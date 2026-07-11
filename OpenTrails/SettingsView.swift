@@ -7,11 +7,19 @@
 //
 
 import SwiftUI
+import SwiftData
 
 struct SettingsView: View {
     @Environment(\.dismiss) private var dismiss
+    @Environment(\.modelContext) private var modelContext
+    @Query private var hikes: [Hike]
 
     @AppStorage(SettingsKey.tileProviderID) private var tileProviderID = TileProvider.default.id
+    @AppStorage(SettingsKey.offlineMaxZoom) private var offlineMaxZoom = OfflineTileDownloader.defaultMaxZoom
+
+    /// Total tile-cache size on disk; `nil` until measured.
+    @State private var totalBytes: Int64?
+    @State private var showDeleteAll = false
 
     private var selectedProvider: TileProvider {
         TileProvider.provider(id: tileProviderID)
@@ -22,6 +30,8 @@ struct SettingsView: View {
             Form {
                 accountSection
                 mapProviderSection
+                offlineSection
+                offlineStorageSection
             }
             .navigationTitle("Settings")
             #if os(iOS)
@@ -32,6 +42,7 @@ struct SettingsView: View {
                     Button("Done") { dismiss() }
                 }
             }
+            .task { await refreshTotalBytes() }
         }
     }
 
@@ -89,6 +100,96 @@ struct SettingsView: View {
         } footer: {
             Text(selectedProvider.attribution)
         }
+    }
+
+    // MARK: - Offline
+
+    private var offlineSection: some View {
+        Section {
+            VStack(alignment: .leading, spacing: 6) {
+                HStack {
+                    Label("Detail level", systemImage: "square.stack.3d.down.right")
+                    Spacer()
+                    Text("Zoom \(offlineMaxZoom)")
+                        .foregroundStyle(.secondary)
+                        .monospacedDigit()
+                }
+                Slider(
+                    value: offlineZoomBinding,
+                    in: zoomBounds,
+                    step: 1
+                ) {
+                    Text("Offline detail level")
+                } minimumValueLabel: {
+                    Text("Less").font(.caption2).foregroundStyle(.secondary)
+                } maximumValueLabel: {
+                    Text("More").font(.caption2).foregroundStyle(.secondary)
+                }
+            }
+            .padding(.vertical, 2)
+        } header: {
+            Text("Offline Maps")
+        } footer: {
+            Text("How deep the “Offline” button saves tiles for a hike. Higher detail captures more of the trail up close, but uses more storage and downloads more slowly.")
+        }
+    }
+
+    private var offlineStorageSection: some View {
+        Section {
+            HStack {
+                Label("Downloaded tiles", systemImage: "internaldrive")
+                Spacer()
+                Text(totalBytes.map(Self.byteText) ?? "…")
+                    .foregroundStyle(.secondary)
+                    .monospacedDigit()
+            }
+
+            Button(role: .destructive) {
+                showDeleteAll = true
+            } label: {
+                Text("Delete All Offline Tiles")
+            }
+            .disabled((totalBytes ?? 0) == 0)
+            .confirmationDialog(
+                "Delete all downloaded map tiles?",
+                isPresented: $showDeleteAll,
+                titleVisibility: .visible
+            ) {
+                Button("Delete All", role: .destructive) { deleteAllTiles() }
+                Button("Cancel", role: .cancel) {}
+            } message: {
+                Text("Frees the storage they use. Tiles re-download automatically when you view maps online again.")
+            }
+        } header: {
+            Text("Offline Storage")
+        }
+    }
+
+    private func refreshTotalBytes() async {
+        let bytes = await Task.detached { TileCache.shared.totalDiskBytes() }.value
+        totalBytes = bytes
+    }
+
+    private func deleteAllTiles() {
+        for hike in hikes { hike.offlineDownloads.removeAll() }
+        totalBytes = 0
+        Task.detached { TileCache.shared.removeAllTiles() }
+    }
+
+    private static func byteText(_ bytes: Int64) -> String {
+        ByteCountFormatter.string(fromByteCount: bytes, countStyle: .file)
+    }
+
+    /// Bridges the `Int` setting to the `Double`-valued slider.
+    private var offlineZoomBinding: Binding<Double> {
+        Binding(
+            get: { Double(offlineMaxZoom) },
+            set: { offlineMaxZoom = Int($0.rounded()) }
+        )
+    }
+
+    private var zoomBounds: ClosedRange<Double> {
+        Double(OfflineTileDownloader.zoomRange.lowerBound)...Double(OfflineTileDownloader.zoomRange.upperBound)
     }
 
     private func providerRow(_ provider: TileProvider) -> some View {

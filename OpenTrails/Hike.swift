@@ -34,6 +34,10 @@ final class Hike {
     /// Ordered track points making up the route.
     var route: [RouteCoordinate]
 
+    /// Records of offline tile downloads for this hike, enough to recompute (and
+    /// so measure and remove) exactly the tiles each one saved.
+    var offlineDownloads: [OfflineDownloadRecord]
+
     // Optional metadata pulled from the GPX file.
     var trackDescription: String?
     var author: String?
@@ -48,6 +52,7 @@ final class Hike {
         routeWidth: Double = 5,
         symbol: String = "figure.hiking",
         route: [RouteCoordinate] = [],
+        offlineDownloads: [OfflineDownloadRecord] = [],
         trackDescription: String? = nil,
         author: String? = nil,
         keywords: String? = nil
@@ -60,6 +65,7 @@ final class Hike {
         self.routeWidth = routeWidth
         self.symbol = symbol
         self.route = route
+        self.offlineDownloads = offlineDownloads
         self.trackDescription = trackDescription
         self.author = author
         self.keywords = keywords
@@ -161,6 +167,17 @@ extension Hike {
         }
         return best > 0 ? Measurement(value: best, unit: .metersPerSecond) : nil
     }
+}
+
+/// A record of one offline tile download for a hike. Stored inline by SwiftData
+/// as part of ``Hike/offlineDownloads``; the parameters recompute the exact tiles.
+struct OfflineDownloadRecord: Codable, Hashable {
+    /// Tile provider the download used (namespaces the cache keys).
+    var providerID: String
+    /// Display scale the tiles were saved at (part of the cache key).
+    var scale: Double
+    /// Deepest zoom level saved.
+    var maxZoom: Int
 }
 
 /// One point on the elevation profile: metres from start vs. elevation in metres.

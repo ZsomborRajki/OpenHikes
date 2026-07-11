@@ -148,4 +148,41 @@ nonisolated final class TileCache: @unchecked Sendable {
     private func diskName(for key: String) -> String {
         key.replacingOccurrences(of: "/", with: "_").replacingOccurrences(of: "@", with: "_")
     }
+
+    // MARK: - Storage management
+
+    /// Total bytes used by all cached tiles on disk. Does file I/O — call off the
+    /// main thread.
+    func totalDiskBytes() -> Int64 {
+        allTileFiles().reduce(0) { $0 + fileSize($1) }
+    }
+
+    /// Bytes used by the tiles for `keys` that are actually present on disk.
+    func bytes(forKeys keys: [String]) -> Int64 {
+        keys.reduce(0) { $0 + fileSize(directory.appendingPathComponent(diskName(for: $1))) }
+    }
+
+    /// Removes every cached tile (memory + disk).
+    func removeAllTiles() {
+        memory.removeAllObjects()
+        for file in allTileFiles() { try? FileManager.default.removeItem(at: file) }
+    }
+
+    /// Removes the tiles for `keys` (memory + disk). Missing files are ignored.
+    func removeTiles(forKeys keys: [String]) {
+        for key in keys {
+            memory.removeObject(forKey: key as NSString)
+            try? FileManager.default.removeItem(at: directory.appendingPathComponent(diskName(for: key)))
+        }
+    }
+
+    private func allTileFiles() -> [URL] {
+        (try? FileManager.default.contentsOfDirectory(
+            at: directory, includingPropertiesForKeys: [.fileSizeKey]
+        )) ?? []
+    }
+
+    private func fileSize(_ url: URL) -> Int64 {
+        Int64((try? url.resourceValues(forKeys: [.fileSizeKey]))?.fileSize ?? 0)
+    }
 }

@@ -8,6 +8,7 @@
 
 import SwiftUI
 import SwiftData
+import MapKit
 import UniformTypeIdentifiers
 
 struct MapSheet: View {
@@ -29,6 +30,10 @@ struct MapSheet: View {
     @State private var showImporter = false
     @State private var showSettings = false
     @State private var path = NavigationPath()
+    @State private var completer = SearchCompleter()
+
+    /// True while the search field is active and has suggestions to offer.
+    private var isSearching: Bool { searchFocused && !completer.suggestions.isEmpty }
 
     /// True at the smallest detent, where only the search field shows.
     private var isCompact: Bool { detent == .height(80) }
@@ -43,7 +48,10 @@ struct MapSheet: View {
                     .padding(.horizontal)
                     .padding(.top, 18)
 
-                if isCompact {
+                if isSearching {
+                    suggestionsList
+                        .padding(.top, 12)
+                } else if isCompact {
                     Spacer()
                 } else {
                     hikesSection
@@ -99,6 +107,8 @@ struct MapSheet: View {
                 .focused($searchFocused)
                 .autocorrectionDisabled()
                 .submitLabel(.search)
+                .onSubmit(performSearch)
+                .onChange(of: searchText) { _, value in completer.update(query: value) }
                 #if os(iOS)
                 .textInputAutocapitalization(.words)
                 #endif
@@ -136,10 +146,14 @@ struct MapSheet: View {
 
     private var hikesSection: some View {
         VStack(alignment: .leading, spacing: 12) {
-            Text("Hikes")
-                .font(.title2.bold())
-                .foregroundStyle(.primary)
-                .padding(.horizontal)
+            HStack(spacing: 12) {
+                Text("Hikes")
+                    .font(.title2.bold())
+                    .foregroundStyle(.primary)
+                Spacer()
+                hikeActions
+            }
+            .padding(.horizontal)
 
             if hikes.isEmpty {
                 emptyState
@@ -151,9 +165,43 @@ struct MapSheet: View {
         }
     }
 
+    /// Always-visible icon buttons for starting a recording or importing a GPX.
+    private var hikeActions: some View {
+        HStack(spacing: 8) {
+            Button(action: onRecord) {
+                Image(systemName: "record.circle")
+                    .foregroundStyle(.red)
+                    .frame(width: 40, height: 40)
+                    .glassEffect(.regular, in: Circle())
+            }
+            .accessibilityLabel("Record new hike")
+
+            Button {
+                showImporter = true
+            } label: {
+                Image(systemName: "square.and.arrow.down")
+                    .foregroundStyle(.tint)
+                    .frame(width: 40, height: 40)
+                    .glassEffect(.regular, in: Circle())
+            }
+            .accessibilityLabel("Import GPX file")
+        }
+        .font(.title3)
+        .buttonStyle(.plain)
+    }
+
+    /// Hikes with "spring" in the title are pinned to the top; the rest keep the
+    /// query's newest-first order.
+    private var sortedHikes: [Hike] {
+        let keyword = "spring"
+        let pinned = hikes.filter { $0.title.localizedCaseInsensitiveContains(keyword) }
+        let rest = hikes.filter { !$0.title.localizedCaseInsensitiveContains(keyword) }
+        return pinned + rest
+    }
+
     private var hikesList: some View {
         List {
-            ForEach(hikes) { hike in
+            ForEach(sortedHikes) { hike in
                 Button {
                     selectedHike = hike
                     path.append(hike)
@@ -183,7 +231,67 @@ struct MapSheet: View {
             selectedHike = nil
             highlight.coordinate = nil
         }
+        // Free any tiles this hike had saved offline before it goes away.
+        let keys = OfflineTileDownloader.storedTileKeys(for: hike)
+        if !keys.isEmpty { Task.detached { TileCache.shared.removeTiles(forKeys: keys) } }
         modelContext.delete(hike)
+    }
+
+    /// Autocomplete suggestions shown under the search field while typing.
+    private var suggestionsList: some View {
+        List(completer.suggestions, id: \.self) { suggestion in
+            Button {
+                select(suggestion)
+            } label: {
+                HStack(spacing: 12) {
+                    Image(systemName: "mappin.circle.fill")
+                        .font(.title3)
+                        .foregroundStyle(.secondary)
+                    VStack(alignment: .leading, spacing: 2) {
+                        Text(suggestion.title)
+                            .foregroundStyle(.primary)
+                        if !suggestion.subtitle.isEmpty {
+                            Text(suggestion.subtitle)
+                                .font(.caption)
+                                .foregroundStyle(.secondary)
+                        }
+                    }
+                    Spacer(minLength: 0)
+                }
+                .contentShape(.rect)
+            }
+            .buttonStyle(.plain)
+        }
+        .listStyle(.plain)
+        .scrollContentBackground(.hidden)
+    }
+
+    /// Resolves a tapped suggestion to a place and zooms the map to it.
+    private func select(_ completion: MKLocalSearchCompletion) {
+        searchText = completion.title
+        searchFocused = false
+        completer.clear()
+        Task {
+            guard let response = try? await MKLocalSearch(request: .init(completion: completion)).start() else { return }
+            mapController.show(response.boundingRegion)
+            withAnimation { detent = .medium }
+        }
+    }
+
+    /// Geocodes the raw search text (when the user hits Return without picking a
+    /// suggestion) and zooms the map to the matching region.
+    private func performSearch() {
+        let query = searchText.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !query.isEmpty else { return }
+        searchFocused = false
+        Task {
+            let request = MKLocalSearch.Request()
+            request.naturalLanguageQuery = query
+            guard let response = try? await MKLocalSearch(request: request).start() else { return }
+            mapController.show(response.boundingRegion)
+            // Drop to a partial detent so the zoomed map is visible.
+            withAnimation { detent = .medium }
+        }
     }
 
     /// GPX has no first-party UTType; match by extension and fall back to XML.
@@ -195,23 +303,23 @@ struct MapSheet: View {
     }
 
     private var emptyState: some View {
-        VStack(spacing: 12) {
-            Button(action: onRecord) {
-                Label("Record New Hike", systemImage: "record.circle")
-                    .frame(maxWidth: .infinity)
-            }
-            .buttonStyle(.borderedProminent)
-
-            Button {
-                showImporter = true
-            } label: {
-                Label("Import GPX File", systemImage: "square.and.arrow.down")
-                    .frame(maxWidth: .infinity)
-            }
-            .buttonStyle(.bordered)
+        VStack(spacing: 8) {
+            Image(systemName: "map")
+                .font(.largeTitle)
+                .foregroundStyle(.secondary)
+            Text("No hikes yet")
+                .font(.headline)
+            Text("Tap ")
+                .font(.subheadline)
+                .foregroundStyle(.secondary)
+            + Text(Image(systemName: "record.circle")).foregroundStyle(.red)
+            + Text(" to record or ").font(.subheadline).foregroundStyle(.secondary)
+            + Text(Image(systemName: "square.and.arrow.down")).foregroundStyle(.tint)
+            + Text(" to import a GPX file.").font(.subheadline).foregroundStyle(.secondary)
         }
-        .controlSize(.large)
-        .padding(.top, 4)
+        .multilineTextAlignment(.center)
+        .frame(maxWidth: .infinity)
+        .padding(.top, 8)
     }
 }
 

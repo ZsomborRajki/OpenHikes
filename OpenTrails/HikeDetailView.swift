@@ -3,7 +3,7 @@
 //  OpenTrails
 //
 //  Pushed when a hike is selected. Surfaces every stat we can derive from the
-//  GPX file, with a placeholder elevation graph pinned to the bottom.
+//  GPX file, with an interactive elevation graph at the top.
 //
 
 import SwiftUI
@@ -22,17 +22,21 @@ struct HikeDetailView: View {
     /// The active tile source, mirrored from Settings so offline downloads use the
     /// same provider (and API key) the map is currently drawing.
     @AppStorage(SettingsKey.tileProviderID) private var tileProviderID = TileProvider.default.id
+    @AppStorage(SettingsKey.offlineMaxZoom) private var offlineMaxZoom = OfflineTileDownloader.defaultMaxZoom
     @Environment(\.displayScale) private var displayScale
     @State private var downloader = OfflineTileDownloader()
+    /// Disk space used by this hike's saved tiles; `nil` until measured.
+    @State private var storedBytes: Int64?
 
-    /// Built once per view identity in `.task`, never in `init` (which re-runs on every
-    /// struct recreation). Scrubbing then resolves points in O(log n).
+    /// Built once per hike in `.task`, never in `init`. Scrubbing then resolves
+    /// points in O(log n).
     @State private var profile: RouteProfile?
+    /// Stat tiles, computed once per hike (each stat is an O(n) pass over the
+    /// route, so they must not be recomputed on every body invalidation).
+    @State private var statItems: [Stat] = []
     /// Persistent tracker position along the route (metres from start). Starts at the
     /// GPX start, follows the finger while scrubbing, and stays where it's left.
     @State private var trackerDistance: Double = 0
-    /// Live chart selection under the finger, if any (transient).
-    @State private var selectedDistance: Double?
 
     var body: some View {
         ScrollView {
@@ -52,16 +56,73 @@ struct HikeDetailView: View {
         .task(id: hike.id) {
             let built = RouteProfile(route: hike.route)
             profile = built
+            statItems = Self.makeStats(for: hike)
             // Place the tracker at the start of the track, on both graph and map.
             trackerDistance = 0
             highlight.coordinate = built.coordinate(atDistance: 0)
+            refreshStoredBytes()
         }
+        // Record the download once it finishes, so its tiles can be measured/removed.
+        .onChange(of: downloader.phase) { _, phase in
+            guard phase == .finished else { return }
+            let record = OfflineDownloadRecord(
+                providerID: activeTileSource.providerID,
+                scale: Double(displayScale),
+                maxZoom: offlineMaxZoom
+            )
+            if !hike.offlineDownloads.contains(record) { hike.offlineDownloads.append(record) }
+            refreshStoredBytes()
+        }
+    }
+
+    // MARK: Offline storage
+
+    /// Measures this hike's saved tiles off the main thread.
+    private func refreshStoredBytes() {
+        let keys = OfflineTileDownloader.storedTileKeys(for: hike)
+        guard !keys.isEmpty else { storedBytes = 0; return }
+        Task { storedBytes = await Task.detached { TileCache.shared.bytes(forKeys: keys) }.value }
+    }
+
+    /// Forgets this hike's downloads and deletes their tiles from disk.
+    private func deleteStoredTiles() {
+        let keys = OfflineTileDownloader.storedTileKeys(for: hike)
+        hike.offlineDownloads.removeAll()
+        storedBytes = 0
+        downloader.reset()
+        Task.detached { TileCache.shared.removeTiles(forKeys: keys) }
+    }
+
+    @ViewBuilder
+    private var storedTilesRow: some View {
+        if !hike.offlineDownloads.isEmpty {
+            HStack {
+                Label(
+                    storedBytes.map { "Offline tiles · \(Self.byteText($0))" } ?? "Offline tiles",
+                    systemImage: "internaldrive"
+                )
+                .font(.caption)
+                .foregroundStyle(.secondary)
+
+                Spacer()
+
+                Button(role: .destructive, action: deleteStoredTiles) {
+                    Text("Delete").font(.caption.weight(.medium))
+                }
+                .buttonStyle(.bordered)
+                .controlSize(.small)
+            }
+        }
+    }
+
+    private static func byteText(_ bytes: Int64) -> String {
+        ByteCountFormatter.string(fromByteCount: bytes, countStyle: .file)
     }
 
     // MARK: Actions
 
     /// Trailing row of actions: zoom the map to the route, save it for offline use,
-    /// and recolor the route line + elevation graph.
+    /// and recolor the route line.
     private var actionBar: some View {
         VStack(spacing: 12) {
             HStack(spacing: 12) {
@@ -77,6 +138,7 @@ struct HikeDetailView: View {
                     .frame(maxWidth: .infinity, alignment: .center)
                     .multilineTextAlignment(.center)
             }
+            storedTilesRow
         }
     }
 
@@ -88,7 +150,7 @@ struct HikeDetailView: View {
             actionTile(icon: "scope", title: "Zoom")
         }
         .buttonStyle(.plain)
-        .disabled(hike.coordinates.count < 2)
+        .disabled(hike.pointCount < 2)
     }
 
     @ViewBuilder
@@ -97,7 +159,8 @@ struct HikeDetailView: View {
             if downloader.phase == .downloading {
                 downloader.cancel()
             } else {
-                downloader.start(route: hike.coordinates, source: activeTileSource, scale: displayScale)
+                downloader.start(route: hike.coordinates, source: activeTileSource,
+                                 maxZoom: offlineMaxZoom, scale: displayScale)
             }
         } label: {
             downloadTile
@@ -163,7 +226,7 @@ struct HikeDetailView: View {
     }
 
     private var canDownload: Bool {
-        activeProvider.supportsBulkDownload && hike.coordinates.count > 1
+        activeProvider.supportsBulkDownload && hike.pointCount > 1
     }
 
     private var downloadNote: String? {
@@ -234,23 +297,23 @@ struct HikeDetailView: View {
             columns: [GridItem(.flexible()), GridItem(.flexible())],
             spacing: 12
         ) {
-            ForEach(stats) { stat in
+            ForEach(statItems) { stat in
                 StatTile(label: stat.label, value: stat.value)
             }
         }
     }
 
-    private var stats: [Stat] {
+    private static func makeStats(for hike: Hike) -> [Stat] {
         var items: [Stat] = [
             Stat("Distance", hike.distance.formatted(.measurement(width: .abbreviated, usage: .road)))
         ]
-        if let duration = hike.duration { items.append(Stat("Duration", Self.durationString(duration))) }
-        if let gain = hike.elevationGain { items.append(Stat("Elevation Gain", Self.lengthString(gain))) }
-        if let loss = hike.elevationLoss { items.append(Stat("Elevation Loss", Self.lengthString(loss))) }
-        if let maxEl = hike.maxElevation { items.append(Stat("Max Elevation", Self.lengthString(maxEl))) }
-        if let minEl = hike.minElevation { items.append(Stat("Min Elevation", Self.lengthString(minEl))) }
-        if let avg = hike.averageSpeed { items.append(Stat("Avg Speed", Self.speedString(avg))) }
-        if let maxSpeed = hike.maxSpeed { items.append(Stat("Max Speed", Self.speedString(maxSpeed))) }
+        if let duration = hike.duration { items.append(Stat("Duration", HikeFormat.duration(duration))) }
+        if let gain = hike.elevationGain { items.append(Stat("Elevation Gain", HikeFormat.length(gain))) }
+        if let loss = hike.elevationLoss { items.append(Stat("Elevation Loss", HikeFormat.length(loss))) }
+        if let maxEl = hike.maxElevation { items.append(Stat("Max Elevation", HikeFormat.length(maxEl))) }
+        if let minEl = hike.minElevation { items.append(Stat("Min Elevation", HikeFormat.length(minEl))) }
+        if let avg = hike.averageSpeed { items.append(Stat("Avg Speed", HikeFormat.speed(avg))) }
+        if let maxSpeed = hike.maxSpeed { items.append(Stat("Max Speed", HikeFormat.speed(maxSpeed))) }
         items.append(Stat("Track Points", hike.pointCount.formatted()))
         if let start = hike.startDate {
             items.append(Stat("Start", start.formatted(date: .abbreviated, time: .shortened)))
@@ -269,7 +332,7 @@ struct HikeDetailView: View {
 
     private var metadataSection: some View {
         VStack(alignment: .leading, spacing: 12) {
-            sectionTitle("Details")
+            Text("Details").font(.headline)
             if let description = hike.trackDescription { DetailRow(label: "Description", value: description) }
             if let author = hike.author { DetailRow(label: "Author", value: author) }
             if let keywords = hike.keywords { DetailRow(label: "Keywords", value: keywords) }
@@ -281,16 +344,69 @@ struct HikeDetailView: View {
     @ViewBuilder
     private var elevationSection: some View {
         if let profile, profile.samples.count > 1 {
-            elevationChart(profile)
+            // Isolated + `Equatable` so slider/color churn in the parent body does
+            // not rebuild the (expensive) Chart. It re-renders only when the data,
+            // tint, or tracker position actually changes.
+            ElevationChartView(
+                profile: profile,
+                tint: hike.tintOpaque,
+                trackerDistance: trackerDistance,
+                onScrub: { distance in
+                    trackerDistance = distance
+                    highlight.coordinate = profile.coordinate(atDistance: distance)
+                }
+            )
+            .equatable()
         } else {
             elevationPlaceholder
         }
     }
 
-    private func elevationChart(_ profile: RouteProfile) -> some View {
+    private var elevationPlaceholder: some View {
+        ZStack {
+            RoundedRectangle(cornerRadius: 16)
+                .fill(hike.tintOpaque.opacity(0.12))
+            VStack(spacing: 8) {
+                Image(systemName: "chart.xyaxis.line")
+                    .font(.largeTitle)
+                    .foregroundStyle(hike.tintOpaque)
+                Text("No elevation data in this file")
+                    .font(.subheadline)
+                    .foregroundStyle(.secondary)
+            }
+        }
+        .frame(height: 180)
+    }
+}
+
+// MARK: - Elevation chart
+
+/// The interactive elevation graph, split out so it only re-renders when its own
+/// inputs change — not when unrelated parent state (line width, download progress)
+/// moves. `Equatable` (via `.equatable()`) drives the skip.
+private struct ElevationChartView: View, Equatable {
+    let profile: RouteProfile
+    let tint: Color
+    let trackerDistance: Double
+    var onScrub: (Double) -> Void
+
+    /// Live chart selection under the finger (transient); owned here so scrubbing
+    /// doesn't touch the parent until it resolves a distance.
+    @State private var selectedDistance: Double?
+
+    // Compares only what the chart actually draws; the `onScrub` closure and the
+    // transient selection are intentionally ignored.
+    static func == (lhs: ElevationChartView, rhs: ElevationChartView) -> Bool {
+        lhs.trackerDistance == rhs.trackerDistance
+            && lhs.tint == rhs.tint
+            && lhs.profile.samples.count == rhs.profile.samples.count
+            && lhs.profile.distances.count == rhs.profile.distances.count
+    }
+
+    var body: some View {
         let domain = elevationDomain(profile)
         let tracker = profile.sample(atDistance: trackerDistance)
-        return Chart {
+        Chart {
             ForEach(profile.samples) { sample in
                 AreaMark(
                     x: .value("Distance", sample.distanceMeters),
@@ -300,7 +416,7 @@ struct HikeDetailView: View {
                 .interpolationMethod(.catmullRom)
                 .foregroundStyle(
                     LinearGradient(
-                        colors: [hike.tintOpaque.opacity(0.45), hike.tintOpaque.opacity(0.05)],
+                        colors: [tint.opacity(0.45), tint.opacity(0.05)],
                         startPoint: .top,
                         endPoint: .bottom
                     )
@@ -311,7 +427,7 @@ struct HikeDetailView: View {
                     y: .value("Elevation", sample.elevation)
                 )
                 .interpolationMethod(.catmullRom)
-                .foregroundStyle(hike.tintOpaque)
+                .foregroundStyle(tint)
                 .lineStyle(StrokeStyle(lineWidth: 2))
             }
 
@@ -324,7 +440,7 @@ struct HikeDetailView: View {
                     x: .value("Distance", tracker.distanceMeters),
                     y: .value("Elevation", tracker.elevation)
                 )
-                .foregroundStyle(hike.tintOpaque)
+                .foregroundStyle(tint)
                 .symbolSize(90)
                 .annotation(position: .top, spacing: 4,
                             overflowResolution: .init(x: .fit(to: .chart), y: .disabled)) {
@@ -360,15 +476,13 @@ struct HikeDetailView: View {
         .onChange(of: selectedDistance) { _, distance in
             // While scrubbing, move the persistent tracker; keep it put on release.
             guard let distance else { return }
-            trackerDistance = distance
-            // O(log n) lookup, then the map moves one annotation off SwiftUI's path.
-            highlight.coordinate = profile.coordinate(atDistance: distance)
+            onScrub(distance)
         }
     }
 
     private func calloutLabel(_ sample: ElevationSample) -> some View {
         VStack(spacing: 1) {
-            Text(Self.lengthString(Measurement(value: sample.elevation, unit: .meters)))
+            Text(HikeFormat.length(Measurement(value: sample.elevation, unit: .meters)))
                 .font(.caption.weight(.semibold))
                 .foregroundStyle(.primary)
             Text(Measurement(value: sample.distanceMeters, unit: UnitLength.meters)
@@ -400,27 +514,6 @@ struct HikeDetailView: View {
         guard high > low else { return (low - 10)...(high + 10) }
         let padding = (high - low) * 0.15
         return (low - padding)...(high + padding)
-    }
-
-    private var elevationPlaceholder: some View {
-        ZStack {
-            RoundedRectangle(cornerRadius: 16)
-                .fill(hike.tintOpaque.opacity(0.12))
-            VStack(spacing: 8) {
-                Image(systemName: "chart.xyaxis.line")
-                    .font(.largeTitle)
-                    .foregroundStyle(hike.tintOpaque)
-                Text("No elevation data in this file")
-                    .font(.subheadline)
-                    .foregroundStyle(.secondary)
-            }
-        }
-        .frame(height: 180)
-    }
-
-    private func sectionTitle(_ title: String) -> some View {
-        Text(title)
-            .font(.headline)
     }
 }
 
@@ -480,20 +573,20 @@ private struct DetailRow: View {
 
 // MARK: - Formatting
 
-private extension HikeDetailView {
-    static func durationString(_ interval: TimeInterval) -> String {
+private enum HikeFormat {
+    static func duration(_ interval: TimeInterval) -> String {
         let formatter = DateComponentsFormatter()
         formatter.allowedUnits = interval >= 3600 ? [.hour, .minute] : [.minute, .second]
         formatter.unitsStyle = .abbreviated
         return formatter.string(from: interval) ?? "—"
     }
 
-    static func lengthString(_ measurement: Measurement<UnitLength>) -> String {
+    static func length(_ measurement: Measurement<UnitLength>) -> String {
         let rounded = Measurement(value: measurement.value.rounded(), unit: measurement.unit)
         return rounded.formatted(.measurement(width: .abbreviated, usage: .asProvided))
     }
 
-    static func speedString(_ measurement: Measurement<UnitSpeed>) -> String {
+    static func speed(_ measurement: Measurement<UnitSpeed>) -> String {
         measurement.converted(to: .kilometersPerHour)
             .formatted(.measurement(width: .abbreviated, usage: .asProvided,
                                     numberFormatStyle: .number.precision(.fractionLength(1))))

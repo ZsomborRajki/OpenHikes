@@ -95,6 +95,13 @@ struct ContentView: View {
                     .presentationDragIndicator(.visible)
                     .interactiveDismissDisabled()
             }
+            // The sheet is the app's primary surface and must always stay up. The
+            // GPX document picker (a UIKit controller presented from within a
+            // detented sheet) tears the sheet down on dismissal — a known SwiftUI
+            // issue — so if it ever goes away, bring it right back.
+            .onChange(of: showSheet) { _, shown in
+                if !shown { showSheet = true }
+            }
     }
 
     /// Coarse location key (~1 km) so weather refetches only on meaningful moves.

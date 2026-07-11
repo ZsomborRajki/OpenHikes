@@ -50,9 +50,17 @@ final class SheetMetrics {
 @Observable
 final class MapController {
     private(set) var fitRouteRequest: Int = 0
+    private(set) var showRegionRequest: Int = 0
+    private(set) var region: MKCoordinateRegion?
 
     /// Ask the map to zoom to fit the currently drawn route.
     func fitToRoute() { fitRouteRequest += 1 }
+
+    /// Ask the map to zoom to a region (e.g. a search result).
+    func show(_ region: MKCoordinateRegion) {
+        self.region = region
+        showRegionRequest += 1
+    }
 }
 
 struct OSMMapView: MapViewRepresentable {
@@ -253,16 +261,42 @@ struct OSMMapView: MapViewRepresentable {
             mapView.setVisibleMapRect(polyline.boundingMapRect, edgePadding: Self.routeInsets, animated: animated)
         }
 
-        /// Observes `MapController.fitRouteRequest` and re-fits the route on each
-        /// bump, then re-registers — same off-SwiftUI technique as `observeHighlight`.
+        /// Observes the detail view / search commands and applies them imperatively.
+        /// Each command re-registers only its own tracking (bumping one must not
+        /// re-arm the others, or they'd multiply).
         func observeMapController(_ controller: MapController, on mapView: MKMapView) {
+            observeFitRoute(controller, on: mapView)
+            observeShowRegion(controller, on: mapView)
+        }
+
+        private func observeFitRoute(_ controller: MapController, on mapView: MKMapView) {
             withObservationTracking {
                 _ = controller.fitRouteRequest
             } onChange: { [weak self, weak mapView, weak controller] in
+                let coordinator = self
+                let map = mapView
+                let model = controller
                 Task { @MainActor in
-                    guard let self, let mapView, let controller else { return }
-                    self.fitToCurrentRoute(mapView, animated: true)
-                    self.observeMapController(controller, on: mapView)
+                    guard let coordinator, let map, let model else { return }
+                    coordinator.fitToCurrentRoute(map, animated: true)
+                    coordinator.observeFitRoute(model, on: map)
+                }
+            }
+        }
+
+        private func observeShowRegion(_ controller: MapController, on mapView: MKMapView) {
+            withObservationTracking {
+                _ = controller.showRegionRequest
+            } onChange: { [weak self, weak mapView, weak controller] in
+                let coordinator = self
+                let map = mapView
+                let model = controller
+                Task { @MainActor in
+                    guard let coordinator, let map, let model else { return }
+                    if let region = model.region {
+                        map.setRegion(map.regionThatFits(region), animated: true)
+                    }
+                    coordinator.observeShowRegion(model, on: map)
                 }
             }
         }

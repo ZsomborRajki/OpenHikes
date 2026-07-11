@@ -52,7 +52,7 @@ extension TileProvider {
     nonisolated static let stadiaOutdoors = TileProvider(
         id: "stadia_outdoors",
         name: "Stadia Outdoors",
-        summary: "Topographic map tuned for hiking. Permits offline downloads — needs a free API key.",
+        summary: "Topographic map tuned for hiking. Permits offline downloads.",
         urlTemplate: "https://tiles.stadiamaps.com/tiles/outdoors/{z}/{x}/{y}.png?api_key={key}",
         maximumZ: 20,
         attribution: "© Stadia Maps, © OpenMapTiles, © OpenStreetMap contributors",
@@ -83,4 +83,5 @@ struct ActiveTileSource: Equatable {
 enum SettingsKey {
     static let tileProviderID = "settings.tileProviderID"
     static let stadiaAPIKey = "settings.apiKey.stadia"
+    static let offlineMaxZoom = "settings.offline.maxZoom"
 }

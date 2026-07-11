@@ -27,27 +27,30 @@ final class OfflineTileDownloader {
 
     private var task: Task<Void, Never>?
 
+    /// Selectable deepest-zoom levels for the offline setting, and the default.
+    static let zoomRange = 13...18
+    static let defaultMaxZoom = 16
+
     /// The shallowest zoom to save (whole-route overview).
-    private let minZoom = 10
-    /// The deepest zoom to attempt; also clamped to the provider's real max.
-    private let maxZoom = 16
+    static let minZoom = 10
     /// Soft cap on tiles — deeper zoom levels are dropped once exceeded, so a huge
     /// route doesn't try to fetch hundreds of thousands of tiles.
-    private let tileBudget = 4_000
+    static let tileBudget = 4_000
     private let maxConcurrent = 5
 
-    /// Begins downloading the tiles covering `route` from `source`. `scale` must be
-    /// the display scale so cache keys match what the renderer requests on-device.
-    func start(route: [CLLocationCoordinate2D], source: ActiveTileSource, scale: CGFloat) {
+    /// Begins downloading the tiles covering `route` from `source`, saving detail
+    /// down to `maxZoom` (clamped to the provider's real max). `scale` must be the
+    /// display scale so cache keys match what the renderer requests on-device.
+    func start(route: [CLLocationCoordinate2D], source: ActiveTileSource, maxZoom: Int, scale: CGFloat) {
         guard phase != .downloading else { return }
         guard route.count > 1 else { phase = .failed("No route to save."); return }
         guard TileCache.shared.isOnline else { phase = .failed("You're offline — connect to save tiles."); return }
 
         let tiles = Self.tiles(
             covering: route,
-            minZoom: minZoom,
-            maxZoom: min(maxZoom, source.maximumZ),
-            budget: tileBudget
+            minZoom: Self.minZoom,
+            maxZoom: min(max(maxZoom, Self.minZoom), source.maximumZ),
+            budget: Self.tileBudget
         )
         guard !tiles.isEmpty else { phase = .failed("Nothing to save."); return }
 
@@ -62,6 +65,14 @@ final class OfflineTileDownloader {
     func cancel() {
         task?.cancel()
         task = nil
+        phase = .idle
+        completed = 0
+        total = 0
+    }
+
+    /// Returns to idle after a finished/failed download (e.g. its tiles were deleted).
+    func reset() {
+        guard phase != .downloading else { return }
         phase = .idle
         completed = 0
         total = 0
@@ -99,6 +110,35 @@ final class OfflineTileDownloader {
         phase = Task.isCancelled ? .idle : .finished
     }
 
+    // MARK: - Stored-tile bookkeeping
+
+    /// The cache keys for every tile a download of `route` would produce for the
+    /// given provider/scale/depth — so stored tiles can be measured and removed
+    /// after the fact. Deterministic: recomputing yields exactly the saved set.
+    static func tileKeys(for route: [CLLocationCoordinate2D], providerID: String, providerMaxZoom: Int, maxZoom: Int, scale: CGFloat) -> [String] {
+        let clamped = min(max(maxZoom, minZoom), providerMaxZoom)
+        return tiles(covering: route, minZoom: minZoom, maxZoom: clamped, budget: tileBudget)
+            .map { $0.cacheKey(providerID: providerID, scale: scale) }
+    }
+
+    /// The union of cache keys across all of a hike's recorded downloads.
+    static func storedTileKeys(for hike: Hike) -> [String] {
+        guard !hike.offlineDownloads.isEmpty else { return [] }
+        let route = hike.coordinates
+        var keys = Set<String>()
+        for record in hike.offlineDownloads {
+            let provider = TileProvider.provider(id: record.providerID)
+            keys.formUnion(tileKeys(
+                for: route,
+                providerID: record.providerID,
+                providerMaxZoom: provider.maximumZ,
+                maxZoom: record.maxZoom,
+                scale: CGFloat(record.scale)
+            ))
+        }
+        return Array(keys)
+    }
+
     // MARK: - Tile enumeration
 
     struct Tile {
@@ -106,7 +146,7 @@ final class OfflineTileDownloader {
         let x: Int
         let y: Int
 
-        func url(from template: String) -> URL? {
+        nonisolated func url(from template: String) -> URL? {
             let filled = template
                 .replacingOccurrences(of: "{z}", with: String(z))
                 .replacingOccurrences(of: "{x}", with: String(x))
@@ -115,7 +155,7 @@ final class OfflineTileDownloader {
         }
 
         /// Must mirror `OSMTileOverlay.cacheKey(for:)` exactly so warmed tiles are found.
-        func cacheKey(providerID: String, scale: CGFloat) -> String {
+        nonisolated func cacheKey(providerID: String, scale: CGFloat) -> String {
             "\(providerID)/\(z)/\(x)/\(y)@\(scale)"
         }
     }
