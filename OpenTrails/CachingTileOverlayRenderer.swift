@@ -13,17 +13,34 @@
 import MapKit
 import os
 
-nonisolated final class CachingTileOverlayRenderer: MKOverlayRenderer {
+nonisolated final class CachingTileOverlayRenderer: MKOverlayRenderer, TileCacheObserver {
     /// How many zoom levels to walk up looking for a tile to crop for overzoom.
     private let maxFallbackDepth = 8
 
     /// Keys of tiles currently being fetched, to avoid duplicate requests.
     private let inFlight = OSAllocatedUnfairLock(initialState: Set<String>())
 
+    /// Keys of tiles that failed to load (offline, 404, …). Skipped until we
+    /// reconnect, so a failed tile never triggers an endless request/redraw loop.
+    private let failed = OSAllocatedUnfairLock(initialState: Set<String>())
+
     private var tileOverlay: OSMTileOverlay { overlay as! OSMTileOverlay }
 
     init(overlay: OSMTileOverlay) {
         super.init(overlay: overlay)
+        // Retry tiles once the network is back (delivered on the main queue).
+        TileCache.shared.addObserver(self)
+    }
+
+    deinit {
+        TileCache.shared.removeObserver(self)
+    }
+
+    /// `TileCacheObserver` — network is back: forget past failures and redraw so
+    /// the now-reachable tiles get requested again.
+    func tileCacheDidReconnect() {
+        failed.withLock { $0.removeAll() }
+        setNeedsDisplay()
     }
 
     override func draw(_ mapRect: MKMapRect, zoomScale: MKZoomScale, in context: CGContext) {
@@ -68,13 +85,23 @@ nonisolated final class CachingTileOverlayRenderer: MKOverlayRenderer {
         let fetchPath = path.z > overlay.maximumZ ? path.ancestor(atZoom: overlay.maximumZ) : path
         let key = fetchPath.cacheKey
 
+        // Skip tiles we already know we can't get, until a reconnect clears them.
+        guard !failed.withLock({ $0.contains(key) }) else { return }
+
         let isNew = inFlight.withLock { $0.insert(key).inserted }
         guard isNew else { return }
 
         Task { [weak self] in
-            await overlay.cacheTile(at: fetchPath)
-            self?.inFlight.withLock { _ = $0.remove(key) }
-            self?.setNeedsDisplay(tileRect)
+            let loaded = await overlay.cacheTile(at: fetchPath)
+            guard let self else { return }
+            self.inFlight.withLock { _ = $0.remove(key) }
+            if loaded {
+                // Only redraw when there's actually a new tile to show — redrawing
+                // on failure is what spun the request loop.
+                self.setNeedsDisplay(tileRect)
+            } else {
+                self.failed.withLock { _ = $0.insert(key) }
+            }
         }
     }
 

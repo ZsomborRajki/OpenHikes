@@ -14,6 +14,16 @@ struct HikeDetailView: View {
     let hike: Hike
     /// Reference type the map observes directly — writing to it doesn't re-render this view.
     let highlight: RouteHighlight
+    /// Drives one-shot map commands (the Zoom button).
+    let mapController: MapController
+    /// Collapses the sheet so the map is visible when zooming to the route.
+    var onZoomToRoute: () -> Void = {}
+
+    /// The active tile source, mirrored from Settings so offline downloads use the
+    /// same provider (and API key) the map is currently drawing.
+    @AppStorage(SettingsKey.tileProviderID) private var tileProviderID = TileProvider.default.id
+    @Environment(\.displayScale) private var displayScale
+    @State private var downloader = OfflineTileDownloader()
 
     /// Built once per view identity in `.task`, never in `init` (which re-runs on every
     /// struct recreation). Scrubbing then resolves points in O(log n).
@@ -31,6 +41,7 @@ struct HikeDetailView: View {
                 header
                 statsGrid
                 if hasMetadata { metadataSection }
+                actionBar
             }
             .padding()
         }
@@ -47,6 +58,153 @@ struct HikeDetailView: View {
         }
     }
 
+    // MARK: Actions
+
+    /// Trailing row of actions: zoom the map to the route, save it for offline use,
+    /// and recolor the route line + elevation graph.
+    private var actionBar: some View {
+        VStack(spacing: 12) {
+            HStack(spacing: 12) {
+                zoomButton
+                downloadButton
+                colorControl
+            }
+            widthSlider
+            if let note = downloadNote {
+                Text(note)
+                    .font(.caption2)
+                    .foregroundStyle(downloader.isFailed ? AnyShapeStyle(.red) : AnyShapeStyle(.secondary))
+                    .frame(maxWidth: .infinity, alignment: .center)
+                    .multilineTextAlignment(.center)
+            }
+        }
+    }
+
+    private var zoomButton: some View {
+        Button {
+            onZoomToRoute()
+            mapController.fitToRoute()
+        } label: {
+            actionTile(icon: "scope", title: "Zoom")
+        }
+        .buttonStyle(.plain)
+        .disabled(hike.coordinates.count < 2)
+    }
+
+    @ViewBuilder
+    private var downloadButton: some View {
+        Button {
+            if downloader.phase == .downloading {
+                downloader.cancel()
+            } else {
+                downloader.start(route: hike.coordinates, source: activeTileSource, scale: displayScale)
+            }
+        } label: {
+            downloadTile
+        }
+        .buttonStyle(.plain)
+        .disabled(!canDownload && downloader.phase != .downloading)
+    }
+
+    @ViewBuilder
+    private var downloadTile: some View {
+        switch downloader.phase {
+        case .downloading:
+            tile {
+                ProgressView().controlSize(.small)
+                Text("\(Int(downloader.progress * 100))%")
+                    .font(.caption2.weight(.medium))
+                    .foregroundStyle(.secondary)
+            }
+        case .finished:
+            actionTile(icon: "checkmark.circle.fill", title: "Saved", tint: .green)
+        default:
+            actionTile(icon: "arrow.down.circle", title: "Offline",
+                       tint: canDownload ? Color.accentColor : .secondary)
+        }
+    }
+
+    private var colorControl: some View {
+        tile {
+            // `supportsOpacity` lets the user set the line's transparency here; the
+            // alpha is applied to the map polyline only (other UI uses `tintOpaque`).
+            ColorPicker("Route color", selection: tintBinding, supportsOpacity: true)
+                .labelsHidden()
+            Text("Color")
+                .font(.caption2.weight(.medium))
+                .foregroundStyle(.secondary)
+        }
+    }
+
+    /// Reads the hike's tint and writes the picked color (with alpha) back as
+    /// "#RRGGBBAA", which live-updates the map polyline.
+    private var tintBinding: Binding<Color> {
+        Binding(get: { hike.tint }, set: { hike.tintHex = $0.hexRGBA })
+    }
+
+    private var widthSlider: some View {
+        VStack(alignment: .leading, spacing: 2) {
+            HStack {
+                Label("Line width", systemImage: "lineweight")
+                    .font(.caption.weight(.medium))
+                Spacer()
+                Text("\(Int(hike.routeWidth)) pt")
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
+                    .monospacedDigit()
+            }
+            Slider(value: widthBinding, in: 1...12, step: 1)
+                .tint(hike.tintOpaque)
+        }
+    }
+
+    private var widthBinding: Binding<Double> {
+        Binding(get: { hike.routeWidth }, set: { hike.routeWidth = $0 })
+    }
+
+    private var canDownload: Bool {
+        activeProvider.supportsBulkDownload && hike.coordinates.count > 1
+    }
+
+    private var downloadNote: String? {
+        switch downloader.phase {
+        case .failed(let message): return message
+        case .finished: return "Saved for offline use."
+        case .downloading: return "Saving \(downloader.total) tiles…"
+        case .idle:
+            return activeProvider.supportsBulkDownload
+                ? nil
+                : "Offline saving needs a downloadable map (Stadia) — pick it in Settings."
+        }
+    }
+
+    private func actionTile(icon: String, title: String, tint: Color = .accentColor) -> some View {
+        tile {
+            Image(systemName: icon).font(.title3)
+            Text(title).font(.caption2.weight(.medium))
+        }
+        .foregroundStyle(tint)
+    }
+
+    private func tile<Content: View>(@ViewBuilder _ content: () -> Content) -> some View {
+        VStack(spacing: 5) { content() }
+            .frame(maxWidth: .infinity)
+            .padding(.vertical, 8)
+            .background(.quaternary, in: RoundedRectangle(cornerRadius: 12))
+    }
+
+    private var activeProvider: TileProvider { .provider(id: tileProviderID) }
+
+    private var activeTileSource: ActiveTileSource {
+        let provider = activeProvider
+        let key = provider.apiKeyDefaultsKey == SettingsKey.stadiaAPIKey ? (Secrets.stadiaAPIKey ?? "") : ""
+        return ActiveTileSource(
+            providerID: provider.id,
+            urlTemplate: provider.resolvedTemplate(apiKey: key),
+            maximumZ: provider.maximumZ
+        )
+    }
+
     // MARK: Header
 
     private var header: some View {
@@ -55,7 +213,7 @@ struct HikeDetailView: View {
                 .font(.system(size: 24, weight: .semibold))
                 .foregroundStyle(.white)
                 .frame(width: 56, height: 56)
-                .background(hike.tint, in: RoundedRectangle(cornerRadius: 14))
+                .background(hike.tintOpaque, in: RoundedRectangle(cornerRadius: 14))
 
             VStack(alignment: .leading, spacing: 4) {
                 Text(hike.title)
@@ -142,7 +300,7 @@ struct HikeDetailView: View {
                 .interpolationMethod(.catmullRom)
                 .foregroundStyle(
                     LinearGradient(
-                        colors: [hike.tint.opacity(0.45), hike.tint.opacity(0.05)],
+                        colors: [hike.tintOpaque.opacity(0.45), hike.tintOpaque.opacity(0.05)],
                         startPoint: .top,
                         endPoint: .bottom
                     )
@@ -153,7 +311,7 @@ struct HikeDetailView: View {
                     y: .value("Elevation", sample.elevation)
                 )
                 .interpolationMethod(.catmullRom)
-                .foregroundStyle(hike.tint)
+                .foregroundStyle(hike.tintOpaque)
                 .lineStyle(StrokeStyle(lineWidth: 2))
             }
 
@@ -166,7 +324,7 @@ struct HikeDetailView: View {
                     x: .value("Distance", tracker.distanceMeters),
                     y: .value("Elevation", tracker.elevation)
                 )
-                .foregroundStyle(hike.tint)
+                .foregroundStyle(hike.tintOpaque)
                 .symbolSize(90)
                 .annotation(position: .top, spacing: 4,
                             overflowResolution: .init(x: .fit(to: .chart), y: .disabled)) {
@@ -247,11 +405,11 @@ struct HikeDetailView: View {
     private var elevationPlaceholder: some View {
         ZStack {
             RoundedRectangle(cornerRadius: 16)
-                .fill(hike.tint.opacity(0.12))
+                .fill(hike.tintOpaque.opacity(0.12))
             VStack(spacing: 8) {
                 Image(systemName: "chart.xyaxis.line")
                     .font(.largeTitle)
-                    .foregroundStyle(hike.tint)
+                    .foregroundStyle(hike.tintOpaque)
                 Text("No elevation data in this file")
                     .font(.subheadline)
                     .foregroundStyle(.secondary)

@@ -21,9 +21,10 @@ nonisolated final class OSMTileOverlay: MKTileOverlay, @unchecked Sendable {
         cache.memoryImage(forKey: cacheKey(for: path))
     }
 
-    /// Asynchronously ensures the tile is cached (network if needed).
-    func cacheTile(at path: MKTileOverlayPath) async {
-        await cache.loadTile(forKey: cacheKey(for: path), url: url(forTilePath: path))
+    /// Asynchronously ensures the tile is cached (network if needed). Returns
+    /// whether a tile is now available, so the renderer only redraws on success.
+    func cacheTile(at path: MKTileOverlayPath) async -> Bool {
+        await cache.loadTile(forKey: cacheKey(for: path), url: url(forTilePath: path)) != nil
     }
 
     /// Provider-namespaced cache key, so switching providers doesn't reuse tiles.

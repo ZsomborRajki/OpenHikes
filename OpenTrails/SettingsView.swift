@@ -12,7 +12,6 @@ struct SettingsView: View {
     @Environment(\.dismiss) private var dismiss
 
     @AppStorage(SettingsKey.tileProviderID) private var tileProviderID = TileProvider.default.id
-    @AppStorage(SettingsKey.stadiaAPIKey) private var stadiaAPIKey = ""
 
     private var selectedProvider: TileProvider {
         TileProvider.provider(id: tileProviderID)
@@ -85,9 +84,6 @@ struct SettingsView: View {
             ForEach(TileProvider.all) { provider in
                 providerRow(provider)
             }
-            if selectedProvider.requiresAPIKey {
-                apiKeyField(for: selectedProvider)
-            }
         } header: {
             Text("Map Tiles")
         } footer: {
@@ -130,34 +126,6 @@ struct SettingsView: View {
         }
         .buttonStyle(.plain)
         .foregroundStyle(.primary)
-    }
-
-    @ViewBuilder
-    private func apiKeyField(for provider: TileProvider) -> some View {
-        VStack(alignment: .leading, spacing: 8) {
-            SecureField("\(provider.name) API key", text: apiKeyBinding(for: provider))
-                .textContentType(.password)
-                .autocorrectionDisabled()
-                #if os(iOS)
-                .textInputAutocapitalization(.never)
-                #endif
-
-            if apiKeyBinding(for: provider).wrappedValue.isEmpty {
-                Label("Add a key to load \(provider.name) tiles.", systemImage: "exclamationmark.triangle.fill")
-                    .font(.caption)
-                    .foregroundStyle(.orange)
-            }
-        }
-        .padding(.vertical, 2)
-    }
-
-    /// Resolves the storage binding for a provider's API key. Only Stadia has one
-    /// today; extend this switch as keyed providers are added.
-    private func apiKeyBinding(for provider: TileProvider) -> Binding<String> {
-        switch provider.apiKeyDefaultsKey {
-        case SettingsKey.stadiaAPIKey: return $stadiaAPIKey
-        default: return .constant("")
-        }
     }
 }
 

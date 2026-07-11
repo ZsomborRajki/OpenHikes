@@ -15,6 +15,7 @@ struct MapSheet: View {
     @Binding var detent: PresentationDetent
     @Binding var selectedHike: Hike?
     var highlight: RouteHighlight
+    var mapController: MapController
 
     var onRecord: () -> Void = {}
     var onImportGPX: (URL) -> Void = { _ in }
@@ -50,7 +51,12 @@ struct MapSheet: View {
                 }
             }
             .navigationDestination(for: Hike.self) { hike in
-                HikeDetailView(hike: hike, highlight: highlight)
+                HikeDetailView(
+                    hike: hike,
+                    highlight: highlight,
+                    mapController: mapController,
+                    onZoomToRoute: { withAnimation { detent = .medium } }
+                )
             }
             #if os(iOS)
             // Set the title mode at the stack level so it's resolved before
@@ -157,7 +163,7 @@ struct MapSheet: View {
                 }
                 .buttonStyle(.plain)
                 .listRowBackground(
-                    hike.id == selectedHike?.id ? hike.tint.opacity(0.15) : Color.clear
+                    hike.id == selectedHike?.id ? hike.tintOpaque.opacity(0.15) : Color.clear
                 )
                 .swipeActions(edge: .trailing) {
                     Button(role: .destructive) {
@@ -219,7 +225,7 @@ private struct HikeRow: View {
                 .font(.system(size: 16, weight: .semibold))
                 .foregroundStyle(.white)
                 .frame(width: 38, height: 38)
-                .background(hike.tint, in: Circle())
+                .background(hike.tintOpaque, in: Circle())
 
             VStack(alignment: .leading, spacing: 2) {
                 Text(hike.title)
@@ -234,7 +240,7 @@ private struct HikeRow: View {
 
             Image(systemName: "chevron.right")
                 .font(.subheadline.weight(.semibold))
-                .foregroundStyle(isSelected ? AnyShapeStyle(hike.tint) : AnyShapeStyle(.tertiary))
+                .foregroundStyle(isSelected ? AnyShapeStyle(hike.tintOpaque) : AnyShapeStyle(.tertiary))
         }
     }
 }

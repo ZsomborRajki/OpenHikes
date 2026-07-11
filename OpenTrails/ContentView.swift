@@ -20,25 +20,32 @@ struct ContentView: View {
     @State private var sheetDetent: PresentationDetent = .height(80)
     @State private var selectedHike: Hike?
     @State private var highlight = RouteHighlight()
+    /// Lets the hike detail view drive one-shot map commands (e.g. the Zoom button).
+    @State private var mapController = MapController()
 
     /// The sheet's live top edge, observed directly by the map so dragging the
     /// sheet never re-renders this view or the sheet's contents.
     @State private var sheetMetrics = SheetMetrics()
 
-    /// The selected tile provider and its API key, persisted by the settings sheet.
+    /// The selected tile provider, persisted by the settings sheet.
     @AppStorage(SettingsKey.tileProviderID) private var tileProviderID = TileProvider.default.id
-    @AppStorage(SettingsKey.stadiaAPIKey) private var stadiaAPIKey = ""
 
     /// The route drawn on the map — always the currently selected hike, if any.
     private var displayedRoute: DisplayedRoute? {
         guard let hike = selectedHike else { return nil }
-        return DisplayedRoute(id: hike.id, coordinates: hike.coordinates, tint: hike.tint)
+        return DisplayedRoute(
+            id: hike.id,
+            coordinates: hike.coordinates,
+            tint: hike.tint,
+            width: hike.routeWidth
+        )
     }
 
     /// Resolves the selected provider (with API key substituted) for the map.
+    /// A key typed into Settings wins; otherwise fall back to the bundled key.
     private var activeTileSource: ActiveTileSource {
         let provider = TileProvider.provider(id: tileProviderID)
-        let apiKey = provider.apiKeyDefaultsKey == SettingsKey.stadiaAPIKey ? stadiaAPIKey : ""
+        let apiKey = provider.apiKeyDefaultsKey == SettingsKey.stadiaAPIKey ? (Secrets.stadiaAPIKey ?? "") : ""
         return ActiveTileSource(
             providerID: provider.id,
             urlTemplate: provider.resolvedTemplate(apiKey: apiKey),
@@ -52,7 +59,8 @@ struct ContentView: View {
             route: displayedRoute,
             highlight: highlight,
             sheetMetrics: sheetMetrics,
-            tileSource: activeTileSource
+            tileSource: activeTileSource,
+            mapController: mapController
         )
             .ignoresSafeArea()
             .overlay(alignment: .topLeading) {
@@ -74,6 +82,7 @@ struct ContentView: View {
                     detent: $sheetDetent,
                     selectedHike: $selectedHike,
                     highlight: highlight,
+                    mapController: mapController,
                     onRecord: recordHike,
                     onImportGPX: importGPX,
                     onSheetTopChange: { sheetMetrics.topY = $0 }

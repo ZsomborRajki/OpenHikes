@@ -9,6 +9,11 @@ import SwiftUI
 import SwiftData
 import CoreLocation
 import MapKit
+#if canImport(UIKit)
+import UIKit
+#elseif canImport(AppKit)
+import AppKit
+#endif
 
 @Model
 final class Hike {
@@ -19,8 +24,11 @@ final class Hike {
     var distanceMeters: Double
     /// Activity date — the GPX start time when available, otherwise the import date.
     var date: Date
-    /// Route tint, stored as a "#RRGGBB" string. Shared with the map overlay.
+    /// Route tint, stored as "#RRGGBB" or "#RRGGBBAA". The alpha is used only for
+    /// the map polyline; other UI reads ``tintOpaque``.
     var tintHex: String
+    /// Map polyline width, in points.
+    var routeWidth: Double
     /// SF Symbol shown in the row's colored circle.
     var symbol: String
     /// Ordered track points making up the route.
@@ -37,6 +45,7 @@ final class Hike {
         distanceMeters: Double,
         date: Date = .now,
         tintHex: String = "#34C759",
+        routeWidth: Double = 5,
         symbol: String = "figure.hiking",
         route: [RouteCoordinate] = [],
         trackDescription: String? = nil,
@@ -48,6 +57,7 @@ final class Hike {
         self.distanceMeters = distanceMeters
         self.date = date
         self.tintHex = tintHex
+        self.routeWidth = routeWidth
         self.symbol = symbol
         self.route = route
         self.trackDescription = trackDescription
@@ -63,7 +73,13 @@ extension Hike {
         Measurement(value: distanceMeters, unit: .meters)
     }
 
+    /// Full tint including the user's chosen alpha — used for the map polyline.
     var tint: Color { Color(hex: tintHex) ?? .green }
+
+    /// Tint forced fully opaque — used everywhere except the map line (graph,
+    /// list-row circle, header icon, highlight dot), so transparency reads only
+    /// on the route itself.
+    var tintOpaque: Color { tint.opaque }
 
     /// "5.2 km · Jun 12, 2026" — length and record/import date.
     var subtitle: String {
@@ -184,15 +200,59 @@ struct RouteCoordinate: Codable, Hashable {
 }
 
 extension Color {
-    /// Parses a "#RRGGBB" (or "RRGGBB") hex string.
+    /// The resolved sRGB components (0…1) of this color.
+    private var rgba: (r: CGFloat, g: CGFloat, b: CGFloat, a: CGFloat) {
+        #if canImport(UIKit)
+        var r: CGFloat = 0, g: CGFloat = 0, b: CGFloat = 0, a: CGFloat = 0
+        UIColor(self).getRed(&r, green: &g, blue: &b, alpha: &a)
+        return (r, g, b, a)
+        #else
+        let c = NSColor(self).usingColorSpace(.sRGB) ?? .black
+        return (c.redComponent, c.greenComponent, c.blueComponent, c.alphaComponent)
+        #endif
+    }
+
+    /// "#RRGGBBAA" for the resolved color — the inverse of `init?(hex:)`, used to
+    /// persist a picked color (with its alpha) back into `Hike.tintHex`.
+    var hexRGBA: String {
+        let c = rgba
+        return String(
+            format: "#%02X%02X%02X%02X",
+            Int((c.r * 255).rounded()), Int((c.g * 255).rounded()),
+            Int((c.b * 255).rounded()), Int((c.a * 255).rounded())
+        )
+    }
+
+    /// The same color forced fully opaque (alpha = 1).
+    var opaque: Color {
+        let c = rgba
+        return Color(.sRGB, red: c.r, green: c.g, blue: c.b, opacity: 1)
+    }
+
+    /// Parses "#RRGGBB" or "#RRGGBBAA" (with or without the leading `#`).
     init?(hex: String) {
         var s = hex.trimmingCharacters(in: .whitespacesAndNewlines)
         if s.hasPrefix("#") { s.removeFirst() }
-        guard s.count == 6, let value = UInt32(s, radix: 16) else { return nil }
-        self.init(
-            red: Double((value >> 16) & 0xFF) / 255,
-            green: Double((value >> 8) & 0xFF) / 255,
-            blue: Double(value & 0xFF) / 255
-        )
+        guard let value = UInt32(s, radix: 16) else { return nil }
+        switch s.count {
+        case 6:
+            self.init(
+                .sRGB,
+                red: Double((value >> 16) & 0xFF) / 255,
+                green: Double((value >> 8) & 0xFF) / 255,
+                blue: Double(value & 0xFF) / 255,
+                opacity: 1
+            )
+        case 8:
+            self.init(
+                .sRGB,
+                red: Double((value >> 24) & 0xFF) / 255,
+                green: Double((value >> 16) & 0xFF) / 255,
+                blue: Double((value >> 8) & 0xFF) / 255,
+                opacity: Double(value & 0xFF) / 255
+            )
+        default:
+            return nil
+        }
     }
 }

@@ -1,0 +1,23 @@
+# Secrets — bundled API keys, never commit the real one.
+# Copy Secrets.example.plist to OpenTrails/Secrets.plist and fill in your key.
+**/Secrets.plist
+
+# Xcode user-specific state
+xcuserdata/
+*.xcuserstate
+*.xcuserdatad/
+
+# Build products
+build/
+DerivedData/
+*.xcarchive
+*.ipa
+*.dSYM.zip
+*.dSYM
+
+# Swift Package Manager
+.swiftpm/
+.build/
+
+# macOS
+.DS_Store

@@ -18,7 +18,10 @@ typealias MapViewRepresentable = UIViewRepresentable
 struct DisplayedRoute {
     let id: UUID
     let coordinates: [CLLocationCoordinate2D]
+    /// Line color, including the user's chosen alpha.
     var tint: Color = .green
+    /// Line width in points.
+    var width: Double = 5
 }
 
 /// The scrub-highlight location, held in a reference type so it can be updated at
@@ -37,6 +40,19 @@ final class RouteHighlight {
 @Observable
 final class SheetMetrics {
     var topY: CGFloat = 0
+}
+
+/// One-shot map commands the detail view issues (e.g. the Zoom button). Held in a
+/// reference type the map observes directly, so triggering one doesn't re-render
+/// any SwiftUI view. `fitRouteRequest` is a token — bumping it asks the map to
+/// re-fit the current route into view.
+@MainActor
+@Observable
+final class MapController {
+    private(set) var fitRouteRequest: Int = 0
+
+    /// Ask the map to zoom to fit the currently drawn route.
+    func fitToRoute() { fitRouteRequest += 1 }
 }
 
 struct OSMMapView: MapViewRepresentable {
@@ -58,6 +74,10 @@ struct OSMMapView: MapViewRepresentable {
     /// rebuilds the overlay on the next update.
     var tileSource: ActiveTileSource
 
+    /// Observed directly by the map so the detail view's Zoom button can re-fit
+    /// the route without re-rendering any view.
+    var mapController: MapController
+
     func makeCoordinator() -> Coordinator { Coordinator() }
 
     private func makeMapView(_ coordinator: Coordinator) -> MKMapView {
@@ -67,6 +87,7 @@ struct OSMMapView: MapViewRepresentable {
         mapView.pointOfInterestFilter = .excludingAll
         coordinator.observeHighlight(highlight, on: mapView)
         coordinator.observeSheetMetrics(sheetMetrics, on: mapView)
+        coordinator.observeMapController(mapController, on: mapView)
 
         // Raster tiles from the selected provider, replacing Apple's base map.
         applyTileSource(to: mapView, coordinator)
@@ -149,22 +170,36 @@ struct OSMMapView: MapViewRepresentable {
         guard let route, route.coordinates.count > 1 else { return }
 
         coordinator.routeTint = route.tint
+        coordinator.routeWidth = route.width
         let polyline = MKPolyline(coordinates: route.coordinates, count: route.coordinates.count)
         coordinator.routeOverlay = polyline
         mapView.addOverlay(polyline, level: .aboveLabels)
 
-        #if os(macOS)
-        let insets = NSEdgeInsets(top: 60, left: 60, bottom: 60, right: 60)
-        #else
-        let insets = UIEdgeInsets(top: 80, left: 60, bottom: 80, right: 60)
-        #endif
-        mapView.setVisibleMapRect(polyline.boundingMapRect, edgePadding: insets, animated: true)
+        coordinator.fitToCurrentRoute(mapView, animated: true)
+    }
+
+    /// Restyles the drawn route (color/alpha, width, and the highlight dot) when
+    /// those change without rebuilding the overlay — the route id stays the same.
+    private func updateRouteStyle(_ mapView: MKMapView, _ coordinator: Coordinator) {
+        guard let route, coordinator.routeOverlay != nil else { return }
+        let tintChanged = coordinator.routeTint != route.tint
+        let widthChanged = coordinator.routeWidth != route.width
+        guard tintChanged || widthChanged else { return }
+        coordinator.routeTint = route.tint
+        coordinator.routeWidth = route.width
+        if let renderer = coordinator.routeRenderer {
+            coordinator.applyStyle(to: renderer)
+            renderer.setNeedsDisplay()
+        }
+        // The dot mirrors the tint (opaque); only refresh it when the color moves.
+        if tintChanged { coordinator.refreshHighlightColor(on: mapView) }
     }
 
     private func update(_ mapView: MKMapView, _ coordinator: Coordinator) {
         applyTileSource(to: mapView, coordinator)
         centerIfNeeded(mapView, coordinator)
         updateRoute(mapView, coordinator)
+        updateRouteStyle(mapView, coordinator)
         // Reapply on layout-driven updates (e.g. first layout, rotation) so the
         // button is positioned correctly even before the sheet reports a drag.
         coordinator.applySheetTop(on: mapView)
@@ -182,13 +217,63 @@ struct OSMMapView: MapViewRepresentable {
         var hasCentered = false
         var routeID: UUID?
         var routeOverlay: MKPolyline?
+        /// The live renderer for the route line, kept so a tint change can recolor
+        /// it in place without rebuilding the overlay.
+        weak var routeRenderer: MKPolylineRenderer?
         /// The currently installed tile overlay and a key identifying its source.
         var tileOverlay: OSMTileOverlay?
         var tileSourceKey: String?
         var routeTint: Color = .green
+        var routeWidth: Double = 5
         var highlightAnnotation: MKPointAnnotation?
         var trackingBottomConstraint: NSLayoutConstraint?
         private weak var sheetMetrics: SheetMetrics?
+
+        /// Edge padding used whenever the map is fitted to the route.
+        #if os(macOS)
+        static let routeInsets = NSEdgeInsets(top: 60, left: 60, bottom: 60, right: 60)
+        #else
+        static let routeInsets = UIEdgeInsets(top: 80, left: 60, bottom: 80, right: 60)
+        #endif
+
+        /// Applies the current tint (with its alpha) and width to the route line.
+        func applyStyle(to renderer: MKPolylineRenderer) {
+            #if os(macOS)
+            renderer.strokeColor = NSColor(routeTint)
+            #else
+            renderer.strokeColor = UIColor(routeTint)
+            #endif
+            renderer.lineWidth = CGFloat(routeWidth)
+        }
+
+        /// Fits the currently drawn route into view. Shared by the initial draw and
+        /// the detail view's Zoom button.
+        func fitToCurrentRoute(_ mapView: MKMapView, animated: Bool) {
+            guard let polyline = routeOverlay else { return }
+            mapView.setVisibleMapRect(polyline.boundingMapRect, edgePadding: Self.routeInsets, animated: animated)
+        }
+
+        /// Observes `MapController.fitRouteRequest` and re-fits the route on each
+        /// bump, then re-registers — same off-SwiftUI technique as `observeHighlight`.
+        func observeMapController(_ controller: MapController, on mapView: MKMapView) {
+            withObservationTracking {
+                _ = controller.fitRouteRequest
+            } onChange: { [weak self, weak mapView, weak controller] in
+                Task { @MainActor in
+                    guard let self, let mapView, let controller else { return }
+                    self.fitToCurrentRoute(mapView, animated: true)
+                    self.observeMapController(controller, on: mapView)
+                }
+            }
+        }
+
+        /// Rebuilds the highlight annotation so `viewFor` recreates its dot in the
+        /// new route tint. Cheap — there is at most one such annotation.
+        func refreshHighlightColor(on mapView: MKMapView) {
+            guard let annotation = highlightAnnotation else { return }
+            mapView.removeAnnotation(annotation)
+            mapView.addAnnotation(annotation)
+        }
 
         /// Observes `sheetMetrics.topY` and repositions the tracking button
         /// imperatively, then re-registers. Keeps sheet drags off SwiftUI's
@@ -276,11 +361,11 @@ struct OSMMapView: MapViewRepresentable {
             view.wantsLayer = true
             let layer = view.layer ?? CALayer()
             view.layer = layer
-            layer.backgroundColor = NSColor(routeTint).cgColor
+            layer.backgroundColor = NSColor(routeTint).withAlphaComponent(1).cgColor
             layer.borderColor = NSColor.white.cgColor
             #else
             let layer = view.layer
-            layer.backgroundColor = UIColor(routeTint).cgColor
+            layer.backgroundColor = UIColor(routeTint).withAlphaComponent(1).cgColor
             layer.borderColor = UIColor.white.cgColor
             #endif
             layer.cornerRadius = diameter / 2
@@ -297,15 +382,11 @@ struct OSMMapView: MapViewRepresentable {
                 return CachingTileOverlayRenderer(overlay: osmOverlay)
             }
             if let polyline = overlay as? MKPolyline {
-                let renderer = MKPolylineRenderer(polyline: polyline)
-                #if os(macOS)
-                renderer.strokeColor = NSColor(routeTint)
-                #else
-                renderer.strokeColor = UIColor(routeTint)
-                #endif
-                renderer.lineWidth = 5
+                let renderer = DirectionalPolylineRenderer(polyline: polyline)
+                applyStyle(to: renderer)
                 renderer.lineJoin = .round
                 renderer.lineCap = .round
+                routeRenderer = renderer
                 return renderer
             }
             return MKOverlayRenderer(overlay: overlay)
