@@ -1,0 +1,15 @@
+{
+  "originHash" : "8f2fdafffaf51245c1236c33a0e301705ccdb647b67804370a2cfe4100235d89",
+  "pins" : [
+    {
+      "identity" : "coregpx",
+      "kind" : "remoteSourceControl",
+      "location" : "https://github.com/vincentneo/CoreGPX",
+      "state" : {
+        "revision" : "42662cc9235d385bdd0356c8f4cb7b581da24e39",
+        "version" : "0.9.3"
+      }
+    }
+  ],
+  "version" : 3
+}
