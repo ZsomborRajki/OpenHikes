@@ -10,10 +10,15 @@
 
 import Foundation
 import CoreLocation
+import os
 
 @MainActor
 @Observable
 final class OfflineTileDownloader {
+    /// `nonisolated`: logged from within `group.addTask`, which runs off the
+    /// main actor.
+    private nonisolated static let logger = Logger(subsystem: "OpenTrails", category: "OfflineDownload")
+
     enum Phase: Equatable { case idle, downloading, finished, failed(String) }
 
     private(set) var phase: Phase = .idle
@@ -31,11 +36,12 @@ final class OfflineTileDownloader {
     static let zoomRange = 13...18
     static let defaultMaxZoom = 16
 
-    /// The shallowest zoom to save (whole-route overview).
-    static let minZoom = 10
+    /// The shallowest zoom to save (whole-route overview). `nonisolated`: a
+    /// plain constant read from the `nonisolated` tile-enumeration functions.
+    nonisolated static let minZoom = 10
     /// Soft cap on tiles — deeper zoom levels are dropped once exceeded, so a huge
     /// route doesn't try to fetch hundreds of thousands of tiles.
-    static let tileBudget = 4_000
+    nonisolated static let tileBudget = 4_000
     private let maxConcurrent = 5
 
     /// Begins downloading the tiles covering `route` from `source`, saving detail
@@ -92,7 +98,13 @@ final class OfflineTileDownloader {
                 active += 1
                 group.addTask {
                     guard let url = tile.url(from: source.urlTemplate) else { return }
-                    await cache.loadTile(forKey: tile.cacheKey(providerID: source.providerID, scale: scale), url: url)
+                    let key = tile.cacheKey(providerID: source.providerID, scale: scale)
+                    let image = await cache.loadTile(forKey: key, url: url)
+                    #if DEBUG
+                    if image != nil {
+                        Self.logger.debug("Bulk-saved tile \(key, privacy: .public)")
+                    }
+                    #endif
                 }
             }
 
@@ -115,18 +127,23 @@ final class OfflineTileDownloader {
     /// The cache keys for every tile a download of `route` would produce for the
     /// given provider/scale/depth — so stored tiles can be measured and removed
     /// after the fact. Deterministic: recomputing yields exactly the saved set.
-    static func tileKeys(for route: [CLLocationCoordinate2D], providerID: String, providerMaxZoom: Int, maxZoom: Int, scale: CGFloat) -> [String] {
+    nonisolated static func tileKeys(for route: [CLLocationCoordinate2D], providerID: String, providerMaxZoom: Int, maxZoom: Int, scale: CGFloat) -> [String] {
         let clamped = min(max(maxZoom, minZoom), providerMaxZoom)
         return tiles(covering: route, minZoom: minZoom, maxZoom: clamped, budget: tileBudget)
             .map { $0.cacheKey(providerID: providerID, scale: scale) }
     }
 
-    /// The union of cache keys across all of a hike's recorded downloads.
-    static func storedTileKeys(for hike: Hike) -> [String] {
-        guard !hike.offlineDownloads.isEmpty else { return [] }
-        let route = hike.coordinates
+    /// Pure, `nonisolated` core, taking plain values instead of a `Hike` so it
+    /// can run off the main actor. Enumerating tiles across every
+    /// recorded download is real CPU work (trig per tile, up to `tileBudget`
+    /// tiles each), so callers that do this repeatedly (e.g. re-measuring
+    /// storage as auto-save drains in new keys) must not run it on the main
+    /// thread — see ``HikeDetailView/refreshStoredBytes()``.
+    nonisolated static func storedTileKeys(route: [CLLocationCoordinate2D], offlineDownloads: [OfflineDownloadRecord]) -> [String] {
+        assertOffMainThread("storedTileKeys(route:offlineDownloads:) does O(tileBudget) trig work per download record — call it off the main thread")
+        guard !offlineDownloads.isEmpty else { return [] }
         var keys = Set<String>()
-        for record in hike.offlineDownloads {
+        for record in offlineDownloads {
             let provider = TileProvider.provider(id: record.providerID)
             keys.formUnion(tileKeys(
                 for: route,
@@ -162,7 +179,7 @@ final class OfflineTileDownloader {
 
     /// Enumerates the tiles covering the route's bounding box from `minZoom` up,
     /// stopping before a zoom level that would blow the tile budget.
-    private static func tiles(covering route: [CLLocationCoordinate2D], minZoom: Int, maxZoom: Int, budget: Int) -> [Tile] {
+    private nonisolated static func tiles(covering route: [CLLocationCoordinate2D], minZoom: Int, maxZoom: Int, budget: Int) -> [Tile] {
         guard maxZoom >= minZoom else { return [] }
 
         var minLat = 90.0, maxLat = -90.0, minLon = 180.0, maxLon = -180.0
@@ -175,10 +192,10 @@ final class OfflineTileDownloader {
         var running = 0
         for z in minZoom...maxZoom {
             let n = 1 << z
-            let xMin = clamp(tileX(minLon, z: z), to: n)
-            let xMax = clamp(tileX(maxLon, z: z), to: n)
-            let yMin = clamp(tileY(maxLat, z: z), to: n) // north edge → smaller y
-            let yMax = clamp(tileY(minLat, z: z), to: n) // south edge → larger y
+            let xMin = SlippyTileMath.clamp(SlippyTileMath.tileX(minLon, z: z), to: n)
+            let xMax = SlippyTileMath.clamp(SlippyTileMath.tileX(maxLon, z: z), to: n)
+            let yMin = SlippyTileMath.clamp(SlippyTileMath.tileY(maxLat, z: z), to: n) // north edge → smaller y
+            let yMax = SlippyTileMath.clamp(SlippyTileMath.tileY(minLat, z: z), to: n) // south edge → larger y
             let count = (xMax - xMin + 1) * (yMax - yMin + 1)
             if running + count > budget && !tiles.isEmpty { break }
             for x in xMin...xMax {
@@ -189,18 +206,5 @@ final class OfflineTileDownloader {
             running += count
         }
         return tiles
-    }
-
-    private static func clamp(_ value: Int, to n: Int) -> Int { min(max(value, 0), n - 1) }
-
-    /// Slippy-map tile column for a longitude at zoom `z`.
-    private static func tileX(_ lon: Double, z: Int) -> Int {
-        Int(floor((lon + 180) / 360 * Double(1 << z)))
-    }
-
-    /// Slippy-map tile row for a latitude at zoom `z`.
-    private static func tileY(_ lat: Double, z: Int) -> Int {
-        let r = lat * .pi / 180
-        return Int(floor((1 - log(tan(r) + 1 / cos(r)) / .pi) / 2 * Double(1 << z)))
     }
 }

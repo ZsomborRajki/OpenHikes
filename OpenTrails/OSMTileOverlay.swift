@@ -24,7 +24,16 @@ nonisolated final class OSMTileOverlay: MKTileOverlay, @unchecked Sendable {
     /// Asynchronously ensures the tile is cached (network if needed). Returns
     /// whether a tile is now available, so the renderer only redraws on success.
     func cacheTile(at path: MKTileOverlayPath) async -> Bool {
-        await cache.loadTile(forKey: cacheKey(for: path), url: url(forTilePath: path)) != nil
+        let key = cacheKey(for: path)
+        guard let image = await cache.loadTile(forKey: key, url: url(forTilePath: path)) else { return false }
+
+        // Providers that disallow bulk downloading (e.g. OSM) still allow normal
+        // browsing, so opportunistically keep tiles the user actually views —
+        // never a synthetic prefetch, just what MapKit already asked for.
+        if !TileProvider.provider(id: providerID).supportsBulkDownload {
+            AutoSaveTileStore.shared.considerPersisting(key: key, z: path.z, x: path.x, y: path.y, image: image)
+        }
+        return true
     }
 
     /// Provider-namespaced cache key, so switching providers doesn't reuse tiles.

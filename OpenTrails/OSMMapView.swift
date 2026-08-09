@@ -7,6 +7,7 @@
 
 import SwiftUI
 import MapKit
+import os
 
 #if os(macOS)
 typealias MapViewRepresentable = NSViewRepresentable
@@ -64,6 +65,8 @@ final class MapController {
 }
 
 struct OSMMapView: MapViewRepresentable {
+    fileprivate static let logger = Logger(subsystem: "OpenTrails", category: "MapView")
+
     /// The coordinate to center on. The map recenters the first time this is set.
     var coordinate: CLLocationCoordinate2D?
 
@@ -123,6 +126,9 @@ struct OSMMapView: MapViewRepresentable {
         // Below the route line, which is also added at `.aboveLabels`.
         mapView.insertOverlay(overlay, at: 0, level: .aboveLabels)
         coordinator.tileOverlay = overlay
+        #if DEBUG
+        Self.logger.debug("Installed tile overlay for \(key, privacy: .public)")
+        #endif
     }
 
     /// Enables MapKit's standard controls. Compass and scale are built-in flags;

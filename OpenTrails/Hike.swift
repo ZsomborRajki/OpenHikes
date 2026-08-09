@@ -38,6 +38,20 @@ final class Hike {
     /// so measure and remove) exactly the tiles each one saved.
     var offlineDownloads: [OfflineDownloadRecord]
 
+    /// Cache keys of tiles auto-saved for this hike while browsing (OSM-style,
+    /// non-bulk-downloadable providers) — recorded exactly, since (unlike
+    /// ``OfflineDownloadRecord``) organic partial coverage can't be recomputed
+    /// deterministically from a bounding box.
+    ///
+    /// The inline `= []`/`= false` defaults below (not just the `init`
+    /// parameter defaults) are required so SwiftData's lightweight migration
+    /// can backfill these values on existing rows — without them, adding the
+    /// column fails with "missing attribute values on mandatory destination
+    /// attribute" for anyone who already has hikes saved.
+    var autoSavedTileKeys: [String] = []
+    /// Whether auto-save is turned on for this hike's map.
+    var autoSaveTilesEnabled = true
+
     // Optional metadata pulled from the GPX file.
     var trackDescription: String?
     var author: String?
@@ -53,6 +67,8 @@ final class Hike {
         symbol: String = "figure.hiking",
         route: [RouteCoordinate] = [],
         offlineDownloads: [OfflineDownloadRecord] = [],
+        autoSavedTileKeys: [String] = [],
+        autoSaveTilesEnabled: Bool = false,
         trackDescription: String? = nil,
         author: String? = nil,
         keywords: String? = nil
@@ -66,6 +82,8 @@ final class Hike {
         self.symbol = symbol
         self.route = route
         self.offlineDownloads = offlineDownloads
+        self.autoSavedTileKeys = autoSavedTileKeys
+        self.autoSaveTilesEnabled = autoSaveTilesEnabled
         self.trackDescription = trackDescription
         self.author = author
         self.keywords = keywords

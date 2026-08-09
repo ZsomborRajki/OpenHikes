@@ -171,12 +171,20 @@ struct SettingsView: View {
     }
 
     private func deleteAllTiles() {
-        for hike in hikes { hike.offlineDownloads.removeAll() }
+        for hike in hikes {
+            hike.offlineDownloads.removeAll()
+            hike.autoSavedTileKeys.removeAll()
+            hike.autoSaveTilesEnabled = false
+        }
+        AutoSaveTileStore.shared.clearActiveHike()
         totalBytes = 0
         Task.detached { TileCache.shared.removeAllTiles() }
     }
 
-    private static func byteText(_ bytes: Int64) -> String {
+    /// `nonisolated`: passed as a bare function reference to `Optional.map`,
+    /// which (unlike a closure literal) doesn't inherit the view's actor
+    /// isolation. Doesn't touch any actor-isolated state, so this is safe.
+    private static nonisolated func byteText(_ bytes: Int64) -> String {
         ByteCountFormatter.string(fromByteCount: bytes, countStyle: .file)
     }
 

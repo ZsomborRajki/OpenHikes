@@ -10,6 +10,12 @@ import SwiftData
 
 @main
 struct OpenTrailsApp: App {
+    init() {
+        #if DEBUG
+        MainThreadWatchdog.start()
+        #endif
+    }
+
     var body: some Scene {
         WindowGroup {
             ContentView()

@@ -22,6 +22,8 @@ struct ContentView: View {
     @State private var highlight = RouteHighlight()
     /// Lets the hike detail view drive one-shot map commands (e.g. the Zoom button).
     @State private var mapController = MapController()
+    /// Tracks which hike (if any) is passively auto-saving OSM tiles while browsed.
+    @State private var autoSaveController = AutoSaveController()
 
     /// The sheet's live top edge, observed directly by the map so dragging the
     /// sheet never re-renders this view or the sheet's contents.
@@ -83,6 +85,7 @@ struct ContentView: View {
                     selectedHike: $selectedHike,
                     highlight: highlight,
                     mapController: mapController,
+                    autoSave: autoSaveController,
                     onRecord: recordHike,
                     onImportGPX: importGPX,
                     onSheetTopChange: { sheetMetrics.topY = $0 }
@@ -101,6 +104,10 @@ struct ContentView: View {
             // issue — so if it ever goes away, bring it right back.
             .onChange(of: showSheet) { _, shown in
                 if !shown { showSheet = true }
+            }
+            // Follows the selected hike so auto-save always tracks what's on screen.
+            .onChange(of: selectedHike) { _, hike in
+                autoSaveController.hikeSelectionChanged(to: hike)
             }
     }
 

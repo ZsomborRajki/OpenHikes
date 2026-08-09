@@ -17,6 +17,7 @@ struct MapSheet: View {
     @Binding var selectedHike: Hike?
     var highlight: RouteHighlight
     var mapController: MapController
+    var autoSave: AutoSaveController
 
     var onRecord: () -> Void = {}
     var onImportGPX: (URL) -> Void = { _ in }
@@ -63,6 +64,7 @@ struct MapSheet: View {
                     hike: hike,
                     highlight: highlight,
                     mapController: mapController,
+                    autoSave: autoSave,
                     onZoomToRoute: { withAnimation { detent = .medium } }
                 )
             }
@@ -231,9 +233,22 @@ struct MapSheet: View {
             selectedHike = nil
             highlight.coordinate = nil
         }
-        // Free any tiles this hike had saved offline before it goes away.
-        let keys = OfflineTileDownloader.storedTileKeys(for: hike)
-        if !keys.isEmpty { Task.detached { TileCache.shared.removeTiles(forKeys: keys) } }
+        // Free any tiles this hike had saved offline before it goes away. The
+        // key computation is real CPU work (tile-grid enumeration per download
+        // record), so it happens inside the detached task, not here.
+        let route = hike.route
+        let offlineDownloads = hike.offlineDownloads
+        let autoSavedTileKeys = hike.autoSavedTileKeys
+        if !offlineDownloads.isEmpty || !autoSavedTileKeys.isEmpty {
+            Task.detached {
+                let coordinates = route.map(\.clCoordinate)
+                let keys = Array(
+                    Set(OfflineTileDownloader.storedTileKeys(route: coordinates, offlineDownloads: offlineDownloads))
+                        .union(autoSavedTileKeys)
+                )
+                TileCache.shared.removeTiles(forKeys: keys)
+            }
+        }
         modelContext.delete(hike)
     }
 
@@ -309,17 +324,23 @@ struct MapSheet: View {
                 .foregroundStyle(.secondary)
             Text("No hikes yet")
                 .font(.headline)
-            Text("Tap ")
+            Text("Tap \(recordIcon) to record or \(importIcon) to import a GPX file.")
                 .font(.subheadline)
                 .foregroundStyle(.secondary)
-            + Text(Image(systemName: "record.circle")).foregroundStyle(.red)
-            + Text(" to record or ").font(.subheadline).foregroundStyle(.secondary)
-            + Text(Image(systemName: "square.and.arrow.down")).foregroundStyle(.tint)
-            + Text(" to import a GPX file.").font(.subheadline).foregroundStyle(.secondary)
         }
         .multilineTextAlignment(.center)
         .frame(maxWidth: .infinity)
         .padding(.top, 8)
+    }
+
+    // Interpolated into `emptyState`'s Text as `Text` values (not plain
+    // strings), so each keeps its own icon color inside the sentence.
+    private var recordIcon: Text {
+        Text(Image(systemName: "record.circle")).foregroundStyle(.red)
+    }
+
+    private var importIcon: Text {
+        Text(Image(systemName: "square.and.arrow.down")).foregroundStyle(.tint)
     }
 }
 

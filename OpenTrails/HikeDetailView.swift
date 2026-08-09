@@ -16,6 +16,8 @@ struct HikeDetailView: View {
     let highlight: RouteHighlight
     /// Drives one-shot map commands (the Zoom button).
     let mapController: MapController
+    /// Owns whether this hike is passively auto-saving OSM tiles while browsed.
+    let autoSave: AutoSaveController
     /// Collapses the sheet so the map is visible when zooming to the route.
     var onZoomToRoute: () -> Void = {}
 
@@ -61,6 +63,7 @@ struct HikeDetailView: View {
             trackerDistance = 0
             highlight.coordinate = built.coordinate(atDistance: 0)
             refreshStoredBytes()
+            autoSave.hikeSelectionChanged(to: hike)
         }
         // Record the download once it finishes, so its tiles can be measured/removed.
         .onChange(of: downloader.phase) { _, phase in
@@ -73,29 +76,64 @@ struct HikeDetailView: View {
             if !hike.offlineDownloads.contains(record) { hike.offlineDownloads.append(record) }
             refreshStoredBytes()
         }
+        // Keeps the byte count live as the background auto-save drain grows it.
+        // Watches `.count`, not the array itself — comparing two multi-thousand-
+        // element `[String]`s on every drain cycle is itself main-thread work.
+        .onChange(of: hike.autoSavedTileKeys.count) { _, _ in refreshStoredBytes() }
     }
 
     // MARK: Offline storage
 
-    /// Measures this hike's saved tiles off the main thread.
+    /// Measures this hike's saved tiles off the main thread. Deliberately reads
+    /// only plain, cheap properties here (array references, not `.coordinates`,
+    /// which remaps the whole route) — everything expensive (tile-grid
+    /// enumeration across every download record, the keys `Set` union, and the
+    /// disk stat calls) happens inside the detached task. This runs on every
+    /// auto-save drain cycle while the user is actively panning the map, so
+    /// anything synchronous here is felt as a UI hitch.
     private func refreshStoredBytes() {
-        let keys = OfflineTileDownloader.storedTileKeys(for: hike)
-        guard !keys.isEmpty else { storedBytes = 0; return }
-        Task { storedBytes = await Task.detached { TileCache.shared.bytes(forKeys: keys) }.value }
+        let route = hike.route
+        let offlineDownloads = hike.offlineDownloads
+        let autoSavedTileKeys = hike.autoSavedTileKeys
+        guard !offlineDownloads.isEmpty || !autoSavedTileKeys.isEmpty else { storedBytes = 0; return }
+        Task {
+            storedBytes = await Task.detached {
+                let coordinates = route.map(\.clCoordinate)
+                let keys = Array(
+                    Set(OfflineTileDownloader.storedTileKeys(route: coordinates, offlineDownloads: offlineDownloads))
+                        .union(autoSavedTileKeys)
+                )
+                return TileCache.shared.bytes(forKeys: keys)
+            }.value
+        }
     }
 
-    /// Forgets this hike's downloads and deletes their tiles from disk.
+    /// Forgets this hike's downloads and auto-saved tiles, and deletes them from
+    /// disk. The key computation (tile-grid enumeration per download record) is
+    /// real CPU work, so it's done inside the detached task, mirroring
+    /// ``refreshStoredBytes()``.
     private func deleteStoredTiles() {
-        let keys = OfflineTileDownloader.storedTileKeys(for: hike)
+        let route = hike.route
+        let offlineDownloads = hike.offlineDownloads
+        let autoSavedTileKeys = hike.autoSavedTileKeys
         hike.offlineDownloads.removeAll()
+        hike.autoSavedTileKeys.removeAll()
+        autoSave.setEnabled(false, for: hike)
         storedBytes = 0
         downloader.reset()
-        Task.detached { TileCache.shared.removeTiles(forKeys: keys) }
+        Task.detached {
+            let coordinates = route.map(\.clCoordinate)
+            let keys = Array(
+                Set(OfflineTileDownloader.storedTileKeys(route: coordinates, offlineDownloads: offlineDownloads))
+                    .union(autoSavedTileKeys)
+            )
+            TileCache.shared.removeTiles(forKeys: keys)
+        }
     }
 
     @ViewBuilder
     private var storedTilesRow: some View {
-        if !hike.offlineDownloads.isEmpty {
+        if !hike.offlineDownloads.isEmpty || !hike.autoSavedTileKeys.isEmpty {
             HStack {
                 Label(
                     storedBytes.map { "Offline tiles · \(Self.byteText($0))" } ?? "Offline tiles",
@@ -127,9 +165,10 @@ struct HikeDetailView: View {
         VStack(spacing: 12) {
             HStack(spacing: 12) {
                 zoomButton
-                downloadButton
+                if activeProvider.supportsBulkDownload { downloadButton }
                 colorControl
             }
+            if !activeProvider.supportsBulkDownload { autoSaveToggle }
             widthSlider
             if let note = downloadNote {
                 Text(note)
@@ -153,7 +192,6 @@ struct HikeDetailView: View {
         .disabled(hike.pointCount < 2)
     }
 
-    @ViewBuilder
     private var downloadButton: some View {
         Button {
             if downloader.phase == .downloading {
@@ -167,6 +205,24 @@ struct HikeDetailView: View {
         }
         .buttonStyle(.plain)
         .disabled(!canDownload && downloader.phase != .downloading)
+    }
+
+    /// OSM-style equivalent of `downloadButton`: a plain system `Toggle` for
+    /// passive auto-save instead of a button that starts a bulk download.
+    private var autoSaveToggle: some View {
+        Toggle(isOn: autoSaveBinding) {
+            Label("Auto-Save Tiles", systemImage: "arrow.down.circle")
+        }
+        .disabled(hike.pointCount < 2)
+    }
+
+    /// Reads/writes `hike.autoSaveTilesEnabled` through `autoSave`, so toggling
+    /// also starts/stops the store's active-hike tracking.
+    private var autoSaveBinding: Binding<Bool> {
+        Binding(
+            get: { hike.autoSaveTilesEnabled },
+            set: { autoSave.setEnabled($0, for: hike) }
+        )
     }
 
     @ViewBuilder
@@ -230,15 +286,25 @@ struct HikeDetailView: View {
     }
 
     private var downloadNote: String? {
+        guard activeProvider.supportsBulkDownload else { return autoSaveNote }
         switch downloader.phase {
         case .failed(let message): return message
         case .finished: return "Saved for offline use."
         case .downloading: return "Saving \(downloader.total) tiles…"
-        case .idle:
-            return activeProvider.supportsBulkDownload
-                ? nil
-                : "Offline saving needs a downloadable map (Stadia) — pick it in Settings."
+        case .idle: return nil
         }
+    }
+
+    /// Status copy for OSM-style providers, where offline saving is passive.
+    private var autoSaveNote: String? {
+        guard hike.autoSaveTilesEnabled else {
+            return "Turn on Auto-Save, then pan and zoom around the trail to save its tiles for offline use."
+        }
+        let count = hike.autoSavedTileKeys.count
+        if autoSave.isCapReached(for: hike) {
+            return "Auto-saved \(count) tiles near the trail — storage limit reached."
+        }
+        return "Auto-saving tiles near the trail as you browse (\(count) so far)."
     }
 
     private func actionTile(icon: String, title: String, tint: Color = .accentColor) -> some View {
@@ -449,6 +515,7 @@ private struct ElevationChartView: View, Equatable {
             }
         }
         .chartXSelection(value: $selectedDistance)
+        .chartXScale(domain: 0...(profile.samples.last?.distanceMeters ?? 1))
         .chartYScale(domain: domain)
         .chartXAxis {
             AxisMarks { value in

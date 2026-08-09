@@ -14,6 +14,8 @@ import MapKit
 import os
 
 nonisolated final class CachingTileOverlayRenderer: MKOverlayRenderer, TileCacheObserver {
+    private static let logger = Logger(subsystem: "OpenTrails", category: "TileRenderer")
+
     /// How many zoom levels to walk up looking for a tile to crop for overzoom.
     private let maxFallbackDepth = 8
 
@@ -39,7 +41,16 @@ nonisolated final class CachingTileOverlayRenderer: MKOverlayRenderer, TileCache
     /// `TileCacheObserver` — network is back: forget past failures and redraw so
     /// the now-reachable tiles get requested again.
     func tileCacheDidReconnect() {
-        failed.withLock { $0.removeAll() }
+        let clearedCount = failed.withLock { count -> Int in
+            let n = count.count
+            count.removeAll()
+            return n
+        }
+        #if DEBUG
+        if clearedCount > 0 {
+            Self.logger.debug("Reconnected — clearing \(clearedCount, privacy: .public) failed tile(s) for retry")
+        }
+        #endif
         setNeedsDisplay()
     }
 
@@ -53,6 +64,8 @@ nonisolated final class CachingTileOverlayRenderer: MKOverlayRenderer, TileCache
         let lastCol = Int(floor((mapRect.maxX - overlayRect.origin.x) / tileMapSize))
         let firstRow = Int(floor((mapRect.minY - overlayRect.origin.y) / tileMapSize))
         let lastRow = Int(floor((mapRect.maxY - overlayRect.origin.y) / tileMapSize))
+        // Column/row count at this zoom — used to keep tile indices in range.
+        let tileCount = 1 << zoom
 
         for x in firstCol...lastCol {
             for y in firstRow...lastRow {
@@ -62,7 +75,18 @@ nonisolated final class CachingTileOverlayRenderer: MKOverlayRenderer, TileCache
                     width: tileMapSize,
                     height: tileMapSize
                 )
-                let path = MKTileOverlayPath(x: x, y: y, z: zoom, contentScaleFactor: contentScaleFactor)
+                // MapKit can hand out columns/rows outside the valid tile grid
+                // while panning/scrolling continuously around the world (or
+                // near the poles) — an unnormalized path produces an invalid
+                // request URL that the tile server 400s, permanently blanking
+                // that spot until reconnect. Normalize before it's used for
+                // caching, fallback, or fetching.
+                let path = MKTileOverlayPath(
+                    x: SlippyTileMath.wrap(x, to: tileCount),
+                    y: SlippyTileMath.clamp(y, to: tileCount),
+                    z: zoom,
+                    contentScaleFactor: contentScaleFactor
+                )
                 let drawRect = rect(for: tileRect)
 
                 if let image = overlay.cachedImage(at: path) {
@@ -91,16 +115,25 @@ nonisolated final class CachingTileOverlayRenderer: MKOverlayRenderer, TileCache
         let isNew = inFlight.withLock { $0.insert(key).inserted }
         guard isNew else { return }
 
+        // Deliberately *not* @MainActor: `cacheTile` does network I/O, disk
+        // reads/writes, and (via AutoSaveTileStore) HEIC encoding — all
+        // synchronous once awaited. Keeping this Task unisolated runs that
+        // work off the main thread instead of stalling it every scroll/zoom.
         Task { [weak self] in
             let loaded = await overlay.cacheTile(at: fetchPath)
             guard let self else { return }
             self.inFlight.withLock { _ = $0.remove(key) }
             if loaded {
                 // Only redraw when there's actually a new tile to show — redrawing
-                // on failure is what spun the request loop.
-                self.setNeedsDisplay(tileRect)
+                // on failure is what spun the request loop. `setNeedsDisplay` must
+                // run on the main thread (MapKit/UIKit requirement that isn't
+                // statically enforced), hence the explicit hop here.
+                await MainActor.run { self.setNeedsDisplay(tileRect) }
             } else {
                 self.failed.withLock { _ = $0.insert(key) }
+                #if DEBUG
+                Self.logger.debug("Tile \(key, privacy: .public) marked failed — renders blank until reconnect (see TileRequests log for the reason)")
+                #endif
             }
         }
     }
