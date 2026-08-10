@@ -15,10 +15,17 @@ struct MapSheet: View {
     @Binding var searchText: String
     @Binding var detent: PresentationDetent
     @Binding var selectedHike: Hike?
+    /// Owned by `ContentView` rather than this view, so a widget tap can push
+    /// a hike's detail view from outside the sheet. Typed as `[Hike]` (not
+    /// `NavigationPath`) because the caller has to be able to ask what's
+    /// already on screen before deciding to navigate — `NavigationPath` can
+    /// be appended to but never read back.
+    @Binding var path: [Hike]
     var highlight: RouteHighlight
     var mapController: MapController
     var autoSave: AutoSaveController
     var locationManager: LocationManager
+    var backgroundTracker: BackgroundTrailTracker
 
     var onRecord: () -> Void = {}
     var onImportGPX: (URL) -> Void = { _ in }
@@ -31,7 +38,6 @@ struct MapSheet: View {
     @FocusState private var searchFocused: Bool
     @State private var showImporter = false
     @State private var showSettings = false
-    @State private var path = NavigationPath()
     @State private var completer = SearchCompleter()
 
     /// True while the search field is active and has suggestions to offer.
@@ -85,6 +91,7 @@ struct MapSheet: View {
                     mapController: mapController,
                     autoSave: autoSave,
                     locationManager: locationManager,
+                    backgroundTracker: backgroundTracker,
                     onZoomToRoute: { withAnimation { detent = .medium } }
                 )
             }
@@ -101,7 +108,7 @@ struct MapSheet: View {
         }
         // Also presented from inside the sheet so it layers above it.
         .sheet(isPresented: $showSettings) {
-            SettingsView()
+            SettingsView(backgroundTracker: backgroundTracker)
         }
         // Focusing the search field expands the sheet to full height.
         .onChange(of: searchFocused) { _, focused in
@@ -240,26 +247,39 @@ struct MapSheet: View {
     }
 
     private func delete(_ hike: Hike) {
+        // Before anything else: tiles auto-saved in the last couple of seconds
+        // live only in AutoSaveTileStore's pending set, and clearing the
+        // selection below tears that set down. Folding them into the manifest
+        // first is what stops them outliving the hike with nothing pointing at
+        // them — and doing it here, rather than after, keeps that from
+        // depending on when SwiftUI gets around to firing the selection change.
+        autoSave.flushPendingKeys()
+
         if hike.id == selectedHike?.id {
             selectedHike = nil
             highlight.coordinate = nil
         }
-        // Free any tiles this hike had saved offline before it goes away. The
-        // key computation is real CPU work (tile-grid enumeration per download
-        // record), so it happens inside the detached task, not here.
-        let route = hike.route
-        let offlineDownloads = hike.offlineDownloads
-        let autoSavedTileKeys = hike.autoSavedTileKeys
-        if !offlineDownloads.isEmpty || !autoSavedTileKeys.isEmpty {
+
+        // Free the tiles this hike had saved offline — but only the ones no
+        // surviving hike still claims. Cache keys carry no hike identity, so
+        // deleting this hike's keys outright would strip coverage from any
+        // trail sharing the area (and at low zoom, that's most of them) while
+        // leaving their manifests claiming tiles that are gone.
+        let doomed = TileOwnership(hike)
+        if doomed.hasStoredTiles {
+            let survivors = hikes
+                .filter { $0.id != hike.id && $0.hasStoredTiles }
+                .map(TileOwnership.init)
+            // Enumerating a route's tile grid is real CPU work, per download
+            // record, for every hike involved — all of it belongs off the
+            // main thread.
             Task.detached {
-                let coordinates = route.map(\.clCoordinate)
-                let keys = Array(
-                    Set(OfflineTileDownloader.storedTileKeys(route: coordinates, offlineDownloads: offlineDownloads))
-                        .union(autoSavedTileKeys)
-                )
-                TileCache.shared.removeTiles(forKeys: keys)
+                let keys = doomed.exclusiveTileKeys(against: survivors)
+                guard !keys.isEmpty else { return }
+                TileCache.shared.removeTiles(forKeys: Array(keys))
             }
         }
+
         modelContext.delete(hike)
     }
 

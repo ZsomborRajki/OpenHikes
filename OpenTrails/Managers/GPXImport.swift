@@ -10,6 +10,7 @@
 import Foundation
 import CoreLocation
 import CoreGPX
+import OpenTrailsShared
 
 nonisolated enum GPXImport {
     struct Point {
@@ -82,15 +83,14 @@ nonisolated enum GPXImport {
         )
     }
 
-    /// Web Mercator's valid latitude range — `SlippyTileMath.tileY` uses `tan`/`log`
-    /// that blow up as latitude approaches ±90°, so points beyond this are rejected
-    /// rather than risking an `Int(floor(...))` trap downstream.
-    private static let maximumMercatorLatitude = 85.0511287798
-
     private static func point(_ waypoint: GPXWaypoint) -> Point? {
+        // Points outside Web Mercator's representable range are rejected at
+        // the door rather than clamped: `Mercator` clamps to keep drawing
+        // code safe, but a track claiming to pass within 5° of a pole is bad
+        // data, not something to silently move onto the map's edge.
         guard
             let lat = waypoint.latitude, let lon = waypoint.longitude,
-            (-maximumMercatorLatitude...maximumMercatorLatitude).contains(lat), (-180...180).contains(lon)
+            Mercator.isRepresentable(latitude: lat, longitude: lon)
         else { return nil }
         return Point(
             coordinate: CLLocationCoordinate2D(latitude: lat, longitude: lon),

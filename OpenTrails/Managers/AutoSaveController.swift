@@ -28,7 +28,7 @@ final class AutoSaveController {
             while true {
                 try? await Task.sleep(for: .seconds(2))
                 guard let self, !Task.isCancelled else { break }
-                self.drain()
+                self.flushPendingKeys()
             }
         }
     }
@@ -75,7 +75,13 @@ final class AutoSaveController {
         AutoSaveTileStore.shared.clearActiveHike()
     }
 
-    private func drain() {
+    /// Folds tiles persisted since the last pass into the active hike's
+    /// manifest. Runs on a timer, and must also be called directly before any
+    /// code that reads manifests to decide which tiles are still spoken for:
+    /// until this runs, the newest tiles exist on disk with nothing in
+    /// SwiftData pointing at them, and `deactivate()` discards the in-memory
+    /// record that would have found them.
+    func flushPendingKeys() {
         guard let hike = activeHike else { return }
         let newKeys = AutoSaveTileStore.shared.drainPendingKeys(for: hike.id)
         guard !newKeys.isEmpty else { return }

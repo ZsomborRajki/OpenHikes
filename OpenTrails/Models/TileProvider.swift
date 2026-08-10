@@ -92,4 +92,13 @@ struct ActiveTileSource: Equatable {
 /// UserDefaults / `@AppStorage` key shared between the settings UI and the map.
 enum SettingsKey {
     static let tileProviderID = "settings.tileProviderID"
+    /// Whether Background Trail Tracking is on, read by `BackgroundTrailTracker`
+    /// at launch to decide whether to re-arm significant-change monitoring.
+    static let backgroundTrackingEnabled = "settings.backgroundTrackingEnabled"
+    /// The last-selected hike's `id.uuidString`, written by `ContentView` on
+    /// every selection change. Serves two purposes: restoring the selection
+    /// on a normal launch, and telling `BackgroundTrailTracker` which hike to
+    /// match a fix against on a background relaunch, which has no in-memory
+    /// selection to read.
+    static let lastSelectedHikeID = "selection.lastHikeID"
 }

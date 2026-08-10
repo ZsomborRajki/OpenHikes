@@ -73,7 +73,7 @@ struct MapView: MapViewRepresentable, Equatable {
         let mapView = MKMapView()
         mapView.delegate = coordinator
         mapView.showsUserLocation = true
-        mapView.pointOfInterestFilter = .excludingAll
+        mapView.pointOfInterestFilter = .includingAll
         coordinator.observeHighlight(highlight, on: mapView)
         coordinator.observeSheetMetrics(sheetMetrics, on: mapView)
         coordinator.observeMapController(mapController, on: mapView)

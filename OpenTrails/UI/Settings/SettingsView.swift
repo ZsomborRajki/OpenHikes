@@ -8,13 +8,19 @@
 
 import SwiftUI
 import SwiftData
+#if os(iOS)
+import UIKit
+#endif
 
 struct SettingsView: View {
     @Environment(\.dismiss) private var dismiss
     @Environment(\.modelContext) private var modelContext
     @Query private var hikes: [Hike]
 
+    let backgroundTracker: BackgroundTrailTracker
+
     @AppStorage(SettingsKey.tileProviderID) private var tileProviderID = TileProvider.default.id
+    @AppStorage(SettingsKey.backgroundTrackingEnabled) private var backgroundTrackingEnabled = false
 
     /// Total tile-cache size on disk; `nil` until measured.
     @State private var totalBytes: Int64?
@@ -29,6 +35,7 @@ struct SettingsView: View {
             Form {
                 accountSection
                 mapProviderSection
+                backgroundTrackingSection
                 offlineStorageSection
             }
             .navigationTitle("Settings")
@@ -98,6 +105,42 @@ struct SettingsView: View {
         } footer: {
             Text(selectedProvider.attribution)
         }
+    }
+
+    // MARK: - Background tracking
+
+    /// iOS-only: this is what feeds the Home Screen widget and Watch
+    /// complication while OpenTrails isn't open. Off by default — turning it
+    /// on is what first triggers the system's Always-location prompt.
+    @ViewBuilder
+    private var backgroundTrackingSection: some View {
+        #if os(iOS)
+        Section {
+            Toggle("Background Trail Tracking", isOn: backgroundTrackingBinding)
+            if backgroundTrackingEnabled && UIApplication.shared.backgroundRefreshStatus != .available {
+                Label(
+                    "Background App Refresh is off, so this may not update while OpenTrails is closed.",
+                    systemImage: "exclamationmark.triangle"
+                )
+                .font(.caption)
+                .foregroundStyle(.orange)
+            }
+        } header: {
+            Text("Background Tracking")
+        } footer: {
+            Text("Keeps your Home Screen widget and Watch complication showing your progress along the selected trail even when OpenTrails isn't open, using occasional, low-power location updates.")
+        }
+        #endif
+    }
+
+    private var backgroundTrackingBinding: Binding<Bool> {
+        Binding(
+            get: { backgroundTrackingEnabled },
+            set: { newValue in
+                backgroundTrackingEnabled = newValue
+                backgroundTracker.setEnabled(newValue)
+            }
+        )
     }
 
     // MARK: - Offline
@@ -185,5 +228,6 @@ struct SettingsView: View {
 }
 
 #Preview {
-    SettingsView()
+    let container = try! ModelContainer(for: Hike.self, configurations: .init(isStoredInMemoryOnly: true))
+    SettingsView(backgroundTracker: BackgroundTrailTracker(container: container))
 }

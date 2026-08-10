@@ -292,7 +292,20 @@ extension MapView {
         }
 
         func mapView(_ mapView: MKMapView, didUpdate userLocation: MKUserLocation) {
+            // Belt-and-suspenders alongside `didSelect` below — MapKit
+            // resets this on its own internal user-location view, so it
+            // alone doesn't reliably suppress the callout.
+            mapView.view(for: userLocation)?.canShowCallout = false
             updateHighlightOpacity(on: mapView)
+        }
+
+        func mapView(_ mapView: MKMapView, didSelect view: MKAnnotationView) {
+            // MapKit's default callout for the blue dot pulls in the "Me"
+            // contact's photo (or a placeholder silhouette) from Contacts;
+            // `canShowCallout = false` alone doesn't reliably suppress it,
+            // so deselect immediately to dismiss the callout before it shows.
+            guard view.annotation is MKUserLocation else { return }
+            mapView.deselectAnnotation(view.annotation, animated: false)
         }
 
         func mapView(_ mapView: MKMapView, regionDidChangeAnimated animated: Bool) {

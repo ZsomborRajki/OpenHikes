@@ -10,17 +10,42 @@ import SwiftData
 
 @main
 struct OpenTrailsApp: App {
+    @Environment(\.scenePhase) private var scenePhase
+
+    private let container: ModelContainer
+    private let backgroundTracker: BackgroundTrailTracker
+
     init() {
         #if DEBUG
         MainThreadWatchdog.start()
         #endif
+        // Built explicitly (rather than via the `.modelContainer(for:)` scene
+        // modifier) so `backgroundTracker` — which needs its own SwiftData
+        // access to look up the tracked hike on a background relaunch — can
+        // share the same container/store as the view hierarchy below.
+        let container = try! ModelContainer(for: Hike.self)
+        self.container = container
+        // Constructed here, not lazily inside a view, because a background
+        // relaunch (triggered by a significant-location-change event) runs
+        // `init()` unconditionally but may never reach a view's `.task`/
+        // `.onAppear` — the location manager has to already be live and
+        // delegated by the time this returns, or the relaunch's one pending
+        // location event has nothing to deliver to.
+        self.backgroundTracker = BackgroundTrailTracker(container: container)
     }
 
     var body: some Scene {
         WindowGroup {
-            ContentView()
+            ContentView(backgroundTracker: backgroundTracker)
                 .ignoresSafeArea()
         }
-        .modelContainer(for: Hike.self)
+        .modelContainer(container)
+        // The widget's basemaps need the network to render, so a trail
+        // selected offline (or during a background relaunch) can end up
+        // without them. Re-checking on every foreground is how that heals;
+        // it's a bounds comparison and no work when they're already right.
+        .onChange(of: scenePhase) { _, phase in
+            if phase == .active { backgroundTracker.refreshBasemaps() }
+        }
     }
 }

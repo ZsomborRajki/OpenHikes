@@ -9,9 +9,15 @@ import SwiftUI
 import SwiftData
 import CoreLocation
 import WeatherKit
+import OpenTrailsShared
 
 struct ContentView: View {
     @Environment(\.modelContext) private var modelContext
+
+    /// Owned by `OpenTrailsApp`, not here — it has to already exist (and be
+    /// delegated for location updates) before this view is ever built, so it
+    /// can catch a background relaunch that never reaches this view at all.
+    let backgroundTracker: BackgroundTrailTracker
 
     @State private var locationManager = LocationManager()
     @State private var weatherManager = WeatherManager()
@@ -19,6 +25,11 @@ struct ContentView: View {
     @State private var searchText = ""
     @State private var sheetDetent: PresentationDetent = .height(80)
     @State private var selectedHike: Hike?
+    /// The sheet's navigation stack, held here rather than inside `MapSheet`
+    /// so a widget tap can push a hike's detail view (see `openHike(from:)`).
+    /// The cost is that popping the detail view now re-evaluates this body
+    /// too; `MapView` is `.equatable()`, so that diff stops at the map.
+    @State private var navigationPath: [Hike] = []
     @State private var highlight = RouteHighlight()
     /// Lets the hike detail view drive one-shot map commands (e.g. the Zoom button).
     @State private var mapController = MapController()
@@ -79,15 +90,18 @@ struct ContentView: View {
             }
             .task { await locationManager.start() }
             .task { await pollWeather() }
+            .task { restoreLastSelectedHike() }
             .sheet(isPresented: $showSheet) {
                 MapSheet(
                     searchText: $searchText,
                     detent: $sheetDetent,
                     selectedHike: $selectedHike,
+                    path: $navigationPath,
                     highlight: highlight,
                     mapController: mapController,
                     autoSave: autoSaveController,
                     locationManager: locationManager,
+                    backgroundTracker: backgroundTracker,
                     onRecord: recordHike,
                     onImportGPX: importGPX,
                     onSheetTopChange: { sheetMetrics.topY = $0 }
@@ -107,10 +121,53 @@ struct ContentView: View {
             .onChange(of: showSheet) { _, shown in
                 if !shown { showSheet = true }
             }
+            .onOpenURL { url in openHike(from: url) }
             // Follows the selected hike so auto-save always tracks what's on screen.
             .onChange(of: selectedHike) { _, hike in
                 autoSaveController.hikeSelectionChanged(to: hike)
+                backgroundTracker.hikeSelectionChanged(to: hike)
+                // The one persisted record of "what's selected" — restores it
+                // on a normal launch (see `restoreLastSelectedHike`) and, on a
+                // background relaunch, is all `backgroundTracker` has to go on.
+                UserDefaults.standard.set(hike?.id.uuidString, forKey: SettingsKey.lastSelectedHikeID)
             }
+    }
+
+    /// Handles a tap on the trail widget: opens that hike's detail view.
+    ///
+    /// Does nothing if its detail view is already the thing on screen —
+    /// coming back to the app you were already looking at shouldn't reshuffle
+    /// it. Otherwise the hike is selected (drawing its route on the map) and
+    /// pushed, replacing rather than stacking onto whatever was open, since
+    /// the widget is a jump to one trail and not a step in a journey.
+    private func openHike(from url: URL) {
+        guard let id = TrailWidgetDeepLink.hikeID(from: url),
+              navigationPath.last?.id != id else { return }
+
+        let descriptor = FetchDescriptor<Hike>(predicate: #Predicate { $0.id == id })
+        // A hike deleted while the widget still showed it: open the app and
+        // leave the user on the search page rather than acting on a ghost.
+        guard let hike = try? modelContext.fetch(descriptor).first else { return }
+
+        // Clearing the query drops the search results the sheet would
+        // otherwise still be showing over the detail view.
+        searchText = ""
+        selectedHike = hike
+        navigationPath = [hike]
+        // The compact detent is only tall enough for the search field, so a
+        // push there would arrive off-screen.
+        withAnimation { sheetDetent = .medium }
+    }
+
+    /// Restores the last-selected hike across launches — today `selectedHike`
+    /// starts every launch as `nil`, so without this the widget/Watch would
+    /// stay empty until the user reselects a trail by hand.
+    private func restoreLastSelectedHike() {
+        guard selectedHike == nil,
+              let stored = UserDefaults.standard.string(forKey: SettingsKey.lastSelectedHikeID),
+              let id = UUID(uuidString: stored) else { return }
+        let descriptor = FetchDescriptor<Hike>(predicate: #Predicate { $0.id == id })
+        selectedHike = try? modelContext.fetch(descriptor).first
     }
 
     /// Polls the user's location once a second (throttled — see
@@ -193,5 +250,7 @@ private struct WeatherBadge: View {
 }
 
 #Preview {
-    ContentView()
+    let container = try! ModelContainer(for: Hike.self, configurations: .init(isStoredInMemoryOnly: true))
+    ContentView(backgroundTracker: BackgroundTrailTracker(container: container))
+        .modelContainer(container)
 }

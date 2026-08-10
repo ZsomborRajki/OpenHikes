@@ -38,6 +38,9 @@ struct HikeDetailView: View {
     let autoSave: AutoSaveController
     /// Source of the user's live location, polled (throttled) to drive auto-follow.
     let locationManager: LocationManager
+    /// Fed the same auto-follow matches as the chart/map, throttled, so the
+    /// widget/Watch stay reasonably fresh while this hike is being viewed.
+    let backgroundTracker: BackgroundTrailTracker
     /// Collapses the sheet so the map is visible when zooming to the route.
     var onZoomToRoute: () -> Void = {}
 
@@ -62,9 +65,13 @@ struct HikeDetailView: View {
     /// True while a finger is actively dragging the elevation chart — pauses
     /// auto-follow's own updates to `trackerDistance` so it doesn't fight the drag.
     @State private var isScrubbing = false
-    /// How far off the route (in meters) a GPS fix can be and still count as
-    /// "on the trail" for auto-follow.
-    private static let followMatchThresholdMeters: Double = 75
+    /// Whether auto-follow has matched a fix at least once since this hike
+    /// was selected. `trackerDistance` starts at 0 on every selection — that's
+    /// a placeholder, not a real previous position, so it can't be trusted as
+    /// a tie-break anchor until a real match has actually happened. Once one
+    /// has, `trackerDistance` holds a genuine last-known position, and *should*
+    /// anchor ties again if the fix is briefly lost and reacquired.
+    @State private var hasMatchedOnce = false
 
     var body: some View {
         // Fires on every re-evaluation of this view's body. Auto-follow's
@@ -96,6 +103,7 @@ struct HikeDetailView: View {
             // Place the tracker at the start of the track, on both graph and map.
             tracker.trackerDistance = 0
             tracker.liveTrackerDistance = nil
+            hasMatchedOnce = false
             highlight.coordinate = built.coordinate(atDistance: 0)
             refreshStoredBytes()
             autoSave.hikeSelectionChanged(to: hike)
@@ -523,8 +531,11 @@ struct HikeDetailView: View {
     private func updateLiveFollow(profile: RouteProfile) {
         guard hike.autoFollowEnabled,
               let coordinate = locationManager.coordinate,
-              let match = profile.nearestPoint(to: coordinate),
-              match.offRouteMeters <= Self.followMatchThresholdMeters else {
+              let match = profile.nearestPoint(
+                to: coordinate,
+                near: hasMatchedOnce ? (tracker.liveTrackerDistance ?? tracker.trackerDistance) : nil
+              ),
+              match.offRouteMeters <= RouteProfile.followMatchThresholdMeters else {
             // Guarded so a stationary/off-route poll (nil already) doesn't
             // write `tracker` every second for nothing.
             if tracker.liveTrackerDistance != nil {
@@ -533,8 +544,15 @@ struct HikeDetailView: View {
             } else {
                 RenderSignpost.mark("LiveFollowUpdate", "no-fix-or-off-route")
             }
+            // Only worth telling the widget "no fix" while auto-follow is
+            // actually trying to track this hike — if the user turned
+            // auto-follow off, leave whatever it last showed alone.
+            if hike.autoFollowEnabled {
+                backgroundTracker.publishLiveFix(hike: hike, profile: profile, match: nil)
+            }
             return
         }
+        hasMatchedOnce = true
         let moved = tracker.liveTrackerDistance != match.distanceAlongRoute
         // Guarded like `trackerDistance` below — reassigning `@Observable`
         // storage to an equal value still triggers dependent views, so an
@@ -563,6 +581,7 @@ struct HikeDetailView: View {
             highlight.coordinate = nil
         }
         RenderSignpost.mark("LiveFollowUpdate", moved ? "moved" : "unchanged")
+        backgroundTracker.publishLiveFix(hike: hike, profile: profile, match: match)
     }
 
     private var elevationPlaceholder: some View {

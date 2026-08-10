@@ -7,17 +7,133 @@
 	objects = {
 
 /* Begin PBXBuildFile section */
+		A8838AE7302A232300FAEEEE /* WidgetKit.framework in Frameworks */ = {isa = PBXBuildFile; fileRef = A8838AE6302A232300FAEEEE /* WidgetKit.framework */; };
+		A8838AE9302A232300FAEEEE /* SwiftUI.framework in Frameworks */ = {isa = PBXBuildFile; fileRef = A8838AE8302A232300FAEEEE /* SwiftUI.framework */; };
+		A8838AF6302A232400FAEEEE /* OpenWidgetExtension.appex in Embed Foundation Extensions */ = {isa = PBXBuildFile; fileRef = A8838AE4302A232300FAEEEE /* OpenWidgetExtension.appex */; settings = {ATTRIBUTES = (RemoveHeadersOnCopy, ); }; };
+		A8838B74302A2F3200FAEEEE /* OpenWatch Watch App.app in Embed Watch Content */ = {isa = PBXBuildFile; fileRef = A8838B6A302A2F3100FAEEEE /* OpenWatch Watch App.app */; settings = {ATTRIBUTES = (RemoveHeadersOnCopy, ); }; };
+		A8838B7E302A2F5B00FAEEEE /* WidgetKit.framework in Frameworks */ = {isa = PBXBuildFile; fileRef = A8838AE6302A232300FAEEEE /* WidgetKit.framework */; };
+		A8838B7F302A2F5B00FAEEEE /* SwiftUI.framework in Frameworks */ = {isa = PBXBuildFile; fileRef = A8838AE8302A232300FAEEEE /* SwiftUI.framework */; };
+		A8838B8A302A2F5B00FAEEEE /* OpenWatchWidgetExtension.appex in Embed Foundation Extensions */ = {isa = PBXBuildFile; fileRef = A8838B7D302A2F5B00FAEEEE /* OpenWatchWidgetExtension.appex */; settings = {ATTRIBUTES = (RemoveHeadersOnCopy, ); }; };
+		A8838B92302A302500FAEEEE /* OpenTrailsShared in Frameworks */ = {isa = PBXBuildFile; productRef = A8838B91302A302500FAEEEE /* OpenTrailsShared */; };
+		A8838B94302A305800FAEEEE /* OpenTrailsShared in Frameworks */ = {isa = PBXBuildFile; productRef = A8838B93302A305800FAEEEE /* OpenTrailsShared */; };
+		A8838B96302A305D00FAEEEE /* OpenTrailsShared in Frameworks */ = {isa = PBXBuildFile; productRef = A8838B95302A305D00FAEEEE /* OpenTrailsShared */; };
+		A8838B98302A306100FAEEEE /* OpenTrailsShared in Frameworks */ = {isa = PBXBuildFile; productRef = A8838B97302A306100FAEEEE /* OpenTrailsShared */; };
 		AA0000000000000000000003 /* CoreGPX in Frameworks */ = {isa = PBXBuildFile; productRef = AA0000000000000000000002 /* CoreGPX */; };
 /* End PBXBuildFile section */
 
+/* Begin PBXContainerItemProxy section */
+		A8838AF4302A232400FAEEEE /* PBXContainerItemProxy */ = {
+			isa = PBXContainerItemProxy;
+			containerPortal = A85E85452FE3EBF500558639 /* Project object */;
+			proxyType = 1;
+			remoteGlobalIDString = A8838AE3302A232300FAEEEE;
+			remoteInfo = OpenWidgetExtension;
+		};
+		A8838B72302A2F3200FAEEEE /* PBXContainerItemProxy */ = {
+			isa = PBXContainerItemProxy;
+			containerPortal = A85E85452FE3EBF500558639 /* Project object */;
+			proxyType = 1;
+			remoteGlobalIDString = A8838B69302A2F3100FAEEEE;
+			remoteInfo = "OpenWatch Watch App";
+		};
+		A8838B88302A2F5B00FAEEEE /* PBXContainerItemProxy */ = {
+			isa = PBXContainerItemProxy;
+			containerPortal = A85E85452FE3EBF500558639 /* Project object */;
+			proxyType = 1;
+			remoteGlobalIDString = A8838B7C302A2F5B00FAEEEE;
+			remoteInfo = OpenWatchWidgetExtension;
+		};
+/* End PBXContainerItemProxy section */
+
+/* Begin PBXCopyFilesBuildPhase section */
+		A8838AFB302A232400FAEEEE /* Embed Foundation Extensions */ = {
+			isa = PBXCopyFilesBuildPhase;
+			buildActionMask = 2147483647;
+			dstPath = "";
+			dstSubfolderSpec = 13;
+			files = (
+				A8838AF6302A232400FAEEEE /* OpenWidgetExtension.appex in Embed Foundation Extensions */,
+			);
+			name = "Embed Foundation Extensions";
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+		A8838B75302A2F3200FAEEEE /* Embed Watch Content */ = {
+			isa = PBXCopyFilesBuildPhase;
+			buildActionMask = 2147483647;
+			dstPath = "$(CONTENTS_FOLDER_PATH)/Watch";
+			dstSubfolderSpec = 16;
+			files = (
+				A8838B74302A2F3200FAEEEE /* OpenWatch Watch App.app in Embed Watch Content */,
+			);
+			name = "Embed Watch Content";
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+		A8838B8F302A2F5B00FAEEEE /* Embed Foundation Extensions */ = {
+			isa = PBXCopyFilesBuildPhase;
+			buildActionMask = 2147483647;
+			dstPath = "";
+			dstSubfolderSpec = 13;
+			files = (
+				A8838B8A302A2F5B00FAEEEE /* OpenWatchWidgetExtension.appex in Embed Foundation Extensions */,
+			);
+			name = "Embed Foundation Extensions";
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+/* End PBXCopyFilesBuildPhase section */
+
 /* Begin PBXFileReference section */
 		A85E854D2FE3EBF500558639 /* OpenTrails.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = OpenTrails.app; sourceTree = BUILT_PRODUCTS_DIR; };
+		A8838AE4302A232300FAEEEE /* OpenWidgetExtension.appex */ = {isa = PBXFileReference; explicitFileType = "wrapper.app-extension"; includeInIndex = 0; path = OpenWidgetExtension.appex; sourceTree = BUILT_PRODUCTS_DIR; };
+		A8838AE6302A232300FAEEEE /* WidgetKit.framework */ = {isa = PBXFileReference; lastKnownFileType = wrapper.framework; name = WidgetKit.framework; path = System/Library/Frameworks/WidgetKit.framework; sourceTree = SDKROOT; };
+		A8838AE8302A232300FAEEEE /* SwiftUI.framework */ = {isa = PBXFileReference; lastKnownFileType = wrapper.framework; name = SwiftUI.framework; path = System/Library/Frameworks/SwiftUI.framework; sourceTree = SDKROOT; };
+		A8838B6A302A2F3100FAEEEE /* OpenWatch Watch App.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = "OpenWatch Watch App.app"; sourceTree = BUILT_PRODUCTS_DIR; };
+		A8838B7D302A2F5B00FAEEEE /* OpenWatchWidgetExtension.appex */ = {isa = PBXFileReference; explicitFileType = "wrapper.app-extension"; includeInIndex = 0; path = OpenWatchWidgetExtension.appex; sourceTree = BUILT_PRODUCTS_DIR; };
+		A8838B99302A30FA00FAEEEE /* OpenWidgetExtension.entitlements */ = {isa = PBXFileReference; lastKnownFileType = text.plist.entitlements; path = OpenWidgetExtension.entitlements; sourceTree = "<group>"; };
+		A8838B9B302A310D00FAEEEE /* OpenWatchWidgetExtension.entitlements */ = {isa = PBXFileReference; lastKnownFileType = text.plist.entitlements; path = OpenWatchWidgetExtension.entitlements; sourceTree = "<group>"; };
 /* End PBXFileReference section */
+
+/* Begin PBXFileSystemSynchronizedBuildFileExceptionSet section */
+		A8838AF7302A232400FAEEEE /* Exceptions for "OpenWidget" folder in "OpenWidgetExtension" target */ = {
+			isa = PBXFileSystemSynchronizedBuildFileExceptionSet;
+			membershipExceptions = (
+				Info.plist,
+			);
+			target = A8838AE3302A232300FAEEEE /* OpenWidgetExtension */;
+		};
+		A8838B8B302A2F5B00FAEEEE /* Exceptions for "OpenWatchWidget" folder in "OpenWatchWidgetExtension" target */ = {
+			isa = PBXFileSystemSynchronizedBuildFileExceptionSet;
+			membershipExceptions = (
+				Info.plist,
+			);
+			target = A8838B7C302A2F5B00FAEEEE /* OpenWatchWidgetExtension */;
+		};
+/* End PBXFileSystemSynchronizedBuildFileExceptionSet section */
 
 /* Begin PBXFileSystemSynchronizedRootGroup section */
 		A85E854F2FE3EBF500558639 /* OpenTrails */ = {
 			isa = PBXFileSystemSynchronizedRootGroup;
 			path = OpenTrails;
+			sourceTree = "<group>";
+		};
+		A8838AEA302A232300FAEEEE /* OpenWidget */ = {
+			isa = PBXFileSystemSynchronizedRootGroup;
+			exceptions = (
+				A8838AF7302A232400FAEEEE /* Exceptions for "OpenWidget" folder in "OpenWidgetExtension" target */,
+			);
+			path = OpenWidget;
+			sourceTree = "<group>";
+		};
+		A8838B6B302A2F3100FAEEEE /* OpenWatch Watch App */ = {
+			isa = PBXFileSystemSynchronizedRootGroup;
+			path = "OpenWatch Watch App";
+			sourceTree = "<group>";
+		};
+		A8838B80302A2F5B00FAEEEE /* OpenWatchWidget */ = {
+			isa = PBXFileSystemSynchronizedRootGroup;
+			exceptions = (
+				A8838B8B302A2F5B00FAEEEE /* Exceptions for "OpenWatchWidget" folder in "OpenWatchWidgetExtension" target */,
+			);
+			path = OpenWatchWidget;
 			sourceTree = "<group>";
 		};
 /* End PBXFileSystemSynchronizedRootGroup section */
@@ -27,7 +143,36 @@
 			isa = PBXFrameworksBuildPhase;
 			buildActionMask = 2147483647;
 			files = (
+				A8838B92302A302500FAEEEE /* OpenTrailsShared in Frameworks */,
 				AA0000000000000000000003 /* CoreGPX in Frameworks */,
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+		A8838AE1302A232300FAEEEE /* Frameworks */ = {
+			isa = PBXFrameworksBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+				A8838AE9302A232300FAEEEE /* SwiftUI.framework in Frameworks */,
+				A8838B94302A305800FAEEEE /* OpenTrailsShared in Frameworks */,
+				A8838AE7302A232300FAEEEE /* WidgetKit.framework in Frameworks */,
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+		A8838B67302A2F3100FAEEEE /* Frameworks */ = {
+			isa = PBXFrameworksBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+				A8838B96302A305D00FAEEEE /* OpenTrailsShared in Frameworks */,
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+		A8838B7A302A2F5B00FAEEEE /* Frameworks */ = {
+			isa = PBXFrameworksBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+				A8838B7F302A2F5B00FAEEEE /* SwiftUI.framework in Frameworks */,
+				A8838B98302A306100FAEEEE /* OpenTrailsShared in Frameworks */,
+				A8838B7E302A2F5B00FAEEEE /* WidgetKit.framework in Frameworks */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
@@ -37,7 +182,13 @@
 		A85E85442FE3EBF500558639 = {
 			isa = PBXGroup;
 			children = (
+				A8838B9B302A310D00FAEEEE /* OpenWatchWidgetExtension.entitlements */,
+				A8838B99302A30FA00FAEEEE /* OpenWidgetExtension.entitlements */,
 				A85E854F2FE3EBF500558639 /* OpenTrails */,
+				A8838AEA302A232300FAEEEE /* OpenWidget */,
+				A8838B6B302A2F3100FAEEEE /* OpenWatch Watch App */,
+				A8838B80302A2F5B00FAEEEE /* OpenWatchWidget */,
+				A8838AE5302A232300FAEEEE /* Frameworks */,
 				A85E854E2FE3EBF500558639 /* Products */,
 			);
 			sourceTree = "<group>";
@@ -46,8 +197,20 @@
 			isa = PBXGroup;
 			children = (
 				A85E854D2FE3EBF500558639 /* OpenTrails.app */,
+				A8838AE4302A232300FAEEEE /* OpenWidgetExtension.appex */,
+				A8838B6A302A2F3100FAEEEE /* OpenWatch Watch App.app */,
+				A8838B7D302A2F5B00FAEEEE /* OpenWatchWidgetExtension.appex */,
 			);
 			name = Products;
+			sourceTree = "<group>";
+		};
+		A8838AE5302A232300FAEEEE /* Frameworks */ = {
+			isa = PBXGroup;
+			children = (
+				A8838AE6302A232300FAEEEE /* WidgetKit.framework */,
+				A8838AE8302A232300FAEEEE /* SwiftUI.framework */,
+			);
+			name = Frameworks;
 			sourceTree = "<group>";
 		};
 /* End PBXGroup section */
@@ -60,10 +223,14 @@
 				A85E85492FE3EBF500558639 /* Sources */,
 				A85E854A2FE3EBF500558639 /* Frameworks */,
 				A85E854B2FE3EBF500558639 /* Resources */,
+				A8838AFB302A232400FAEEEE /* Embed Foundation Extensions */,
+				A8838B75302A2F3200FAEEEE /* Embed Watch Content */,
 			);
 			buildRules = (
 			);
 			dependencies = (
+				A8838AF5302A232400FAEEEE /* PBXTargetDependency */,
+				A8838B73302A2F3200FAEEEE /* PBXTargetDependency */,
 			);
 			fileSystemSynchronizedGroups = (
 				A85E854F2FE3EBF500558639 /* OpenTrails */,
@@ -71,10 +238,82 @@
 			name = OpenTrails;
 			packageProductDependencies = (
 				AA0000000000000000000002 /* CoreGPX */,
+				A8838B91302A302500FAEEEE /* OpenTrailsShared */,
 			);
 			productName = OpenTrails;
 			productReference = A85E854D2FE3EBF500558639 /* OpenTrails.app */;
 			productType = "com.apple.product-type.application";
+		};
+		A8838AE3302A232300FAEEEE /* OpenWidgetExtension */ = {
+			isa = PBXNativeTarget;
+			buildConfigurationList = A8838AF8302A232400FAEEEE /* Build configuration list for PBXNativeTarget "OpenWidgetExtension" */;
+			buildPhases = (
+				A8838AE0302A232300FAEEEE /* Sources */,
+				A8838AE1302A232300FAEEEE /* Frameworks */,
+				A8838AE2302A232300FAEEEE /* Resources */,
+			);
+			buildRules = (
+			);
+			dependencies = (
+			);
+			fileSystemSynchronizedGroups = (
+				A8838AEA302A232300FAEEEE /* OpenWidget */,
+			);
+			name = OpenWidgetExtension;
+			packageProductDependencies = (
+				A8838B93302A305800FAEEEE /* OpenTrailsShared */,
+			);
+			productName = OpenWidgetExtension;
+			productReference = A8838AE4302A232300FAEEEE /* OpenWidgetExtension.appex */;
+			productType = "com.apple.product-type.app-extension";
+		};
+		A8838B69302A2F3100FAEEEE /* OpenWatch Watch App */ = {
+			isa = PBXNativeTarget;
+			buildConfigurationList = A8838B78302A2F3200FAEEEE /* Build configuration list for PBXNativeTarget "OpenWatch Watch App" */;
+			buildPhases = (
+				A8838B66302A2F3100FAEEEE /* Sources */,
+				A8838B67302A2F3100FAEEEE /* Frameworks */,
+				A8838B68302A2F3100FAEEEE /* Resources */,
+				A8838B8F302A2F5B00FAEEEE /* Embed Foundation Extensions */,
+			);
+			buildRules = (
+			);
+			dependencies = (
+				A8838B89302A2F5B00FAEEEE /* PBXTargetDependency */,
+			);
+			fileSystemSynchronizedGroups = (
+				A8838B6B302A2F3100FAEEEE /* OpenWatch Watch App */,
+			);
+			name = "OpenWatch Watch App";
+			packageProductDependencies = (
+				A8838B95302A305D00FAEEEE /* OpenTrailsShared */,
+			);
+			productName = "OpenWatch Watch App";
+			productReference = A8838B6A302A2F3100FAEEEE /* OpenWatch Watch App.app */;
+			productType = "com.apple.product-type.application";
+		};
+		A8838B7C302A2F5B00FAEEEE /* OpenWatchWidgetExtension */ = {
+			isa = PBXNativeTarget;
+			buildConfigurationList = A8838B8C302A2F5B00FAEEEE /* Build configuration list for PBXNativeTarget "OpenWatchWidgetExtension" */;
+			buildPhases = (
+				A8838B79302A2F5B00FAEEEE /* Sources */,
+				A8838B7A302A2F5B00FAEEEE /* Frameworks */,
+				A8838B7B302A2F5B00FAEEEE /* Resources */,
+			);
+			buildRules = (
+			);
+			dependencies = (
+			);
+			fileSystemSynchronizedGroups = (
+				A8838B80302A2F5B00FAEEEE /* OpenWatchWidget */,
+			);
+			name = OpenWatchWidgetExtension;
+			packageProductDependencies = (
+				A8838B97302A306100FAEEEE /* OpenTrailsShared */,
+			);
+			productName = OpenWatchWidgetExtension;
+			productReference = A8838B7D302A2F5B00FAEEEE /* OpenWatchWidgetExtension.appex */;
+			productType = "com.apple.product-type.app-extension";
 		};
 /* End PBXNativeTarget section */
 
@@ -83,11 +322,20 @@
 			isa = PBXProject;
 			attributes = {
 				BuildIndependentTargetsInParallel = 1;
-				LastSwiftUpdateCheck = 2650;
+				LastSwiftUpdateCheck = 2660;
 				LastUpgradeCheck = 2660;
 				TargetAttributes = {
 					A85E854C2FE3EBF500558639 = {
 						CreatedOnToolsVersion = 26.5;
+					};
+					A8838AE3302A232300FAEEEE = {
+						CreatedOnToolsVersion = 26.6;
+					};
+					A8838B69302A2F3100FAEEEE = {
+						CreatedOnToolsVersion = 26.6;
+					};
+					A8838B7C302A2F5B00FAEEEE = {
+						CreatedOnToolsVersion = 26.6;
 					};
 				};
 			};
@@ -102,6 +350,7 @@
 			minimizedProjectReferenceProxies = 1;
 			packageReferences = (
 				AA0000000000000000000001 /* XCRemoteSwiftPackageReference "CoreGPX" */,
+				A8838B90302A302500FAEEEE /* XCLocalSwiftPackageReference "OpenTrailsShared" */,
 			);
 			preferredProjectObjectVersion = 77;
 			productRefGroup = A85E854E2FE3EBF500558639 /* Products */;
@@ -109,12 +358,36 @@
 			projectRoot = "";
 			targets = (
 				A85E854C2FE3EBF500558639 /* OpenTrails */,
+				A8838AE3302A232300FAEEEE /* OpenWidgetExtension */,
+				A8838B69302A2F3100FAEEEE /* OpenWatch Watch App */,
+				A8838B7C302A2F5B00FAEEEE /* OpenWatchWidgetExtension */,
 			);
 		};
 /* End PBXProject section */
 
 /* Begin PBXResourcesBuildPhase section */
 		A85E854B2FE3EBF500558639 /* Resources */ = {
+			isa = PBXResourcesBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+		A8838AE2302A232300FAEEEE /* Resources */ = {
+			isa = PBXResourcesBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+		A8838B68302A2F3100FAEEEE /* Resources */ = {
+			isa = PBXResourcesBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+		A8838B7B302A2F5B00FAEEEE /* Resources */ = {
 			isa = PBXResourcesBuildPhase;
 			buildActionMask = 2147483647;
 			files = (
@@ -131,7 +404,46 @@
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
+		A8838AE0302A232300FAEEEE /* Sources */ = {
+			isa = PBXSourcesBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+		A8838B66302A2F3100FAEEEE /* Sources */ = {
+			isa = PBXSourcesBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+		A8838B79302A2F5B00FAEEEE /* Sources */ = {
+			isa = PBXSourcesBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
 /* End PBXSourcesBuildPhase section */
+
+/* Begin PBXTargetDependency section */
+		A8838AF5302A232400FAEEEE /* PBXTargetDependency */ = {
+			isa = PBXTargetDependency;
+			target = A8838AE3302A232300FAEEEE /* OpenWidgetExtension */;
+			targetProxy = A8838AF4302A232400FAEEEE /* PBXContainerItemProxy */;
+		};
+		A8838B73302A2F3200FAEEEE /* PBXTargetDependency */ = {
+			isa = PBXTargetDependency;
+			target = A8838B69302A2F3100FAEEEE /* OpenWatch Watch App */;
+			targetProxy = A8838B72302A2F3200FAEEEE /* PBXContainerItemProxy */;
+		};
+		A8838B89302A2F5B00FAEEEE /* PBXTargetDependency */ = {
+			isa = PBXTargetDependency;
+			target = A8838B7C302A2F5B00FAEEEE /* OpenWatchWidgetExtension */;
+			targetProxy = A8838B88302A2F5B00FAEEEE /* PBXContainerItemProxy */;
+		};
+/* End PBXTargetDependency section */
 
 /* Begin XCBuildConfiguration section */
 		A85E85582FE3EBF600558639 /* Debug */ = {
@@ -269,6 +581,7 @@
 				ENABLE_PREVIEWS = YES;
 				ENABLE_USER_SELECTED_FILES = readonly;
 				GENERATE_INFOPLIST_FILE = YES;
+				INFOPLIST_KEY_NSLocationAlwaysAndWhenInUseUsageDescription = "OpenTrails uses Always location, only when you turn on Background Trail Tracking in Settings, to keep your Home Screen widget and Watch complication showing your progress along the trail while the app isn't open.";
 				INFOPLIST_KEY_NSLocationWhenInUseUsageDescription = "OpenTrails uses your location to show where you are on the map.";
 				"INFOPLIST_KEY_UIApplicationSceneManifest_Generation[sdk=iphoneos*]" = YES;
 				"INFOPLIST_KEY_UIApplicationSceneManifest_Generation[sdk=iphonesimulator*]" = YES;
@@ -316,6 +629,7 @@
 				ENABLE_PREVIEWS = YES;
 				ENABLE_USER_SELECTED_FILES = readonly;
 				GENERATE_INFOPLIST_FILE = YES;
+				INFOPLIST_KEY_NSLocationAlwaysAndWhenInUseUsageDescription = "OpenTrails uses Always location, only when you turn on Background Trail Tracking in Settings, to keep your Home Screen widget and Watch complication showing your progress along the trail while the app isn't open.";
 				INFOPLIST_KEY_NSLocationWhenInUseUsageDescription = "OpenTrails uses your location to show where you are on the map.";
 				"INFOPLIST_KEY_UIApplicationSceneManifest_Generation[sdk=iphoneos*]" = YES;
 				"INFOPLIST_KEY_UIApplicationSceneManifest_Generation[sdk=iphonesimulator*]" = YES;
@@ -348,6 +662,211 @@
 			};
 			name = Release;
 		};
+		A8838AF9302A232400FAEEEE /* Debug */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				ASSETCATALOG_COMPILER_GLOBAL_ACCENT_COLOR_NAME = AccentColor;
+				ASSETCATALOG_COMPILER_WIDGET_BACKGROUND_COLOR_NAME = WidgetBackground;
+				CODE_SIGN_ENTITLEMENTS = OpenWidgetExtension.entitlements;
+				CODE_SIGN_STYLE = Automatic;
+				CURRENT_PROJECT_VERSION = 1;
+				DEVELOPMENT_TEAM = 697EW27G9U;
+				GENERATE_INFOPLIST_FILE = YES;
+				INFOPLIST_FILE = OpenWidget/Info.plist;
+				INFOPLIST_KEY_CFBundleDisplayName = OpenWidget;
+				INFOPLIST_KEY_NSHumanReadableCopyright = "";
+				IPHONEOS_DEPLOYMENT_TARGET = 26.5;
+				LD_RUNPATH_SEARCH_PATHS = (
+					"$(inherited)",
+					"@executable_path/Frameworks",
+					"@executable_path/../../Frameworks",
+				);
+				MARKETING_VERSION = 1.0;
+				PRODUCT_BUNDLE_IDENTIFIER = tappium.com.OpenTrails.OpenWidget;
+				PRODUCT_NAME = "$(TARGET_NAME)";
+				SDKROOT = iphoneos;
+				SKIP_INSTALL = YES;
+				STRING_CATALOG_GENERATE_SYMBOLS = YES;
+				SWIFT_APPROACHABLE_CONCURRENCY = YES;
+				SWIFT_EMIT_LOC_STRINGS = YES;
+				SWIFT_UPCOMING_FEATURE_MEMBER_IMPORT_VISIBILITY = YES;
+				SWIFT_VERSION = 5.0;
+				TARGETED_DEVICE_FAMILY = "1,2";
+			};
+			name = Debug;
+		};
+		A8838AFA302A232400FAEEEE /* Release */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				ASSETCATALOG_COMPILER_GLOBAL_ACCENT_COLOR_NAME = AccentColor;
+				ASSETCATALOG_COMPILER_WIDGET_BACKGROUND_COLOR_NAME = WidgetBackground;
+				CODE_SIGN_ENTITLEMENTS = OpenWidgetExtension.entitlements;
+				CODE_SIGN_STYLE = Automatic;
+				CURRENT_PROJECT_VERSION = 1;
+				DEVELOPMENT_TEAM = 697EW27G9U;
+				GENERATE_INFOPLIST_FILE = YES;
+				INFOPLIST_FILE = OpenWidget/Info.plist;
+				INFOPLIST_KEY_CFBundleDisplayName = OpenWidget;
+				INFOPLIST_KEY_NSHumanReadableCopyright = "";
+				IPHONEOS_DEPLOYMENT_TARGET = 26.5;
+				LD_RUNPATH_SEARCH_PATHS = (
+					"$(inherited)",
+					"@executable_path/Frameworks",
+					"@executable_path/../../Frameworks",
+				);
+				MARKETING_VERSION = 1.0;
+				PRODUCT_BUNDLE_IDENTIFIER = tappium.com.OpenTrails.OpenWidget;
+				PRODUCT_NAME = "$(TARGET_NAME)";
+				SDKROOT = iphoneos;
+				SKIP_INSTALL = YES;
+				STRING_CATALOG_GENERATE_SYMBOLS = YES;
+				SWIFT_APPROACHABLE_CONCURRENCY = YES;
+				SWIFT_EMIT_LOC_STRINGS = YES;
+				SWIFT_UPCOMING_FEATURE_MEMBER_IMPORT_VISIBILITY = YES;
+				SWIFT_VERSION = 5.0;
+				TARGETED_DEVICE_FAMILY = "1,2";
+				VALIDATE_PRODUCT = YES;
+			};
+			name = Release;
+		};
+		A8838B76302A2F3200FAEEEE /* Debug */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon;
+				ASSETCATALOG_COMPILER_GLOBAL_ACCENT_COLOR_NAME = AccentColor;
+				CODE_SIGN_ENTITLEMENTS = "OpenWatch Watch App/OpenWatch Watch App.entitlements";
+				CODE_SIGN_STYLE = Automatic;
+				CURRENT_PROJECT_VERSION = 1;
+				DEVELOPMENT_TEAM = 697EW27G9U;
+				ENABLE_PREVIEWS = YES;
+				GENERATE_INFOPLIST_FILE = YES;
+				INFOPLIST_KEY_CFBundleDisplayName = OpenWatch;
+				INFOPLIST_KEY_UISupportedInterfaceOrientations = "UIInterfaceOrientationPortrait UIInterfaceOrientationPortraitUpsideDown";
+				INFOPLIST_KEY_WKCompanionAppBundleIdentifier = tappium.com.OpenTrails;
+				LD_RUNPATH_SEARCH_PATHS = (
+					"$(inherited)",
+					"@executable_path/Frameworks",
+				);
+				MARKETING_VERSION = 1.0;
+				PRODUCT_BUNDLE_IDENTIFIER = tappium.com.OpenTrails.watchkitapp;
+				PRODUCT_NAME = "$(TARGET_NAME)";
+				SDKROOT = watchos;
+				SKIP_INSTALL = YES;
+				STRING_CATALOG_GENERATE_SYMBOLS = YES;
+				SWIFT_APPROACHABLE_CONCURRENCY = YES;
+				SWIFT_DEFAULT_ACTOR_ISOLATION = MainActor;
+				SWIFT_EMIT_LOC_STRINGS = YES;
+				SWIFT_UPCOMING_FEATURE_MEMBER_IMPORT_VISIBILITY = YES;
+				SWIFT_VERSION = 5.0;
+				TARGETED_DEVICE_FAMILY = 4;
+				WATCHOS_DEPLOYMENT_TARGET = 26.5;
+			};
+			name = Debug;
+		};
+		A8838B77302A2F3200FAEEEE /* Release */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon;
+				ASSETCATALOG_COMPILER_GLOBAL_ACCENT_COLOR_NAME = AccentColor;
+				CODE_SIGN_ENTITLEMENTS = "OpenWatch Watch App/OpenWatch Watch App.entitlements";
+				CODE_SIGN_STYLE = Automatic;
+				CURRENT_PROJECT_VERSION = 1;
+				DEVELOPMENT_TEAM = 697EW27G9U;
+				ENABLE_PREVIEWS = YES;
+				GENERATE_INFOPLIST_FILE = YES;
+				INFOPLIST_KEY_CFBundleDisplayName = OpenWatch;
+				INFOPLIST_KEY_UISupportedInterfaceOrientations = "UIInterfaceOrientationPortrait UIInterfaceOrientationPortraitUpsideDown";
+				INFOPLIST_KEY_WKCompanionAppBundleIdentifier = tappium.com.OpenTrails;
+				LD_RUNPATH_SEARCH_PATHS = (
+					"$(inherited)",
+					"@executable_path/Frameworks",
+				);
+				MARKETING_VERSION = 1.0;
+				PRODUCT_BUNDLE_IDENTIFIER = tappium.com.OpenTrails.watchkitapp;
+				PRODUCT_NAME = "$(TARGET_NAME)";
+				SDKROOT = watchos;
+				SKIP_INSTALL = YES;
+				STRING_CATALOG_GENERATE_SYMBOLS = YES;
+				SWIFT_APPROACHABLE_CONCURRENCY = YES;
+				SWIFT_DEFAULT_ACTOR_ISOLATION = MainActor;
+				SWIFT_EMIT_LOC_STRINGS = YES;
+				SWIFT_UPCOMING_FEATURE_MEMBER_IMPORT_VISIBILITY = YES;
+				SWIFT_VERSION = 5.0;
+				TARGETED_DEVICE_FAMILY = 4;
+				VALIDATE_PRODUCT = YES;
+				WATCHOS_DEPLOYMENT_TARGET = 26.5;
+			};
+			name = Release;
+		};
+		A8838B8D302A2F5B00FAEEEE /* Debug */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				ASSETCATALOG_COMPILER_GLOBAL_ACCENT_COLOR_NAME = AccentColor;
+				ASSETCATALOG_COMPILER_WIDGET_BACKGROUND_COLOR_NAME = WidgetBackground;
+				CODE_SIGN_ENTITLEMENTS = OpenWatchWidgetExtension.entitlements;
+				CODE_SIGN_STYLE = Automatic;
+				CURRENT_PROJECT_VERSION = 1;
+				DEVELOPMENT_TEAM = 697EW27G9U;
+				GENERATE_INFOPLIST_FILE = YES;
+				INFOPLIST_FILE = OpenWatchWidget/Info.plist;
+				INFOPLIST_KEY_CFBundleDisplayName = OpenWatchWidget;
+				INFOPLIST_KEY_NSHumanReadableCopyright = "";
+				LD_RUNPATH_SEARCH_PATHS = (
+					"$(inherited)",
+					"@executable_path/Frameworks",
+					"@executable_path/../../Frameworks",
+					"@executable_path/../../../../Frameworks",
+				);
+				MARKETING_VERSION = 1.0;
+				PRODUCT_BUNDLE_IDENTIFIER = tappium.com.OpenTrails.watchkitapp.OpenWatchWidget;
+				PRODUCT_NAME = "$(TARGET_NAME)";
+				SDKROOT = watchos;
+				SKIP_INSTALL = YES;
+				STRING_CATALOG_GENERATE_SYMBOLS = YES;
+				SWIFT_APPROACHABLE_CONCURRENCY = YES;
+				SWIFT_EMIT_LOC_STRINGS = YES;
+				SWIFT_UPCOMING_FEATURE_MEMBER_IMPORT_VISIBILITY = YES;
+				SWIFT_VERSION = 5.0;
+				TARGETED_DEVICE_FAMILY = 4;
+				WATCHOS_DEPLOYMENT_TARGET = 26.5;
+			};
+			name = Debug;
+		};
+		A8838B8E302A2F5B00FAEEEE /* Release */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				ASSETCATALOG_COMPILER_GLOBAL_ACCENT_COLOR_NAME = AccentColor;
+				ASSETCATALOG_COMPILER_WIDGET_BACKGROUND_COLOR_NAME = WidgetBackground;
+				CODE_SIGN_ENTITLEMENTS = OpenWatchWidgetExtension.entitlements;
+				CODE_SIGN_STYLE = Automatic;
+				CURRENT_PROJECT_VERSION = 1;
+				DEVELOPMENT_TEAM = 697EW27G9U;
+				GENERATE_INFOPLIST_FILE = YES;
+				INFOPLIST_FILE = OpenWatchWidget/Info.plist;
+				INFOPLIST_KEY_CFBundleDisplayName = OpenWatchWidget;
+				INFOPLIST_KEY_NSHumanReadableCopyright = "";
+				LD_RUNPATH_SEARCH_PATHS = (
+					"$(inherited)",
+					"@executable_path/Frameworks",
+					"@executable_path/../../Frameworks",
+					"@executable_path/../../../../Frameworks",
+				);
+				MARKETING_VERSION = 1.0;
+				PRODUCT_BUNDLE_IDENTIFIER = tappium.com.OpenTrails.watchkitapp.OpenWatchWidget;
+				PRODUCT_NAME = "$(TARGET_NAME)";
+				SDKROOT = watchos;
+				SKIP_INSTALL = YES;
+				STRING_CATALOG_GENERATE_SYMBOLS = YES;
+				SWIFT_APPROACHABLE_CONCURRENCY = YES;
+				SWIFT_EMIT_LOC_STRINGS = YES;
+				SWIFT_UPCOMING_FEATURE_MEMBER_IMPORT_VISIBILITY = YES;
+				SWIFT_VERSION = 5.0;
+				TARGETED_DEVICE_FAMILY = 4;
+				VALIDATE_PRODUCT = YES;
+				WATCHOS_DEPLOYMENT_TARGET = 26.5;
+			};
+			name = Release;
+		};
 /* End XCBuildConfiguration section */
 
 /* Begin XCConfigurationList section */
@@ -369,7 +888,41 @@
 			defaultConfigurationIsVisible = 0;
 			defaultConfigurationName = Release;
 		};
+		A8838AF8302A232400FAEEEE /* Build configuration list for PBXNativeTarget "OpenWidgetExtension" */ = {
+			isa = XCConfigurationList;
+			buildConfigurations = (
+				A8838AF9302A232400FAEEEE /* Debug */,
+				A8838AFA302A232400FAEEEE /* Release */,
+			);
+			defaultConfigurationIsVisible = 0;
+			defaultConfigurationName = Release;
+		};
+		A8838B78302A2F3200FAEEEE /* Build configuration list for PBXNativeTarget "OpenWatch Watch App" */ = {
+			isa = XCConfigurationList;
+			buildConfigurations = (
+				A8838B76302A2F3200FAEEEE /* Debug */,
+				A8838B77302A2F3200FAEEEE /* Release */,
+			);
+			defaultConfigurationIsVisible = 0;
+			defaultConfigurationName = Release;
+		};
+		A8838B8C302A2F5B00FAEEEE /* Build configuration list for PBXNativeTarget "OpenWatchWidgetExtension" */ = {
+			isa = XCConfigurationList;
+			buildConfigurations = (
+				A8838B8D302A2F5B00FAEEEE /* Debug */,
+				A8838B8E302A2F5B00FAEEEE /* Release */,
+			);
+			defaultConfigurationIsVisible = 0;
+			defaultConfigurationName = Release;
+		};
 /* End XCConfigurationList section */
+
+/* Begin XCLocalSwiftPackageReference section */
+		A8838B90302A302500FAEEEE /* XCLocalSwiftPackageReference "OpenTrailsShared" */ = {
+			isa = XCLocalSwiftPackageReference;
+			relativePath = OpenTrailsShared;
+		};
+/* End XCLocalSwiftPackageReference section */
 
 /* Begin XCRemoteSwiftPackageReference section */
 		AA0000000000000000000001 /* XCRemoteSwiftPackageReference "CoreGPX" */ = {
@@ -383,6 +936,25 @@
 /* End XCRemoteSwiftPackageReference section */
 
 /* Begin XCSwiftPackageProductDependency section */
+		A8838B91302A302500FAEEEE /* OpenTrailsShared */ = {
+			isa = XCSwiftPackageProductDependency;
+			productName = OpenTrailsShared;
+		};
+		A8838B93302A305800FAEEEE /* OpenTrailsShared */ = {
+			isa = XCSwiftPackageProductDependency;
+			package = A8838B90302A302500FAEEEE /* XCLocalSwiftPackageReference "OpenTrailsShared" */;
+			productName = OpenTrailsShared;
+		};
+		A8838B95302A305D00FAEEEE /* OpenTrailsShared */ = {
+			isa = XCSwiftPackageProductDependency;
+			package = A8838B90302A302500FAEEEE /* XCLocalSwiftPackageReference "OpenTrailsShared" */;
+			productName = OpenTrailsShared;
+		};
+		A8838B97302A306100FAEEEE /* OpenTrailsShared */ = {
+			isa = XCSwiftPackageProductDependency;
+			package = A8838B90302A302500FAEEEE /* XCLocalSwiftPackageReference "OpenTrailsShared" */;
+			productName = OpenTrailsShared;
+		};
 		AA0000000000000000000002 /* CoreGPX */ = {
 			isa = XCSwiftPackageProductDependency;
 			package = AA0000000000000000000001 /* XCRemoteSwiftPackageReference "CoreGPX" */;
