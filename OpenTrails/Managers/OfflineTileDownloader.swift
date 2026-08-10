@@ -178,7 +178,7 @@ final class OfflineTileDownloader {
             return URL(string: filled)
         }
 
-        /// Must mirror `OSMTileOverlay.cacheKey(for:)` exactly so warmed tiles are found.
+        /// Must mirror `TileOverlay.cacheKey(for:)` exactly so warmed tiles are found.
         nonisolated func cacheKey(providerID: String, scale: CGFloat) -> String {
             "\(providerID)/\(z)/\(x)/\(y)@\(scale)"
         }

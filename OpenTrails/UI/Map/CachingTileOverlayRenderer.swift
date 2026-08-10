@@ -69,9 +69,9 @@ nonisolated final class CachingTileOverlayRenderer: MKOverlayRenderer, TileCache
     /// reconnect, so a failed tile never triggers an endless request/redraw loop.
     private let failed = OSAllocatedUnfairLock(initialState: Set<String>())
 
-    private var tileOverlay: OSMTileOverlay { overlay as! OSMTileOverlay }
+    private var tileOverlay: TileOverlay { overlay as! TileOverlay }
 
-    init(overlay: OSMTileOverlay) {
+    init(overlay: TileOverlay) {
         super.init(overlay: overlay)
         // Retry tiles once the network is back (delivered on the main queue).
         TileCache.shared.addObserver(self)
@@ -146,7 +146,7 @@ nonisolated final class CachingTileOverlayRenderer: MKOverlayRenderer, TileCache
 
     // MARK: - Loading
 
-    private func loadTileIfNeeded(for path: MKTileOverlayPath, in tileRect: MKMapRect, overlay: OSMTileOverlay) {
+    private func loadTileIfNeeded(for path: MKTileOverlayPath, in tileRect: MKMapRect, overlay: TileOverlay) {
         // Beyond the source's max zoom no real tile exists, so fetch the deepest
         // real ancestor instead — the fallback step will crop it for overzoom.
         let fetchPath = path.z > overlay.maximumZ ? path.ancestor(atZoom: overlay.maximumZ) : path
@@ -184,7 +184,7 @@ nonisolated final class CachingTileOverlayRenderer: MKOverlayRenderer, TileCache
     }
 
     /// Finds the nearest cached lower-zoom tile and crops the relevant quadrant.
-    private func fallbackImage(for path: MKTileOverlayPath, in overlay: OSMTileOverlay) -> TileImage? {
+    private func fallbackImage(for path: MKTileOverlayPath, in overlay: TileOverlay) -> TileImage? {
         var ancestor = path
         for depth in 1...maxFallbackDepth where ancestor.z > 0 {
             ancestor = ancestor.parent

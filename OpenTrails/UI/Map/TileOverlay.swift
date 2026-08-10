@@ -1,5 +1,5 @@
 //
-//  OSMTileOverlay.swift
+//  TileOverlay.swift
 //  OpenTrails
 //
 //  An MKTileOverlay backed by TileCache, plus tile-path math used for overzoom.
@@ -9,7 +9,7 @@ import Foundation
 import MapKit
 
 /// OpenStreetMap tile overlay that serves tiles through the shared cache.
-nonisolated final class OSMTileOverlay: MKTileOverlay, @unchecked Sendable {
+nonisolated final class TileOverlay: MKTileOverlay, @unchecked Sendable {
     private let cache = TileCache.shared
 
     /// Identifies the tile source, so cached tiles from different providers never

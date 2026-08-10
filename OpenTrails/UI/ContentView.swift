@@ -58,9 +58,9 @@ struct ContentView: View {
         // Fires on every re-evaluation of this view's body — the throttled
         // `locationManager.coordinate` publish (~1/sec while moving) is the
         // most likely repeat offender; compare its rate here against the
-        // `MapUpdateCalled`/`MapCentered` marks in OSMMapView.
+        // `MapUpdateCalled`/`MapCentered` marks in MapView.
         RenderSignpost.mark("ContentViewBody")
-        return OSMMapView(
+        return MapView(
             locationManager: locationManager,
             route: displayedRoute,
             highlight: highlight,
