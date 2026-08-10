@@ -35,7 +35,25 @@ struct MapSheet: View {
     @State private var completer = SearchCompleter()
 
     /// True while the search field is active and has suggestions to offer.
-    private var isSearching: Bool { searchFocused && !completer.suggestions.isEmpty }
+    private var isSearching: Bool {
+        searchFocused && (!completer.suggestions.isEmpty || !matchingHikes.isEmpty)
+    }
+
+    /// Imported/recorded hikes whose title matches the current query, with
+    /// titles that start with the query ranked above ones that merely contain
+    /// it — surfaced above map suggestions so a user's own trails come first.
+    private var matchingHikes: [Hike] {
+        let query = searchText.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !query.isEmpty else { return [] }
+        return hikes
+            .filter { $0.title.localizedCaseInsensitiveContains(query) }
+            .sorted { lhs, rhs in
+                let lhsPrefix = lhs.title.range(of: query, options: [.caseInsensitive, .anchored]) != nil
+                let rhsPrefix = rhs.title.range(of: query, options: [.caseInsensitive, .anchored]) != nil
+                if lhsPrefix != rhsPrefix { return lhsPrefix }
+                return lhs.title.localizedCaseInsensitiveCompare(rhs.title) == .orderedAscending
+            }
+    }
 
     /// True at the smallest detent, where only the search field shows.
     private var isCompact: Bool { detent == .height(80) }
@@ -194,18 +212,9 @@ struct MapSheet: View {
         .buttonStyle(.plain)
     }
 
-    /// Hikes with "spring" in the title are pinned to the top; the rest keep the
-    /// query's newest-first order.
-    private var sortedHikes: [Hike] {
-        let keyword = "spring"
-        let pinned = hikes.filter { $0.title.localizedCaseInsensitiveContains(keyword) }
-        let rest = hikes.filter { !$0.title.localizedCaseInsensitiveContains(keyword) }
-        return pinned + rest
-    }
-
     private var hikesList: some View {
         List {
-            ForEach(sortedHikes) { hike in
+            ForEach(hikes) { hike in
                 Button {
                     selectedHike = hike
                     path.append(hike)
@@ -255,32 +264,66 @@ struct MapSheet: View {
     }
 
     /// Autocomplete suggestions shown under the search field while typing.
+    /// Matching hikes (imported or recorded) are listed first, ahead of
+    /// MapKit's place suggestions.
     private var suggestionsList: some View {
-        List(completer.suggestions, id: \.self) { suggestion in
-            Button {
-                select(suggestion)
-            } label: {
-                HStack(spacing: 12) {
-                    Image(systemName: "mappin.circle.fill")
-                        .font(.title3)
-                        .foregroundStyle(.secondary)
-                    VStack(alignment: .leading, spacing: 2) {
-                        Text(suggestion.title)
-                            .foregroundStyle(.primary)
-                        if !suggestion.subtitle.isEmpty {
-                            Text(suggestion.subtitle)
-                                .font(.caption)
-                                .foregroundStyle(.secondary)
+        List {
+            if !matchingHikes.isEmpty {
+                Section("Your Hikes") {
+                    ForEach(matchingHikes) { hike in
+                        Button {
+                            select(hike)
+                        } label: {
+                            HikeRow(hike: hike, isSelected: hike.id == selectedHike?.id)
+                                .contentShape(.rect)
                         }
+                        .buttonStyle(.plain)
                     }
-                    Spacer(minLength: 0)
                 }
-                .contentShape(.rect)
             }
-            .buttonStyle(.plain)
+            if !completer.suggestions.isEmpty {
+                Section {
+                    ForEach(completer.suggestions, id: \.self) { suggestion in
+                        Button {
+                            select(suggestion)
+                        } label: {
+                            HStack(spacing: 12) {
+                                Image(systemName: "mappin.circle.fill")
+                                    .font(.title3)
+                                    .foregroundStyle(.secondary)
+                                VStack(alignment: .leading, spacing: 2) {
+                                    Text(suggestion.title)
+                                        .foregroundStyle(.primary)
+                                    if !suggestion.subtitle.isEmpty {
+                                        Text(suggestion.subtitle)
+                                            .font(.caption)
+                                            .foregroundStyle(.secondary)
+                                    }
+                                }
+                                Spacer(minLength: 0)
+                            }
+                            .contentShape(.rect)
+                        }
+                        .buttonStyle(.plain)
+                    }
+                } header: {
+                    if !matchingHikes.isEmpty {
+                        Text("Maps")
+                    }
+                }
+            }
         }
         .listStyle(.plain)
         .scrollContentBackground(.hidden)
+    }
+
+    /// Opens a tapped hike suggestion straight to its detail view.
+    private func select(_ hike: Hike) {
+        searchText = ""
+        searchFocused = false
+        completer.clear()
+        selectedHike = hike
+        path.append(hike)
     }
 
     /// Resolves a tapped suggestion to a place and zooms the map to it.

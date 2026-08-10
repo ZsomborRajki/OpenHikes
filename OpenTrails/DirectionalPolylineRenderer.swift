@@ -59,9 +59,13 @@ nonisolated final class DirectionalPolylineRenderer: MKPolylineRenderer {
                 width: abs(dx) + 2 * pad, height: abs(dy) + 2 * pad
             )
             guard mapRect.intersects(segRect) else {
-                var d = carry
-                while d <= segLength { d += spacing }
-                carry = d - segLength
+                // Closed-form version of the on-screen loop below (advance `d` by
+                // `spacing` until it passes `segLength`). An off-screen segment
+                // isn't bounded by screen size, so at deep zoom (tiny `spacing`)
+                // a single long segment could otherwise mean millions of
+                // iterations just to keep the chevron spacing carry accurate.
+                let steps = max(0, Int(((segLength - carry) / spacing).rounded(.down)) + 1)
+                carry = carry + Double(steps) * spacing - segLength
                 continue
             }
 

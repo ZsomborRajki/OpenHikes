@@ -11,20 +11,10 @@
 import Foundation
 
 enum Secrets {
-    /// The bundled Stadia Maps API key, or `nil` if none is configured.
-    /// The in-app Settings key (if the user entered one) takes precedence over this.
-    static let stadiaAPIKey: String? = value(for: "StadiaAPIKey")
-
-    /// The bundled Thunderforest API key, or `nil` if none is configured.
-    static let thunderforestAPIKey: String? = value(for: "ThunderforestAPIKey")
-
     /// The bundled key for `provider`, or `nil` for keyless providers or missing keys.
     static func apiKey(for provider: TileProvider) -> String? {
-        switch provider.apiKeyDefaultsKey {
-        case SettingsKey.stadiaAPIKey: return stadiaAPIKey
-        case SettingsKey.thunderforestAPIKey: return thunderforestAPIKey
-        default: return nil
-        }
+        guard let plistKey = provider.apiKeyPlistKey else { return nil }
+        return value(for: plistKey)
     }
 
     /// Placeholder values from the committed template resolve to `nil`, never to a broken key.

@@ -55,14 +55,20 @@ struct ContentView: View {
     }
 
     var body: some View {
-        OSMMapView(
-            coordinate: locationManager.coordinate,
+        // Fires on every re-evaluation of this view's body — the throttled
+        // `locationManager.coordinate` publish (~1/sec while moving) is the
+        // most likely repeat offender; compare its rate here against the
+        // `MapUpdateCalled`/`MapCentered` marks in OSMMapView.
+        RenderSignpost.mark("ContentViewBody")
+        return OSMMapView(
+            locationManager: locationManager,
             route: displayedRoute,
             highlight: highlight,
             sheetMetrics: sheetMetrics,
             tileSource: activeTileSource,
             mapController: mapController
         )
+            .equatable()
             .ignoresSafeArea()
             .overlay(alignment: .topLeading) {
                 if let current = weatherManager.current {
@@ -72,11 +78,7 @@ struct ContentView: View {
                 }
             }
             .task { await locationManager.start() }
-            .task(id: weatherKey) {
-                if let coordinate = locationManager.coordinate {
-                    await weatherManager.update(for: coordinate)
-                }
-            }
+            .task { await pollWeather() }
             .sheet(isPresented: $showSheet) {
                 MapSheet(
                     searchText: $searchText,
@@ -111,10 +113,30 @@ struct ContentView: View {
             }
     }
 
-    /// Coarse location key (~1 km) so weather refetches only on meaningful moves.
-    private var weatherKey: String {
-        guard let c = locationManager.coordinate else { return "none" }
-        return "\(Int(c.latitude * 100)),\(Int(c.longitude * 100))"
+    /// Polls the user's location once a second (throttled — see
+    /// `LocationManager`) and refetches weather only when the coarse (~1 km)
+    /// location key actually changes. Mirrors `HikeDetailView.followLocation`'s
+    /// polling loop so this never reads `locationManager.coordinate` from
+    /// `body` — doing that here would re-invalidate this whole view (and,
+    /// via the sheet's content closure, everything nested inside it, down to
+    /// `HikeDetailView`) on every throttled publish, not just on the
+    /// meaningful ~1 km moves this is actually gated on.
+    private func pollWeather() async {
+        var lastKey: String?
+        while !Task.isCancelled {
+            if let coordinate = locationManager.coordinate {
+                let key = Self.weatherKey(for: coordinate)
+                if key != lastKey {
+                    lastKey = key
+                    await weatherManager.update(for: coordinate)
+                }
+            }
+            try? await Task.sleep(for: .seconds(1))
+        }
+    }
+
+    private static func weatherKey(for coordinate: CLLocationCoordinate2D) -> String {
+        "\(Int(coordinate.latitude * 100)),\(Int(coordinate.longitude * 100))"
     }
 
     // TODO: start a live GPS recording session.

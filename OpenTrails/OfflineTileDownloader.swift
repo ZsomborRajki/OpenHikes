@@ -31,6 +31,10 @@ final class OfflineTileDownloader {
     var isFailed: Bool { if case .failed = phase { return true } else { return false } }
 
     private var task: Task<Void, Never>?
+    /// Bumped on every `start()`/`cancel()` so a stale `run()` from a prior,
+    /// cancelled download can tell it's no longer current and skip mutating
+    /// state that now belongs to a newer download.
+    private var generation = 0
 
     /// The shallowest zoom to save (whole-route overview). `nonisolated`: a
     /// plain constant read from the `nonisolated` tile-enumeration functions.
@@ -56,15 +60,18 @@ final class OfflineTileDownloader {
         )
         guard !tiles.isEmpty else { phase = .failed("Nothing to save."); return }
 
+        generation += 1
+        let currentGeneration = generation
         completed = 0
         total = tiles.count
         phase = .downloading
         task = Task { [weak self] in
-            await self?.run(tiles: tiles, source: source, scale: scale)
+            await self?.run(tiles: tiles, source: source, scale: scale, generation: currentGeneration)
         }
     }
 
     func cancel() {
+        generation += 1
         task?.cancel()
         task = nil
         phase = .idle
@@ -80,7 +87,7 @@ final class OfflineTileDownloader {
         total = 0
     }
 
-    private func run(tiles: [Tile], source: ActiveTileSource, scale: CGFloat) async {
+    private func run(tiles: [Tile], source: ActiveTileSource, scale: CGFloat, generation: Int) async {
         let cache = TileCache.shared
         var index = 0
 
@@ -109,12 +116,16 @@ final class OfflineTileDownloader {
             while active > 0 {
                 await group.next()
                 active -= 1
+                // A newer download has started since this task began — stop touching
+                // its state and let the group drain/cancel our remaining children.
+                guard generation == self.generation else { break }
                 completed += 1
                 if Task.isCancelled { break }
                 addNext()
             }
         }
 
+        guard generation == self.generation else { return }
         phase = Task.isCancelled ? .idle : .finished
     }
 

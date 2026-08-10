@@ -10,6 +10,26 @@ import SwiftUI
 import Charts
 import CoreLocation
 
+/// The elevation graph's tracker positions, held in a reference type so the
+/// once-a-second auto-follow poll moves the chart without re-rendering the
+/// rest of `HikeDetailView` (header, stats grid, buttons) — the same
+/// technique `RouteHighlight`/`SheetMetrics` use for the map. `HikeDetailView`
+/// only ever passes this object down; it never reads its properties directly,
+/// so mutating them invalidates `ElevationChartView` (which does read them)
+/// and nothing above it.
+@MainActor
+@Observable
+final class TrackerState {
+    /// Persistent tracker position along the route (metres from start). Starts
+    /// at the GPX start, follows the finger while scrubbing, and stays where
+    /// it's left.
+    var trackerDistance: Double = 0
+    /// The user's live GPS fix projected onto the route (metres from start), or
+    /// `nil` when auto-follow is off, there's no fix, or the fix is too far
+    /// from the trail to match.
+    var liveTrackerDistance: Double?
+}
+
 struct HikeDetailView: View {
     let hike: Hike
     /// Reference type the map observes directly — writing to it doesn't re-render this view.
@@ -37,14 +57,10 @@ struct HikeDetailView: View {
     /// Stat tiles, computed once per hike (each stat is an O(n) pass over the
     /// route, so they must not be recomputed on every body invalidation).
     @State private var statItems: [Stat] = []
-    /// Persistent tracker position along the route (metres from start). Starts at the
-    /// GPX start, follows the finger while scrubbing, and stays where it's left.
-    @State private var trackerDistance: Double = 0
-    /// The user's live GPS fix projected onto the route (metres from start), or
-    /// `nil` when auto-follow is off, there's no fix, or the fix is too far from
-    /// the trail to match. Drawn on the chart separately from `trackerDistance`
-    /// so a manual scrub and the live position can both be visible at once.
-    @State private var liveTrackerDistance: Double?
+    /// Tracker/live-follow positions, isolated in a reference type — see
+    /// ``TrackerState``. Drawn on the chart as two separate markers so a manual
+    /// scrub and the live position can both be visible at once.
+    @State private var tracker = TrackerState()
     /// True while a finger is actively dragging the elevation chart — pauses
     /// auto-follow's own updates to `trackerDistance` so it doesn't fight the drag.
     @State private var isScrubbing = false
@@ -53,7 +69,15 @@ struct HikeDetailView: View {
     private static let followMatchThresholdMeters: Double = 75
 
     var body: some View {
-        ScrollView {
+        // Fires on every re-evaluation of this view's body. Auto-follow's
+        // once-a-second tracker updates should NOT show up here — they live in
+        // `tracker` (a `TrackerState`), which this body never reads, so those
+        // updates invalidate only `ElevationChartView` below. If this mark
+        // starts firing at that cadence again, something re-introduced a read
+        // of `tracker`'s properties into this body (directly or via a
+        // computed var it calls, like `elevationSection`).
+        RenderSignpost.mark("HikeDetailBody")
+        return ScrollView {
             VStack(alignment: .leading, spacing: 24) {
                 elevationSection
                 header
@@ -72,17 +96,29 @@ struct HikeDetailView: View {
             profile = built
             statItems = Self.makeStats(for: hike)
             // Place the tracker at the start of the track, on both graph and map.
-            trackerDistance = 0
-            liveTrackerDistance = nil
+            tracker.trackerDistance = 0
+            tracker.liveTrackerDistance = nil
             highlight.coordinate = built.coordinate(atDistance: 0)
             refreshStoredBytes()
             autoSave.hikeSelectionChanged(to: hike)
             await followLocation(profile: built)
         }
         // Toggling off should clear the live dot immediately, not wait for the
-        // next throttled poll.
+        // next throttled poll. Toggling on should hand the map pin back to
+        // auto-follow right away, rather than leaving a stale manual pin up
+        // to a second until the next poll clears it.
         .onChange(of: hike.autoFollowEnabled) { _, enabled in
-            if !enabled { liveTrackerDistance = nil }
+            if enabled {
+                if !isScrubbing { highlight.coordinate = nil }
+            } else {
+                tracker.liveTrackerDistance = nil
+                // Hand the pin back to the persistent tracker so it reappears
+                // at the last-followed/scrubbed position instead of staying
+                // hidden from auto-follow's ownership of the map.
+                if !isScrubbing {
+                    highlight.coordinate = profile?.coordinate(atDistance: tracker.trackerDistance)
+                }
+            }
         }
         // Record the download once it finishes, so its tiles can be measured/removed.
         .onChange(of: downloader.phase) { _, phase in
@@ -446,19 +482,26 @@ struct HikeDetailView: View {
     @ViewBuilder
     private var elevationSection: some View {
         if let profile, profile.samples.count > 1 {
-            // Isolated + `Equatable` so slider/color churn in the parent body does
-            // not rebuild the (expensive) Chart. It re-renders only when the data,
-            // tint, or tracker position actually changes.
+            // `tracker` is passed down as a reference, never read here — that's
+            // what keeps this body from re-running on every auto-follow tick.
+            // `Equatable` still covers slider/color churn (tint/profile changes).
             ElevationChartView(
                 profile: profile,
                 tint: hike.tintOpaque,
-                trackerDistance: trackerDistance,
-                liveDistance: liveTrackerDistance,
+                tracker: tracker,
                 onScrub: { distance in
-                    trackerDistance = distance
+                    tracker.trackerDistance = distance
                     highlight.coordinate = profile.coordinate(atDistance: distance)
                 },
-                onScrubbingChanged: { isScrubbing = $0 }
+                onScrubbingChanged: { scrubbing in
+                    isScrubbing = scrubbing
+                    // Auto-follow owns the map pin: once the finger lifts, hand
+                    // it back so the pin doesn't sit at a stale scrub position
+                    // fighting the live location puck.
+                    if !scrubbing && hike.autoFollowEnabled {
+                        highlight.coordinate = nil
+                    }
+                }
             )
             .equatable()
         } else {
@@ -484,15 +527,44 @@ struct HikeDetailView: View {
               let coordinate = locationManager.coordinate,
               let match = profile.nearestPoint(to: coordinate),
               match.offRouteMeters <= Self.followMatchThresholdMeters else {
-            liveTrackerDistance = nil
+            // Guarded so a stationary/off-route poll (nil already) doesn't
+            // write `tracker` every second for nothing.
+            if tracker.liveTrackerDistance != nil {
+                tracker.liveTrackerDistance = nil
+                RenderSignpost.mark("LiveFollowUpdate", "cleared")
+            } else {
+                RenderSignpost.mark("LiveFollowUpdate", "no-fix-or-off-route")
+            }
             return
         }
-        liveTrackerDistance = match.distanceAlongRoute
+        let moved = tracker.liveTrackerDistance != match.distanceAlongRoute
+        // Guarded like `trackerDistance` below — reassigning `@Observable`
+        // storage to an equal value still triggers dependent views, so an
+        // unconditional write here would invalidate `ElevationChartView` (and,
+        // previously, `HikeDetailView` itself) on every "unchanged" poll too.
+        if moved { tracker.liveTrackerDistance = match.distanceAlongRoute }
         // Don't fight an in-progress manual scrub; the live dot still moves,
         // but the persistent tracker stays under the user's finger.
-        guard !isScrubbing else { return }
-        trackerDistance = match.distanceAlongRoute
-        highlight.coordinate = profile.coordinate(atDistance: match.distanceAlongRoute)
+        guard !isScrubbing else {
+            RenderSignpost.mark("LiveFollowUpdate", moved ? "moved-scrubbing" : "unchanged-scrubbing")
+            return
+        }
+        // Skip the tracker write when the projected position hasn't actually
+        // moved (e.g. paused, or GPS noise below the route-matching
+        // resolution) — avoids a redundant `TrackerState` update every second
+        // at rest.
+        if tracker.trackerDistance != match.distanceAlongRoute {
+            tracker.trackerDistance = match.distanceAlongRoute
+        }
+        // Auto-follow owns the map: the live location puck already shows
+        // where the user is, so the custom pin stays hidden here rather than
+        // sitting on top of (and fading against) it. It only reappears while
+        // the user is scrubbing the elevation graph, to compare other
+        // sections of the trail.
+        if highlight.coordinate != nil {
+            highlight.coordinate = nil
+        }
+        RenderSignpost.mark("LiveFollowUpdate", moved ? "moved" : "unchanged")
     }
 
     private var elevationPlaceholder: some View {
@@ -516,18 +588,18 @@ struct HikeDetailView: View {
 
 /// The interactive elevation graph, split out so it only re-renders when its own
 /// inputs change — not when unrelated parent state (line width, download progress)
-/// moves. `Equatable` (via `.equatable()`) drives the skip.
+/// moves. `Equatable` (via `.equatable()`) covers `tint`/`profile` changes;
+/// `tracker`'s properties are read directly in `body` below, so `Observation`
+/// invalidates this view (and only this view) whenever they change, without
+/// needing an equality check.
 private struct ElevationChartView: View, Equatable {
     let profile: RouteProfile
     let tint: Color
-    let trackerDistance: Double
-    /// The user's live GPS position projected onto the route, or `nil` when
-    /// auto-follow is off or has no matching fix. Drawn as a separate marker,
-    /// on top of the tracker pin.
-    let liveDistance: Double?
+    /// Tracker/live-follow positions — see ``TrackerState``.
+    let tracker: TrackerState
     var onScrub: (Double) -> Void
     /// Reports drag start/end so the parent can pause auto-follow's own
-    /// updates to `trackerDistance` while a finger is on the chart.
+    /// updates to `tracker.trackerDistance` while a finger is on the chart.
     var onScrubbingChanged: (Bool) -> Void = { _ in }
 
     /// Live chart selection under the finger (transient); owned here so scrubbing
@@ -550,21 +622,20 @@ private struct ElevationChartView: View, Equatable {
     /// pushes the axis down into implausible (even negative) elevations.
     private static let maxSpanMultiplier: Double = 4
 
-    // Compares only what the chart actually draws; the `onScrub`/
-    // `onScrubbingChanged` closures and the transient selection are
-    // intentionally ignored.
+    // `tracker` is always the same instance (owned by the parent's `@State`),
+    // so it's deliberately excluded here — its mutations reach this view via
+    // Observation, not via this equality check. This only needs to catch the
+    // parent reconstructing the view with a genuinely different `tint`/`profile`.
     static func == (lhs: ElevationChartView, rhs: ElevationChartView) -> Bool {
-        lhs.trackerDistance == rhs.trackerDistance
-            && lhs.liveDistance == rhs.liveDistance
-            && lhs.tint == rhs.tint
+        lhs.tint == rhs.tint
             && lhs.profile.samples.count == rhs.profile.samples.count
             && lhs.profile.distances.count == rhs.profile.distances.count
     }
 
     var body: some View {
         let domain = elevationDomain(profile, plotWidth: plotWidth)
-        let tracker = profile.sample(atDistance: trackerDistance)
-        let liveSample = liveDistance.flatMap { profile.sample(atDistance: $0) }
+        let trackerSample = profile.sample(atDistance: tracker.trackerDistance)
+        let liveSample = tracker.liveTrackerDistance.flatMap { profile.sample(atDistance: $0) }
         Chart {
             ForEach(profile.samples) { sample in
                 AreaMark(
@@ -590,20 +661,20 @@ private struct ElevationChartView: View, Equatable {
                 .lineStyle(StrokeStyle(lineWidth: 2))
             }
 
-            if let tracker {
-                RuleMark(x: .value("Distance", tracker.distanceMeters))
+            if let trackerSample {
+                RuleMark(x: .value("Distance", trackerSample.distanceMeters))
                     .foregroundStyle(.secondary.opacity(0.4))
                     .lineStyle(StrokeStyle(lineWidth: 1, dash: [4]))
 
                 PointMark(
-                    x: .value("Distance", tracker.distanceMeters),
-                    y: .value("Elevation", tracker.elevation)
+                    x: .value("Distance", trackerSample.distanceMeters),
+                    y: .value("Elevation", trackerSample.elevation)
                 )
                 .foregroundStyle(tint)
                 .symbolSize(90)
                 .annotation(position: .top, spacing: 4,
                             overflowResolution: .init(x: .fit(to: .chart), y: .disabled)) {
-                    calloutLabel(tracker)
+                    calloutLabel(trackerSample)
                 }
             }
 

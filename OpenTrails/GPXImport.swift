@@ -82,8 +82,16 @@ nonisolated enum GPXImport {
         )
     }
 
+    /// Web Mercator's valid latitude range — `SlippyTileMath.tileY` uses `tan`/`log`
+    /// that blow up as latitude approaches ±90°, so points beyond this are rejected
+    /// rather than risking an `Int(floor(...))` trap downstream.
+    private static let maximumMercatorLatitude = 85.0511287798
+
     private static func point(_ waypoint: GPXWaypoint) -> Point? {
-        guard let lat = waypoint.latitude, let lon = waypoint.longitude else { return nil }
+        guard
+            let lat = waypoint.latitude, let lon = waypoint.longitude,
+            (-maximumMercatorLatitude...maximumMercatorLatitude).contains(lat), (-180...180).contains(lon)
+        else { return nil }
         return Point(
             coordinate: CLLocationCoordinate2D(latitude: lat, longitude: lon),
             elevation: waypoint.elevation,

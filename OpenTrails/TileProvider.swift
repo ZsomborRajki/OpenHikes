@@ -22,10 +22,8 @@ struct TileProvider: Identifiable, Hashable {
     let attribution: String
     /// Whether the provider's usage policy permits pre-downloading tiles for offline use.
     let supportsBulkDownload: Bool
-    /// UserDefaults key holding the API key, for providers that need one. `nil` if keyless.
-    let apiKeyDefaultsKey: String?
-
-    var requiresAPIKey: Bool { apiKeyDefaultsKey != nil }
+    /// `Secrets.plist` key holding this provider's API key, for providers that need one. `nil` if keyless.
+    let apiKeyPlistKey: String?
 
     /// The template with `{key}` replaced by `apiKey`. Keyless providers ignore it.
     func resolvedTemplate(apiKey: String) -> String {
@@ -45,7 +43,7 @@ extension TileProvider {
         maximumZ: 19,
         attribution: "© OpenStreetMap contributors",
         supportsBulkDownload: false,
-        apiKeyDefaultsKey: nil
+        apiKeyPlistKey: nil
     )
 
     /// A topographic source tuned for hiking that permits offline downloads.
@@ -57,7 +55,7 @@ extension TileProvider {
         maximumZ: 20,
         attribution: "© Stadia Maps, © OpenMapTiles, © OpenStreetMap contributors",
         supportsBulkDownload: true,
-        apiKeyDefaultsKey: SettingsKey.stadiaAPIKey
+        apiKeyPlistKey: "StadiaAPIKey"
     )
 
     /// A hiking-focused source with deep native zoom, so close-in views stay sharp.
@@ -69,7 +67,7 @@ extension TileProvider {
         maximumZ: 22,
         attribution: "Maps © Thunderforest, Data © OpenStreetMap contributors",
         supportsBulkDownload: true,
-        apiKeyDefaultsKey: SettingsKey.thunderforestAPIKey
+        apiKeyPlistKey: "ThunderforestAPIKey"
     )
 
     /// All selectable providers, in display order.
@@ -91,9 +89,7 @@ struct ActiveTileSource: Equatable {
     let maximumZ: Int
 }
 
-/// UserDefaults / `@AppStorage` keys shared between the settings UI and the map.
+/// UserDefaults / `@AppStorage` key shared between the settings UI and the map.
 enum SettingsKey {
     static let tileProviderID = "settings.tileProviderID"
-    static let stadiaAPIKey = "settings.apiKey.stadia"
-    static let thunderforestAPIKey = "settings.apiKey.thunderforest"
 }

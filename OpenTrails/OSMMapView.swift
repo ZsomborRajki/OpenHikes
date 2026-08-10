@@ -16,13 +16,20 @@ typealias MapViewRepresentable = UIViewRepresentable
 #endif
 
 /// A route to draw on the map, keyed by `id` so the map only redraws when it changes.
-struct DisplayedRoute {
+struct DisplayedRoute: Equatable {
     let id: UUID
     let coordinates: [CLLocationCoordinate2D]
     /// Line color, including the user's chosen alpha.
     var tint: Color = .green
     /// Line width in points.
     var width: Double = 5
+
+    /// Coordinates are intentionally excluded: they only ever change together
+    /// with `id` (a new hike selection), so comparing `id`/`tint`/`width` is
+    /// both sufficient and avoids an O(n) array diff on every SwiftUI update.
+    static func == (lhs: DisplayedRoute, rhs: DisplayedRoute) -> Bool {
+        lhs.id == rhs.id && lhs.tint == rhs.tint && lhs.width == rhs.width
+    }
 }
 
 /// The scrub-highlight location, held in a reference type so it can be updated at
@@ -64,11 +71,16 @@ final class MapController {
     }
 }
 
-struct OSMMapView: MapViewRepresentable {
+struct OSMMapView: MapViewRepresentable, Equatable {
     fileprivate static let logger = Logger(subsystem: "OpenTrails", category: "MapView")
 
-    /// The coordinate to center on. The map recenters the first time this is set.
-    var coordinate: CLLocationCoordinate2D?
+    /// Source of the user's live location. Observed directly by the map (not
+    /// via SwiftUI), the same technique `highlight`/`sheetMetrics` use, so the
+    /// ~1/sec publish that drives it (continuous whether or not the user is
+    /// moving — see `LocationManager`) never re-renders any view. The map
+    /// centers on the user's first fix, once, while no route is selected —
+    /// see `Coordinator.observeLocation`.
+    var locationManager: LocationManager
 
     /// An imported/selected route to draw and zoom to. Draws a line and fits the map to it.
     var route: DisplayedRoute?
@@ -89,9 +101,31 @@ struct OSMMapView: MapViewRepresentable {
     /// the route without re-rendering any view.
     var mapController: MapController
 
+    /// Lets `.equatable()` skip `updateUIView` when nothing actually changed —
+    /// without it, SwiftUI calls `updateUIView` on every ancestor body pass
+    /// that touches this view's transaction (e.g. the sheet's per-frame drag
+    /// updates), even though `highlight`/`sheetMetrics`/`mapController`/
+    /// `locationManager` are deliberately observed outside SwiftUI for
+    /// exactly that scenario. Those four are reference types the parent
+    /// always hands down as the same instance, so identity comparison is
+    /// correct: their *contents* changing on their own is not a reason to
+    /// re-run `updateUIView`.
+    static func == (lhs: OSMMapView, rhs: OSMMapView) -> Bool {
+        lhs.route == rhs.route
+            && lhs.highlight === rhs.highlight
+            && lhs.sheetMetrics === rhs.sheetMetrics
+            && lhs.tileSource == rhs.tileSource
+            && lhs.mapController === rhs.mapController
+            && lhs.locationManager === rhs.locationManager
+    }
+
     func makeCoordinator() -> Coordinator { Coordinator() }
 
     private func makeMapView(_ coordinator: Coordinator) -> MKMapView {
+        // Fires once per MKMapView creation — if this repeats, something is
+        // destroying the representable's identity (e.g. an `.id()` upstream
+        // churning), which throws away all MapKit state, not just SwiftUI's.
+        RenderSignpost.mark("MapViewCreated")
         let mapView = MKMapView()
         mapView.delegate = coordinator
         mapView.showsUserLocation = true
@@ -114,6 +148,7 @@ struct OSMMapView: MapViewRepresentable {
         let key = "\(tileSource.providerID)|\(tileSource.urlTemplate)|\(tileSource.maximumZ)"
         guard coordinator.tileSourceKey != key else { return }
         coordinator.tileSourceKey = key
+        RenderSignpost.mark("MapTileSourceRebuilt", key)
 
         if let existing = coordinator.tileOverlay {
             mapView.removeOverlay(existing)
@@ -158,23 +193,12 @@ struct OSMMapView: MapViewRepresentable {
         #endif
     }
 
-    private func centerIfNeeded(_ mapView: MKMapView, _ coordinator: Coordinator) {
-        // A route, once present, owns the viewport — don't also recenter on the user.
-        guard route == nil, let coordinate, !coordinator.hasCentered else { return }
-        coordinator.hasCentered = true
-        let region = MKCoordinateRegion(
-            center: coordinate,
-            latitudinalMeters: 2_000,
-            longitudinalMeters: 2_000
-        )
-        mapView.setRegion(region, animated: true)
-    }
-
     /// Draws the current route (if any) and fits the map to it. No-op while the
     /// same route is already shown, so unrelated view updates don't re-zoom.
     private func updateRoute(_ mapView: MKMapView, _ coordinator: Coordinator) {
         guard coordinator.routeID != route?.id else { return }
         coordinator.routeID = route?.id
+        RenderSignpost.mark("MapRouteRebuilt")
 
         if let existing = coordinator.routeOverlay {
             mapView.removeOverlay(existing)
@@ -201,6 +225,7 @@ struct OSMMapView: MapViewRepresentable {
         guard tintChanged || widthChanged else { return }
         coordinator.routeTint = route.tint
         coordinator.routeWidth = route.width
+        RenderSignpost.mark("MapRouteRestyled")
         if let renderer = coordinator.routeRenderer {
             coordinator.applyStyle(to: renderer)
             renderer.setNeedsDisplay()
@@ -210,13 +235,24 @@ struct OSMMapView: MapViewRepresentable {
     }
 
     private func update(_ mapView: MKMapView, _ coordinator: Coordinator) {
+        // Fires on every SwiftUI-driven update pass, whether or not any of the
+        // steps below actually change anything — compare its rate against the
+        // "Rebuilt"/"Centered"/"Restyled" marks to see how much of that is
+        // real work vs. free no-ops.
+        RenderSignpost.mark("MapUpdateCalled")
         applyTileSource(to: mapView, coordinator)
-        centerIfNeeded(mapView, coordinator)
         updateRoute(mapView, coordinator)
         updateRouteStyle(mapView, coordinator)
-        // Reapply on layout-driven updates (e.g. first layout, rotation) so the
-        // button is positioned correctly even before the sheet reports a drag.
-        coordinator.applySheetTop(on: mapView)
+        // Idempotent — only the first call (after `updateRoute` above has set
+        // `routeID`) actually starts the location tracking; see
+        // `Coordinator.observeLocation`.
+        coordinator.observeLocation(locationManager, on: mapView)
+        // Only reapplies when the map's own bounds height moved (first layout,
+        // rotation) — `sheetMetrics.topY` changes are already tracked at full
+        // frame rate by `observeSheetMetrics`'s own observation, so redoing it
+        // here unconditionally would just repeat that work on every one of
+        // this method's (frequent, often no-op) calls.
+        coordinator.applySheetTopIfHeightChanged(on: mapView)
     }
 
     #if os(macOS)
@@ -229,6 +265,9 @@ struct OSMMapView: MapViewRepresentable {
 
     final class Coordinator: NSObject, MKMapViewDelegate {
         var hasCentered = false
+        /// Guards `observeLocation` so `update(_:_:)` — called on every
+        /// SwiftUI-driven pass — only starts the location-tracking loop once.
+        private var isObservingLocation = false
         var routeID: UUID?
         var routeOverlay: MKPolyline?
         /// The live renderer for the route line, kept so a tint change can recolor
@@ -310,6 +349,48 @@ struct OSMMapView: MapViewRepresentable {
             }
         }
 
+        /// Starts observing `locationManager.coordinate` imperatively — the
+        /// same technique `observeHighlight`/`observeSheetMetrics` use to keep
+        /// continuous updates off SwiftUI's render path entirely. Called from
+        /// `update(_:_:)` rather than `makeMapView` (like the others above),
+        /// specifically so the first call lands *after* `updateRoute` has set
+        /// `routeID` — `centerOnUser` needs an accurate "is a route already
+        /// selected" answer on its very first check, not just later ones.
+        func observeLocation(_ locationManager: LocationManager, on mapView: MKMapView) {
+            guard !isObservingLocation else { return }
+            isObservingLocation = true
+            trackLocation(locationManager, on: mapView)
+        }
+
+        private func trackLocation(_ locationManager: LocationManager, on mapView: MKMapView) {
+            centerOnUser(locationManager.coordinate, on: mapView)
+            withObservationTracking {
+                _ = locationManager.coordinate
+            } onChange: { [weak self, weak mapView, weak locationManager] in
+                let coordinator = self
+                let map = mapView
+                let model = locationManager
+                Task { @MainActor in
+                    guard let coordinator, let map, let model else { return }
+                    coordinator.trackLocation(model, on: map)
+                }
+            }
+        }
+
+        /// Centers the map on the user's first fix, once. A route, once
+        /// present, owns the viewport — don't also recenter on the user.
+        private func centerOnUser(_ coordinate: CLLocationCoordinate2D?, on mapView: MKMapView) {
+            guard routeID == nil, let coordinate, !hasCentered else { return }
+            hasCentered = true
+            RenderSignpost.mark("MapCentered")
+            let region = MKCoordinateRegion(
+                center: coordinate,
+                latitudinalMeters: 2_000,
+                longitudinalMeters: 2_000
+            )
+            mapView.setRegion(region, animated: true)
+        }
+
         /// Rebuilds the highlight annotation so `viewFor` recreates its dot in the
         /// new route tint. Cheap — there is at most one such annotation.
         func refreshHighlightColor(on mapView: MKMapView) {
@@ -335,6 +416,22 @@ struct OSMMapView: MapViewRepresentable {
                     coordinator.observeSheetMetrics(model, on: map)
                 }
             }
+        }
+
+        /// The `mapView.bounds.height` last seen by `applySheetTopIfHeightChanged`,
+        /// so repeated `update(_:_:)` calls during a sheet drag (where the map's
+        /// own bounds haven't moved) can skip reapplying — `observeSheetMetrics`
+        /// already keeps the button tracking `topY` at full frame rate on its own.
+        private var lastAppliedHeight: CGFloat = -1
+
+        /// Reapplies the button position only when the map's own bounds height
+        /// has changed (first layout, rotation) — everything else `topY`-driven
+        /// is already handled reactively by `observeSheetMetrics`.
+        func applySheetTopIfHeightChanged(on mapView: MKMapView) {
+            let height = mapView.bounds.height
+            guard height != lastAppliedHeight else { return }
+            lastAppliedHeight = height
+            applySheetTop(on: mapView)
         }
 
         /// Positions the "my location" button just above the sheet's top edge,
