@@ -1,0 +1,283 @@
+//
+//  RenderIsolationTests.swift
+//  OpenTrailsTests
+//
+//  The app's central performance idea (see README, "Keeping SwiftUI's diffing
+//  out of the hot paths") is that high-frequency state lives in `@Observable`
+//  reference types that the owning views never read in their own `body`, so a
+//  GPS fix or a sheet drag moves one annotation instead of re-diffing a view
+//  tree. That only holds if two things are true, and neither is checkable by
+//  reading the code:
+//
+//  * an observer really is notified per write — including writes that don't
+//    change the value, which is why the hot paths guard their assignments
+//    (`if moved { … }`, `if highlight.coordinate != nil { … }`); and
+//  * observing one property really doesn't wake observers of another.
+//
+//  So the tests here pin the *notification* behaviour these views are tuned
+//  against, and then check the producers that feed them at high frequency.
+//
+
+import CoreLocation
+import Foundation
+import MapKit
+import Testing
+@testable import OpenTrails
+
+/// Counts `withObservationTracking` notifications, re-registering after each
+/// one exactly the way `MapView.Coordinator` does.
+@MainActor
+final class ObservationCounter {
+    private(set) var count = 0
+    private var track: (() -> Void)?
+
+    /// - Parameter read: the property access to observe, mirroring what the
+    ///   corresponding view or coordinator reads.
+    init(_ read: @escaping () -> Void) {
+        track = { [weak self] in
+            withObservationTracking {
+                read()
+            } onChange: {
+                Task { @MainActor in
+                    guard let self else { return }
+                    self.count += 1
+                    self.track?()
+                }
+            }
+        }
+        track?()
+    }
+
+    /// Lets the queued re-registrations run. Observation delivers its change
+    /// callback synchronously but the re-registration hops through a `Task`,
+    /// same as in the app.
+    func settle() async {
+        for _ in 0..<8 { await Task.yield() }
+    }
+}
+
+@MainActor
+@Suite("Observation cost")
+struct ObservationCostTests {
+    /// Observation filters a write that doesn't change an `Equatable` value.
+    /// So the hot paths' guards around `Double`/`Double?`/`CGFloat` state —
+    /// `if moved { tracker.liveTrackerDistance = … }` and friends — are
+    /// belt-and-braces on this toolchain: an unguarded equal assignment costs
+    /// nothing either. Pinned because the comments around those guards claim
+    /// otherwise, and because a future guard removed on this evidence should
+    /// fail loudly here if the runtime ever changes back.
+    @Test("an equal write to an Equatable property notifies nobody")
+    func equalEquatableWriteIsFiltered() async {
+        let tracker = TrackerState()
+        tracker.trackerDistance = 100
+        tracker.liveTrackerDistance = 100
+        let distanceCounter = ObservationCounter { _ = tracker.trackerDistance }
+        let liveCounter = ObservationCounter { _ = tracker.liveTrackerDistance }
+        await distanceCounter.settle()
+
+        tracker.trackerDistance = 100
+        tracker.liveTrackerDistance = 100
+        await distanceCounter.settle()
+        #expect(distanceCounter.count == 0)
+        #expect(liveCounter.count == 0)
+
+        tracker.trackerDistance = 200
+        await distanceCounter.settle()
+        #expect(distanceCounter.count == 1, "a real move must still reach the chart")
+    }
+
+    /// …but `CLLocationCoordinate2D` is not `Equatable`, so Observation has
+    /// no way to tell an unchanged position from a new one and notifies on
+    /// every assignment. That makes the guards on the two coordinate-typed
+    /// publishers — `RouteHighlight.coordinate` and `LocationManager.
+    /// coordinate` — the ones that actually carry weight, and they're also
+    /// the two written most often (drag frequency and 1 Hz respectively).
+    @Test("an equal write to a coordinate notifies anyway")
+    func equalCoordinateWriteIsNotFiltered() async {
+        let highlight = RouteHighlight()
+        highlight.coordinate = CLLocationCoordinate2D(latitude: 47.63, longitude: 12.86)
+        let counter = ObservationCounter { _ = highlight.coordinate }
+        await counter.settle()
+
+        highlight.coordinate = CLLocationCoordinate2D(latitude: 47.63, longitude: 12.86)
+        await counter.settle()
+        #expect(counter.count == 1, "same place, still a notification — the coordinate publishers must compare for themselves")
+    }
+
+    /// The other half of the same idea: the guard genuinely costs nothing when
+    /// it holds.
+    @Test("a skipped write notifies nobody")
+    func skippedWriteIsSilent() async {
+        let highlight = RouteHighlight()
+        let counter = ObservationCounter { _ = highlight.coordinate }
+        await counter.settle()
+
+        // What `updateLiveFollow` does: only write when there's something to change.
+        if highlight.coordinate != nil { highlight.coordinate = nil }
+        await counter.settle()
+        #expect(counter.count == 0)
+    }
+
+    /// The sheet's top edge is written at frame rate while dragging, and the
+    /// map repositions its location button from it — but nothing in SwiftUI
+    /// should hear about it.
+    @Test("dragging the sheet notifies only its own observer")
+    func sheetMetricsAreIsolated() async {
+        let metrics = SheetMetrics()
+        let highlight = RouteHighlight()
+        let sheetCounter = ObservationCounter { _ = metrics.topY }
+        let highlightCounter = ObservationCounter { _ = highlight.coordinate }
+        await sheetCounter.settle()
+
+        for y in stride(from: 800.0, to: 400.0, by: -20) {
+            metrics.topY = y
+            await sheetCounter.settle()
+        }
+        #expect(sheetCounter.count == 20)
+        #expect(highlightCounter.count == 0, "a sheet drag must not wake the route highlight's observer")
+    }
+
+    /// The map registers the two one-shot commands separately so that bumping
+    /// one doesn't re-arm the other.
+    @Test("the map's two commands notify independently")
+    func mapCommandsAreIndependent() async {
+        let controller = MapController()
+        let fitCounter = ObservationCounter { _ = controller.fitRouteRequest }
+        let regionCounter = ObservationCounter { _ = controller.showRegionRequest }
+        await fitCounter.settle()
+
+        controller.fitToRoute()
+        await fitCounter.settle()
+        #expect(fitCounter.count == 1)
+        #expect(regionCounter.count == 0)
+
+        controller.show(MKCoordinateRegion(
+            center: CLLocationCoordinate2D(latitude: 47.63, longitude: 12.86),
+            latitudinalMeters: 1_000,
+            longitudinalMeters: 1_000
+        ))
+        await regionCounter.settle()
+        #expect(regionCounter.count == 1)
+        #expect(fitCounter.count == 1, "showing a region must not also re-fit the route")
+    }
+}
+
+@MainActor
+@Suite("Location publishing")
+struct LocationPublishingTests {
+    /// CoreLocation can deliver far more often than once a second; the
+    /// throttle is what keeps that off every observer downstream.
+    @Test("a burst of fixes publishes once")
+    func burstIsThrottled() async {
+        let manager = LocationManager()
+        let counter = ObservationCounter { _ = manager.coordinate }
+        await counter.settle()
+
+        for step in 0..<10 {
+            manager.locationManager(
+                CLLocationManager(),
+                didUpdateLocations: [CLLocation(latitude: 47.63 + Double(step) * 1e-4, longitude: 12.86)]
+            )
+        }
+        await counter.settle()
+        try? await Task.sleep(for: .milliseconds(100))
+        await counter.settle()
+        #expect(counter.count == 1, "ten fixes in one runloop turn should reach observers once")
+    }
+
+    /// A walker who has stopped — at a viewpoint, a hut, a photo — still gets
+    /// a fix every second, and every one of them is republished as a new
+    /// value even though it is the same place. Each republish wakes the map
+    /// coordinator, which re-registers its observation through a `Task` hop,
+    /// once a second, for as long as the app is open.
+    ///
+    /// Nothing downstream needs the heartbeat: auto-follow and the weather
+    /// poll both *poll* `coordinate` on their own timers, and the map only
+    /// uses it to center on the very first fix. So an unchanged fix has
+    /// nobody to tell.
+    @Test("an unchanged fix isn't republished")
+    func unchangedFixIsNotRepublished() async throws {
+        let manager = LocationManager()
+        let counter = ObservationCounter { _ = manager.coordinate }
+        await counter.settle()
+
+        let stationary = CLLocation(latitude: 47.6300, longitude: 12.8600)
+        manager.locationManager(CLLocationManager(), didUpdateLocations: [stationary])
+        try await Task.sleep(for: .milliseconds(100))
+        await counter.settle()
+        #expect(counter.count == 1, "precondition: the first fix is published")
+
+        // Past the 1 s throttle, so this one is not being dropped for timing —
+        // it's the same place.
+        try await Task.sleep(for: .milliseconds(1_100))
+        manager.locationManager(
+            CLLocationManager(),
+            didUpdateLocations: [CLLocation(latitude: stationary.coordinate.latitude, longitude: stationary.coordinate.longitude)]
+        )
+        try await Task.sleep(for: .milliseconds(100))
+        await counter.settle()
+        #expect(counter.count == 1, "standing still should not wake the map's observation every second")
+    }
+
+    /// …while actually moving must still publish, or auto-follow stops.
+    @Test("a fix that moved is published")
+    func movedFixIsPublished() async throws {
+        let manager = LocationManager()
+        let counter = ObservationCounter { _ = manager.coordinate }
+        await counter.settle()
+
+        manager.locationManager(CLLocationManager(), didUpdateLocations: [CLLocation(latitude: 47.6300, longitude: 12.8600)])
+        try await Task.sleep(for: .milliseconds(1_100))
+        manager.locationManager(CLLocationManager(), didUpdateLocations: [CLLocation(latitude: 47.6305, longitude: 12.8600)])
+        try await Task.sleep(for: .milliseconds(100))
+        await counter.settle()
+
+        #expect(counter.count == 2)
+        #expect(manager.coordinate?.latitude == 47.6305)
+    }
+}
+
+@MainActor
+@Suite("Download progress")
+struct DownloadProgressTests {
+    /// `HikeDetailView.body` reads `downloader.progress` (through
+    /// `downloadTile`) and `downloader.total` (through `downloadNote`), so
+    /// every `completed += 1` invalidates the *whole* detail view — header,
+    /// stats grid, action bar and all. This pins the rate at which that
+    /// happens: one notification per tile, and a bulk download is up to 4,000
+    /// tiles.
+    ///
+    /// The elevation chart is spared (it's `.equatable()` and its inputs
+    /// don't change), but nothing else is. The fix is a view split — move the
+    /// progress readout into a small child that reads `downloader` — so this
+    /// is a characterisation test: it should keep passing, and the *body* it
+    /// invalidates should shrink.
+    @Test("progress notifies once per tile", .enabled(if: TileCache.shared.isOnline))
+    func progressNotifiesPerTile() async throws {
+        let downloader = OfflineTileDownloader()
+        let counter = ObservationCounter { _ = downloader.progress }
+        await counter.settle()
+
+        downloader.start(
+            route: Fixture.coordinates(Fixture.ridgeRoute),
+            // Nothing listens on this port: every tile fails fast, which is
+            // fine — `completed` counts attempts, not successes.
+            source: ActiveTileSource(providerID: "test_unreachable", urlTemplate: "http://127.0.0.1:9/{z}/{x}/{y}.png", maximumZ: 14),
+            scale: 2
+        )
+        let total = downloader.total
+        #expect(total > 1, "precondition: there is more than one tile to fetch")
+
+        try await Task.sleep(for: .seconds(2))
+        await counter.settle()
+
+        #expect(downloader.completed == total)
+        // Deliberately not `>= total`: this counter re-registers through a
+        // `Task`, exactly like the map coordinator does, so completions that
+        // land in the same runloop turn are coalesced — which is also what
+        // SwiftUI does with the resulting invalidations. The point stands
+        // either way: progress publishes repeatedly during a download, and
+        // every view reading it is rebuilt each time.
+        #expect(counter.count >= 2)
+    }
+}

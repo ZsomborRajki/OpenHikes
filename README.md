@@ -86,6 +86,22 @@ Both are `#if DEBUG`-gated and no-op entirely in Release builds:
 - **`RenderInstrumentation.swift`** (`RenderSignpost`) — marks SwiftUI body evaluations and `UIViewRepresentable`/`NSViewRepresentable` update calls as `os_signpost` events, visible in Instruments' Points of Interest track. Set `RENDER_SIGNPOST_LOG=1` in the scheme's environment variables to also print each mark to the console with a running per-name call count and time-since-last-fire — useful for confirming the render-isolation pattern above is actually working, without an Instruments session.
 - **`MainThreadWatchdog.swift`** — a background thread pings the main run loop every 0.2s and logs a warning if it doesn't answer within 0.15s, catching synchronous work (disk I/O, image encoding, large collection ops) that slipped onto the main thread. Also defines `assertOffMainThread(_:)`, asserted at the top of every function in the tile pipeline that's documented as "must not run on main."
 
+## Tests
+
+Two suites, both [Swift Testing](https://developer.apple.com/documentation/testing):
+
+```
+xcodebuild test -scheme OpenTrails -destination 'platform=iOS Simulator,name=iPhone 17 Pro'
+cd OpenTrailsShared && swift test
+```
+
+- **`OpenTrailsTests`** — a unit-test target hosted by the app, covering the logic behind the features: tile indexing and the auto-save corridor, offline tile enumeration and the shared-tile bookkeeping that decides what a delete may actually free, `RouteProfile`'s scrub lookups and auto-follow route matching, derived hike statistics, GPX parsing (including malformed and hostile files), tint persistence, the snapshot feed the widget and Watch render from, and the render-isolation behaviour the architecture above depends on (what Observation notifies, and how much the elevation chart is asked to draw).
+- **`OpenTrailsSharedTests`** — the shared package's own suite: the Mercator projection, the widget's basemap geometry, deep links, and the trail snapshot's progress/decimation.
+
+Not covered: SwiftUI view bodies, `MapView`/`Coordinator`'s imperative MapKit updates, and `TileCache`'s network path. The render-isolation pattern described above is verified with `RenderSignpost` marks in Instruments rather than by tests — see [Debug tooling](#debug-tooling).
+
+Seven tests currently fail on purpose, each pinning a known defect — see [Known limitations](#known-limitations), and `CODE_REVIEW.md` for the UI-performance ones with their measurements.
+
 ## Project layout
 
 **App shell**
@@ -136,6 +152,8 @@ Both are `#if DEBUG`-gated and no-op entirely in Release builds:
 
 **Debug tooling** — `RenderInstrumentation.swift`, `MainThreadWatchdog.swift` (see above).
 
+**Tests** — `OpenTrailsTests/` (app target logic, hosted by the app), `OpenTrailsShared/Tests/` (shared package). See [Tests](#tests).
+
 **Secrets** — `Secrets.swift`, `Secrets.plist` (gitignored, real keys), `Secrets.example.plist` (committed template).
 
 ## Tile providers
@@ -157,5 +175,11 @@ Both are `#if DEBUG`-gated and no-op entirely in Release builds:
 - **Recording a live hike isn't implemented yet** — the record button in the hikes list is wired up but currently a no-op (`ContentView.recordHike`); only GPX import works today.
 - **Sign in with Apple** in Settings is a visual placeholder, not yet functional.
 - **No in-app API key entry** — Stadia and Thunderforest keys can only be supplied via the bundled `Secrets.plist`; there's no Settings field to paste one in on-device.
-- **No automated tests** — the project currently has a single app target and no unit/UI test target.
 - **No app-wide offline storage cap** — each hike's tiles are capped individually (3,000 auto-saved / ~4,000 bulk-downloaded), but total disk usage across many hikes is unbounded aside from the manual "Delete All" in Settings.
+- **The bulk-download tile budget isn't a hard cap** — `OfflineTileDownloader` applies its 4,000-tile budget *between* zoom levels and always takes the shallowest one, so a route whose overview zoom alone exceeds the budget downloads however many tiles that takes (a Europe-spanning GPX enumerates ~7,400). Covered by a failing test.
+- **A route crossing the antimeridian enumerates a band around the world** — tile *columns* wrap (`SlippyTileMath.wrap`), but the bounding boxes in `OfflineTileDownloader` and `TileCorridor` treat longitude as a plain interval, so a trail spanning ±180° gets a globe-wide box: thousands of ocean tiles at the overview zoom, and no budget left for the close-in zooms that would make it usable offline. Covered by a failing test.
+- **The elevation chart plots every track point** — two `catmullRom` marks per sample, rebuilt on every scrub event and once a second by auto-follow. An 18,000-point recording takes over a second per render (measurements in `CODE_REVIEW.md`), so scrubbing a long hike is effectively frozen. Covered by a failing test, alongside passing tests for what any downsampling has to preserve.
+- **A stationary walker republishes their position once a second** — `CLLocationCoordinate2D` isn't `Equatable`, so Observation can't filter an unchanged fix the way it filters the app's `Double`-valued state, and the map's location observation is re-armed every second for nothing. Covered by a failing test.
+- **`ElevationChartView.==` compares only sample counts**, so two different trails of the same length read as unchanged and the chart keeps drawing the old one. Latent today; live recording would make it reachable. Covered by a failing test.
+- **`ElevationSample.id` is a fresh `UUID` per instance**, so `ForEach` re-diffs the whole chart on every profile rebuild — and generating them is over half the cost of building a long profile. Covered by a failing test.
+- **Auto-save records a tile before it's written** — `AutoSaveTileStore.considerPersisting` inserts the key into the hike's known/pending sets and only then encodes and writes. If the encode fails (the reason there's a PNG fallback at all), the key still counts against the 3,000-tile cap, is reported as saved, and — being "known" — is never reconsidered. Covered by a failing test.

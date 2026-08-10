@@ -19,6 +19,7 @@
 		A8838B96302A305D00FAEEEE /* OpenTrailsShared in Frameworks */ = {isa = PBXBuildFile; productRef = A8838B95302A305D00FAEEEE /* OpenTrailsShared */; };
 		A8838B98302A306100FAEEEE /* OpenTrailsShared in Frameworks */ = {isa = PBXBuildFile; productRef = A8838B97302A306100FAEEEE /* OpenTrailsShared */; };
 		AA0000000000000000000003 /* CoreGPX in Frameworks */ = {isa = PBXBuildFile; productRef = AA0000000000000000000002 /* CoreGPX */; };
+		AB000000000000000000000D /* OpenTrailsShared in Frameworks */ = {isa = PBXBuildFile; productRef = AB000000000000000000000C /* OpenTrailsShared */; };
 /* End PBXBuildFile section */
 
 /* Begin PBXContainerItemProxy section */
@@ -42,6 +43,13 @@
 			proxyType = 1;
 			remoteGlobalIDString = A8838B7C302A2F5B00FAEEEE;
 			remoteInfo = OpenWatchWidgetExtension;
+		};
+		AB000000000000000000000B /* PBXContainerItemProxy */ = {
+			isa = PBXContainerItemProxy;
+			containerPortal = A85E85452FE3EBF500558639 /* Project object */;
+			proxyType = 1;
+			remoteGlobalIDString = A85E854C2FE3EBF500558639;
+			remoteInfo = OpenTrails;
 		};
 /* End PBXContainerItemProxy section */
 
@@ -90,6 +98,7 @@
 		A8838B7D302A2F5B00FAEEEE /* OpenWatchWidgetExtension.appex */ = {isa = PBXFileReference; explicitFileType = "wrapper.app-extension"; includeInIndex = 0; path = OpenWatchWidgetExtension.appex; sourceTree = BUILT_PRODUCTS_DIR; };
 		A8838B99302A30FA00FAEEEE /* OpenWidgetExtension.entitlements */ = {isa = PBXFileReference; lastKnownFileType = text.plist.entitlements; path = OpenWidgetExtension.entitlements; sourceTree = "<group>"; };
 		A8838B9B302A310D00FAEEEE /* OpenWatchWidgetExtension.entitlements */ = {isa = PBXFileReference; lastKnownFileType = text.plist.entitlements; path = OpenWatchWidgetExtension.entitlements; sourceTree = "<group>"; };
+		AB0000000000000000000008 /* OpenTrailsTests.xctest */ = {isa = PBXFileReference; explicitFileType = wrapper.cfbundle; includeInIndex = 0; path = OpenTrailsTests.xctest; sourceTree = BUILT_PRODUCTS_DIR; };
 /* End PBXFileReference section */
 
 /* Begin PBXFileSystemSynchronizedBuildFileExceptionSet section */
@@ -136,6 +145,11 @@
 			path = OpenWatchWidget;
 			sourceTree = "<group>";
 		};
+		AB0000000000000000000009 /* OpenTrailsTests */ = {
+			isa = PBXFileSystemSynchronizedRootGroup;
+			path = OpenTrailsTests;
+			sourceTree = "<group>";
+		};
 /* End PBXFileSystemSynchronizedRootGroup section */
 
 /* Begin PBXFrameworksBuildPhase section */
@@ -176,6 +190,14 @@
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
+		AB0000000000000000000006 /* Frameworks */ = {
+			isa = PBXFrameworksBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+				AB000000000000000000000D /* OpenTrailsShared in Frameworks */,
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
 /* End PBXFrameworksBuildPhase section */
 
 /* Begin PBXGroup section */
@@ -185,6 +207,7 @@
 				A8838B9B302A310D00FAEEEE /* OpenWatchWidgetExtension.entitlements */,
 				A8838B99302A30FA00FAEEEE /* OpenWidgetExtension.entitlements */,
 				A85E854F2FE3EBF500558639 /* OpenTrails */,
+				AB0000000000000000000009 /* OpenTrailsTests */,
 				A8838AEA302A232300FAEEEE /* OpenWidget */,
 				A8838B6B302A2F3100FAEEEE /* OpenWatch Watch App */,
 				A8838B80302A2F5B00FAEEEE /* OpenWatchWidget */,
@@ -197,6 +220,7 @@
 			isa = PBXGroup;
 			children = (
 				A85E854D2FE3EBF500558639 /* OpenTrails.app */,
+				AB0000000000000000000008 /* OpenTrailsTests.xctest */,
 				A8838AE4302A232300FAEEEE /* OpenWidgetExtension.appex */,
 				A8838B6A302A2F3100FAEEEE /* OpenWatch Watch App.app */,
 				A8838B7D302A2F5B00FAEEEE /* OpenWatchWidgetExtension.appex */,
@@ -315,6 +339,30 @@
 			productReference = A8838B7D302A2F5B00FAEEEE /* OpenWatchWidgetExtension.appex */;
 			productType = "com.apple.product-type.app-extension";
 		};
+		AB0000000000000000000001 /* OpenTrailsTests */ = {
+			isa = PBXNativeTarget;
+			buildConfigurationList = AB0000000000000000000002 /* Build configuration list for PBXNativeTarget "OpenTrailsTests" */;
+			buildPhases = (
+				AB0000000000000000000005 /* Sources */,
+				AB0000000000000000000006 /* Frameworks */,
+				AB0000000000000000000007 /* Resources */,
+			);
+			buildRules = (
+			);
+			dependencies = (
+				AB000000000000000000000A /* PBXTargetDependency */,
+			);
+			fileSystemSynchronizedGroups = (
+				AB0000000000000000000009 /* OpenTrailsTests */,
+			);
+			name = OpenTrailsTests;
+			packageProductDependencies = (
+				AB000000000000000000000C /* OpenTrailsShared */,
+			);
+			productName = OpenTrailsTests;
+			productReference = AB0000000000000000000008 /* OpenTrailsTests.xctest */;
+			productType = "com.apple.product-type.bundle.unit-test";
+		};
 /* End PBXNativeTarget section */
 
 /* Begin PBXProject section */
@@ -337,6 +385,10 @@
 					A8838B7C302A2F5B00FAEEEE = {
 						CreatedOnToolsVersion = 26.6;
 					};
+					AB0000000000000000000001 = {
+						CreatedOnToolsVersion = 26.6;
+						TestTargetID = A85E854C2FE3EBF500558639;
+					};
 				};
 			};
 			buildConfigurationList = A85E85482FE3EBF500558639 /* Build configuration list for PBXProject "OpenTrails" */;
@@ -358,6 +410,7 @@
 			projectRoot = "";
 			targets = (
 				A85E854C2FE3EBF500558639 /* OpenTrails */,
+				AB0000000000000000000001 /* OpenTrailsTests */,
 				A8838AE3302A232300FAEEEE /* OpenWidgetExtension */,
 				A8838B69302A2F3100FAEEEE /* OpenWatch Watch App */,
 				A8838B7C302A2F5B00FAEEEE /* OpenWatchWidgetExtension */,
@@ -388,6 +441,13 @@
 			runOnlyForDeploymentPostprocessing = 0;
 		};
 		A8838B7B302A2F5B00FAEEEE /* Resources */ = {
+			isa = PBXResourcesBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+		AB0000000000000000000007 /* Resources */ = {
 			isa = PBXResourcesBuildPhase;
 			buildActionMask = 2147483647;
 			files = (
@@ -425,6 +485,13 @@
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
+		AB0000000000000000000005 /* Sources */ = {
+			isa = PBXSourcesBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
 /* End PBXSourcesBuildPhase section */
 
 /* Begin PBXTargetDependency section */
@@ -442,6 +509,11 @@
 			isa = PBXTargetDependency;
 			target = A8838B7C302A2F5B00FAEEEE /* OpenWatchWidgetExtension */;
 			targetProxy = A8838B88302A2F5B00FAEEEE /* PBXContainerItemProxy */;
+		};
+		AB000000000000000000000A /* PBXTargetDependency */ = {
+			isa = PBXTargetDependency;
+			target = A85E854C2FE3EBF500558639 /* OpenTrails */;
+			targetProxy = AB000000000000000000000B /* PBXContainerItemProxy */;
 		};
 /* End PBXTargetDependency section */
 
@@ -867,6 +939,70 @@
 			};
 			name = Release;
 		};
+		AB0000000000000000000003 /* Debug */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				BUNDLE_LOADER = "$(TEST_HOST)";
+				CODE_SIGN_STYLE = Automatic;
+				CURRENT_PROJECT_VERSION = 1;
+				DEVELOPMENT_TEAM = 697EW27G9U;
+				GENERATE_INFOPLIST_FILE = YES;
+				IPHONEOS_DEPLOYMENT_TARGET = 26.5;
+				LD_RUNPATH_SEARCH_PATHS = (
+					"$(inherited)",
+					"@executable_path/Frameworks",
+					"@loader_path/Frameworks",
+				);
+				MACOSX_DEPLOYMENT_TARGET = 26.5;
+				MARKETING_VERSION = 1.0;
+				PRODUCT_BUNDLE_IDENTIFIER = tappium.com.OpenTrailsTests;
+				PRODUCT_NAME = "$(TARGET_NAME)";
+				SDKROOT = auto;
+				SUPPORTED_PLATFORMS = "iphoneos iphonesimulator macosx xros xrsimulator";
+				SWIFT_APPROACHABLE_CONCURRENCY = YES;
+				SWIFT_DEFAULT_ACTOR_ISOLATION = MainActor;
+				SWIFT_EMIT_LOC_STRINGS = NO;
+				SWIFT_UPCOMING_FEATURE_MEMBER_IMPORT_VISIBILITY = YES;
+				SWIFT_VERSION = 5.0;
+				TARGETED_DEVICE_FAMILY = "1,2,7";
+				TEST_HOST = "$(BUILT_PRODUCTS_DIR)/OpenTrails.app/$(BUNDLE_EXECUTABLE_FOLDER_PATH)/OpenTrails";
+				TEST_TARGET_NAME = OpenTrails;
+				XROS_DEPLOYMENT_TARGET = 26.5;
+			};
+			name = Debug;
+		};
+		AB0000000000000000000004 /* Release */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				BUNDLE_LOADER = "$(TEST_HOST)";
+				CODE_SIGN_STYLE = Automatic;
+				CURRENT_PROJECT_VERSION = 1;
+				DEVELOPMENT_TEAM = 697EW27G9U;
+				GENERATE_INFOPLIST_FILE = YES;
+				IPHONEOS_DEPLOYMENT_TARGET = 26.5;
+				LD_RUNPATH_SEARCH_PATHS = (
+					"$(inherited)",
+					"@executable_path/Frameworks",
+					"@loader_path/Frameworks",
+				);
+				MACOSX_DEPLOYMENT_TARGET = 26.5;
+				MARKETING_VERSION = 1.0;
+				PRODUCT_BUNDLE_IDENTIFIER = tappium.com.OpenTrailsTests;
+				PRODUCT_NAME = "$(TARGET_NAME)";
+				SDKROOT = auto;
+				SUPPORTED_PLATFORMS = "iphoneos iphonesimulator macosx xros xrsimulator";
+				SWIFT_APPROACHABLE_CONCURRENCY = YES;
+				SWIFT_DEFAULT_ACTOR_ISOLATION = MainActor;
+				SWIFT_EMIT_LOC_STRINGS = NO;
+				SWIFT_UPCOMING_FEATURE_MEMBER_IMPORT_VISIBILITY = YES;
+				SWIFT_VERSION = 5.0;
+				TARGETED_DEVICE_FAMILY = "1,2,7";
+				TEST_HOST = "$(BUILT_PRODUCTS_DIR)/OpenTrails.app/$(BUNDLE_EXECUTABLE_FOLDER_PATH)/OpenTrails";
+				TEST_TARGET_NAME = OpenTrails;
+				XROS_DEPLOYMENT_TARGET = 26.5;
+			};
+			name = Release;
+		};
 /* End XCBuildConfiguration section */
 
 /* Begin XCConfigurationList section */
@@ -915,6 +1051,15 @@
 			defaultConfigurationIsVisible = 0;
 			defaultConfigurationName = Release;
 		};
+		AB0000000000000000000002 /* Build configuration list for PBXNativeTarget "OpenTrailsTests" */ = {
+			isa = XCConfigurationList;
+			buildConfigurations = (
+				AB0000000000000000000003 /* Debug */,
+				AB0000000000000000000004 /* Release */,
+			);
+			defaultConfigurationIsVisible = 0;
+			defaultConfigurationName = Release;
+		};
 /* End XCConfigurationList section */
 
 /* Begin XCLocalSwiftPackageReference section */
@@ -959,6 +1104,11 @@
 			isa = XCSwiftPackageProductDependency;
 			package = AA0000000000000000000001 /* XCRemoteSwiftPackageReference "CoreGPX" */;
 			productName = CoreGPX;
+		};
+		AB000000000000000000000C /* OpenTrailsShared */ = {
+			isa = XCSwiftPackageProductDependency;
+			package = A8838B90302A302500FAEEEE /* XCLocalSwiftPackageReference "OpenTrailsShared" */;
+			productName = OpenTrailsShared;
 		};
 /* End XCSwiftPackageProductDependency section */
 	};
