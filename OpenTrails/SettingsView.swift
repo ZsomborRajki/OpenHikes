@@ -15,7 +15,6 @@ struct SettingsView: View {
     @Query private var hikes: [Hike]
 
     @AppStorage(SettingsKey.tileProviderID) private var tileProviderID = TileProvider.default.id
-    @AppStorage(SettingsKey.offlineMaxZoom) private var offlineMaxZoom = OfflineTileDownloader.defaultMaxZoom
 
     /// Total tile-cache size on disk; `nil` until measured.
     @State private var totalBytes: Int64?
@@ -30,7 +29,6 @@ struct SettingsView: View {
             Form {
                 accountSection
                 mapProviderSection
-                offlineSection
                 offlineStorageSection
             }
             .navigationTitle("Settings")
@@ -104,36 +102,6 @@ struct SettingsView: View {
 
     // MARK: - Offline
 
-    private var offlineSection: some View {
-        Section {
-            VStack(alignment: .leading, spacing: 6) {
-                HStack {
-                    Label("Detail level", systemImage: "square.stack.3d.down.right")
-                    Spacer()
-                    Text("Zoom \(offlineMaxZoom)")
-                        .foregroundStyle(.secondary)
-                        .monospacedDigit()
-                }
-                Slider(
-                    value: offlineZoomBinding,
-                    in: zoomBounds,
-                    step: 1
-                ) {
-                    Text("Offline detail level")
-                } minimumValueLabel: {
-                    Text("Less").font(.caption2).foregroundStyle(.secondary)
-                } maximumValueLabel: {
-                    Text("More").font(.caption2).foregroundStyle(.secondary)
-                }
-            }
-            .padding(.vertical, 2)
-        } header: {
-            Text("Offline Maps")
-        } footer: {
-            Text("How deep the “Offline” button saves tiles for a hike. Higher detail captures more of the trail up close, but uses more storage and downloads more slowly.")
-        }
-    }
-
     private var offlineStorageSection: some View {
         Section {
             HStack {
@@ -188,18 +156,6 @@ struct SettingsView: View {
         ByteCountFormatter.string(fromByteCount: bytes, countStyle: .file)
     }
 
-    /// Bridges the `Int` setting to the `Double`-valued slider.
-    private var offlineZoomBinding: Binding<Double> {
-        Binding(
-            get: { Double(offlineMaxZoom) },
-            set: { offlineMaxZoom = Int($0.rounded()) }
-        )
-    }
-
-    private var zoomBounds: ClosedRange<Double> {
-        Double(OfflineTileDownloader.zoomRange.lowerBound)...Double(OfflineTileDownloader.zoomRange.upperBound)
-    }
-
     private func providerRow(_ provider: TileProvider) -> some View {
         let isSelected = provider.id == tileProviderID
         return Button {
@@ -211,18 +167,8 @@ struct SettingsView: View {
                     .foregroundStyle(isSelected ? AnyShapeStyle(Color.accentColor) : AnyShapeStyle(.secondary))
 
                 VStack(alignment: .leading, spacing: 3) {
-                    HStack(spacing: 6) {
-                        Text(provider.name)
-                            .font(.body.weight(.medium))
-                        if provider.supportsBulkDownload {
-                            Text("Offline")
-                                .font(.caption2.weight(.semibold))
-                                .foregroundStyle(.green)
-                                .padding(.horizontal, 6)
-                                .padding(.vertical, 2)
-                                .background(.green.opacity(0.18), in: Capsule())
-                        }
-                    }
+                    Text(provider.name)
+                        .font(.body.weight(.medium))
                     Text(provider.summary)
                         .font(.caption)
                         .foregroundStyle(.secondary)

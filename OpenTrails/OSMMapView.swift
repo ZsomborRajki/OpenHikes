@@ -242,6 +242,9 @@ struct OSMMapView: MapViewRepresentable {
         var highlightAnnotation: MKPointAnnotation?
         var trackingBottomConstraint: NSLayoutConstraint?
         private weak var sheetMetrics: SheetMetrics?
+        /// Screen-point radius within which the selection dot and the "my location"
+        /// puck are considered overlapping (roughly the size of either dot).
+        static let overlapThresholdPoints: CGFloat = 20
 
         /// Edge padding used whenever the map is fitted to the route.
         #if os(macOS)
@@ -383,6 +386,32 @@ struct OSMMapView: MapViewRepresentable {
                 highlightAnnotation = annotation
                 mapView.addAnnotation(annotation)
             }
+            updateHighlightOpacity(on: mapView)
+        }
+
+        /// Fades the selection dot when it visually coincides with the "my location"
+        /// puck, so the two don't blend into an ambiguous blob and the user's real
+        /// position stays the one that reads clearly. zPriority doesn't help here —
+        /// MKUserLocationView isn't ordered against custom annotations the normal way.
+        private func updateHighlightOpacity(on mapView: MKMapView) {
+            guard let annotation = highlightAnnotation,
+                  let view = mapView.view(for: annotation) else { return }
+            guard let userCoordinate = mapView.userLocation.location?.coordinate else {
+                setAlpha(1, on: view)
+                return
+            }
+            let selectionPoint = mapView.convert(annotation.coordinate, toPointTo: mapView)
+            let userPoint = mapView.convert(userCoordinate, toPointTo: mapView)
+            let distance = hypot(selectionPoint.x - userPoint.x, selectionPoint.y - userPoint.y)
+            setAlpha(distance < Self.overlapThresholdPoints ? 0.25 : 1, on: view)
+        }
+
+        private func setAlpha(_ alpha: CGFloat, on view: MKAnnotationView) {
+            #if os(macOS)
+            view.alphaValue = alpha
+            #else
+            view.alpha = alpha
+            #endif
         }
 
         func mapView(_ mapView: MKMapView, viewFor annotation: MKAnnotation) -> MKAnnotationView? {
@@ -415,6 +444,16 @@ struct OSMMapView: MapViewRepresentable {
             layer.shadowRadius = 2
             layer.shadowOffset = .zero
             return view
+        }
+
+        func mapView(_ mapView: MKMapView, didUpdate userLocation: MKUserLocation) {
+            updateHighlightOpacity(on: mapView)
+        }
+
+        func mapView(_ mapView: MKMapView, regionDidChangeAnimated animated: Bool) {
+            // Zooming changes the on-screen distance between two fixed coordinates,
+            // so the overlap fade needs to be re-checked, not just on move/relocate.
+            updateHighlightOpacity(on: mapView)
         }
 
         func mapView(_ mapView: MKMapView, rendererFor overlay: MKOverlay) -> MKOverlayRenderer {

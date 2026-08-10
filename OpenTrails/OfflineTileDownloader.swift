@@ -32,10 +32,6 @@ final class OfflineTileDownloader {
 
     private var task: Task<Void, Never>?
 
-    /// Selectable deepest-zoom levels for the offline setting, and the default.
-    static let zoomRange = 13...18
-    static let defaultMaxZoom = 16
-
     /// The shallowest zoom to save (whole-route overview). `nonisolated`: a
     /// plain constant read from the `nonisolated` tile-enumeration functions.
     nonisolated static let minZoom = 10
@@ -45,9 +41,9 @@ final class OfflineTileDownloader {
     private let maxConcurrent = 5
 
     /// Begins downloading the tiles covering `route` from `source`, saving detail
-    /// down to `maxZoom` (clamped to the provider's real max). `scale` must be the
+    /// down to the provider's deepest real zoom level. `scale` must be the
     /// display scale so cache keys match what the renderer requests on-device.
-    func start(route: [CLLocationCoordinate2D], source: ActiveTileSource, maxZoom: Int, scale: CGFloat) {
+    func start(route: [CLLocationCoordinate2D], source: ActiveTileSource, scale: CGFloat) {
         guard phase != .downloading else { return }
         guard route.count > 1 else { phase = .failed("No route to save."); return }
         guard TileCache.shared.isOnline else { phase = .failed("You're offline — connect to save tiles."); return }
@@ -55,7 +51,7 @@ final class OfflineTileDownloader {
         let tiles = Self.tiles(
             covering: route,
             minZoom: Self.minZoom,
-            maxZoom: min(max(maxZoom, Self.minZoom), source.maximumZ),
+            maxZoom: max(source.maximumZ, Self.minZoom),
             budget: Self.tileBudget
         )
         guard !tiles.isEmpty else { phase = .failed("Nothing to save."); return }

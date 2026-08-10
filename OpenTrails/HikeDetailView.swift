@@ -18,13 +18,14 @@ struct HikeDetailView: View {
     let mapController: MapController
     /// Owns whether this hike is passively auto-saving OSM tiles while browsed.
     let autoSave: AutoSaveController
+    /// Source of the user's live location, polled (throttled) to drive auto-follow.
+    let locationManager: LocationManager
     /// Collapses the sheet so the map is visible when zooming to the route.
     var onZoomToRoute: () -> Void = {}
 
     /// The active tile source, mirrored from Settings so offline downloads use the
     /// same provider (and API key) the map is currently drawing.
     @AppStorage(SettingsKey.tileProviderID) private var tileProviderID = TileProvider.default.id
-    @AppStorage(SettingsKey.offlineMaxZoom) private var offlineMaxZoom = OfflineTileDownloader.defaultMaxZoom
     @Environment(\.displayScale) private var displayScale
     @State private var downloader = OfflineTileDownloader()
     /// Disk space used by this hike's saved tiles; `nil` until measured.
@@ -39,6 +40,17 @@ struct HikeDetailView: View {
     /// Persistent tracker position along the route (metres from start). Starts at the
     /// GPX start, follows the finger while scrubbing, and stays where it's left.
     @State private var trackerDistance: Double = 0
+    /// The user's live GPS fix projected onto the route (metres from start), or
+    /// `nil` when auto-follow is off, there's no fix, or the fix is too far from
+    /// the trail to match. Drawn on the chart separately from `trackerDistance`
+    /// so a manual scrub and the live position can both be visible at once.
+    @State private var liveTrackerDistance: Double?
+    /// True while a finger is actively dragging the elevation chart — pauses
+    /// auto-follow's own updates to `trackerDistance` so it doesn't fight the drag.
+    @State private var isScrubbing = false
+    /// How far off the route (in meters) a GPS fix can be and still count as
+    /// "on the trail" for auto-follow.
+    private static let followMatchThresholdMeters: Double = 75
 
     var body: some View {
         ScrollView {
@@ -61,9 +73,16 @@ struct HikeDetailView: View {
             statItems = Self.makeStats(for: hike)
             // Place the tracker at the start of the track, on both graph and map.
             trackerDistance = 0
+            liveTrackerDistance = nil
             highlight.coordinate = built.coordinate(atDistance: 0)
             refreshStoredBytes()
             autoSave.hikeSelectionChanged(to: hike)
+            await followLocation(profile: built)
+        }
+        // Toggling off should clear the live dot immediately, not wait for the
+        // next throttled poll.
+        .onChange(of: hike.autoFollowEnabled) { _, enabled in
+            if !enabled { liveTrackerDistance = nil }
         }
         // Record the download once it finishes, so its tiles can be measured/removed.
         .onChange(of: downloader.phase) { _, phase in
@@ -71,7 +90,7 @@ struct HikeDetailView: View {
             let record = OfflineDownloadRecord(
                 providerID: activeTileSource.providerID,
                 scale: Double(displayScale),
-                maxZoom: offlineMaxZoom
+                maxZoom: activeTileSource.maximumZ
             )
             if !hike.offlineDownloads.contains(record) { hike.offlineDownloads.append(record) }
             refreshStoredBytes()
@@ -168,7 +187,8 @@ struct HikeDetailView: View {
                 if activeProvider.supportsBulkDownload { downloadButton }
                 colorControl
             }
-            if !activeProvider.supportsBulkDownload { autoSaveToggle }
+            autoSaveToggle
+            autoFollowToggle
             widthSlider
             if let note = downloadNote {
                 Text(note)
@@ -197,8 +217,7 @@ struct HikeDetailView: View {
             if downloader.phase == .downloading {
                 downloader.cancel()
             } else {
-                downloader.start(route: hike.coordinates, source: activeTileSource,
-                                 maxZoom: offlineMaxZoom, scale: displayScale)
+                downloader.start(route: hike.coordinates, source: activeTileSource, scale: displayScale)
             }
         } label: {
             downloadTile
@@ -207,8 +226,9 @@ struct HikeDetailView: View {
         .disabled(!canDownload && downloader.phase != .downloading)
     }
 
-    /// OSM-style equivalent of `downloadButton`: a plain system `Toggle` for
-    /// passive auto-save instead of a button that starts a bulk download.
+    /// Passive gap-filler alongside (or instead of) the bulk `downloadButton`:
+    /// saves tiles as they're actually browsed, so areas a bulk download
+    /// missed — or, for OSM-style providers, everything — still end up saved.
     private var autoSaveToggle: some View {
         Toggle(isOn: autoSaveBinding) {
             Label("Auto-Save Tiles", systemImage: "arrow.down.circle")
@@ -222,6 +242,22 @@ struct HikeDetailView: View {
         Binding(
             get: { hike.autoSaveTilesEnabled },
             set: { autoSave.setEnabled($0, for: hike) }
+        )
+    }
+
+    /// Auto-scrolls the elevation graph to the user's live position along this
+    /// trail. On by default; the throttled poll in `followLocation` does the work.
+    private var autoFollowToggle: some View {
+        Toggle(isOn: autoFollowBinding) {
+            Label("Auto-Follow Trail", systemImage: "location.fill.viewfinder")
+        }
+        .disabled(hike.pointCount < 2)
+    }
+
+    private var autoFollowBinding: Binding<Bool> {
+        Binding(
+            get: { hike.autoFollowEnabled },
+            set: { hike.autoFollowEnabled = $0 }
         )
     }
 
@@ -286,16 +322,16 @@ struct HikeDetailView: View {
     }
 
     private var downloadNote: String? {
-        guard activeProvider.supportsBulkDownload else { return autoSaveNote }
         switch downloader.phase {
         case .failed(let message): return message
         case .finished: return "Saved for offline use."
         case .downloading: return "Saving \(downloader.total) tiles…"
-        case .idle: return nil
+        case .idle: return autoSaveNote
         }
     }
 
-    /// Status copy for OSM-style providers, where offline saving is passive.
+    /// Status copy for auto-save — the only offline note for OSM-style
+    /// providers, and the fallback once a bulk download (if any) is idle.
     private var autoSaveNote: String? {
         guard hike.autoSaveTilesEnabled else {
             return "Turn on Auto-Save, then pan and zoom around the trail to save its tiles for offline use."
@@ -326,7 +362,7 @@ struct HikeDetailView: View {
 
     private var activeTileSource: ActiveTileSource {
         let provider = activeProvider
-        let key = provider.apiKeyDefaultsKey == SettingsKey.stadiaAPIKey ? (Secrets.stadiaAPIKey ?? "") : ""
+        let key = Secrets.apiKey(for: provider) ?? ""
         return ActiveTileSource(
             providerID: provider.id,
             urlTemplate: provider.resolvedTemplate(apiKey: key),
@@ -417,15 +453,46 @@ struct HikeDetailView: View {
                 profile: profile,
                 tint: hike.tintOpaque,
                 trackerDistance: trackerDistance,
+                liveDistance: liveTrackerDistance,
                 onScrub: { distance in
                     trackerDistance = distance
                     highlight.coordinate = profile.coordinate(atDistance: distance)
-                }
+                },
+                onScrubbingChanged: { isScrubbing = $0 }
             )
             .equatable()
         } else {
             elevationPlaceholder
         }
+    }
+
+    // MARK: Auto-follow
+
+    /// Polls the user's location once a second (throttled — GPS fixes can arrive
+    /// far more often than that) and, while auto-follow is on, projects it onto
+    /// the route to drive both the live chart marker and the persistent tracker.
+    /// Runs for as long as this hike stays selected; cancelled when it changes.
+    private func followLocation(profile: RouteProfile) async {
+        while !Task.isCancelled {
+            updateLiveFollow(profile: profile)
+            try? await Task.sleep(for: .seconds(1))
+        }
+    }
+
+    private func updateLiveFollow(profile: RouteProfile) {
+        guard hike.autoFollowEnabled,
+              let coordinate = locationManager.coordinate,
+              let match = profile.nearestPoint(to: coordinate),
+              match.offRouteMeters <= Self.followMatchThresholdMeters else {
+            liveTrackerDistance = nil
+            return
+        }
+        liveTrackerDistance = match.distanceAlongRoute
+        // Don't fight an in-progress manual scrub; the live dot still moves,
+        // but the persistent tracker stays under the user's finger.
+        guard !isScrubbing else { return }
+        trackerDistance = match.distanceAlongRoute
+        highlight.coordinate = profile.coordinate(atDistance: match.distanceAlongRoute)
     }
 
     private var elevationPlaceholder: some View {
@@ -454,24 +521,50 @@ private struct ElevationChartView: View, Equatable {
     let profile: RouteProfile
     let tint: Color
     let trackerDistance: Double
+    /// The user's live GPS position projected onto the route, or `nil` when
+    /// auto-follow is off or has no matching fix. Drawn as a separate marker,
+    /// on top of the tracker pin.
+    let liveDistance: Double?
     var onScrub: (Double) -> Void
+    /// Reports drag start/end so the parent can pause auto-follow's own
+    /// updates to `trackerDistance` while a finger is on the chart.
+    var onScrubbingChanged: (Bool) -> Void = { _ in }
 
     /// Live chart selection under the finger (transient); owned here so scrubbing
     /// doesn't touch the parent until it resolves a distance.
     @State private var selectedDistance: Double?
+    /// Measured plot width, used to keep vertical exaggeration consistent
+    /// regardless of screen size. `0` until the first layout pass reports it.
+    @State private var plotWidth: CGFloat = 0
 
-    // Compares only what the chart actually draws; the `onScrub` closure and the
-    // transient selection are intentionally ignored.
+    private static let chartHeight: CGFloat = 200
+    /// How many times steeper the chart renders a slope than it truly is —
+    /// the standard cartographic "vertical exaggeration" used on elevation
+    /// profiles, so trails read as hilly without a small bump looking like a
+    /// cliff. See `elevationDomain` for how it's applied.
+    private static let verticalExaggeration: Double = 3
+    /// Ceiling on the exaggerated span, as a multiple of the route's own
+    /// elevation range. Without this, a long, nearly flat route (e.g. a 13km
+    /// trail with 140m of relief) computes a span thousands of meters wide —
+    /// mathematically "flat" is right, but centering that on the real data
+    /// pushes the axis down into implausible (even negative) elevations.
+    private static let maxSpanMultiplier: Double = 4
+
+    // Compares only what the chart actually draws; the `onScrub`/
+    // `onScrubbingChanged` closures and the transient selection are
+    // intentionally ignored.
     static func == (lhs: ElevationChartView, rhs: ElevationChartView) -> Bool {
         lhs.trackerDistance == rhs.trackerDistance
+            && lhs.liveDistance == rhs.liveDistance
             && lhs.tint == rhs.tint
             && lhs.profile.samples.count == rhs.profile.samples.count
             && lhs.profile.distances.count == rhs.profile.distances.count
     }
 
     var body: some View {
-        let domain = elevationDomain(profile)
+        let domain = elevationDomain(profile, plotWidth: plotWidth)
         let tracker = profile.sample(atDistance: trackerDistance)
+        let liveSample = liveDistance.flatMap { profile.sample(atDistance: $0) }
         Chart {
             ForEach(profile.samples) { sample in
                 AreaMark(
@@ -513,6 +606,25 @@ private struct ElevationChartView: View, Equatable {
                     calloutLabel(tracker)
                 }
             }
+
+            // The live GPS position, mirroring the map's "my location" dot
+            // (white halo + blue center). Declared last so it draws over the
+            // tracker pin when the two land close together.
+            if let liveSample {
+                PointMark(
+                    x: .value("Distance", liveSample.distanceMeters),
+                    y: .value("Elevation", liveSample.elevation)
+                )
+                .foregroundStyle(.white)
+                .symbolSize(170)
+
+                PointMark(
+                    x: .value("Distance", liveSample.distanceMeters),
+                    y: .value("Elevation", liveSample.elevation)
+                )
+                .foregroundStyle(.blue)
+                .symbolSize(110)
+            }
         }
         .chartXSelection(value: $selectedDistance)
         .chartXScale(domain: 0...(profile.samples.last?.distanceMeters ?? 1))
@@ -539,9 +651,13 @@ private struct ElevationChartView: View, Equatable {
                 }
             }
         }
-        .frame(height: 200)
+        .frame(height: Self.chartHeight)
+        .onGeometryChange(for: CGFloat.self) { proxy in
+            proxy.size.width
+        } action: { plotWidth = $0 }
         .onChange(of: selectedDistance) { _, distance in
             // While scrubbing, move the persistent tracker; keep it put on release.
+            onScrubbingChanged(distance != nil)
             guard let distance else { return }
             onScrub(distance)
         }
@@ -573,14 +689,41 @@ private struct ElevationChartView: View, Equatable {
         #endif
     }()
 
-    /// A y-range fitted to the actual elevation data (with a little headroom),
-    /// so flat-ish profiles aren't squashed against a 0-based axis.
-    private func elevationDomain(_ profile: RouteProfile) -> ClosedRange<Double> {
+    /// A y-range that keeps the rendered slope proportional to the real one
+    /// (times `verticalExaggeration`), instead of always stretching to fill
+    /// the chart — otherwise a 20m rise over 5km and a 200m rise over 500m
+    /// would render as the identically dramatic spike.
+    ///
+    /// Picks the tightest y-span that both (a) fits the real elevation range
+    /// and (b) keeps meters-per-point on Y at `1/verticalExaggeration` of
+    /// meters-per-point on X, given the measured plot width — capped at
+    /// `maxSpanMultiplier` × the real range so a long, flat route doesn't
+    /// balloon into an implausible axis. Whichever span is larger wins, so
+    /// real elevation data is never clipped — a genuinely steep trail just
+    /// ends up using its natural (wider) span, which is exactly what makes
+    /// it read as steep.
+    private func elevationDomain(_ profile: RouteProfile, plotWidth: CGFloat) -> ClosedRange<Double> {
         guard let range = profile.elevationRange else { return 0...1 }
         let low = range.lowerBound, high = range.upperBound
-        guard high > low else { return (low - 10)...(high + 10) }
-        let padding = (high - low) * 0.15
-        return (low - padding)...(high + padding)
+        let dataSpan = high - low
+        guard dataSpan > 0 else { return (low - 10)...(high + 10) }
+
+        // Before the first layout pass reports a real width, fall back to a
+        // plain data-fitted range rather than guessing.
+        guard plotWidth > 0 else {
+            let padding = dataSpan * 0.15
+            return (low - padding)...(high + padding)
+        }
+
+        let totalDistance = max(profile.samples.last?.distanceMeters ?? 1, 1)
+        let metersPerPointX = totalDistance / Double(plotWidth)
+        let metersPerPointY = metersPerPointX / Self.verticalExaggeration
+        let exaggeratedSpan = min(Double(Self.chartHeight) * metersPerPointY, dataSpan * Self.maxSpanMultiplier)
+
+        let span = max(exaggeratedSpan, dataSpan)
+        let padding = span * 0.15
+        let mid = (low + high) / 2
+        return (mid - span / 2 - padding)...(mid + span / 2 + padding)
     }
 }
 

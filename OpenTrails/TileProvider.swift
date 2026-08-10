@@ -40,7 +40,7 @@ extension TileProvider {
     nonisolated static let openStreetMap = TileProvider(
         id: "osm",
         name: "OpenStreetMap",
-        summary: "Standard street map. Its tile policy disallows bulk offline downloads.",
+        summary: "Standard street map. Its tile policy disallows bulk downloads, so viewed tiles are auto-saved for offline use instead.",
         urlTemplate: "https://tile.openstreetmap.org/{z}/{x}/{y}.png",
         maximumZ: 19,
         attribution: "© OpenStreetMap contributors",
@@ -60,8 +60,20 @@ extension TileProvider {
         apiKeyDefaultsKey: SettingsKey.stadiaAPIKey
     )
 
+    /// A hiking-focused source with deep native zoom, so close-in views stay sharp.
+    nonisolated static let thunderforestOutdoors = TileProvider(
+        id: "thunderforest_outdoors",
+        name: "Thunderforest Outdoors",
+        summary: "Topographic map with deep zoom for sharp close-up detail. Permits offline downloads.",
+        urlTemplate: "https://tile.thunderforest.com/outdoors/{z}/{x}/{y}.png?apikey={key}",
+        maximumZ: 22,
+        attribution: "Maps © Thunderforest, Data © OpenStreetMap contributors",
+        supportsBulkDownload: true,
+        apiKeyDefaultsKey: SettingsKey.thunderforestAPIKey
+    )
+
     /// All selectable providers, in display order.
-    nonisolated static let all: [TileProvider] = [openStreetMap, stadiaOutdoors]
+    nonisolated static let all: [TileProvider] = [openStreetMap, stadiaOutdoors, thunderforestOutdoors]
 
     nonisolated static let `default` = openStreetMap
 
@@ -83,5 +95,5 @@ struct ActiveTileSource: Equatable {
 enum SettingsKey {
     static let tileProviderID = "settings.tileProviderID"
     static let stadiaAPIKey = "settings.apiKey.stadia"
-    static let offlineMaxZoom = "settings.offline.maxZoom"
+    static let thunderforestAPIKey = "settings.apiKey.thunderforest"
 }

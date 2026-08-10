@@ -44,10 +44,9 @@ struct ContentView: View {
     }
 
     /// Resolves the selected provider (with API key substituted) for the map.
-    /// A key typed into Settings wins; otherwise fall back to the bundled key.
     private var activeTileSource: ActiveTileSource {
         let provider = TileProvider.provider(id: tileProviderID)
-        let apiKey = provider.apiKeyDefaultsKey == SettingsKey.stadiaAPIKey ? (Secrets.stadiaAPIKey ?? "") : ""
+        let apiKey = Secrets.apiKey(for: provider) ?? ""
         return ActiveTileSource(
             providerID: provider.id,
             urlTemplate: provider.resolvedTemplate(apiKey: apiKey),
@@ -86,6 +85,7 @@ struct ContentView: View {
                     highlight: highlight,
                     mapController: mapController,
                     autoSave: autoSaveController,
+                    locationManager: locationManager,
                     onRecord: recordHike,
                     onImportGPX: importGPX,
                     onSheetTopChange: { sheetMetrics.topY = $0 }
@@ -132,6 +132,7 @@ struct ContentView: View {
             title: title,
             distanceMeters: track.distanceMeters,
             date: track.startTime ?? .now,
+            tintHex: Hike.randomTintHex(),
             route: track.points.map {
                 RouteCoordinate(
                     latitude: $0.coordinate.latitude,

@@ -51,6 +51,9 @@ final class Hike {
     var autoSavedTileKeys: [String] = []
     /// Whether auto-save is turned on for this hike's map.
     var autoSaveTilesEnabled = true
+    /// Whether the elevation graph auto-scrolls to track the user's live
+    /// location while browsing this hike.
+    var autoFollowEnabled = true
 
     // Optional metadata pulled from the GPX file.
     var trackDescription: String?
@@ -63,12 +66,13 @@ final class Hike {
         distanceMeters: Double,
         date: Date = .now,
         tintHex: String = "#34C759",
-        routeWidth: Double = 5,
+        routeWidth: Double = 3,
         symbol: String = "figure.hiking",
         route: [RouteCoordinate] = [],
         offlineDownloads: [OfflineDownloadRecord] = [],
         autoSavedTileKeys: [String] = [],
-        autoSaveTilesEnabled: Bool = false,
+        autoSaveTilesEnabled: Bool = true,
+        autoFollowEnabled: Bool = true,
         trackDescription: String? = nil,
         author: String? = nil,
         keywords: String? = nil
@@ -84,6 +88,7 @@ final class Hike {
         self.offlineDownloads = offlineDownloads
         self.autoSavedTileKeys = autoSavedTileKeys
         self.autoSaveTilesEnabled = autoSaveTilesEnabled
+        self.autoFollowEnabled = autoFollowEnabled
         self.trackDescription = trackDescription
         self.author = author
         self.keywords = keywords
@@ -99,6 +104,13 @@ extension Hike {
 
     /// Full tint including the user's chosen alpha — used for the map polyline.
     var tint: Color { Color(hex: tintHex) ?? .green }
+
+    /// A random, visually distinct route color — fixed saturation/brightness so
+    /// every hue stays legible on the map and in the UI. Used to give each
+    /// newly imported hike its own default tint instead of always green.
+    static func randomTintHex() -> String {
+        Color(hue: .random(in: 0..<1), saturation: 0.65, brightness: 0.85).hexRGBA
+    }
 
     /// Tint forced fully opaque — used everywhere except the map line (graph,
     /// list-row circle, header icon, highlight dot), so transparency reads only

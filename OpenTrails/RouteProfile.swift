@@ -63,6 +63,26 @@ nonisolated struct RouteProfile {
         nearestIndex(in: sampleDistances, to: target).map { samples[$0] }
     }
 
+    /// Projects an arbitrary coordinate (e.g. a live GPS fix) onto the route,
+    /// used to auto-follow the elevation graph. Returns the distance-along-route
+    /// of the nearest track point and how far off the route that point is, in
+    /// meters — callers use the latter to decide whether the fix is actually
+    /// near the trail. O(n): fine for a once-a-second poll.
+    func nearestPoint(to coordinate: CLLocationCoordinate2D) -> (distanceAlongRoute: Double, offRouteMeters: Double)? {
+        guard !coordinates.isEmpty else { return nil }
+        let target = CLLocation(latitude: coordinate.latitude, longitude: coordinate.longitude)
+        var bestIndex = 0
+        var bestDistance = Double.greatestFiniteMagnitude
+        for (index, candidate) in coordinates.enumerated() {
+            let distance = target.distance(from: CLLocation(latitude: candidate.latitude, longitude: candidate.longitude))
+            if distance < bestDistance {
+                bestDistance = distance
+                bestIndex = index
+            }
+        }
+        return (distances[bestIndex], bestDistance)
+    }
+
     /// Index of the value in an ascending array closest to `target`. O(log n).
     private func nearestIndex(in sorted: [Double], to target: Double) -> Int? {
         guard let first = sorted.first, let last = sorted.last else { return nil }

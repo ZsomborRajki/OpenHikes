@@ -4,8 +4,10 @@
 //
 //  Passively persists tiles for the one hike currently being auto-saved, as a
 //  side effect of tiles MapKit already fetched to draw on screen — no bulk
-//  enumeration, no extra network requests. Exists because providers like OSM
-//  disallow automated bulk downloading but don't restrict normal browsing.
+//  enumeration, no extra network requests. This is how providers like OSM
+//  (which disallow automated bulk downloading) save anything at all, and it
+//  doubles as a gap-filler for bulk-download-capable providers: any tile the
+//  bulk pass missed still gets saved the moment it's actually browsed.
 //
 
 import Foundation

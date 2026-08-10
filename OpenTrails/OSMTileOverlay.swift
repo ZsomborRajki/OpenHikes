@@ -27,12 +27,13 @@ nonisolated final class OSMTileOverlay: MKTileOverlay, @unchecked Sendable {
         let key = cacheKey(for: path)
         guard let image = await cache.loadTile(forKey: key, url: url(forTilePath: path)) else { return false }
 
-        // Providers that disallow bulk downloading (e.g. OSM) still allow normal
-        // browsing, so opportunistically keep tiles the user actually views —
-        // never a synthetic prefetch, just what MapKit already asked for.
-        if !TileProvider.provider(id: providerID).supportsBulkDownload {
-            AutoSaveTileStore.shared.considerPersisting(key: key, z: path.z, x: path.x, y: path.y, image: image)
-        }
+        // Opportunistically keep tiles the user actually views — never a
+        // synthetic prefetch, just what MapKit already asked for. Runs for
+        // every provider: it's how OSM (which disallows bulk downloading)
+        // saves anything at all, and it also fills gaps a bulk download left
+        // (e.g. an area zoomed into that the bulk pass didn't cover) for
+        // providers that support both.
+        AutoSaveTileStore.shared.considerPersisting(key: key, z: path.z, x: path.x, y: path.y, image: image)
         return true
     }
 

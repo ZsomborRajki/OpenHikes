@@ -18,6 +18,7 @@ struct MapSheet: View {
     var highlight: RouteHighlight
     var mapController: MapController
     var autoSave: AutoSaveController
+    var locationManager: LocationManager
 
     var onRecord: () -> Void = {}
     var onImportGPX: (URL) -> Void = { _ in }
@@ -65,6 +66,7 @@ struct MapSheet: View {
                     highlight: highlight,
                     mapController: mapController,
                     autoSave: autoSave,
+                    locationManager: locationManager,
                     onZoomToRoute: { withAnimation { detent = .medium } }
                 )
             }
