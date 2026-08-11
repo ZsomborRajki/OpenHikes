@@ -102,6 +102,10 @@ nonisolated enum GPXImport {
         var points: [Point] = []
 
         // Tracks → segments → points.
+        // This app targets single-track, single-segment GPX files (e.g. Komoot exports).
+        // Multi-segment files are flattened: cross-segment edges are treated as
+        // continuous route legs. That's intentional — we don't need to support
+        // paused recordings or disconnected trail sections.
         for track in root.tracks {
             for segment in track.segments {
                 points.append(contentsOf: segment.points.compactMap(point))

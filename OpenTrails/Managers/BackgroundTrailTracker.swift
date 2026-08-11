@@ -188,6 +188,14 @@ final class BackgroundTrailTracker: NSObject {
     // MARK: Background feed
 
     fileprivate func handleBackgroundFix(_ location: CLLocation) {
+        // Significant-location-change delivery can include stale cached fixes
+        // on relaunch. Matching also requires uncertainty no wider than the
+        // same route tolerance used by foreground tracking.
+        guard LocationFixPolicy.accepts(
+            location,
+            maximumAge: LocationFixPolicy.backgroundMaximumAge,
+            maximumHorizontalAccuracy: RouteProfile.followMatchThresholdMeters
+        ) else { return }
         guard let trackedHikeID else { return }
         let context = ModelContext(container)
         let descriptor = FetchDescriptor<Hike>(predicate: #Predicate { $0.id == trackedHikeID })
@@ -207,7 +215,7 @@ final class BackgroundTrailTracker: NSObject {
                 coordinate: .init(latitude: coordinate.latitude, longitude: coordinate.longitude),
                 distanceAlongRouteMeters: match.distanceAlongRoute,
                 offRouteMeters: match.offRouteMeters,
-                timestamp: .now
+                timestamp: location.timestamp
             ),
             hike: hike
         )

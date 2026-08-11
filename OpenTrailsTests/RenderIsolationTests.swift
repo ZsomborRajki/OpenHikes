@@ -291,6 +291,59 @@ struct RouteHighlightTests {
 @MainActor
 @Suite("Location publishing")
 struct LocationPublishingTests {
+    private func location(
+        latitude: Double = 47.63,
+        longitude: Double = 12.86,
+        horizontalAccuracy: CLLocationAccuracy,
+        timestamp: Date = .now
+    ) -> CLLocation {
+        CLLocation(
+            coordinate: .init(latitude: latitude, longitude: longitude),
+            altitude: 0,
+            horizontalAccuracy: horizontalAccuracy,
+            verticalAccuracy: -1,
+            course: -1,
+            speed: -1,
+            timestamp: timestamp
+        )
+    }
+
+    @Test("reduced-accuracy fixes remain available for coarse features")
+    func reducedAccuracyIsPublishedButNotRouteMatched() async {
+        let manager = LocationManager()
+        let approximate = location(horizontalAccuracy: 1_500)
+
+        manager.locationManager(CLLocationManager(), didUpdateLocations: [approximate])
+        await Task.yield()
+
+        #expect(manager.coordinate?.latitude == approximate.coordinate.latitude)
+        #expect(manager.coordinate?.longitude == approximate.coordinate.longitude)
+        #expect(
+            manager.coordinateForRouteMatching(
+                maximumHorizontalAccuracy: RouteProfile.followMatchThresholdMeters
+            ) == nil
+        )
+    }
+
+    @Test("invalid and stale fixes are rejected")
+    func invalidAndStaleFixesAreRejected() async {
+        let staleManager = LocationManager()
+        let stale = location(
+            horizontalAccuracy: 10,
+            timestamp: .now.addingTimeInterval(-(LocationFixPolicy.foregroundMaximumAge + 1))
+        )
+        staleManager.locationManager(CLLocationManager(), didUpdateLocations: [stale])
+        await Task.yield()
+
+        let invalidManager = LocationManager()
+        let invalid = location(horizontalAccuracy: -1)
+        invalidManager.locationManager(CLLocationManager(), didUpdateLocations: [invalid])
+        await Task.yield()
+
+        #expect(staleManager.coordinate == nil)
+        #expect(invalidManager.coordinate == nil)
+    }
+
     /// CoreLocation can deliver far more often than once a second; the
     /// throttle is what keeps that off every observer downstream.
     @Test("a burst of fixes publishes once")

@@ -21,48 +21,6 @@ There are no confirmed critical or high-priority defects. The remaining findings
 
 ## Medium-priority correctness and lifecycle findings
 
-### 1. GPX segment boundaries become fictitious route legs
-
-**File:** `OpenTrails/Managers/GPXImport.swift:28-42,101-109`
-
-All tracks and segments are flattened into one point array, and distance is summed across every adjacent point. Separate GPX segments commonly represent pauses, transport, GPS loss, or disconnected trail sections.
-
-**Impact:** Imports can gain artificial straight-line legs that inflate distance and distort profiles, matching, rendering, and offline tile bounds.
-
-**Recommendation:** Preserve segment boundaries in the route model, or at minimum exclude cross-segment edges from distance/profile/matching calculations.
-
-### 2. Location fixes are accepted without freshness or accuracy checks
-
-**Files:** `OpenTrails/Managers/LocationManager.swift:54-80`, `OpenTrails/Managers/BackgroundTrailTracker.swift:194-223,258-269`
-
-Core Location can initially deliver cached samples or samples with invalid/poor accuracy. They are immediately used for map centering, weather, route matching, and shared snapshots. Background snapshots stamp `.now` rather than preserving `CLLocation.timestamp`, which makes an old delivered sample appear fresh.
-
-**Recommendation:** Reject negative or excessive `horizontalAccuracy`, reject stale timestamps, and preserve the source timestamp in `SharedTrailSnapshot.LiveFix`.
-
-### 3. Map searches can apply out-of-order responses
-
-**File:** `OpenTrails/UI/Map/MapSheet.swift:355-380`
-
-Each selected suggestion or submitted query starts an uncancelled task. A slower earlier request can finish after a newer request and move the map back to stale user intent.
-
-**Recommendation:** Retain a cancellable search task or generation token and invalidate it whenever a new search starts.
-
-### 4. Weather failures are not retried while stationary
-
-**Files:** `OpenTrails/UI/ContentView.swift:218-229`, `OpenTrails/Managers/WeatherManager.swift:21-27`
-
-`pollWeather()` records the coarse location key before the request. `WeatherManager` swallows errors and returns no success signal. A transient failure therefore suppresses all retries until the user moves roughly one kilometre.
-
-**Recommendation:** Advance the successful key only after a fetch succeeds, and add a bounded retry/freshness policy.
-
-### 5. Offline byte measurements can complete out of order
-
-**File:** `OpenTrails/UI/Hike/HikeDetailView.swift:155-195`
-
-Every manifest change launches an independent detached measurement. Older work can finish last and overwrite a newer byte count; a measurement already in flight can also replace the zero assigned during deletion.
-
-**Recommendation:** Cancel the previous task or use a generation token before publishing `storedBytes`.
-
 ### 6. There is no automated build/test workflow
 
 Only local instructions exist; `.github/workflows` is empty. The current suite depends on Xcode 26.5, iOS runtimes, signing capabilities, App Group access, and simulator health.

@@ -53,6 +53,8 @@ struct HikeDetailView: View {
     @State private var downloader = OfflineTileDownloader()
     /// Disk space used by this hike's saved tiles; `nil` until measured.
     @State private var storedBytes: Int64?
+    @State private var storedBytesMeasurementTask: Task<Void, Never>?
+    @State private var storedBytesMeasurementGeneration = 0
     @State private var storageDeletionFailed = false
 
     /// Built once per hike in `.task`, never in `init`. Scrubbing then resolves
@@ -140,6 +142,9 @@ struct HikeDetailView: View {
         // Watches `.count`, not the array itself — comparing two multi-thousand-
         // element `[String]`s on every drain cycle is itself main-thread work.
         .onChange(of: hike.autoSavedTileKeys.count) { _, _ in refreshStoredBytes() }
+        .onDisappear {
+            invalidateStoredBytesMeasurement()
+        }
         .alert("Couldn’t Delete Offline Tiles", isPresented: $storageDeletionFailed) {
             Button("OK", role: .cancel) {}
         } message: {
@@ -157,12 +162,14 @@ struct HikeDetailView: View {
     /// auto-save drain cycle while the user is actively panning the map, so
     /// anything synchronous here is felt as a UI hitch.
     private func refreshStoredBytes() {
+        invalidateStoredBytesMeasurement()
         let route = hike.route
         let offlineDownloads = hike.offlineDownloads
         let autoSavedTileKeys = hike.autoSavedTileKeys
         guard !offlineDownloads.isEmpty || !autoSavedTileKeys.isEmpty else { storedBytes = 0; return }
-        Task {
-            storedBytes = await Task.detached {
+        let generation = storedBytesMeasurementGeneration
+        storedBytesMeasurementTask = Task {
+            let bytes = await Task.detached {
                 let coordinates = route.map(\.clCoordinate)
                 let keys = Array(
                     Set(OfflineTileDownloader.storedTileKeys(route: coordinates, offlineDownloads: offlineDownloads))
@@ -170,7 +177,16 @@ struct HikeDetailView: View {
                 )
                 return TileCache.shared.bytes(forKeys: keys)
             }.value
+            guard !Task.isCancelled,
+                  generation == storedBytesMeasurementGeneration else { return }
+            storedBytes = bytes
         }
+    }
+
+    private func invalidateStoredBytesMeasurement() {
+        storedBytesMeasurementTask?.cancel()
+        storedBytesMeasurementTask = nil
+        storedBytesMeasurementGeneration &+= 1
     }
 
     /// Forgets this hike's downloads and auto-saved tiles, and deletes them from
@@ -193,6 +209,7 @@ struct HikeDetailView: View {
         let deletionPlan = StoredTileDeletionPlan(removing: hike, among: hikes)
         hike.offlineDownloads.removeAll()
         hike.autoSavedTileKeys.removeAll()
+        invalidateStoredBytesMeasurement()
         storedBytes = 0
         downloader.reset()
         Task.detached {
@@ -534,7 +551,9 @@ struct HikeDetailView: View {
 
     private func updateLiveFollow(profile: RouteProfile) {
         guard hike.autoFollowEnabled,
-              let coordinate = locationManager.coordinate,
+              let coordinate = locationManager.coordinateForRouteMatching(
+                maximumHorizontalAccuracy: RouteProfile.followMatchThresholdMeters
+              ),
               let match = profile.nearestPoint(
                 to: coordinate,
                 near: hasMatchedOnce ? (tracker.liveTrackerDistance ?? tracker.trackerDistance) : nil

@@ -40,6 +40,7 @@ struct MapSheet: View {
     @State private var showImporter = false
     @State private var showSettings = false
     @State private var completer = SearchCompleter()
+    @State private var searchTask: Task<Void, Never>?
 
     /// True while the search field is active and has suggestions to offer.
     private var isSearching: Bool {
@@ -133,6 +134,10 @@ struct MapSheet: View {
         // Track the sheet's top edge continuously (including during interactive
         // drags) and hand it to the map so it can position the location button.
         .onTopEdgeChange(perform: onSheetTopChange)
+        .onDisappear {
+            searchTask?.cancel()
+            searchTask = nil
+        }
     }
 
     private var searchField: some View {
@@ -152,6 +157,8 @@ struct MapSheet: View {
 
             if !searchText.isEmpty {
                 Button {
+                    searchTask?.cancel()
+                    searchTask = nil
                     searchText = ""
                 } label: {
                     Image(systemName: "xmark.circle.fill")
@@ -342,6 +349,8 @@ struct MapSheet: View {
 
     /// Opens a tapped hike suggestion straight to its detail view.
     private func select(_ hike: Hike) {
+        searchTask?.cancel()
+        searchTask = nil
         searchText = ""
         searchFocused = false
         completer.clear()
@@ -354,11 +363,7 @@ struct MapSheet: View {
         searchText = completion.title
         searchFocused = false
         completer.clear()
-        Task {
-            guard let response = try? await MKLocalSearch(request: .init(completion: completion)).start() else { return }
-            mapController.show(response.boundingRegion)
-            withAnimation { detent = .medium }
-        }
+        startSearch(request: .init(completion: completion))
     }
 
     /// Geocodes the raw search text (when the user hits Return without picking a
@@ -367,10 +372,19 @@ struct MapSheet: View {
         let query = searchText.trimmingCharacters(in: .whitespacesAndNewlines)
         guard !query.isEmpty else { return }
         searchFocused = false
-        Task {
-            let request = MKLocalSearch.Request()
-            request.naturalLanguageQuery = query
-            guard let response = try? await MKLocalSearch(request: request).start() else { return }
+        let request = MKLocalSearch.Request()
+        request.naturalLanguageQuery = query
+        startSearch(request: request)
+    }
+
+    /// Cancels and invalidates the previous request before starting another.
+    /// The explicit cancellation check also protects against a MapKit request
+    /// that finishes after cancellation rather than throwing immediately.
+    private func startSearch(request: MKLocalSearch.Request) {
+        searchTask?.cancel()
+        searchTask = Task {
+            guard let response = try? await MKLocalSearch(request: request).start(),
+                  !Task.isCancelled else { return }
             mapController.show(response.boundingRegion)
             // Drop to a partial detent so the zoomed map is visible.
             withAnimation { detent = .medium }

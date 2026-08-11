@@ -211,22 +211,21 @@ struct ContentView: View {
         }
     }
 
-    /// Polls the user's location once a second (throttled — see
-    /// `LocationManager`) and refetches weather only when the coarse (~1 km)
-    /// location key actually changes. Mirrors `HikeDetailView.followLocation`'s
-    /// polling loop so this never reads `locationManager.coordinate` from
-    /// `body` — doing that here would re-invalidate this whole view (and,
-    /// via the sheet's content closure, everything nested inside it, down to
-    /// `HikeDetailView`) on every throttled publish, not just on the
-    /// meaningful ~1 km moves this is actually gated on.
+    /// Polls without reading location from `body`, refreshing after movement or
+    /// when the current reading expires. Failures use capped backoff so a
+    /// stationary user recovers without continuously hitting WeatherKit.
     private func pollWeather() async {
-        var lastKey: String?
+        var state = WeatherPollState()
         while !Task.isCancelled {
             if let coordinate = locationManager.coordinate {
                 let key = Self.weatherKey(for: coordinate)
-                if key != lastKey {
-                    lastKey = key
-                    await weatherManager.update(for: coordinate)
+                let requestedAt = Date()
+                if state.shouldRequest(key: key, at: requestedAt) {
+                    if await weatherManager.update(for: coordinate) {
+                        state.recordSuccess(key: key, at: .now)
+                    } else {
+                        state.recordFailure(key: key, at: .now)
+                    }
                 }
             }
             try? await Task.sleep(for: .seconds(1))

@@ -16,10 +16,36 @@ import Foundation
 import CoreLocation
 import Observation
 
+nonisolated enum LocationFixPolicy {
+    static let foregroundMaximumAge: TimeInterval = 30
+    static let backgroundMaximumAge: TimeInterval = 5 * 60
+    private static let futureTimestampTolerance: TimeInterval = 5
+
+    static func accepts(
+        _ location: CLLocation,
+        maximumAge: TimeInterval,
+        maximumHorizontalAccuracy: CLLocationAccuracy? = nil,
+        now: Date = .now
+    ) -> Bool {
+        guard CLLocationCoordinate2DIsValid(location.coordinate),
+              location.horizontalAccuracy >= 0 else { return false }
+
+        let age = now.timeIntervalSince(location.timestamp)
+        guard age >= -futureTimestampTolerance, age <= maximumAge else { return false }
+
+        if let maximumHorizontalAccuracy,
+           location.horizontalAccuracy > maximumHorizontalAccuracy {
+            return false
+        }
+        return true
+    }
+}
+
 @MainActor
 @Observable
 final class LocationManager: NSObject {
     private(set) var coordinate: CLLocationCoordinate2D?
+    @ObservationIgnored private var latestLocation: CLLocation?
 
     private let manager = CLLocationManager()
     /// CLLocationManager can deliver updates far more often than once a second;
@@ -62,6 +88,12 @@ final class LocationManager: NSObject {
     }
 
     fileprivate func publish(_ location: CLLocation) {
+        guard LocationFixPolicy.accepts(
+            location,
+            maximumAge: LocationFixPolicy.foregroundMaximumAge
+        ) else { return }
+        latestLocation = location
+
         let next = location.coordinate
         // `CLLocationCoordinate2D` isn't `Equatable`, so Observation can't tell
         // a repeat fix from a new one and treats the same place as news. A
@@ -81,6 +113,21 @@ final class LocationManager: NSObject {
         }
         lastPublished = now
         coordinate = next
+    }
+
+    /// Returns a current fix only when its uncertainty is narrow enough for
+    /// the caller's matching tolerance. Map centering and weather can still
+    /// use reduced-accuracy locations through ``coordinate``.
+    func coordinateForRouteMatching(
+        maximumHorizontalAccuracy: CLLocationAccuracy
+    ) -> CLLocationCoordinate2D? {
+        guard let latestLocation,
+              LocationFixPolicy.accepts(
+                latestLocation,
+                maximumAge: LocationFixPolicy.foregroundMaximumAge,
+                maximumHorizontalAccuracy: maximumHorizontalAccuracy
+              ) else { return nil }
+        return latestLocation.coordinate
     }
 }
 
