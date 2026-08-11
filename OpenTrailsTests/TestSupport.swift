@@ -62,6 +62,16 @@ enum Fixture {
         return points
     }()
 
+    /// A ~10 km walk in Fiji that steps across ±180°. Short on the ground, but
+    /// the widest possible span if longitude is read as a plain `min`/`max`
+    /// interval — which is the mistake both the bulk downloader and the
+    /// auto-save corridor have to avoid, so they're both tested against this
+    /// same trail.
+    static let antimeridianRoute: [CLLocationCoordinate2D] = [
+        CLLocationCoordinate2D(latitude: -17.70, longitude: 179.95),
+        CLLocationCoordinate2D(latitude: -17.71, longitude: -179.95)
+    ]
+
     /// The route as the map/downloader see it.
     static func coordinates(_ route: [RouteCoordinate]) -> [CLLocationCoordinate2D] {
         route.map(\.clCoordinate)
@@ -100,14 +110,7 @@ enum Fixture {
         ModelContext(try modelContainer())
     }
 
-    /// An image with no backing bitmap — what the auto-save path's encode
-    /// step can't turn into bytes. Stands in for the HEIC/PNG encode failures
-    /// that motivated the fallback in `encodedForDurableStorage`.
-    static func unencodableTileImage() -> TileImage {
-        TileImage()
-    }
-
-    /// A 1×1 tile image that really encodes — what the auto-save path is
+    /// A 1×1 tile image that really encodes — what the tile pipeline is
     /// handed in production, minus the 256×256.
     static func tileImage() -> TileImage? {
         let size = CGSize(width: 1, height: 1)
@@ -126,6 +129,79 @@ enum Fixture {
         #else
         return nil
         #endif
+    }
+}
+
+/// Stands in for the tile pipeline's two on-disk tiers.
+///
+/// `TileCache` keeps both the directories and the key→filename mapping
+/// private, so they're restated here; a change to either belongs in this type
+/// too. Reaching in is the point: auto-save no longer takes an image and
+/// encodes it, it moves the bytes a fetch already cached, so a test that wants
+/// a tile to be savable has to put those bytes where a fetch would have.
+enum TileStore {
+    /// A real, decodable tile as bytes — what a fetch actually writes. Tests
+    /// read tiles back through `TileCache`, so filler bytes wouldn't do.
+    static let tileData: Data = {
+        guard let image = Fixture.tileImage() else { return Data() }
+        #if canImport(UIKit)
+        return image.pngData() ?? Data()
+        #elseif canImport(AppKit)
+        guard let cgImage = image.cgImage(forProposedRect: nil, context: nil, hints: nil) else { return Data() }
+        return NSBitmapImageRep(cgImage: cgImage).representation(using: .png, properties: [:]) ?? Data()
+        #else
+        return Data()
+        #endif
+    }()
+
+    static var tileByteCount: Int64 { Int64(tileData.count) }
+
+    private static func file(for key: String, in directory: URL) -> URL {
+        let name = key.replacingOccurrences(of: "/", with: "_").replacingOccurrences(of: "@", with: "_")
+        return directory.appendingPathComponent(name)
+    }
+
+    /// `Caches/OSMTiles` — where a tile fetched to draw the map lands, whether
+    /// or not any hike will ever claim it.
+    static func browsedFile(for key: String) -> URL {
+        let caches = FileManager.default.urls(for: .cachesDirectory, in: .userDomainMask)[0]
+        return file(for: key, in: caches.appendingPathComponent("OSMTiles", isDirectory: true))
+    }
+
+    /// `Application Support/OSMTilesSaved` — where a tile kept for offline use
+    /// lands, out of reach of the OS reclaiming storage.
+    static func savedFile(for key: String) -> URL {
+        let support = FileManager.default.urls(for: .applicationSupportDirectory, in: .userDomainMask)[0]
+        return file(for: key, in: support.appendingPathComponent("OSMTilesSaved", isDirectory: true))
+    }
+
+    /// Puts a tile in the browsing cache, as drawing it would have.
+    static func browse(key: String) throws {
+        let file = browsedFile(for: key)
+        try FileManager.default.createDirectory(
+            at: file.deletingLastPathComponent(), withIntermediateDirectories: true
+        )
+        try tileData.write(to: file, options: .atomic)
+    }
+
+    static func isBrowsed(_ key: String) -> Bool {
+        FileManager.default.fileExists(atPath: browsedFile(for: key).path)
+    }
+
+    /// Ages a tile on disk, so eviction order — which is by modification date,
+    /// i.e. when the tile was last fetched — can be driven without waiting.
+    static func age(key: String, byDays days: Double) throws {
+        for file in [browsedFile(for: key), savedFile(for: key)]
+        where FileManager.default.fileExists(atPath: file.path) {
+            try FileManager.default.setAttributes(
+                [.modificationDate: Date(timeIntervalSinceNow: -days * 86_400)],
+                ofItemAtPath: file.path
+            )
+        }
+    }
+
+    static func isSaved(_ key: String) -> Bool {
+        FileManager.default.fileExists(atPath: savedFile(for: key).path)
     }
 }
 

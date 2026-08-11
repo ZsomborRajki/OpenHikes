@@ -124,20 +124,17 @@ nonisolated final class TileCache: @unchecked Sendable {
         memory.object(forKey: key as NSString)
     }
 
-    /// Loads a tile, checking memory, then disk (ephemeral, then durable), then
-    /// the network, and populating the faster tiers as it goes.
+    /// Loads a tile for display, checking memory, then disk (ephemeral, then
+    /// durable), then the network, and populating the faster tiers as it goes.
+    ///
+    /// The browsing path: a tile fetched to draw the map is cached where the OS
+    /// may reclaim it, which is the right trade for something nobody asked to
+    /// keep. Tiles that *are* meant to survive go through
+    /// ``saveTileDurably(forKey:url:)`` or ``promoteCachedTile(forKey:)``.
     @discardableResult
     func loadTile(forKey key: String, url: URL) async -> TileImage? {
         if let cached = memory.object(forKey: key as NSString) { return cached }
-
-        let name = diskName(for: key)
-
-        if let data = try? Data(contentsOf: directory.appendingPathComponent(name)), let image = TileImage(data: data) {
-            memory.setObject(image, forKey: key as NSString)
-            return image
-        }
-
-        if let data = try? Data(contentsOf: durableDirectory.appendingPathComponent(name)), let image = TileImage(data: data) {
+        if let image = diskImage(forKey: key) {
             memory.setObject(image, forKey: key as NSString)
             return image
         }
@@ -151,6 +148,49 @@ nonisolated final class TileCache: @unchecked Sendable {
             return nil
         }
 
+        guard let fetched = await fetchTile(forKey: key, url: url) else { return nil }
+        try? fetched.data.write(to: directory.appendingPathComponent(diskName(for: key)), options: .atomic)
+        memory.setObject(fetched.image, forKey: key as NSString)
+        return fetched.image
+    }
+
+    /// Fetches a tile straight into durable storage — the bulk-download path.
+    ///
+    /// The counterpart to ``loadTile(forKey:url:)``: same network fetch, but the
+    /// bytes land where the OS can't reclaim them. A download is coverage the
+    /// user explicitly asked for, and `Caches` is the first thing purged under
+    /// storage pressure — a tile evicted from under a saved hike is offline
+    /// coverage that silently isn't there when they're out of signal.
+    ///
+    /// Returns whether the tile is durably saved once this returns.
+    @discardableResult
+    func saveTileDurably(forKey key: String, url: URL) async -> Bool {
+        // Already saved by an earlier download or by auto-save, or already
+        // browsed and so sitting on disk in the wrong tier: either way, no
+        // reason to ask the tile server for a second copy.
+        if promoteCachedTile(forKey: key) { return true }
+
+        guard isOnline, let fetched = await fetchTile(forKey: key, url: url) else { return false }
+        memory.setObject(fetched.image, forKey: key as NSString)
+        return writeDurable(fetched.data, forKey: key)
+    }
+
+    /// The tile as it sits on disk, ephemeral tier first — it's the one a
+    /// browsing fetch refreshes, and the two hold the same image.
+    private func diskImage(forKey key: String) -> TileImage? {
+        let name = diskName(for: key)
+        for directory in [directory, durableDirectory] {
+            if let data = try? Data(contentsOf: directory.appendingPathComponent(name)),
+               let image = TileImage(data: data) {
+                return image
+            }
+        }
+        return nil
+    }
+
+    /// One tile off the network, validated and decoded, with nothing written
+    /// anywhere — the caller decides which tier it belongs in.
+    private func fetchTile(forKey key: String, url: URL) async -> (data: Data, image: TileImage)? {
         #if DEBUG
         Self.logger.debug("Requesting tile \(key, privacy: .public) from \(url.absoluteString, privacy: .public)")
         #endif
@@ -176,12 +216,10 @@ nonisolated final class TileCache: @unchecked Sendable {
                 return nil
             }
 
-            try? data.write(to: directory.appendingPathComponent(name), options: .atomic)
-            memory.setObject(image, forKey: key as NSString)
             #if DEBUG
             Self.logger.debug("Fetched tile \(key, privacy: .public) (\(data.count, privacy: .public) bytes)")
             #endif
-            return image
+            return (data, image)
         } catch {
             #if DEBUG
             Self.logger.error("Tile \(key, privacy: .public) request failed: \(error.localizedDescription, privacy: .public)")
@@ -190,11 +228,55 @@ nonisolated final class TileCache: @unchecked Sendable {
         }
     }
 
-    /// Writes pre-encoded tile bytes to the durable store, bypassing the network
-    /// path entirely. Used by ``AutoSaveTileStore`` to persist tiles the user has
-    /// already viewed (and so already fetched through ``loadTile(forKey:url:)``).
-    func writeDurable(_ data: Data, forKey key: String) {
-        try? data.write(to: durableDirectory.appendingPathComponent(diskName(for: key)), options: .atomic)
+    /// Moves the browsing cache's copy of a tile into durable storage, keeping
+    /// the bytes exactly as the tile server sent them. Used by
+    /// ``AutoSaveTileStore`` for tiles the user has already viewed, and so
+    /// already fetched through ``loadTile(forKey:url:)``, which is what put that
+    /// cached copy there.
+    ///
+    /// A move, not a re-encode. Providers serve PNG, which is what flat-filled,
+    /// sharp-edged cartography compresses best in, so those bytes are already
+    /// both the smallest and the only lossless representation on offer: a
+    /// lossless PNG round-trip through ImageIO measured +10% on real tiles, and
+    /// HEIC at full quality +178%. Lossy HEIC did save 7% on average, but
+    /// inflated flat tiles (desert, coastline, low-zoom overviews) by up to 4×,
+    /// which is exactly backwards. Moving the file instead also keeps a decode
+    /// and an encode off the drawing path entirely.
+    ///
+    /// Returns whether the tile is durably stored once this returns — including
+    /// when it already was, which is what lets a second hike over the same
+    /// ground claim tiles the first one saved.
+    @discardableResult
+    func promoteCachedTile(forKey key: String) -> Bool {
+        let name = diskName(for: key)
+        let durable = durableDirectory.appendingPathComponent(name)
+        if FileManager.default.fileExists(atPath: durable.path) { return true }
+        do {
+            try FileManager.default.moveItem(at: directory.appendingPathComponent(name), to: durable)
+            return true
+        } catch {
+            // Nothing cached to promote — the tile was served from memory after
+            // its disk copy went (an OS purge of `Caches`, say). Callers drop
+            // their claim, so this is retried next time the tile is drawn.
+            #if DEBUG
+            Self.logger.debug("No cached tile to save for \(key, privacy: .public)")
+            #endif
+            return false
+        }
+    }
+
+    /// Writes freshly-fetched bytes straight to durable storage, for the
+    /// download path — where there's no cached copy to move.
+    private func writeDurable(_ data: Data, forKey key: String) -> Bool {
+        do {
+            try data.write(to: durableDirectory.appendingPathComponent(diskName(for: key)), options: .atomic)
+            return true
+        } catch {
+            #if DEBUG
+            Self.logger.error("Failed to save tile \(key, privacy: .public): \(error.localizedDescription, privacy: .public)")
+            #endif
+            return false
+        }
     }
 
     private func diskName(for key: String) -> String {
@@ -203,11 +285,39 @@ nonisolated final class TileCache: @unchecked Sendable {
 
     // MARK: - Storage management
 
-    /// Total bytes used by all cached tiles on disk (ephemeral + durable). Does
-    /// file I/O — call off the main thread.
-    func totalDiskBytes() -> Int64 {
-        assertOffMainThread("totalDiskBytes() enumerates and stats every cached tile file — call it off the main thread")
-        return (allTileFiles(in: directory) + allTileFiles(in: durableDirectory)).reduce(0) { $0 + fileSize($1) }
+    /// How the tiles on disk divide between offline coverage and browsing.
+    struct DiskUsage: Equatable, Sendable {
+        /// Bytes held by tiles some hike's manifest claims — what the hike
+        /// sheets add up to, and what has to survive a cache clear.
+        var claimed: Int64 = 0
+        /// Bytes held by everything else: tiles fetched to draw the map that no
+        /// hike ever claimed (panned past the corridor, browsed before anything
+        /// was selected, over a hike's cap), which nothing reclaims on its own.
+        var unclaimed: Int64 = 0
+
+        var total: Int64 { claimed + unclaimed }
+    }
+
+    /// Splits every tile on disk into the ones `keys` claims and the rest.
+    ///
+    /// Deliberately *not* split by storage tier: which directory a tile landed
+    /// in says how it was fetched, not whether anything still wants it. A bulk
+    /// download populates the ephemeral cache and is very much offline
+    /// coverage; a tile browsed past the corridor lands there too and is
+    /// nothing but residue. The manifests are the only thing that knows the
+    /// difference, so they're what this buckets by.
+    func diskUsage(claimedBy keys: Set<String>) -> DiskUsage {
+        assertOffMainThread("diskUsage(claimedBy:) enumerates and stats every cached tile file — call it off the main thread")
+        let claimedNames = Set(keys.map(diskName(for:)))
+        var usage = DiskUsage()
+        for file in allTileFiles(in: directory) + allTileFiles(in: durableDirectory) {
+            if claimedNames.contains(file.lastPathComponent) {
+                usage.claimed += fileSize(file)
+            } else {
+                usage.unclaimed += fileSize(file)
+            }
+        }
+        return usage
     }
 
     /// Bytes used by the tiles for `keys` that are actually present on disk
@@ -231,6 +341,81 @@ nonisolated final class TileCache: @unchecked Sendable {
         }
     }
 
+    /// Removes every tile `keys` doesn't claim, leaving offline coverage intact.
+    ///
+    /// The memory cache is dropped wholesale rather than picked through: its
+    /// entries are keyed by tile, not by file, and everything worth keeping is
+    /// still on disk to be read back.
+    func removeTiles(unclaimedBy keys: Set<String>) {
+        assertOffMainThread("removeTiles(unclaimedBy:) enumerates and deletes tile files synchronously — call it off the main thread")
+        let claimedNames = Set(keys.map(diskName(for:)))
+        memory.removeAllObjects()
+        for file in allTileFiles(in: directory) + allTileFiles(in: durableDirectory)
+        where !claimedNames.contains(file.lastPathComponent) {
+            try? FileManager.default.removeItem(at: file)
+        }
+    }
+
+    /// Ceiling on tiles no hike claims. At roughly 30 KB a tile that's ~17,000
+    /// of them — plenty to pan around on without refetching, and small enough
+    /// that browsing can never be the reason a phone runs out of room.
+    ///
+    /// Deliberately a cap on the *cache* and not on offline coverage. A hike's
+    /// saved map is data the user asked for, to have on a trail with no signal;
+    /// deleting it to stay under a number is the one failure this app can't
+    /// afford. Residue is the half that grows without anyone asking, so it's
+    /// the half that's bounded.
+    static let cacheByteLimit: Int64 = 500 * 1024 * 1024
+
+    /// How far under the limit a trim goes. Trimming to exactly the limit would
+    /// mean doing it again on the next launch after a few tiles, for a few
+    /// tiles; leaving headroom makes it an occasional job instead.
+    private static let trimTargetFraction = 0.8
+
+    /// Brings unclaimed tiles back under `limit`, oldest first, and leaves
+    /// everything `keys` claims alone. No-op below the limit.
+    ///
+    /// Oldest by modification date, which for a tile is when it was fetched or
+    /// last re-fetched — so what goes is the ground the user has been away from
+    /// longest. Returns the bytes freed.
+    ///
+    /// `limit` is a parameter only so tests can drive it with a handful of
+    /// tiles instead of half a gigabyte; callers pass the default.
+    @discardableResult
+    func trimCache(claimedBy keys: Set<String>, limit: Int64 = TileCache.cacheByteLimit) -> Int64 {
+        assertOffMainThread("trimCache(claimedBy:) stats and deletes tile files synchronously — call it off the main thread")
+        let claimedNames = Set(keys.map(diskName(for:)))
+
+        var unclaimed: [(url: URL, size: Int64, modified: Date)] = []
+        var total: Int64 = 0
+        for file in allTileFiles(in: directory) + allTileFiles(in: durableDirectory)
+        where !claimedNames.contains(file.lastPathComponent) {
+            let values = try? file.resourceValues(forKeys: [.fileSizeKey, .contentModificationDateKey])
+            let size = Int64(values?.fileSize ?? 0)
+            unclaimed.append((file, size, values?.contentModificationDate ?? .distantPast))
+            total += size
+        }
+
+        guard total > limit else { return 0 }
+
+        // The memory cache is keyed by tile, not by file, so there's no way to
+        // evict just the entries being deleted — and no need to, since anything
+        // still wanted is a disk read away.
+        memory.removeAllObjects()
+
+        let target = Int64(Double(limit) * Self.trimTargetFraction)
+        var freed: Int64 = 0
+        for tile in unclaimed.sorted(by: { $0.modified < $1.modified }) {
+            guard total - freed > target else { break }
+            guard (try? FileManager.default.removeItem(at: tile.url)) != nil else { continue }
+            freed += tile.size
+        }
+        #if DEBUG
+        Self.logger.debug("Trimmed \(freed, privacy: .public) bytes of unclaimed tiles (was \(total, privacy: .public))")
+        #endif
+        return freed
+    }
+
     /// Removes the tiles for `keys` (memory + ephemeral disk + durable disk).
     /// Missing files are ignored.
     func removeTiles(forKeys keys: [String]) {
@@ -245,7 +430,7 @@ nonisolated final class TileCache: @unchecked Sendable {
 
     private func allTileFiles(in directory: URL) -> [URL] {
         (try? FileManager.default.contentsOfDirectory(
-            at: directory, includingPropertiesForKeys: [.fileSizeKey]
+            at: directory, includingPropertiesForKeys: [.fileSizeKey, .contentModificationDateKey]
         )) ?? []
     }
 

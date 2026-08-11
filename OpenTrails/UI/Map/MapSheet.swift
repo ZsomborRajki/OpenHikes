@@ -27,8 +27,9 @@ struct MapSheet: View {
     var locationManager: LocationManager
     var backgroundTracker: BackgroundTrailTracker
 
-    var onRecord: () -> Void = {}
     var onImportGPX: (URL) -> Void = { _ in }
+    /// The document picker failed to produce a file at all.
+    var onImportFailed: () -> Void = {}
     /// Reports the sheet's top edge (global Y) as it's dragged, so the map can
     /// keep the "my location" button riding just above the sheet.
     var onSheetTopChange: (CGFloat) -> Void = { _ in }
@@ -104,11 +105,18 @@ struct MapSheet: View {
         // Presented from inside the sheet so it isn't blocked by the sheet's
         // own presentation context.
         .fileImporter(isPresented: $showImporter, allowedContentTypes: Self.gpxContentTypes) { result in
-            if case let .success(url) = result { onImportGPX(url) }
+            switch result {
+            case let .success(url): onImportGPX(url)
+            // Rare — the picker couldn't hand over the file at all — but
+            // dropping it here would be the same silent no-op the import path
+            // itself was just fixed for. From the user's side it's the same
+            // story as an unreadable file, so it's told the same way.
+            case .failure: onImportFailed()
+            }
         }
         // Also presented from inside the sheet so it layers above it.
         .sheet(isPresented: $showSettings) {
-            SettingsView(backgroundTracker: backgroundTracker)
+            SettingsView(autoSave: autoSave, backgroundTracker: backgroundTracker)
         }
         // Focusing the search field expands the sheet to full height.
         .onChange(of: searchFocused) { _, focused in
@@ -194,17 +202,14 @@ struct MapSheet: View {
         }
     }
 
-    /// Always-visible icon buttons for starting a recording or importing a GPX.
+    /// Always-visible icon button for importing a GPX.
+    ///
+    /// A record button sat beside this one, fully styled and tappable, wired to
+    /// an empty function — the one thing worse than an app that can't record a
+    /// hike is one that appears to and then doesn't. It comes back when there's
+    /// a recording session behind it.
     private var hikeActions: some View {
         HStack(spacing: 8) {
-            Button(action: onRecord) {
-                Image(systemName: "record.circle")
-                    .foregroundStyle(.red)
-                    .frame(width: 40, height: 40)
-                    .glassEffect(.regular, in: Circle())
-            }
-            .accessibilityLabel("Record new hike")
-
             Button {
                 showImporter = true
             } label: {
@@ -248,16 +253,17 @@ struct MapSheet: View {
 
     private func delete(_ hike: Hike) {
         // Before anything else: tiles auto-saved in the last couple of seconds
-        // live only in AutoSaveTileStore's pending set, and clearing the
-        // selection below tears that set down. Folding them into the manifest
-        // first is what stops them outliving the hike with nothing pointing at
-        // them — and doing it here, rather than after, keeps that from
-        // depending on when SwiftUI gets around to firing the selection change.
-        autoSave.flushPendingKeys()
+        // live only in AutoSaveTileStore's pending set. Folding them into the
+        // manifest first is what stops them outliving the hike with nothing
+        // pointing at them — and stopping auto-save here, rather than waiting
+        // for the selection change below to make its way back through SwiftUI,
+        // closes the window where a tile still in flight lands on disk claimed
+        // by a hike that no longer exists.
+        autoSave.hikeWillBeDeleted(hike)
 
         if hike.id == selectedHike?.id {
             selectedHike = nil
-            highlight.coordinate = nil
+            highlight.move(to: nil)
         }
 
         // Free the tiles this hike had saved offline — but only the ones no
@@ -389,7 +395,7 @@ struct MapSheet: View {
                 .foregroundStyle(.secondary)
             Text("No hikes yet")
                 .font(.headline)
-            Text("Tap \(recordIcon) to record or \(importIcon) to import a GPX file.")
+            Text("Tap \(importIcon) to import a GPX file.")
                 .font(.subheadline)
                 .foregroundStyle(.secondary)
         }
@@ -398,12 +404,8 @@ struct MapSheet: View {
         .padding(.top, 8)
     }
 
-    // Interpolated into `emptyState`'s Text as `Text` values (not plain
-    // strings), so each keeps its own icon color inside the sentence.
-    private var recordIcon: Text {
-        Text(Image(systemName: "record.circle")).foregroundStyle(.red)
-    }
-
+    // Interpolated into `emptyState`'s Text as a `Text` value (not a plain
+    // string), so the icon keeps its own color inside the sentence.
     private var importIcon: Text {
         Text(Image(systemName: "square.and.arrow.down")).foregroundStyle(.tint)
     }

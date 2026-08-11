@@ -52,12 +52,25 @@ final class LocationManager: NSObject {
     }
 
     fileprivate func publish(_ location: CLLocation) {
+        let next = location.coordinate
+        // `CLLocationCoordinate2D` isn't `Equatable`, so Observation can't tell
+        // a repeat fix from a new one and treats the same place as news. A
+        // walker standing still at a viewpoint would otherwise wake every
+        // observer once a second for as long as the app is open. Nothing
+        // downstream wants that heartbeat: auto-follow and the weather poll
+        // read `coordinate` on their own timers, and the map only uses it to
+        // centre on the very first fix.
+        if let coordinate, coordinate.latitude == next.latitude, coordinate.longitude == next.longitude {
+            return
+        }
+        // Only an actual publish restarts the throttle window, so the first
+        // step after standing still reaches the map straight away.
         let now = Date()
         if let lastPublished, now.timeIntervalSince(lastPublished) < Self.minimumPublishInterval {
             return
         }
         lastPublished = now
-        coordinate = location.coordinate
+        coordinate = next
     }
 }
 

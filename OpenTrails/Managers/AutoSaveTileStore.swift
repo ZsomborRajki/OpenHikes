@@ -12,15 +12,7 @@
 
 import Foundation
 import CoreLocation
-import ImageIO
-import UniformTypeIdentifiers
 import os
-
-#if canImport(UIKit)
-import UIKit
-#elseif canImport(AppKit)
-import AppKit
-#endif
 
 /// Thread-safe singleton bridging the (background) tile-load path to the one
 /// hike the user currently has auto-save turned on for. Safe to call from any
@@ -36,7 +28,6 @@ nonisolated final class AutoSaveTileStore: @unchecked Sendable {
     static let tileCap = 3_000
     /// How far past the route's bounding box a tile is still fair game to save.
     static let corridorBufferMeters: CLLocationDistance = 1_500
-    static let heicQuality: CGFloat = 0.8
 
     private struct ActiveHike {
         let id: UUID
@@ -74,27 +65,49 @@ nonisolated final class AutoSaveTileStore: @unchecked Sendable {
     /// Called after a tile has already been resolved for on-screen display
     /// (memory/disk/network hit alike). No-ops unless a hike is active, the
     /// tile falls in its corridor, it's under the cap, and it isn't already
-    /// saved — otherwise HEIC-encodes and durably writes it.
-    func considerPersisting(key: String, z: Int, x: Int, y: Int, image: TileImage) {
-        assertOffMainThread("considerPersisting does HEIC encoding and a durable disk write — call it off the main thread")
-        let shouldPersist = state.withLock { state -> Bool in
-            guard var hike = state else { return false }
-            defer { state = hike }
+    /// saved — otherwise moves the cached tile into durable storage, bytes
+    /// unchanged.
+    func considerPersisting(key: String, z: Int, x: Int, y: Int) {
+        assertOffMainThread("considerPersisting moves a file on disk — call it off the main thread")
+        // Claim the tile up front so two threads drawing it at once don't both
+        // try to move it; `releaseClaim` undoes that if the bytes never land.
+        let claimant = state.withLock { state -> UUID? in
+            guard var hike = state else { return nil }
             guard
                 hike.knownKeys.count < Self.tileCap,
                 !hike.knownKeys.contains(key),
-                hike.corridor.overlaps(z: z, x: x, y: y)    
-            else { return false }
+                hike.corridor.overlaps(z: z, x: x, y: y)
+            else { return nil }
             hike.knownKeys.insert(key)
             hike.pendingKeys.insert(key)
-            return true
+            state = hike
+            return hike.id
         }
-        guard shouldPersist else { return }
-        guard let data = image.encodedForDurableStorage(quality: Self.heicQuality) else { return }
-        TileCache.shared.writeDurable(data, forKey: key)
+        guard let claimant else { return }
+
+        // A claim no bytes back is worse than no claim: it counts against the
+        // cap, is reported as saved, and — being "known" — is never
+        // reconsidered, so the tile stays missing offline with nothing retrying
+        // it. The move fails when there's no cached copy left to move.
+        guard TileCache.shared.promoteCachedTile(forKey: key) else {
+            releaseClaim(on: key, by: claimant)
+            return
+        }
         #if DEBUG
-        Self.logger.debug("Auto-saved tile \(key, privacy: .public) (\(data.count, privacy: .public) bytes)")
+        Self.logger.debug("Auto-saved tile \(key, privacy: .public)")
         #endif
+    }
+
+    /// Gives back a claim taken by `considerPersisting` whose tile never made it
+    /// to disk. Scoped to the hike that took it, so a selection change mid-write
+    /// doesn't punch a hole in the new hike's manifest.
+    private func releaseClaim(on key: String, by hikeID: UUID) {
+        state.withLock { state in
+            guard var hike = state, hike.id == hikeID else { return }
+            hike.knownKeys.remove(key)
+            hike.pendingKeys.remove(key)
+            state = hike
+        }
     }
 
     /// Main-actor bookkeeping hook: returns and clears the keys persisted for
@@ -108,36 +121,5 @@ nonisolated final class AutoSaveTileStore: @unchecked Sendable {
             state = hike
             return drained
         }
-    }
-}
-
-/// `nonisolated`: called from ``AutoSaveTileStore``, which runs off the main actor.
-private nonisolated extension TileImage {
-    /// HEIC-encodes the tile for durable storage; falls back to PNG if HEIC
-    /// encoding is unavailable (seen intermittently in the Simulator), so a
-    /// tile is never silently dropped.
-    func encodedForDurableStorage(quality: CGFloat) -> Data? {
-        guard let cgImage = cgImageForEncoding else { return nil }
-        if let heic = Self.encode(cgImage, type: .heic, quality: quality) { return heic }
-        return Self.encode(cgImage, type: .png, quality: 1)
-    }
-
-    private static func encode(_ cgImage: CGImage, type: UTType, quality: CGFloat) -> Data? {
-        let data = NSMutableData()
-        guard let destination = CGImageDestinationCreateWithData(data, type.identifier as CFString, 1, nil) else {
-            return nil
-        }
-        let options = [kCGImageDestinationLossyCompressionQuality: quality] as CFDictionary
-        CGImageDestinationAddImage(destination, cgImage, options)
-        guard CGImageDestinationFinalize(destination) else { return nil }
-        return data as Data
-    }
-
-    private var cgImageForEncoding: CGImage? {
-        #if canImport(UIKit)
-        return cgImage
-        #elseif canImport(AppKit)
-        return cgImage(forProposedRect: nil, context: nil, hints: nil)
-        #endif
     }
 }

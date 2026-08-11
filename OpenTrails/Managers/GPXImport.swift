@@ -43,11 +43,59 @@ nonisolated enum GPXImport {
         }
     }
 
-    /// Parses the file at `url`. Returns nil if it can't be read or has no points.
-    static func load(from url: URL) -> Track? {
-        guard let parser = GPXParser(withURL: url),
-              let root = parser.parsedData() else { return nil }
-        return track(from: root)
+    /// Why a file couldn't be turned into a hike.
+    ///
+    /// Worth distinguishing rather than collapsing to "import failed": the
+    /// three mean genuinely different things to whoever picked the file, and
+    /// send them somewhere different to fix it. The import used to say nothing
+    /// at all — a picked file that produced no hike looked exactly like a
+    /// picked file that was ignored.
+    enum ImportFailure: LocalizedError, Equatable {
+        /// Not there, or not well-formed XML — the parser had nothing to work
+        /// with. Note that well-formed XML that simply *isn't* GPX (an HTML
+        /// page, say) parses happily into an empty document, so it arrives as
+        /// ``noUsablePoints`` instead; the copy for that case allows for it.
+        case unreadable
+        /// Parsed, but nothing in it carried a coordinate this app can project
+        /// — no points at all, points missing `lat`/`lon`, or points outside
+        /// Web Mercator's range.
+        case noUsablePoints
+        /// One usable point. Enough to put a pin on a map; not a route — no
+        /// length, no elevation profile, nothing to draw. Policy rather than a
+        /// parse failure, so ``load(from:)`` still returns such a track and the
+        /// import is what refuses it.
+        case tooShort
+
+        var errorDescription: String? {
+            switch self {
+            case .unreadable: "This file couldn’t be read."
+            case .noUsablePoints: "No track points were found in this file."
+            case .tooShort: "This GPX file has only one track point."
+            }
+        }
+
+        var recoverySuggestion: String? {
+            switch self {
+            case .unreadable: "Check that it’s a .gpx file and isn’t damaged."
+            // Deliberately covers "it isn't GPX at all" as well — see the case's
+            // own note for why that lands here.
+            case .noUsablePoints: "It may not be a GPX file, or its points are missing coordinates or out of range."
+            case .tooShort: "A hike needs at least two points to have a route."
+            }
+        }
+    }
+
+    /// Parses the file at `url`.
+    ///
+    /// A one-point file parses *successfully* — refusing it is the import's
+    /// call, not the parser's, and the distinction is what lets the caller say
+    /// which of the two happened. See ``ImportFailure``.
+    static func load(from url: URL) throws(ImportFailure) -> Track {
+        guard let parser = GPXParser(withURL: url), let root = parser.parsedData() else {
+            throw .unreadable
+        }
+        guard let track = track(from: root) else { throw .noUsablePoints }
+        return track
     }
 
     private static func track(from root: GPXRoot) -> Track? {

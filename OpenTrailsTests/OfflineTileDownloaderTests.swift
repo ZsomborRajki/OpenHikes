@@ -155,10 +155,7 @@ struct OfflineTileEnumerationTests {
     /// this reason); the bounding box doesn't.
     @Test("a route across the antimeridian saves its surroundings, not a band around the world")
     func antimeridianRoute() {
-        let acrossTheLine = [
-            CLLocationCoordinate2D(latitude: -17.70, longitude: 179.95),
-            CLLocationCoordinate2D(latitude: -17.71, longitude: -179.95)
-        ]
+        let acrossTheLine = Fixture.antimeridianRoute
         let keys = OfflineTileDownloader.tileKeys(
             for: acrossTheLine,
             providerID: "osm",
@@ -169,6 +166,44 @@ struct OfflineTileEnumerationTests {
         let levels = zoomLevels(in: keys)
         #expect(keys.count < 500, "a ~10 km trail shouldn't enumerate a world-wide strip")
         #expect(levels.contains(16), "the trail is unusable offline without its close-in zooms")
+    }
+
+    /// Picking the short way round the globe is only half of it — the arc has
+    /// to be the one the trail is actually on. Covering 359.9° of empty ocean
+    /// and 0.1° of nothing would satisfy a tile count just as well.
+    @Test("an antimeridian route is covered on both sides of the line")
+    func antimeridianCoversBothSides() {
+        let acrossTheLine = Fixture.antimeridianRoute
+        let keys = Set(OfflineTileDownloader.tileKeys(
+            for: acrossTheLine, providerID: "osm", providerMaxZoom: 19, maxZoom: 16, scale: 2
+        ))
+        for z in zoomLevels(in: Array(keys)) {
+            for coordinate in acrossTheLine {
+                let x = SlippyTileMath.tileX(coordinate.longitude, z: z)
+                let y = SlippyTileMath.tileY(coordinate.latitude, z: z)
+                #expect(keys.contains("osm/\(z)/\(x)/\(y)@2.0"), "zoom \(z) misses \(coordinate.longitude)")
+            }
+        }
+    }
+
+    /// Making the budget bind on the shallowest level too can't mean returning
+    /// nothing: `start()` reports an empty enumeration as "Nothing to save.",
+    /// which for a continental route is both wrong and unactionable. A coarser
+    /// overview is the honest answer.
+    @Test("a route too big for the overview zoom falls back to a shallower one")
+    func hugeRouteFallsBackToAShallowerOverview() {
+        let sprawling = [
+            CLLocationCoordinate2D(latitude: 40.0, longitude: 0.0),
+            CLLocationCoordinate2D(latitude: 55.0, longitude: 40.0)
+        ]
+        let keys = OfflineTileDownloader.tileKeys(
+            for: sprawling, providerID: "osm", providerMaxZoom: 19, maxZoom: 19, scale: 2
+        )
+        #expect(!keys.isEmpty, "a route this size still has an overview worth saving")
+
+        let levels = zoomLevels(in: keys).sorted()
+        #expect(levels.last! < OfflineTileDownloader.minZoom, "the usual overview zoom didn't fit")
+        #expect(levels == Array(levels.first!...levels.last!), "and the levels it did take are contiguous")
     }
 }
 

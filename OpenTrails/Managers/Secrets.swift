@@ -17,6 +17,13 @@ enum Secrets {
         return value(for: plistKey)
     }
 
+    /// Whether `provider` has everything it needs to load tiles on this build.
+    /// False only for a key-gated provider whose key didn't resolve — a build
+    /// with no `Secrets.plist`, or one still holding the template's placeholder.
+    static func canLoadTiles(_ provider: TileProvider) -> Bool {
+        provider.isUsable(withKey: apiKey(for: provider))
+    }
+
     /// Placeholder values from the committed template resolve to `nil`, never to a broken key.
     private static let placeholderPrefix = "YOUR_"
 

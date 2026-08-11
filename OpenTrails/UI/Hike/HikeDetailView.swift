@@ -104,7 +104,7 @@ struct HikeDetailView: View {
             tracker.trackerDistance = 0
             tracker.liveTrackerDistance = nil
             hasMatchedOnce = false
-            highlight.coordinate = built.coordinate(atDistance: 0)
+            highlight.move(to: built.coordinate(atDistance: 0))
             refreshStoredBytes()
             autoSave.hikeSelectionChanged(to: hike)
             await followLocation(profile: built)
@@ -115,14 +115,14 @@ struct HikeDetailView: View {
         // to a second until the next poll clears it.
         .onChange(of: hike.autoFollowEnabled) { _, enabled in
             if enabled {
-                if !isScrubbing { highlight.coordinate = nil }
+                if !isScrubbing { highlight.move(to: nil) }
             } else {
                 tracker.liveTrackerDistance = nil
                 // Hand the pin back to the persistent tracker so it reappears
                 // at the last-followed/scrubbed position instead of staying
                 // hidden from auto-follow's ownership of the map.
                 if !isScrubbing {
-                    highlight.coordinate = profile?.coordinate(atDistance: tracker.trackerDistance)
+                    highlight.move(to: profile?.coordinate(atDistance: tracker.trackerDistance))
                 }
             }
         }
@@ -174,12 +174,16 @@ struct HikeDetailView: View {
     /// real CPU work, so it's done inside the detached task, mirroring
     /// ``refreshStoredBytes()``.
     private func deleteStoredTiles() {
+        // First, and before the manifest is read: switching auto-save off folds
+        // in the tiles saved since the last drain. Reading the manifest ahead of
+        // that would delete a snapshot taken up to two seconds ago and strand
+        // everything saved since — durably, where nothing would reclaim it.
+        autoSave.setEnabled(false, for: hike)
         let route = hike.route
         let offlineDownloads = hike.offlineDownloads
         let autoSavedTileKeys = hike.autoSavedTileKeys
         hike.offlineDownloads.removeAll()
         hike.autoSavedTileKeys.removeAll()
-        autoSave.setEnabled(false, for: hike)
         storedBytes = 0
         downloader.reset()
         Task.detached {
@@ -400,17 +404,11 @@ struct HikeDetailView: View {
             .background(.quaternary, in: RoundedRectangle(cornerRadius: 12))
     }
 
-    private var activeProvider: TileProvider { .provider(id: tileProviderID) }
+    /// `renderable`, not `provider`: this drives whether a bulk download is
+    /// offered at all, so it has to name the source the map is really drawing.
+    private var activeProvider: TileProvider { .renderable(id: tileProviderID) }
 
-    private var activeTileSource: ActiveTileSource {
-        let provider = activeProvider
-        let key = Secrets.apiKey(for: provider) ?? ""
-        return ActiveTileSource(
-            providerID: provider.id,
-            urlTemplate: provider.resolvedTemplate(apiKey: key),
-            maximumZ: provider.maximumZ
-        )
-    }
+    private var activeTileSource: ActiveTileSource { ActiveTileSource(activeProvider) }
 
     // MARK: Header
 
@@ -497,7 +495,7 @@ struct HikeDetailView: View {
                 tracker: tracker,
                 onScrub: { distance in
                     tracker.trackerDistance = distance
-                    highlight.coordinate = profile.coordinate(atDistance: distance)
+                    highlight.move(to: profile.coordinate(atDistance: distance))
                 },
                 onScrubbingChanged: { scrubbing in
                     isScrubbing = scrubbing
@@ -505,7 +503,7 @@ struct HikeDetailView: View {
                     // it back so the pin doesn't sit at a stale scrub position
                     // fighting the live location puck.
                     if !scrubbing && hike.autoFollowEnabled {
-                        highlight.coordinate = nil
+                        highlight.move(to: nil)
                     }
                 }
             )
@@ -576,10 +574,9 @@ struct HikeDetailView: View {
         // where the user is, so the custom pin stays hidden here rather than
         // sitting on top of (and fading against) it. It only reappears while
         // the user is scrubbing the elevation graph, to compare other
-        // sections of the trail.
-        if highlight.coordinate != nil {
-            highlight.coordinate = nil
-        }
+        // sections of the trail. Clearing an already-clear highlight is free —
+        // `move(to:)` does the comparison this poll used to do by hand.
+        highlight.move(to: nil)
         RenderSignpost.mark("LiveFollowUpdate", moved ? "moved" : "unchanged")
         backgroundTracker.publishLiveFix(hike: hike, profile: profile, match: match)
     }

@@ -15,7 +15,36 @@ import MapKit
 @MainActor
 @Observable
 final class RouteHighlight {
-    var coordinate: CLLocationCoordinate2D?
+    /// Written only through ``move(to:)``, which is what keeps a repeat position
+    /// from waking the map — see there.
+    private(set) var coordinate: CLLocationCoordinate2D?
+
+    /// Moves the highlight, or clears it with `nil`, and notifies the map only
+    /// when that actually changes where the pin belongs.
+    ///
+    /// `CLLocationCoordinate2D` isn't `Equatable`, so Observation can't filter
+    /// a repeat write the way it does for `Double` and friends — it has to be
+    /// compared here. It matters most on the hot path this type exists for:
+    /// scrubbing the elevation chart resolves a distance to the *nearest track
+    /// point*, so a finger crossing one vertex's worth of trail reports the
+    /// same coordinate many times over, and each repeat would re-register the
+    /// map coordinator's observation through a `Task` hop for no movement.
+    ///
+    /// Guarding here rather than at each call site is deliberate: the write
+    /// sites are spread across the detail view's scrub, its auto-follow poll
+    /// and its toggles, and a missed guard is invisible until someone profiles
+    /// a drag.
+    func move(to coordinate: CLLocationCoordinate2D?) {
+        switch (self.coordinate, coordinate) {
+        case (nil, nil):
+            return
+        case let (current?, next?)
+            where current.latitude == next.latitude && current.longitude == next.longitude:
+            return
+        default:
+            self.coordinate = coordinate
+        }
+    }
 }
 
 /// The sheet's live top edge (global Y), held in a reference type so the sheet can

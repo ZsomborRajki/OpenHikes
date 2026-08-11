@@ -17,11 +17,20 @@ nonisolated struct RouteProfile {
     /// all agree on the same trail.
     static let followMatchThresholdMeters: Double = 75
 
+    /// Upper bound on how many points the elevation chart is asked to draw.
+    /// One plotted point per two device pixels is already past what a 390 pt
+    /// chart resolves at 3×; beyond that, every extra sample is main-thread
+    /// cost at drag frequency with no picture to go with it.
+    static let plottedSampleBudget = 500
+
     /// All route coordinates, in order.
     let coordinates: [CLLocationCoordinate2D]
     /// Cumulative metres from the start, aligned with `coordinates`, ascending.
     let distances: [Double]
-    /// Points that carry elevation, for charting.
+    /// Points that carry elevation, for charting — downsampled to
+    /// ``plottedSampleBudget`` on long routes. See ``downsampledForDrawing(_:)``
+    /// for what that keeps; in particular the route's true high and low points
+    /// always survive, so ``elevationRange`` is exact however long the track is.
     let samples: [ElevationSample]
 
     private let sampleDistances: [Double]
@@ -46,10 +55,77 @@ nonisolated struct RouteProfile {
             }
         }
 
+        let plotted = Self.downsampledForDrawing(samples)
         self.coordinates = coordinates
         self.distances = distances
-        self.samples = samples
-        self.sampleDistances = samples.map(\.distanceMeters)
+        self.samples = plotted
+        self.sampleDistances = plotted.map(\.distanceMeters)
+    }
+
+    /// Thins the elevation samples down to ``plottedSampleBudget`` for drawing,
+    /// keeping the shape of the trail rather than a sparse sketch of it.
+    ///
+    /// A plain stride would break the chart in two silent ways, because the
+    /// chart derives its axes from whatever is plotted: stepping over the
+    /// summit shrinks `elevationRange` and the drawn line runs off the top of
+    /// its own y-scale, and dropping the final sample shortens the x-scale
+    /// while the live tracker is still placed from `distances`, putting the
+    /// walker's own position past the end of the graph near the finish.
+    ///
+    /// So instead: keep the first and last samples outright, split the rest
+    /// into equal buckets, and emit each bucket's lowest and highest point in
+    /// route order. That preserves the envelope, and with it every local peak
+    /// and trough the eye actually reads — including the global extremes,
+    /// which are by definition their own bucket's min or max.
+    ///
+    /// Routes at or under the budget are returned untouched: a six-point walk
+    /// draws its six real points.
+    private static func downsampledForDrawing(_ samples: [ElevationSample]) -> [ElevationSample] {
+        // Two per bucket, plus the reserved first and last.
+        let bucketCount = (plottedSampleBudget - 2) / 2
+        guard samples.count > plottedSampleBudget, bucketCount > 0 else { return samples }
+
+        let last = samples.count - 1
+        var picked: [Int] = [0]
+        picked.reserveCapacity(plottedSampleBudget)
+
+        // Interior only — the endpoints are already spoken for.
+        let interiorCount = last - 1
+        for bucket in 0..<bucketCount {
+            let start = 1 + interiorCount * bucket / bucketCount
+            let end = 1 + interiorCount * (bucket + 1) / bucketCount
+            guard start < end else { continue }
+
+            var lowest = start
+            var highest = start
+            for index in start..<end {
+                if samples[index].elevation < samples[lowest].elevation { lowest = index }
+                if samples[index].elevation > samples[highest].elevation { highest = index }
+            }
+            if lowest == highest {
+                picked.append(lowest)
+            } else {
+                picked.append(min(lowest, highest))
+                picked.append(max(lowest, highest))
+            }
+        }
+        picked.append(last)
+
+        // Distances are cumulative, so they never decrease — but a stationary
+        // stretch can repeat one, and `Charts` plots (and `ElevationSample`
+        // identifies) by distance. Keep the later point of any such pair so the
+        // series stays strictly ascending without losing the route's end.
+        var plotted: [ElevationSample] = []
+        plotted.reserveCapacity(picked.count)
+        for index in picked {
+            let sample = samples[index]
+            if let previous = plotted.last, sample.distanceMeters <= previous.distanceMeters {
+                plotted[plotted.count - 1] = sample
+            } else {
+                plotted.append(sample)
+            }
+        }
+        return plotted
     }
 
     /// Elevation min…max across the plotted samples, if any.

@@ -29,6 +29,17 @@ struct TileProvider: Identifiable, Hashable {
     func resolvedTemplate(apiKey: String) -> String {
         urlTemplate.replacingOccurrences(of: "{key}", with: apiKey)
     }
+
+    /// Whether this source can actually load tiles given the key resolved for
+    /// it. Keyless providers always can; a key-gated one without a key renders
+    /// nothing but 401s, so selecting it would leave the map blank forever.
+    ///
+    /// Pure, and takes the key rather than looking it up, so the rule is
+    /// testable without a bundle to read it from — see ``Secrets/canLoadTiles(_:)``
+    /// for the lookup that feeds it.
+    func isUsable(withKey apiKey: String?) -> Bool {
+        apiKeyPlistKey == nil || apiKey?.isEmpty == false
+    }
 }
 
 // Provider constants are `nonisolated` so the tile-loading code (which runs off
@@ -87,6 +98,38 @@ struct ActiveTileSource: Equatable {
     let providerID: String
     let urlTemplate: String
     let maximumZ: Int
+}
+
+extension ActiveTileSource {
+    /// Resolves `provider`'s bundled key into its URL template. Pair with
+    /// ``TileProvider/renderable(id:)`` rather than ``TileProvider/provider(id:)``,
+    /// so a key-gated provider with no key can't be built into a source that
+    /// only ever 401s.
+    init(_ provider: TileProvider) {
+        self.init(
+            providerID: provider.id,
+            urlTemplate: provider.resolvedTemplate(apiKey: Secrets.apiKey(for: provider) ?? ""),
+            maximumZ: provider.maximumZ
+        )
+    }
+}
+
+extension TileProvider {
+    /// The provider to actually render with for a stored `id`: the stored one,
+    /// unless it's key-gated and no key resolves on this build, in which case
+    /// the (keyless) default.
+    ///
+    /// Settings won't let such a provider be *selected* — see `providerRow` —
+    /// but a build that once had a `Secrets.plist` can leave the id behind in
+    /// `UserDefaults` after the key is gone, and a blank map is the worst
+    /// possible answer to that. Everything user-facing has to agree on one
+    /// provider (the tiles, the attribution shown for them, whether a bulk
+    /// download is even offered), so the fallback lives here rather than at
+    /// each call site.
+    nonisolated static func renderable(id: String?) -> TileProvider {
+        let stored = provider(id: id)
+        return Secrets.canLoadTiles(stored) ? stored : .default
+    }
 }
 
 /// UserDefaults / `@AppStorage` key shared between the settings UI and the map.

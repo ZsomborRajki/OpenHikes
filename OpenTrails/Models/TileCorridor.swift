@@ -11,43 +11,25 @@ import CoreLocation
 
 /// `nonisolated`: constructed and queried from ``AutoSaveTileStore``, which runs
 /// off the main actor.
+///
+/// Thin by design. This used to keep its own padded `min`/`max` box, which read
+/// longitude as a plain interval — so a trail crossing the antimeridian got a
+/// corridor spanning the entire globe, and auto-save would then claim tiles
+/// browsed anywhere in that latitude band as belonging to the trail. Both the
+/// wrap and the padding now live in ``TileBoundingBox``, which the bulk
+/// downloader already enumerates through, so the two sides of the offline
+/// story agree on what "near the route" means.
 nonisolated struct TileCorridor: Sendable {
-    private let minLat: Double
-    private let maxLat: Double
-    private let minLon: Double
-    private let maxLon: Double
+    /// `nil` for an empty route: nowhere to be near, so nothing is near it.
+    private let box: TileBoundingBox?
 
     init(route: [CLLocationCoordinate2D], bufferMeters: CLLocationDistance) {
-        guard !route.isEmpty else {
-            minLat = 0; maxLat = 0; minLon = 0; maxLon = 0
-            return
-        }
-
-        var minLat = 90.0, maxLat = -90.0, minLon = 180.0, maxLon = -180.0
-        for c in route {
-            minLat = min(minLat, c.latitude); maxLat = max(maxLat, c.latitude)
-            minLon = min(minLon, c.longitude); maxLon = max(maxLon, c.longitude)
-        }
-
-        // Rough meters-per-degree padding; longitude degrees shrink toward the
-        // poles, so scale by the corridor's mid-latitude.
-        let latPad = bufferMeters / 111_320
-        let midLatRad = (minLat + maxLat) / 2 * .pi / 180
-        let lonPad = bufferMeters / (max(cos(midLatRad), 0.01) * 111_320)
-
-        self.minLat = minLat - latPad
-        self.maxLat = maxLat + latPad
-        self.minLon = minLon - lonPad
-        self.maxLon = maxLon + lonPad
+        box = TileBoundingBox(route: route)?.padded(byMeters: bufferMeters)
     }
 
     /// Whether tile `z/x/y` overlaps the padded bounding box at all (edge tiles
     /// included, not just tiles whose center falls inside it).
     func overlaps(z: Int, x: Int, y: Int) -> Bool {
-        let tileMinLon = SlippyTileMath.lon(x: x, z: z)
-        let tileMaxLon = SlippyTileMath.lon(x: x + 1, z: z)
-        let tileMaxLat = SlippyTileMath.lat(y: y, z: z)
-        let tileMinLat = SlippyTileMath.lat(y: y + 1, z: z)
-        return tileMinLon <= maxLon && tileMaxLon >= minLon && tileMinLat <= maxLat && tileMaxLat >= minLat
+        box?.contains(z: z, x: x, y: y) ?? false
     }
 }

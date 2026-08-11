@@ -47,10 +47,16 @@ struct ElevationChartView: View, Equatable {
     // so it's deliberately excluded here — its mutations reach this view via
     // Observation, not via this equality check. This only needs to catch the
     // parent reconstructing the view with a genuinely different `tint`/`profile`.
+    //
+    // The plotted samples are compared in full, not merely counted: everything
+    // this body draws — the marks, both scales, the scrub callout — is derived
+    // from `profile.samples` and nothing else, so they are exactly the input
+    // that decides whether the picture changed. Comparing lengths instead let
+    // two different trails of the same size pass as equal and froze the graph
+    // on the old one. It's bounded work by construction: `RouteProfile` caps
+    // the plotted samples at `plottedSampleBudget`.
     static func == (lhs: ElevationChartView, rhs: ElevationChartView) -> Bool {
-        lhs.tint == rhs.tint
-            && lhs.profile.samples.count == rhs.profile.samples.count
-            && lhs.profile.distances.count == rhs.profile.distances.count
+        lhs.tint == rhs.tint && lhs.profile.samples == rhs.profile.samples
     }
 
     var body: some View {

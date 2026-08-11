@@ -42,7 +42,13 @@ final class OfflineTileDownloader {
     /// Soft cap on tiles — deeper zoom levels are dropped once exceeded, so a huge
     /// route doesn't try to fetch hundreds of thousands of tiles.
     nonisolated static let tileBudget = 4_000
-    private let maxConcurrent = 5
+    /// How many tiles are kept in flight in the task group at once — a
+    /// pipelining window, not a concurrency cap. What actually limits
+    /// simultaneous blocking work is ``TileLoadGate``, shared with the map's
+    /// own tile loads; tasks beyond its background share simply park on it.
+    /// Keeping this a little wider than that share means there's always one
+    /// ready to go the moment a slot frees.
+    private let inFlightWindow = 5
 
     /// Begins downloading the tiles covering `route` from `source`, saving detail
     /// down to the provider's deepest real zoom level. `scale` must be the
@@ -102,16 +108,24 @@ final class OfflineTileDownloader {
                 group.addTask {
                     guard let url = tile.url(from: source.urlTemplate) else { return }
                     let key = tile.cacheKey(providerID: source.providerID, scale: scale)
-                    let image = await cache.loadTile(forKey: key, url: url)
+                    // Shared with the map's own tile loads, at `.background`:
+                    // nobody minds a download taking a minute longer, and
+                    // everybody minds the map stalling while it runs.
+                    await TileLoadGate.shared.acquire(.background)
+                    // Durably, not through `loadTile`: the point of a download is
+                    // that the tiles are still there when the user is out of
+                    // signal, which rules out the OS-reclaimable cache.
+                    let saved = await cache.saveTileDurably(forKey: key, url: url)
+                    await TileLoadGate.shared.release(.background)
                     #if DEBUG
-                    if image != nil {
+                    if saved {
                         Self.logger.debug("Bulk-saved tile \(key, privacy: .public)")
                     }
                     #endif
                 }
             }
 
-            for _ in 0..<min(maxConcurrent, tiles.count) { addNext() }
+            for _ in 0..<min(inFlightWindow, tiles.count) { addNext() }
 
             while active > 0 {
                 await group.next()
@@ -184,30 +198,38 @@ final class OfflineTileDownloader {
         }
     }
 
-    /// Enumerates the tiles covering the route's bounding box from `minZoom` up,
-    /// stopping before a zoom level that would blow the tile budget.
+    /// Enumerates the tiles covering the route's bounding box from the overview
+    /// zoom up, stopping before a zoom level that would blow the tile budget.
     private nonisolated static func tiles(covering route: [CLLocationCoordinate2D], minZoom: Int, maxZoom: Int, budget: Int) -> [Tile] {
-        guard maxZoom >= minZoom else { return [] }
+        guard maxZoom >= minZoom, let box = TileBoundingBox(route: route) else { return [] }
 
-        var minLat = 90.0, maxLat = -90.0, minLon = 180.0, maxLon = -180.0
-        for c in route {
-            minLat = min(minLat, c.latitude); maxLat = max(maxLat, c.latitude)
-            minLon = min(minLon, c.longitude); maxLon = max(maxLon, c.longitude)
+        // A route too sprawling for even the overview zoom to fit the budget
+        // gets a shallower overview rather than nothing at all: the budget has
+        // to bind here too (this is where a continental route used to blow
+        // straight through it), but returning empty would surface as "Nothing to
+        // save." for a route that has plenty worth saving. Each level down is a
+        // quarter of the tiles, so this bottoms out within a level or two — and
+        // at zoom 0 the whole world is one tile.
+        var overviewZoom = minZoom
+        while overviewZoom > 0, box.tileCount(at: overviewZoom) > budget {
+            overviewZoom -= 1
         }
 
         var tiles: [Tile] = []
         var running = 0
-        for z in minZoom...maxZoom {
+        for z in overviewZoom...maxZoom {
+            let count = box.tileCount(at: z)
+            guard running + count <= budget else { break }
+
             let n = 1 << z
-            let xMin = SlippyTileMath.clamp(SlippyTileMath.tileX(minLon, z: z), to: n)
-            let xMax = SlippyTileMath.clamp(SlippyTileMath.tileX(maxLon, z: z), to: n)
-            let yMin = SlippyTileMath.clamp(SlippyTileMath.tileY(maxLat, z: z), to: n) // north edge → smaller y
-            let yMax = SlippyTileMath.clamp(SlippyTileMath.tileY(minLat, z: z), to: n) // south edge → larger y
-            let count = (xMax - xMin + 1) * (yMax - yMin + 1)
-            if running + count > budget && !tiles.isEmpty { break }
-            for x in xMin...xMax {
-                for y in yMin...yMax {
-                    tiles.append(Tile(z: z, x: x, y: y))
+            let (firstColumn, columnCount) = box.columns(at: z)
+            let (firstRow, rowCount) = box.rows(at: z)
+            for column in 0..<columnCount {
+                // Columns wrap: a route across the antimeridian runs off the east
+                // edge of the grid and continues at column zero.
+                let x = SlippyTileMath.wrap(firstColumn + column, to: n)
+                for row in 0..<rowCount {
+                    tiles.append(Tile(z: z, x: x, y: firstRow + row))
                 }
             }
             running += count

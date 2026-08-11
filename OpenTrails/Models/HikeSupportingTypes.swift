@@ -21,8 +21,15 @@ struct OfflineDownloadRecord: Codable, Hashable {
 }
 
 /// One point on the elevation profile: metres from start vs. elevation in metres.
-struct ElevationSample: Identifiable {
-    let id = UUID()
+///
+/// Identified by its own distance rather than a per-instance `UUID`: the chart's
+/// `ForEach` diffs the plotted samples by `id`, so a fresh identity per instance
+/// made every rebuild of the same route diff as a wholesale replacement. Distance
+/// along the route is unique within a profile (``RouteProfile`` keeps the plotted
+/// samples strictly ascending) and identical across rebuilds — and free, where
+/// `UUID()` was over half the cost of building a long profile.
+struct ElevationSample: Identifiable, Equatable {
+    var id: Double { distanceMeters }
     let distanceMeters: Double
     let elevation: Double
 }

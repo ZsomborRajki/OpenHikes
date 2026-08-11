@@ -109,13 +109,91 @@ struct TileCorridorTests {
     /// only ever activates hikes with more than one point, so this is a
     /// belt-and-braces check that an empty corridor can't be built into
     /// something that accepts the world.
-    @Test("an empty route's corridor accepts nothing around a real trail")
+    @Test("an empty route's corridor accepts nothing anywhere")
     func emptyRoute() {
         let empty = TileCorridor(route: [], bufferMeters: AutoSaveTileStore.corridorBufferMeters)
         let z = 14
         for coordinate in Fixture.coordinates(Fixture.ridgeRoute) {
             let tile = tile(at: coordinate, z: z)
             #expect(!empty.overlaps(z: z, x: tile.x, y: tile.y))
+        }
+        // Including the null island a `0,0,0,0` box used to sit on.
+        let nullIsland = tile(at: CLLocationCoordinate2D(latitude: 0, longitude: 0), z: z)
+        #expect(!empty.overlaps(z: z, x: nullIsland.x, y: nullIsland.y))
+    }
+
+    // MARK: - The antimeridian
+
+    /// A trail that steps across ±180° covers a few kilometres of ground. Read
+    /// as a plain longitude interval it comes out spanning the globe the long
+    /// way round, and then auto-save treats *anywhere* at that latitude as
+    /// "near the trail" — filling the hike's 3,000-tile budget with ocean the
+    /// walker will never see, and doing it while they browse somewhere else
+    /// entirely.
+    @Test("a trail across the antimeridian doesn't put the whole latitude band in its corridor", arguments: [12, 14, 16])
+    func antimeridianCorridorStaysLocal(z: Int) {
+        let corridor = TileCorridor(route: Fixture.antimeridianRoute, bufferMeters: AutoSaveTileStore.corridorBufferMeters)
+
+        for coordinate in Fixture.antimeridianRoute {
+            let tile = tile(at: coordinate, z: z)
+            #expect(corridor.overlaps(z: z, x: tile.x, y: tile.y), "the trail's own tiles are always in its corridor")
+        }
+
+        // Same latitude, half a world away — the tiles a globe-wide box would
+        // have swallowed.
+        for longitude in [0.0, 90.0, -90.0, 45.0] {
+            let far = CLLocationCoordinate2D(latitude: Fixture.antimeridianRoute[0].latitude, longitude: longitude)
+            let tile = tile(at: far, z: z)
+            #expect(!corridor.overlaps(z: z, x: tile.x, y: tile.y), "\(longitude)° is not near a trail on the antimeridian")
+        }
+    }
+
+    /// The corridor has to reach across the line, not stop at it: the buffer is
+    /// there so a user zooming in beside the trail keeps filling their offline
+    /// map, and a trail on the antimeridian has "beside it" on both sides.
+    @Test("the corridor spans both sides of the antimeridian")
+    func antimeridianCorridorCoversBothSides() {
+        let z = 14
+        let corridor = TileCorridor(route: Fixture.antimeridianRoute, bufferMeters: AutoSaveTileStore.corridorBufferMeters)
+        let latitude = Fixture.antimeridianRoute[0].latitude
+
+        for longitude in [179.97, -179.97] {
+            let tile = tile(at: CLLocationCoordinate2D(latitude: latitude, longitude: longitude), z: z)
+            #expect(corridor.overlaps(z: z, x: tile.x, y: tile.y), "\(longitude)° is a few hundred metres from the trail")
+        }
+    }
+
+    /// Membership and enumeration are the same question asked twice, so they
+    /// have to give the same answer — including for a route that wraps, which
+    /// is where an independent second implementation would go wrong.
+    @Test("a corridor accepts exactly the tiles its own box enumerates", arguments: [
+        Fixture.coordinates(Fixture.ridgeRoute), Fixture.antimeridianRoute
+    ])
+    func membershipMatchesEnumeration(route: [CLLocationCoordinate2D]) throws {
+        let z = 13
+        let n = 1 << z
+        let corridor = TileCorridor(route: route, bufferMeters: AutoSaveTileStore.corridorBufferMeters)
+        let box = try #require(TileBoundingBox(route: route)).padded(byMeters: AutoSaveTileStore.corridorBufferMeters)
+
+        var enumerated: Set<[Int]> = []
+        let (firstColumn, columnCount) = box.columns(at: z)
+        let (firstRow, rowCount) = box.rows(at: z)
+        for column in 0..<columnCount {
+            for row in 0..<rowCount {
+                enumerated.insert([SlippyTileMath.wrap(firstColumn + column, to: n), firstRow + row])
+            }
+        }
+
+        // Every tile the box enumerates is in the corridor…
+        for tile in enumerated {
+            #expect(corridor.overlaps(z: z, x: tile[0], y: tile[1]))
+        }
+        // …and a band of tiles around it agrees in both directions.
+        for x in (firstColumn - 3)...(firstColumn + columnCount + 3) {
+            for y in max(firstRow - 3, 0)...min(firstRow + rowCount + 3, n - 1) {
+                let column = SlippyTileMath.wrap(x, to: n)
+                #expect(corridor.overlaps(z: z, x: column, y: y) == enumerated.contains([column, y]))
+            }
         }
     }
 }

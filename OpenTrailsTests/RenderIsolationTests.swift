@@ -10,8 +10,9 @@
 //  reading the code:
 //
 //  * an observer really is notified per write — including writes that don't
-//    change the value, which is why the hot paths guard their assignments
-//    (`if moved { … }`, `if highlight.coordinate != nil { … }`); and
+//    change the value, which is why the coordinate-typed publishers compare
+//    before assigning (`RouteHighlight.move(to:)`, `LocationManager.publish`);
+//    and
 //  * observing one property really doesn't wake observers of another.
 //
 //  So the tests here pin the *notification* behaviour these views are tuned
@@ -56,6 +57,20 @@ final class ObservationCounter {
     }
 }
 
+/// A bare coordinate-typed publisher, the shape `RouteHighlight` and
+/// `LocationManager` had before either compared for itself.
+///
+/// Owned by the tests rather than borrowed from the app: what the two tests
+/// below pin is Observation's own treatment of a non-`Equatable` value, which
+/// is the *premise* those models' guards rest on — so it has to be measurable
+/// on something unguarded, or the evidence for the guards disappears the moment
+/// they're added.
+@MainActor
+@Observable
+final class CoordinatePublisher {
+    var coordinate: CLLocationCoordinate2D?
+}
+
 @MainActor
 @Suite("Observation cost")
 struct ObservationCostTests {
@@ -88,18 +103,18 @@ struct ObservationCostTests {
 
     /// …but `CLLocationCoordinate2D` is not `Equatable`, so Observation has
     /// no way to tell an unchanged position from a new one and notifies on
-    /// every assignment. That makes the guards on the two coordinate-typed
-    /// publishers — `RouteHighlight.coordinate` and `LocationManager.
-    /// coordinate` — the ones that actually carry weight, and they're also
-    /// the two written most often (drag frequency and 1 Hz respectively).
+    /// every assignment. That is why the two coordinate-typed publishers —
+    /// `RouteHighlight` and `LocationManager`, the two written most often
+    /// (drag frequency and 1 Hz respectively) — compare before assigning
+    /// instead of leaving it to the runtime.
     @Test("an equal write to a coordinate notifies anyway")
     func equalCoordinateWriteIsNotFiltered() async {
-        let highlight = RouteHighlight()
-        highlight.coordinate = CLLocationCoordinate2D(latitude: 47.63, longitude: 12.86)
-        let counter = ObservationCounter { _ = highlight.coordinate }
+        let publisher = CoordinatePublisher()
+        publisher.coordinate = CLLocationCoordinate2D(latitude: 47.63, longitude: 12.86)
+        let counter = ObservationCounter { _ = publisher.coordinate }
         await counter.settle()
 
-        highlight.coordinate = CLLocationCoordinate2D(latitude: 47.63, longitude: 12.86)
+        publisher.coordinate = CLLocationCoordinate2D(latitude: 47.63, longitude: 12.86)
         await counter.settle()
         #expect(counter.count == 1, "same place, still a notification — the coordinate publishers must compare for themselves")
     }
@@ -108,12 +123,13 @@ struct ObservationCostTests {
     /// it holds.
     @Test("a skipped write notifies nobody")
     func skippedWriteIsSilent() async {
-        let highlight = RouteHighlight()
-        let counter = ObservationCounter { _ = highlight.coordinate }
+        let publisher = CoordinatePublisher()
+        let counter = ObservationCounter { _ = publisher.coordinate }
         await counter.settle()
 
-        // What `updateLiveFollow` does: only write when there's something to change.
-        if highlight.coordinate != nil { highlight.coordinate = nil }
+        // The shape `RouteHighlight.move(to:)` applies: only write when there's
+        // something to change.
+        if publisher.coordinate != nil { publisher.coordinate = nil }
         await counter.settle()
         #expect(counter.count == 0)
     }
@@ -159,6 +175,111 @@ struct ObservationCostTests {
         await regionCounter.settle()
         #expect(regionCounter.count == 1)
         #expect(fitCounter.count == 1, "showing a region must not also re-fit the route")
+    }
+}
+
+@MainActor
+@Suite("Route highlight")
+struct RouteHighlightTests {
+    private static let viewpoint = CLLocationCoordinate2D(latitude: 47.6300, longitude: 12.8600)
+
+    /// The pin has to reach the map when it genuinely moves — the guard below
+    /// is only worth having if this still holds.
+    @Test("placing and moving the pin reaches the map")
+    func movesArePublished() async {
+        let highlight = RouteHighlight()
+        let counter = ObservationCounter { _ = highlight.coordinate }
+        await counter.settle()
+
+        highlight.move(to: Self.viewpoint)
+        await counter.settle()
+        #expect(counter.count == 1)
+
+        highlight.move(to: CLLocationCoordinate2D(latitude: 47.6400, longitude: 12.8600))
+        await counter.settle()
+        #expect(counter.count == 2)
+        #expect(highlight.coordinate?.latitude == 47.64)
+    }
+
+    /// `CLLocationCoordinate2D` isn't `Equatable` (pinned by `an equal write to
+    /// a coordinate notifies anyway`), so without the comparison in
+    /// `move(to:)` this is a notification for a pin that hasn't moved.
+    @Test("moving the pin where it already is doesn't wake the map")
+    func repeatedPositionIsNotRepublished() async {
+        let highlight = RouteHighlight()
+        let counter = ObservationCounter { _ = highlight.coordinate }
+        await counter.settle()
+
+        highlight.move(to: Self.viewpoint)
+        await counter.settle()
+        #expect(counter.count == 1, "precondition: placing the pin reaches the map")
+
+        highlight.move(to: CLLocationCoordinate2D(latitude: 47.6300, longitude: 12.8600))
+        await counter.settle()
+        #expect(counter.count == 1, "same place — the map's annotation is already there")
+        #expect(highlight.coordinate?.latitude == 47.63, "and the pin is still where it belongs")
+    }
+
+    @Test("clearing a placed pin reaches the map")
+    func clearingIsPublished() async {
+        let highlight = RouteHighlight()
+        highlight.move(to: Self.viewpoint)
+        let counter = ObservationCounter { _ = highlight.coordinate }
+        await counter.settle()
+
+        highlight.move(to: nil)
+        await counter.settle()
+        #expect(counter.count == 1)
+        #expect(highlight.coordinate == nil)
+    }
+
+    /// `updateLiveFollow` hides the pin on every poll while auto-follow owns
+    /// the map — once a second, for as long as the detail view is open. Only
+    /// the first of those polls has anything to say.
+    @Test("auto-follow's per-second clear reaches the map once")
+    func repeatedClearIsSilentAfterTheFirst() async {
+        let highlight = RouteHighlight()
+        highlight.move(to: Self.viewpoint)
+        let counter = ObservationCounter { _ = highlight.coordinate }
+        await counter.settle()
+
+        for _ in 0..<5 {
+            highlight.move(to: nil)
+            await counter.settle()
+        }
+        #expect(counter.count == 1, "the pin is hidden once; the next four polls have nothing to say")
+        #expect(highlight.coordinate == nil)
+    }
+
+    /// The hot path this type exists for. Scrubbing the elevation chart
+    /// resolves a distance to the *nearest track point*, so a finger crossing
+    /// one point's worth of trail reports the same coordinate over and over —
+    /// and every repeat would re-register the map coordinator's observation
+    /// through a `Task` hop for a pin that hasn't moved.
+    ///
+    /// Settling between events on purpose: drag events arrive in separate
+    /// runloop turns, so this counts them the way the map would see them
+    /// rather than letting a synchronous burst coalesce into one.
+    @Test("a drag along the trail moves the pin once per track point")
+    func scrubbingWritesOncePerTrackPoint() async throws {
+        let profile = RouteProfile(route: Fixture.ridgeRoute)
+        let total = try #require(profile.distances.last)
+        let highlight = RouteHighlight()
+        let counter = ObservationCounter { _ = highlight.coordinate }
+        await counter.settle()
+
+        var dragEvents = 0
+        for distance in stride(from: 0, through: total, by: 10) {
+            highlight.move(to: profile.coordinate(atDistance: distance))
+            dragEvents += 1
+            await counter.settle()
+        }
+
+        #expect(dragEvents > Fixture.ridgeRoute.count * 5, "precondition: far more drag events than track points")
+        #expect(
+            counter.count == Fixture.ridgeRoute.count,
+            "the pin can only ever be at a track point, so that's the most times it can move"
+        )
     }
 }
 

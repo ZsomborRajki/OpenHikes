@@ -10,20 +10,24 @@ A SwiftUI hiking/trail-mapping app for iOS, iPadOS, macOS, and visionOS. OpenTra
 - **GPX import** (via [CoreGPX](https://github.com/vincentneo/CoreGPX)), pulling track points plus author/description/keywords metadata.
 - **Hike detail view** with an interactive elevation profile (Swift Charts) you can scrub, distance/elevation-gain/elevation-loss/speed/duration stats, a customizable route tint and line width, and directional chevrons on the map showing travel direction.
 - **Live GPS auto-follow** — while a hike is open, the elevation chart and map track your live position along that trail.
+- **Home Screen widget and Watch complication** — the selected trail's shape, over a pre-rendered basemap, with your last-known position along it. Fed by the app through an App Group; neither surface reads location or computes geometry itself.
+- **Background trail tracking** (opt-in, iOS) — keeps those surfaces current while the app is closed, using significant-location-change delivery rather than continuous GPS.
 - **Weather badge** for your current location (WeatherKit).
 - **Search** — MapKit place search, plus matching against your own saved hikes, surfaced together in one suggestions list.
+- **Offline storage that accounts for itself** — Settings separates tiles your hikes are keeping for offline use from tiles the map merely happened to draw, and lets you reclaim the latter without touching the former.
 
 ## Requirements
 
 - Xcode 26.5 or later.
 - Deployment targets: iOS/iPadOS 26.5, macOS 26.5, visionOS 26.5 (`TARGETED_DEVICE_FAMILY = 1,2,7`).
 - An Apple Developer Program team — **WeatherKit requires a paid membership**; the project won't build against a free personal team without removing that entitlement.
+- An App Group (`group.tappium.com.OpenTrails` as committed), shared by the app, the iOS widget, and the Watch complication — it's how the trail snapshot and the widget's basemap images get from the app to those surfaces.
 - Network access for map tiles, weather, and search. Once a hike's tiles are downloaded or auto-saved, its map works offline.
 
 ## Getting started
 
 1. Clone the repo and open `OpenTrails.xcodeproj` in Xcode.
-2. In **Signing & Capabilities**, change the team from the placeholder (`697EW27G9U`) to your own.
+2. In **Signing & Capabilities**, change the team from the placeholder (`697EW27G9U`) to your own — on all four targets (`OpenTrails`, `OpenWidgetExtension`, `OpenWatch Watch App`, `OpenWatchWidgetExtension`). If your team can't claim `group.tappium.com.OpenTrails`, change the App Group on all four to one you own, and update `SharedStore.appGroupID` in `OpenTrailsShared` to match.
 3. *(Optional)* Enable the key-gated providers (Stadia Outdoors, Thunderforest Outdoors):
    ```
    cp Secrets.example.plist OpenTrails/Secrets.plist
@@ -35,32 +39,40 @@ A SwiftUI hiking/trail-mapping app for iOS, iPadOS, macOS, and visionOS. OpenTra
 ## Architecture
 
 ```
-OpenTrailsApp
+OpenTrailsApp                       owns the SwiftData container + BackgroundTrailTracker
  └─ ContentView                     full-screen map + persistent sheet, owns shared state
-     ├─ OSMMapView                  MKMapView wrapper (UIViewRepresentable/NSViewRepresentable)
+     ├─ MapView                     MKMapView wrapper (UIViewRepresentable/NSViewRepresentable)
+     │   └─ MapCoordinator          MKMapViewDelegate; imperative overlay/annotation updates
      └─ MapSheet                    search + hikes list
-         ├─ SettingsView            tile-provider picker, offline storage
+         ├─ SettingsView            tile-provider picker, offline storage, background tracking
          └─ HikeDetailView          elevation chart, stats, offline/color/width controls
+
+OpenTrailsShared (SwiftPM)          snapshot, Mercator, basemap geometry, deep links
+ ├─ OpenWidget                      iOS Home Screen widget
+ ├─ OpenWatch Watch App             minimal fallback surface
+ └─ OpenWatchWidget                 Watch complication
 ```
 
 ### Keeping SwiftUI's diffing out of the hot paths
 
 The most distinctive pattern in this codebase: state that changes at high frequency — GPS fixes (~1/sec), a dragged sheet's top edge (frame rate), an elevation-chart scrub (drag frequency) — is held in plain `@Observable` reference types (`RouteHighlight`, `SheetMetrics`, `MapController`, `TrackerState`, `LocationManager`) and passed down the view tree as stable object *references*, not as `@State`/`@Binding` value state.
 
-The owning SwiftUI views (`ContentView`, `MapSheet`, `HikeDetailView`) never read these objects' properties in their own `body`. Only the imperative code that actually needs them does — e.g. `OSMMapView.Coordinator` observes them with `withObservationTracking` and updates MapKit directly, entirely outside SwiftUI's render loop. That keeps a ~1/sec location publish or a per-frame sheet drag from invalidating (and re-diffing) an expensive view tree, while still moving the one small piece of UI — a map annotation, a button constraint, a chart marker — that actually needs to move.
+The owning SwiftUI views (`ContentView`, `MapSheet`, `HikeDetailView`) never read these objects' properties in their own `body`. Only the imperative code that actually needs them does — e.g. `MapCoordinator` observes them with `withObservationTracking` and updates MapKit directly, entirely outside SwiftUI's render loop. That keeps a ~1/sec location publish or a per-frame sheet drag from invalidating (and re-diffing) an expensive view tree, while still moving the one small piece of UI — a map annotation, a button constraint, a chart marker — that actually needs to move.
 
-This is explained at length in comments throughout `OSMMapView.swift`, `ContentView.swift`, and `HikeDetailView.swift`, with `RenderSignpost` marks to verify it empirically (see [Debug tooling](#debug-tooling)). Worth reading before changing how state flows through those files — it's easy to accidentally reintroduce the re-render storms this works around.
+One consequence is worth knowing before you touch either coordinate publisher: Observation filters a repeat write to an `Equatable` value automatically, but `CLLocationCoordinate2D` isn't `Equatable`, so the same position reads as news. Both places that publish one compare latitude/longitude by hand — `LocationManager.publish`, and `RouteHighlight`, whose `coordinate` is `private(set)` behind `move(to:)` precisely so no call site can skip the check. Without them, a walker standing still wakes the map's observation once a second forever, and a scrub crossing one track point's worth of trail wakes it once per drag event.
+
+This is explained at length in comments throughout `MapView.swift`, `MapCoordinator.swift`, `MapControllers.swift`, `ContentView.swift`, and `HikeDetailView.swift`, with `RenderSignpost` marks to verify it empirically (see [Debug tooling](#debug-tooling)). Worth reading before changing how state flows through those files — it's easy to accidentally reintroduce the re-render storms this works around.
 
 ### Tile pipeline
 
 ```
 MKMapView draw pass
  └─ CachingTileOverlayRenderer.draw(_:zoomScale:in:)
-     └─ OSMTileOverlay.cachedImage(at:)          sync memory-cache lookup
+     └─ TileOverlay.cachedImage(at:)             sync memory-cache lookup
           hit  → draw immediately
           miss → draw a cropped lower-zoom tile as a placeholder ("overzoom" fallback)
                → loadTileIfNeeded() spawns a Task, gated by TileLoadGate (max 4 concurrent)
-                   → OSMTileOverlay.cacheTile(at:)
+                   → TileOverlay.cacheTile(at:)
                        → TileCache.loadTile: memory → ephemeral disk → durable disk → network
                        → AutoSaveTileStore.considerPersisting (opportunistic durable save)
                    → setNeedsDisplay() on success, re-triggering the draw pass
@@ -68,16 +80,33 @@ MKMapView draw pass
 
 `TileCache` is a two-tier (memory + disk) cache with two disk stores: an ephemeral one (`Caches/`, subject to OS storage-pressure eviction) and a durable one (`Application Support/`, for tiles explicitly worth keeping). It monitors network reachability (`NWPathMonitor`) and notifies renderers to retry failed tiles on reconnect.
 
+Which tier a tile lands in follows from *why* it was fetched, not from how it's drawn. A tile fetched to draw the map goes to the ephemeral store; anything meant to survive goes durable, by one of two routes:
+
+- `saveTileDurably(forKey:url:)` — the bulk-download path: fetch straight into durable storage. Offline coverage the user explicitly asked for can't sit in the first directory the OS purges under storage pressure.
+- `promoteCachedTile(forKey:)` — the auto-save path: *move* the already-cached file across, bytes unchanged. A move rather than a re-encode because providers serve PNG, which is both the smallest and the only lossless representation on offer for flat-filled cartography (a lossless PNG round-trip through ImageIO measured +10%; HEIC at full quality +178%), and because it keeps a decode and an encode off the drawing path entirely.
+
 ### Offline maps: two complementary mechanisms
 
-- **Bulk download** (`OfflineTileDownloader`) — only for providers whose usage policy allows pre-fetching (`TileProvider.supportsBulkDownload`). Enumerates a route's bounding-box tiles across zoom levels (`SlippyTileMath`), fetches up to 5 concurrently, capped at 4,000 tiles.
-- **Auto-save** (`AutoSaveTileStore` + `AutoSaveController`) — passively persists tiles as they're actually browsed while a hike is selected, scoped to a `TileCorridor` (the route's bounding box, padded 1,500 m) and capped at 3,000 tiles per hike. This is the *only* offline mechanism OpenStreetMap's tile usage policy permits, and it doubles as a gap-filler for bulk-capable providers — any tile a bulk pass missed still gets saved the moment it's browsed. A background drain (every 2s) merges newly-saved keys into the hike's SwiftData record.
+- **Bulk download** (`OfflineTileDownloader`) — only for providers whose usage policy allows pre-fetching (`TileProvider.supportsBulkDownload`). Enumerates a route's tiles from an overview zoom down to the provider's deepest, through `TileBoundingBox` (which treats longitude as cyclic, so an antimeridian route gets the short arc rather than a band around the world), and fetches up to 5 concurrently. The 4,000-tile budget binds at every level including the overview — a route too sprawling for even that gets a *shallower* overview rather than nothing at all.
+- **Auto-save** (`AutoSaveTileStore` + `AutoSaveController`) — passively persists tiles as they're actually browsed while a hike is selected, scoped to a `TileCorridor` (the route's bounding box, padded 1,500 m) and capped at 3,000 tiles per hike. This is the *only* offline mechanism OpenStreetMap's tile usage policy permits, and it doubles as a gap-filler for bulk-capable providers — any tile a bulk pass missed still gets saved the moment it's browsed. A background drain (every 2s) merges newly-saved keys into the hike's SwiftData record; every teardown path (deselect, switch, disable, delete, delete-all) flushes that pending set first, so tiles saved in the last drain window can't outlive the record that would free them.
 
-Both mechanisms record just enough (`OfflineDownloadRecord`, `Hike.autoSavedTileKeys`) to *recompute* — and so measure and delete — exactly the tiles each one saved, rather than storing redundant tile lists.
+Both mechanisms record just enough (`OfflineDownloadRecord`, `Hike.autoSavedTileKeys`) to *recompute* — and so measure and delete — exactly the tiles each one saved, rather than storing redundant tile lists. `TileOwnership` answers the question that follows from tile keys being purely geographic (`providerID/z/x/y@scale`, with no hike in them): two hikes in the same area claim literally the same tiles, so deleting one hike frees only what no other hike still claims.
+
+Everything on disk that no manifest claims is browsing residue — real, and often large, since MapKit caches every tile it draws. Settings reports it separately from offline coverage and can clear it on its own, and it's bounded: once-per-launch housekeeping trims it back under 500 MB, oldest tile first. Offline coverage is deliberately exempt from that ceiling — a hike's saved map is what the user has when there's no signal, so nothing removes it to save space except the user.
 
 ### Data & persistence
 
-`Hike` is a SwiftData `@Model`: title, route (`[RouteCoordinate]`, inline `Codable`), tint/width, and offline-download bookkeeping. Derived stats (distance, elevation gain/loss, average/max speed, duration) are computed properties over the route. `RouteProfile` precomputes a cumulative-distance index once per hike so scrubbing the elevation chart resolves a map location in O(log n) via binary search, and so live GPS auto-follow can project a fix onto the route.
+`Hike` is a SwiftData `@Model`: title, route (`[RouteCoordinate]`, inline `Codable`), tint/width, and offline-download bookkeeping. Derived stats (distance, elevation gain/loss, average/max speed, duration) are computed properties over the route. `RouteProfile` precomputes a cumulative-distance index once per hike so scrubbing the elevation chart resolves a map location in O(log n) via binary search, and so live GPS auto-follow can project a fix onto the route. It also downsamples the elevation samples for drawing — see [Known limitations](#known-limitations) for why that budget exists and what it preserves.
+
+### Widget, complication, and background tracking
+
+All the work happens in the app process; the widget and complication only render what they're handed.
+
+`BackgroundTrailTracker` assembles a `SharedTrailSnapshot` — the trail's decimated shape, your matched position along it, and a status line — and writes it to the App Group through `SharedStore`, then reloads the relevant timelines. It's fed from two independent sources: a throttled foreground push from `HikeDetailView`'s existing auto-follow loop (no extra permission needed), and, if the user opts in, significant-location-change delivery, which can relaunch the app after it's been suspended or terminated. That's why it's constructed in `OpenTrailsApp.init()` rather than lazily in a view — a background relaunch may never reach a view's `.task`.
+
+The iOS widget also gets a real basemap under the trail line, because WidgetKit can't host a live `Map`/`MKMapView` at any OS version. `TrailBasemapRenderer` rasterizes the trail's surroundings with `MKMapSnapshotter` (two shapes × light and dark) into the App Group, and `TrailBasemap` in the shared package pins each image to the patch of Earth it covers. Basemaps need the network, so a trail selected offline can end up without them; the app re-checks on every foreground.
+
+The Watch is fed by `WatchConnectivityBridge` (iOS-only, owned internally by `BackgroundTrailTracker`) into the watch-local `SharedStore`. Tapping either surface deep-links back into the app via `TrailWidgetDeepLink`.
 
 ### Debug tooling
 
@@ -95,62 +124,84 @@ xcodebuild test -scheme OpenTrails -destination 'platform=iOS Simulator,name=iPh
 cd OpenTrailsShared && swift test
 ```
 
-- **`OpenTrailsTests`** — a unit-test target hosted by the app, covering the logic behind the features: tile indexing and the auto-save corridor, offline tile enumeration and the shared-tile bookkeeping that decides what a delete may actually free, `RouteProfile`'s scrub lookups and auto-follow route matching, derived hike statistics, GPX parsing (including malformed and hostile files), tint persistence, the snapshot feed the widget and Watch render from, and the render-isolation behaviour the architecture above depends on (what Observation notifies, and how much the elevation chart is asked to draw).
-- **`OpenTrailsSharedTests`** — the shared package's own suite: the Mercator projection, the widget's basemap geometry, deep links, and the trail snapshot's progress/decimation.
+- **`OpenTrailsTests`** (178 tests) — a unit-test target hosted by the app, covering the logic behind the features: tile indexing and the auto-save corridor, offline tile enumeration (budget, antimeridian) and the shared-tile bookkeeping that decides what a delete may actually free, how offline coverage and browsing residue are told apart on disk, `RouteProfile`'s scrub lookups, downsampling and auto-follow route matching, derived hike statistics, GPX parsing (including malformed and hostile files), tint persistence, the snapshot feed the widget and Watch render from, and the render-isolation behaviour the architecture above depends on (what Observation notifies, and how much the elevation chart is asked to draw).
+- **`OpenTrailsSharedTests`** (42 tests) — the shared package's own suite: the Mercator projection, the widget's basemap geometry, deep links, and the trail snapshot's progress/decimation.
 
-Not covered: SwiftUI view bodies, `MapView`/`Coordinator`'s imperative MapKit updates, and `TileCache`'s network path. The render-isolation pattern described above is verified with `RenderSignpost` marks in Instruments rather than by tests — see [Debug tooling](#debug-tooling).
+Not covered: SwiftUI view bodies, `MapView`/`MapCoordinator`'s imperative MapKit updates, and `TileCache`'s network path. The render-isolation pattern described above is verified with `RenderSignpost` marks in Instruments rather than by tests — see [Debug tooling](#debug-tooling).
 
-Seven tests currently fail on purpose, each pinning a known defect — see [Known limitations](#known-limitations), and `CODE_REVIEW.md` for the UI-performance ones with their measurements.
+Both suites pass in full. The seven tests that used to fail on purpose each pinned a defect that has since been fixed; `CODE_REVIEW.md` records what they were, alongside the issues that are still open.
 
 ## Project layout
 
-**App shell**
+App sources live under `OpenTrails/` in three folders: `UI/`, `Models/`, and `Managers/`.
+
+**App shell** — `UI/`
 | File | Role |
 |---|---|
-| `OpenTrailsApp.swift` | `@main` entry point; starts `MainThreadWatchdog` in DEBUG; sets up the SwiftData container. |
+| `OpenTrailsApp.swift` | `@main` entry point; builds the SwiftData container and `BackgroundTrailTracker`; starts `MainThreadWatchdog` in DEBUG. |
 | `ContentView.swift` | Root view — full-screen map + persistent sheet; owns the shared reference-type state; polls weather; handles GPX import. |
 
-**Map & rendering**
+**Map & rendering** — `UI/Map/`, `Managers/`
 | File | Role |
 |---|---|
-| `OSMMapView.swift` | `MKMapView` wrapper; `Coordinator` drives imperative updates; defines `RouteHighlight`/`SheetMetrics`/`MapController`/`DisplayedRoute`. |
+| `MapView.swift` | `MKMapView` wrapper (`UIViewRepresentable`/`NSViewRepresentable`). |
+| `MapCoordinator.swift` | Its `MKMapViewDelegate`: owns overlays/annotations and applies highlight/sheet/controller changes imperatively. |
+| `MapControllers.swift` | The reference-type state the map observes directly: `RouteHighlight`, `SheetMetrics`, `MapController`. |
+| `DisplayedRoute.swift` | The route to draw, keyed by id so the map only redraws when it changes. |
 | `CachingTileOverlayRenderer.swift` | Custom `MKOverlayRenderer`: draws cached tiles, crops lower-zoom tiles for overzoom, gates concurrent tile loads. |
 | `DirectionalPolylineRenderer.swift` | Custom `MKPolylineRenderer`: route line plus evenly-spaced direction chevrons. |
-| `OSMTileOverlay.swift` | `MKTileOverlay` subclass backed by `TileCache`; tile-path helpers for overzoom. |
+| `TileOverlay.swift` | `MKTileOverlay` subclass backed by `TileCache`; tile-path helpers for overzoom. |
 
-**Tile pipeline & offline maps**
+**Tile pipeline & offline maps** — `Models/`, `Managers/`
 | File | Role |
 |---|---|
 | `TileProvider.swift` | Catalog of selectable tile sources + settings keys. |
-| `TileCache.swift` | Two-tier memory/disk cache; ephemeral vs. durable stores; reachability monitor. |
-| `SlippyTileMath.swift` | Slippy-map tile index ↔ coordinate conversions. |
+| `TileCache.swift` | Two-tier memory/disk cache; ephemeral vs. durable stores; claimed/unclaimed accounting; reachability monitor. |
+| `SlippyTileMath.swift` | Slippy-map tile index ↔ coordinate conversions, plus `TileBoundingBox` (antimeridian-aware route bounds). |
 | `TileCorridor.swift` | A route's padded bounding box, scoping auto-saved tiles to "near the trail." |
+| `TileOwnership.swift` | Which tiles a hike claims, and which of those nothing else still needs — the basis for measuring and deleting. |
 | `OfflineTileDownloader.swift` | Bulk tile pre-fetch for policy-permitting providers. |
-| `AutoSaveTileStore.swift` / `AutoSaveController.swift` | Passive save-what-you-view pipeline; HEIC-encodes tiles; drains saved keys into the active hike. |
+| `AutoSaveTileStore.swift` / `AutoSaveController.swift` | Passive save-what-you-view pipeline; promotes browsed tiles into durable storage; drains saved keys into the active hike. |
 
-**Data & import**
+**Data & import** — `Models/`, `Managers/`
 | File | Role |
 |---|---|
-| `Hike.swift` | SwiftData model + derived stats + `Color` hex helpers. |
-| `GPXImport.swift` | Parses a `.gpx` file (via CoreGPX) into points + metadata. |
-| `RouteProfile.swift` | Precomputed distance/elevation index for O(log n) scrub lookups and route-matching. |
+| `Hike.swift` | The SwiftData `@Model`. |
+| `Hike+Statistics.swift` / `Hike+Presentation.swift` | Derived stats over the route; display-side helpers (coordinates, tint). |
+| `HikeSupportingTypes.swift` | `RouteCoordinate`, `ElevationSample`, `OfflineDownloadRecord`. |
+| `HikeFormat.swift` / `Color+Hex.swift` | Stat formatting; tint hex ↔ `Color`. |
+| `GPXImport.swift` | Parses a `.gpx` file (via CoreGPX) into points + metadata; rejects unrepresentable coordinates. |
+| `RouteProfile.swift` | Precomputed distance/elevation index for O(log n) scrub lookups and route-matching; downsamples samples for drawing. |
 
-**UI**
+**UI** — `UI/`
 | File | Role |
 |---|---|
 | `MapSheet.swift` | Persistent bottom sheet: search + suggestions, hikes list, import/record actions. |
+| `HikeRow.swift` | One hike row, shared by the list and the search suggestions. |
 | `HikeDetailView.swift` | Pushed hike detail: elevation chart, stats grid, offline/color/width controls, auto-follow. |
-| `SettingsView.swift` | Tile-provider picker, offline storage total + delete-all, account placeholder. |
+| `ElevationChartView.swift` / `HikeStatsViews.swift` | The scrubberable Swift Charts profile; the stats-grid building blocks. |
+| `SettingsView.swift` | Tile-provider picker, offline storage split + clear/delete, background tracking, account placeholder. |
 | `SearchCompleter.swift` | Wraps `MKLocalSearchCompleter` for the search bar's autocomplete. |
 | `TopEdgeReader.swift` | Reports a view's top edge for the "my location" button's sheet-aware positioning. |
 
-**Location & weather**
+**Location, weather & companion surfaces** — `Managers/`
 | File | Role |
 |---|---|
 | `LocationManager.swift` | Throttled `CLLocationManager` wrapper (delegate-based — see the file header for why not the async `liveUpdates()` stream). |
 | `WeatherManager.swift` | WeatherKit current-conditions fetch. |
+| `BackgroundTrailTracker.swift` | Builds and publishes the trail snapshot; owns the separate significant-location-change manager. |
+| `TrailBasemapRenderer.swift` | Rasterizes the widget's basemap images into the App Group. |
+| `WatchConnectivityBridge.swift` | Phone-side push of the snapshot to a paired Watch (iOS-only; stubbed elsewhere). |
 
-**Debug tooling** — `RenderInstrumentation.swift`, `MainThreadWatchdog.swift` (see above).
+**Other targets**
+| Target | Role |
+|---|---|
+| `OpenTrailsShared/` | SwiftPM package shared by every target: `SharedTrailSnapshot`, `SharedStore`, `Mercator`, `TrailBasemap`, `TrailMapView`/`TrailGlyphView`, `TrailWidgetDeepLink`. |
+| `OpenWidget/` | iOS Home Screen widget. |
+| `OpenWatch Watch App/` | Minimal Watch app — a fallback surface for the complication. |
+| `OpenWatchWidget/` | Watch complication. |
+
+**Debug tooling** — `Managers/RenderInstrumentation.swift`, `Managers/MainThreadWatchdog.swift` (see above).
 
 **Tests** — `OpenTrailsTests/` (app target logic, hosted by the app), `OpenTrailsShared/Tests/` (shared package). See [Tests](#tests).
 
@@ -166,20 +217,24 @@ Seven tests currently fail on purpose, each pinning a known defect — see [Know
 
 ## Privacy & entitlements
 
-- Location: "when in use" only (`NSLocationWhenInUseUsageDescription`), used to show your position and drive auto-follow.
-- `OpenTrails.entitlements` grants WeatherKit access and outbound network client access; App Sandbox and Hardened Runtime are both enabled.
-- All map/weather/search requests go directly from the device to the relevant provider (OpenStreetMap, Stadia, Thunderforest, Apple Weather/Maps) — there is no OpenTrails backend.
+- Location: "when in use" only (`NSLocationWhenInUseUsageDescription`), used to show your position and drive auto-follow. Background trail tracking is opt-in in Settings and uses significant-location-change delivery, not continuous GPS.
+- `OpenTrails.entitlements` grants WeatherKit access, outbound network client access, and the App Group; App Sandbox and Hardened Runtime are both enabled. The widget and complication get the App Group only.
+- All map/weather/search requests go directly from the device to the relevant provider (OpenStreetMap, Stadia, Thunderforest, Apple Weather/Maps) — there is no OpenTrails backend. The trail snapshot and basemap images stay on-device, in the App Group container.
 
 ## Known limitations
 
-- **Recording a live hike isn't implemented yet** — the record button in the hikes list is wired up but currently a no-op (`ContentView.recordHike`); only GPX import works today.
+Scope-level gaps, plus the defects that are still open. `CODE_REVIEW.md` has the full current list with file references, measurements, and suggested fixes — including the UI-performance items not repeated here.
+
+**Not built yet**
+
+- **Recording a live hike isn't implemented** — only GPX import works today. The record button was removed rather than left promising something it couldn't do; it comes back with a recording session behind it.
 - **Sign in with Apple** in Settings is a visual placeholder, not yet functional.
-- **No in-app API key entry** — Stadia and Thunderforest keys can only be supplied via the bundled `Secrets.plist`; there's no Settings field to paste one in on-device.
-- **No app-wide offline storage cap** — each hike's tiles are capped individually (3,000 auto-saved / ~4,000 bulk-downloaded), but total disk usage across many hikes is unbounded aside from the manual "Delete All" in Settings.
-- **The bulk-download tile budget isn't a hard cap** — `OfflineTileDownloader` applies its 4,000-tile budget *between* zoom levels and always takes the shallowest one, so a route whose overview zoom alone exceeds the budget downloads however many tiles that takes (a Europe-spanning GPX enumerates ~7,400). Covered by a failing test.
-- **A route crossing the antimeridian enumerates a band around the world** — tile *columns* wrap (`SlippyTileMath.wrap`), but the bounding boxes in `OfflineTileDownloader` and `TileCorridor` treat longitude as a plain interval, so a trail spanning ±180° gets a globe-wide box: thousands of ocean tiles at the overview zoom, and no budget left for the close-in zooms that would make it usable offline. Covered by a failing test.
-- **The elevation chart plots every track point** — two `catmullRom` marks per sample, rebuilt on every scrub event and once a second by auto-follow. An 18,000-point recording takes over a second per render (measurements in `CODE_REVIEW.md`), so scrubbing a long hike is effectively frozen. Covered by a failing test, alongside passing tests for what any downsampling has to preserve.
-- **A stationary walker republishes their position once a second** — `CLLocationCoordinate2D` isn't `Equatable`, so Observation can't filter an unchanged fix the way it filters the app's `Double`-valued state, and the map's location observation is re-armed every second for nothing. Covered by a failing test.
-- **`ElevationChartView.==` compares only sample counts**, so two different trails of the same length read as unchanged and the chart keeps drawing the old one. Latent today; live recording would make it reachable. Covered by a failing test.
-- **`ElevationSample.id` is a fresh `UUID` per instance**, so `ForEach` re-diffs the whole chart on every profile rebuild — and generating them is over half the cost of building a long profile. Covered by a failing test.
-- **Auto-save records a tile before it's written** — `AutoSaveTileStore.considerPersisting` inserts the key into the hike's known/pending sets and only then encodes and writes. If the encode fails (the reason there's a PNG fallback at all), the key still counts against the 3,000-tile cap, is reported as saved, and — being "known" — is never reconsidered. Covered by a failing test.
+- **No in-app API key entry** — Stadia and Thunderforest keys are a build-time concern, supplied via the bundled `Secrets.plist`. Deliberate rather than pending: without a key those providers are shown as "Needs API key" and can't be selected, so the app tells you why instead of drawing a blank map.
+
+**Open defects**
+
+- **Six UI-performance items remain open** — chiefly that the whole hike detail view rebuilds once per downloaded tile, search ranking runs up to four times per keystroke, and the selected route's coordinates are re-mapped on every `ContentView` body pass. All are measured in `CODE_REVIEW.md`.
+
+**Deliberate, but surprising**
+
+- **The elevation chart doesn't plot every track point.** `RouteProfile` thins the samples to a fixed 500 for drawing — already past what a 390 pt chart resolves at 3×, and the difference between a scrub that tracks your finger and one that doesn't on a long track. It's min/max per bucket, not a stride, so the route's true high and low points, both endpoints, and strictly ascending distances all survive; the tests pin all four, because the chart derives its axes and the live tracker's placement from exactly those. The budget is a constant, though, not a function of the chart's actual width.

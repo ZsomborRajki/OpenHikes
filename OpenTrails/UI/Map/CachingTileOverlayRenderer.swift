@@ -13,48 +13,23 @@
 import MapKit
 import os
 
-/// Bounds how many tile-load pipelines (network fetch, disk I/O, and — via
-/// ``AutoSaveTileStore`` — HEIC encoding) run their blocking work at once.
-///
-/// `loadTileIfNeeded` spawns one unstructured `Task` per cache-missed tile,
-/// with nothing limiting how many run together. Normally that's a handful.
-/// But right after fitting the map to a freshly-imported route, MapKit's
-/// zoom-to-fit animation calls `draw(_:zoomScale:in:)` across many tiles and
-/// zoom levels in quick succession, and since a fresh route has nothing
-/// cached yet, every one of them is a miss. That can fire off dozens of Tasks
-/// together, each blocking a thread in Swift's small cooperative pool on
-/// synchronous disk reads/writes and HEIC encoding (slower still on the
-/// Simulator). The pool doesn't grow to absorb that — it backs up, and since
-/// MapKit's own tile-rendering dispatch competes for the same worker threads,
-/// the whole map can appear to freeze, including after switching providers
-/// (the new overlay's tile loads queue up behind the same jam).
-///
-/// Mirrors ``OfflineTileDownloader``'s `maxConcurrent`, which already caps
-/// its own bulk-download pipeline the same way.
-private actor TileLoadGate {
-    static let shared = TileLoadGate()
-    private let maxConcurrent = 4
-    private var active = 0
-    private var waiters: [CheckedContinuation<Void, Never>] = []
-
-    func acquire() async {
-        if active < maxConcurrent {
-            active += 1
-            return
-        }
-        await withCheckedContinuation { waiters.append($0) }
-    }
-
-    /// Hands the freed slot straight to the next waiter when there is one, so
-    /// `active` never dips below what's really in flight between the two.
-    func release() {
-        guard !waiters.isEmpty else {
-            active -= 1
-            return
-        }
-        waiters.removeFirst().resume()
-    }
-}
+// Why the tile loads below go through a gate at all:
+//
+// `loadTileIfNeeded` spawns one unstructured `Task` per cache-missed tile,
+// with nothing limiting how many run together. Normally that's a handful. But
+// right after fitting the map to a freshly-imported route, MapKit's
+// zoom-to-fit animation calls `draw(_:zoomScale:in:)` across many tiles and
+// zoom levels in quick succession, and since a fresh route has nothing cached
+// yet, every one of them is a miss. That can fire off dozens of Tasks
+// together, each blocking a thread in Swift's small cooperative pool on
+// synchronous filesystem work (slower still on the Simulator). The pool
+// doesn't grow to absorb that — it backs up, and since MapKit's own
+// tile-rendering dispatch competes for the same worker threads, the whole map
+// can appear to freeze, including after switching providers (the new
+// overlay's tile loads queue up behind the same jam).
+//
+// The gate is shared with the bulk downloader, and these loads take it at
+// `.interactive` — see `TileLoadGate` for what that guarantees.
 
 nonisolated final class CachingTileOverlayRenderer: MKOverlayRenderer, TileCacheObserver {
     private static let logger = Logger(subsystem: "OpenTrails", category: "TileRenderer")
@@ -159,13 +134,14 @@ nonisolated final class CachingTileOverlayRenderer: MKOverlayRenderer, TileCache
         guard isNew else { return }
 
         // Deliberately *not* @MainActor: `cacheTile` does network I/O, disk
-        // reads/writes, and (via AutoSaveTileStore) HEIC encoding — all
-        // synchronous once awaited. Keeping this Task unisolated runs that
-        // work off the main thread instead of stalling it every scroll/zoom.
+        // reads/writes, and (via AutoSaveTileStore) a file move into durable
+        // storage — all synchronous once awaited. Keeping this Task unisolated
+        // runs that work off the main thread instead of stalling it every
+        // scroll/zoom.
         Task { [weak self] in
-            await TileLoadGate.shared.acquire()
+            await TileLoadGate.shared.acquire(.interactive)
             let loaded = await overlay.cacheTile(at: fetchPath)
-            await TileLoadGate.shared.release()
+            await TileLoadGate.shared.release(.interactive)
             guard let self else { return }
             self.inFlight.withLock { _ = $0.remove(key) }
             if loaded {

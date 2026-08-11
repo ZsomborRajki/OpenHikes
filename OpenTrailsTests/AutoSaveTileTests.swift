@@ -58,11 +58,15 @@ struct TileStoreTests {
         )
     }
 
-    /// Runs the tile-thread path: `considerPersisting` asserts it isn't on
-    /// main (it encodes an image and writes to disk).
-    private func persist(key: String, tile: (z: Int, x: Int, y: Int), image: TileImage) async {
+    /// Runs the tile-thread path: the tile has been drawn, so its bytes are in
+    /// the browsing cache, and `considerPersisting` decides whether to keep
+    /// them. Asserts it isn't on main (it moves a file).
+    ///
+    /// Pass `browsed: false` for the case where the bytes aren't there.
+    private func persist(key: String, tile: (z: Int, x: Int, y: Int), browsed: Bool = true) async throws {
+        if browsed { try TileStore.browse(key: key) }
         let store = store
-        await offMain { store.considerPersisting(key: key, z: tile.z, x: tile.x, y: tile.y, image: image) }
+        await offMain { store.considerPersisting(key: key, z: tile.z, x: tile.x, y: tile.y) }
     }
 
     private func cleanUp(_ keys: [String]) async {
@@ -74,43 +78,42 @@ struct TileStoreTests {
 
     @Test("a browsed tile near the trail is saved and reported back")
     func savesTilesOnTheTrail() async throws {
-        let image = try #require(Fixture.tileImage())
         activate()
         let key = key(16, 1, 1)
-        await persist(key: key, tile: tile(), image: image)
+        try await persist(key: key, tile: tile())
 
         #expect(store.drainPendingKeys(for: hikeID) == [key])
-        let bytes = await offMain { TileCache.shared.bytes(forKeys: [key]) }
-        #expect(bytes > 0, "the tile should actually be on disk, not just recorded")
+        #expect(TileStore.isSaved(key), "the tile should be kept for offline use, not just recorded")
+        #expect(!TileStore.isBrowsed(key), "and moved out of the cache rather than copied out of it")
         await cleanUp([key])
     }
 
     /// Panning away from the trail is browsing, not saving — otherwise a
     /// hike's offline budget fills with wherever the user happened to look.
+    /// The tile stays in the cache, where it can be reclaimed; it just isn't
+    /// promoted to something the hike is keeping.
     @Test("a tile far from the trail is not saved")
     func ignoresTilesOffCorridor() async throws {
-        let image = try #require(Fixture.tileImage())
         activate()
         let key = key(16, 9, 9)
-        await persist(key: key, tile: tile(northMeters: 25_000), image: image)
+        try await persist(key: key, tile: tile(northMeters: 25_000))
 
         #expect(store.drainPendingKeys(for: hikeID).isEmpty)
-        let bytes = await offMain { TileCache.shared.bytes(forKeys: [key]) }
-        #expect(bytes == 0)
+        #expect(!TileStore.isSaved(key))
+        #expect(TileStore.isBrowsed(key), "it is still cache, and still clearable as such")
         await cleanUp([key])
     }
 
     /// Re-viewing the same tile (every pan back and forth does) must not
-    /// re-encode and rewrite it.
+    /// move it a second time.
     @Test("a tile already saved isn't saved twice")
     func dedupesWithinASession() async throws {
-        let image = try #require(Fixture.tileImage())
         activate()
         let key = key(16, 2, 2)
-        await persist(key: key, tile: tile(), image: image)
+        try await persist(key: key, tile: tile())
         #expect(store.drainPendingKeys(for: hikeID) == [key])
 
-        await persist(key: key, tile: tile(), image: image)
+        try await persist(key: key, tile: tile())
         #expect(store.drainPendingKeys(for: hikeID).isEmpty)
         await cleanUp([key])
     }
@@ -119,10 +122,9 @@ struct TileStoreTests {
     /// tile saved in a previous session isn't rewritten in this one.
     @Test("keys carried over from a previous session are already known")
     func dedupesAcrossSessions() async throws {
-        let image = try #require(Fixture.tileImage())
         let key = key(16, 3, 3)
         activate(knownKeys: [key])
-        await persist(key: key, tile: tile(), image: image)
+        try await persist(key: key, tile: tile())
         #expect(store.drainPendingKeys(for: hikeID).isEmpty)
         await cleanUp([key])
     }
@@ -131,13 +133,12 @@ struct TileStoreTests {
 
     @Test("the cap is measured against everything the hike already claims")
     func capCountsExistingKeys() async throws {
-        let image = try #require(Fixture.tileImage())
         let existing = Set((0..<AutoSaveTileStore.tileCap).map { "\(namespace)/16/\($0)/0@2.0" })
         activate(knownKeys: existing)
         #expect(store.isCapReached(for: hikeID))
 
         let key = key(16, 4, 4)
-        await persist(key: key, tile: tile(), image: image)
+        try await persist(key: key, tile: tile())
         #expect(store.drainPendingKeys(for: hikeID).isEmpty, "nothing more should be saved once the cap is reached")
         await cleanUp([key])
     }
@@ -155,13 +156,11 @@ struct TileStoreTests {
 
     @Test("nothing is saved while no hike is active")
     func inactiveStoreSavesNothing() async throws {
-        let image = try #require(Fixture.tileImage())
         store.clearActiveHike()
         let key = key(16, 5, 5)
-        await persist(key: key, tile: tile(), image: image)
+        try await persist(key: key, tile: tile())
         #expect(store.drainPendingKeys(for: hikeID).isEmpty)
-        let bytes = await offMain { TileCache.shared.bytes(forKeys: [key]) }
-        #expect(bytes == 0)
+        #expect(!TileStore.isSaved(key))
         await cleanUp([key])
     }
 
@@ -169,10 +168,9 @@ struct TileStoreTests {
     /// splice one trail's tiles into another's manifest.
     @Test("pending keys are only handed to the hike they belong to")
     func drainIsScopedToTheHike() async throws {
-        let image = try #require(Fixture.tileImage())
         activate()
         let key = key(16, 6, 6)
-        await persist(key: key, tile: tile(), image: image)
+        try await persist(key: key, tile: tile())
 
         #expect(store.drainPendingKeys(for: UUID()).isEmpty)
         #expect(store.drainPendingKeys(for: hikeID) == [key], "the real hike's keys must survive the wrong-hike query")
@@ -181,32 +179,29 @@ struct TileStoreTests {
 
     @Test("switching hikes drops the previous one's pending keys")
     func switchingHikesResetsPending() async throws {
-        let image = try #require(Fixture.tileImage())
         activate()
         let key = key(16, 7, 7)
-        await persist(key: key, tile: tile(), image: image)
+        try await persist(key: key, tile: tile())
 
         store.setActiveHike(id: UUID(), route: Fixture.coordinates(Fixture.ridgeRoute), knownKeys: [])
         #expect(store.drainPendingKeys(for: hikeID).isEmpty)
         await cleanUp([key])
     }
 
-    // MARK: Failure to write
+    // MARK: Failure to save
 
-    /// A tile is claimed in the manifest before its bytes are on disk. If the
-    /// encode step fails — the reason there's a PNG fallback at all is that
-    /// HEIC encoding has been seen to fail — the key is left claiming a tile
-    /// that was never written: it counts against the 3,000-tile cap, it's
-    /// reported as saved, and being "known" it is never reconsidered.
-    @Test("a tile that couldn't be written isn't reported as saved")
-    func unencodableTileIsNotClaimed() async {
+    /// A tile is claimed before its bytes have moved. If there is nothing in
+    /// the cache to move — the tile came from memory after an OS purge of
+    /// `Caches` — the key would otherwise be left claiming a tile that was
+    /// never saved: it counts against the 3,000-tile cap, it is reported as
+    /// saved, and being "known" it is never reconsidered.
+    @Test("a tile with nothing cached to save isn't reported as saved")
+    func uncachedTileIsNotClaimed() async throws {
         activate()
         let key = key(16, 8, 8)
-        // An image with no backing bitmap: encodes to nothing, on either platform.
-        await persist(key: key, tile: tile(), image: Fixture.unencodableTileImage())
+        try await persist(key: key, tile: tile(), browsed: false)
 
-        let bytes = await offMain { TileCache.shared.bytes(forKeys: [key]) }
-        #expect(bytes == 0, "precondition: nothing was written")
+        #expect(!TileStore.isSaved(key), "precondition: nothing was saved")
         #expect(store.drainPendingKeys(for: hikeID).isEmpty, "a tile that isn't on disk must not be recorded as saved")
         await cleanUp([key])
     }
@@ -306,7 +301,6 @@ struct ControllerTests {
         let hike = Fixture.hike(in: context)
         controller.hikeSelectionChanged(to: hike)
 
-        let image = try #require(Fixture.tileImage())
         let store = AutoSaveTileStore.shared
         let anchor = hike.coordinates[2]
         let z = 17
@@ -314,7 +308,8 @@ struct ControllerTests {
         let y = SlippyTileMath.tileY(anchor.latitude, z: z)
         let keys = ["autosave-test/\(z)/\(x)/\(y)@2.0", "autosave-test/\(z)/\(x + 1)/\(y)@2.0"]
         for key in keys {
-            await offMain { store.considerPersisting(key: key, z: z, x: x, y: y, image: image) }
+            try TileStore.browse(key: key)
+            await offMain { store.considerPersisting(key: key, z: z, x: x, y: y) }
         }
 
         controller.flushPendingKeys()

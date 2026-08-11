@@ -74,14 +74,62 @@ struct TileProviderTests {
 
     /// A missing key resolves to an empty string rather than leaving `{key}`
     /// in the URL — the request still fails, but as a plain 401/403 rather
-    /// than a malformed URL. (There is no in-app way to supply a key, so this
-    /// is the real experience of picking a key-gated provider on a fresh
-    /// clone: a blank map.)
+    /// than a malformed URL. Reaching this at all now takes a stored id that
+    /// outlived its key (see `renderable(id:)`), because Settings won't let a
+    /// keyless provider be picked in the first place.
     @Test("a missing key leaves an empty parameter, not a literal placeholder")
     func resolvedTemplateWithoutKey() {
         let resolved = TileProvider.stadiaOutdoors.resolvedTemplate(apiKey: "")
         #expect(resolved.hasSuffix("api_key="))
         #expect(!resolved.contains("{key}"))
+    }
+
+    // MARK: - Usability
+
+    /// What Settings greys a row out on, and what `renderable(id:)` falls back
+    /// on. Keyless providers are usable no matter what they're handed — OSM is
+    /// the default, so getting this wrong would make a fresh clone unusable.
+    @Test("a keyless provider is usable with or without a key")
+    func keylessProviderIsAlwaysUsable() {
+        let provider = TileProvider.openStreetMap
+        #expect(provider.isUsable(withKey: nil))
+        #expect(provider.isUsable(withKey: ""))
+        #expect(provider.isUsable(withKey: "SECRET"))
+    }
+
+    /// The blank-map case: a key-gated provider with nothing to substitute can
+    /// only ever 401, so it isn't offered.
+    @Test("a key-gated provider is usable only with a non-empty key", arguments: [
+        TileProvider.stadiaOutdoors, TileProvider.thunderforestOutdoors
+    ])
+    func gatedProviderNeedsAKey(provider: TileProvider) {
+        #expect(!provider.isUsable(withKey: nil))
+        #expect(!provider.isUsable(withKey: ""))
+        #expect(provider.isUsable(withKey: "SECRET"))
+    }
+
+    /// A build that once had a `Secrets.plist` leaves the chosen id behind in
+    /// `UserDefaults` after the key is gone. Rendering that as a blank map is
+    /// the worst available answer, so the resolution step falls back instead —
+    /// and the fallback has to be a provider that needs no key, or it would
+    /// just move the problem.
+    @Test("a provider that can't load tiles resolves to the default")
+    func unusableProviderFallsBack() {
+        for provider in TileProvider.all where !Secrets.canLoadTiles(provider) {
+            #expect(
+                TileProvider.renderable(id: provider.id).id == TileProvider.default.id,
+                "\(provider.name) has no key in this build, so the map must not be asked to draw it"
+            )
+        }
+        #expect(Secrets.canLoadTiles(.default), "the fallback itself must never need a key")
+    }
+
+    /// The other half: resolution only ever *substitutes* a provider it can't
+    /// draw, never one it can.
+    @Test("a usable provider resolves to itself", arguments: TileProvider.all)
+    func usableProviderIsKept(provider: TileProvider) {
+        guard Secrets.canLoadTiles(provider) else { return }
+        #expect(TileProvider.renderable(id: provider.id).id == provider.id)
     }
 
     /// Keyless providers ignore whatever they're handed.

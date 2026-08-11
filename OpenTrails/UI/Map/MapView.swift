@@ -98,8 +98,10 @@ struct MapView: MapViewRepresentable, Equatable {
             mapView.removeOverlay(existing)
         }
 
-        let overlay = TileOverlay(urlTemplate: tileSource.urlTemplate)
-        overlay.providerID = tileSource.providerID
+        let overlay = TileOverlay(providerID: tileSource.providerID, urlTemplate: tileSource.urlTemplate)
+        // The two below are `MKTileOverlay`'s own properties, so they stay
+        // assignments; like `providerID` they're set before the overlay is
+        // handed to MapKit, and never touched again afterwards.
         overlay.canReplaceMapContent = true
         overlay.maximumZ = tileSource.maximumZ
         // Below the route line, which is also added at `.aboveLabels`.

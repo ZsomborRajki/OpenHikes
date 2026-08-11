@@ -55,7 +55,7 @@ struct GPXImportTests {
 
     @Test("a track's points, elevations and times all come through")
     func loadsTrackPoints() throws {
-        let track = try #require(GPXImport.load(from: try gpxFile(Self.fullTrack)))
+        let track = try GPXImport.load(from: try gpxFile(Self.fullTrack))
         #expect(track.points.count == 3)
         #expect(abs(track.points[0].coordinate.latitude - 47.63) < 1e-9)
         #expect(abs(track.points[0].coordinate.longitude - 12.86) < 1e-9)
@@ -68,7 +68,7 @@ struct GPXImportTests {
     /// meaningful one on the track itself.
     @Test("the track's own name and description are preferred over the file's")
     func prefersTrackMetadata() throws {
-        let track = try #require(GPXImport.load(from: try gpxFile(Self.fullTrack)))
+        let track = try GPXImport.load(from: try gpxFile(Self.fullTrack))
         #expect(track.name == "Thumsee Loop")
         #expect(track.trackDescription == "A lakeside loop.")
         #expect(track.author == "Ada Lovelace")
@@ -77,7 +77,7 @@ struct GPXImportTests {
 
     @Test("the activity date comes from the file's metadata when it has one")
     func startTimeFromMetadata() throws {
-        let track = try #require(GPXImport.load(from: try gpxFile(Self.fullTrack)))
+        let track = try GPXImport.load(from: try gpxFile(Self.fullTrack))
         let expected = ISO8601DateFormatter().date(from: "2026-06-01T08:00:00Z")
         #expect(track.startTime == expected)
     }
@@ -95,7 +95,7 @@ struct GPXImportTests {
           </trkseg></trk>
         </gpx>
         """
-        let track = try #require(GPXImport.load(from: try gpxFile(xml)))
+        let track = try GPXImport.load(from: try gpxFile(xml))
         #expect(track.startTime == ISO8601DateFormatter().date(from: "2026-06-01T09:30:00Z"))
     }
 
@@ -113,7 +113,7 @@ struct GPXImportTests {
           </trkseg></trk>
         </gpx>
         """
-        let track = try #require(GPXImport.load(from: try gpxFile(xml)))
+        let track = try GPXImport.load(from: try gpxFile(xml))
         // ~111 m out and ~111 m back: an out-and-back is twice the span, not zero.
         #expect(abs(track.distanceMeters - 222) < 5)
     }
@@ -126,7 +126,7 @@ struct GPXImportTests {
           <trk><trkseg><trkpt lat="47.6300" lon="12.8600"/></trkseg></trk>
         </gpx>
         """
-        let track = try #require(GPXImport.load(from: try gpxFile(xml)))
+        let track = try GPXImport.load(from: try gpxFile(xml))
         #expect(track.distanceMeters == 0)
         #expect(track.points.count == 1)
     }
@@ -149,7 +149,7 @@ struct GPXImportTests {
           </trk>
         </gpx>
         """
-        let track = try #require(GPXImport.load(from: try gpxFile(xml)))
+        let track = try GPXImport.load(from: try gpxFile(xml))
         #expect(track.points.count == 3)
         #expect(track.points.map { ($0.coordinate.latitude * 1e4).rounded() } == [476_300, 476_310, 476_320])
     }
@@ -168,7 +168,7 @@ struct GPXImportTests {
           </rte>
         </gpx>
         """
-        let track = try #require(GPXImport.load(from: try gpxFile(xml)))
+        let track = try GPXImport.load(from: try gpxFile(xml))
         #expect(track.points.count == 2)
         #expect(track.points[1].elevation == 620)
     }
@@ -183,7 +183,7 @@ struct GPXImportTests {
           <wpt lat="47.6310" lon="12.8600"><ele>620.0</ele></wpt>
         </gpx>
         """
-        let track = try #require(GPXImport.load(from: try gpxFile(xml)))
+        let track = try GPXImport.load(from: try gpxFile(xml))
         #expect(track.points.count == 2)
     }
 
@@ -203,7 +203,7 @@ struct GPXImportTests {
           </trkseg></trk>
         </gpx>
         """
-        let track = try #require(GPXImport.load(from: try gpxFile(xml)))
+        let track = try GPXImport.load(from: try gpxFile(xml))
         #expect(track.points.count == 2)
         #expect(track.points.allSatisfy { $0.coordinate.latitude > 47 })
     }
@@ -227,7 +227,7 @@ struct GPXImportTests {
           </trkseg></trk>
         </gpx>
         """
-        let track = try #require(GPXImport.load(from: try gpxFile(xml)))
+        let track = try GPXImport.load(from: try gpxFile(xml))
         #expect(track.points.count == 2)
         for point in track.points {
             #expect(abs(point.coordinate.latitude) < 85)
@@ -235,9 +235,10 @@ struct GPXImportTests {
         }
     }
 
-    /// Nothing usable in the file means nothing to import — the caller
-    /// (`ContentView.importGPX`) treats `nil` as "don't create a hike".
-    @Test("a file with nothing importable is refused", arguments: [
+    /// A file that parsed fine and simply has nothing in it. Told apart from
+    /// "that isn't a GPX file" because the user can act on the difference —
+    /// and because the import used to report neither.
+    @Test("a parsable file with nothing importable is refused as empty", arguments: [
         // Well-formed GPX, no points anywhere.
         """
         <?xml version="1.0" encoding="UTF-8"?>
@@ -257,20 +258,63 @@ struct GPXImportTests {
           <trk><trkseg><trkpt><ele>600</ele></trkpt></trkseg></trk>
         </gpx>
         """,
-        // Not GPX at all.
-        "<?xml version=\"1.0\"?><html><body>Not a GPX file</body></html>",
-        // Not even XML.
-        "this is not a gpx file"
+        // Well-formed XML that simply isn't GPX. CoreGPX parses it happily
+        // into a document with no tracks, so it can't be told apart from an
+        // empty GPX file — which is why `.noUsablePoints` is worded to cover
+        // "this may not be a GPX file" too.
+        "<?xml version=\"1.0\"?><html><body>Not a GPX file</body></html>"
     ])
-    func refusesUnusableFiles(xml: String) throws {
-        #expect(GPXImport.load(from: try gpxFile(xml)) == nil)
+    func refusesEmptyFiles(xml: String) throws {
+        #expect(throws: GPXImport.ImportFailure.noUsablePoints) {
+            try GPXImport.load(from: try gpxFile(xml))
+        }
+    }
+
+    /// Only a file the parser can't get through at all reaches `.unreadable`.
+    @Test("a file that isn't even XML is refused as unreadable")
+    func refusesNonXMLFiles() throws {
+        #expect(throws: GPXImport.ImportFailure.unreadable) {
+            try GPXImport.load(from: try gpxFile("this is not a gpx file"))
+        }
     }
 
     @Test("a file that isn't there is refused rather than trapping")
     func refusesMissingFile() {
         let missing = FileManager.default.temporaryDirectory
             .appendingPathComponent("does-not-exist-\(UUID().uuidString).gpx")
-        #expect(GPXImport.load(from: missing) == nil)
+        #expect(throws: GPXImport.ImportFailure.unreadable) {
+            try GPXImport.load(from: missing)
+        }
+    }
+
+    /// Every refusal has to carry something to show the user — the whole point
+    /// of typing them. A case added later without copy would fail here rather
+    /// than surfacing as an empty alert.
+    @Test("every failure explains itself", arguments: [
+        GPXImport.ImportFailure.unreadable, .noUsablePoints, .tooShort
+    ])
+    func failuresAreExplained(failure: GPXImport.ImportFailure) throws {
+        let description = try #require(failure.errorDescription)
+        let suggestion = try #require(failure.recoverySuggestion)
+        #expect(!description.isEmpty)
+        #expect(!suggestion.isEmpty)
+    }
+
+    /// A one-point file parses successfully — refusing it is the *import's*
+    /// call. Keeping the two apart is what lets the alert say "only one track
+    /// point" instead of the blanket "couldn't read that".
+    @Test("a single-point file parses, and is left for the import to refuse")
+    func singlePointParsesButIsntARoute() throws {
+        let xml = """
+        <?xml version="1.0" encoding="UTF-8"?>
+        <gpx version="1.1" creator="OpenTrailsTests" xmlns="http://www.topografix.com/GPX/1/1">
+          <trk><trkseg><trkpt lat="47.6300" lon="12.8600"/></trkseg></trk>
+        </gpx>
+        """
+        let track = try GPXImport.load(from: try gpxFile(xml))
+        #expect(track.points.count == 1)
+        // The rule `ContentView.importGPX` applies to it.
+        #expect(track.points.count <= 1, "which is what makes it .tooShort at the import")
     }
 
     /// Blank metadata fields are common (`<desc></desc>`) and should read as
@@ -288,7 +332,7 @@ struct GPXImportTests {
           </trkseg></trk>
         </gpx>
         """
-        let track = try #require(GPXImport.load(from: try gpxFile(xml)))
+        let track = try GPXImport.load(from: try gpxFile(xml))
         #expect(track.name == nil)
         #expect(track.trackDescription == nil)
         #expect(track.author == nil)
@@ -303,7 +347,7 @@ struct GPXImportTests {
     /// one step rather than assumed.
     @Test("an imported track indexes cleanly into a route profile")
     func importedTrackFeedsTheProfile() throws {
-        let track = try #require(GPXImport.load(from: try gpxFile(Self.fullTrack)))
+        let track = try GPXImport.load(from: try gpxFile(Self.fullTrack))
         let route = track.points.map {
             RouteCoordinate(
                 latitude: $0.coordinate.latitude,

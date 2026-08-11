@@ -61,7 +61,21 @@ final class AutoSaveController {
         AutoSaveTileStore.shared.isCapReached(for: hike.id)
     }
 
+    /// Called just before `hike` is deleted, so the delete that follows sees a
+    /// complete manifest. Waiting for the selection change to propagate back
+    /// through SwiftUI would leave the tiles saved in the last drain window on
+    /// disk with nothing claiming them — and they're durable, so nothing would
+    /// ever reclaim them.
+    func hikeWillBeDeleted(_ hike: Hike) {
+        guard activeHike?.id == hike.id else { return }
+        deactivate()
+    }
+
     private func activate(_ hike: Hike) {
+        // Hand the outgoing hike its tiles back first: `setActiveHike` replaces
+        // the store's state wholesale, pending set included, and those tiles are
+        // already on disk.
+        flushPendingKeys()
         activeHike = hike
         AutoSaveTileStore.shared.setActiveHike(
             id: hike.id,
@@ -71,6 +85,9 @@ final class AutoSaveController {
     }
 
     private func deactivate() {
+        // Same reason as in `activate`: `clearActiveHike` drops the pending set,
+        // which is the only record of the last couple of seconds' worth of saves.
+        flushPendingKeys()
         activeHike = nil
         AutoSaveTileStore.shared.clearActiveHike()
     }

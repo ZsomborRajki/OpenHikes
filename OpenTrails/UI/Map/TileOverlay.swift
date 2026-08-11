@@ -13,8 +13,23 @@ nonisolated final class TileOverlay: MKTileOverlay, @unchecked Sendable {
     private let cache = TileCache.shared
 
     /// Identifies the tile source, so cached tiles from different providers never
-    /// collide. Set when the overlay is created for the selected provider.
-    var providerID: String = TileProvider.default.id
+    /// collide.
+    ///
+    /// `let`, and taken in the initializer, because this type is
+    /// `@unchecked Sendable` and this property is read off the main thread on
+    /// every tile load (through ``cacheKey(for:)``, from ``cacheTile(at:)``'s
+    /// background task). As a `var` it was safe only by convention — assigned
+    /// once immediately after construction and never again — with nothing
+    /// stopping a later change from mutating it after publication, which would
+    /// be a silent data race *and* would start filing tiles under the wrong
+    /// provider. Switching providers builds a new overlay anyway
+    /// (`MapView.applyTileSource`), so there was never a reason for it to move.
+    let providerID: String
+
+    init(providerID: String, urlTemplate: String?) {
+        self.providerID = providerID
+        super.init(urlTemplate: urlTemplate)
+    }
 
     /// Synchronous cache hit, or nil. Used by the renderer's draw pass.
     func cachedImage(at path: MKTileOverlayPath) -> TileImage? {
@@ -25,15 +40,16 @@ nonisolated final class TileOverlay: MKTileOverlay, @unchecked Sendable {
     /// whether a tile is now available, so the renderer only redraws on success.
     func cacheTile(at path: MKTileOverlayPath) async -> Bool {
         let key = cacheKey(for: path)
-        guard let image = await cache.loadTile(forKey: key, url: url(forTilePath: path)) else { return false }
+        guard await cache.loadTile(forKey: key, url: url(forTilePath: path)) != nil else { return false }
 
         // Opportunistically keep tiles the user actually views — never a
         // synthetic prefetch, just what MapKit already asked for. Runs for
         // every provider: it's how OSM (which disallows bulk downloading)
         // saves anything at all, and it also fills gaps a bulk download left
         // (e.g. an area zoomed into that the bulk pass didn't cover) for
-        // providers that support both.
-        AutoSaveTileStore.shared.considerPersisting(key: key, z: path.z, x: path.x, y: path.y, image: image)
+        // providers that support both. Takes only the key: the tile's bytes are
+        // in the cache the load above just populated, and get moved, not re-encoded.
+        AutoSaveTileStore.shared.considerPersisting(key: key, z: path.z, x: path.x, y: path.y)
         return true
     }
 

@@ -17,17 +17,25 @@ struct SettingsView: View {
     @Environment(\.modelContext) private var modelContext
     @Query private var hikes: [Hike]
 
+    /// Needed to fold in tiles auto-saved since the last drain before anything
+    /// here reads the manifests — this screen both measures and deletes by them.
+    let autoSave: AutoSaveController
     let backgroundTracker: BackgroundTrailTracker
 
     @AppStorage(SettingsKey.tileProviderID) private var tileProviderID = TileProvider.default.id
     @AppStorage(SettingsKey.backgroundTrackingEnabled) private var backgroundTrackingEnabled = false
 
-    /// Total tile-cache size on disk; `nil` until measured.
-    @State private var totalBytes: Int64?
+    /// Tile bytes on disk, split into offline coverage and browsing residue;
+    /// `nil` until measured.
+    @State private var usage: TileCache.DiskUsage?
     @State private var showDeleteAll = false
 
+    /// The provider the map is really drawing with, which is not always the
+    /// stored one — see ``TileProvider/renderable(id:)``. The attribution and
+    /// the checkmark both follow this: showing Stadia's attribution over
+    /// OpenStreetMap tiles would be wrong twice over.
     private var selectedProvider: TileProvider {
-        TileProvider.provider(id: tileProviderID)
+        TileProvider.renderable(id: tileProviderID)
     }
 
     var body: some View {
@@ -47,7 +55,7 @@ struct SettingsView: View {
                     Button("Done") { dismiss() }
                 }
             }
-            .task { await refreshTotalBytes() }
+            .task { await refreshUsage() }
         }
     }
 
@@ -103,7 +111,12 @@ struct SettingsView: View {
         } header: {
             Text("Map Tiles")
         } footer: {
-            Text(selectedProvider.attribution)
+            VStack(alignment: .leading, spacing: 6) {
+                Text(selectedProvider.attribution)
+                if TileProvider.all.contains(where: { !Secrets.canLoadTiles($0) }) {
+                    Text("Sources marked “Needs API key” aren’t available in this build. Adding one is a build-time step — see Secrets.example.plist in the project.")
+                }
+            }
         }
     }
 
@@ -145,51 +158,104 @@ struct SettingsView: View {
 
     // MARK: - Offline
 
+    /// Two numbers, not one: the tiles the hikes are keeping for offline use,
+    /// and the ones the map merely happened to draw. They used to be added
+    /// together and labelled "Downloaded tiles", which read as a single pile of
+    /// deliberately-saved data and left the total permanently ahead of what any
+    /// hike could account for — or delete.
     private var offlineStorageSection: some View {
         Section {
-            HStack {
-                Label("Downloaded tiles", systemImage: "internaldrive")
-                Spacer()
-                Text(totalBytes.map(Self.byteText) ?? "…")
-                    .foregroundStyle(.secondary)
-                    .monospacedDigit()
-            }
+            usageRow(
+                "Saved for offline",
+                systemImage: "internaldrive",
+                bytes: usage?.claimed
+            )
+            usageRow(
+                "Map cache",
+                systemImage: "clock.arrow.circlepath",
+                bytes: usage?.unclaimed
+            )
+
+            Button("Clear Map Cache", action: clearMapCache)
+                .disabled((usage?.unclaimed ?? 0) == 0)
 
             Button(role: .destructive) {
                 showDeleteAll = true
             } label: {
-                Text("Delete All Offline Tiles")
+                Text("Delete All Saved Tiles")
             }
-            .disabled((totalBytes ?? 0) == 0)
+            .disabled((usage?.total ?? 0) == 0)
             .confirmationDialog(
-                "Delete all downloaded map tiles?",
+                "Delete every saved map tile?",
                 isPresented: $showDeleteAll,
                 titleVisibility: .visible
             ) {
                 Button("Delete All", role: .destructive) { deleteAllTiles() }
                 Button("Cancel", role: .cancel) {}
             } message: {
-                Text("Frees the storage they use. Tiles re-download automatically when you view maps online again.")
+                Text("Your hikes lose their offline maps, and the map cache is cleared too. Tiles re-download when you view maps online again.")
             }
         } header: {
             Text("Offline Storage")
+        } footer: {
+            Text("Saved tiles keep your hikes usable without a signal, and are never removed automatically. The map cache is just what you’ve recently looked at — it’s kept under \(Self.byteText(TileCache.cacheByteLimit)), oldest first, and clearing it costs you nothing offline.")
         }
     }
 
-    private func refreshTotalBytes() async {
-        let bytes = await Task.detached { TileCache.shared.totalDiskBytes() }.value
-        totalBytes = bytes
+    private func usageRow(_ title: String, systemImage: String, bytes: Int64?) -> some View {
+        HStack {
+            Label(title, systemImage: systemImage)
+            Spacer()
+            Text(bytes.map(Self.byteText) ?? "…")
+                .foregroundStyle(.secondary)
+                .monospacedDigit()
+        }
+    }
+
+    /// Snapshots every hike's claims on the main actor so the expensive part —
+    /// enumerating each one's tile grid — can run off it. Mirrors the delete
+    /// path in ``MapSheet``.
+    private func claimSnapshots() -> [TileOwnership] {
+        // Tiles auto-saved in the last couple of seconds are on disk with
+        // nothing in SwiftData pointing at them yet. Unflushed, they measure as
+        // cache and — worse — a cache clear would delete them.
+        autoSave.flushPendingKeys()
+        return hikes.filter(\.hasStoredTiles).map(TileOwnership.init)
+    }
+
+    private func refreshUsage() async {
+        let claims = claimSnapshots()
+        usage = await Task.detached {
+            TileCache.shared.diskUsage(claimedBy: Self.keys(of: claims))
+        }.value
+    }
+
+    private func clearMapCache() {
+        let claims = claimSnapshots()
+        usage?.unclaimed = 0
+        Task.detached {
+            TileCache.shared.removeTiles(unclaimedBy: Self.keys(of: claims))
+        }
     }
 
     private func deleteAllTiles() {
+        // Before the manifests are cleared: stopping auto-save folds in whatever
+        // it saved since the last drain, which would otherwise land in a
+        // manifest emptied a line later and claim tiles that are about to go.
+        autoSave.hikeSelectionChanged(to: nil)
         for hike in hikes {
             hike.offlineDownloads.removeAll()
             hike.autoSavedTileKeys.removeAll()
             hike.autoSaveTilesEnabled = false
         }
-        AutoSaveTileStore.shared.clearActiveHike()
-        totalBytes = 0
+        usage = TileCache.DiskUsage()
         Task.detached { TileCache.shared.removeAllTiles() }
+    }
+
+    /// `nonisolated`: the union is O(tile budget) trig per download record, so
+    /// it belongs inside the detached tasks above rather than on the way in.
+    private static nonisolated func keys(of claims: [TileOwnership]) -> Set<String> {
+        claims.reduce(into: Set<String>()) { $0.formUnion($1.tileKeys()) }
     }
 
     /// `nonisolated`: passed as a bare function reference to `Optional.map`,
@@ -199,8 +265,15 @@ struct SettingsView: View {
         ByteCountFormatter.string(fromByteCount: bytes, countStyle: .file)
     }
 
+    /// A provider whose key didn't resolve is shown, but not selectable: it can
+    /// only ever draw a blank map, and the previous behaviour — letting it be
+    /// picked and leaving the user staring at nothing — gave no hint that a
+    /// missing key was the reason.
     private func providerRow(_ provider: TileProvider) -> some View {
-        let isSelected = provider.id == tileProviderID
+        let isUsable = Secrets.canLoadTiles(provider)
+        // Against the *effective* provider, so a stored id that has since lost
+        // its key doesn't leave a checkmark on a row the map is ignoring.
+        let isSelected = provider.id == selectedProvider.id
         return Button {
             tileProviderID = provider.id
         } label: {
@@ -210,8 +283,18 @@ struct SettingsView: View {
                     .foregroundStyle(isSelected ? AnyShapeStyle(Color.accentColor) : AnyShapeStyle(.secondary))
 
                 VStack(alignment: .leading, spacing: 3) {
-                    Text(provider.name)
-                        .font(.body.weight(.medium))
+                    HStack(spacing: 8) {
+                        Text(provider.name)
+                            .font(.body.weight(.medium))
+                        if !isUsable {
+                            Text("Needs API key")
+                                .font(.caption2.weight(.medium))
+                                .foregroundStyle(.secondary)
+                                .padding(.horizontal, 7)
+                                .padding(.vertical, 3)
+                                .background(.quaternary, in: Capsule())
+                        }
+                    }
                     Text(provider.summary)
                         .font(.caption)
                         .foregroundStyle(.secondary)
@@ -224,10 +307,15 @@ struct SettingsView: View {
         }
         .buttonStyle(.plain)
         .foregroundStyle(.primary)
+        .opacity(isUsable ? 1 : 0.55)
+        .disabled(!isUsable)
     }
 }
 
 #Preview {
     let container = try! ModelContainer(for: Hike.self, configurations: .init(isStoredInMemoryOnly: true))
-    SettingsView(backgroundTracker: BackgroundTrailTracker(container: container))
+    SettingsView(
+        autoSave: AutoSaveController(),
+        backgroundTracker: BackgroundTrailTracker(container: container)
+    )
 }

@@ -31,6 +31,9 @@ struct ContentView: View {
     /// too; `MapView` is `.equatable()`, so that diff stops at the map.
     @State private var navigationPath: [Hike] = []
     @State private var highlight = RouteHighlight()
+    /// Set when a picked file couldn't become a hike; drives the alert that
+    /// says so. `nil` the rest of the time.
+    @State private var importFailure: GPXImport.ImportFailure?
     /// Lets the hike detail view drive one-shot map commands (e.g. the Zoom button).
     @State private var mapController = MapController()
     /// Tracks which hike (if any) is passively auto-saving OSM tiles while browsed.
@@ -56,12 +59,16 @@ struct ContentView: View {
 
     /// Resolves the selected provider (with API key substituted) for the map.
     private var activeTileSource: ActiveTileSource {
-        let provider = TileProvider.provider(id: tileProviderID)
-        let apiKey = Secrets.apiKey(for: provider) ?? ""
-        return ActiveTileSource(
-            providerID: provider.id,
-            urlTemplate: provider.resolvedTemplate(apiKey: apiKey),
-            maximumZ: provider.maximumZ
+        ActiveTileSource(TileProvider.renderable(id: tileProviderID))
+    }
+
+    /// `.alert(isPresented:error:)` wants a `Bool`; the message lives in
+    /// ``importFailure``, so dismissal clears that rather than a second flag
+    /// the two could disagree on.
+    private var showingImportFailure: Binding<Bool> {
+        Binding(
+            get: { importFailure != nil },
+            set: { if !$0 { importFailure = nil } }
         )
     }
 
@@ -91,6 +98,7 @@ struct ContentView: View {
             .task { await locationManager.start() }
             .task { await pollWeather() }
             .task { restoreLastSelectedHike() }
+            .task { trimTileCache() }
             .sheet(isPresented: $showSheet) {
                 MapSheet(
                     searchText: $searchText,
@@ -102,8 +110,8 @@ struct ContentView: View {
                     autoSave: autoSaveController,
                     locationManager: locationManager,
                     backgroundTracker: backgroundTracker,
-                    onRecord: recordHike,
                     onImportGPX: importGPX,
+                    onImportFailed: { importFailure = .unreadable },
                     onSheetTopChange: { sheetMetrics.topY = $0 }
                 )
                     .presentationDetents([.height(80), .medium, .large], selection: $sheetDetent)
@@ -120,6 +128,13 @@ struct ContentView: View {
             // issue — so if it ever goes away, bring it right back.
             .onChange(of: showSheet) { _, shown in
                 if !shown { showSheet = true }
+            }
+            // Presented from here rather than from the sheet: the document
+            // picker's dismissal tears the sheet down (see above), and an alert
+            // owned by a view that's being rebuilt at that moment doesn't
+            // reliably appear.
+            .alert(isPresented: showingImportFailure, error: importFailure) {
+                Button("OK", role: .cancel) {}
             }
             .onOpenURL { url in openHike(from: url) }
             // Follows the selected hike so auto-save always tracks what's on screen.
@@ -170,6 +185,28 @@ struct ContentView: View {
         selectedHike = try? modelContext.fetch(descriptor).first
     }
 
+    /// Once-per-launch housekeeping: brings tiles no hike claims back under
+    /// ``TileCache/cacheByteLimit``.
+    ///
+    /// Launch rather than a timer, and rather than on each save: browsing adds
+    /// tiles a few tens of kilobytes at a time, so a bound that's checked once
+    /// a session is checked often enough, and the check itself stats every
+    /// cached file. Offline coverage is exempt — reading the manifests here is
+    /// what makes it exempt, so this must not run before they can be read.
+    private func trimTileCache() {
+        // Auto-save can have tiles on disk that no manifest claims *yet*; a
+        // trim that ran first would count them as residue and be entitled to
+        // delete them.
+        autoSaveController.flushPendingKeys()
+        let claims = (try? modelContext.fetch(FetchDescriptor<Hike>()))?
+            .filter(\.hasStoredTiles)
+            .map(TileOwnership.init) ?? []
+        Task.detached {
+            let keys = claims.reduce(into: Set<String>()) { $0.formUnion($1.tileKeys()) }
+            TileCache.shared.trimCache(claimedBy: keys)
+        }
+    }
+
     /// Polls the user's location once a second (throttled — see
     /// `LocationManager`) and refetches weather only when the coarse (~1 km)
     /// location key actually changes. Mirrors `HikeDetailView.followLocation`'s
@@ -196,15 +233,23 @@ struct ContentView: View {
         "\(Int(coordinate.latitude * 100)),\(Int(coordinate.longitude * 100))"
     }
 
-    // TODO: start a live GPS recording session.
-    private func recordHike() {}
-
     /// Parses a picked .gpx file, persists it as a `Hike`, and shows it on the map.
+    /// A file that can't become a hike raises ``importFailure`` rather than
+    /// leaving the user looking at an unchanged screen.
     private func importGPX(from url: URL) {
         let scoped = url.startAccessingSecurityScopedResource()
         defer { if scoped { url.stopAccessingSecurityScopedResource() } }
 
-        guard let track = GPXImport.load(from: url), track.points.count > 1 else { return }
+        let track: GPXImport.Track
+        // Typed, so the catch below can't quietly widen to `any Error` and
+        // start swallowing something this screen has no message for.
+        do throws(GPXImport.ImportFailure) {
+            track = try GPXImport.load(from: url)
+            guard track.points.count > 1 else { throw .tooShort }
+        } catch {
+            importFailure = error
+            return
+        }
 
         let title = track.name ?? url.deletingPathExtension().lastPathComponent
         let hike = Hike(
