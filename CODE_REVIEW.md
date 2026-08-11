@@ -29,12 +29,6 @@ Only local instructions exist; `.github/workflows` is empty. The current suite d
 
 **Recommendation:** Add CI for the shared package, unsigned platform compilation, and app tests on a controlled simulator. Report skipped conditional suites explicitly.
 
-## Performance backlog
-
-These findings remain valid from the prior measured pass:
-
-1. **Overzoom placeholders are re-cropped on each draw.** `CachingTileOverlayRenderer.fallbackImage` materializes a cropped bitmap for every fallback. Memoize crops or clip and draw the ancestor directly.
-
 ## Test review
 
 ### Strong coverage
