@@ -4,20 +4,16 @@ Reviewed 2026-08-11 at commit `773a253` (`main`, aligned with `origin/main`).
 
 ## Executive summary
 
-The iOS application is in a strong state for a young, multi-target SwiftUI project. Its algorithmic and offline-storage tests are unusually thorough, the main-thread/off-main split is deliberate, and render isolation is well designed. The app suite contains **197 tests in 23 suites**; its latest full runs expose one timing-sensitive Tile Load Gate failure that passes when the suite is isolated. The shared package passed **42 tests in 5 suites**, and iOS, macOS, and visionOS now compile cleanly.
+The iOS application is in a strong state for a young, multi-target SwiftUI project. Its algorithmic and offline-storage tests are unusually thorough, the main-thread/off-main split is deliberate, and render isolation is well designed. The app suite contains **209 tests in 24 suites**; its latest full runs expose one timing-sensitive Tile Load Gate failure that passes when the suite is isolated. The shared package passed **42 tests in 5 suites**, and iOS, macOS, and visionOS now compile cleanly.
 
-There are no confirmed critical defects, but there are several high-priority correctness and release risks:
-
-1. Partial tile-download failures are recorded as complete offline coverage.
-2. Sparse GPX routes can be classified off-route because matching considers vertices rather than segments.
-3. Durable OpenStreetMap offline storage does not comply with the public tile service's caching/offline-use policy.
+There are no confirmed critical or high-priority defects. The remaining findings are medium-priority correctness, lifecycle, performance, and release-engineering risks.
 
 ## Current build and test state
 
 | Surface | Result | Notes |
 |---|---:|---|
 | iOS app build | Pass | `OpenTrails`, iPhone 17 Pro simulator, iOS 26.5 |
-| iOS app tests | **Flaky** | 197 tests; `TileLoadGateTests.downloadCannotStarveTheMap` fails under the full parallel suite but its 4-test suite passes isolated |
+| iOS app tests | **Flaky** | 209 tests; `TileLoadGateTests.downloadCannotStarveTheMap` fails under the full parallel suite but its 4-test suite passes isolated |
 | Shared package tests | Pass | 42 tests, 5 suites |
 | macOS build | Pass | Platform-specific authorization handling; iOS extensions excluded from embedding |
 | visionOS build | Pass | visionOS authorization and material fallbacks compile with the 26.5 simulator SDK |
@@ -25,43 +21,9 @@ There are no confirmed critical defects, but there are several high-priority cor
 
 The app suite has produced clean passes, but repeated post-review runs reproduce the Tile Load Gate timing failure even after a simulator reset. This reinforces the need to replace fixed timing assumptions with explicit synchronization and to run the suite in deterministic CI.
 
-## High-priority findings
-
-### 1. Failed tile downloads are persisted as complete
-
-**Files:** `OpenTrails/Managers/OfflineTileDownloader.swift:94-143`, `OpenTrails/UI/Hike/HikeDetailView.swift:129-138`
-
-Each child task receives the `Bool` returned by `saveTileDurably`, but the result is discarded. Every completed child increments progress, and any non-cancelled run ends in `.finished`. `HikeDetailView` then records an `OfflineDownloadRecord`, whose deterministic key set assumes every tile was saved.
-
-**Impact:** HTTP, decode, or disk failures can produce incomplete maps shown as fully available offline. Storage accounting and later deletion also operate on a manifest that overstates what exists.
-
-**Recommendation:** Aggregate per-key success, distinguish complete/partial/failed outcomes, persist only verified coverage, and expose retryable missing tiles. Add controlled transport tests for HTTP failure, invalid image data, and write failure.
-
-### 2. Route matching measures vertices instead of route segments
-
-**File:** `OpenTrails/Models/RouteProfile.swift:148-200`
-
-`nearestPoint(to:near:)` compares a fix with every recorded coordinate. It does not project the fix onto the line segments between those points. A user standing on the midpoint of a segment longer than twice the 75 m follow threshold can be reported off-route even while directly on the trail.
-
-**Impact:** Sparse GPX files can cause the live marker, elevation auto-follow, widget progress, and Watch progress to disappear or jump.
-
-**Recommendation:** Project onto each polyline segment, interpolate cumulative route distance, and apply the existing continuity tie-break to segment projections. Add long-segment midpoint, loop, and antimeridian tests.
-
-### 3. OpenStreetMap durable storage conflicts with tile-service policy
-
-**Files:** `OpenTrails/Models/TileProvider.swift:48-57`, `OpenTrails/Managers/TileCache.swift:55-70,130-245`, `OpenTrails/Managers/AutoSaveTileStore.swift:65-95`
-
-The default source is `tile.openstreetmap.org`. Viewed tiles may be promoted into non-reclaimable Application Support storage specifically for later offline use. The cache stores raw image bytes without expiry metadata and does not honor `Cache-Control`, `Expires`, `ETag`, or `Last-Modified`.
-
-The current [OpenStreetMap tile usage policy](https://operations.osmfoundation.org/policies/tiles/) requires honoring server caching headers (or retaining tiles for at least seven days), conditional revalidation after expiry, and states that offline use is not permitted on `tile.openstreetmap.org`.
-
-**Impact:** The app may serve indefinitely stale tiles and risks having its tile traffic blocked. The existing User-Agent and lack of bulk prefetch for OSM are good, but they do not resolve the durable offline-use and revalidation requirements.
-
-**Recommendation:** Treat OSM as a policy-compliant interactive cache with expiry/revalidation, not durable offline coverage. Use a provider that explicitly permits offline storage, self-hosted tiles, or an offline-capable vector dataset for the auto-save feature.
-
 ## Medium-priority correctness and lifecycle findings
 
-### 4. Pending auto-save ownership can be lost on suspension or termination
+### 1. Pending auto-save ownership can be lost on suspension or termination
 
 **Files:** `OpenTrails/Managers/AutoSaveController.swift:26-32,67-105`, `OpenTrails/UI/OpenTrailsApp.swift:37-48`
 
@@ -69,7 +31,7 @@ Newly promoted tiles live only in `AutoSaveTileStore.pendingKeys` until the two-
 
 **Recommendation:** Flush pending keys and save the model context when entering inactive/background states. Longer term, make durable promotion and ownership persistence one recoverable transaction.
 
-### 5. Watch state can be lost at activation boundaries
+### 2. Watch state can be lost at activation boundaries
 
 **Files:** `OpenTrails/Managers/WatchConnectivityBridge.swift:22-55`, `OpenWatch Watch App/WatchConnectivityBridge.swift:26-54`
 
@@ -79,7 +41,7 @@ The phone drops `send` calls until `WCSession` is activated and does not replay 
 
 **Recommendation:** Retain and replay the latest phone state after activation. Add an explicit versioned envelope with a clear marker; ignore absent or malformed contexts while preserving the last valid snapshot.
 
-### 6. GPX segment boundaries become fictitious route legs
+### 3. GPX segment boundaries become fictitious route legs
 
 **File:** `OpenTrails/Managers/GPXImport.swift:28-42,101-109`
 
@@ -89,7 +51,7 @@ All tracks and segments are flattened into one point array, and distance is summ
 
 **Recommendation:** Preserve segment boundaries in the route model, or at minimum exclude cross-segment edges from distance/profile/matching calculations.
 
-### 7. Location fixes are accepted without freshness or accuracy checks
+### 4. Location fixes are accepted without freshness or accuracy checks
 
 **Files:** `OpenTrails/Managers/LocationManager.swift:54-80`, `OpenTrails/Managers/BackgroundTrailTracker.swift:194-223,258-269`
 
@@ -97,7 +59,7 @@ Core Location can initially deliver cached samples or samples with invalid/poor 
 
 **Recommendation:** Reject negative or excessive `horizontalAccuracy`, reject stale timestamps, and preserve the source timestamp in `SharedTrailSnapshot.LiveFix`.
 
-### 8. Map searches can apply out-of-order responses
+### 5. Map searches can apply out-of-order responses
 
 **File:** `OpenTrails/UI/Map/MapSheet.swift:355-380`
 
@@ -105,7 +67,7 @@ Each selected suggestion or submitted query starts an uncancelled task. A slower
 
 **Recommendation:** Retain a cancellable search task or generation token and invalidate it whenever a new search starts.
 
-### 9. Weather failures are not retried while stationary
+### 6. Weather failures are not retried while stationary
 
 **Files:** `OpenTrails/UI/ContentView.swift:218-229`, `OpenTrails/Managers/WeatherManager.swift:21-27`
 
@@ -113,7 +75,7 @@ Each selected suggestion or submitted query starts an uncancelled task. A slower
 
 **Recommendation:** Advance the successful key only after a fetch succeeds, and add a bounded retry/freshness policy.
 
-### 10. Offline byte measurements can complete out of order
+### 7. Offline byte measurements can complete out of order
 
 **File:** `OpenTrails/UI/Hike/HikeDetailView.swift:155-195`
 
@@ -121,7 +83,7 @@ Every manifest change launches an independent detached measurement. Older work c
 
 **Recommendation:** Cancel the previous task or use a generation token before publishing `storedBytes`.
 
-### 11. There is no automated build/test workflow
+### 8. There is no automated build/test workflow
 
 Only local instructions exist; `.github/workflows` is empty. The current suite depends on Xcode 26.5, iOS/watchOS runtimes, signing capabilities, App Group access, and simulator health.
 
@@ -182,6 +144,7 @@ The test names and explanatory comments are notably good: they capture user-visi
 - `MapCoordinator` uses imperative MapKit updates and Observation tracking rather than rebuilding the map.
 - Blocking tile math, disk enumeration, and image work are consistently pushed off the main thread.
 - Tile identity includes provider, coordinates, zoom, and display scale.
+- Tile files expire after seven days and are removed at launch or rejected lazily before display.
 - `TileOwnership` correctly recognizes that multiple hikes can share the same geographic tile.
 - Auto-save uses locking, caps, corridor checks, deduplication, and failed-claim rollback.
 - Downloader generation tracking prevents an abandoned run from overwriting a newer run.
@@ -192,9 +155,6 @@ The test names and explanatory comments are notably good: they capture user-visi
 ## Recommended order of work
 
 1. Add CI compile gates for iOS, macOS, and visionOS.
-2. Fix partial-download manifests.
-3. Resolve the OSM storage/revalidation policy issue before distribution.
-4. Change route matching to segment projection.
-5. Harden auto-save scene persistence and Watch activation delivery.
-6. Add controlled integration seams for location, HTTP, filesystem, MapKit, and WatchConnectivity.
-7. Address the measured render/search/storage performance backlog.
+2. Harden auto-save scene persistence and Watch activation delivery.
+3. Add controlled integration seams for location, HTTP, filesystem, MapKit, and WatchConnectivity.
+4. Address the measured render/search/storage performance backlog.

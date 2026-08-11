@@ -10,7 +10,9 @@ import Foundation
 import CoreLocation
 
 /// A record of one offline tile download for a hike. Stored inline by SwiftData
-/// as part of ``Hike/offlineDownloads``; the parameters recompute the exact tiles.
+/// as part of ``Hike/offlineDownloads``. Complete downloads stay compact by
+/// recomputing their tile grid; partial downloads record only the keys that
+/// actually reached durable storage.
 struct OfflineDownloadRecord: Codable, Hashable {
     /// Tile provider the download used (namespaces the cache keys).
     var providerID: String
@@ -18,6 +20,16 @@ struct OfflineDownloadRecord: Codable, Hashable {
     var scale: Double
     /// Deepest zoom level saved.
     var maxZoom: Int
+    /// Exact durable keys for a partial download, or `nil` when every tile in
+    /// the deterministic grid was saved.
+    var savedTileKeys: [String]? = nil
+
+    init(providerID: String, scale: Double, maxZoom: Int, savedTileKeys: [String]? = nil) {
+        self.providerID = providerID
+        self.scale = scale
+        self.maxZoom = maxZoom
+        self.savedTileKeys = savedTileKeys
+    }
 }
 
 /// One point on the elevation profile: metres from start vs. elevation in metres.

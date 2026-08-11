@@ -14,6 +14,7 @@
 import CoreLocation
 import Foundation
 import MapKit
+import SwiftData
 import Testing
 @testable import OpenTrails
 
@@ -44,6 +45,21 @@ struct OfflineTileEnumerationTests {
     func deterministic() {
         #expect(keys() == keys())
         #expect(Set(keys()).count == keys().count, "a tile should not be enumerated twice")
+    }
+
+    @Test("a partial record claims only tiles verified on disk")
+    func partialRecordUsesExactKeys() async {
+        let exact = ["test/10/1/1@2.0", "test/10/1/2@2.0"]
+        let record = OfflineDownloadRecord(
+            providerID: "test",
+            scale: 2,
+            maxZoom: 19,
+            savedTileKeys: exact
+        )
+        let stored = await offMain {
+            OfflineTileDownloader.storedTileKeys(route: route, offlineDownloads: [record])
+        }
+        #expect(Set(stored) == Set(exact))
     }
 
     /// The renderer looks tiles up as `providerID/z/x/y@scale`. The
@@ -218,6 +234,12 @@ struct OfflineDownloadStateTests {
         maximumZ: 10
     )
 
+    private let controlled = ActiveTileSource(
+        providerID: "test_controlled",
+        urlTemplate: "https://example.invalid/{z}/{x}/{y}.png",
+        maximumZ: 12
+    )
+
     @Test("a route with nothing to draw is refused with a reason")
     func refusesEmptyRoute() {
         let downloader = OfflineTileDownloader()
@@ -300,5 +322,109 @@ struct OfflineDownloadStateTests {
         // knocked back to idle by the run that was cancelled.
         #expect(downloader.phase != .idle)
         downloader.cancel()
+    }
+
+    @Test("a partial download fails and records only successful tiles")
+    func partialDownloadIsNotReportedComplete() async {
+        let attempts = AttemptCounter()
+        let downloader = OfflineTileDownloader(
+            isOnline: { true },
+            saveTile: { _, _ in await attempts.succeedAlternating() }
+        )
+
+        downloader.start(route: Fixture.coordinates(Fixture.ridgeRoute), source: controlled, scale: 2)
+        await downloader.waitForCurrentRun()
+
+        #expect(downloader.isFailed)
+        #expect(downloader.completed == downloader.total)
+        let record = downloader.completedRecord
+        #expect(record?.savedTileKeys?.isEmpty == false)
+        #expect((record?.savedTileKeys?.count ?? 0) < downloader.total)
+    }
+
+    @Test("a complete download keeps the compact deterministic record")
+    func completeDownloadFinishes() async {
+        let downloader = OfflineTileDownloader(
+            isOnline: { true },
+            saveTile: { _, _ in true }
+        )
+
+        downloader.start(route: Fixture.coordinates(Fixture.ridgeRoute), source: controlled, scale: 2)
+        await downloader.waitForCurrentRun()
+
+        #expect(downloader.phase == .finished)
+        #expect(downloader.completedRecord?.savedTileKeys == nil)
+    }
+}
+
+private actor AttemptCounter {
+    private var attempts = 0
+
+    func succeedAlternating() -> Bool {
+        attempts += 1
+        return !attempts.isMultiple(of: 2)
+    }
+}
+
+@MainActor
+@Suite("Offline download manifest")
+struct OfflineDownloadManifestTests {
+    private let context: ModelContext
+
+    init() throws {
+        context = try Fixture.modelContext()
+    }
+
+    @Test("retries merge exact partial coverage")
+    func partialRetriesMerge() {
+        let hike = Fixture.hike(in: context)
+        hike.mergeOfflineDownload(
+            OfflineDownloadRecord(
+                providerID: "test",
+                scale: 2,
+                maxZoom: 12,
+                savedTileKeys: ["test/12/1/1@2.0"]
+            )
+        )
+        hike.mergeOfflineDownload(
+            OfflineDownloadRecord(
+                providerID: "test",
+                scale: 2,
+                maxZoom: 12,
+                savedTileKeys: ["test/12/1/2@2.0"]
+            )
+        )
+
+        #expect(hike.offlineDownloads.count == 1)
+        #expect(
+            Set(hike.offlineDownloads[0].savedTileKeys ?? [])
+                == ["test/12/1/1@2.0", "test/12/1/2@2.0"]
+        )
+    }
+
+    @Test("a complete retry replaces partial coverage")
+    func completeRetryReplacesPartial() {
+        let hike = Fixture.hike(in: context)
+        hike.mergeOfflineDownload(
+            OfflineDownloadRecord(
+                providerID: "test",
+                scale: 2,
+                maxZoom: 12,
+                savedTileKeys: ["test/12/1/1@2.0"]
+            )
+        )
+        hike.mergeOfflineDownload(
+            OfflineDownloadRecord(providerID: "test", scale: 2, maxZoom: 12)
+        )
+
+        #expect(hike.offlineDownloads.count == 1)
+        #expect(hike.offlineDownloads[0].savedTileKeys == nil)
+    }
+
+    @Test("legacy records decode as complete coverage")
+    func legacyRecordDecodes() throws {
+        let data = Data(#"{"providerID":"test","scale":2,"maxZoom":12}"#.utf8)
+        let record = try JSONDecoder().decode(OfflineDownloadRecord.self, from: data)
+        #expect(record.savedTileKeys == nil)
     }
 }

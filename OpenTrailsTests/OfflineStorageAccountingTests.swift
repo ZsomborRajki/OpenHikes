@@ -448,7 +448,7 @@ struct StorageAccountingTests {
         // Four tiles on disk and room for three: the trim goes to 80% of the
         // limit rather than sitting exactly on it, so it takes two — which is
         // enough to see *which* two.
-        await offMain {
+        _ = await offMain {
             TileCache.shared.trimCache(claimedBy: [], limit: TileStore.tileByteCount * 3)
         }
 
@@ -472,6 +472,43 @@ struct StorageAccountingTests {
         #expect(browsed.allSatisfy(TileStore.isBrowsed))
 
         await cleanUp(browsed)
+    }
+
+    // MARK: - Expiration
+
+    @Test("launch cleanup removes tiles after seven days from both disk tiers")
+    func launchCleanupRemovesExpiredTiles() async throws {
+        let staleBrowsed = key(16, 24, 0)
+        let staleSaved = key(16, 24, 1)
+        let freshBrowsed = key(16, 24, 2)
+        try TileStore.browse(key: staleBrowsed)
+        try TileStore.browse(key: staleSaved)
+        try TileStore.browse(key: freshBrowsed)
+        #expect(await offMain { TileCache.shared.promoteCachedTile(forKey: staleSaved) })
+        try TileStore.age(key: staleBrowsed, byDays: 8)
+        try TileStore.age(key: staleSaved, byDays: 8)
+
+        let removed = await offMain { TileCache.shared.removeExpiredTiles() }
+
+        #expect(removed >= 2)
+        #expect(!TileStore.isBrowsed(staleBrowsed))
+        #expect(!TileStore.isSaved(staleSaved))
+        #expect(TileStore.isBrowsed(freshBrowsed), "tiles inside the seven-day TTL remain cached")
+        await cleanUp([staleBrowsed, staleSaved, freshBrowsed])
+    }
+
+    @Test("an expired tile is deleted instead of being displayed")
+    func displayLookupRejectsExpiredTile() async throws {
+        let stale = key(16, 25, 0)
+        try TileStore.browse(key: stale)
+        try TileStore.age(key: stale, byDays: 8)
+        let unavailableURL = try #require(URL(string: "file:///expired-tile-must-not-load"))
+
+        let image = await TileCache.shared.loadTile(forKey: stale, url: unavailableURL)
+
+        #expect(image == nil)
+        #expect(!TileStore.isBrowsed(stale))
+        await cleanUp([stale])
     }
 
     // MARK: - Tiles auto-save writes but forgets

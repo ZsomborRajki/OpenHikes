@@ -129,6 +129,23 @@ struct TileStoreTests {
         await cleanUp([key])
     }
 
+    @Test("an expired known tile is saved again when viewed")
+    func refreshesExpiredKnownTile() async throws {
+        let key = key(16, 3, 4)
+        try TileStore.browse(key: key)
+        #expect(await offMain { TileCache.shared.promoteCachedTile(forKey: key) })
+        try TileStore.age(key: key, byDays: 8)
+        _ = await offMain { TileCache.shared.removeExpiredTiles() }
+        #expect(!TileStore.isSaved(key), "precondition: launch cleanup removed the expired copy")
+
+        activate(knownKeys: [key])
+        try await persist(key: key, tile: tile())
+
+        #expect(TileStore.isSaved(key), "the stale manifest entry must not prevent fresh bytes being saved")
+        #expect(store.drainPendingKeys(for: hikeID).isEmpty, "the key was already present in the manifest")
+        await cleanUp([key])
+    }
+
     // MARK: The cap
 
     @Test("the cap is measured against everything the hike already claims")

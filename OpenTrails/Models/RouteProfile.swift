@@ -135,9 +135,21 @@ nonisolated struct RouteProfile {
         return low...high
     }
 
-    /// Map coordinate nearest to a distance along the route. O(log n).
+    /// Map coordinate at a distance along the route, interpolated within the
+    /// bracketing segment. O(log n).
     func coordinate(atDistance target: Double) -> CLLocationCoordinate2D? {
-        nearestIndex(in: distances, to: target).map { coordinates[$0] }
+        guard let firstDistance = distances.first, let lastDistance = distances.last,
+              let firstCoordinate = coordinates.first, let lastCoordinate = coordinates.last
+        else { return nil }
+        if target <= firstDistance { return firstCoordinate }
+        if target >= lastDistance { return lastCoordinate }
+
+        let upper = lowerBound(in: distances, for: target)
+        let lower = upper - 1
+        let segmentLength = distances[upper] - distances[lower]
+        guard segmentLength > 0 else { return coordinates[upper] }
+        let fraction = (target - distances[lower]) / segmentLength
+        return Self.interpolate(from: coordinates[lower], to: coordinates[upper], fraction: fraction)
     }
 
     /// Elevation sample nearest to a distance along the route. O(log n).
@@ -147,9 +159,9 @@ nonisolated struct RouteProfile {
 
     /// Projects an arbitrary coordinate (e.g. a live GPS fix) onto the route,
     /// used to auto-follow the elevation graph. Returns the distance-along-route
-    /// of the nearest track point and how far off the route that point is, in
-    /// meters — callers use the latter to decide whether the fix is actually
-    /// near the trail. O(n): fine for a once-a-second poll.
+    /// of the nearest point on any route segment and how far off the route
+    /// that point is, in meters — callers use the latter to decide whether the
+    /// fix is actually near the trail. O(n): fine for a once-a-second poll.
     ///
     /// `referenceDistance`, when given (the previous match), breaks ties in
     /// favor of continuity. Loops, out-and-backs, and switchbacks can bring
@@ -159,45 +171,97 @@ nonisolated struct RouteProfile {
     /// most of the route with no real movement.
     func nearestPoint(to coordinate: CLLocationCoordinate2D, near referenceDistance: Double? = nil) -> (distanceAlongRoute: Double, offRouteMeters: Double)? {
         guard !coordinates.isEmpty else { return nil }
-        let target = CLLocation(latitude: coordinate.latitude, longitude: coordinate.longitude)
+        guard coordinates.count > 1 else {
+            let only = coordinates[0]
+            let offset = CLLocation(latitude: coordinate.latitude, longitude: coordinate.longitude)
+                .distance(from: CLLocation(latitude: only.latitude, longitude: only.longitude))
+            return (0, offset)
+        }
 
-        // Only the tie-break path below needs every point's offset — skip
-        // building it when there's no reference to break ties against.
-        let tracksOffsets = referenceDistance != nil
-        var offsets: [Double] = []
-        if tracksOffsets { offsets.reserveCapacity(coordinates.count) }
-        var bestIndex = 0
-        var bestDistance = Double.greatestFiniteMagnitude
-        for (index, candidate) in coordinates.enumerated() {
-            let distance = target.distance(from: CLLocation(latitude: candidate.latitude, longitude: candidate.longitude))
-            if tracksOffsets { offsets.append(distance) }
-            if distance < bestDistance {
-                bestDistance = distance
-                bestIndex = index
-            }
+        struct Candidate {
+            let distanceAlongRoute: Double
+            let offRouteMeters: Double
+        }
+
+        var candidates: [Candidate] = []
+        if referenceDistance != nil { candidates.reserveCapacity(coordinates.count - 1) }
+        var best = Candidate(distanceAlongRoute: 0, offRouteMeters: .greatestFiniteMagnitude)
+
+        for index in 0..<(coordinates.count - 1) {
+            let start = Self.localOffset(from: coordinate, to: coordinates[index])
+            let end = Self.localOffset(from: coordinate, to: coordinates[index + 1])
+            let dx = end.x - start.x
+            let dy = end.y - start.y
+            let lengthSquared = dx * dx + dy * dy
+            let fraction = lengthSquared > 0
+                ? min(max(-(start.x * dx + start.y * dy) / lengthSquared, 0), 1)
+                : 0
+            let projectedX = start.x + fraction * dx
+            let projectedY = start.y + fraction * dy
+            let candidate = Candidate(
+                distanceAlongRoute: distances[index] + fraction * (distances[index + 1] - distances[index]),
+                offRouteMeters: hypot(projectedX, projectedY)
+            )
+            if referenceDistance != nil { candidates.append(candidate) }
+            if candidate.offRouteMeters < best.offRouteMeters { best = candidate }
         }
 
         guard let referenceDistance else {
-            return (distances[bestIndex], bestDistance)
+            return (best.distanceAlongRoute, best.offRouteMeters)
         }
 
-        // Among every point within `tieBreakToleranceMeters` of the closest
-        // one, prefer whichever is nearest the previous match rather than
-        // always the single closest raw vertex.
+        // Among every segment projection within `tieBreakToleranceMeters` of
+        // the closest one, prefer whichever is nearest the previous match.
         let tieBreakToleranceMeters = 20.0
-        var bestTiedIndex = bestIndex
-        var bestContinuity = abs(distances[bestIndex] - referenceDistance)
-        for (index, distance) in offsets.enumerated() where distance <= bestDistance + tieBreakToleranceMeters {
-            let continuity = abs(distances[index] - referenceDistance)
+        var tied = best
+        var bestContinuity = abs(best.distanceAlongRoute - referenceDistance)
+        for candidate in candidates where candidate.offRouteMeters <= best.offRouteMeters + tieBreakToleranceMeters {
+            let continuity = abs(candidate.distanceAlongRoute - referenceDistance)
             if continuity < bestContinuity {
                 bestContinuity = continuity
-                bestTiedIndex = index
+                tied = candidate
             }
         }
-        // The tied vertex's own offset, not the raw-closest vertex's — they
-        // can differ once tie-break actually picks a different index, and
-        // callers gate on this value describing the point being returned.
-        return (distances[bestTiedIndex], offsets[bestTiedIndex])
+        return (tied.distanceAlongRoute, tied.offRouteMeters)
+    }
+
+    private static func localOffset(
+        from origin: CLLocationCoordinate2D,
+        to coordinate: CLLocationCoordinate2D
+    ) -> (x: Double, y: Double) {
+        let earthRadius = 6_371_008.8
+        let latitudeRadians = origin.latitude * .pi / 180
+        let longitudeDelta = normalizedLongitudeDelta(coordinate.longitude - origin.longitude)
+        return (
+            x: longitudeDelta * .pi / 180 * earthRadius * cos(latitudeRadians),
+            y: (coordinate.latitude - origin.latitude) * .pi / 180 * earthRadius
+        )
+    }
+
+    private static func interpolate(
+        from start: CLLocationCoordinate2D,
+        to end: CLLocationCoordinate2D,
+        fraction: Double
+    ) -> CLLocationCoordinate2D {
+        let longitude = start.longitude + normalizedLongitudeDelta(end.longitude - start.longitude) * fraction
+        return CLLocationCoordinate2D(
+            latitude: start.latitude + (end.latitude - start.latitude) * fraction,
+            longitude: normalizedLongitude(longitude)
+        )
+    }
+
+    private static func normalizedLongitudeDelta(_ delta: Double) -> Double {
+        var normalized = delta.truncatingRemainder(dividingBy: 360)
+        if normalized > 180 { normalized -= 360 }
+        if normalized < -180 { normalized += 360 }
+        return normalized
+    }
+
+    private static func normalizedLongitude(_ longitude: Double) -> Double {
+        var normalized = longitude.truncatingRemainder(dividingBy: 360)
+        if normalized >= 180 { normalized -= 360 }
+        if normalized < -180 { normalized += 360 }
+        return normalized
     }
 
     /// Index of the value in an ascending array closest to `target`. O(log n).
@@ -214,5 +278,19 @@ nonisolated struct RouteProfile {
         }
         let lower = low - 1
         return abs(sorted[low] - target) < abs(sorted[lower] - target) ? low : lower
+    }
+
+    private func lowerBound(in sorted: [Double], for target: Double) -> Int {
+        var low = 0
+        var high = sorted.count
+        while low < high {
+            let mid = (low + high) / 2
+            if sorted[mid] < target {
+                low = mid + 1
+            } else {
+                high = mid
+            }
+        }
+        return low
     }
 }

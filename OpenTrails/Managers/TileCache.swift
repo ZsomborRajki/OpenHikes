@@ -31,7 +31,21 @@ nonisolated final class TileCache: @unchecked Sendable {
 
     private static let logger = Logger(subsystem: "OpenTrails", category: "TileRequests")
 
-    private let memory = NSCache<NSString, TileImage>()
+    private final class MemoryTile: @unchecked Sendable {
+        let image: TileImage
+        let storedAt: Date
+
+        init(image: TileImage, storedAt: Date) {
+            self.image = image
+            self.storedAt = storedAt
+        }
+    }
+
+    /// OSM requires cached tiles to honor response caching headers, or to use
+    /// at least a seven-day TTL when the client does not persist those headers.
+    static let tileExpirationInterval: TimeInterval = 7 * 24 * 60 * 60
+
+    private let memory = NSCache<NSString, MemoryTile>()
     private let directory: URL
     /// Durable (non-purgeable) store for tiles the user has explicitly chosen to
     /// keep, e.g. via ``AutoSaveTileStore``. Unlike `directory`, this lives under
@@ -121,7 +135,13 @@ nonisolated final class TileCache: @unchecked Sendable {
 
     /// Fast, synchronous memory-only lookup — safe to call from the render loop.
     func memoryImage(forKey key: String) -> TileImage? {
-        memory.object(forKey: key as NSString)
+        let cacheKey = key as NSString
+        guard let tile = memory.object(forKey: cacheKey) else { return nil }
+        guard !isExpired(tile.storedAt) else {
+            memory.removeObject(forKey: cacheKey)
+            return nil
+        }
+        return tile.image
     }
 
     /// Loads a tile for display, checking memory, then disk (ephemeral, then
@@ -133,10 +153,10 @@ nonisolated final class TileCache: @unchecked Sendable {
     /// ``saveTileDurably(forKey:url:)`` or ``promoteCachedTile(forKey:)``.
     @discardableResult
     func loadTile(forKey key: String, url: URL) async -> TileImage? {
-        if let cached = memory.object(forKey: key as NSString) { return cached }
-        if let image = diskImage(forKey: key) {
-            memory.setObject(image, forKey: key as NSString)
-            return image
+        if let cached = memoryImage(forKey: key) { return cached }
+        if let tile = diskImage(forKey: key) {
+            memory.setObject(MemoryTile(image: tile.image, storedAt: tile.storedAt), forKey: key as NSString)
+            return tile.image
         }
 
         // Offline: the tile isn't cached and the network is gone. Return without
@@ -150,7 +170,7 @@ nonisolated final class TileCache: @unchecked Sendable {
 
         guard let fetched = await fetchTile(forKey: key, url: url) else { return nil }
         try? fetched.data.write(to: directory.appendingPathComponent(diskName(for: key)), options: .atomic)
-        memory.setObject(fetched.image, forKey: key as NSString)
+        memory.setObject(MemoryTile(image: fetched.image, storedAt: Date()), forKey: key as NSString)
         return fetched.image
     }
 
@@ -171,18 +191,20 @@ nonisolated final class TileCache: @unchecked Sendable {
         if promoteCachedTile(forKey: key) { return true }
 
         guard isOnline, let fetched = await fetchTile(forKey: key, url: url) else { return false }
-        memory.setObject(fetched.image, forKey: key as NSString)
+        memory.setObject(MemoryTile(image: fetched.image, storedAt: Date()), forKey: key as NSString)
         return writeDurable(fetched.data, forKey: key)
     }
 
     /// The tile as it sits on disk, ephemeral tier first — it's the one a
     /// browsing fetch refreshes, and the two hold the same image.
-    private func diskImage(forKey key: String) -> TileImage? {
+    private func diskImage(forKey key: String) -> (image: TileImage, storedAt: Date)? {
         let name = diskName(for: key)
         for directory in [directory, durableDirectory] {
-            if let data = try? Data(contentsOf: directory.appendingPathComponent(name)),
+            let file = directory.appendingPathComponent(name)
+            guard let storedAt = freshModificationDate(for: file) else { continue }
+            if let data = try? Data(contentsOf: file),
                let image = TileImage(data: data) {
-                return image
+                return (image, storedAt)
             }
         }
         return nil
@@ -250,11 +272,16 @@ nonisolated final class TileCache: @unchecked Sendable {
     func promoteCachedTile(forKey key: String) -> Bool {
         let name = diskName(for: key)
         let durable = durableDirectory.appendingPathComponent(name)
-        if FileManager.default.fileExists(atPath: durable.path) { return true }
+        if freshModificationDate(for: durable) != nil { return true }
+        let cached = directory.appendingPathComponent(name)
+        guard freshModificationDate(for: cached) != nil else { return false }
         do {
-            try FileManager.default.moveItem(at: directory.appendingPathComponent(name), to: durable)
+            try FileManager.default.moveItem(at: cached, to: durable)
             return true
         } catch {
+            // Another renderer may have promoted the same shared tile after
+            // the checks above. That is still a successful durable save.
+            if freshModificationDate(for: durable) != nil { return true }
             // Nothing cached to promote — the tile was served from memory after
             // its disk copy went (an OS purge of `Caches`, say). Callers drop
             // their claim, so this is retried next time the tile is drawn.
@@ -263,6 +290,23 @@ nonisolated final class TileCache: @unchecked Sendable {
             #endif
             return false
         }
+    }
+
+    /// Removes expired tiles from both disk tiers. Runs at launch so stale
+    /// offline coverage is not retained indefinitely; normal tile reads apply
+    /// the same check lazily before displaying anything.
+    @discardableResult
+    func removeExpiredTiles(referenceDate: Date = Date()) -> Int {
+        assertOffMainThread("removeExpiredTiles() enumerates and deletes tile files synchronously — call it off the main thread")
+        memory.removeAllObjects()
+        var removed = 0
+        for file in allTileFiles(in: directory) + allTileFiles(in: durableDirectory) {
+            let modified = (try? file.resourceValues(forKeys: [.contentModificationDateKey]))?.contentModificationDate
+            guard modified == nil || isExpired(modified!, referenceDate: referenceDate) else { continue }
+            guard (try? FileManager.default.removeItem(at: file)) != nil else { continue }
+            removed += 1
+        }
+        return removed
     }
 
     /// Writes freshly-fetched bytes straight to durable storage, for the
@@ -436,5 +480,22 @@ nonisolated final class TileCache: @unchecked Sendable {
 
     private func fileSize(_ url: URL) -> Int64 {
         Int64((try? url.resourceValues(forKeys: [.fileSizeKey]))?.fileSize ?? 0)
+    }
+
+    /// Returns a usable fetch date, deleting the file when its fixed TTL has
+    /// elapsed. Modification time is the fetch time because tile files are
+    /// written atomically and never rewritten except by a fresh response.
+    private func freshModificationDate(for file: URL, referenceDate: Date = Date()) -> Date? {
+        guard FileManager.default.fileExists(atPath: file.path) else { return nil }
+        let modified = (try? file.resourceValues(forKeys: [.contentModificationDateKey]))?.contentModificationDate
+        guard let modified, !isExpired(modified, referenceDate: referenceDate) else {
+            try? FileManager.default.removeItem(at: file)
+            return nil
+        }
+        return modified
+    }
+
+    private func isExpired(_ storedAt: Date, referenceDate: Date = Date()) -> Bool {
+        referenceDate.timeIntervalSince(storedAt) >= Self.tileExpirationInterval
     }
 }

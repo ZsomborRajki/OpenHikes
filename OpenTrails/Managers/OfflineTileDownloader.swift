@@ -24,6 +24,9 @@ final class OfflineTileDownloader {
     private(set) var phase: Phase = .idle
     private(set) var completed = 0
     private(set) var total = 0
+    /// Coverage produced by the latest completed run. Complete runs omit the
+    /// explicit keys; partial runs carry only keys verified on durable storage.
+    private(set) var completedRecord: OfflineDownloadRecord?
 
     /// 0…1 fraction of tiles fetched, for a progress indicator.
     var progress: Double { total == 0 ? 0 : min(1, Double(completed) / Double(total)) }
@@ -35,6 +38,8 @@ final class OfflineTileDownloader {
     /// cancelled download can tell it's no longer current and skip mutating
     /// state that now belongs to a newer download.
     private var generation = 0
+    private let isOnline: @Sendable () -> Bool
+    private let saveTile: @Sendable (String, URL) async -> Bool
 
     /// The shallowest zoom to save (whole-route overview). `nonisolated`: a
     /// plain constant read from the `nonisolated` tile-enumeration functions.
@@ -50,13 +55,23 @@ final class OfflineTileDownloader {
     /// ready to go the moment a slot frees.
     private let inFlightWindow = 5
 
+    init(
+        isOnline: @escaping @Sendable () -> Bool = { TileCache.shared.isOnline },
+        saveTile: @escaping @Sendable (String, URL) async -> Bool = {
+            await TileCache.shared.saveTileDurably(forKey: $0, url: $1)
+        }
+    ) {
+        self.isOnline = isOnline
+        self.saveTile = saveTile
+    }
+
     /// Begins downloading the tiles covering `route` from `source`, saving detail
     /// down to the provider's deepest real zoom level. `scale` must be the
     /// display scale so cache keys match what the renderer requests on-device.
     func start(route: [CLLocationCoordinate2D], source: ActiveTileSource, scale: CGFloat) {
         guard phase != .downloading else { return }
         guard route.count > 1 else { phase = .failed("No route to save."); return }
-        guard TileCache.shared.isOnline else { phase = .failed("You're offline — connect to save tiles."); return }
+        guard isOnline() else { phase = .failed("You're offline — connect to save tiles."); return }
 
         let tiles = Self.tiles(
             covering: route,
@@ -70,6 +85,7 @@ final class OfflineTileDownloader {
         let currentGeneration = generation
         completed = 0
         total = tiles.count
+        completedRecord = nil
         phase = .downloading
         task = Task { [weak self] in
             await self?.run(tiles: tiles, source: source, scale: scale, generation: currentGeneration)
@@ -83,6 +99,7 @@ final class OfflineTileDownloader {
         phase = .idle
         completed = 0
         total = 0
+        completedRecord = nil
     }
 
     /// Returns to idle after a finished/failed download (e.g. its tiles were deleted).
@@ -91,13 +108,20 @@ final class OfflineTileDownloader {
         phase = .idle
         completed = 0
         total = 0
+        completedRecord = nil
     }
 
     private func run(tiles: [Tile], source: ActiveTileSource, scale: CGFloat, generation: Int) async {
-        let cache = TileCache.shared
-        var index = 0
+        struct SaveResult: Sendable {
+            let key: String
+            let saved: Bool
+        }
 
-        await withTaskGroup(of: Void.self) { group in
+        let saveTile = self.saveTile
+        var index = 0
+        var savedKeys = Set<String>()
+
+        await withTaskGroup(of: SaveResult.self) { group in
             var active = 0
 
             func addNext() {
@@ -106,8 +130,10 @@ final class OfflineTileDownloader {
                 index += 1
                 active += 1
                 group.addTask {
-                    guard let url = tile.url(from: source.urlTemplate) else { return }
                     let key = tile.cacheKey(providerID: source.providerID, scale: scale)
+                    guard let url = tile.url(from: source.urlTemplate) else {
+                        return SaveResult(key: key, saved: false)
+                    }
                     // Shared with the map's own tile loads, at `.background`:
                     // nobody minds a download taking a minute longer, and
                     // everybody minds the map stalling while it runs.
@@ -115,32 +141,72 @@ final class OfflineTileDownloader {
                     // Durably, not through `loadTile`: the point of a download is
                     // that the tiles are still there when the user is out of
                     // signal, which rules out the OS-reclaimable cache.
-                    let saved = await cache.saveTileDurably(forKey: key, url: url)
+                    let saved = await saveTile(key, url)
                     await TileLoadGate.shared.release(.background)
                     #if DEBUG
                     if saved {
                         Self.logger.debug("Bulk-saved tile \(key, privacy: .public)")
                     }
                     #endif
+                    return SaveResult(key: key, saved: saved)
                 }
             }
 
             for _ in 0..<min(inFlightWindow, tiles.count) { addNext() }
 
             while active > 0 {
-                await group.next()
+                guard let result = await group.next() else { break }
                 active -= 1
                 // A newer download has started since this task began — stop touching
                 // its state and let the group drain/cancel our remaining children.
-                guard generation == self.generation else { break }
+                guard generation == self.generation else {
+                    group.cancelAll()
+                    break
+                }
+                if result.saved { savedKeys.insert(result.key) }
                 completed += 1
-                if Task.isCancelled { break }
+                if Task.isCancelled {
+                    group.cancelAll()
+                    break
+                }
                 addNext()
             }
         }
 
         guard generation == self.generation else { return }
-        phase = Task.isCancelled ? .idle : .finished
+        guard !Task.isCancelled else {
+            phase = .idle
+            return
+        }
+
+        let sortedKeys = savedKeys.sorted()
+        if savedKeys.count == tiles.count {
+            completedRecord = OfflineDownloadRecord(
+                providerID: source.providerID,
+                scale: Double(scale),
+                maxZoom: source.maximumZ
+            )
+            phase = .finished
+        } else {
+            if !sortedKeys.isEmpty {
+                completedRecord = OfflineDownloadRecord(
+                    providerID: source.providerID,
+                    scale: Double(scale),
+                    maxZoom: source.maximumZ,
+                    savedTileKeys: sortedKeys
+                )
+            }
+            phase = .failed(
+                sortedKeys.isEmpty
+                    ? "Couldn’t save any tiles. Check your connection and try again."
+                    : "Saved \(sortedKeys.count) of \(tiles.count) tiles. Try again to finish the download."
+            )
+        }
+    }
+
+    /// Test/support hook that waits for the current run without polling time.
+    func waitForCurrentRun() async {
+        await task?.value
     }
 
     // MARK: - Stored-tile bookkeeping
@@ -165,6 +231,10 @@ final class OfflineTileDownloader {
         guard !offlineDownloads.isEmpty else { return [] }
         var keys = Set<String>()
         for record in offlineDownloads {
+            if let savedTileKeys = record.savedTileKeys {
+                keys.formUnion(savedTileKeys)
+                continue
+            }
             let provider = TileProvider.provider(id: record.providerID)
             keys.formUnion(tileKeys(
                 for: route,

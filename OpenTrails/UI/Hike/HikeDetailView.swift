@@ -129,15 +129,11 @@ struct HikeDetailView: View {
                 }
             }
         }
-        // Record the download once it finishes, so its tiles can be measured/removed.
+        // Record verified coverage from complete and partial downloads so
+        // storage accounting never claims tiles that failed to reach disk.
         .onChange(of: downloader.phase) { _, phase in
-            guard phase == .finished else { return }
-            let record = OfflineDownloadRecord(
-                providerID: activeTileSource.providerID,
-                scale: Double(displayScale),
-                maxZoom: activeTileSource.maximumZ
-            )
-            if !hike.offlineDownloads.contains(record) { hike.offlineDownloads.append(record) }
+            guard phase != .downloading, let record = downloader.completedRecord else { return }
+            hike.mergeOfflineDownload(record)
             refreshStoredBytes()
         }
         // Keeps the byte count live as the background auto-save drain grows it.

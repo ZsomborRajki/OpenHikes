@@ -87,3 +87,42 @@ final class Hike {
         self.keywords = keywords
     }
 }
+
+@MainActor
+extension Hike {
+    /// Adds complete or partial bulk coverage without accumulating redundant
+    /// records for repeated attempts at the same provider/scale/depth.
+    func mergeOfflineDownload(_ record: OfflineDownloadRecord) {
+        let matches: (OfflineDownloadRecord) -> Bool = {
+            $0.providerID == record.providerID
+                && $0.scale == record.scale
+                && $0.maxZoom == record.maxZoom
+        }
+
+        if record.savedTileKeys == nil {
+            offlineDownloads.removeAll(where: matches)
+            offlineDownloads.append(record)
+            return
+        }
+
+        if offlineDownloads.contains(where: { matches($0) && $0.savedTileKeys == nil }) {
+            return
+        }
+
+        var mergedKeys = Set(record.savedTileKeys ?? [])
+        offlineDownloads.removeAll { existing in
+            guard matches(existing), let keys = existing.savedTileKeys else { return false }
+            mergedKeys.formUnion(keys)
+            return true
+        }
+        guard !mergedKeys.isEmpty else { return }
+        offlineDownloads.append(
+            OfflineDownloadRecord(
+                providerID: record.providerID,
+                scale: record.scale,
+                maxZoom: record.maxZoom,
+                savedTileKeys: mergedKeys.sorted()
+            )
+        )
+    }
+}

@@ -41,6 +41,11 @@ nonisolated final class AutoSaveTileStore: @unchecked Sendable {
         var pendingKeys: Set<String>
     }
 
+    private struct PersistenceClaim {
+        let hikeID: UUID
+        let isNewKey: Bool
+    }
+
     private let state = OSAllocatedUnfairLock<ActiveHike?>(initialState: nil)
 
     /// Makes `hikeID` the active auto-save target. Replaces any previously
@@ -71,26 +76,30 @@ nonisolated final class AutoSaveTileStore: @unchecked Sendable {
         assertOffMainThread("considerPersisting moves a file on disk — call it off the main thread")
         // Claim the tile up front so two threads drawing it at once don't both
         // try to move it; `releaseClaim` undoes that if the bytes never land.
-        let claimant = state.withLock { state -> UUID? in
+        let claim = state.withLock { state -> PersistenceClaim? in
             guard var hike = state else { return nil }
+            let isNewKey = !hike.knownKeys.contains(key)
             guard
-                hike.knownKeys.count < Self.tileCap,
-                !hike.knownKeys.contains(key),
+                !isNewKey || hike.knownKeys.count < Self.tileCap,
                 hike.corridor.overlaps(z: z, x: x, y: y)
             else { return nil }
-            hike.knownKeys.insert(key)
-            hike.pendingKeys.insert(key)
+            if isNewKey {
+                hike.knownKeys.insert(key)
+                hike.pendingKeys.insert(key)
+            }
             state = hike
-            return hike.id
+            return PersistenceClaim(hikeID: hike.id, isNewKey: isNewKey)
         }
-        guard let claimant else { return }
+        guard let claim else { return }
 
         // A claim no bytes back is worse than no claim: it counts against the
         // cap, is reported as saved, and — being "known" — is never
         // reconsidered, so the tile stays missing offline with nothing retrying
         // it. The move fails when there's no cached copy left to move.
         guard TileCache.shared.promoteCachedTile(forKey: key) else {
-            releaseClaim(on: key, by: claimant)
+            if claim.isNewKey {
+                releaseClaim(on: key, by: claim.hikeID)
+            }
             return
         }
         #if DEBUG

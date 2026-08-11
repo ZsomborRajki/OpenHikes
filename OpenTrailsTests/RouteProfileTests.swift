@@ -108,22 +108,13 @@ struct RouteProfileTests {
         #expect(profile.coordinate(atDistance: total * 10)?.latitude == end.latitude)
     }
 
-    /// The binary search has to return the *nearest* index, not merely a
-    /// bracketing one — the chart callout reads elevation off whatever it
-    /// picks.
-    @Test("the lookup picks the nearest sample, not just a neighbouring one")
-    func nearestNotAdjacent() throws {
+    @Test("coordinate lookup interpolates within a route segment")
+    func coordinateLookupInterpolates() throws {
         let profile = RouteProfile(route: Fixture.ridgeRoute)
-        for index in profile.distances.indices {
-            let target = profile.distances[index]
-            let resolved = try #require(profile.coordinate(atDistance: target))
-            #expect(abs(resolved.latitude - profile.coordinates[index].latitude) < 1e-9)
-
-            // Nudged either way, still the same point (the neighbours are
-            // ~200 m apart, so a 1 m nudge can't cross the midpoint).
-            #expect(profile.coordinate(atDistance: target + 1)?.latitude == resolved.latitude)
-            #expect(profile.coordinate(atDistance: target - 1)?.latitude == resolved.latitude)
-        }
+        let midpointDistance = (profile.distances[1] + profile.distances[2]) / 2
+        let midpoint = try #require(profile.coordinate(atDistance: midpointDistance))
+        #expect(abs(midpoint.latitude - (profile.coordinates[1].latitude + profile.coordinates[2].latitude) / 2) < 1e-9)
+        #expect(abs(midpoint.longitude - (profile.coordinates[1].longitude + profile.coordinates[2].longitude) / 2) < 1e-9)
     }
 
     @Test("elevation lookups only ever return charted samples")
@@ -158,6 +149,55 @@ struct RouteProfileTests {
         let match = try #require(profile.nearestPoint(to: nearby))
         #expect(match.offRouteMeters > 10)
         #expect(match.offRouteMeters < RouteProfile.followMatchThresholdMeters)
+    }
+
+    @Test("the midpoint of a sparse segment matches the segment, not an endpoint")
+    func sparseSegmentMidpoint() throws {
+        let route = [
+            RouteCoordinate(latitude: 47.63, longitude: 12.86),
+            RouteCoordinate(latitude: 47.63, longitude: 12.87)
+        ]
+        let profile = RouteProfile(route: route)
+        let total = try #require(profile.distances.last)
+        let match = try #require(
+            profile.nearestPoint(to: CLLocationCoordinate2D(latitude: 47.63, longitude: 12.865))
+        )
+
+        #expect(match.offRouteMeters < 1)
+        #expect(abs(match.distanceAlongRoute - total / 2) < 1)
+        #expect(match.offRouteMeters <= RouteProfile.followMatchThresholdMeters)
+    }
+
+    @Test("a fix beside the middle of a sparse segment reports its perpendicular offset")
+    func sparseSegmentOffset() throws {
+        let route = [
+            RouteCoordinate(latitude: 47.63, longitude: 12.86),
+            RouteCoordinate(latitude: 47.63, longitude: 12.87)
+        ]
+        let profile = RouteProfile(route: route)
+        let fix = CLLocationCoordinate2D(
+            latitude: 47.63 + 30 / 111_320,
+            longitude: 12.865
+        )
+        let match = try #require(profile.nearestPoint(to: fix))
+
+        #expect(match.offRouteMeters > 25)
+        #expect(match.offRouteMeters < 35)
+    }
+
+    @Test("segment matching and interpolation take the short path across the antimeridian")
+    func antimeridianSegment() throws {
+        let route = Fixture.antimeridianRoute.map(RouteCoordinate.init)
+        let profile = RouteProfile(route: route)
+        let total = try #require(profile.distances.last)
+        let match = try #require(
+            profile.nearestPoint(to: CLLocationCoordinate2D(latitude: -17.705, longitude: 180))
+        )
+        let resolved = try #require(profile.coordinate(atDistance: match.distanceAlongRoute))
+
+        #expect(match.offRouteMeters < 10)
+        #expect(abs(match.distanceAlongRoute - total / 2) < 20)
+        #expect(abs(abs(resolved.longitude) - 180) < 0.01)
     }
 
     /// Off the trail, the *caller* decides — the profile still returns its

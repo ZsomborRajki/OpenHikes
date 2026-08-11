@@ -19,6 +19,9 @@ struct OpenTrailsApp: App {
         #if DEBUG
         MainThreadWatchdog.start()
         #endif
+        Task.detached {
+            TileCache.shared.removeExpiredTiles()
+        }
         // Built explicitly (rather than via the `.modelContainer(for:)` scene
         // modifier) so `backgroundTracker` — which needs its own SwiftData
         // access to look up the tracked hike on a background relaunch — can
