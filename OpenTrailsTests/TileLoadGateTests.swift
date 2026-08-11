@@ -32,6 +32,23 @@ struct TileLoadGateTests {
         for _ in 0..<count { await gate.release(priority) }
     }
 
+    /// Waits until every spawned acquire has reached the actor and either
+    /// entered or queued. Unlike a fixed sleep, this remains deterministic on
+    /// a busy simulator.
+    private func waitForAcquireAttempts(_ expected: Int) async -> (
+        total: Int,
+        background: Int,
+        interactiveWaiters: Int,
+        backgroundWaiters: Int
+    ) {
+        while true {
+            let state = await gate.testState
+            let attempts = state.total + state.interactiveWaiters + state.backgroundWaiters
+            if attempts == expected { return state }
+            await Task.yield()
+        }
+    }
+
     /// The whole point: one number bounds everything, whoever asked.
     @Test("the total in flight never exceeds the budget, from either side")
     func totalIsBounded() async {
@@ -45,8 +62,9 @@ struct TileLoadGateTests {
 
         // Nothing more may enter, from either side, until something leaves.
         let blocked = Task { await self.gate.acquire(.interactive) }
-        try? await Task.sleep(for: .milliseconds(50))
-        #expect(await gate.inFlight.total == total, "an extra request waits rather than squeezing in")
+        let blockedState = await waitForAcquireAttempts(total + 1)
+        #expect(blockedState.total == total, "an extra request waits rather than squeezing in")
+        #expect(blockedState.interactiveWaiters == 1)
 
         await releaseSlots(1, .background)
         await blocked.value
@@ -67,12 +85,12 @@ struct TileLoadGateTests {
         let waiting = (0..<(total + 4)).map { _ in
             Task { await self.gate.acquire(.background) }
         }
-        try? await Task.sleep(for: .milliseconds(50))
 
-        let inFlight = await gate.inFlight
+        let inFlight = await waitForAcquireAttempts(total + 4)
         #expect(inFlight.background == background, "the download saturates its own share")
         #expect(inFlight.total == background, "and takes nothing beyond it")
         #expect(total - inFlight.total > 0, "so the map always has slots left")
+        #expect(inFlight.backgroundWaiters == total + 4 - background)
 
         // One release per acquire, which drains the queue and then empties the
         // gate — a release hands its slot to the next waiter rather than
@@ -98,9 +116,12 @@ struct TileLoadGateTests {
 
         // A background waiter queues first, an interactive one second.
         let backgroundWaiter = Task { await self.gate.acquire(.background) }
-        try? await Task.sleep(for: .milliseconds(30))
+        let backgroundQueued = await waitForAcquireAttempts(total + 1)
+        #expect(backgroundQueued.backgroundWaiters == 1)
         let interactiveWaiter = Task { await self.gate.acquire(.interactive) }
-        try? await Task.sleep(for: .milliseconds(30))
+        let bothQueued = await waitForAcquireAttempts(total + 2)
+        #expect(bothQueued.interactiveWaiters == 1)
+        #expect(bothQueued.backgroundWaiters == 1)
 
         // One slot comes back. Despite queueing later, the map takes it —
         // awaiting it here is the assertion: this only returns if the gate

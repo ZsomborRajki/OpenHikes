@@ -251,17 +251,16 @@ struct RouteHighlightTests {
         #expect(highlight.coordinate == nil)
     }
 
-    /// The hot path this type exists for. Scrubbing the elevation chart
-    /// resolves a distance to the *nearest track point*, so a finger crossing
-    /// one point's worth of trail reports the same coordinate over and over —
-    /// and every repeat would re-register the map coordinator's observation
-    /// through a `Task` hop for a pin that hasn't moved.
+    /// The hot path this type exists for. Scrubbing now interpolates continuously
+    /// along route segments, so each distinct distance should move the pin, while
+    /// repeated drag samples at the same distance must still be filtered before
+    /// they re-register the map coordinator's observation through a `Task` hop.
     ///
     /// Settling between events on purpose: drag events arrive in separate
     /// runloop turns, so this counts them the way the map would see them
     /// rather than letting a synchronous burst coalesce into one.
-    @Test("a drag along the trail moves the pin once per track point")
-    func scrubbingWritesOncePerTrackPoint() async throws {
+    @Test("a drag moves the pin once per distinct interpolated position")
+    func scrubbingWritesOncePerDistinctPosition() async throws {
         let profile = RouteProfile(route: Fixture.ridgeRoute)
         let total = try #require(profile.distances.last)
         let highlight = RouteHighlight()
@@ -269,16 +268,22 @@ struct RouteHighlightTests {
         await counter.settle()
 
         var dragEvents = 0
+        var distinctPositions = 0
         for distance in stride(from: 0, through: total, by: 10) {
-            highlight.move(to: profile.coordinate(atDistance: distance))
+            let coordinate = profile.coordinate(atDistance: distance)
+            highlight.move(to: coordinate)
             dragEvents += 1
+            await counter.settle()
+            highlight.move(to: coordinate)
+            dragEvents += 1
+            distinctPositions += 1
             await counter.settle()
         }
 
-        #expect(dragEvents > Fixture.ridgeRoute.count * 5, "precondition: far more drag events than track points")
+        #expect(dragEvents == distinctPositions * 2, "precondition: every position is submitted twice")
         #expect(
-            counter.count == Fixture.ridgeRoute.count,
-            "the pin can only ever be at a track point, so that's the most times it can move"
+            counter.count == distinctPositions,
+            "interpolated movement publishes, while repeating the same position remains silent"
         )
     }
 }

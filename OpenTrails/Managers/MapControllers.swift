@@ -25,10 +25,10 @@ final class RouteHighlight {
     /// `CLLocationCoordinate2D` isn't `Equatable`, so Observation can't filter
     /// a repeat write the way it does for `Double` and friends — it has to be
     /// compared here. It matters most on the hot path this type exists for:
-    /// scrubbing the elevation chart resolves a distance to the *nearest track
-    /// point*, so a finger crossing one vertex's worth of trail reports the
-    /// same coordinate many times over, and each repeat would re-register the
-    /// map coordinator's observation through a `Task` hop for no movement.
+    /// scrubbing the elevation chart interpolates positions along route
+    /// segments, and repeated drag samples at the same distance would otherwise
+    /// re-register the map coordinator's observation through a `Task` hop for
+    /// no movement.
     ///
     /// Guarding here rather than at each call site is deliberate: the write
     /// sites are spread across the detail view's scrub, its auto-follow poll

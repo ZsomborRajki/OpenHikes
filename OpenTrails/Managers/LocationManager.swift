@@ -28,6 +28,9 @@ final class LocationManager: NSObject {
     /// Throttled here so downstream consumers only ever see ~1 update/sec.
     private var lastPublished: Date?
     private static let minimumPublishInterval: TimeInterval = 1
+    /// Authorization callbacks can arrive as soon as the delegate is assigned.
+    /// Only start hardware updates after the owning view has called `start()`.
+    private var updatesRequested = false
 
     override init() {
         super.init()
@@ -39,6 +42,7 @@ final class LocationManager: NSObject {
     /// updating. Location delivery itself is ongoing via the delegate for as
     /// long as this object lives.
     func start() async {
+        updatesRequested = true
         let status = manager.authorizationStatus
         if status == .notDetermined {
             manager.requestWhenInUseAuthorization()
@@ -89,7 +93,7 @@ extension LocationManager: CLLocationManagerDelegate {
     nonisolated func locationManagerDidChangeAuthorization(_ manager: CLLocationManager) {
         let status = manager.authorizationStatus
         Task { @MainActor in
-            guard Self.isAuthorized(status) else { return }
+            guard updatesRequested, Self.isAuthorized(status) else { return }
             manager.startUpdatingLocation()
         }
     }

@@ -4,7 +4,7 @@ Reviewed 2026-08-11 at commit `773a253` (`main`, aligned with `origin/main`).
 
 ## Executive summary
 
-The iOS application is in a strong state for a young, multi-target SwiftUI project. Its algorithmic and offline-storage tests are unusually thorough, the main-thread/off-main split is deliberate, and render isolation is well designed. The app suite contains **209 tests in 24 suites**; its latest full runs expose one timing-sensitive Tile Load Gate failure that passes when the suite is isolated. The shared package passed **42 tests in 5 suites**, and iOS, macOS, and visionOS now compile cleanly.
+The iOS application is in a strong state for a young, multi-target SwiftUI project. Its algorithmic and offline-storage tests are unusually thorough, the main-thread/off-main split is deliberate, and render isolation is well designed. The app suite passes **209 tests in 24 suites**. The shared package passed **42 tests in 5 suites**, and iOS, macOS, and visionOS compile cleanly.
 
 There are no confirmed critical or high-priority defects. The remaining findings are medium-priority correctness, lifecycle, performance, and release-engineering risks.
 
@@ -13,13 +13,11 @@ There are no confirmed critical or high-priority defects. The remaining findings
 | Surface | Result | Notes |
 |---|---:|---|
 | iOS app build | Pass | `OpenTrails`, iPhone 17 Pro simulator, iOS 26.5 |
-| iOS app tests | **Flaky** | 209 tests; `TileLoadGateTests.downloadCannotStarveTheMap` fails under the full parallel suite but its 4-test suite passes isolated |
+| iOS app tests | Pass | 209 tests, 24 suites |
 | Shared package tests | Pass | 42 tests, 5 suites |
 | macOS build | Pass | Platform-specific authorization handling; iOS extensions excluded from embedding |
 | visionOS build | Pass | visionOS authorization and material fallbacks compile with the 26.5 simulator SDK |
 | CI | **Absent** | No workflow exists under `.github/workflows` |
-
-The app suite has produced clean passes, but repeated post-review runs reproduce the Tile Load Gate timing failure even after a simulator reset. This reinforces the need to replace fixed timing assumptions with explicit synchronization and to run the suite in deterministic CI.
 
 ## Medium-priority correctness and lifecycle findings
 

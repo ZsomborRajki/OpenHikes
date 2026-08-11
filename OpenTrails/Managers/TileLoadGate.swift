@@ -106,5 +106,16 @@ actor TileLoadGate {
     var inFlight: (total: Int, background: Int) { (active, activeBackground) }
 
     var budgets: (total: Int, background: Int) { (totalBudget, backgroundBudget) }
+
+    /// Atomic test snapshot used to wait until spawned acquire tasks have
+    /// either entered or queued, without guessing at actor scheduling delays.
+    var testState: (
+        total: Int,
+        background: Int,
+        interactiveWaiters: Int,
+        backgroundWaiters: Int
+    ) {
+        (active, activeBackground, interactiveWaiters.count, backgroundWaiters.count)
+    }
     #endif
 }
