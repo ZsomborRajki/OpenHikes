@@ -2,8 +2,8 @@
 //  SharedTrailSnapshot.swift
 //  OpenTrailsShared
 //
-//  The small, precomputed payload the main app writes and every widget/watch
-//  surface reads. Assembled only by the main app process (foreground or a
+//  The small, precomputed payload the main app writes and the widget reads.
+//  Assembled only by the main app process (foreground or a
 //  background significant-location-change relaunch) — nothing downstream ever
 //  recomputes trail geometry or GPS matching itself.
 //
@@ -90,8 +90,8 @@ public struct SharedTrailSnapshot: Codable, Sendable, Equatable {
     }
 
     /// "62% · 1.4 mi left" while a live fix is on the trail, otherwise just
-    /// the trail's total length. Shared by the iOS widget, the watch app, and
-    /// the watch complication so the three surfaces can't drift out of sync.
+    /// the trail's total length. Shared with the iOS widget so the app and
+    /// extension cannot drift out of sync.
     public var statusText: String {
         guard let fractionComplete, let remainingDistanceMeters else {
             return Self.formattedLength(totalDistanceMeters)

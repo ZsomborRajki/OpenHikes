@@ -40,7 +40,7 @@ struct HikeDetailView: View {
     /// Source of the user's live location, polled (throttled) to drive auto-follow.
     let locationManager: LocationManager
     /// Fed the same auto-follow matches as the chart/map, throttled, so the
-    /// widget/Watch stay reasonably fresh while this hike is being viewed.
+    /// widget stays reasonably fresh while this hike is being viewed.
     let backgroundTracker: BackgroundTrailTracker
     /// Collapses the sheet so the map is visible when zooming to the route.
     var onZoomToRoute: () -> Void = {}

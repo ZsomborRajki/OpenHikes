@@ -181,6 +181,23 @@ struct TileStoreTests {
         await cleanUp([key])
     }
 
+    @Test("suspending atomically blocks new tile claims until resume")
+    func suspensionBlocksNewClaims() async throws {
+        activate()
+        #expect(store.suspendAndSnapshotPendingKeys(for: hikeID).isEmpty)
+
+        let key = key(16, 5, 6)
+        try await persist(key: key, tile: tile())
+        #expect(!TileStore.isSaved(key))
+        #expect(TileStore.isBrowsed(key), "a tile finishing after suspension must remain ordinary cache")
+
+        store.resumePersisting(for: hikeID)
+        try await persist(key: key, tile: tile())
+        #expect(store.drainPendingKeys(for: hikeID) == [key])
+        #expect(TileStore.isSaved(key))
+        await cleanUp([key])
+    }
+
     /// The drain is keyed by hike so a selection change mid-flight can't
     /// splice one trail's tiles into another's manifest.
     @Test("pending keys are only handed to the hike they belong to")
@@ -337,6 +354,94 @@ struct ControllerTests {
         #expect(hike.autoSavedTileKeys.count == keys.count)
 
         await offMain { TileCache.shared.removeTiles(forKeys: keys) }
+        AutoSaveTileStore.shared.clearActiveHike()
+    }
+
+    @Test("a failed suspension save keeps ownership pending for retry")
+    func failedSuspensionSaveKeepsPendingKeys() async throws {
+        struct SaveFailure: Error {}
+
+        let controller = AutoSaveController()
+        let hike = Fixture.hike(in: context)
+        controller.hikeSelectionChanged(to: hike)
+
+        let store = AutoSaveTileStore.shared
+        let anchor = hike.coordinates[2]
+        let z = 17
+        let x = SlippyTileMath.tileX(anchor.longitude, z: z)
+        let y = SlippyTileMath.tileY(anchor.latitude, z: z)
+        let key = "autosave-suspension-test/\(z)/\(x)/\(y)@2.0"
+        try TileStore.browse(key: key)
+        await offMain { store.considerPersisting(key: key, z: z, x: x, y: y) }
+
+        controller.sceneWillResignActive { throw SaveFailure() }
+        #expect(hike.autoSavedTileKeys.isEmpty, "a failed save must roll back the in-memory manifest update")
+        #expect(
+            store.suspendAndSnapshotPendingKeys(for: hike.id) == [key],
+            "ownership must remain pending until persistence succeeds"
+        )
+
+        controller.sceneDidBecomeActive()
+        controller.flushPendingKeys()
+        #expect(hike.autoSavedTileKeys == [key])
+
+        await offMain { TileCache.shared.removeTiles(forKeys: [key]) }
+        AutoSaveTileStore.shared.clearActiveHike()
+    }
+
+    @Test("suspension saves ownership already folded into the model")
+    func suspensionSavesPreviouslyDrainedOwnership() async throws {
+        let controller = AutoSaveController()
+        let hike = Fixture.hike(in: context)
+        controller.hikeSelectionChanged(to: hike)
+
+        let store = AutoSaveTileStore.shared
+        let anchor = hike.coordinates[2]
+        let z = 17
+        let x = SlippyTileMath.tileX(anchor.longitude, z: z)
+        let y = SlippyTileMath.tileY(anchor.latitude, z: z)
+        let key = "autosave-drained-test/\(z)/\(x)/\(y)@2.0"
+        try TileStore.browse(key: key)
+        await offMain { store.considerPersisting(key: key, z: z, x: x, y: y) }
+        controller.flushPendingKeys()
+
+        var saveWasCalled = false
+        controller.sceneWillResignActive { saveWasCalled = true }
+        #expect(saveWasCalled, "suspension must save even when the timer already drained every pending key")
+
+        await offMain { TileCache.shared.removeTiles(forKeys: [key]) }
+        AutoSaveTileStore.shared.clearActiveHike()
+    }
+
+    @Test("selection changes during suspension preserve failed-save ownership")
+    func suspendedSelectionChangePreservesPendingKeys() async throws {
+        struct SaveFailure: Error {}
+
+        let controller = AutoSaveController()
+        let first = Fixture.hike(in: context)
+        let second = Fixture.hike(title: "Second", in: context)
+        controller.hikeSelectionChanged(to: first)
+
+        let store = AutoSaveTileStore.shared
+        let anchor = first.coordinates[2]
+        let z = 17
+        let x = SlippyTileMath.tileX(anchor.longitude, z: z)
+        let y = SlippyTileMath.tileY(anchor.latitude, z: z)
+        let key = "autosave-deferred-selection-test/\(z)/\(x)/\(y)@2.0"
+        try TileStore.browse(key: key)
+        await offMain { store.considerPersisting(key: key, z: z, x: x, y: y) }
+
+        controller.sceneWillResignActive { throw SaveFailure() }
+        controller.hikeSelectionChanged(to: second)
+        #expect(
+            store.suspendAndSnapshotPendingKeys(for: first.id) == [key],
+            "changing selection while suspended must not replace the store's retained ownership"
+        )
+
+        controller.sceneDidBecomeActive()
+        #expect(first.autoSavedTileKeys == [key])
+
+        await offMain { TileCache.shared.removeTiles(forKeys: [key]) }
         AutoSaveTileStore.shared.clearActiveHike()
     }
 }

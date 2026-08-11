@@ -16,12 +16,6 @@
 //  the widget project the trail line and the current position onto it without
 //  the app re-rendering anything.
 //
-//  Deliberately phone-only: these images stay in the phone's App Group
-//  container and are never sent over WatchConnectivity. The Watch payload
-//  stays a few KB of JSON, and accessory complication families render tinted
-//  and flattened anyway — a photographic basemap has nothing to add there.
-//
-
 import CoreGraphics
 import Foundation
 
@@ -278,8 +272,7 @@ public struct TrailBasemap: Codable, Sendable, Equatable {
 ///
 /// Stored beside the trail snapshot rather than inside it, on purpose: the
 /// snapshot is rewritten whenever a live fix lands (as often as every 45
-/// seconds) and is mirrored to the Watch, whereas this changes only when the
-/// selected trail's geometry does, and never leaves the phone.
+/// seconds), whereas this changes only when the selected trail's geometry does.
 public struct TrailBasemapSet: Codable, Sendable, Equatable {
     public var hikeID: UUID
     /// The trail's own bounding box at render time — the staleness key. Once

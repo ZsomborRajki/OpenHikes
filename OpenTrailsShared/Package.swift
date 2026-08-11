@@ -5,7 +5,6 @@ let package = Package(
     name: "OpenTrailsShared",
     platforms: [
         .iOS(.v18),
-        .watchOS(.v10),
         .macOS(.v13),
         .visionOS(.v1)
     ],

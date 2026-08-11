@@ -205,8 +205,8 @@ enum TileStore {
     }
 }
 
-/// Whether this process can reach the App Group container the widget and
-/// Watch payload live in. Present in the real app (and in a test host that
+/// Whether this process can reach the App Group container the widget payload
+/// lives in. Present in the real app (and in a test host that
 /// inherits its entitlements), absent if the capability is ever dropped — in
 /// which case the feed suites skip rather than fail for the wrong reason.
 enum SharedStoreProbe {

@@ -21,25 +21,7 @@ There are no confirmed critical or high-priority defects. The remaining findings
 
 ## Medium-priority correctness and lifecycle findings
 
-### 1. Pending auto-save ownership can be lost on suspension or termination
-
-**Files:** `OpenTrails/Managers/AutoSaveController.swift:26-32,67-105`, `OpenTrails/UI/OpenTrailsApp.swift:37-48`
-
-Newly promoted tiles live only in `AutoSaveTileStore.pendingKeys` until the two-second drain runs. Selection changes and deletion flush correctly, but scene transitions do not. If the process is suspended or terminated in that window, durable files remain without a SwiftData owner and can later be trimmed as residue.
-
-**Recommendation:** Flush pending keys and save the model context when entering inactive/background states. Longer term, make durable promotion and ownership persistence one recoverable transaction.
-
-### 2. Watch state can be lost at activation boundaries
-
-**Files:** `OpenTrails/Managers/WatchConnectivityBridge.swift:22-55`, `OpenWatch Watch App/WatchConnectivityBridge.swift:26-54`
-
-The phone drops `send` calls until `WCSession` is activated and does not replay the latest desired snapshot after activation. Conversely, the Watch interprets any empty, malformed, or incompatible application context as an explicit clear and erases its last valid local snapshot.
-
-**Impact:** Launch-time selection restoration, deselection, or malformed delivery can leave the Watch stale or unnecessarily blank.
-
-**Recommendation:** Retain and replay the latest phone state after activation. Add an explicit versioned envelope with a clear marker; ignore absent or malformed contexts while preserving the last valid snapshot.
-
-### 3. GPX segment boundaries become fictitious route legs
+### 1. GPX segment boundaries become fictitious route legs
 
 **File:** `OpenTrails/Managers/GPXImport.swift:28-42,101-109`
 
@@ -49,7 +31,7 @@ All tracks and segments are flattened into one point array, and distance is summ
 
 **Recommendation:** Preserve segment boundaries in the route model, or at minimum exclude cross-segment edges from distance/profile/matching calculations.
 
-### 4. Location fixes are accepted without freshness or accuracy checks
+### 2. Location fixes are accepted without freshness or accuracy checks
 
 **Files:** `OpenTrails/Managers/LocationManager.swift:54-80`, `OpenTrails/Managers/BackgroundTrailTracker.swift:194-223,258-269`
 
@@ -57,7 +39,7 @@ Core Location can initially deliver cached samples or samples with invalid/poor 
 
 **Recommendation:** Reject negative or excessive `horizontalAccuracy`, reject stale timestamps, and preserve the source timestamp in `SharedTrailSnapshot.LiveFix`.
 
-### 5. Map searches can apply out-of-order responses
+### 3. Map searches can apply out-of-order responses
 
 **File:** `OpenTrails/UI/Map/MapSheet.swift:355-380`
 
@@ -65,7 +47,7 @@ Each selected suggestion or submitted query starts an uncancelled task. A slower
 
 **Recommendation:** Retain a cancellable search task or generation token and invalidate it whenever a new search starts.
 
-### 6. Weather failures are not retried while stationary
+### 4. Weather failures are not retried while stationary
 
 **Files:** `OpenTrails/UI/ContentView.swift:218-229`, `OpenTrails/Managers/WeatherManager.swift:21-27`
 
@@ -73,7 +55,7 @@ Each selected suggestion or submitted query starts an uncancelled task. A slower
 
 **Recommendation:** Advance the successful key only after a fetch succeeds, and add a bounded retry/freshness policy.
 
-### 7. Offline byte measurements can complete out of order
+### 5. Offline byte measurements can complete out of order
 
 **File:** `OpenTrails/UI/Hike/HikeDetailView.swift:155-195`
 
@@ -81,9 +63,9 @@ Every manifest change launches an independent detached measurement. Older work c
 
 **Recommendation:** Cancel the previous task or use a generation token before publishing `storedBytes`.
 
-### 8. There is no automated build/test workflow
+### 6. There is no automated build/test workflow
 
-Only local instructions exist; `.github/workflows` is empty. The current suite depends on Xcode 26.5, iOS/watchOS runtimes, signing capabilities, App Group access, and simulator health.
+Only local instructions exist; `.github/workflows` is empty. The current suite depends on Xcode 26.5, iOS runtimes, signing capabilities, App Group access, and simulator health.
 
 **Impact:** The passing local state is not protected on pull requests, cross-platform compile failures reached `main`, and entitlement-dependent suites can silently skip.
 
@@ -116,7 +98,7 @@ The test names and explanatory comments are notably good: they capture user-visi
 
 ### Highest-value missing or fragile coverage
 
-1. **No direct widget, Watch app, complication, or WatchConnectivity tests.** Shared payload tests do not exercise timeline providers, families, empty states, basemap pairing, activation replay, or clears.
+1. **No direct widget tests.** Shared payload tests do not exercise timeline providers, families, empty states, basemap pairing, or clears.
 2. **The actual background-location relaunch path is untested.** Authorization transitions, persisted selection, delegate delivery, off-route clearing, and deleted-hike behavior need injected location/defaults/clock tests.
 3. **MapKit integration is weakly covered.** Render-isolation tests characterize observable controllers but do not verify `MapCoordinator` registration, route-overlay churn, recentering, sheet insets, or highlight updates.
 4. **Tile HTTP and renderer behavior lacks a controlled transport.** Status handling, invalid images, headers, cache ordering, expiry/revalidation, reconnect retry, deduplication, and fallback image output are not covered.
@@ -146,13 +128,12 @@ The test names and explanatory comments are notably good: they capture user-visi
 - `TileOwnership` correctly recognizes that multiple hikes can share the same geographic tile.
 - Auto-save uses locking, caps, corridor checks, deduplication, and failed-claim rollback.
 - Downloader generation tracking prevents an abandoned run from overwriting a newer run.
-- Shared snapshots are compact and precomputed; widgets and Watch surfaces do not duplicate route matching.
+- Shared snapshots are compact and precomputed; the widget does not duplicate route matching.
 - SharedStore uses atomic writes, and basemap publication writes images before advertising the manifest.
 - The codebase has strong inline rationale around concurrency, lifecycle, rendering, and policy decisions.
 
 ## Recommended order of work
 
 1. Add CI compile gates for iOS, macOS, and visionOS.
-2. Harden auto-save scene persistence and Watch activation delivery.
-3. Add controlled integration seams for location, HTTP, filesystem, MapKit, and WatchConnectivity.
-4. Address the measured render/search/storage performance backlog.
+2. Add controlled integration seams for location, HTTP, filesystem, and MapKit.
+3. Address the measured render/search/storage performance backlog.

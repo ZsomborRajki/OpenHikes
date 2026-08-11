@@ -2,12 +2,9 @@
 //  SharedTrailSnapshotTests.swift
 //  OpenTrailsSharedTests
 //
-//  The snapshot is the entire contract between the app and its other
-//  surfaces: the iOS widget, the Watch app, and the complication all render
-//  from this and compute nothing themselves. It also crosses two process
-//  boundaries — a file in the App Group, and a WatchConnectivity payload —
-//  so what's checked here is that it survives the trip and that the three
-//  surfaces can't drift apart, since they share one status line.
+//  The snapshot is the contract between the app and the iOS widget, which
+//  renders it without recomputing trail geometry or route matching. It crosses
+//  the App Group process boundary, so these tests keep both targets aligned.
 //
 
 import Foundation
@@ -61,8 +58,8 @@ struct SharedTrailSnapshotTests {
 
     /// The trail's stored length and the distance a fix is matched at are
     /// computed by two different passes over the same points, so they can
-    /// disagree by a metre. "101% · -8 m left" on a watch face is worse than
-    /// a rounding error, hence the clamp.
+    /// disagree by a metre. "101% · -8 m left" is worse than a rounding error,
+    /// hence the clamp.
     @Test("progress stays within 0…100% at the finish")
     func progressClamps() throws {
         let overshoot = Self.snapshot(total: 10_000, along: 11_000)
@@ -114,9 +111,8 @@ struct SharedTrailSnapshotTests {
         #expect(decoded.statusText == snapshot.statusText)
     }
 
-    /// The Watch payload goes over WatchConnectivity, which is not the place
-    /// for a full-resolution track — hence the decimation. A few KB is the
-    /// budget being defended here.
+    /// The widget snapshot does not need a full-resolution track, so a few KB
+    /// is the payload budget defended here.
     @Test("a long trail's payload stays small")
     func payloadStaysSmall() throws {
         let long: [(latitude: Double, longitude: Double)] = (0..<20_000).map { step in

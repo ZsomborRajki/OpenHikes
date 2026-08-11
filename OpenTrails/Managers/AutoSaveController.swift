@@ -8,10 +8,13 @@
 //
 
 import Foundation
+import os
 
 @MainActor
 @Observable
 final class AutoSaveController {
+    private static let logger = Logger(subsystem: "OpenTrails", category: "AutoSaveTiles")
+
     /// Weakly held: kept alive by whoever else references the hike (the
     /// selected-hike state, the pushed detail view); this controller shouldn't
     /// be the thing keeping a deleted hike around.
@@ -22,6 +25,11 @@ final class AutoSaveController {
     /// `@MainActor` class, runs nonisolated).
     @ObservationIgnored
     private nonisolated(unsafe) var drainTask: Task<Void, Never>?
+    @ObservationIgnored
+    private var isSuspended = false
+    @ObservationIgnored
+    private var hasDeferredSelectionChange = false
+    private weak var deferredHike: Hike?
 
     init() {
         drainTask = Task { [weak self] in
@@ -40,16 +48,25 @@ final class AutoSaveController {
     /// Called whenever the map's selected hike changes, so auto-save follows
     /// whatever is actually on screen.
     func hikeSelectionChanged(to hike: Hike?) {
-        guard let hike, hike.autoSaveTilesEnabled, hike.pointCount > 1 else {
-            deactivate()
+        let eligibleHike = hike.flatMap {
+            $0.autoSaveTilesEnabled && $0.pointCount > 1 ? $0 : nil
+        }
+        guard !isSuspended else {
+            deferredHike = eligibleHike
+            hasDeferredSelectionChange = true
             return
         }
-        activate(hike)
+        applySelection(eligibleHike)
     }
 
     /// Toggled from the hike detail view's Auto-Save control.
     func setEnabled(_ enabled: Bool, for hike: Hike) {
         hike.autoSaveTilesEnabled = enabled
+        if isSuspended {
+            deferredHike = enabled && hike.pointCount > 1 ? hike : nil
+            hasDeferredSelectionChange = true
+            return
+        }
         if enabled, hike.pointCount > 1 {
             activate(hike)
         } else if activeHike?.id == hike.id {
@@ -61,6 +78,41 @@ final class AutoSaveController {
         AutoSaveTileStore.shared.isCapReached(for: hike.id)
     }
 
+    /// Stops background tile work from creating new ownership after the final
+    /// lifecycle flush. Pending keys are acknowledged only after SwiftData
+    /// confirms the manifest was persisted.
+    func sceneWillResignActive(save: () throws -> Void) {
+        isSuspended = true
+        let store = AutoSaveTileStore.shared
+        let hike = activeHike
+        let newKeys = hike.map { store.suspendAndSnapshotPendingKeys(for: $0.id) } ?? []
+
+        let previousCount = hike?.autoSavedTileKeys.count ?? 0
+        hike?.autoSavedTileKeys.append(contentsOf: newKeys)
+        do {
+            try save()
+            if let hike {
+                store.acknowledgePendingKeys(newKeys, for: hike.id)
+            }
+        } catch {
+            hike?.autoSavedTileKeys.removeSubrange(previousCount...)
+            Self.logger.error("Could not persist auto-saved tile ownership: \(error.localizedDescription, privacy: .public)")
+        }
+    }
+
+    func sceneDidBecomeActive() {
+        isSuspended = false
+        if hasDeferredSelectionChange {
+            let hike = deferredHike
+            deferredHike = nil
+            hasDeferredSelectionChange = false
+            applySelection(hike)
+            return
+        }
+        guard let hike = activeHike else { return }
+        AutoSaveTileStore.shared.resumePersisting(for: hike.id)
+    }
+
     /// Called just before `hike` is deleted, so the delete that follows sees a
     /// complete manifest. Waiting for the selection change to propagate back
     /// through SwiftUI would leave the tiles saved in the last drain window on
@@ -68,7 +120,15 @@ final class AutoSaveController {
     /// ever reclaim them.
     func hikeWillBeDeleted(_ hike: Hike) {
         guard activeHike?.id == hike.id else { return }
-        deactivate()
+        deactivate(flushWhileSuspended: true)
+    }
+
+    private func applySelection(_ hike: Hike?) {
+        guard let hike else {
+            deactivate()
+            return
+        }
+        activate(hike)
     }
 
     private func activate(_ hike: Hike) {
@@ -80,14 +140,19 @@ final class AutoSaveController {
         AutoSaveTileStore.shared.setActiveHike(
             id: hike.id,
             route: hike.coordinates,
-            knownKeys: Set(hike.autoSavedTileKeys)
+            knownKeys: Set(hike.autoSavedTileKeys),
+            acceptsNewClaims: !isSuspended
         )
     }
 
-    private func deactivate() {
+    private func deactivate(flushWhileSuspended: Bool = false) {
         // Same reason as in `activate`: `clearActiveHike` drops the pending set,
         // which is the only record of the last couple of seconds' worth of saves.
-        flushPendingKeys()
+        if flushWhileSuspended {
+            flushPendingKeysIgnoringSuspension()
+        } else {
+            flushPendingKeys()
+        }
         activeHike = nil
         AutoSaveTileStore.shared.clearActiveHike()
     }
@@ -99,6 +164,11 @@ final class AutoSaveController {
     /// SwiftData pointing at them, and `deactivate()` discards the in-memory
     /// record that would have found them.
     func flushPendingKeys() {
+        guard !isSuspended else { return }
+        flushPendingKeysIgnoringSuspension()
+    }
+
+    private func flushPendingKeysIgnoringSuspension() {
         guard let hike = activeHike else { return }
         let newKeys = AutoSaveTileStore.shared.drainPendingKeys(for: hike.id)
         guard !newKeys.isEmpty else { return }

@@ -18,6 +18,8 @@ struct ContentView: View {
     /// delegated for location updates) before this view is ever built, so it
     /// can catch a background relaunch that never reaches this view at all.
     let backgroundTracker: BackgroundTrailTracker
+    /// Owned by `OpenTrailsApp`, so scene lifecycle events are handled there.
+    let autoSaveController: AutoSaveController
 
     @State private var locationManager = LocationManager()
     @State private var weatherManager = WeatherManager()
@@ -36,8 +38,6 @@ struct ContentView: View {
     @State private var importFailure: GPXImport.ImportFailure?
     /// Lets the hike detail view drive one-shot map commands (e.g. the Zoom button).
     @State private var mapController = MapController()
-    /// Tracks which hike (if any) is passively auto-saving OSM tiles while browsed.
-    @State private var autoSaveController = AutoSaveController()
 
     /// The sheet's live top edge, observed directly by the map so dragging the
     /// sheet never re-renders this view or the sheet's contents.
@@ -179,7 +179,7 @@ struct ContentView: View {
     }
 
     /// Restores the last-selected hike across launches — today `selectedHike`
-    /// starts every launch as `nil`, so without this the widget/Watch would
+    /// starts every launch as `nil`, so without this the widget would
     /// stay empty until the user reselects a trail by hand.
     private func restoreLastSelectedHike() {
         guard selectedHike == nil,
@@ -300,6 +300,9 @@ private struct WeatherBadge: View {
 
 #Preview {
     let container = try! ModelContainer(for: Hike.self, configurations: .init(isStoredInMemoryOnly: true))
-    ContentView(backgroundTracker: BackgroundTrailTracker(container: container))
-        .modelContainer(container)
+    ContentView(
+        backgroundTracker: BackgroundTrailTracker(container: container),
+        autoSaveController: AutoSaveController()
+    )
+    .modelContainer(container)
 }

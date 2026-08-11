@@ -4,7 +4,7 @@
 //
 //  `RouteProfile` is the index behind three user-visible things: scrubbing
 //  the elevation chart (distance → map coordinate), live auto-follow
-//  (GPS fix → distance along the trail), and the widget/Watch progress
+//  (GPS fix → distance along the trail), and the widget progress
 //  readout, which divides that distance by the hike's own length. If any of
 //  those disagree the failure is silent — the graph marker simply sits
 //  somewhere plausible but wrong.

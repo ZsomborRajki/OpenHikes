@@ -3,10 +3,8 @@
 //  OpenTrailsShared
 //
 //  Reads/writes the current SharedTrailSnapshot to the App Group container.
-//  The same code runs unmodified on the phone (OpenTrails + OpenWidgetExtension,
-//  sharing one container) and on the Watch (OpenWatch + OpenWatchWidget, sharing
-//  a separate container of their own) — each process resolves its own
-//  device-local App Group path from the same identifier.
+//  The same code runs unmodified in OpenTrails and OpenWidgetExtension, which
+//  resolve the same device-local App Group container.
 //
 
 import Foundation
@@ -52,10 +50,8 @@ public enum SharedStore {
     // MARK: Basemaps
 
     // Kept in files of their own rather than inside the snapshot: the
-    // snapshot is small, rewritten on every live fix, and mirrored to the
-    // Watch, while these are hundreds of KB, rewritten only when the trail's
-    // geometry changes, and never leave the phone. Nothing here exists on the
-    // Watch — see `TrailBasemap`'s header.
+    // snapshot is small and rewritten on every live fix, while these are
+    // hundreds of KB and rewritten only when the trail's geometry changes.
 
     private static var basemapSetURL: URL? {
         containerURL?.appendingPathComponent(basemapSetFileName)

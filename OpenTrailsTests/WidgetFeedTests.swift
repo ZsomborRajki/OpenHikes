@@ -2,9 +2,9 @@
 //  WidgetFeedTests.swift
 //  OpenTrailsTests
 //
-//  The Home Screen widget and the Watch never compute anything: they draw a
-//  precomputed snapshot the app writes into the App Group. So everything the
-//  user sees on those surfaces is decided here — which trail, how far along
+//  The Home Screen widget never computes anything: it draws a precomputed
+//  snapshot the app writes into the App Group. So everything the user sees
+//  there is decided here — which trail, how far along
 //  it, and whether that reading is fresh enough to show at all.
 //
 //  The throttle is part of the contract, not an implementation detail: the
@@ -20,7 +20,7 @@ import Testing
 @testable import OpenTrails
 
 @MainActor
-@Suite("Widget and Watch feed", .serialized, .enabled(if: SharedStoreProbe.isAvailable))
+@Suite("Widget feed", .serialized, .enabled(if: SharedStoreProbe.isAvailable))
 final class WidgetFeedTests {
     private let container: ModelContainer
     private let context: ModelContext

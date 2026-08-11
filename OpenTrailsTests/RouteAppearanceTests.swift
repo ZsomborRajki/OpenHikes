@@ -3,7 +3,7 @@
 //  OpenTrailsTests
 //
 //  A hike's tint is picked with a colour well and stored as a hex string, so
-//  it survives a relaunch and can be read by the widget and the Watch. That
+//  it survives a relaunch and can be read by the widget. That
 //  round trip is the only thing standing between "the user chose a colour"
 //  and "the route is drawn in it" — including the alpha, which is deliberately
 //  applied to the map line alone while every other surface uses the opaque

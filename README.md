@@ -10,8 +10,8 @@ A SwiftUI hiking/trail-mapping app for iOS, iPadOS, macOS, and visionOS. OpenTra
 - **GPX import** (via [CoreGPX](https://github.com/vincentneo/CoreGPX)), pulling track points plus author/description/keywords metadata.
 - **Hike detail view** with an interactive elevation profile (Swift Charts) you can scrub, distance/elevation-gain/elevation-loss/speed/duration stats, a customizable route tint and line width, and directional chevrons on the map showing travel direction.
 - **Live GPS auto-follow** — while a hike is open, the elevation chart and map track your live position along that trail.
-- **Home Screen widget and Watch complication** — the selected trail's shape, over a pre-rendered basemap, with your last-known position along it. Fed by the app through an App Group; neither surface reads location or computes geometry itself.
-- **Background trail tracking** (opt-in, iOS) — keeps those surfaces current while the app is closed, using significant-location-change delivery rather than continuous GPS.
+- **Home Screen widget** — the selected trail's shape, over a pre-rendered basemap, with your last-known position along it. Fed by the app through an App Group; the extension does not read location or compute geometry itself.
+- **Background trail tracking** (opt-in, iOS) — keeps the widget current while the app is closed, using significant-location-change delivery rather than continuous GPS.
 - **Weather badge** for your current location (WeatherKit).
 - **Search** — MapKit place search, plus matching against your own saved hikes, surfaced together in one suggestions list.
 - **Offline storage that accounts for itself** — Settings separates tiles your hikes are keeping for offline use from tiles the map merely happened to draw, and lets you reclaim the latter without touching the former.
@@ -21,13 +21,13 @@ A SwiftUI hiking/trail-mapping app for iOS, iPadOS, macOS, and visionOS. OpenTra
 - Xcode 26.5 or later.
 - Deployment targets: iOS/iPadOS 26.5, macOS 26.5, visionOS 26.5 (`TARGETED_DEVICE_FAMILY = 1,2,7`).
 - An Apple Developer Program team — **WeatherKit requires a paid membership**; the project won't build against a free personal team without removing that entitlement.
-- An App Group (`group.tappium.com.OpenTrails` as committed), shared by the app, the iOS widget, and the Watch complication — it's how the trail snapshot and the widget's basemap images get from the app to those surfaces.
+- An App Group (`group.tappium.com.OpenTrails` as committed), shared by the app and the iOS widget — it's how the trail snapshot and basemap images reach the extension.
 - Network access for map tiles, weather, and search. Once a hike's tiles are downloaded or auto-saved, its map works offline.
 
 ## Getting started
 
 1. Clone the repo and open `OpenTrails.xcodeproj` in Xcode.
-2. In **Signing & Capabilities**, change the team from the placeholder (`697EW27G9U`) to your own — on all four targets (`OpenTrails`, `OpenWidgetExtension`, `OpenWatch Watch App`, `OpenWatchWidgetExtension`). If your team can't claim `group.tappium.com.OpenTrails`, change the App Group on all four to one you own, and update `SharedStore.appGroupID` in `OpenTrailsShared` to match.
+2. In **Signing & Capabilities**, change the team from the placeholder (`697EW27G9U`) to your own on both targets (`OpenTrails` and `OpenWidgetExtension`). If your team can't claim `group.tappium.com.OpenTrails`, change the App Group on both to one you own, and update `SharedStore.appGroupID` in `OpenTrailsShared` to match.
 3. *(Optional)* Enable the key-gated providers (Stadia Outdoors, Thunderforest Outdoors):
    ```
    cp Secrets.example.plist OpenTrails/Secrets.plist
@@ -48,9 +48,7 @@ OpenTrailsApp                       owns the SwiftData container + BackgroundTra
          └─ HikeDetailView          elevation chart, stats, offline/color/width controls
 
 OpenTrailsShared (SwiftPM)          snapshot, Mercator, basemap geometry, deep links
- ├─ OpenWidget                      iOS Home Screen widget
- ├─ OpenWatch Watch App             minimal fallback surface
- └─ OpenWatchWidget                 Watch complication
+ └─ OpenWidget                      iOS Home Screen widget
 ```
 
 ### Keeping SwiftUI's diffing out of the hot paths
@@ -98,15 +96,15 @@ Everything on disk that no manifest claims is browsing residue — real, and oft
 
 `Hike` is a SwiftData `@Model`: title, route (`[RouteCoordinate]`, inline `Codable`), tint/width, and offline-download bookkeeping. Derived stats (distance, elevation gain/loss, average/max speed, duration) are computed properties over the route. `RouteProfile` precomputes a cumulative-distance index once per hike so scrubbing the elevation chart resolves a map location in O(log n) via binary search, and so live GPS auto-follow can project a fix onto the route. It also downsamples the elevation samples for drawing — see [Known limitations](#known-limitations) for why that budget exists and what it preserves.
 
-### Widget, complication, and background tracking
+### Widget and background tracking
 
-All the work happens in the app process; the widget and complication only render what they're handed.
+All the work happens in the app process; the widget only renders what it is handed.
 
 `BackgroundTrailTracker` assembles a `SharedTrailSnapshot` — the trail's decimated shape, your matched position along it, and a status line — and writes it to the App Group through `SharedStore`, then reloads the relevant timelines. It's fed from two independent sources: a throttled foreground push from `HikeDetailView`'s existing auto-follow loop (no extra permission needed), and, if the user opts in, significant-location-change delivery, which can relaunch the app after it's been suspended or terminated. That's why it's constructed in `OpenTrailsApp.init()` rather than lazily in a view — a background relaunch may never reach a view's `.task`.
 
 The iOS widget also gets a real basemap under the trail line, because WidgetKit can't host a live `Map`/`MKMapView` at any OS version. `TrailBasemapRenderer` rasterizes the trail's surroundings with `MKMapSnapshotter` (two shapes × light and dark) into the App Group, and `TrailBasemap` in the shared package pins each image to the patch of Earth it covers. Basemaps need the network, so a trail selected offline can end up without them; the app re-checks on every foreground.
 
-The Watch is fed by `WatchConnectivityBridge` (iOS-only, owned internally by `BackgroundTrailTracker`) into the watch-local `SharedStore`. Tapping either surface deep-links back into the app via `TrailWidgetDeepLink`.
+Tapping the widget deep-links back into the app via `TrailWidgetDeepLink`.
 
 ### Debug tooling
 
@@ -124,7 +122,7 @@ xcodebuild test -scheme OpenTrails -destination 'platform=iOS Simulator,name=iPh
 cd OpenTrailsShared && swift test
 ```
 
-- **`OpenTrailsTests`** (178 tests) — a unit-test target hosted by the app, covering the logic behind the features: tile indexing and the auto-save corridor, offline tile enumeration (budget, antimeridian) and the shared-tile bookkeeping that decides what a delete may actually free, how offline coverage and browsing residue are told apart on disk, `RouteProfile`'s scrub lookups, downsampling and auto-follow route matching, derived hike statistics, GPX parsing (including malformed and hostile files), tint persistence, the snapshot feed the widget and Watch render from, and the render-isolation behaviour the architecture above depends on (what Observation notifies, and how much the elevation chart is asked to draw).
+- **`OpenTrailsTests`** (213 tests) — a unit-test target hosted by the app, covering the logic behind the features: tile indexing and the auto-save corridor, offline tile enumeration (budget, antimeridian) and the shared-tile bookkeeping that decides what a delete may actually free, how offline coverage and browsing residue are told apart on disk, `RouteProfile`'s scrub lookups, downsampling and auto-follow route matching, derived hike statistics, GPX parsing (including malformed and hostile files), tint persistence, the snapshot feed the widget renders, and the render-isolation behaviour the architecture above depends on (what Observation notifies, and how much the elevation chart is asked to draw).
 - **`OpenTrailsSharedTests`** (42 tests) — the shared package's own suite: the Mercator projection, the widget's basemap geometry, deep links, and the trail snapshot's progress/decimation.
 
 Not covered: SwiftUI view bodies, `MapView`/`MapCoordinator`'s imperative MapKit updates, and `TileCache`'s network path. The render-isolation pattern described above is verified with `RenderSignpost` marks in Instruments rather than by tests — see [Debug tooling](#debug-tooling).
@@ -191,15 +189,12 @@ App sources live under `OpenTrails/` in three folders: `UI/`, `Models/`, and `Ma
 | `WeatherManager.swift` | WeatherKit current-conditions fetch. |
 | `BackgroundTrailTracker.swift` | Builds and publishes the trail snapshot; owns the separate significant-location-change manager. |
 | `TrailBasemapRenderer.swift` | Rasterizes the widget's basemap images into the App Group. |
-| `WatchConnectivityBridge.swift` | Phone-side push of the snapshot to a paired Watch (iOS-only; stubbed elsewhere). |
 
 **Other targets**
 | Target | Role |
 |---|---|
-| `OpenTrailsShared/` | SwiftPM package shared by every target: `SharedTrailSnapshot`, `SharedStore`, `Mercator`, `TrailBasemap`, `TrailMapView`/`TrailGlyphView`, `TrailWidgetDeepLink`. |
+| `OpenTrailsShared/` | SwiftPM package shared by the app and widget: `SharedTrailSnapshot`, `SharedStore`, `Mercator`, `TrailBasemap`, `TrailMapView`/`TrailGlyphView`, `TrailWidgetDeepLink`. |
 | `OpenWidget/` | iOS Home Screen widget. |
-| `OpenWatch Watch App/` | Minimal Watch app — a fallback surface for the complication. |
-| `OpenWatchWidget/` | Watch complication. |
 
 **Debug tooling** — `Managers/RenderInstrumentation.swift`, `Managers/MainThreadWatchdog.swift` (see above).
 

@@ -14,6 +14,7 @@ struct OpenTrailsApp: App {
 
     private let container: ModelContainer
     private let backgroundTracker: BackgroundTrailTracker
+    private let autoSaveController: AutoSaveController
 
     init() {
         #if DEBUG
@@ -35,11 +36,12 @@ struct OpenTrailsApp: App {
         // delegated by the time this returns, or the relaunch's one pending
         // location event has nothing to deliver to.
         self.backgroundTracker = BackgroundTrailTracker(container: container)
+        self.autoSaveController = AutoSaveController()
     }
 
     var body: some Scene {
         WindowGroup {
-            ContentView(backgroundTracker: backgroundTracker)
+            ContentView(backgroundTracker: backgroundTracker, autoSaveController: autoSaveController)
                 .ignoresSafeArea()
         }
         .modelContainer(container)
@@ -48,7 +50,14 @@ struct OpenTrailsApp: App {
         // without them. Re-checking on every foreground is how that heals;
         // it's a bounds comparison and no work when they're already right.
         .onChange(of: scenePhase) { _, phase in
-            if phase == .active { backgroundTracker.refreshBasemaps() }
+            if phase == .active {
+                autoSaveController.sceneDidBecomeActive()
+                backgroundTracker.refreshBasemaps()
+            } else if phase == .inactive || phase == .background {
+                autoSaveController.sceneWillResignActive {
+                    try container.mainContext.save()
+                }
+            }
         }
     }
 }

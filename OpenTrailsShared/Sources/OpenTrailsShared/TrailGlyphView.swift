@@ -4,8 +4,8 @@
 //
 //  Draws a trail as a stroked line fitted to the view's bounds, with an
 //  optional dot at the last-known position — no basemap, no image assets, no
-//  network. This is the whole visual on the Watch (app and complication), and
-//  the iOS widget's fallback whenever a rendered basemap isn't available yet:
+//  network. This is the iOS widget's fallback whenever a rendered basemap
+//  isn't available yet:
 //  the first seconds after a trail is selected, offline, or if a snapshot
 //  render failed. See ``TrailMapView`` for the phone's map-backed version.
 //

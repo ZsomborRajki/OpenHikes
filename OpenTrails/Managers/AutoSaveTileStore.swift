@@ -32,6 +32,7 @@ nonisolated final class AutoSaveTileStore: @unchecked Sendable {
     private struct ActiveHike {
         let id: UUID
         let corridor: TileCorridor
+        var acceptsNewClaims: Bool
         /// Every key already known to belong to this hike (loaded from its saved
         /// manifest, plus anything persisted so far this session) — the dedupe +
         /// cap-counting set.
@@ -50,9 +51,22 @@ nonisolated final class AutoSaveTileStore: @unchecked Sendable {
 
     /// Makes `hikeID` the active auto-save target. Replaces any previously
     /// active hike.
-    func setActiveHike(id: UUID, route: [CLLocationCoordinate2D], knownKeys: Set<String>) {
+    func setActiveHike(
+        id: UUID,
+        route: [CLLocationCoordinate2D],
+        knownKeys: Set<String>,
+        acceptsNewClaims: Bool = true
+    ) {
         let corridor = TileCorridor(route: route, bufferMeters: Self.corridorBufferMeters)
-        state.withLock { $0 = ActiveHike(id: id, corridor: corridor, knownKeys: knownKeys, pendingKeys: []) }
+        state.withLock {
+            $0 = ActiveHike(
+                id: id,
+                corridor: corridor,
+                acceptsNewClaims: acceptsNewClaims,
+                knownKeys: knownKeys,
+                pendingKeys: []
+            )
+        }
     }
 
     /// Stops auto-saving — no active hike means `considerPersisting` is a no-op.
@@ -77,7 +91,7 @@ nonisolated final class AutoSaveTileStore: @unchecked Sendable {
         // Claim the tile up front so two threads drawing it at once don't both
         // try to move it; `releaseClaim` undoes that if the bytes never land.
         let claim = state.withLock { state -> PersistenceClaim? in
-            guard var hike = state else { return nil }
+            guard var hike = state, hike.acceptsNewClaims else { return nil }
             let isNewKey = !hike.knownKeys.contains(key)
             guard
                 !isNewKey || hike.knownKeys.count < Self.tileCap,
@@ -129,6 +143,36 @@ nonisolated final class AutoSaveTileStore: @unchecked Sendable {
             hike.pendingKeys.removeAll()
             state = hike
             return drained
+        }
+    }
+
+    /// Stops new claims and returns the pending ownership snapshot in the same
+    /// lock acquisition. The keys remain pending until SwiftData confirms that
+    /// their manifest update was saved.
+    func suspendAndSnapshotPendingKeys(for hikeID: UUID) -> Set<String> {
+        state.withLock { state -> Set<String> in
+            guard var hike = state, hike.id == hikeID else { return [] }
+            hike.acceptsNewClaims = false
+            state = hike
+            return hike.pendingKeys
+        }
+    }
+
+    /// Removes only the snapshot successfully committed to SwiftData. Claims
+    /// added after a normal foreground snapshot remain pending for a later pass.
+    func acknowledgePendingKeys(_ keys: Set<String>, for hikeID: UUID) {
+        state.withLock { state in
+            guard var hike = state, hike.id == hikeID else { return }
+            hike.pendingKeys.subtract(keys)
+            state = hike
+        }
+    }
+
+    func resumePersisting(for hikeID: UUID) {
+        state.withLock { state in
+            guard var hike = state, hike.id == hikeID else { return }
+            hike.acceptsNewClaims = true
+            state = hike
         }
     }
 }

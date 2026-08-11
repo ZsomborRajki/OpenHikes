@@ -122,8 +122,8 @@ struct SettingsView: View {
 
     // MARK: - Background tracking
 
-    /// iOS-only: this is what feeds the Home Screen widget and Watch
-    /// complication while OpenTrails isn't open. Off by default — turning it
+    /// iOS-only: this is what feeds the Home Screen widget while OpenTrails
+    /// isn't open. Off by default — turning it
     /// on is what first triggers the system's Always-location prompt.
     @ViewBuilder
     private var backgroundTrackingSection: some View {
@@ -141,7 +141,7 @@ struct SettingsView: View {
         } header: {
             Text("Background Tracking")
         } footer: {
-            Text("Keeps your Home Screen widget and Watch complication showing your progress along the selected trail even when OpenTrails isn't open, using occasional, low-power location updates.")
+            Text("Keeps your Home Screen widget showing your progress along the selected trail even when OpenTrails isn't open, using occasional, low-power location updates.")
         }
         #endif
     }

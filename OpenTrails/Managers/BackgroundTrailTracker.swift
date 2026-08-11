@@ -2,7 +2,7 @@
 //  BackgroundTrailTracker.swift
 //  OpenTrails
 //
-//  Keeps the widget/Watch trail snapshot fresh from two independent feeds:
+//  Keeps the widget trail snapshot fresh from two independent feeds:
 //  a throttled foreground push (`publishLiveFix`, called from
 //  HikeDetailView's existing auto-follow loop — no extra permission needed)
 //  and a background one, driven by significant-location-change delivery,
@@ -33,8 +33,6 @@ import OpenTrailsShared
 final class BackgroundTrailTracker: NSObject {
     private let manager = CLLocationManager()
     private let container: ModelContainer
-    private let watchBridge = WatchConnectivityBridge()
-
     /// The hike background delivery should match fixes against. Seeded at
     /// launch from `SettingsKey.lastSelectedHikeID` (written by `ContentView`)
     /// since a background relaunch has no in-memory selection to read.
@@ -125,13 +123,11 @@ final class BackgroundTrailTracker: NSObject {
             SharedStore.clear()
             Task { await TrailBasemapRenderer.shared.invalidate() }
             WidgetCenter.shared.reloadTimelines(ofKind: TrailWidgetKind.id)
-            watchBridge.send(nil)
             return
         }
         let snapshot = Self.buildSnapshot(hike: hike, liveFix: nil)
         SharedStore.save(snapshot)
         WidgetCenter.shared.reloadTimelines(ofKind: TrailWidgetKind.id)
-        watchBridge.send(snapshot)
         refreshBasemaps(for: snapshot)
     }
 
@@ -233,7 +229,6 @@ final class BackgroundTrailTracker: NSObject {
         guard let snapshot else { return }
         SharedStore.save(snapshot)
         WidgetCenter.shared.reloadTimelines(ofKind: TrailWidgetKind.id)
-        watchBridge.send(snapshot)
         // Only when the trail itself changed. A moving position needs no new
         // basemap — that's the whole reason images are affordable here.
         if isNewTrail { refreshBasemaps(for: snapshot) }
