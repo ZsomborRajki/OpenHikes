@@ -45,9 +45,21 @@ nonisolated final class CachingTileOverlayRenderer: MKOverlayRenderer, TileCache
     /// Keys of tiles currently being fetched, to avoid duplicate requests.
     private let inFlight = OSAllocatedUnfairLock(initialState: Set<String>())
 
-    /// Keys of tiles that failed to load (offline, 404, …). Skipped until we
-    /// reconnect, so a failed tile never triggers an endless request/redraw loop.
-    private let failed = OSAllocatedUnfairLock(initialState: Set<String>())
+    /// Tiles that failed to load (offline, 500, timeout, undecodable, 404),
+    /// and when each may be asked for again. Skipping them is what stops a
+    /// failed tile spinning a request/redraw loop; expiring the skip is what
+    /// stops a transient server error leaving a permanent hole in the map.
+    /// See ``TileFailureLog``.
+    private let failures = OSAllocatedUnfairLock(initialState: TileFailureLog())
+
+    /// The pending "a backoff has elapsed, redraw" wake-up, and when it fires.
+    /// At most one is scheduled at a time: a redraw retries every tile that
+    /// has come due, so the earliest deadline covers all of them.
+    private struct RetryWake {
+        var task: Task<Void, Never>?
+        var dueAt: ContinuousClock.Instant?
+    }
+    private let retryWake = OSAllocatedUnfairLock(initialState: RetryWake())
 
     private var tileOverlay: TileOverlay { overlay as! TileOverlay }
 
@@ -59,22 +71,65 @@ nonisolated final class CachingTileOverlayRenderer: MKOverlayRenderer, TileCache
 
     deinit {
         TileCache.shared.removeObserver(self)
+        retryWake.withLock { $0.task?.cancel() }
     }
 
     /// `TileCacheObserver` — network is back: forget past failures and redraw so
     /// the now-reachable tiles get requested again.
+    ///
+    /// Still a wholesale clear rather than a backoff reset, because this is
+    /// the one event that invalidates every past failure at once: they were
+    /// all recorded against a network that no longer applies.
     func tileCacheDidReconnect() {
-        let clearedCount = failed.withLock { count -> Int in
-            let n = count.count
-            count.removeAll()
-            return n
-        }
+        let clearedCount = failures.withLock { $0.removeAll() }
+        cancelRetryWake()
         #if DEBUG
         if clearedCount > 0 {
             Self.logger.debug("Reconnected — clearing \(clearedCount, privacy: .public) failed tile(s) for retry")
         }
         #endif
         setNeedsDisplay()
+    }
+
+    // MARK: - Retry scheduling
+
+    /// Arranges a redraw for when the soonest-eligible failed tile comes due.
+    ///
+    /// Without this, a retry only happens when something else causes a draw
+    /// pass — so a user who stops panning keeps staring at the hole. With it,
+    /// the map heals itself while sitting still.
+    ///
+    /// This is the redraw-on-failure loop the renderer was originally written
+    /// to avoid, made safe by being bounded: one wake-up at a time however
+    /// many tiles failed, and each tile's own deadline grows 5 s → 15 s →
+    /// 45 s → 2 min → 5 min, so a genuinely absent tile settles at one redraw
+    /// every five minutes rather than one per draw pass.
+    private func scheduleRetryWake() {
+        // Offline, `TileFailureLog` holds every failed tile indefinitely and
+        // the reconnect notification is what releases them — so there is
+        // nothing for a timer to make eligible.
+        guard TileCache.shared.isOnline, let due = failures.withLock({ $0.earliestRetry() }) else { return }
+
+        retryWake.withLock { wake in
+            // A wake-up already scheduled at or before this deadline covers it.
+            if wake.task != nil, let pending = wake.dueAt, pending <= due { return }
+            wake.task?.cancel()
+            wake.dueAt = due
+            wake.task = Task { [weak self] in
+                try? await Task.sleep(until: due, clock: ContinuousClock())
+                guard !Task.isCancelled, let self else { return }
+                self.retryWake.withLock { $0.task = nil; $0.dueAt = nil }
+                await MainActor.run { self.setNeedsDisplay() }
+            }
+        }
+    }
+
+    private func cancelRetryWake() {
+        retryWake.withLock { wake in
+            wake.task?.cancel()
+            wake.task = nil
+            wake.dueAt = nil
+        }
     }
 
     override func draw(_ mapRect: MKMapRect, zoomScale: MKZoomScale, in context: CGContext) {
@@ -137,8 +192,11 @@ nonisolated final class CachingTileOverlayRenderer: MKOverlayRenderer, TileCache
         let fetchPath = path.z > overlay.maximumZ ? path.ancestor(atZoom: overlay.maximumZ) : path
         let key = fetchPath.cacheKey
 
-        // Skip tiles we already know we can't get, until a reconnect clears them.
-        guard !failed.withLock({ $0.contains(key) }) else { return }
+        // Skip tiles we already know we can't get — until their backoff runs
+        // out, or a reconnect clears them outright.
+        let now = ContinuousClock.now
+        let isOnline = TileCache.shared.isOnline
+        guard failures.withLock({ $0.mayAttempt(key, at: now, isOnline: isOnline) }) else { return }
 
         let isNew = inFlight.withLock { $0.insert(key).inserted }
         guard isNew else { return }
@@ -155,15 +213,23 @@ nonisolated final class CachingTileOverlayRenderer: MKOverlayRenderer, TileCache
             guard let self else { return }
             self.inFlight.withLock { _ = $0.remove(key) }
             if loaded {
-                // Only redraw when there's actually a new tile to show — redrawing
-                // on failure is what spun the request loop. `setNeedsDisplay` must
-                // run on the main thread (MapKit/UIKit requirement that isn't
+                // A tile that loads clears its own failure history, so a later
+                // failure starts its backoff fresh rather than inheriting the
+                // last run of bad luck.
+                self.failures.withLock { $0.recordSuccess(key) }
+                // Redraw only the tile that arrived. `setNeedsDisplay` must run
+                // on the main thread (MapKit/UIKit requirement that isn't
                 // statically enforced), hence the explicit hop here.
                 await MainActor.run { self.setNeedsDisplay(tileRect) }
             } else {
-                self.failed.withLock { _ = $0.insert(key) }
+                // Deliberately no redraw here: redrawing *on* failure is what
+                // spun the request loop. The retry instead rides a wake-up
+                // scheduled for when the backoff expires.
+                let retryAt = self.failures.withLock { $0.recordFailure(key, at: .now) }
+                self.scheduleRetryWake()
                 #if DEBUG
-                Self.logger.debug("Tile \(key, privacy: .public) marked failed — renders blank until reconnect (see TileRequests log for the reason)")
+                let seconds = ContinuousClock.now.duration(to: retryAt).components.seconds
+                Self.logger.debug("Tile \(key, privacy: .public) failed — retrying in \(seconds, privacy: .public)s (see TileRequests log for the reason)")
                 #endif
             }
         }

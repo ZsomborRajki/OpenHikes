@@ -336,10 +336,47 @@ struct OfflineDownloadStateTests {
         await downloader.waitForCurrentRun()
 
         #expect(downloader.isFailed)
-        #expect(downloader.completed == downloader.total)
         let record = downloader.completedRecord
         #expect(record?.savedTileKeys?.isEmpty == false)
         #expect((record?.savedTileKeys?.count ?? 0) < downloader.total)
+        // The bar and the "Saved N of M" message read the same number.
+        #expect(downloader.completed == record?.savedTileKeys?.count)
+        #expect(downloader.completed < downloader.total, "half the tiles saved is not a full bar")
+    }
+
+    /// The case that made this worth changing: every tile fails, the bar fills
+    /// to 100%, and the message underneath it says "Saved 0 of N tiles."
+    @Test("a download that saves nothing doesn't fill its progress bar")
+    func failedDownloadReportsNoProgress() async {
+        let downloader = OfflineTileDownloader(
+            isOnline: { true },
+            saveTile: { _, _ in false }
+        )
+
+        downloader.start(route: Fixture.coordinates(Fixture.ridgeRoute), source: controlled, scale: 2)
+        await downloader.waitForCurrentRun()
+
+        #expect(downloader.isFailed)
+        #expect(downloader.total > 0, "precondition: it had tiles to try")
+        #expect(downloader.completed == 0)
+        #expect(downloader.progress == 0, "nothing saved is nothing to show")
+    }
+
+    /// And the other end: a download that really did save everything still
+    /// reads as finished, so reporting successes hasn't made success
+    /// unreachable.
+    @Test("a complete download does fill its progress bar")
+    func completeDownloadReportsFullProgress() async {
+        let downloader = OfflineTileDownloader(
+            isOnline: { true },
+            saveTile: { _, _ in true }
+        )
+
+        downloader.start(route: Fixture.coordinates(Fixture.ridgeRoute), source: controlled, scale: 2)
+        await downloader.waitForCurrentRun()
+
+        #expect(downloader.completed == downloader.total)
+        #expect(downloader.progress == 1)
     }
 
     @Test("a complete download keeps the compact deterministic record")

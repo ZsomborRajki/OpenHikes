@@ -230,26 +230,50 @@ struct SettingsView: View {
         }.value
     }
 
+    /// Both storage actions below report by re-measuring, never by assuming.
+    ///
+    /// They used to write the expected result into `usage` before the detached
+    /// delete had run, and nothing refreshed afterwards — so a delete that
+    /// failed, or freed less than expected, left the screen claiming zero bytes
+    /// until the sheet was reopened. `nil` in the meantime is the "…" the rows
+    /// already show before the first measurement, which also disables the
+    /// buttons while the work is in flight.
+    private func reportingUsage(_ work: @escaping @Sendable () -> Void) {
+        usage = nil
+        Task {
+            await Task.detached(operation: work).value
+            await refreshUsage()
+        }
+    }
+
     private func clearMapCache() {
         let claims = claimSnapshots()
-        usage?.unclaimed = 0
-        Task.detached {
-            TileCache.shared.removeTiles(unclaimedBy: Self.keys(of: claims))
-        }
+        reportingUsage { TileCache.shared.removeTiles(unclaimedBy: Self.keys(of: claims)) }
     }
 
     private func deleteAllTiles() {
         // Before the manifests are cleared: stopping auto-save folds in whatever
         // it saved since the last drain, which would otherwise land in a
         // manifest emptied a line later and claim tiles that are about to go.
+        // Held onto so it can be resumed below — this is a storage action, not
+        // a change to which hike is being saved.
+        let resumed = autoSave.currentHike
         autoSave.hikeSelectionChanged(to: nil)
+
         for hike in hikes {
             hike.offlineDownloads.removeAll()
             hike.autoSavedTileKeys.removeAll()
-            hike.autoSaveTilesEnabled = false
+            // `autoSaveTilesEnabled` is deliberately left alone. Reclaiming
+            // disk is not a decision about whether a hike should keep saving
+            // tiles, and this used to silently turn that setting off for every
+            // hike the user had ever enabled it on.
         }
-        usage = TileCache.DiskUsage()
-        Task.detached { TileCache.shared.removeAllTiles() }
+
+        // Back on, with an empty manifest and a fresh cap, for whatever was
+        // selected before.
+        autoSave.hikeSelectionChanged(to: resumed)
+
+        reportingUsage { TileCache.shared.removeAllTiles() }
     }
 
     /// `nonisolated`: the union is O(tile budget) trig per download record, so

@@ -63,6 +63,28 @@ final class BackgroundTrailTracker: NSObject {
     private var lastForegroundPublish: (date: Date, wasOnRoute: Bool)?
     private static let foregroundPublishInterval: TimeInterval = 45
 
+    /// When the status-flip bypass was last taken.
+    ///
+    /// The bypass exists so that genuinely losing the trail reaches the widget
+    /// at once rather than up to 45 s later, and that's worth keeping — but
+    /// unbounded it is a hole straight through the throttle it bypasses. A
+    /// walker flipping on and off with ordinary GPS noise took it on every
+    /// one-second poll, each time costing a `SharedStore.load`, a re-encode, an
+    /// atomic App Group write and a `WidgetCenter.reloadTimelines`. WidgetKit
+    /// throttles a widget that overruns its daily reload budget, so the
+    /// unbounded bypass degrades the very feature it's trying to keep fresh.
+    private var lastStatusFlipPublish: Date?
+    /// Floor under that bypass: the first flip is immediate, a second one waits.
+    private static let statusFlipInterval: TimeInterval = 30
+
+    /// How far off the trail counts as having left it, once already on it.
+    ///
+    /// Hysteresis, so a fix hovering either side of the follow threshold isn't
+    /// a status change at all. Coming *back* still uses the plain threshold, so
+    /// regaining the trail is as prompt as it ever was; only leaving it is
+    /// grudging, and only by the width of this band.
+    private static let offRouteExitMeters = RouteProfile.followMatchThresholdMeters * 1.5
+
     private enum Keys {
         static let lastMatchedDistance = "trailTracking.lastMatchedDistance"
     }
@@ -161,13 +183,26 @@ final class BackgroundTrailTracker: NSObject {
     /// poll. Throttled internally — does not write on every call.
     func publishLiveFix(hike: Hike, profile: RouteProfile, match: (distanceAlongRoute: Double, offRouteMeters: Double)?) {
         guard hike.id == trackedHikeID else { return }
-        let isOnRoute = (match?.offRouteMeters).map { $0 <= RouteProfile.followMatchThresholdMeters } ?? false
 
+        // Leaving the trail takes the wider threshold, rejoining it the normal
+        // one, so noise around the follow distance doesn't read as a status
+        // change in the first place.
+        let wasOnRoute = lastForegroundPublish?.wasOnRoute ?? false
+        let threshold = wasOnRoute ? Self.offRouteExitMeters : RouteProfile.followMatchThresholdMeters
+        let isOnRoute = (match?.offRouteMeters).map { $0 <= threshold } ?? false
+
+        let now = Date()
         if let last = lastForegroundPublish {
-            let intervalElapsed = Date().timeIntervalSince(last.date) >= Self.foregroundPublishInterval
-            guard intervalElapsed || isOnRoute != last.wasOnRoute else { return }
+            let intervalElapsed = now.timeIntervalSince(last.date) >= Self.foregroundPublishInterval
+            // A flip may bypass the interval, but not more often than
+            // `statusFlipInterval` — the first one is free, the flapping isn't.
+            let flipped = isOnRoute != last.wasOnRoute
+            let flipAllowed = flipped
+                && (lastStatusFlipPublish.map { now.timeIntervalSince($0) >= Self.statusFlipInterval } ?? true)
+            guard intervalElapsed || flipAllowed else { return }
+            if flipAllowed { lastStatusFlipPublish = now }
         }
-        lastForegroundPublish = (Date(), isOnRoute)
+        lastForegroundPublish = (now, isOnRoute)
 
         guard isOnRoute, let match, let coordinate = profile.coordinate(atDistance: match.distanceAlongRoute) else {
             updateStoredLiveFix(nil, hike: hike)

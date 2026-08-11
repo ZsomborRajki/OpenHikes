@@ -419,26 +419,36 @@ struct LocationPublishingTests {
 @MainActor
 @Suite("Download progress")
 struct DownloadProgressTests {
-    /// Progress still publishes once per tile, but only the focused download
-    /// child views observe it; `HikeDetailView.body` observes low-frequency
-    /// phase transitions instead.
-    @Test("progress notifies once per tile", .enabled(if: TileCache.shared.isOnline))
+    /// Progress still publishes once per saved tile, but only the focused
+    /// download child views observe it; `HikeDetailView.body` observes
+    /// low-frequency phase transitions instead.
+    ///
+    /// Saves are stubbed rather than pointed at a dead port: `completed` counts
+    /// tiles *saved*, so a download where every tile fails now correctly
+    /// publishes no progress at all, and there'd be nothing here to observe.
+    @Test("progress notifies once per tile")
     func progressNotifiesPerTile() async throws {
-        let downloader = OfflineTileDownloader()
+        let downloader = OfflineTileDownloader(
+            isOnline: { true },
+            // Spaced out so completions land in separate runloop turns, the
+            // way real fetches do.
+            saveTile: { _, _ in
+                try? await Task.sleep(for: .milliseconds(20))
+                return true
+            }
+        )
         let counter = ObservationCounter { _ = downloader.progress }
         await counter.settle()
 
         downloader.start(
             route: Fixture.coordinates(Fixture.ridgeRoute),
-            // Nothing listens on this port: every tile fails fast, which is
-            // fine — `completed` counts attempts, not successes.
-            source: ActiveTileSource(providerID: "test_unreachable", urlTemplate: "http://127.0.0.1:9/{z}/{x}/{y}.png", maximumZ: 14),
+            source: ActiveTileSource(providerID: "test_stub", urlTemplate: "https://tiles.invalid/{z}/{x}/{y}.png", maximumZ: 14),
             scale: 2
         )
         let total = downloader.total
         #expect(total > 1, "precondition: there is more than one tile to fetch")
 
-        try await Task.sleep(for: .seconds(2))
+        await downloader.waitForCurrentRun()
         await counter.settle()
 
         #expect(downloader.completed == total)

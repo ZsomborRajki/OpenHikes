@@ -10,7 +10,10 @@ import MapKit
 
 /// OpenStreetMap tile overlay that serves tiles through the shared cache.
 nonisolated final class TileOverlay: MKTileOverlay, @unchecked Sendable {
-    private let cache = TileCache.shared
+    /// The cache tiles are served from and filed into. Injectable so a test
+    /// can hand over one wired to a stub transport and its own directories;
+    /// the app always gets the shared one.
+    let cache: TileCache
 
     /// Identifies the tile source, so cached tiles from different providers never
     /// collide.
@@ -26,8 +29,9 @@ nonisolated final class TileOverlay: MKTileOverlay, @unchecked Sendable {
     /// (`MapView.applyTileSource`), so there was never a reason for it to move.
     let providerID: String
 
-    init(providerID: String, urlTemplate: String?) {
+    init(providerID: String, urlTemplate: String?, cache: TileCache = .shared) {
         self.providerID = providerID
+        self.cache = cache
         super.init(urlTemplate: urlTemplate)
     }
 

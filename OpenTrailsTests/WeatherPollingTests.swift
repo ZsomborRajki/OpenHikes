@@ -60,4 +60,104 @@ struct WeatherPollingTests {
         let shouldRequest = state.shouldRequest(key: "48,13", at: start.addingTimeInterval(1), policy: policy)
         #expect(shouldRequest)
     }
+
+    /// `ContentView` buckets the user's position to two decimal places — about
+    /// 1.1 km — and any change of bucket resets this state wholesale:
+    /// `lastSuccess`, `failureCount` and `nextAttempt` all go, and the next
+    /// poll requests. That is right for someone who has genuinely moved, and
+    /// wrong for someone standing on a bucket boundary, where consecutive
+    /// fixes land on either side of it.
+    ///
+    /// The poll runs once a second, so an oscillation there is a WeatherKit
+    /// request every second, indefinitely — against a metered API, on a phone
+    /// that is by definition outdoors on battery. Neither the freshness
+    /// interval nor the failure backoff applies, because both are keyed to the
+    /// bucket that just changed.
+    ///
+    /// A boundary is not a corner case here: bucket edges are a fixed 1.1 km
+    /// grid laid over the world, and a trail crosses one every kilometre or so.
+    @Test("hovering on a bucket boundary doesn't request every second")
+    func boundaryOscillationIsThrottled() {
+        var state = WeatherPollState()
+        var requests = 0
+
+        // Twenty seconds of polling while GPS noise flips the bucket.
+        for second in 0..<20 {
+            let key = second.isMultiple(of: 2) ? "4763,1286" : "4763,1287"
+            let now = start.addingTimeInterval(Double(second))
+            if state.shouldRequest(key: key, at: now, policy: policy) {
+                requests += 1
+                state.recordSuccess(key: key, at: now)
+            }
+        }
+
+        #expect(requests <= 2, "two adjacent buckets, one reading each")
+    }
+
+    /// The backoff has to survive the boundary too. A bucket that failed and a
+    /// bucket that hasn't been tried are different situations, and hopping
+    /// between them mustn't launder the first into the second — that was the
+    /// same escape hatch, reached through `nextAttempt` instead of freshness.
+    @Test("a failing bucket keeps its backoff across a boundary hop")
+    func backoffSurvivesBoundaryOscillation() {
+        var state = WeatherPollState()
+        var requests = 0
+
+        for second in 0..<20 {
+            let key = second.isMultiple(of: 2) ? "4763,1286" : "4763,1287"
+            let now = start.addingTimeInterval(Double(second))
+            if state.shouldRequest(key: key, at: now, policy: policy) {
+                requests += 1
+                state.recordFailure(key: key, at: now, policy: policy)
+            }
+        }
+
+        // Each bucket: one attempt, then a 5 s delay, then a second attempt and
+        // a 30 s delay that outlasts the window. Four requests, not twenty.
+        #expect(requests <= 4, "each bucket backs off on its own schedule")
+    }
+
+    /// The memory is bounded, and bounded by *recency* — a walker crossing
+    /// buckets in a line must not accumulate one entry per kilometre, and the
+    /// bucket they're standing in must not be the one evicted.
+    @Test("only the most recent buckets are remembered")
+    func bucketMemoryIsBounded() {
+        var state = WeatherPollState()
+        let limit = WeatherPollState.trackedBucketLimit
+
+        // Walk far enough to overflow the memory several times over.
+        for step in 0..<(limit * 3) {
+            let now = start.addingTimeInterval(Double(step))
+            let key = "4763,\(1286 + step)"
+            let isNewGround = state.shouldRequest(key: key, at: now, policy: policy)
+            #expect(isNewGround, "each is new ground")
+            state.recordSuccess(key: key, at: now)
+        }
+
+        let afterTheWalk = start.addingTimeInterval(Double(limit * 3))
+
+        // The bucket just left is still remembered…
+        let last = "4763,\(1286 + limit * 3 - 1)"
+        let revisitsLast = state.shouldRequest(key: last, at: afterTheWalk, policy: policy)
+        #expect(!revisitsLast, "stepping back over the last boundary finds a fresh reading")
+
+        // …and one from the start of the walk has been forgotten, which is
+        // correct: it's kilometres behind, and its reading would be stale.
+        let revisitsFirst = state.shouldRequest(key: "4763,1286", at: afterTheWalk, policy: policy)
+        #expect(revisitsFirst)
+    }
+
+    /// The behaviour any fix has to keep: someone who really has moved a
+    /// kilometre gets fresh weather without waiting out the freshness
+    /// interval for the place they left.
+    @Test("a genuine move still refreshes before the interval is up")
+    func realMovementStillRefreshes() {
+        var state = WeatherPollState()
+        state.recordSuccess(key: "4763,1286", at: start)
+
+        let sameBucket = state.shouldRequest(key: "4763,1286", at: start.addingTimeInterval(60), policy: policy)
+        #expect(!sameBucket, "still fresh where it was measured")
+        let kilometreAway = state.shouldRequest(key: "4800,1300", at: start.addingTimeInterval(60), policy: policy)
+        #expect(kilometreAway)
+    }
 }

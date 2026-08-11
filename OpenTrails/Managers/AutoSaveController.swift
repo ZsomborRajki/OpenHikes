@@ -78,6 +78,13 @@ final class AutoSaveController {
         AutoSaveTileStore.shared.isCapReached(for: hike.id)
     }
 
+    /// The hike auto-save is currently running for, if any.
+    ///
+    /// For callers that have to stop it briefly and then put it back exactly as
+    /// it was — Settings' delete-all, which flushes through a deactivation
+    /// before clearing the manifests it would otherwise write into.
+    var currentHike: Hike? { activeHike }
+
     /// Stops background tile work from creating new ownership after the final
     /// lifecycle flush. Pending keys are acknowledged only after SwiftData
     /// confirms the manifest was persisted.

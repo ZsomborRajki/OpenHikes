@@ -281,6 +281,19 @@ struct MapSheet: View {
             highlight.move(to: nil)
         }
 
+        // The same treatment for the navigation stack, which drives
+        // `navigationDestination(for: Hike.self)` off this very array. Clearing
+        // the selection stops the *map* drawing a deleted trail; without this
+        // its detail view stays pushed, showing a hike that no longer exists —
+        // stats, elevation chart, and live Offline/Auto-Save controls writing
+        // to a detached object nothing will persist. SwiftData detaches rather
+        // than invalidates, so it's a stale screen rather than a crash.
+        //
+        // Unconditional, unlike the selection check above: a widget deep link
+        // pushes onto this path directly, so "pushed" and "selected" aren't
+        // guaranteed to be the same hike.
+        path.removeAll { $0.id == hike.id }
+
         // Free the tiles this hike had saved offline — but only the ones no
         // surviving hike still claims. Cache keys carry no hike identity, so
         // deleting this hike's keys outright would strip coverage from any

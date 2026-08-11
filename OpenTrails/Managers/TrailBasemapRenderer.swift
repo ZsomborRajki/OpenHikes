@@ -87,6 +87,23 @@ actor TrailBasemapRenderer {
         let startedAt = generation
         defer { if inFlight == request { inFlight = nil } }
 
+        // Every early return below leaves behind whatever this pass had already
+        // written — files with no manifest pointing at them, reclaimed only by
+        // the *next* successful render's prune, which may never come if the
+        // user doesn't select another trail. So the pass cleans up after
+        // itself.
+        var written: Set<String> = []
+        var published = false
+        defer {
+            // Unless something else is mid-render: its files aren't ours to
+            // judge, and its own prune reclaims ours along with any others.
+            // Naming our files rather than pruning to a keep-set is what makes
+            // this safe to do while another pass is writing.
+            if !published, inFlight == nil, !written.isEmpty {
+                SharedStore.removeBasemapImages(named: written)
+            }
+        }
+
         var images: [TrailBasemap] = []
         for variant in TrailBasemapVariant.allCases {
             let framed = coverage.framed(toAspectRatio: variant.aspectRatio)
@@ -96,6 +113,7 @@ actor TrailBasemapRenderer {
 
                 let fileName = Self.fileName(hikeID: hikeID, coverage: coverage, variant: variant, appearance: appearance)
                 guard SharedStore.writeBasemapImage(rendered.data, named: fileName) else { continue }
+                written.insert(fileName)
                 images.append(
                     TrailBasemap(
                         fileName: fileName,
@@ -120,6 +138,7 @@ actor TrailBasemapRenderer {
         // reading mid-render sees either the whole old set or the whole new
         // one, never a manifest pointing at a file that isn't there yet.
         SharedStore.saveBasemapSet(TrailBasemapSet(hikeID: hikeID, coverage: coverage, images: images))
+        published = true
         SharedStore.pruneBasemapImages(keeping: Set(images.map(\.fileName)))
         WidgetCenter.shared.reloadTimelines(ofKind: TrailWidgetKind.id)
     }

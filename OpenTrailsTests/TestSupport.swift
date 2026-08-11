@@ -112,6 +112,33 @@ enum Fixture {
 
     /// A 1×1 tile image that really encodes — what the tile pipeline is
     /// handed in production, minus the 256×256.
+    /// A tile at the size providers actually serve, for the questions where
+    /// 1×1 gives the wrong answer — chiefly what a decoded tile costs in
+    /// memory, where the whole point is that it dwarfs the compressed file.
+    static func fullSizeTileImage(scale: CGFloat = 2) -> TileImage? {
+        let points = 256.0
+        #if canImport(UIKit)
+        let format = UIGraphicsImageRendererFormat()
+        format.scale = scale
+        return UIGraphicsImageRenderer(size: CGSize(width: points, height: points), format: format).image { context in
+            UIColor.green.setFill()
+            context.fill(CGRect(x: 0, y: 0, width: points, height: points))
+        }
+        #elseif canImport(AppKit)
+        let pixels = Int(points * scale)
+        guard let rep = NSBitmapImageRep(
+            bitmapDataPlanes: nil, pixelsWide: pixels, pixelsHigh: pixels,
+            bitsPerSample: 8, samplesPerPixel: 4, hasAlpha: true, isPlanar: false,
+            colorSpaceName: .deviceRGB, bytesPerRow: 0, bitsPerPixel: 0
+        ) else { return nil }
+        let image = NSImage(size: CGSize(width: points, height: points))
+        image.addRepresentation(rep)
+        return image
+        #else
+        return nil
+        #endif
+    }
+
     static func tileImage() -> TileImage? {
         let size = CGSize(width: 1, height: 1)
         #if canImport(UIKit)

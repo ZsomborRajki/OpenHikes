@@ -22,13 +22,19 @@ final class OfflineTileDownloader {
     enum Phase: Equatable { case idle, downloading, finished, failed(String) }
 
     private(set) var phase: Phase = .idle
+    /// Tiles actually saved so far — not tiles attempted.
+    ///
+    /// The difference is the whole point: attempts always reach `total`, so a
+    /// download that saved nothing still filled its progress bar to 100% and
+    /// then reported "Saved 0 of 4,000 tiles." A bar that stalls is telling the
+    /// truth about a download that has stopped saving anything.
     private(set) var completed = 0
     private(set) var total = 0
     /// Coverage produced by the latest completed run. Complete runs omit the
     /// explicit keys; partial runs carry only keys verified on durable storage.
     private(set) var completedRecord: OfflineDownloadRecord?
 
-    /// 0…1 fraction of tiles fetched, for a progress indicator.
+    /// 0…1 fraction of tiles saved, for a progress indicator.
     var progress: Double { total == 0 ? 0 : min(1, Double(completed) / Double(total)) }
 
     var isFailed: Bool { if case .failed = phase { return true } else { return false } }
@@ -163,8 +169,11 @@ final class OfflineTileDownloader {
                     group.cancelAll()
                     break
                 }
-                if result.saved { savedKeys.insert(result.key) }
-                completed += 1
+                // Kept in step with `savedKeys` rather than counted separately,
+                // so the bar and the "Saved N of M" message can't disagree.
+                if result.saved, savedKeys.insert(result.key).inserted {
+                    completed = savedKeys.count
+                }
                 if Task.isCancelled {
                     group.cancelAll()
                     break

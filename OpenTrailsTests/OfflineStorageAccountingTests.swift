@@ -386,6 +386,72 @@ struct StorageAccountingTests {
         await cleanUp([saved])
     }
 
+    // MARK: - Reclaiming storage from Settings
+
+    /// "Delete All Saved Tiles" reclaims disk. It is not a decision about which
+    /// hikes should go on saving tiles as they're browsed — but it used to set
+    /// `autoSaveTilesEnabled = false` on every hike, silently clearing a
+    /// per-hike setting the user had chosen, on a screen that says nothing
+    /// about it.
+    @Test("deleting every saved tile doesn't turn off anyone's auto-save")
+    func deleteAllKeepsAutoSavePreferences() async throws {
+        let controller = AutoSaveController()
+        let selected = Fixture.hike(in: context) { $0.autoSaveTilesEnabled = true }
+        let other = Fixture.hike(title: "Other", route: Fixture.loopRoute, in: context) {
+            $0.autoSaveTilesEnabled = true
+        }
+        let optedOut = Fixture.hike(title: "Opted out", in: context) { $0.autoSaveTilesEnabled = false }
+        controller.hikeSelectionChanged(to: selected)
+
+        let saved = key(16, 30, 30)
+        try await persist(key: saved, tile: tile())
+
+        // `SettingsView.deleteAllTiles`, minus the SwiftUI.
+        let resumed = controller.currentHike
+        controller.hikeSelectionChanged(to: nil)
+        for hike in [selected, other, optedOut] {
+            hike.offlineDownloads.removeAll()
+            hike.autoSavedTileKeys.removeAll()
+        }
+        controller.hikeSelectionChanged(to: resumed)
+        await offMain { TileCache.shared.removeAllTiles() }
+
+        #expect(selected.autoSaveTilesEnabled, "the setting is the user's, not the delete button's")
+        #expect(other.autoSaveTilesEnabled)
+        #expect(!optedOut.autoSaveTilesEnabled, "and a hike that had it off still has it off")
+    }
+
+    /// The other half: auto-save has to still be *running* for the selected
+    /// hike afterwards. Stopping it is how the delete flushes pending keys
+    /// safely, so the only question is whether it gets started again.
+    @Test("deleting every saved tile leaves the selected hike still saving")
+    func deleteAllResumesAutoSave() async throws {
+        let controller = AutoSaveController()
+        let selected = Fixture.hike(in: context) { $0.autoSaveTilesEnabled = true }
+        controller.hikeSelectionChanged(to: selected)
+
+        let before = key(16, 31, 31)
+        try await persist(key: before, tile: tile())
+
+        let resumed = controller.currentHike
+        controller.hikeSelectionChanged(to: nil)
+        selected.offlineDownloads.removeAll()
+        selected.autoSavedTileKeys.removeAll()
+        controller.hikeSelectionChanged(to: resumed)
+        await offMain { TileCache.shared.removeAllTiles() }
+
+        // A tile browsed after the delete is saved against the hike again,
+        // which only happens if the store still has it active.
+        let after = key(16, 32, 32)
+        try await persist(key: after, tile: tile())
+        controller.flushPendingKeys()
+
+        #expect(selected.autoSavedTileKeys.contains(after), "auto-save picked up where it left off")
+        #expect(!selected.autoSavedTileKeys.contains(before), "and the manifest really was cleared")
+
+        await cleanUp([before, after])
+    }
+
     // MARK: - Bounding the cache
 
     /// The map cache is the one thing here that grows without anyone asking:
