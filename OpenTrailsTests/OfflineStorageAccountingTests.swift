@@ -95,12 +95,26 @@ struct StorageAccountingTests {
     /// The delete-a-hike path from `MapSheet.delete(_:)`, minus the SwiftUI.
     private func deleteHike(_ hike: Hike, survivors: [Hike] = [], using controller: AutoSaveController) async {
         controller.hikeWillBeDeleted(hike)
-        let doomed = TileOwnership(hike)
-        let others = survivors.filter(\.hasStoredTiles).map(TileOwnership.init)
+        let deletionPlan = StoredTileDeletionPlan(removing: hike, among: [hike] + survivors)
         await offMain {
-            TileCache.shared.removeTiles(forKeys: Array(doomed.exclusiveTileKeys(against: others)))
+            TileCache.shared.removeTiles(forKeys: Array(deletionPlan.exclusiveTileKeys()))
         }
         context.delete(hike)
+    }
+
+    /// The Delete button in `HikeDetailView`, minus the SwiftUI.
+    private func clearStoredTiles(
+        for hike: Hike,
+        among hikes: [Hike],
+        using controller: AutoSaveController
+    ) async {
+        controller.setEnabled(false, for: hike)
+        let deletionPlan = StoredTileDeletionPlan(removing: hike, among: hikes)
+        hike.offlineDownloads.removeAll()
+        hike.autoSavedTileKeys.removeAll()
+        await offMain {
+            TileCache.shared.removeTiles(forKeys: Array(deletionPlan.exclusiveTileKeys()))
+        }
     }
 
     // MARK: - Coverage versus cache
@@ -550,6 +564,28 @@ struct StorageAccountingTests {
 
         await deleteHike(doomed, survivors: [survivor], using: controller)
         #expect(await bytes([shared]) > 0, "the surviving hike still lists this tile")
+
+        await cleanUp([shared])
+    }
+
+    @Test("clearing one hike's offline tiles keeps another hike's shared coverage")
+    func clearingStoredTilesKeepsSharedTiles() async throws {
+        let controller = AutoSaveController()
+        let cleared = Fixture.hike(title: "Cleared", in: context)
+        let survivor = Fixture.hike(title: "Survivor", in: context)
+        controller.hikeSelectionChanged(to: cleared)
+
+        let shared = key(17, 11, 11)
+        try await persist(key: shared, tile: tile(z: 17))
+        controller.flushPendingKeys()
+        survivor.autoSavedTileKeys = [shared]
+
+        await clearStoredTiles(for: cleared, among: [cleared, survivor], using: controller)
+
+        #expect(cleared.autoSavedTileKeys.isEmpty)
+        #expect(cleared.offlineDownloads.isEmpty)
+        #expect(survivor.autoSavedTileKeys == [shared])
+        #expect(await bytes([shared]) > 0, "the surviving hike still owns this tile")
 
         await cleanUp([shared])
     }

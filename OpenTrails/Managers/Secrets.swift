@@ -10,7 +10,7 @@
 
 import Foundation
 
-enum Secrets {
+nonisolated enum Secrets {
     /// The bundled key for `provider`, or `nil` for keyless providers or missing keys.
     static func apiKey(for provider: TileProvider) -> String? {
         guard let plistKey = provider.apiKeyPlistKey else { return nil }

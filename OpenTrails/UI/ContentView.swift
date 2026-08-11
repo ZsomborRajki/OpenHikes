@@ -117,7 +117,11 @@ struct ContentView: View {
                     .presentationDetents([.height(80), .medium, .large], selection: $sheetDetent)
                     .presentationBackgroundInteraction(.enabled(upThrough: .medium))
                     .presentationBackground {
+                        #if os(visionOS)
+                        Color.clear
+                        #else
                         Color.clear.glassEffect(.clear, in: Rectangle())
+                        #endif
                     }
                     .presentationDragIndicator(.visible)
                     .interactiveDismissDisabled()

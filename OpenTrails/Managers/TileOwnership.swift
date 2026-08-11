@@ -68,6 +68,25 @@ nonisolated struct TileOwnership: Sendable {
     }
 }
 
+/// Snapshots one hike's tile claims and every surviving claim in one
+/// main-actor pass, then answers the expensive deletion question off-main.
+nonisolated struct StoredTileDeletionPlan: Sendable {
+    private let doomed: TileOwnership
+    private let survivors: [TileOwnership]
+
+    @MainActor
+    init(removing hike: Hike, among hikes: [Hike]) {
+        doomed = TileOwnership(hike)
+        survivors = hikes
+            .filter { $0.id != hike.id && $0.hasStoredTiles }
+            .map(TileOwnership.init)
+    }
+
+    func exclusiveTileKeys() -> Set<String> {
+        doomed.exclusiveTileKeys(against: survivors)
+    }
+}
+
 @MainActor
 extension Hike {
     /// Whether this hike has any stored tiles — answered from two small

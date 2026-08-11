@@ -261,12 +261,12 @@ extension BackgroundTrailTracker: CLLocationManagerDelegate {
     }
 
     nonisolated func locationManagerDidChangeAuthorization(_ manager: CLLocationManager) {
+        #if os(iOS)
         Task { @MainActor in
             guard manager.authorizationStatus == .authorizedAlways,
                   UserDefaults.standard.bool(forKey: SettingsKey.backgroundTrackingEnabled) else { return }
-            #if os(iOS)
             manager.startMonitoringSignificantLocationChanges()
-            #endif
         }
+        #endif
     }
 }

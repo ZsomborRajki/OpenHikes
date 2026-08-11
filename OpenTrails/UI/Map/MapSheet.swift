@@ -161,7 +161,7 @@ struct MapSheet: View {
             }
         }
         .padding(10)
-        .glassEffect(.regular, in: RoundedRectangle(cornerRadius: 12))
+        .sheetGlassBackground(in: RoundedRectangle(cornerRadius: 12))
     }
 
     /// Profile/settings entry point, sitting to the right of the search field —
@@ -175,7 +175,7 @@ struct MapSheet: View {
                 .font(.title2)
                 .foregroundStyle(.secondary)
                 .frame(width: 44, height: 44)
-                .glassEffect(.regular, in: Circle())
+                .sheetGlassBackground(in: Circle())
         }
         .buttonStyle(.plain)
         .accessibilityLabel("Profile and settings")
@@ -216,7 +216,7 @@ struct MapSheet: View {
                 Image(systemName: "square.and.arrow.down")
                     .foregroundStyle(.tint)
                     .frame(width: 40, height: 40)
-                    .glassEffect(.regular, in: Circle())
+                    .sheetGlassBackground(in: Circle())
             }
             .accessibilityLabel("Import GPX file")
         }
@@ -271,16 +271,13 @@ struct MapSheet: View {
         // deleting this hike's keys outright would strip coverage from any
         // trail sharing the area (and at low zoom, that's most of them) while
         // leaving their manifests claiming tiles that are gone.
-        let doomed = TileOwnership(hike)
-        if doomed.hasStoredTiles {
-            let survivors = hikes
-                .filter { $0.id != hike.id && $0.hasStoredTiles }
-                .map(TileOwnership.init)
+        if hike.hasStoredTiles {
+            let deletionPlan = StoredTileDeletionPlan(removing: hike, among: hikes)
             // Enumerating a route's tile grid is real CPU work, per download
             // record, for every hike involved — all of it belongs off the
             // main thread.
             Task.detached {
-                let keys = doomed.exclusiveTileKeys(against: survivors)
+                let keys = deletionPlan.exclusiveTileKeys()
                 guard !keys.isEmpty else { return }
                 TileCache.shared.removeTiles(forKeys: Array(keys))
             }
@@ -411,3 +408,13 @@ struct MapSheet: View {
     }
 }
 
+private extension View {
+    @ViewBuilder
+    func sheetGlassBackground<S: Shape>(in shape: S) -> some View {
+        #if os(visionOS)
+        background(.regularMaterial, in: shape)
+        #else
+        glassEffect(.regular, in: shape)
+        #endif
+    }
+}

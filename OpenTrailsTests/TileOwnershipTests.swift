@@ -91,9 +91,8 @@ struct TileOwnershipTests {
         download(doomed)
         download(survivor)
 
-        let doomedOwnership = TileOwnership(doomed)
-        let survivorOwnership = TileOwnership(survivor)
-        let exclusive = await offMain { doomedOwnership.exclusiveTileKeys(against: [survivorOwnership]) }
+        let deletionPlan = StoredTileDeletionPlan(removing: doomed, among: [doomed, survivor])
+        let exclusive = await offMain { deletionPlan.exclusiveTileKeys() }
         #expect(exclusive.isEmpty, "two hikes on the same route claim the same tiles")
     }
 
@@ -107,9 +106,9 @@ struct TileOwnershipTests {
         download(elsewhere)
 
         let doomedOwnership = TileOwnership(doomed)
-        let otherOwnership = TileOwnership(elsewhere)
+        let deletionPlan = StoredTileDeletionPlan(removing: doomed, among: [doomed, elsewhere])
         let claimed = await offMain { doomedOwnership.tileKeys() }
-        let exclusive = await offMain { doomedOwnership.exclusiveTileKeys(against: [otherOwnership]) }
+        let exclusive = await offMain { deletionPlan.exclusiveTileKeys() }
         #expect(exclusive == claimed)
     }
 

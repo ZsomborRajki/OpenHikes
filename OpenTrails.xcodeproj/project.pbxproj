@@ -9,8 +9,8 @@
 /* Begin PBXBuildFile section */
 		A8838AE7302A232300FAEEEE /* WidgetKit.framework in Frameworks */ = {isa = PBXBuildFile; fileRef = A8838AE6302A232300FAEEEE /* WidgetKit.framework */; };
 		A8838AE9302A232300FAEEEE /* SwiftUI.framework in Frameworks */ = {isa = PBXBuildFile; fileRef = A8838AE8302A232300FAEEEE /* SwiftUI.framework */; };
-		A8838AF6302A232400FAEEEE /* OpenWidgetExtension.appex in Embed Foundation Extensions */ = {isa = PBXBuildFile; fileRef = A8838AE4302A232300FAEEEE /* OpenWidgetExtension.appex */; settings = {ATTRIBUTES = (RemoveHeadersOnCopy, ); }; };
-		A8838B74302A2F3200FAEEEE /* OpenWatch Watch App.app in Embed Watch Content */ = {isa = PBXBuildFile; fileRef = A8838B6A302A2F3100FAEEEE /* OpenWatch Watch App.app */; settings = {ATTRIBUTES = (RemoveHeadersOnCopy, ); }; };
+		A8838AF6302A232400FAEEEE /* OpenWidgetExtension.appex in Embed Foundation Extensions */ = {isa = PBXBuildFile; fileRef = A8838AE4302A232300FAEEEE /* OpenWidgetExtension.appex */; platformFilter = ios; settings = {ATTRIBUTES = (RemoveHeadersOnCopy, ); }; };
+		A8838B74302A2F3200FAEEEE /* OpenWatch Watch App.app in Embed Watch Content */ = {isa = PBXBuildFile; fileRef = A8838B6A302A2F3100FAEEEE /* OpenWatch Watch App.app */; platformFilter = ios; settings = {ATTRIBUTES = (RemoveHeadersOnCopy, ); }; };
 		A8838B7E302A2F5B00FAEEEE /* WidgetKit.framework in Frameworks */ = {isa = PBXBuildFile; fileRef = A8838AE6302A232300FAEEEE /* WidgetKit.framework */; };
 		A8838B7F302A2F5B00FAEEEE /* SwiftUI.framework in Frameworks */ = {isa = PBXBuildFile; fileRef = A8838AE8302A232300FAEEEE /* SwiftUI.framework */; };
 		A8838B8A302A2F5B00FAEEEE /* OpenWatchWidgetExtension.appex in Embed Foundation Extensions */ = {isa = PBXBuildFile; fileRef = A8838B7D302A2F5B00FAEEEE /* OpenWatchWidgetExtension.appex */; settings = {ATTRIBUTES = (RemoveHeadersOnCopy, ); }; };
@@ -497,11 +497,13 @@
 /* Begin PBXTargetDependency section */
 		A8838AF5302A232400FAEEEE /* PBXTargetDependency */ = {
 			isa = PBXTargetDependency;
+			platformFilter = ios;
 			target = A8838AE3302A232300FAEEEE /* OpenWidgetExtension */;
 			targetProxy = A8838AF4302A232400FAEEEE /* PBXContainerItemProxy */;
 		};
 		A8838B73302A2F3200FAEEEE /* PBXTargetDependency */ = {
 			isa = PBXTargetDependency;
+			platformFilter = ios;
 			target = A8838B69302A2F3100FAEEEE /* OpenWatch Watch App */;
 			targetProxy = A8838B72302A2F3200FAEEEE /* PBXContainerItemProxy */;
 		};

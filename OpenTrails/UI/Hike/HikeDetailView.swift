@@ -7,6 +7,7 @@
 //
 
 import SwiftUI
+import SwiftData
 
 /// The elevation graph's tracker positions, held in a reference type so the
 /// once-a-second auto-follow poll moves the chart without re-rendering the
@@ -48,9 +49,11 @@ struct HikeDetailView: View {
     /// same provider (and API key) the map is currently drawing.
     @AppStorage(SettingsKey.tileProviderID) private var tileProviderID = TileProvider.default.id
     @Environment(\.displayScale) private var displayScale
+    @Environment(\.modelContext) private var modelContext
     @State private var downloader = OfflineTileDownloader()
     /// Disk space used by this hike's saved tiles; `nil` until measured.
     @State private var storedBytes: Int64?
+    @State private var storageDeletionFailed = false
 
     /// Built once per hike in `.task`, never in `init`. Scrubbing then resolves
     /// points in O(log n).
@@ -141,6 +144,11 @@ struct HikeDetailView: View {
         // Watches `.count`, not the array itself — comparing two multi-thousand-
         // element `[String]`s on every drain cycle is itself main-thread work.
         .onChange(of: hike.autoSavedTileKeys.count) { _, _ in refreshStoredBytes() }
+        .alert("Couldn’t Delete Offline Tiles", isPresented: $storageDeletionFailed) {
+            Button("OK", role: .cancel) {}
+        } message: {
+            Text("OpenTrails couldn’t read the other hikes’ offline coverage. No tiles were deleted.")
+        }
     }
 
     // MARK: Offline storage
@@ -178,21 +186,23 @@ struct HikeDetailView: View {
         // in the tiles saved since the last drain. Reading the manifest ahead of
         // that would delete a snapshot taken up to two seconds ago and strand
         // everything saved since — durably, where nothing would reclaim it.
+        let hikes: [Hike]
+        do {
+            hikes = try modelContext.fetch(FetchDescriptor<Hike>())
+        } catch {
+            storageDeletionFailed = true
+            return
+        }
         autoSave.setEnabled(false, for: hike)
-        let route = hike.route
-        let offlineDownloads = hike.offlineDownloads
-        let autoSavedTileKeys = hike.autoSavedTileKeys
+        let deletionPlan = StoredTileDeletionPlan(removing: hike, among: hikes)
         hike.offlineDownloads.removeAll()
         hike.autoSavedTileKeys.removeAll()
         storedBytes = 0
         downloader.reset()
         Task.detached {
-            let coordinates = route.map(\.clCoordinate)
-            let keys = Array(
-                Set(OfflineTileDownloader.storedTileKeys(route: coordinates, offlineDownloads: offlineDownloads))
-                    .union(autoSavedTileKeys)
-            )
-            TileCache.shared.removeTiles(forKeys: keys)
+            let keys = deletionPlan.exclusiveTileKeys()
+            guard !keys.isEmpty else { return }
+            TileCache.shared.removeTiles(forKeys: Array(keys))
         }
     }
 
@@ -597,4 +607,3 @@ struct HikeDetailView: View {
         .frame(height: 180)
     }
 }
-

@@ -26,7 +26,7 @@ struct TileProvider: Identifiable, Hashable {
     let apiKeyPlistKey: String?
 
     /// The template with `{key}` replaced by `apiKey`. Keyless providers ignore it.
-    func resolvedTemplate(apiKey: String) -> String {
+    nonisolated func resolvedTemplate(apiKey: String) -> String {
         urlTemplate.replacingOccurrences(of: "{key}", with: apiKey)
     }
 
@@ -37,7 +37,7 @@ struct TileProvider: Identifiable, Hashable {
     /// Pure, and takes the key rather than looking it up, so the rule is
     /// testable without a bundle to read it from — see ``Secrets/canLoadTiles(_:)``
     /// for the lookup that feeds it.
-    func isUsable(withKey apiKey: String?) -> Bool {
+    nonisolated func isUsable(withKey apiKey: String?) -> Bool {
         apiKeyPlistKey == nil || apiKey?.isEmpty == false
     }
 }

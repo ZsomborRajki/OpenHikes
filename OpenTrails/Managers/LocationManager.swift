@@ -39,16 +39,22 @@ final class LocationManager: NSObject {
     /// updating. Location delivery itself is ongoing via the delegate for as
     /// long as this object lives.
     func start() async {
-        switch manager.authorizationStatus {
-        case .notDetermined:
+        let status = manager.authorizationStatus
+        if status == .notDetermined {
             manager.requestWhenInUseAuthorization()
-        case .authorizedWhenInUse, .authorizedAlways:
+        } else if Self.isAuthorized(status) {
             manager.startUpdatingLocation()
-        case .denied, .restricted:
-            break
-        @unknown default:
-            break
         }
+    }
+
+    private static func isAuthorized(_ status: CLAuthorizationStatus) -> Bool {
+        #if os(macOS)
+        status == .authorizedAlways
+        #elseif os(visionOS)
+        status == .authorizedWhenInUse
+        #else
+        status == .authorizedWhenInUse || status == .authorizedAlways
+        #endif
     }
 
     fileprivate func publish(_ location: CLLocation) {
@@ -83,7 +89,7 @@ extension LocationManager: CLLocationManagerDelegate {
     nonisolated func locationManagerDidChangeAuthorization(_ manager: CLLocationManager) {
         let status = manager.authorizationStatus
         Task { @MainActor in
-            guard status == .authorizedWhenInUse || status == .authorizedAlways else { return }
+            guard Self.isAuthorized(status) else { return }
             manager.startUpdatingLocation()
         }
     }
