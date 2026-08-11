@@ -2,7 +2,7 @@
 //  CachingTileOverlayRenderer.swift
 //  OpenTrails
 //
-//  Draws OSM tiles from the cache, falling back to cropped lower-zoom tiles
+//  Draws OSM tiles from the cache, falling back to clipped lower-zoom tiles
 //  while higher-zoom tiles load. This avoids the blank/flickering tiles seen
 //  with MKTileOverlayRenderer when zooming hard.
 //
@@ -32,6 +32,11 @@ import os
 // `.interactive` — see `TileLoadGate` for what that guarantees.
 
 nonisolated final class CachingTileOverlayRenderer: MKOverlayRenderer, TileCacheObserver {
+    private struct Fallback {
+        let image: TileImage
+        let sourceRect: CGRect
+    }
+
     private static let logger = Logger(subsystem: "OpenTrails", category: "TileRenderer")
 
     /// How many zoom levels to walk up looking for a tile to crop for overzoom.
@@ -110,8 +115,13 @@ nonisolated final class CachingTileOverlayRenderer: MKOverlayRenderer, TileCache
                 if let image = overlay.cachedImage(at: path) {
                     drawImage(image, in: drawRect, context: context)
                 } else {
-                    if let fallback = fallbackImage(for: path, in: overlay) {
-                        drawImage(fallback, in: drawRect, context: context)
+                    if let fallback = fallback(for: path, in: overlay) {
+                        drawImage(
+                            fallback.image,
+                            sourceRect: fallback.sourceRect,
+                            in: drawRect,
+                            context: context
+                        )
                     }
                     loadTileIfNeeded(for: path, in: tileRect, overlay: overlay)
                 }
@@ -159,13 +169,17 @@ nonisolated final class CachingTileOverlayRenderer: MKOverlayRenderer, TileCache
         }
     }
 
-    /// Finds the nearest cached lower-zoom tile and crops the relevant quadrant.
-    private func fallbackImage(for path: MKTileOverlayPath, in overlay: TileOverlay) -> TileImage? {
+    /// Finds the nearest cached lower-zoom tile and identifies the relevant
+    /// source region without allocating a cropped image.
+    private func fallback(for path: MKTileOverlayPath, in overlay: TileOverlay) -> Fallback? {
         var ancestor = path
         for depth in 1...maxFallbackDepth where ancestor.z > 0 {
             ancestor = ancestor.parent
             if let image = overlay.cachedImage(at: ancestor) {
-                return image.cropped(to: cropRect(depth: depth, path: path, imageSize: image.size))
+                return Fallback(
+                    image: image,
+                    sourceRect: cropRect(depth: depth, path: path, imageSize: image.size)
+                )
             }
         }
         return nil
@@ -173,18 +187,40 @@ nonisolated final class CachingTileOverlayRenderer: MKOverlayRenderer, TileCache
 
     // MARK: - Drawing
 
-    private func drawImage(_ image: TileImage, in rect: CGRect, context: CGContext) {
+    private func drawImage(
+        _ image: TileImage,
+        sourceRect: CGRect? = nil,
+        in rect: CGRect,
+        context: CGContext
+    ) {
+        let imageRect: CGRect
+        if let sourceRect {
+            imageRect = scaledImageRect(
+                imageSize: image.size,
+                sourceRect: sourceRect,
+                destinationRect: rect
+            )
+            context.saveGState()
+            context.clip(to: rect)
+        } else {
+            imageRect = rect
+        }
+
         #if canImport(UIKit)
         UIGraphicsPushContext(context)
-        image.draw(in: rect)
+        image.draw(in: imageRect)
         UIGraphicsPopContext()
         #elseif canImport(AppKit)
         let graphicsContext = NSGraphicsContext(cgContext: context, flipped: true)
         NSGraphicsContext.saveGraphicsState()
         NSGraphicsContext.current = graphicsContext
-        image.draw(in: rect)
+        image.draw(in: imageRect)
         NSGraphicsContext.restoreGraphicsState()
         #endif
+
+        if sourceRect != nil {
+            context.restoreGState()
+        }
     }
 
     /// Approximates a tile zoom level from a zoomScale (no public API for this).
@@ -195,7 +231,7 @@ nonisolated final class CachingTileOverlayRenderer: MKOverlayRenderer, TileCache
 }
 
 /// The sub-rectangle of a `depth`-levels-up ancestor that corresponds to `path`.
-private nonisolated func cropRect(depth: Int, path: MKTileOverlayPath, imageSize: CGSize) -> CGRect {
+nonisolated func cropRect(depth: Int, path: MKTileOverlayPath, imageSize: CGSize) -> CGRect {
     let factor = 1 << depth
     let subWidth = imageSize.width / CGFloat(factor)
     let subHeight = imageSize.height / CGFloat(factor)
@@ -207,27 +243,19 @@ private nonisolated func cropRect(depth: Int, path: MKTileOverlayPath, imageSize
     )
 }
 
-nonisolated extension TileImage {
-    /// Returns a new image cropped to `rect`, expressed in the image's point space.
-    func cropped(to rect: CGRect) -> TileImage? {
-        #if canImport(UIKit)
-        let format = UIGraphicsImageRendererFormat.preferred()
-        format.scale = scale
-        return UIGraphicsImageRenderer(size: rect.size, format: format).image { _ in
-            draw(at: CGPoint(x: -rect.origin.x, y: -rect.origin.y))
-        }
-        #elseif canImport(AppKit)
-        return NSImage(size: rect.size, flipped: true) { _ in
-            self.draw(
-                in: NSRect(x: -rect.origin.x, y: -rect.origin.y, width: self.size.width, height: self.size.height),
-                from: NSRect(origin: .zero, size: self.size),
-                operation: .copy,
-                fraction: 1.0,
-                respectFlipped: true,
-                hints: nil
-            )
-            return true
-        }
-        #endif
-    }
+/// Positions the full ancestor image so `sourceRect` exactly fills the
+/// destination; the renderer clips to `destinationRect` before drawing it.
+nonisolated func scaledImageRect(
+    imageSize: CGSize,
+    sourceRect: CGRect,
+    destinationRect: CGRect
+) -> CGRect {
+    let scaleX = destinationRect.width / sourceRect.width
+    let scaleY = destinationRect.height / sourceRect.height
+    return CGRect(
+        x: destinationRect.minX - sourceRect.minX * scaleX,
+        y: destinationRect.minY - sourceRect.minY * scaleY,
+        width: imageSize.width * scaleX,
+        height: imageSize.height * scaleY
+    )
 }

@@ -81,4 +81,19 @@ struct TileOverzoomTests {
         #expect(MKTileOverlayPath(x: 3, y: 4, z: 5, contentScaleFactor: 3).cacheKey == "5/3/4@3.0")
         #expect(MKTileOverlayPath(x: 4, y: 3, z: 5, contentScaleFactor: 2).cacheKey != "5/3/4@2.0")
     }
+
+    @Test("fallback source region maps to the whole destination tile")
+    func fallbackDrawingGeometry() {
+        let path = MKTileOverlayPath(x: 3, y: 2, z: 2, contentScaleFactor: 2)
+        let source = cropRect(depth: 1, path: path, imageSize: CGSize(width: 256, height: 256))
+        #expect(source == CGRect(x: 128, y: 0, width: 128, height: 128))
+
+        let destination = CGRect(x: 10, y: 20, width: 256, height: 256)
+        let imageRect = scaledImageRect(
+            imageSize: CGSize(width: 256, height: 256),
+            sourceRect: source,
+            destinationRect: destination
+        )
+        #expect(imageRect == CGRect(x: -246, y: 20, width: 512, height: 512))
+    }
 }
