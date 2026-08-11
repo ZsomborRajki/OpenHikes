@@ -11,6 +11,19 @@ import CoreLocation
 import WeatherKit
 import OpenTrailsShared
 
+@MainActor
+private final class DisplayedRouteCoordinateCache {
+    private var hikeID: UUID?
+    private var coordinates: [CLLocationCoordinate2D] = []
+
+    func coordinates(for hike: Hike) -> [CLLocationCoordinate2D] {
+        guard hike.id != hikeID else { return coordinates }
+        hikeID = hike.id
+        coordinates = hike.coordinates
+        return coordinates
+    }
+}
+
 struct ContentView: View {
     @Environment(\.modelContext) private var modelContext
 
@@ -38,6 +51,9 @@ struct ContentView: View {
     @State private var importFailure: GPXImport.ImportFailure?
     /// Lets the hike detail view drive one-shot map commands (e.g. the Zoom button).
     @State private var mapController = MapController()
+    /// Route points are immutable after import and change only when the hike ID
+    /// changes. Keep their Core Location projection across unrelated body passes.
+    @State private var displayedRouteCoordinateCache = DisplayedRouteCoordinateCache()
 
     /// The sheet's live top edge, observed directly by the map so dragging the
     /// sheet never re-renders this view or the sheet's contents.
@@ -51,7 +67,7 @@ struct ContentView: View {
         guard let hike = selectedHike else { return nil }
         return DisplayedRoute(
             id: hike.id,
-            coordinates: hike.coordinates,
+            coordinates: displayedRouteCoordinateCache.coordinates(for: hike),
             tint: hike.tint,
             width: hike.routeWidth
         )

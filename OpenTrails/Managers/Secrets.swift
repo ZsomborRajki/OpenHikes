@@ -27,14 +27,26 @@ nonisolated enum Secrets {
     /// Placeholder values from the committed template resolve to `nil`, never to a broken key.
     private static let placeholderPrefix = "YOUR_"
 
-    private static func value(for key: String) -> String? {
+    /// Static initialization is lazy and thread-safe, so the bundled plist is
+    /// read and parsed at most once regardless of how often views resolve a
+    /// tile provider.
+    private static let values: [String: String] = {
         guard
             let url = Bundle.main.url(forResource: "Secrets", withExtension: "plist"),
-            let dict = NSDictionary(contentsOf: url),
-            let value = dict[key] as? String,
-            !value.isEmpty,
-            !value.hasPrefix(placeholderPrefix)
-        else { return nil }
-        return value
+            let data = try? Data(contentsOf: url),
+            let plist = try? PropertyListSerialization.propertyList(from: data, format: nil),
+            let dictionary = plist as? [String: Any]
+        else { return [:] }
+
+        return dictionary.compactMapValues { rawValue in
+            guard let value = rawValue as? String,
+                  !value.isEmpty,
+                  !value.hasPrefix(placeholderPrefix) else { return nil }
+            return value
+        }
+    }()
+
+    private static func value(for key: String) -> String? {
+        values[key]
     }
 }

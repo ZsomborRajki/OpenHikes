@@ -33,12 +33,7 @@ Only local instructions exist; `.github/workflows` is empty. The current suite d
 
 These findings remain valid from the prior measured pass:
 
-1. **Download progress invalidates the whole detail view.** `HikeDetailView.body` reads per-tile `downloader.progress` and `downloader.total`; up to 4,000 progress writes rebuild the header, stats, controls, and metadata. Isolate progress in a small observing child view.
-2. **Search ranking is recomputed repeatedly per body pass.** `MapSheet.matchingHikes` performs locale-aware filtering and sorting and is read by both `isSearching` and `suggestionsList`. Compute it once and precompute ranking keys.
-3. **`ContentView.displayedRoute` remaps the full route on unrelated state changes.** `hike.coordinates` allocates a new coordinate array before `MapView` equality can stop the diff. Cache by selected hike or map only when the route changes.
-4. **Secrets are parsed from disk in render-related paths.** `Secrets.apiKey(for:)` loads and parses a plist on each key-gated provider lookup. Cache the plist once.
-5. **Overzoom placeholders are re-cropped on each draw.** `CachingTileOverlayRenderer.fallbackImage` materializes a cropped bitmap for every fallback. Memoize crops or clip and draw the ancestor directly.
-6. **Stored-byte accounting re-enumerates and stats the full manifest every two seconds during auto-save.** It is correctly off-main, but competes with tile work. Throttle or update from newly drained deltas.
+1. **Overzoom placeholders are re-cropped on each draw.** `CachingTileOverlayRenderer.fallbackImage` materializes a cropped bitmap for every fallback. Memoize crops or clip and draw the ancestor directly.
 
 ## Test review
 

@@ -419,18 +419,9 @@ struct LocationPublishingTests {
 @MainActor
 @Suite("Download progress")
 struct DownloadProgressTests {
-    /// `HikeDetailView.body` reads `downloader.progress` (through
-    /// `downloadTile`) and `downloader.total` (through `downloadNote`), so
-    /// every `completed += 1` invalidates the *whole* detail view — header,
-    /// stats grid, action bar and all. This pins the rate at which that
-    /// happens: one notification per tile, and a bulk download is up to 4,000
-    /// tiles.
-    ///
-    /// The elevation chart is spared (it's `.equatable()` and its inputs
-    /// don't change), but nothing else is. The fix is a view split — move the
-    /// progress readout into a small child that reads `downloader` — so this
-    /// is a characterisation test: it should keep passing, and the *body* it
-    /// invalidates should shrink.
+    /// Progress still publishes once per tile, but only the focused download
+    /// child views observe it; `HikeDetailView.body` observes low-frequency
+    /// phase transitions instead.
     @Test("progress notifies once per tile", .enabled(if: TileCache.shared.isOnline))
     func progressNotifiesPerTile() async throws {
         let downloader = OfflineTileDownloader()

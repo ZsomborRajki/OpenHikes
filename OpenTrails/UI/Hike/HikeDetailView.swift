@@ -53,9 +53,11 @@ struct HikeDetailView: View {
     @State private var downloader = OfflineTileDownloader()
     /// Disk space used by this hike's saved tiles; `nil` until measured.
     @State private var storedBytes: Int64?
+    @State private var scheduledStoredBytesRefresh: Task<Void, Never>?
     @State private var storedBytesMeasurementTask: Task<Void, Never>?
     @State private var storedBytesMeasurementGeneration = 0
     @State private var storageDeletionFailed = false
+    private static let storedBytesRefreshDebounce: Duration = .seconds(5)
 
     /// Built once per hike in `.task`, never in `init`. Scrubbing then resolves
     /// points in O(log n).
@@ -141,9 +143,9 @@ struct HikeDetailView: View {
         // Keeps the byte count live as the background auto-save drain grows it.
         // Watches `.count`, not the array itself — comparing two multi-thousand-
         // element `[String]`s on every drain cycle is itself main-thread work.
-        .onChange(of: hike.autoSavedTileKeys.count) { _, _ in refreshStoredBytes() }
+        .onChange(of: hike.autoSavedTileKeys.count) { _, _ in scheduleStoredBytesRefresh() }
         .onDisappear {
-            invalidateStoredBytesMeasurement()
+            invalidateStoredBytesWork()
         }
         .alert("Couldn’t Delete Offline Tiles", isPresented: $storageDeletionFailed) {
             Button("OK", role: .cancel) {}
@@ -158,10 +160,11 @@ struct HikeDetailView: View {
     /// only plain, cheap properties here (array references, not `.coordinates`,
     /// which remaps the whole route) — everything expensive (tile-grid
     /// enumeration across every download record, the keys `Set` union, and the
-    /// disk stat calls) happens inside the detached task. This runs on every
-    /// auto-save drain cycle while the user is actively panning the map, so
-    /// anything synchronous here is felt as a UI hitch.
+    /// disk stat calls) happens inside the detached task. Auto-save manifest
+    /// changes reach this through ``scheduleStoredBytesRefresh()`` so repeated
+    /// two-second drains collapse into one trailing measurement.
     private func refreshStoredBytes() {
+        cancelScheduledStoredBytesRefresh()
         invalidateStoredBytesMeasurement()
         let route = hike.route
         let offlineDownloads = hike.offlineDownloads
@@ -183,10 +186,39 @@ struct HikeDetailView: View {
         }
     }
 
+    private func scheduleStoredBytesRefresh() {
+        cancelScheduledStoredBytesRefresh()
+        guard !hike.offlineDownloads.isEmpty || !hike.autoSavedTileKeys.isEmpty else {
+            invalidateStoredBytesMeasurement()
+            storedBytes = 0
+            return
+        }
+        scheduledStoredBytesRefresh = Task {
+            do {
+                try await Task.sleep(for: Self.storedBytesRefreshDebounce)
+            } catch {
+                return
+            }
+            guard !Task.isCancelled else { return }
+            scheduledStoredBytesRefresh = nil
+            refreshStoredBytes()
+        }
+    }
+
+    private func cancelScheduledStoredBytesRefresh() {
+        scheduledStoredBytesRefresh?.cancel()
+        scheduledStoredBytesRefresh = nil
+    }
+
     private func invalidateStoredBytesMeasurement() {
         storedBytesMeasurementTask?.cancel()
         storedBytesMeasurementTask = nil
         storedBytesMeasurementGeneration &+= 1
+    }
+
+    private func invalidateStoredBytesWork() {
+        cancelScheduledStoredBytesRefresh()
+        invalidateStoredBytesMeasurement()
     }
 
     /// Forgets this hike's downloads and auto-saved tiles, and deletes them from
@@ -209,7 +241,7 @@ struct HikeDetailView: View {
         let deletionPlan = StoredTileDeletionPlan(removing: hike, among: hikes)
         hike.offlineDownloads.removeAll()
         hike.autoSavedTileKeys.removeAll()
-        invalidateStoredBytesMeasurement()
+        invalidateStoredBytesWork()
         storedBytes = 0
         downloader.reset()
         Task.detached {
@@ -253,19 +285,25 @@ struct HikeDetailView: View {
         VStack(spacing: 12) {
             HStack(spacing: 12) {
                 zoomButton
-                if activeProvider.supportsBulkDownload { downloadButton }
+                if activeProvider.supportsBulkDownload {
+                    OfflineDownloadButton(
+                        downloader: downloader,
+                        canDownload: canDownload,
+                        start: {
+                            downloader.start(
+                                route: hike.coordinates,
+                                source: activeTileSource,
+                                scale: displayScale
+                            )
+                        }
+                    )
+                }
                 colorControl
             }
             autoSaveToggle
             autoFollowToggle
             widthSlider
-            if let note = downloadNote {
-                Text(note)
-                    .font(.caption2)
-                    .foregroundStyle(downloader.isFailed ? AnyShapeStyle(.red) : AnyShapeStyle(.secondary))
-                    .frame(maxWidth: .infinity, alignment: .center)
-                    .multilineTextAlignment(.center)
-            }
+            OfflineDownloadStatus(downloader: downloader, idleNote: autoSaveNote)
             storedTilesRow
         }
     }
@@ -279,20 +317,6 @@ struct HikeDetailView: View {
         }
         .buttonStyle(.plain)
         .disabled(hike.pointCount < 2)
-    }
-
-    private var downloadButton: some View {
-        Button {
-            if downloader.phase == .downloading {
-                downloader.cancel()
-            } else {
-                downloader.start(route: hike.coordinates, source: activeTileSource, scale: displayScale)
-            }
-        } label: {
-            downloadTile
-        }
-        .buttonStyle(.plain)
-        .disabled(!canDownload && downloader.phase != .downloading)
     }
 
     /// Passive gap-filler alongside (or instead of) the bulk `downloadButton`:
@@ -328,24 +352,6 @@ struct HikeDetailView: View {
             get: { hike.autoFollowEnabled },
             set: { hike.autoFollowEnabled = $0 }
         )
-    }
-
-    @ViewBuilder
-    private var downloadTile: some View {
-        switch downloader.phase {
-        case .downloading:
-            tile {
-                ProgressView().controlSize(.small)
-                Text("\(Int(downloader.progress * 100))%")
-                    .font(.caption2.weight(.medium))
-                    .foregroundStyle(.secondary)
-            }
-        case .finished:
-            actionTile(icon: "checkmark.circle.fill", title: "Saved", tint: .green)
-        default:
-            actionTile(icon: "arrow.down.circle", title: "Offline",
-                       tint: canDownload ? Color.accentColor : .secondary)
-        }
     }
 
     private var colorControl: some View {
@@ -388,15 +394,6 @@ struct HikeDetailView: View {
 
     private var canDownload: Bool {
         activeProvider.supportsBulkDownload && hike.pointCount > 1
-    }
-
-    private var downloadNote: String? {
-        switch downloader.phase {
-        case .failed(let message): return message
-        case .finished: return "Saved for offline use."
-        case .downloading: return "Saving \(downloader.total) tiles…"
-        case .idle: return autoSaveNote
-        }
     }
 
     /// Status copy for auto-save — the only offline note for OSM-style
@@ -620,5 +617,86 @@ struct HikeDetailView: View {
             }
         }
         .frame(height: 180)
+    }
+}
+
+/// Owns the high-frequency download observations so per-tile progress only
+/// rebuilds this tile rather than the entire hike detail hierarchy.
+private struct OfflineDownloadButton: View {
+    let downloader: OfflineTileDownloader
+    let canDownload: Bool
+    let start: () -> Void
+
+    var body: some View {
+        Button {
+            if downloader.phase == .downloading {
+                downloader.cancel()
+            } else {
+                start()
+            }
+        } label: {
+            tile
+        }
+        .buttonStyle(.plain)
+        .disabled(!canDownload && downloader.phase != .downloading)
+    }
+
+    @ViewBuilder
+    private var tile: some View {
+        switch downloader.phase {
+        case .downloading:
+            actionTile {
+                ProgressView().controlSize(.small)
+                Text("\(Int(downloader.progress * 100))%")
+                    .font(.caption2.weight(.medium))
+                    .foregroundStyle(.secondary)
+            }
+        case .finished:
+            actionTile(tint: .green) {
+                Image(systemName: "checkmark.circle.fill").font(.title3)
+                Text("Saved").font(.caption2.weight(.medium))
+            }
+        default:
+            actionTile(tint: canDownload ? .accentColor : .secondary) {
+                Image(systemName: "arrow.down.circle").font(.title3)
+                Text("Offline").font(.caption2.weight(.medium))
+            }
+        }
+    }
+
+    private func actionTile<Content: View>(
+        tint: Color = .accentColor,
+        @ViewBuilder content: () -> Content
+    ) -> some View {
+        VStack(spacing: 5) { content() }
+            .frame(maxWidth: .infinity)
+            .padding(.vertical, 8)
+            .background(.quaternary, in: RoundedRectangle(cornerRadius: 12))
+            .foregroundStyle(tint)
+    }
+}
+
+/// Keeps the per-tile `total` observation out of `HikeDetailView.body`.
+private struct OfflineDownloadStatus: View {
+    let downloader: OfflineTileDownloader
+    let idleNote: String?
+
+    private var note: String? {
+        switch downloader.phase {
+        case .failed(let message): message
+        case .finished: "Saved for offline use."
+        case .downloading: "Saving \(downloader.total) tiles…"
+        case .idle: idleNote
+        }
+    }
+
+    var body: some View {
+        if let note {
+            Text(note)
+                .font(.caption2)
+                .foregroundStyle(downloader.isFailed ? AnyShapeStyle(.red) : AnyShapeStyle(.secondary))
+                .frame(maxWidth: .infinity, alignment: .center)
+                .multilineTextAlignment(.center)
+        }
     }
 }

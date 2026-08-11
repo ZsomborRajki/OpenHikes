@@ -42,32 +42,40 @@ struct MapSheet: View {
     @State private var completer = SearchCompleter()
     @State private var searchTask: Task<Void, Never>?
 
-    /// True while the search field is active and has suggestions to offer.
-    private var isSearching: Bool {
-        searchFocused && (!completer.suggestions.isEmpty || !matchingHikes.isEmpty)
-    }
-
     /// Imported/recorded hikes whose title matches the current query, with
     /// titles that start with the query ranked above ones that merely contain
     /// it — surfaced above map suggestions so a user's own trails come first.
-    private var matchingHikes: [Hike] {
+    private func rankedMatchingHikes() -> [Hike] {
         let query = searchText.trimmingCharacters(in: .whitespacesAndNewlines)
         guard !query.isEmpty else { return [] }
+
+        let foldingOptions: String.CompareOptions = [.caseInsensitive, .diacriticInsensitive, .widthInsensitive]
+        let locale = Locale.current
+        let queryKey = query.folding(options: foldingOptions, locale: locale)
+
         return hikes
-            .filter { $0.title.localizedCaseInsensitiveContains(query) }
-            .sorted { lhs, rhs in
-                let lhsPrefix = lhs.title.range(of: query, options: [.caseInsensitive, .anchored]) != nil
-                let rhsPrefix = rhs.title.range(of: query, options: [.caseInsensitive, .anchored]) != nil
-                if lhsPrefix != rhsPrefix { return lhsPrefix }
-                return lhs.title.localizedCaseInsensitiveCompare(rhs.title) == .orderedAscending
+            .compactMap { hike -> (hike: Hike, prefixRank: Int, titleKey: String)? in
+                let titleKey = hike.title.folding(options: foldingOptions, locale: locale)
+                guard titleKey.contains(queryKey) else { return nil }
+                return (hike, titleKey.hasPrefix(queryKey) ? 0 : 1, titleKey)
             }
+            .sorted { lhs, rhs in
+                if lhs.prefixRank != rhs.prefixRank {
+                    return lhs.prefixRank < rhs.prefixRank
+                }
+                return lhs.titleKey < rhs.titleKey
+            }
+            .map(\.hike)
     }
 
     /// True at the smallest detent, where only the search field shows.
     private var isCompact: Bool { detent == .height(80) }
 
     var body: some View {
-        NavigationStack(path: $path) {
+        let matchingHikes = rankedMatchingHikes()
+        let isSearching = searchFocused && (!completer.suggestions.isEmpty || !matchingHikes.isEmpty)
+
+        return NavigationStack(path: $path) {
             VStack(spacing: 0) {
                 HStack(spacing: 10) {
                     searchField
@@ -77,7 +85,7 @@ struct MapSheet: View {
                     .padding(.top, 18)
 
                 if isSearching {
-                    suggestionsList
+                    suggestionsList(matchingHikes: matchingHikes)
                         .padding(.top, 12)
                 } else if isCompact {
                     Spacer()
@@ -296,7 +304,7 @@ struct MapSheet: View {
     /// Autocomplete suggestions shown under the search field while typing.
     /// Matching hikes (imported or recorded) are listed first, ahead of
     /// MapKit's place suggestions.
-    private var suggestionsList: some View {
+    private func suggestionsList(matchingHikes: [Hike]) -> some View {
         List {
             if !matchingHikes.isEmpty {
                 Section("Your Hikes") {
