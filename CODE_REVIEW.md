@@ -1,34 +1,30 @@
 # OpenTrails Code Review
 
-Reviewed 2026-08-11 at commit `2ee19ea` (`main`). Themes: stability, defects, missing tests, UI performance.
+Original review: 2026-08-11 at commit `2ee19ea`. Status updated against `b320f48` (`main`).
 
 ## Executive summary
 
-The app is in good shape structurally. The render-isolation architecture is real and holds where it's claimed, the off-main split in the tile pipeline is deliberate and asserted, and the algorithmic and offline-storage suites are unusually thorough. Nothing here is a crash or data-loss bug.
+The app remains structurally sound. Fixes after the original review moved GPX preparation off the main actor, tightened tile transport and cache behavior, bounded WeatherKit and WidgetKit throttles, and added workload and transport coverage. No current finding is a crash or data-loss defect.
 
-What this pass found is a consistent pattern rather than scattered defects: **the work the architecture pushed off the main thread is the work that was expensive in aggregate — per-tile, per-frame. The work still on it is expensive per-event, and it's proportional to the size of the imported GPX.** Importing a five-hour recording blocks the main thread for 60 ms; selecting it blocks for another 8–11 ms; the once-a-second auto-follow poll spends 4 ms there. None of that shows up on the six-point fixtures the suite is built from.
+The remaining measured issues are concentrated in main-actor UI work: publishing a long selected trail to the widget, rebuilding a route profile during a background publish, and propagating route appearance changes through `ContentView`. Four tests pin those regressions with `withKnownIssue`; the suite stays green and will flag when the wrappers can be removed.
 
-The second pattern is **unbounded repetition of a metered operation**: two throttles have escape hatches with no floor under them, so a walker hovering at a threshold can spend a WeatherKit call and a WidgetKit timeline reload every second, indefinitely.
-
-The open items are pinned by tests using `withKnownIssue`, so the suite stays green and each one fails loudly the day it's fixed (prompting removal of the wrapper). The finding sections below name the test that pins each.
+The larger outstanding risk is infrastructure: key system boundaries still lack injectable seams or integration targets, and the repository has no CI.
 
 ## Current build and test state
 
 | Surface | Result | Notes |
 |---|---:|---|
 | iOS app build | Pass | `OpenTrails`, iPhone 17 Pro simulator |
-| iOS app tests | Pass | **298 tests, 34 suites**, 4 known issues |
+| iOS app tests | Pass | **298 tests, 34 suites**, 4 known issues, 0 skipped |
 | Shared package tests | Pass | 42 tests, 5 suites |
 | macOS build | Pass | Unsigned, arm64 |
 | visionOS build | **Not verified** | No visionOS runtime installed on this machine |
 | iPadOS | **Not verified** | No iPad simulator installed |
 | CI | **Absent** | `.github/workflows` does not exist |
 
-## Stability and correctness
-
 ## UI performance
 
-Every remaining item here runs on the main actor and is proportional to the imported route's point count. Measurements are from the iPhone 17 Pro simulator on this machine, at 18,000 points — one point per second for five hours, the size of recording the app is explicitly built to import.
+The measured route work below runs on the main actor and scales with the imported route's point count. Measurements are from the iPhone 17 Pro simulator on this machine at 18,000 points — one point per second for five hours. Search ranking is a separate per-body cost that scales with the saved-hike collection.
 
 | Path | Cost | Where |
 |---|---:|---|
@@ -86,7 +82,6 @@ The suite's algorithmic and storage coverage is genuinely strong. What remains i
 - **Two user-specific Xcode files are still tracked** despite `.gitignore` covering `xcuserdata`:
   - `OpenTrails.xcodeproj/project.xcworkspace/xcuserdata/zsomborrajki.xcuserdatad/UserInterfaceState.xcuserstate`
   - `OpenTrails.xcodeproj/xcuserdata/zsomborrajki.xcuserdatad/xcschemes/xcschememanagement.plist`
-- **README is out of date on its own claims.** It cites 213 app tests (now 243); it says "Six UI-performance items remain open — ... All are measured in `CODE_REVIEW.md`" and "`CODE_REVIEW.md` records what they were", neither of which was true of the document this replaces. Point it at the sections above.
 - **No localization catalog.** All user-facing strings are in source — fine for a single-language prototype, a product-readiness task before localization.
 
 ## TODO
@@ -121,5 +116,4 @@ finished when the wrapper comes off. Items with no test named need a seam built 
 - [ ] **Fail, don't skip, when a conditional suite's precondition is missing in CI** (test gap 5).
 - [ ] **Seed the randomized tests; replace fixed sleeps with injected clocks** (test gap 6).
 - [ ] **Add a disk-backed `Hike` persistence/migration test** (test gap 7).
-- [ ] **Untrack the two `xcuserdata` files** and correct README's test counts and its references to items this
-      document no longer contains (hygiene).
+- [ ] **Untrack the two `xcuserdata` files** (hygiene).
