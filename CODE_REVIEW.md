@@ -1,12 +1,12 @@
 # OpenTrails Code Review
 
-Original review: 2026-08-11 at commit `2ee19ea`. Status updated against `b320f48` (`main`).
+Original review: 2026-08-11 at commit `2ee19ea`. Status updated against the working tree based on `9585e71` (`main`).
 
 ## Executive summary
 
 The app remains structurally sound. Fixes after the original review moved GPX preparation off the main actor, tightened tile transport and cache behavior, bounded WeatherKit and WidgetKit throttles, and added workload and transport coverage. No current finding is a crash or data-loss defect.
 
-The remaining measured issues are concentrated in main-actor UI work: publishing a long selected trail to the widget, rebuilding a route profile during a background publish, and propagating route appearance changes through `ContentView`. Four tests pin those regressions with `withKnownIssue`; the suite stays green and will flag when the wrappers can be removed.
+The remaining measured issues are concentrated in main-actor UI work: propagating route appearance changes through `ContentView`. Two tests pin those regressions with `withKnownIssue`; the suite stays green and will flag when the wrappers can be removed.
 
 The larger outstanding risk is infrastructure: key system boundaries still lack injectable seams or integration targets, and the repository has no CI.
 
@@ -15,8 +15,8 @@ The larger outstanding risk is infrastructure: key system boundaries still lack 
 | Surface | Result | Notes |
 |---|---:|---|
 | iOS app build | Pass | `OpenTrails`, iPhone 17 Pro simulator |
-| iOS app tests | Pass | **298 tests, 34 suites**, 4 known issues, 0 skipped |
-| Shared package tests | Pass | 42 tests, 5 suites |
+| iOS app tests | Pass | **300 tests, 35 suites**, 2 known issues, 0 skipped |
+| Shared package tests | Pass | 43 tests, 5 suites |
 | macOS build | Pass | Unsigned, arm64 |
 | visionOS build | **Not verified** | No visionOS runtime installed on this machine |
 | iPadOS | **Not verified** | No iPad simulator installed |
@@ -24,24 +24,7 @@ The larger outstanding risk is infrastructure: key system boundaries still lack 
 
 ## UI performance
 
-The measured route work below runs on the main actor and scales with the imported route's point count. Measurements are from the iPhone 17 Pro simulator on this machine at 18,000 points — one point per second for five hours. Search ranking is a separate per-body cost that scales with the saved-hike collection.
-
-| Path | Cost | Where |
-|---|---:|---|
-| `hikeSelectionChanged` | 8–11 ms | `BackgroundTrailTracker`, on every selection tap |
-| `RouteProfile(route:)` | 7 ms | built 2× per background fix |
-
-### 8. Selecting a trail spends most of a frame publishing to the widget
-
-`hikeSelectionChanged` does this synchronously on a tap: `RouteProfile(route:)`, then `hike.coordinates` (a second full pass), then `decimate` (a third), then `JSONEncoder`, then an **atomic write into the App Group container** — real disk I/O on the main actor, the exact thing `MainThreadWatchdog` exists to catch.
-
-None of it needs to be there. The only main-actor-bound part is reading the `Hike`, and `TileOwnership` already demonstrates the snapshot-then-hop pattern that would move the rest off.
-
-`updateStoredLiveFix` then compounds it: it rebuilds the snapshot — and with it a second `RouteProfile` — whenever nothing is stored for the hike, discarding the profile its caller is holding. `handleBackgroundFix` makes the waste explicit, building a profile, matching against it, and handing the *hike* to a function that builds another. That's the path a background relaunch takes, where nothing is stored yet.
-
-**Tests:** `selecting a long trail doesn't spend a frame on the main actor`, `publishing a fix doesn't rebuild a route profile the caller already has`.
-
-### 9. Route tint and width are the one hot path still inside SwiftUI
+### 8. Route tint and width are the one hot path still inside SwiftUI
 
 `ContentView.displayedRoute` reads `hike.tint` and `hike.routeWidth` in `ContentView.body` to hand them to the map. Both live on the `@Model` and both are written continuously — a `Slider` drag and a `ColorPicker` drag — so **every drag sample invalidates the root view**, and with it the `.sheet` closure that builds `MapSheet`: `rankedMatchingHikes()` re-runs, the `NavigationStack` rebuilds, and the pushed `HikeDetailView` that owns the slider being dragged is re-evaluated.
 
@@ -53,7 +36,7 @@ The fix is the pattern the rest of the app already uses: hold the drawn route's 
 
 **Tests:** `dragging the width slider doesn't invalidate the root view`, `dragging the colour picker doesn't invalidate the root view`, with `a new selection still reaches the map` pinning what must keep working.
 
-### 10. Per-event costs worth removing
+### 9. Per-event costs worth removing
 
 - **`MapSheet.body` calls `rankedMatchingHikes()` on every pass**, including the detent changes a sheet drag produces, whenever `searchText` is non-empty.
 
@@ -92,15 +75,10 @@ finished when the wrapper comes off. Items with no test named need a seam built 
 
 ### Now — main-actor cost
 
-- [ ] **Move the widget publish off the main actor** (finding 8). Snapshot the `Hike` on-main, do the profile,
-      decimation, encoding and App Group write off it — the `TileOwnership` pattern.
-      ✅ `selecting a long trail doesn't spend a frame on the main actor`
-- [ ] **Pass the caller's `RouteProfile` into `updateStoredLiveFix`** (finding 8).
-      ✅ `publishing a fix doesn't rebuild a route profile the caller already has`
-- [ ] **Move route tint and width out of `ContentView.body`** (finding 9) into a stable `@Observable` the
+- [ ] **Move route tint and width out of `ContentView.body`** (finding 8) into a stable `@Observable` the
       coordinator observes directly, as `RouteHighlight` does.
       ✅ `dragging the width slider doesn't invalidate the root view`, `dragging the colour picker doesn't invalidate the root view`
-- [ ] **Memoize or gate `rankedMatchingHikes()`** so a sheet drag doesn't re-rank (finding 10).
+- [ ] **Memoize or gate `rankedMatchingHikes()`** so a sheet drag doesn't re-rank (finding 9).
 
 ### Infrastructure — unblocks everything above
 

@@ -19,8 +19,14 @@ import SwiftData
 import Testing
 @testable import OpenTrails
 
+/// Both child suites share one App Group file, so they must not run beside
+/// each other even when they are selected together.
+@Suite("Widget feeds", .serialized, .enabled(if: SharedStoreProbe.isAvailable))
+struct WidgetFeedSuites {}
+
+extension WidgetFeedSuites {
 @MainActor
-@Suite("Widget feed", .serialized, .enabled(if: SharedStoreProbe.isAvailable))
+@Suite("Feed behavior", .serialized)
 final class WidgetFeedTests {
     private let container: ModelContainer
     private let context: ModelContext
@@ -48,9 +54,10 @@ final class WidgetFeedTests {
     /// arrives — otherwise the widget would sit on the previous trail (or
     /// empty) until the user next moved.
     @Test("selecting a hike publishes everything the widget draws")
-    func selectionPublishesSnapshot() throws {
+    func selectionPublishesSnapshot() async throws {
         let hike = self.hike()
         tracker.hikeSelectionChanged(to: hike)
+        await tracker.waitForSelectionPublish()
 
         let snapshot = try #require(SharedStore.load())
         #expect(snapshot.hikeID == hike.id)
@@ -72,29 +79,34 @@ final class WidgetFeedTests {
     }
 
     @Test("deselecting clears the trail rather than leaving a stale one")
-    func deselectionClears() {
+    func deselectionClears() async {
         tracker.hikeSelectionChanged(to: hike())
+        await tracker.waitForSelectionPublish()
         #expect(SharedStore.load() != nil)
         tracker.hikeSelectionChanged(to: nil)
+        await tracker.waitForSelectionPublish()
         #expect(SharedStore.load() == nil)
     }
 
     /// A hike with a single point has no shape to draw.
     @Test("a hike with nothing to draw clears the widget")
-    func degenerateHikeClears() {
+    func degenerateHikeClears() async {
         tracker.hikeSelectionChanged(to: hike())
+        await tracker.waitForSelectionPublish()
         let stub = Fixture.hike(route: [RouteCoordinate(latitude: 47.63, longitude: 12.86)], in: context)
         tracker.hikeSelectionChanged(to: stub)
+        await tracker.waitForSelectionPublish()
         #expect(SharedStore.load() == nil)
     }
 
     // MARK: The live fix
 
     @Test("an on-route fix is published as progress along the trail")
-    func liveFixPublished() throws {
+    func liveFixPublished() async throws {
         let hike = self.hike()
         let profile = RouteProfile(route: hike.route)
         tracker.hikeSelectionChanged(to: hike)
+        await tracker.waitForSelectionPublish()
 
         let match = try #require(profile.nearestPoint(to: profile.coordinates[3]))
         tracker.publishLiveFix(hike: hike, profile: profile, match: match)
@@ -114,10 +126,11 @@ final class WidgetFeedTests {
     /// A fix too far from the trail isn't progress — the widget shows the
     /// trail's length instead of a made-up position.
     @Test("a fix off the trail publishes no position")
-    func offRouteFixPublishesNothing() throws {
+    func offRouteFixPublishesNothing() async throws {
         let hike = self.hike()
         let profile = RouteProfile(route: hike.route)
         tracker.hikeSelectionChanged(to: hike)
+        await tracker.waitForSelectionPublish()
 
         let far = try #require(profile.nearestPoint(to: CLLocationCoordinate2D(latitude: 37.3350, longitude: -122.0200)))
         #expect(far.offRouteMeters > RouteProfile.followMatchThresholdMeters, "precondition: this fix is off the trail")
@@ -130,10 +143,11 @@ final class WidgetFeedTests {
 
     /// The poll runs once a second; the feed must not.
     @Test("a second fix moments later doesn't republish")
-    func publishesAreThrottled() throws {
+    func publishesAreThrottled() async throws {
         let hike = self.hike()
         let profile = RouteProfile(route: hike.route)
         tracker.hikeSelectionChanged(to: hike)
+        await tracker.waitForSelectionPublish()
 
         let first = try #require(profile.nearestPoint(to: profile.coordinates[1]))
         tracker.publishLiveFix(hike: hike, profile: profile, match: first)
@@ -148,10 +162,11 @@ final class WidgetFeedTests {
     /// …except when the answer to "are you on the trail?" changes, which is
     /// the one update worth spending a reload on immediately.
     @Test("losing the trail is published immediately, throttle or not")
-    func statusFlipBypassesTheThrottle() throws {
+    func statusFlipBypassesTheThrottle() async throws {
         let hike = self.hike()
         let profile = RouteProfile(route: hike.route)
         tracker.hikeSelectionChanged(to: hike)
+        await tracker.waitForSelectionPublish()
 
         let onRoute = try #require(profile.nearestPoint(to: profile.coordinates[1]))
         tracker.publishLiveFix(hike: hike, profile: profile, match: onRoute)
@@ -164,10 +179,11 @@ final class WidgetFeedTests {
     /// The detail view of a hike that isn't the selected one can still be
     /// polling; its fixes must not overwrite the tracked trail.
     @Test("a fix for a hike that isn't the tracked one is ignored")
-    func ignoresUntrackedHikes() throws {
+    func ignoresUntrackedHikes() async throws {
         let tracked = hike()
         let other = Fixture.hike(title: "Elsewhere", in: context)
         tracker.hikeSelectionChanged(to: tracked)
+        await tracker.waitForSelectionPublish()
 
         let profile = RouteProfile(route: other.route)
         let match = try #require(profile.nearestPoint(to: profile.coordinates[2]))
@@ -181,18 +197,42 @@ final class WidgetFeedTests {
     /// Changing trails has to reset the throttle and the position, or the
     /// new trail inherits the old one's progress.
     @Test("switching trails starts the new one from scratch")
-    func switchingTrailsResets() throws {
+    func switchingTrailsResets() async throws {
         let first = hike()
         let profile = RouteProfile(route: first.route)
         tracker.hikeSelectionChanged(to: first)
+        await tracker.waitForSelectionPublish()
         let match = try #require(profile.nearestPoint(to: profile.coordinates[3]))
         tracker.publishLiveFix(hike: first, profile: profile, match: match)
         #expect(SharedStore.load()?.liveFix != nil)
 
         let second = Fixture.hike(title: "Second", in: context)
         tracker.hikeSelectionChanged(to: second)
+        await tracker.waitForSelectionPublish()
         let snapshot = try #require(SharedStore.load())
         #expect(snapshot.hikeID == second.id)
         #expect(snapshot.liveFix == nil)
     }
+
+    @Test("rapid selection changes publish only the latest trail")
+    func rapidSelectionPublishesLatest() async throws {
+        let first = hike()
+        let second = Fixture.hike(title: "Second", route: Fixture.loopRoute, in: context)
+
+        tracker.hikeSelectionChanged(to: first)
+        tracker.hikeSelectionChanged(to: second)
+        await tracker.waitForSelectionPublish()
+
+        #expect(try #require(SharedStore.load()).hikeID == second.id)
+    }
+
+    @Test("deselecting while a publish is pending can't restore a stale trail")
+    func pendingPublishCannotOutliveDeselection() async {
+        tracker.hikeSelectionChanged(to: hike())
+        tracker.hikeSelectionChanged(to: nil)
+        await tracker.waitForSelectionPublish()
+
+        #expect(SharedStore.load() == nil)
+    }
+}
 }

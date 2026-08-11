@@ -37,6 +37,11 @@ final class BackgroundTrailTracker: NSObject {
     /// launch from `SettingsKey.lastSelectedHikeID` (written by `ContentView`)
     /// since a background relaunch has no in-memory selection to read.
     private var trackedHikeID: UUID?
+    /// Invalidates detached selection work when a newer selection arrives.
+    private var selectionRevision: UInt64 = 0
+    private var selectionPublishTask: Task<Void, Never>?
+    private let selectionGeneration: SelectionGeneration
+    private let selectionWriter: SelectionSnapshotWriter
 
     /// Last distance-along-route a fix was actually matched at — the
     /// continuity reference `RouteProfile.nearestPoint` needs so GPS noise on
@@ -90,7 +95,10 @@ final class BackgroundTrailTracker: NSObject {
     }
 
     init(container: ModelContainer) {
+        let selectionGeneration = SelectionGeneration()
         self.container = container
+        self.selectionGeneration = selectionGeneration
+        self.selectionWriter = SelectionSnapshotWriter(generation: selectionGeneration)
         super.init()
         manager.delegate = self
         trackedHikeID = UUID(uuidString: UserDefaults.standard.string(forKey: SettingsKey.lastSelectedHikeID) ?? "")
@@ -133,24 +141,65 @@ final class BackgroundTrailTracker: NSObject {
 
     // MARK: Selection
 
-    /// Called whenever the app's selected hike changes. Immediately shows the
-    /// new trail's shape (no live fix yet) so the widget isn't stale/empty
-    /// until the next fix arrives.
+    /// Called whenever the app's selected hike changes. Snapshots the SwiftData
+    /// values on-main, then prepares and writes the widget payload off-main so
+    /// a long GPX cannot consume most of the tap's frame.
     func hikeSelectionChanged(to hike: Hike?) {
         trackedHikeID = hike?.id
         lastMatchedDistance = nil
         lastForegroundPublish = nil
+        lastStatusFlipPublish = nil
+        selectionRevision &+= 1
+        let revision = selectionRevision
+        selectionGeneration.update(to: revision)
+        selectionPublishTask?.cancel()
 
         guard let hike, hike.pointCount > 1 else {
-            SharedStore.clear()
-            Task { await TrailBasemapRenderer.shared.invalidate() }
-            WidgetCenter.shared.reloadTimelines(ofKind: TrailWidgetKind.id)
+            selectionPublishTask = Task { [weak self] in
+                guard let self,
+                      await self.selectionWriter.clear(ifCurrent: revision),
+                      self.selectionRevision == revision,
+                      self.trackedHikeID == nil
+                else { return }
+                await TrailBasemapRenderer.shared.invalidate()
+                guard self.selectionRevision == revision else { return }
+                WidgetCenter.shared.reloadTimelines(ofKind: TrailWidgetKind.id)
+                self.selectionPublishTask = nil
+            }
             return
         }
-        let snapshot = Self.buildSnapshot(hike: hike, liveFix: nil)
-        SharedStore.save(snapshot)
-        WidgetCenter.shared.reloadTimelines(ofKind: TrailWidgetKind.id)
-        refreshBasemaps(for: snapshot)
+        let input = SnapshotInput(hike: hike)
+        selectionPublishTask = Task { [weak self] in
+            guard !Task.isCancelled else { return }
+            let buildTask = Task.detached(priority: .userInitiated) {
+                assertOffMainThread("Widget snapshot preparation must stay off the main thread")
+                return Self.buildSnapshot(from: input, liveFix: nil)
+            }
+            let snapshot = await withTaskCancellationHandler {
+                await buildTask.value
+            } onCancel: {
+                buildTask.cancel()
+            }
+            guard let snapshot,
+                  let self,
+                  !Task.isCancelled,
+                  self.selectionRevision == revision,
+                  self.trackedHikeID == input.hikeID,
+                  await self.selectionWriter.save(snapshot, ifCurrent: revision),
+                  self.selectionRevision == revision,
+                  self.trackedHikeID == input.hikeID
+            else { return }
+            WidgetCenter.shared.reloadTimelines(ofKind: TrailWidgetKind.id)
+            self.refreshBasemaps(for: snapshot)
+            self.selectionPublishTask = nil
+        }
+    }
+
+    /// Waits for the latest selection publication. The detail view uses this
+    /// before starting its live-fix loop so the first fix cannot race and be
+    /// overwritten by the trail's initial snapshot.
+    func waitForSelectionPublish() async {
+        await selectionPublishTask?.value
     }
 
     // MARK: Widget basemaps
@@ -182,7 +231,10 @@ final class BackgroundTrailTracker: NSObject {
     /// Called from `HikeDetailView`'s existing once-a-second auto-follow
     /// poll. Throttled internally — does not write on every call.
     func publishLiveFix(hike: Hike, profile: RouteProfile, match: (distanceAlongRoute: Double, offRouteMeters: Double)?) {
-        guard hike.id == trackedHikeID else { return }
+        // The first poll waits for selection publication in HikeDetailView.
+        // Keep this guard as a backstop for any other caller; the next poll
+        // retries rather than racing the initial snapshot.
+        guard hike.id == trackedHikeID, selectionPublishTask == nil else { return }
 
         // Leaving the trail takes the wider threshold, rejoining it the normal
         // one, so noise around the follow distance doesn't read as a status
@@ -205,7 +257,7 @@ final class BackgroundTrailTracker: NSObject {
         lastForegroundPublish = (now, isOnRoute)
 
         guard isOnRoute, let match, let coordinate = profile.coordinate(atDistance: match.distanceAlongRoute) else {
-            updateStoredLiveFix(nil, hike: hike)
+            updateStoredLiveFix(nil, hike: hike, profile: profile)
             return
         }
         lastMatchedDistance = match.distanceAlongRoute
@@ -216,7 +268,8 @@ final class BackgroundTrailTracker: NSObject {
                 offRouteMeters: match.offRouteMeters,
                 timestamp: .now
             ),
-            hike: hike
+            hike: hike,
+            profile: profile
         )
     }
 
@@ -240,7 +293,7 @@ final class BackgroundTrailTracker: NSObject {
         guard let match = profile.nearestPoint(to: location.coordinate, near: lastMatchedDistance),
               match.offRouteMeters <= RouteProfile.followMatchThresholdMeters,
               let coordinate = profile.coordinate(atDistance: match.distanceAlongRoute) else {
-            updateStoredLiveFix(nil, hike: hike)
+            updateStoredLiveFix(nil, hike: hike, profile: profile)
             return
         }
 
@@ -252,20 +305,29 @@ final class BackgroundTrailTracker: NSObject {
                 offRouteMeters: match.offRouteMeters,
                 timestamp: location.timestamp
             ),
-            hike: hike
+            hike: hike,
+            profile: profile
         )
     }
 
     // MARK: Shared write path
 
-    /// Updates just the live-fix portion of the stored snapshot, rebuilding
-    /// the whole thing from `hike` first if nothing was stored yet or the
-    /// stored snapshot belongs to a different hike.
-    private func updateStoredLiveFix(_ fix: SharedTrailSnapshot.LiveFix?, hike: Hike) {
+    /// Updates just the live-fix portion of the stored snapshot. If the trail
+    /// itself must be rebuilt, reuse the caller's profile rather than repeating
+    /// its O(route points) distance and elevation work.
+    private func updateStoredLiveFix(
+        _ fix: SharedTrailSnapshot.LiveFix?,
+        hike: Hike,
+        profile: RouteProfile
+    ) {
         var snapshot = SharedStore.load()
         let isNewTrail = snapshot?.hikeID != hike.id
         if isNewTrail {
-            snapshot = Self.buildSnapshot(hike: hike, liveFix: nil)
+            snapshot = Self.buildSnapshot(
+                from: SnapshotInput(hike: hike),
+                elevationRange: profile.elevationRange,
+                liveFix: nil
+            )
         }
         snapshot?.liveFix = fix
         snapshot?.updatedAt = .now
@@ -277,16 +339,95 @@ final class BackgroundTrailTracker: NSObject {
         if isNewTrail { refreshBasemaps(for: snapshot) }
     }
 
-    private static func buildSnapshot(hike: Hike, liveFix: SharedTrailSnapshot.LiveFix?) -> SharedTrailSnapshot {
-        let profile = RouteProfile(route: hike.route)
+    private nonisolated struct SnapshotInput: Sendable {
+        let hikeID: UUID
+        let title: String
+        let tintHex: String
+        let totalDistanceMeters: Double
+        let route: [RouteCoordinate]
+
+        @MainActor
+        init(hike: Hike) {
+            hikeID = hike.id
+            title = hike.title
+            tintHex = hike.tintHex
+            totalDistanceMeters = hike.distanceMeters
+            route = hike.route
+        }
+    }
+
+    private nonisolated final class SelectionGeneration: @unchecked Sendable {
+        private let lock = NSLock()
+        private var value: UInt64 = 0
+
+        func update(to newValue: UInt64) {
+            lock.lock()
+            value = newValue
+            lock.unlock()
+        }
+
+        func matches(_ candidate: UInt64) -> Bool {
+            lock.lock()
+            let matches = value == candidate
+            lock.unlock()
+            return matches
+        }
+    }
+
+    /// Serializes App Group mutations away from the main actor. The generation
+    /// gate prevents canceled selection work from committing stale data.
+    private actor SelectionSnapshotWriter {
+        private let generation: SelectionGeneration
+
+        init(generation: SelectionGeneration) {
+            self.generation = generation
+        }
+
+        func save(_ snapshot: SharedTrailSnapshot, ifCurrent revision: UInt64) -> Bool {
+            assertOffMainThread("Widget snapshot writes must stay off the main thread")
+            guard generation.matches(revision) else { return false }
+            SharedStore.save(snapshot)
+            return generation.matches(revision)
+        }
+
+        func clear(ifCurrent revision: UInt64) -> Bool {
+            assertOffMainThread("Widget snapshot deletion must stay off the main thread")
+            guard generation.matches(revision) else { return false }
+            SharedStore.clear()
+            return generation.matches(revision)
+        }
+    }
+
+    private static nonisolated func buildSnapshot(
+        from input: SnapshotInput,
+        liveFix: SharedTrailSnapshot.LiveFix?
+    ) -> SharedTrailSnapshot? {
+        guard !Task.isCancelled else { return nil }
+        let profile = RouteProfile(route: input.route)
+        guard !Task.isCancelled else { return nil }
+        return buildSnapshot(
+            from: input,
+            elevationRange: profile.elevationRange,
+            liveFix: liveFix
+        )
+    }
+
+    private static nonisolated func buildSnapshot(
+        from input: SnapshotInput,
+        elevationRange: ClosedRange<Double>?,
+        liveFix: SharedTrailSnapshot.LiveFix?
+    ) -> SharedTrailSnapshot? {
+        guard !Task.isCancelled else { return nil }
         return SharedTrailSnapshot(
-            hikeID: hike.id,
-            title: hike.title,
-            tintHex: hike.tintHex,
-            totalDistanceMeters: hike.distanceMeters,
-            elevationLowMeters: profile.elevationRange?.lowerBound,
-            elevationHighMeters: profile.elevationRange?.upperBound,
-            polyline: decimate(hike.coordinates.map { (latitude: $0.latitude, longitude: $0.longitude) }),
+            hikeID: input.hikeID,
+            title: input.title,
+            tintHex: input.tintHex,
+            totalDistanceMeters: input.totalDistanceMeters,
+            elevationLowMeters: elevationRange?.lowerBound,
+            elevationHighMeters: elevationRange?.upperBound,
+            polyline: decimate(input.route) {
+                SharedTrailSnapshot.CodableCoordinate(latitude: $0.latitude, longitude: $0.longitude)
+            },
             liveFix: liveFix
         )
     }

@@ -21,8 +21,9 @@ import SwiftData
 import Testing
 @testable import OpenTrails
 
+extension WidgetFeedSuites {
 @MainActor
-@Suite("Widget feed budget", .serialized, .enabled(if: SharedStoreProbe.isAvailable))
+@Suite("Feed budget", .serialized)
 final class WidgetFeedBudgetTests {
     private let container: ModelContainer
     private let context: ModelContext
@@ -71,10 +72,11 @@ final class WidgetFeedBudgetTests {
     /// hysteresis on the threshold, so that recovering the trail is prompt but
     /// oscillating around it is not free.
     @Test("flapping on and off the trail can't spend the whole reload budget")
-    func statusFlappingIsBounded() throws {
+    func statusFlappingIsBounded() async throws {
         let hike = Fixture.hike(in: context)
         let profile = RouteProfile(route: hike.route)
         tracker.hikeSelectionChanged(to: hike)
+        await tracker.waitForSelectionPublish()
 
         let onRoute = try #require(profile.nearestPoint(to: profile.coordinates[2]))
         let offRoute = try #require(
@@ -108,10 +110,11 @@ final class WidgetFeedBudgetTests {
     /// than rejoining it, so noise inside that band is not a flip and never
     /// reaches the bypass.
     @Test("noise around the follow threshold isn't a status change")
-    func thresholdNoiseIsNotAFlip() throws {
+    func thresholdNoiseIsNotAFlip() async throws {
         let hike = Fixture.hike(in: context)
         let profile = RouteProfile(route: hike.route)
         tracker.hikeSelectionChanged(to: hike)
+        await tracker.waitForSelectionPublish()
 
         let onRoute = try #require(profile.nearestPoint(to: profile.coordinates[2]))
         tracker.publishLiveFix(hike: hike, profile: profile, match: onRoute)
@@ -139,10 +142,11 @@ final class WidgetFeedBudgetTests {
     /// genuinely losing the trail shows up straight away rather than up to 45
     /// seconds later.
     @Test("a first loss of the trail is still published immediately")
-    func firstStatusChangeStillBypassesTheThrottle() throws {
+    func firstStatusChangeStillBypassesTheThrottle() async throws {
         let hike = Fixture.hike(in: context)
         let profile = RouteProfile(route: hike.route)
         tracker.hikeSelectionChanged(to: hike)
+        await tracker.waitForSelectionPublish()
 
         let onRoute = try #require(profile.nearestPoint(to: profile.coordinates[2]))
         tracker.publishLiveFix(hike: hike, profile: profile, match: onRoute)
@@ -155,66 +159,47 @@ final class WidgetFeedBudgetTests {
     // MARK: Main-actor cost
 
     /// Selecting a trail is a tap, and taps are the one place a frame drop is
-    /// visible. `hikeSelectionChanged` does all of this on the main actor,
-    /// synchronously, before returning to SwiftUI:
-    ///
-    ///   * `RouteProfile(route:)` — two `CLLocation` allocations per point
-    ///     plus a `distance(from:)` call, ~7 ms at 18,000 points;
-    ///   * `hike.coordinates` — a second full pass over the route;
-    ///   * `decimate(_:)` — a third;
-    ///   * `JSONEncoder` over the decimated polyline; and
-    ///   * an atomic write into the App Group container — real disk I/O, the
-    ///     exact thing `MainThreadWatchdog` exists to catch.
-    ///
-    /// Measured on the Simulator at 18,000 points: ~11 ms, most of one frame,
-    /// for a hike the app is explicitly designed to import. None of it needs
-    /// to be on the main actor: the only main-actor-bound part is reading the
-    /// `Hike`, and `TileOwnership` already demonstrates the snapshot-then-hop
-    /// pattern that would move the rest off.
+    /// visible. Only the SwiftData value snapshot belongs on the main actor;
+    /// route profiling, decimation, encoding, and the App Group write do not.
     @Test("selecting a long trail doesn't spend a frame on the main actor")
-    func selectionStaysInsideAFrame() throws {
+    func selectionStaysInsideAFrame() async throws {
         let hike = Fixture.hike(title: "Five hours", route: Self.longRoute, in: context)
 
         let elapsed = milliseconds { tracker.hikeSelectionChanged(to: hike) }
+        #expect(elapsed < 4, "selection should only snapshot values and schedule the publication")
+        await tracker.waitForSelectionPublish()
         #expect(SharedStore.load()?.hikeID == hike.id, "precondition: it really published")
-
-        withKnownIssue("profile build, two route passes, JSON encoding and an App Group write all run on the main actor") {
-            #expect(elapsed < 4, "a quarter of a 60 Hz frame; measured 8–11 ms at 18,000 points")
-        }
     }
 
-    /// The same work again, from the caller that already did it.
-    /// `updateStoredLiveFix` rebuilds the whole snapshot — and with it a
-    /// `RouteProfile` — whenever nothing is stored for the hike being
-    /// published, discarding the profile its caller is holding.
-    ///
-    /// `handleBackgroundFix` makes the waste explicit: it builds a profile,
-    /// matches the fix against it, and then hands the hike (not the profile)
-    /// to `updateStoredLiveFix`, which builds a second one. That's two O(n)
-    /// passes with two `CLLocation` allocations per point, on the main actor,
-    /// per background fix — and the background path is precisely the one that
-    /// runs on a relaunch, where nothing is stored yet.
+    /// A deliberately different elevation range makes reuse observable:
+    /// rebuilding from the hike would publish the hike's range instead.
     @Test("publishing a fix doesn't rebuild a route profile the caller already has")
-    func publishDoesNotRebuildTheProfile() throws {
+    func publishDoesNotRebuildTheProfile() async throws {
         let hike = Fixture.hike(title: "Five hours", route: Self.longRoute, in: context)
-        let profile = RouteProfile(route: hike.route)
+        let suppliedRoute = Self.longRoute.map {
+            RouteCoordinate(
+                latitude: $0.latitude,
+                longitude: $0.longitude,
+                elevation: $0.elevation.map { $0 + 10_000 },
+                timestamp: $0.timestamp
+            )
+        }
+        let profile = RouteProfile(route: suppliedRoute)
+        #expect(profile.elevationRange != RouteProfile(route: hike.route).elevationRange)
         let match = try #require(profile.nearestPoint(to: profile.coordinates[9_000]))
 
         tracker.hikeSelectionChanged(to: hike)
+        await tracker.waitForSelectionPublish()
         // A relaunch, or a snapshot the widget's own housekeeping removed:
         // the tracked hike is known but nothing is stored for it.
         SharedStore.clear()
 
-        let elapsed = milliseconds {
-            tracker.publishLiveFix(hike: hike, profile: profile, match: match)
-        }
-        #expect(SharedStore.load()?.liveFix != nil, "precondition: it really did publish")
+        tracker.publishLiveFix(hike: hike, profile: profile, match: match)
 
-        withKnownIssue("updateStoredLiveFix rebuilds the snapshot, and its profile, from the hike") {
-            #expect(
-                elapsed < 3,
-                "the caller passed the profile in; publishing a position shouldn't build another"
-            )
-        }
+        let snapshot = try #require(SharedStore.load())
+        #expect(snapshot.liveFix != nil, "precondition: it really did publish")
+        #expect(snapshot.elevationLowMeters == profile.elevationRange?.lowerBound)
+        #expect(snapshot.elevationHighMeters == profile.elevationRange?.upperBound)
+    }
     }
 }

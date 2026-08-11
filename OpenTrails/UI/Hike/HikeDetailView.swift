@@ -114,6 +114,8 @@ struct HikeDetailView: View {
             highlight.move(to: built.coordinate(atDistance: 0))
             refreshStoredBytes()
             autoSave.hikeSelectionChanged(to: hike)
+            // Keep the first live fix from racing the widget's initial trail snapshot.
+            await backgroundTracker.waitForSelectionPublish()
             await followLocation(profile: built)
         }
         // Toggling off should clear the live dot immediately, not wait for the

@@ -113,17 +113,29 @@ public func decimate(
     _ coordinates: [(latitude: Double, longitude: Double)],
     maxPoints: Int = 180
 ) -> [SharedTrailSnapshot.CodableCoordinate] {
-    guard coordinates.count > maxPoints, maxPoints > 1 else {
-        return coordinates.map { SharedTrailSnapshot.CodableCoordinate(latitude: $0.latitude, longitude: $0.longitude) }
+    decimate(coordinates, maxPoints: maxPoints) {
+        SharedTrailSnapshot.CodableCoordinate(latitude: $0.latitude, longitude: $0.longitude)
     }
-    let lastIndex = coordinates.count - 1
+}
+
+/// Decimates values that can be projected to coordinates without first
+/// mapping the entire source collection. Long GPX routes therefore transform
+/// only the points the widget will actually keep.
+public func decimate<Element>(
+    _ elements: [Element],
+    maxPoints: Int = 180,
+    transform: (Element) -> SharedTrailSnapshot.CodableCoordinate
+) -> [SharedTrailSnapshot.CodableCoordinate] {
+    guard elements.count > maxPoints, maxPoints > 1 else {
+        return elements.map(transform)
+    }
+    let lastIndex = elements.count - 1
     let stride = Double(lastIndex) / Double(maxPoints - 1)
     var result: [SharedTrailSnapshot.CodableCoordinate] = []
     result.reserveCapacity(maxPoints)
     for i in 0..<maxPoints {
         let index = min(Int((Double(i) * stride).rounded()), lastIndex)
-        let point = coordinates[index]
-        result.append(SharedTrailSnapshot.CodableCoordinate(latitude: point.latitude, longitude: point.longitude))
+        result.append(transform(elements[index]))
     }
     return result
 }

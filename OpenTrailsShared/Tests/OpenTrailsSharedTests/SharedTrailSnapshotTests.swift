@@ -193,6 +193,18 @@ struct DecimateTests {
         #expect(smallest > 0)
     }
 
+    @Test("a long track transforms only the points it keeps")
+    func longTracksAvoidAFullProjectionPass() {
+        var transformed = 0
+        let result = decimate(Array(0..<10_000), maxPoints: 180) { step in
+            transformed += 1
+            return .init(latitude: Double(step), longitude: 0)
+        }
+
+        #expect(result.count == 180)
+        #expect(transformed == 180)
+    }
+
     /// A degenerate budget mustn't produce an empty or crashing result — the
     /// widget would have nothing to draw.
     @Test("a nonsense budget falls back to passing the track through", arguments: [0, 1])
