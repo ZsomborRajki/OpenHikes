@@ -12,7 +12,7 @@ import WeatherKit
 import OpenTrailsShared
 
 @MainActor
-private final class DisplayedRouteCoordinateCache {
+final class DisplayedRouteCoordinateCache {
     private var hikeID: UUID?
     private var coordinates: [CLLocationCoordinate2D] = []
 
@@ -21,6 +21,11 @@ private final class DisplayedRouteCoordinateCache {
         hikeID = hike.id
         coordinates = hike.coordinates
         return coordinates
+    }
+
+    func clear() {
+        hikeID = nil
+        coordinates = []
     }
 }
 
@@ -159,6 +164,9 @@ struct ContentView: View {
             .onOpenURL { url in openHike(from: url) }
             // Follows the selected hike so auto-save always tracks what's on screen.
             .onChange(of: selectedHike) { _, hike in
+                if hike == nil {
+                    displayedRouteCoordinateCache.clear()
+                }
                 autoSaveController.hikeSelectionChanged(to: hike)
                 backgroundTracker.hikeSelectionChanged(to: hike)
                 // The one persisted record of "what's selected" — restores it
@@ -257,42 +265,37 @@ struct ContentView: View {
     /// leaving the user looking at an unchanged screen.
     private func importGPX(from url: URL) {
         let scoped = url.startAccessingSecurityScopedResource()
-        defer { if scoped { url.stopAccessingSecurityScopedResource() } }
+        Task {
+            defer { if scoped { url.stopAccessingSecurityScopedResource() } }
 
-        let track: GPXImport.Track
-        // Typed, so the catch below can't quietly widen to `any Error` and
-        // start swallowing something this screen has no message for.
-        do throws(GPXImport.ImportFailure) {
-            track = try GPXImport.load(from: url)
-            guard track.points.count > 1 else { throw .tooShort }
-        } catch {
-            importFailure = error
-            return
+            let track: GPXImport.Track
+            // Typed, so the catch below can't quietly widen to `any Error` and
+            // start swallowing something this screen has no message for.
+            do throws(GPXImport.ImportFailure) {
+                track = try await GPXImport.loadOffMain(from: url)
+                guard track.points.count > 1 else { throw .tooShort }
+            } catch {
+                importFailure = error
+                return
+            }
+
+            let title = track.name ?? url.deletingPathExtension().lastPathComponent
+            let hike = Hike(
+                title: title,
+                distanceMeters: track.distanceMeters,
+                date: track.startTime ?? .now,
+                tintHex: Hike.randomTintHex(),
+                route: track.route,
+                trackDescription: track.trackDescription,
+                author: track.author,
+                keywords: track.keywords
+            )
+            modelContext.insert(hike)
+
+            // Select it (draws + zooms the route via `displayedRoute`) and reveal the map.
+            selectedHike = hike
+            withAnimation { sheetDetent = .medium }
         }
-
-        let title = track.name ?? url.deletingPathExtension().lastPathComponent
-        let hike = Hike(
-            title: title,
-            distanceMeters: track.distanceMeters,
-            date: track.startTime ?? .now,
-            tintHex: Hike.randomTintHex(),
-            route: track.points.map {
-                RouteCoordinate(
-                    latitude: $0.coordinate.latitude,
-                    longitude: $0.coordinate.longitude,
-                    elevation: $0.elevation,
-                    timestamp: $0.time
-                )
-            },
-            trackDescription: track.trackDescription,
-            author: track.author,
-            keywords: track.keywords
-        )
-        modelContext.insert(hike)
-
-        // Select it (draws + zooms the route via `displayedRoute`) and reveal the map.
-        selectedHike = hike
-        withAnimation { sheetDetent = .medium }
     }
 }
 

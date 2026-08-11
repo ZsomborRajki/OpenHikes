@@ -289,10 +289,12 @@ struct TileCacheTierTests {
     /// binds — which is the whole point of the change.
     @Test("the memory tier is bounded in bytes, and that's the bound that binds")
     func memoryTierIsBoundedInBytes() throws {
-        let stub = StubbedTileCache()
-        defer { stub.tearDown() }
+        let root = FileManager.default.temporaryDirectory
+            .appendingPathComponent("memory-limit-\(UUID().uuidString)", isDirectory: true)
+        defer { try? FileManager.default.removeItem(at: root) }
+        let cache = TileCache(storageRoot: root, monitorsNetwork: false)
 
-        let limits = stub.cache.memoryLimits
+        let limits = cache.memoryLimits
         #expect(limits.bytes == TileCache.memoryByteLimit)
 
         let tileCost = TileCache.decodedByteCost(of: try #require(Fixture.fullSizeTileImage(scale: 3)))

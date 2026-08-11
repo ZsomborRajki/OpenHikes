@@ -287,6 +287,21 @@ struct GPXImportTests {
         }
     }
 
+    @Test("background parsing preserves the specific import failure")
+    func backgroundParsingPreservesFailure() async {
+        let missing = FileManager.default.temporaryDirectory
+            .appendingPathComponent("does-not-exist-\(UUID().uuidString).gpx")
+        var failure: GPXImport.ImportFailure?
+
+        do throws(GPXImport.ImportFailure) {
+            _ = try await GPXImport.loadOffMain(from: missing)
+        } catch {
+            failure = error
+        }
+
+        #expect(failure == .unreadable)
+    }
+
     /// Every refusal has to carry something to show the user — the whole point
     /// of typing them. A case added later without copy would fail here rather
     /// than surfacing as an empty alert.
@@ -348,15 +363,7 @@ struct GPXImportTests {
     @Test("an imported track indexes cleanly into a route profile")
     func importedTrackFeedsTheProfile() throws {
         let track = try GPXImport.load(from: try gpxFile(Self.fullTrack))
-        let route = track.points.map {
-            RouteCoordinate(
-                latitude: $0.coordinate.latitude,
-                longitude: $0.coordinate.longitude,
-                elevation: $0.elevation,
-                timestamp: $0.time
-            )
-        }
-        let profile = RouteProfile(route: route)
+        let profile = RouteProfile(route: track.route)
         #expect(profile.samples.count == track.points.count)
         #expect(abs((profile.distances.last ?? 0) - track.distanceMeters) < 0.001)
         let range = try #require(profile.elevationRange)

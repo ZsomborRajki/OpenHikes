@@ -43,12 +43,14 @@ nonisolated struct RouteProfile {
         distances.reserveCapacity(route.count)
 
         var cumulative = 0.0
-        var previous: CLLocation?
+        var previous: CLLocationCoordinate2D?
         for point in route {
-            let location = CLLocation(latitude: point.latitude, longitude: point.longitude)
-            if let previous { cumulative += location.distance(from: previous) }
-            previous = location
-            coordinates.append(point.clCoordinate)
+            let coordinate = point.clCoordinate
+            if let previous {
+                cumulative += RouteGeometry.distanceMeters(from: previous, to: coordinate)
+            }
+            previous = coordinate
+            coordinates.append(coordinate)
             distances.append(cumulative)
             if let elevation = point.elevation {
                 samples.append(ElevationSample(distanceMeters: cumulative, elevation: elevation))
@@ -173,8 +175,7 @@ nonisolated struct RouteProfile {
         guard !coordinates.isEmpty else { return nil }
         guard coordinates.count > 1 else {
             let only = coordinates[0]
-            let offset = CLLocation(latitude: coordinate.latitude, longitude: coordinate.longitude)
-                .distance(from: CLLocation(latitude: only.latitude, longitude: only.longitude))
+            let offset = RouteGeometry.distanceMeters(from: coordinate, to: only)
             return (0, offset)
         }
 
@@ -183,11 +184,7 @@ nonisolated struct RouteProfile {
             let offRouteMeters: Double
         }
 
-        var candidates: [Candidate] = []
-        if referenceDistance != nil { candidates.reserveCapacity(coordinates.count - 1) }
-        var best = Candidate(distanceAlongRoute: 0, offRouteMeters: .greatestFiniteMagnitude)
-
-        for index in 0..<(coordinates.count - 1) {
+        func candidate(at index: Int) -> Candidate {
             let start = Self.localOffset(from: coordinate, to: coordinates[index])
             let end = Self.localOffset(from: coordinate, to: coordinates[index + 1])
             let dx = end.x - start.x
@@ -198,11 +195,15 @@ nonisolated struct RouteProfile {
                 : 0
             let projectedX = start.x + fraction * dx
             let projectedY = start.y + fraction * dy
-            let candidate = Candidate(
+            return Candidate(
                 distanceAlongRoute: distances[index] + fraction * (distances[index + 1] - distances[index]),
                 offRouteMeters: hypot(projectedX, projectedY)
             )
-            if referenceDistance != nil { candidates.append(candidate) }
+        }
+
+        var best = Candidate(distanceAlongRoute: 0, offRouteMeters: .greatestFiniteMagnitude)
+        for index in 0..<(coordinates.count - 1) {
+            let candidate = candidate(at: index)
             if candidate.offRouteMeters < best.offRouteMeters { best = candidate }
         }
 
@@ -215,7 +216,9 @@ nonisolated struct RouteProfile {
         let tieBreakToleranceMeters = 20.0
         var tied = best
         var bestContinuity = abs(best.distanceAlongRoute - referenceDistance)
-        for candidate in candidates where candidate.offRouteMeters <= best.offRouteMeters + tieBreakToleranceMeters {
+        for index in 0..<(coordinates.count - 1) {
+            let candidate = candidate(at: index)
+            guard candidate.offRouteMeters <= best.offRouteMeters + tieBreakToleranceMeters else { continue }
             let continuity = abs(candidate.distanceAlongRoute - referenceDistance)
             if continuity < bestContinuity {
                 bestContinuity = continuity

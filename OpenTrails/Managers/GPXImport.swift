@@ -13,33 +13,57 @@ import CoreGPX
 import OpenTrailsShared
 
 nonisolated enum GPXImport {
-    struct Point {
-        var coordinate: CLLocationCoordinate2D
-        var elevation: Double?
-        var time: Date?
+    struct Point: Sendable {
+        let coordinate: CLLocationCoordinate2D
+        let elevation: Double?
+        let time: Date?
     }
 
-    struct Track {
-        var name: String?
-        var trackDescription: String?
-        var author: String?
-        var keywords: String?
+    struct Track: Sendable {
+        let name: String?
+        let trackDescription: String?
+        let author: String?
+        let keywords: String?
         /// Activity start time, from the metadata or the first timestamped point.
-        var startTime: Date?
-        var points: [Point]
+        let startTime: Date?
+        let points: [Point]
+        let coordinates: [CLLocationCoordinate2D]
+        let route: [RouteCoordinate]
+        /// Total length in meters, computed once while preparing the import.
+        let distanceMeters: Double
 
-        var coordinates: [CLLocationCoordinate2D] { points.map(\.coordinate) }
-
-        /// Total length in meters, summed between consecutive points.
-        var distanceMeters: Double {
-            guard points.count > 1 else { return 0 }
-            var total = 0.0
-            for i in 1..<points.count {
-                let a = CLLocation(latitude: points[i - 1].coordinate.latitude, longitude: points[i - 1].coordinate.longitude)
-                let b = CLLocation(latitude: points[i].coordinate.latitude, longitude: points[i].coordinate.longitude)
-                total += b.distance(from: a)
+        fileprivate init(
+            name: String?,
+            trackDescription: String?,
+            author: String?,
+            keywords: String?,
+            startTime: Date?,
+            points: [Point]
+        ) {
+            self.name = name
+            self.trackDescription = trackDescription
+            self.author = author
+            self.keywords = keywords
+            self.startTime = startTime
+            self.points = points
+            self.coordinates = points.map(\.coordinate)
+            self.route = points.map {
+                RouteCoordinate(
+                    latitude: $0.coordinate.latitude,
+                    longitude: $0.coordinate.longitude,
+                    elevation: $0.elevation,
+                    timestamp: $0.time
+                )
             }
-            return total
+
+            var distanceMeters = 0.0
+            for (start, end) in zip(points, points.dropFirst()) {
+                distanceMeters += RouteGeometry.distanceMeters(
+                    from: start.coordinate,
+                    to: end.coordinate
+                )
+            }
+            self.distanceMeters = distanceMeters
         }
     }
 
@@ -50,7 +74,7 @@ nonisolated enum GPXImport {
     /// send them somewhere different to fix it. The import used to say nothing
     /// at all — a picked file that produced no hike looked exactly like a
     /// picked file that was ignored.
-    enum ImportFailure: LocalizedError, Equatable {
+    enum ImportFailure: LocalizedError, Equatable, Sendable {
         /// Not there, or not well-formed XML — the parser had nothing to work
         /// with. Note that well-formed XML that simply *isn't* GPX (an HTML
         /// page, say) parses happily into an empty document, so it arrives as
@@ -96,6 +120,30 @@ nonisolated enum GPXImport {
         }
         guard let track = track(from: root) else { throw .noUsablePoints }
         return track
+    }
+
+    /// Parses and prepares a picked file without occupying the main actor.
+    static func loadOffMain(from url: URL) async throws(ImportFailure) -> Track {
+        try await runOffMain { () throws(ImportFailure) -> Track in
+            try load(from: url)
+        }
+    }
+
+    /// Runs import preparation on a detached executor. Internal so workload
+    /// tests can verify the executor directly without relying on wall-clock
+    /// scheduling while unrelated suites run in parallel.
+    static func runOffMain<Value: Sendable>(
+        _ work: @Sendable @escaping () throws(ImportFailure) -> Value
+    ) async throws(ImportFailure) -> Value {
+        let result = await Task.detached(priority: .userInitiated) { () -> Result<Value, ImportFailure> in
+            assertOffMainThread("GPX parsing and route preparation must stay off the main thread")
+            do throws(ImportFailure) {
+                return .success(try work())
+            } catch {
+                return .failure(error)
+            }
+        }.value
+        return try result.get()
     }
 
     private static func track(from root: GPXRoot) -> Track? {

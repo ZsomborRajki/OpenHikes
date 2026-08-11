@@ -30,11 +30,9 @@ struct RouteProfileTests {
         }
     }
 
-    /// The profile's total and the length shown on the hike are computed by
-    /// two different code paths (this one, and `GPXImport.Track`) over the
-    /// same points. The widget divides one by the other to get "62% done",
-    /// so they have to land on the same number.
-    @Test("the profile's total length matches the same route measured point-to-point")
+    /// Keep the allocation-free route distance close to Core Location's
+    /// geodesic result across an ordinary hiking route.
+    @Test("the profile's total length stays close to Core Location")
     func totalMatchesPointToPoint() throws {
         let profile = RouteProfile(route: Fixture.ridgeRoute)
         var expected = 0.0
@@ -43,7 +41,36 @@ struct RouteProfileTests {
                 .distance(from: CLLocation(latitude: a.latitude, longitude: a.longitude))
         }
         let total = try #require(profile.distances.last)
-        #expect(abs(total - expected) < 0.001)
+        #expect(abs(total - expected) < expected * 0.005)
+    }
+
+    @Test("direct distance takes the short path across the antimeridian")
+    func directDistanceHandlesAntimeridian() {
+        let start = Fixture.antimeridianRoute[0]
+        let end = Fixture.antimeridianRoute[1]
+        let direct = RouteGeometry.distanceMeters(from: start, to: end)
+        let coreLocation = CLLocation(latitude: start.latitude, longitude: start.longitude)
+            .distance(from: CLLocation(latitude: end.latitude, longitude: end.longitude))
+
+        #expect(direct > 5_000)
+        #expect(direct < 20_000)
+        #expect(abs(direct - coreLocation) < coreLocation * 0.005)
+    }
+
+    @Test("stationary points keep cumulative distance finite")
+    func stationaryPointsStayFinite() {
+        let start = RouteCoordinate(latitude: 47.63, longitude: 12.86, elevation: 600)
+        let route = [
+            start,
+            start,
+            RouteCoordinate(latitude: 47.631, longitude: 12.86, elevation: 610)
+        ]
+        let profile = RouteProfile(route: route)
+
+        #expect(profile.distances[0] == 0)
+        #expect(profile.distances[1] == 0)
+        #expect(profile.distances[2].isFinite)
+        #expect(profile.distances[2] > 0)
     }
 
     /// Only points that carry elevation are plotted, but their x positions

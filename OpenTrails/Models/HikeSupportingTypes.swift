@@ -47,7 +47,7 @@ struct ElevationSample: Identifiable, Equatable {
 }
 
 /// A single Codable track point. Stored inline by SwiftData as part of ``Hike/route``.
-struct RouteCoordinate: Codable, Hashable {
+struct RouteCoordinate: Codable, Hashable, Sendable {
     var latitude: Double
     var longitude: Double
     var elevation: Double?
@@ -72,5 +72,33 @@ struct RouteCoordinate: Codable, Hashable {
 
     nonisolated var clCoordinate: CLLocationCoordinate2D {
         CLLocationCoordinate2D(latitude: latitude, longitude: longitude)
+    }
+}
+
+nonisolated enum RouteGeometry {
+    private static let earthRadiusMeters = 6_371_008.8
+
+    /// Great-circle distance without allocating Core Location objects per leg.
+    static func distanceMeters(
+        from start: CLLocationCoordinate2D,
+        to end: CLLocationCoordinate2D
+    ) -> Double {
+        let startLatitude = start.latitude * .pi / 180
+        let endLatitude = end.latitude * .pi / 180
+        let latitudeDelta = (end.latitude - start.latitude) * .pi / 180
+        let longitudeDelta = normalizedLongitudeDelta(end.longitude - start.longitude) * .pi / 180
+        let latitudeTerm = sin(latitudeDelta / 2)
+        let longitudeTerm = sin(longitudeDelta / 2)
+        let haversine = latitudeTerm * latitudeTerm
+            + cos(startLatitude) * cos(endLatitude) * longitudeTerm * longitudeTerm
+        let bounded = min(max(haversine, 0), 1)
+        return 2 * earthRadiusMeters * atan2(sqrt(bounded), sqrt(1 - bounded))
+    }
+
+    private static func normalizedLongitudeDelta(_ delta: Double) -> Double {
+        var normalized = delta.truncatingRemainder(dividingBy: 360)
+        if normalized > 180 { normalized -= 360 }
+        if normalized < -180 { normalized += 360 }
+        return normalized
     }
 }

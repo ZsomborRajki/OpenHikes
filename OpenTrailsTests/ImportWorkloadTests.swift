@@ -3,11 +3,8 @@
 //  OpenTrailsTests
 //
 //  `GPXImportTests` covers what the parser accepts and refuses. This covers
-//  what importing costs, because `ContentView.importGPX(from:)` is
-//  `@MainActor` and does every part of it synchronously before returning:
-//  security-scoped access, an XML parse of the whole document, an O(n)
-//  distance sum with two `CLLocation` allocations per point, a full re-map of
-//  the points into `RouteCoordinate`, and a SwiftData insert.
+//  what importing costs, because the parse, distance calculation, and route
+//  preparation are all proportional to the picked file's point count.
 //
 //  Nothing about that is bounded by anything the app controls — it's bounded
 //  by the size of the file the user picked. A GPX is not a small format: a
@@ -22,8 +19,13 @@ import Testing
 @testable import OpenTrails
 
 @MainActor
-@Suite("Import workload")
+@Suite("Import workload", .serialized)
 struct ImportWorkloadTests {
+    private struct ObservedParse: Sendable {
+        let track: GPXImport.Track
+        let ranOnMainThread: Bool
+    }
+
     /// Writes a real GPX file with `pointCount` track points, so the parser
     /// does the work it would do on a picked file rather than on a fixture
     /// that was never serialized.
@@ -65,56 +67,48 @@ struct ImportWorkloadTests {
     /// `nonisolated` and takes a `URL`, so the parse can happen in a detached
     /// task and only the `Hike` construction and insert need the main actor.
     @Test("importing a long recording doesn't block the main thread")
-    func longImportStaysOffTheMainThread() throws {
+    func longImportStaysOffTheMainThread() async throws {
         let url = try writeGPX(pointCount: 18_000)
         defer { try? FileManager.default.removeItem(at: url) }
 
-        var track: GPXImport.Track?
-        let parseMs = try milliseconds { track = try GPXImport.load(from: url) }
-        let parsed = try #require(track)
-        #expect(parsed.points.count == 18_000, "precondition: the whole file was read")
-
-        withKnownIssue("ContentView.importGPX parses on the main actor, synchronously") {
-            #expect(parseMs < 16, "one frame; measured ~60 ms at 18,000 points")
+        let observed = try await GPXImport.runOffMain { () throws(GPXImport.ImportFailure) -> ObservedParse in
+            ObservedParse(
+                track: try GPXImport.load(from: url),
+                ranOnMainThread: Thread.isMainThread
+            )
         }
+
+        #expect(observed.track.points.count == 18_000, "precondition: the whole file was read")
+        #expect(!observed.ranOnMainThread, "the picked file must be parsed on the detached import executor")
     }
 
-    /// `Track.distanceMeters` is a computed property, not a stored one — every
-    /// access re-walks the route and allocates two `CLLocation`s per point.
-    /// `ContentView.importGPX` reads it once today, which is the only reason
-    /// this isn't already a multiple of its own cost; nothing in the type says
-    /// so, and `coordinates` next to it has exactly the same shape.
+    /// Derived route data is prepared once during parsing. Repeated reads must
+    /// not re-walk an arbitrarily large imported recording.
     @Test("the imported track's derived length is cheap to ask for twice")
-    func derivedLengthIsNotRecomputedPerAccess() throws {
+    func derivedLengthIsNotRecomputedPerAccess() async throws {
         let url = try writeGPX(pointCount: 18_000)
         defer { try? FileManager.default.removeItem(at: url) }
-        let track = try GPXImport.load(from: url)
+        let track = try await GPXImport.loadOffMain(from: url)
 
-        let first = milliseconds { _ = track.distanceMeters }
-        let second = milliseconds { _ = track.distanceMeters }
-
-        withKnownIssue("distanceMeters is computed, so each read is a fresh O(n) pass") {
-            #expect(second < first / 4, "a second read of the same value should be free")
+        var checksum = 0.0
+        let repeatedReadMs = milliseconds {
+            for _ in 0..<100 {
+                checksum += track.distanceMeters
+            }
         }
+        #expect(checksum > 0)
+        #expect(repeatedReadMs < 5, "cached distance reads should be constant-time")
     }
 
     /// The route survives the trip through the importer's own remapping —
     /// the assertion the workload tests above are only worth having alongside.
     @Test("a long import still produces a usable route")
-    func longImportIsCorrect() throws {
+    func longImportIsCorrect() async throws {
         let url = try writeGPX(pointCount: 5_000)
         defer { try? FileManager.default.removeItem(at: url) }
-        let track = try GPXImport.load(from: url)
+        let track = try await GPXImport.loadOffMain(from: url)
 
-        let route = track.points.map {
-            RouteCoordinate(
-                latitude: $0.coordinate.latitude,
-                longitude: $0.coordinate.longitude,
-                elevation: $0.elevation,
-                timestamp: $0.time
-            )
-        }
-        let profile = RouteProfile(route: route)
+        let profile = RouteProfile(route: track.route)
         #expect(profile.coordinates.count == 5_000)
         #expect(try #require(profile.distances.last) > 0)
         #expect(profile.samples.count <= RouteProfile.plottedSampleBudget)
