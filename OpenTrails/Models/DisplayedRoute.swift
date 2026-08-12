@@ -75,6 +75,13 @@ final class DisplayedRouteCoordinateCache {
 @MainActor
 @Observable
 final class RouteStyle {
+    /// Non-isolated so releasing the last reference never requires proving
+    /// we're on the main actor — deinit does nothing actor-sensitive, and
+    /// without this, dropping a `RouteStyle` off the main actor (e.g. a
+    /// `@MainActor` test suite instance deallocated on Swift Testing's
+    /// cooperative pool) traps in `MainActor.assumeIsolated`.
+    nonisolated deinit {}
+
     /// `Hike.tint`'s own fallback and `Hike`'s own initial width, so an
     /// unfollowed style is the one a freshly imported trail would have rather
     /// than a third set of values to reason about.

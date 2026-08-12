@@ -78,6 +78,24 @@ struct MapCoordinatorTests {
         return map
     }
 
+    /// Hands MapKit's own machinery back before the test ends.
+    ///
+    /// A map built here is switched on: it is tracking the user's location, it
+    /// has a tile overlay with loads in flight against the app's real cache,
+    /// and `MKMapView.delegate` is a weak reference to a coordinator that is
+    /// about to deallocate. Left alone, each test abandons all of that and the
+    /// next one starts another.
+    ///
+    /// Called from a `defer` in each test rather than from a suite `deinit`:
+    /// a suite instance is not guaranteed to be released on the main actor,
+    /// and every property here is main-actor isolated.
+    private func detach(_ map: MKMapView) {
+        map.delegate = nil
+        map.showsUserLocation = false
+        map.removeOverlays(map.overlays)
+        map.removeAnnotations(map.annotations)
+    }
+
     /// Lets the `Task { @MainActor in … }` hop each observation re-registers
     /// through actually run — the same hop the app pays for a scrub or a drag.
     private func settle() async {
@@ -92,6 +110,7 @@ struct MapCoordinatorTests {
     func buildingRegistersEverything() throws {
         let coordinator = MapView.Coordinator()
         let map = makeMap(mapView(), coordinator)
+        defer { detach(map) }
 
         #expect(map.delegate === coordinator, "no delegate means no renderers and no overlays drawn")
         #expect(map.showsUserLocation)
@@ -119,6 +138,7 @@ struct MapCoordinatorTests {
         let coordinator = MapView.Coordinator()
         let view = mapView()
         let map = makeMap(view, coordinator)
+        defer { detach(map) }
         let installed = coordinator.tileOverlay
 
         view.update(map, coordinator)
@@ -134,6 +154,7 @@ struct MapCoordinatorTests {
     func changingProviderSwapsTheOverlay() throws {
         let coordinator = MapView.Coordinator()
         let map = makeMap(mapView(), coordinator)
+        defer { detach(map) }
         let first = try #require(coordinator.tileOverlay)
 
         mapView(tileSource: Self.other).update(map, coordinator)
@@ -152,6 +173,7 @@ struct MapCoordinatorTests {
         let coordinator = MapView.Coordinator()
         let view = mapView(route: Self.route())
         let map = makeMap(view, coordinator)
+        defer { detach(map) }
 
         view.update(map, coordinator)
         let drawn = try #require(coordinator.routeOverlay)
@@ -165,6 +187,7 @@ struct MapCoordinatorTests {
     func newRouteReplacesTheOverlay() throws {
         let coordinator = MapView.Coordinator()
         let map = makeMap(mapView(), coordinator)
+        defer { detach(map) }
 
         mapView(route: Self.route()).update(map, coordinator)
         let first = try #require(coordinator.routeOverlay)
@@ -180,6 +203,7 @@ struct MapCoordinatorTests {
     func clearingRouteRemovesTheOverlay() {
         let coordinator = MapView.Coordinator()
         let map = makeMap(mapView(route: Self.route()), coordinator)
+        defer { detach(map) }
 
         mapView(route: nil).update(map, coordinator)
 
@@ -193,6 +217,7 @@ struct MapCoordinatorTests {
     func degenerateRouteDrawsNothing() {
         let coordinator = MapView.Coordinator()
         let map = makeMap(mapView(), coordinator)
+        defer { detach(map) }
 
         let single = DisplayedRoute(id: UUID(), coordinates: [CLLocationCoordinate2D(latitude: 47.63, longitude: 12.86)])
         mapView(route: single).update(map, coordinator)
@@ -208,6 +233,7 @@ struct MapCoordinatorTests {
         let coordinator = MapView.Coordinator()
         let view = mapView(route: Self.route())
         let map = makeMap(view, coordinator)
+        defer { detach(map) }
         view.update(map, coordinator)
 
         let tiles = try #require(coordinator.tileOverlay)
@@ -230,6 +256,7 @@ struct MapCoordinatorTests {
         let coordinator = MapView.Coordinator()
         let view = mapView(route: Self.route())
         let map = makeMap(view, coordinator)
+        defer { detach(map) }
         view.update(map, coordinator)
 
         let line = try #require(coordinator.routeOverlay)
@@ -257,6 +284,7 @@ struct MapCoordinatorTests {
         let coordinator = MapView.Coordinator()
         let view = mapView()
         let map = makeMap(view, coordinator)
+        defer { detach(map) }
         view.update(map, coordinator)
 
         locationManager.locationManager(
@@ -286,6 +314,7 @@ struct MapCoordinatorTests {
         let coordinator = MapView.Coordinator()
         let view = mapView(route: Self.route())
         let map = makeMap(view, coordinator)
+        defer { detach(map) }
         view.update(map, coordinator)
 
         locationManager.locationManager(
@@ -304,6 +333,7 @@ struct MapCoordinatorTests {
         let coordinator = MapView.Coordinator()
         let view = mapView(route: Self.route())
         let map = makeMap(view, coordinator)
+        defer { detach(map) }
         view.update(map, coordinator)
 
         coordinator.fitToCurrentRoute(map, animated: false)
@@ -325,6 +355,7 @@ struct MapCoordinatorTests {
         #if os(iOS)
         let coordinator = MapView.Coordinator()
         let map = makeMap(mapView(), coordinator)
+        defer { detach(map) }
         let constraint = try #require(coordinator.trackingBottomConstraint)
         let spacing: CGFloat = 16
 
@@ -346,6 +377,7 @@ struct MapCoordinatorTests {
         #if os(iOS)
         let coordinator = MapView.Coordinator()
         let map = makeMap(mapView(), coordinator)
+        defer { detach(map) }
         let constraint = try #require(coordinator.trackingBottomConstraint)
         let spacing: CGFloat = 16
 
@@ -364,6 +396,7 @@ struct MapCoordinatorTests {
     func highlightMovesInPlace() async throws {
         let coordinator = MapView.Coordinator()
         let map = makeMap(mapView(route: Self.route()), coordinator)
+        defer { detach(map) }
 
         highlight.move(to: CLLocationCoordinate2D(latitude: 37.3320, longitude: -122.0300))
         await settle()
@@ -381,6 +414,7 @@ struct MapCoordinatorTests {
     func clearingHighlightRemovesTheAnnotation() async throws {
         let coordinator = MapView.Coordinator()
         let map = makeMap(mapView(route: Self.route()), coordinator)
+        defer { detach(map) }
 
         highlight.move(to: CLLocationCoordinate2D(latitude: 37.3320, longitude: -122.0300))
         await settle()
@@ -399,6 +433,7 @@ struct MapCoordinatorTests {
     func highlightUsesTheRouteTint() async throws {
         let coordinator = MapView.Coordinator()
         let map = makeMap(mapView(route: Self.route()), coordinator)
+        defer { detach(map) }
         coordinator.routeTint = .red
 
         highlight.move(to: CLLocationCoordinate2D(latitude: 37.3320, longitude: -122.0300))
@@ -419,6 +454,7 @@ struct MapCoordinatorTests {
     func userLocationIsLeftToMapKit() {
         let coordinator = MapView.Coordinator()
         let map = makeMap(mapView(), coordinator)
+        defer { detach(map) }
 
         #expect(coordinator.mapView(map, viewFor: map.userLocation) == nil, "MapKit draws its own")
     }

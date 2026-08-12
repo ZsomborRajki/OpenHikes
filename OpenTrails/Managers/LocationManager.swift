@@ -79,6 +79,13 @@ nonisolated enum LocationFixPolicy {
 @MainActor
 @Observable
 final class LocationManager: NSObject {
+    /// Non-isolated so releasing the last reference never requires proving
+    /// we're on the main actor — deinit does nothing actor-sensitive, and
+    /// without this, dropping a `LocationManager` off the main actor (e.g. a
+    /// `@MainActor` test suite instance deallocated on Swift Testing's
+    /// cooperative pool) traps in `MainActor.assumeIsolated`.
+    nonisolated deinit {}
+
     private(set) var coordinate: CLLocationCoordinate2D?
     @ObservationIgnored private var latestLocation: CLLocation?
 

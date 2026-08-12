@@ -15,6 +15,10 @@ import MapKit
 @MainActor
 @Observable
 final class RouteHighlight {
+    /// Non-isolated so releasing the last reference never requires proving
+    /// we're on the main actor — see ``LocationManager``'s deinit for why.
+    nonisolated deinit {}
+
     /// Written only through ``move(to:)``, which is what keeps a repeat position
     /// from waking the map — see there.
     private(set) var coordinate: CLLocationCoordinate2D?
@@ -53,6 +57,10 @@ final class RouteHighlight {
 @MainActor
 @Observable
 final class SheetMetrics {
+    /// Non-isolated so releasing the last reference never requires proving
+    /// we're on the main actor — see ``LocationManager``'s deinit for why.
+    nonisolated deinit {}
+
     var topY: CGFloat = 0
 }
 
@@ -63,6 +71,10 @@ final class SheetMetrics {
 @MainActor
 @Observable
 final class MapController {
+    /// Non-isolated so releasing the last reference never requires proving
+    /// we're on the main actor — see ``LocationManager``'s deinit for why.
+    nonisolated deinit {}
+
     private(set) var fitRouteRequest: Int = 0
     private(set) var showRegionRequest: Int = 0
     private(set) var region: MKCoordinateRegion?
