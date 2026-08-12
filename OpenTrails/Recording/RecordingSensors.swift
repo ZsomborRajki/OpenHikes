@@ -76,6 +76,89 @@ final class SystemRecordingElevationSource: RecordingElevationSource {
     }
 }
 
+nonisolated enum RecordingMotionState: Equatable, Sendable {
+    case unknown
+    case stationary
+    case pedestrian
+    case nonPedestrian
+}
+
+@MainActor
+protocol RecordingMotionSource: AnyObject {
+    var isAvailable: Bool { get }
+
+    func start(
+        deliveringState handler: @escaping @Sendable (
+            RecordingMotionState
+        ) -> Void
+    )
+    func stop()
+}
+
+@MainActor
+final class SystemRecordingMotionSource: RecordingMotionSource {
+    #if os(iOS) && canImport(CoreMotion)
+    private let manager = CMMotionActivityManager()
+    private let queue: OperationQueue = {
+        let queue = OperationQueue()
+        queue.name = "OpenTrails.recording-motion"
+        queue.qualityOfService = .utility
+        queue.maxConcurrentOperationCount = 1
+        return queue
+    }()
+    #endif
+
+    var isAvailable: Bool {
+        #if os(iOS) && canImport(CoreMotion)
+        CMMotionActivityManager.isActivityAvailable()
+        #else
+        false
+        #endif
+    }
+
+    func start(
+        deliveringState handler: @escaping @Sendable (
+            RecordingMotionState
+        ) -> Void
+    ) {
+        #if os(iOS) && canImport(CoreMotion)
+        guard isAvailable else { return }
+        manager.stopActivityUpdates()
+        manager.startActivityUpdates(to: queue) { activity in
+            guard let activity else {
+                handler(.unknown)
+                return
+            }
+            handler(Self.state(for: activity))
+        }
+        #endif
+    }
+
+    func stop() {
+        #if os(iOS) && canImport(CoreMotion)
+        manager.stopActivityUpdates()
+        #endif
+    }
+
+    #if os(iOS) && canImport(CoreMotion)
+    private nonisolated static func state(
+        for activity: CMMotionActivity
+    ) -> RecordingMotionState {
+        guard activity.confidence != .low else { return .unknown }
+        if activity.automotive || activity.cycling {
+            return .nonPedestrian
+        }
+        if activity.walking || activity.running {
+            return .pedestrian
+        }
+        if activity.stationary {
+            return .stationary
+        }
+        return .unknown
+    }
+    #endif
+}
+
 /// Slow GPS anchoring plus fast barometric deltas. The barometer supplies the
 /// profile's shape; valid GPS altitude prevents weather drift from moving the
 /// whole recording indefinitely.

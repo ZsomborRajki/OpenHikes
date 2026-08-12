@@ -94,6 +94,57 @@ struct RecordingIsolationTests {
         #expect(traceCounter.count == 1)
     }
 
+    @Test("a live match revises only the provisional trace generation")
+    func liveMatchReplacesTheProvisionalTail() {
+        let trace = RecordingTrace()
+        let generation = trace.generation
+        trace.append(
+            CLLocationCoordinate2D(latitude: 47.63, longitude: 12.86),
+            provisional: true
+        )
+        trace.append(
+            CLLocationCoordinate2D(latitude: 47.6302, longitude: 12.86),
+            provisional: true
+        )
+
+        #expect(trace.applyLiveMatch(
+            committing: [
+                CLLocationCoordinate2D(
+                    latitude: 47.63,
+                    longitude: 12.8599
+                )
+            ],
+            provisional: [
+                CLLocationCoordinate2D(
+                    latitude: 47.63,
+                    longitude: 12.8599
+                ),
+                CLLocationCoordinate2D(
+                    latitude: 47.6302,
+                    longitude: 12.8599
+                )
+            ],
+            expectedGeneration: generation
+        ))
+        #expect(trace.tail.count == 2)
+        #expect(trace.tail.allSatisfy {
+            abs($0.longitude - 12.8599) < 0.000_001
+        })
+
+        trace.replace(with: [])
+        #expect(!trace.applyLiveMatch(
+            committing: [],
+            provisional: [
+                CLLocationCoordinate2D(
+                    latitude: 47.64,
+                    longitude: 12.85
+                )
+            ],
+            expectedGeneration: generation
+        ))
+        #expect(trace.tail.isEmpty)
+    }
+
     /// `RecordingView.body` and the whole hikes sheet (via
     /// `HikeRecorder.isActive`) read `phase`, and a recording writes it on
     /// every accepted fix. Those bodies are budgeted at one invalidation per

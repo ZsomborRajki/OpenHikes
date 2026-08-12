@@ -32,6 +32,7 @@ struct TrailMatcherTests {
         #expect(result.matchedLegCount == 2)
         #expect(result.didMoveRoute)
         #expect(result.matchedTrailName == "Ridge Path")
+        #expect(result.currentTrailName == "Ridge Path")
         #expect(result.points.allSatisfy {
             abs($0.longitude - 12.8600) < 0.00001
         })
@@ -58,7 +59,7 @@ struct TrailMatcherTests {
     }
 
     @Test("similar paths through a sparse gap stay raw without distance evidence")
-    func ambiguousGapAbstains() {
+    func ambiguousGapAbstains() throws {
         let fixture = forkedGraph()
         let points = [
             point(47.6300, 12.8600, at: 0, accuracy: 5),
@@ -69,8 +70,27 @@ struct TrailMatcherTests {
 
         #expect(result.matchedLegCount == 0)
         #expect(result.ambiguousLegCount == 1)
+        #expect(result.currentTrailName == nil)
         #expect(!result.didMoveRoute)
         #expect(result.points == points)
+        let ambiguity = try #require(result.ambiguities.first)
+        #expect(ambiguity.alternatives.count >= 2)
+        let alternative = try #require(ambiguity.alternatives.first)
+        let resolved = result.points(
+            resolving: [
+                ambiguity.id: .alternative(alternative.id)
+            ]
+        )
+        #expect(resolved != points)
+        #expect(resolved.first?.coordinate.latitude == points.first?.latitude)
+        #expect(resolved.first?.coordinate.longitude == points.first?.longitude)
+        #expect(resolved.last?.coordinate.latitude == points.last?.latitude)
+        #expect(resolved.last?.coordinate.longitude == points.last?.longitude)
+        #expect(
+            result.points(
+                resolving: [ambiguity.id: .gps]
+            ) == points
+        )
     }
 
     @Test("parallel sparse candidates remain ambiguous")

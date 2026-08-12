@@ -162,6 +162,65 @@ nonisolated struct RecordingRecoverySummary: Equatable, Sendable {
 }
 
 @MainActor
+enum RecordingStopOutcome {
+    case saved(Hike)
+    case needsReview
+}
+
+@MainActor
+@Observable
+final class RecordingAmbiguityReview {
+    nonisolated deinit {}
+
+    let ambiguities: [TrailMatchAmbiguity]
+    private(set) var currentIndex = 0
+    private(set) var choices: [Int: TrailAmbiguityChoice]
+
+    init(ambiguities: [TrailMatchAmbiguity]) {
+        self.ambiguities = ambiguities
+        choices = Dictionary(
+            uniqueKeysWithValues: ambiguities.map { ($0.id, .gps) }
+        )
+    }
+
+    var current: TrailMatchAmbiguity? {
+        ambiguities.indices.contains(currentIndex)
+            ? ambiguities[currentIndex]
+            : nil
+    }
+
+    var canMoveBackward: Bool {
+        currentIndex > 0
+    }
+
+    var canMoveForward: Bool {
+        currentIndex + 1 < ambiguities.count
+    }
+
+    func select(_ choice: TrailAmbiguityChoice) {
+        guard let current else { return }
+        choices[current.id] = choice
+    }
+
+    func moveBackward() {
+        guard canMoveBackward else { return }
+        currentIndex -= 1
+    }
+
+    func moveForward() {
+        guard canMoveForward else { return }
+        currentIndex += 1
+    }
+}
+
+nonisolated private struct PendingAmbiguitySave: Sendable {
+    let session: TrackJournalSession
+    let normalizedPoints: [RecordingPoint]
+    let options: RecordingSessionOptions
+    let matchResult: TrailMatchResult
+}
+
+@MainActor
 @Observable
 final class HikeRecorder: NSObject {
     private static let logger = Logger(
@@ -176,6 +235,7 @@ final class HikeRecorder: NSObject {
         case recording
         case paused
         case saving
+        case reviewing
         case failed(RecordingFailure)
     }
 
@@ -190,6 +250,7 @@ final class HikeRecorder: NSObject {
     private(set) var phase: Phase = .idle
     private(set) var recoveryState: RecoveryState = .none
     private(set) var sessionStartedAt: Date?
+    private(set) var ambiguityReview: RecordingAmbiguityReview?
 
     let stats = RecordingStats()
     let trace = RecordingTrace()
@@ -198,6 +259,8 @@ final class HikeRecorder: NSObject {
     @ObservationIgnored private let source: any RecordingLocationSource
     @ObservationIgnored private let elevationSource:
         (any RecordingElevationSource)?
+    @ObservationIgnored private let motionSource:
+        (any RecordingMotionSource)?
     @ObservationIgnored private let trailGraphProvider:
         (any TrailGraphProviding)?
     @ObservationIgnored private let distanceEvidenceSource:
@@ -220,12 +283,20 @@ final class HikeRecorder: NSObject {
     @ObservationIgnored private var lastAcceptedPoint: RecordingPoint?
     @ObservationIgnored private var accumulator = RecordingDistanceAccumulator()
     @ObservationIgnored private var elevationFilter = RecordingElevationFilter()
-    @ObservationIgnored private var lastGraphPrefetchCoordinate:
-        CLLocationCoordinate2D?
+    @ObservationIgnored private var latestMotionState:
+        RecordingMotionState = .unknown
+    @ObservationIgnored private var requestedGraphRegions:
+        Set<TrailGraphRegion> = []
     @ObservationIgnored private var startRequested = false
     @ObservationIgnored private var isActivating = false
     @ObservationIgnored private var pendingResumeFlag = false
     @ObservationIgnored private var acceptedFixRevision: UInt64 = 0
+    @ObservationIgnored private var liveMatchWindow: [RecordingPoint] = []
+    @ObservationIgnored private var liveMatchingTask: Task<Void, Never>?
+    @ObservationIgnored private var liveMatchingTaskID: UUID?
+    @ObservationIgnored private var liveMatchNeedsRun = false
+    @ObservationIgnored private var pendingAmbiguitySave:
+        PendingAmbiguitySave?
     @ObservationIgnored private var journalTail: Task<Void, Never>?
     @ObservationIgnored private var journalFlushTask: Task<Void, Never>?
     @ObservationIgnored private var pendingFixMergeTask: Task<Void, Never>?
@@ -234,6 +305,8 @@ final class HikeRecorder: NSObject {
     @ObservationIgnored private var lastSharedSnapshotPointCount = 0
 
     private static let sharedSnapshotInterval: TimeInterval = 15 * 60
+    nonisolated private static let liveMatchingMaximumPoints = 20
+    nonisolated private static let liveMatchingDuration: TimeInterval = 60
 
     var isActive: Bool {
         switch phase {
@@ -241,7 +314,7 @@ final class HikeRecorder: NSObject {
             false
         case .recovering:
             true
-        case .waitingForFix, .recording, .paused, .saving, .failed:
+        case .waitingForFix, .recording, .paused, .saving, .reviewing, .failed:
             sessionID != nil || startRequested
         }
     }
@@ -255,7 +328,7 @@ final class HikeRecorder: NSObject {
         switch phase {
         case .waitingForFix, .recording:
             true
-        case .idle, .recovering, .paused, .saving, .failed:
+        case .idle, .recovering, .paused, .saving, .reviewing, .failed:
             false
         }
     }
@@ -297,6 +370,7 @@ final class HikeRecorder: NSObject {
         container: ModelContainer,
         source: (any RecordingLocationSource)? = nil,
         elevationSource: (any RecordingElevationSource)? = nil,
+        motionSource: (any RecordingMotionSource)? = nil,
         trailGraphProvider: (any TrailGraphProviding)? = nil,
         distanceEvidenceSource:
             (any RecordingDistanceEvidenceSource)? = nil,
@@ -321,6 +395,7 @@ final class HikeRecorder: NSObject {
         self.container = container
         self.source = source ?? SystemRecordingLocationSource()
         self.elevationSource = elevationSource
+        self.motionSource = motionSource
         self.trailGraphProvider = trailGraphProvider
         self.distanceEvidenceSource = distanceEvidenceSource
         self.onlineMatcher = onlineMatcher
@@ -365,6 +440,7 @@ final class HikeRecorder: NSObject {
     func pause() {
         guard phase == .waitingForFix || phase == .recording else { return }
         phase = .paused
+        cancelLiveMatching(clearWindow: false)
         publishSharedRecordingSnapshot(force: true)
         journalFlushTask?.cancel()
         journalFlushTask = nil
@@ -380,6 +456,7 @@ final class HikeRecorder: NSObject {
                 try await journal.pause(at: pausedAt)
                 self?.source.stopRecordingUpdates()
                 self?.elevationSource?.stop()
+                self?.motionSource?.stop()
             } catch {
                 self?.fail(.storage(error.localizedDescription))
             }
@@ -420,6 +497,7 @@ final class HikeRecorder: NSObject {
         startElevationUpdates(
             anchorElevation: elevationAnchor
         )
+        startMotionUpdates()
         source.startRecordingUpdates(
             profile: activeSessionOptions.accuracyProfile
         )
@@ -428,7 +506,7 @@ final class HikeRecorder: NSObject {
     }
 
     @discardableResult
-    func stop() async throws -> Hike {
+    func stop() async throws -> RecordingStopOutcome {
         guard phase == .waitingForFix
                 || phase == .recording
                 || phase == .paused else {
@@ -443,6 +521,7 @@ final class HikeRecorder: NSObject {
         }
 
         phase = .saving
+        cancelLiveMatching(clearWindow: false)
         journalFlushTask?.cancel()
         journalFlushTask = nil
         publishSharedRecordingSnapshot(force: true)
@@ -463,6 +542,7 @@ final class HikeRecorder: NSObject {
             session = loaded
             source.stopRecordingUpdates()
             elevationSource?.stop()
+            motionSource?.stop()
         } catch let failure as RecordingFailure {
             fail(failure)
             throw failure
@@ -472,30 +552,22 @@ final class HikeRecorder: NSObject {
             throw failure
         }
 
-        let hike: Hike
         do {
-            hike = try await persist(session)
+            return try await finishPreparedSession(
+                session,
+                journal: journal
+            )
         } catch {
             fail(error, endLocationUpdates: false)
             throw error
         }
-
-        await clearSharedRecordingState(sessionID: session.metadata.sessionID)
-        do {
-            try await journal.discard()
-        } catch {
-            Self.logger.error(
-                "Saved hike but could not remove its finished journal: \(error.localizedDescription, privacy: .public)"
-            )
-        }
-
-        resetSession()
-        return hike
     }
 
     func discard() async {
+        cancelLiveMatching(clearWindow: true)
         source.stopRecordingUpdates()
         elevationSource?.stop()
+        motionSource?.stop()
         journalFlushTask?.cancel()
         journalFlushTask = nil
         await pendingFixMergeTask?.value
@@ -534,6 +606,8 @@ final class HikeRecorder: NSObject {
         guard case .failed = phase else { return }
         if sessionID == nil {
             resetSession()
+        } else if pendingAmbiguitySave != nil {
+            phase = .reviewing
         } else {
             phase = .paused
         }
@@ -610,16 +684,12 @@ final class HikeRecorder: NSObject {
         if session.metadata.endedAt != nil {
             phase = .saving
             do {
-                _ = try await persist(session)
-                await clearSharedRecordingState(
-                    sessionID: session.metadata.sessionID
+                _ = try await finishPreparedSession(
+                    session,
+                    journal: journal
                 )
-                try await journal.discard()
-                resetSession()
-            } catch let failure as RecordingFailure {
+            } catch let failure {
                 fail(failure, endLocationUpdates: false)
-            } catch {
-                fail(.save(error.localizedDescription), endLocationUpdates: false)
             }
             return
         }
@@ -645,6 +715,7 @@ final class HikeRecorder: NSObject {
             startElevationUpdates(
                 anchorElevation: lastAcceptedPoint?.elevation
             )
+            startMotionUpdates()
             source.startRecordingUpdates(
                 profile: activeSessionOptions.accuracyProfile
             )
@@ -696,15 +767,18 @@ final class HikeRecorder: NSObject {
         sessionStartedAt = startedAt
         sessionOptions = options
         sessionUptimeBase = uptime()
+        cancelLiveMatching(clearWindow: true)
         stats.reset()
         trace.reset()
         accumulator = RecordingDistanceAccumulator()
         elevationFilter.reset()
+        latestMotionState = .unknown
         lastAcceptedPoint = nil
-        lastGraphPrefetchCoordinate = nil
+        requestedGraphRegions = []
         pendingResumeFlag = false
         recoveryState = .none
         startElevationUpdates()
+        startMotionUpdates()
         source.startRecordingUpdates(profile: options.accuracyProfile)
         phase = .waitingForFix
         publishSharedRecordingSnapshot(force: true)
@@ -722,6 +796,7 @@ final class HikeRecorder: NSObject {
         guard RecordingFixPolicy.accepts(
                 location,
                 after: lastAcceptedPoint,
+                motionState: latestMotionState,
                 now: clock()
               ) else {
             return
@@ -732,6 +807,14 @@ final class HikeRecorder: NSObject {
             flags.insert(.resumed)
             pendingResumeFlag = false
         }
+        switch latestMotionState {
+        case .stationary:
+            flags.insert(.motionStationary)
+        case .nonPedestrian:
+            flags.insert(.nonPedestrian)
+        case .unknown, .pedestrian:
+            break
+        }
         var point = RecordingPoint(location: location, flags: flags)
         point.elevation = elevationFilter.elevation(for: location)
         let distance = accumulator.append(point)
@@ -741,7 +824,15 @@ final class HikeRecorder: NSObject {
         lastAcceptedPoint = point
         acceptedFixRevision &+= 1
 
-        trace.append(point.coordinate)
+        let liveMatchingEnabled = activeSessionOptions.snapToTrails
+            && trailGraphProvider != nil
+        if liveMatchingEnabled {
+            liveMatchWindow.append(point)
+        }
+        trace.append(
+            point.coordinate,
+            provisional: liveMatchingEnabled
+        )
         stats.distanceMeters = distance
         stats.pointCount += 1
         stats.horizontalAccuracy = point.horizontalAccuracy
@@ -758,6 +849,7 @@ final class HikeRecorder: NSObject {
         }
         RenderSignpost.mark("LiveFixAccepted")
         prefetchTrailGraphIfNeeded(around: point.coordinate)
+        scheduleLiveMatching()
 
         let pointToJournal = point
         enqueueJournalOperation { journal in
@@ -785,21 +877,178 @@ final class HikeRecorder: NSObject {
         }
     }
 
+    private func startMotionUpdates() {
+        motionSource?.stop()
+        latestMotionState = .unknown
+        guard let motionSource, motionSource.isAvailable else { return }
+        motionSource.start { [weak self] state in
+            Task { @MainActor [weak self] in
+                self?.latestMotionState = state
+            }
+        }
+    }
+
     private func prefetchTrailGraphIfNeeded(
         around coordinate: CLLocationCoordinate2D
     ) {
         guard activeSessionOptions.snapToTrails,
               let trailGraphProvider,
-              lastGraphPrefetchCoordinate == nil else { return }
-        lastGraphPrefetchCoordinate = coordinate
-        Task {
+              let region = trailGraphProvider.region(containing: coordinate),
+              requestedGraphRegions.insert(region).inserted else {
+            return
+        }
+        let expectedSessionID = sessionID
+        Task { [weak self] in
             do {
                 try await trailGraphProvider.prefetch(around: coordinate)
             } catch {
+                if self?.sessionID == expectedSessionID {
+                    self?.requestedGraphRegions.remove(region)
+                }
                 Self.logger.error(
                     "Trail graph prefetch failed: \(error.localizedDescription, privacy: .public)"
                 )
             }
+        }
+    }
+
+    private func scheduleLiveMatching() {
+        guard phase == .waitingForFix || phase == .recording,
+              activeSessionOptions.snapToTrails,
+              let trailGraphProvider,
+              liveMatchWindow.count > 1 else {
+            stats.matchedTrailName = nil
+            return
+        }
+        guard liveMatchingTask == nil else {
+            liveMatchNeedsRun = true
+            return
+        }
+
+        liveMatchNeedsRun = false
+        let points = Array(
+            liveMatchWindow.prefix(
+                Self.liveMatchingMaximumPoints + 1
+            )
+        )
+        let expectedGeneration = trace.generation
+        let expectedSessionID = sessionID
+        let retainedStart = Self.liveWindowRetainedStart(in: points)
+        let taskID = UUID()
+        liveMatchingTaskID = taskID
+        liveMatchingTask = Task { [weak self] in
+            let graph: TrailGraph
+            do {
+                graph = try await trailGraphProvider.cachedGraph(
+                    covering: points.map(\.coordinate)
+                ) ?? .empty
+            } catch {
+                Self.logger.error(
+                    "Live trail graph could not be loaded: \(error.localizedDescription, privacy: .public)"
+                )
+                graph = .empty
+            }
+            guard !Task.isCancelled else { return }
+            let match = await Task.detached(priority: .utility) {
+                TrailMatcher.match(points: points, graph: graph)
+            }.value
+            guard let self,
+                  self.liveMatchingTaskID == taskID else {
+                return
+            }
+            self.liveMatchingTask = nil
+            self.liveMatchingTaskID = nil
+            guard !Task.isCancelled,
+                  self.sessionID == expectedSessionID,
+                  self.trace.generation == expectedGeneration,
+                  self.phase == .waitingForFix
+                    || self.phase == .recording else {
+                if self.liveMatchNeedsRun {
+                    self.scheduleLiveMatching()
+                }
+                return
+            }
+
+            let currentPrefix = self.liveMatchWindow.prefix(points.count)
+            guard currentPrefix.count == points.count,
+                  zip(currentPrefix, points).allSatisfy({
+                      $0.0.timestamp == $0.1.timestamp
+                        && $0.0.latitude == $0.1.latitude
+                        && $0.0.longitude == $0.1.longitude
+                  }) else {
+                self.scheduleLiveMatching()
+                return
+            }
+            let newerPoints = Array(
+                self.liveMatchWindow.dropFirst(points.count)
+            )
+            let stablePoints: [RecordingPoint]
+            let provisionalPoints: [RecordingPoint]
+            var retainedPoints = Array(points[retainedStart...])
+            if retainedStart > 0 {
+                let cutoff = points[retainedStart].timestamp
+                stablePoints = match.points.filter {
+                    $0.timestamp <= cutoff
+                }
+                provisionalPoints = match.points.filter {
+                    $0.timestamp >= cutoff
+                }
+                if let matchedBoundary = match.points.last(where: {
+                    $0.timestamp <= cutoff
+                }) {
+                    retainedPoints[0] = matchedBoundary
+                }
+            } else {
+                stablePoints = []
+                provisionalPoints = match.points
+            }
+
+            guard self.trace.applyLiveMatch(
+                committing: stablePoints.map(\.coordinate),
+                provisional: (
+                    provisionalPoints + newerPoints
+                ).map(\.coordinate),
+                expectedGeneration: expectedGeneration
+            ) else {
+                if self.liveMatchNeedsRun {
+                    self.scheduleLiveMatching()
+                }
+                return
+            }
+
+            self.stats.matchedTrailName = newerPoints.isEmpty
+                ? match.currentTrailName
+                : nil
+            self.liveMatchWindow = retainedPoints + newerPoints
+            RenderSignpost.mark("LiveTrailMatchApplied")
+            if self.liveMatchNeedsRun || !newerPoints.isEmpty {
+                self.scheduleLiveMatching()
+            }
+        }
+    }
+
+    private nonisolated static func liveWindowRetainedStart(
+        in points: [RecordingPoint]
+    ) -> Int {
+        guard points.count > 2 else { return 0 }
+        let latest = points[points.count - 1].timestamp
+        let earliest = latest.addingTimeInterval(-liveMatchingDuration)
+        var start = max(0, points.count - liveMatchingMaximumPoints)
+        while start < points.count - 2,
+              points[start + 1].timestamp < earliest {
+            start += 1
+        }
+        return start
+    }
+
+    private func cancelLiveMatching(clearWindow: Bool) {
+        liveMatchingTask?.cancel()
+        liveMatchingTask = nil
+        liveMatchingTaskID = nil
+        liveMatchNeedsRun = false
+        stats.matchedTrailName = nil
+        if clearWindow {
+            liveMatchWindow = []
         }
     }
 
@@ -863,7 +1112,10 @@ final class HikeRecorder: NSObject {
     }
 
     private func schedulePendingWidgetFixMerge() {
-        guard pendingFixMergeTask == nil,
+        guard phase == .waitingForFix
+                || phase == .recording
+                || phase == .paused,
+              pendingFixMergeTask == nil,
               let sessionID,
               sharedStateStore != nil else {
             return
@@ -1042,6 +1294,7 @@ final class HikeRecorder: NSObject {
     }
 
     private func rebuildLiveState(from points: [RecordingPoint]) {
+        cancelLiveMatching(clearWindow: true)
         accumulator = RecordingDistanceAccumulator()
         for point in points {
             accumulator.append(point)
@@ -1050,33 +1303,42 @@ final class HikeRecorder: NSObject {
         stats.pointCount = points.count
         stats.horizontalAccuracy = points.last?.horizontalAccuracy
         stats.averageSpeedMetersPerSecond = accumulator.averageSpeedMetersPerSecond
-        trace.replace(with: points.map(\.coordinate))
+        if activeSessionOptions.snapToTrails,
+           trailGraphProvider != nil,
+           !points.isEmpty {
+            let windowStart = Self.liveWindowRetainedStart(in: points)
+            liveMatchWindow = Array(points[windowStart...])
+            let stable = windowStart > 0
+                ? Array(points[...windowStart]).map(\.coordinate)
+                : []
+            trace.replace(
+                stable: stable,
+                provisional: liveMatchWindow.map(\.coordinate)
+            )
+            scheduleLiveMatching()
+        } else {
+            trace.replace(with: points.map(\.coordinate))
+        }
     }
 
-    private func persist(
+    private func prepareForSave(
         _ session: TrackJournalSession
-    ) async throws(RecordingFailure) -> Hike {
-        let sessionID = session.metadata.sessionID
-        let descriptor = FetchDescriptor<Hike>(
-            predicate: #Predicate { $0.id == sessionID }
-        )
-        do {
-            if let existing = try container.mainContext.fetch(descriptor).first {
-                return existing
-            }
-        } catch {
-            throw .save(error.localizedDescription)
-        }
-
+    ) async throws(RecordingFailure) -> (
+        prepared: PreparedRecording,
+        review: PendingAmbiguitySave?
+    ) {
         guard let endedAt = session.metadata.endedAt else {
             throw .save("The recording has not been finished yet.")
         }
 
         var prepared: PreparedRecording
+        let options = session.metadata.recordingOptions
+            ?? activeSessionOptions
+        let normalized: [RecordingPoint]
+        let graph: TrailGraph?
+        let gapEvidence: [Int: Double]
         do {
-            let options = session.metadata.recordingOptions
-                ?? activeSessionOptions
-            let normalized = await Task.detached(
+            normalized = await Task.detached(
                 priority: .userInitiated
             ) {
                 assertOffMainThread(
@@ -1084,7 +1346,6 @@ final class HikeRecorder: NSObject {
                 )
                 return RecordingPreparation.normalizedPoints(session.points)
             }.value
-            let graph: TrailGraph?
             if options.snapToTrails,
                let trailGraphProvider {
                 do {
@@ -1100,7 +1361,7 @@ final class HikeRecorder: NSObject {
             } else {
                 graph = nil
             }
-            let gapDistances = await gapDistances(for: normalized)
+            gapEvidence = await gapDistances(for: normalized)
             prepared = try await Task.detached(priority: .userInitiated) {
                 assertOffMainThread("Recording preparation must stay off the main thread")
                 return try RecordingPreparation.prepare(
@@ -1108,7 +1369,7 @@ final class HikeRecorder: NSObject {
                     startedAt: session.metadata.startedAt,
                     endedAt: endedAt,
                     graph: graph,
-                    gapDistances: gapDistances,
+                    gapDistances: gapEvidence,
                     keepRawGPSTrack: options.keepRawGPSTrack
                 )
             }.value
@@ -1132,7 +1393,8 @@ final class HikeRecorder: NSObject {
                         startedAt: prepared.startedAt,
                         endedAt: prepared.endedAt,
                         matchedTrailName: prepared.matchedTrailName,
-                        ambiguousLegCount: 0
+                        ambiguousLegCount: 0,
+                        matchResult: nil
                     )
                 } catch {
                     Self.logger.error(
@@ -1146,11 +1408,33 @@ final class HikeRecorder: NSObject {
             throw .save(error.localizedDescription)
         }
 
-        if prepared.ambiguousLegCount > 0 {
-            Self.logger.info(
-                "Kept \(prepared.ambiguousLegCount) ambiguous trail legs on raw GPS geometry"
+        let review: PendingAmbiguitySave?
+        if graph != nil,
+           let matchResult = prepared.matchResult,
+           !matchResult.ambiguities.isEmpty {
+            review = PendingAmbiguitySave(
+                session: session,
+                normalizedPoints: normalized,
+                options: options,
+                matchResult: matchResult
             )
+        } else {
+            review = nil
         }
+        return (prepared, review)
+    }
+
+    private func persist(
+        _ session: TrackJournalSession,
+        prepared: PreparedRecording
+    ) throws(RecordingFailure) -> Hike {
+        if let existing = try existingHike(
+            sessionID: session.metadata.sessionID
+        ) {
+            return existing
+        }
+
+        let sessionID = session.metadata.sessionID
         stats.matchedTrailName = prepared.matchedTrailName
         let hike = Hike(
             id: sessionID,
@@ -1171,13 +1455,175 @@ final class HikeRecorder: NSObject {
         }
     }
 
+    private func finishPreparedSession(
+        _ session: TrackJournalSession,
+        journal: TrackJournal
+    ) async throws(RecordingFailure) -> RecordingStopOutcome {
+        if let existing = try existingHike(
+            sessionID: session.metadata.sessionID
+        ) {
+            await finishSavedSession(session, journal: journal)
+            return .saved(existing)
+        }
+
+        let result = try await prepareForSave(session)
+        if let pending = result.review {
+            pendingAmbiguitySave = pending
+            ambiguityReview = RecordingAmbiguityReview(
+                ambiguities: pending.matchResult.ambiguities
+            )
+            phase = .reviewing
+            updateAmbiguityPreview()
+            publishSharedRecordingSnapshot(force: true)
+            return .needsReview
+        }
+
+        let hike = try persist(session, prepared: result.prepared)
+        await finishSavedSession(session, journal: journal)
+        return .saved(hike)
+    }
+
+    private func existingHike(
+        sessionID: UUID
+    ) throws(RecordingFailure) -> Hike? {
+        let descriptor = FetchDescriptor<Hike>(
+            predicate: #Predicate { $0.id == sessionID }
+        )
+        do {
+            return try container.mainContext.fetch(descriptor).first
+        } catch {
+            throw .save(error.localizedDescription)
+        }
+    }
+
+    func selectAmbiguityChoice(_ choice: TrailAmbiguityChoice) {
+        guard phase == .reviewing, let ambiguityReview else { return }
+        ambiguityReview.select(choice)
+        updateAmbiguityPreview()
+    }
+
+    func moveToPreviousAmbiguity() {
+        guard phase == .reviewing, let ambiguityReview else { return }
+        ambiguityReview.moveBackward()
+        updateAmbiguityPreview()
+    }
+
+    func moveToNextAmbiguity() {
+        guard phase == .reviewing, let ambiguityReview else { return }
+        ambiguityReview.moveForward()
+        updateAmbiguityPreview()
+    }
+
+    func saveReviewedRecording() async throws -> Hike {
+        guard phase == .reviewing,
+              let pendingAmbiguitySave,
+              let ambiguityReview,
+              let journal else {
+            throw RecordingFailure.save(
+                "No ambiguous recording is ready to save."
+            )
+        }
+        phase = .saving
+        let prepared: PreparedRecording
+        do {
+            let points = pendingAmbiguitySave.normalizedPoints
+            let choices = ambiguityReview.choices
+            let startedAt = pendingAmbiguitySave.session.metadata.startedAt
+            let endedAt = try {
+                guard let endedAt =
+                        pendingAmbiguitySave.session.metadata.endedAt else {
+                    throw RecordingFailure.save(
+                        "The recording has not been finished yet."
+                    )
+                }
+                return endedAt
+            }()
+            prepared = try await Task.detached(priority: .userInitiated) {
+                assertOffMainThread(
+                    "Ambiguity resolution must stay off the main thread"
+                )
+                return try RecordingPreparation.prepareResolved(
+                    points: points,
+                    startedAt: startedAt,
+                    endedAt: endedAt,
+                    matchResult: pendingAmbiguitySave.matchResult,
+                    choices: choices,
+                    keepRawGPSTrack:
+                        pendingAmbiguitySave.options.keepRawGPSTrack
+                )
+            }.value
+            let hike = try persist(
+                pendingAmbiguitySave.session,
+                prepared: prepared
+            )
+            await finishSavedSession(
+                pendingAmbiguitySave.session,
+                journal: journal
+            )
+            return hike
+        } catch let failure as RecordingFailure {
+            fail(failure, endLocationUpdates: false)
+            throw failure
+        } catch {
+            let failure = RecordingFailure.save(
+                error.localizedDescription
+            )
+            fail(failure, endLocationUpdates: false)
+            throw failure
+        }
+    }
+
+    private func updateAmbiguityPreview() {
+        guard let pendingAmbiguitySave,
+              let ambiguityReview else {
+            return
+        }
+        let points = pendingAmbiguitySave.matchResult.points(
+            resolving: ambiguityReview.choices
+        )
+        let highlighted = ambiguityReview.current.map { ambiguity in
+            switch ambiguityReview.choices[ambiguity.id] ?? .gps {
+            case .gps:
+                return ambiguity.gpsPoints.map(\.coordinate)
+            case .alternative(let alternativeID):
+                return ambiguity.alternatives.first {
+                    $0.id == alternativeID
+                }?.points.map(\.coordinate)
+                    ?? ambiguity.gpsPoints.map(\.coordinate)
+            }
+        }
+        trace.showReview(
+            route: points.map(\.coordinate),
+            highlightedSegment: highlighted
+        )
+    }
+
+    private func finishSavedSession(
+        _ session: TrackJournalSession,
+        journal: TrackJournal
+    ) async {
+        await clearSharedRecordingState(
+            sessionID: session.metadata.sessionID
+        )
+        do {
+            try await journal.discard()
+        } catch {
+            Self.logger.error(
+                "Saved hike but could not remove its finished journal: \(error.localizedDescription, privacy: .public)"
+            )
+        }
+        resetSession()
+    }
+
     private func fail(
         _ failure: RecordingFailure,
         endLocationUpdates: Bool = true
     ) {
+        cancelLiveMatching(clearWindow: false)
         if endLocationUpdates {
             source.stopRecordingUpdates()
             elevationSource?.stop()
+            motionSource?.stop()
         }
         journalFlushTask?.cancel()
         journalFlushTask = nil
@@ -1192,17 +1638,25 @@ final class HikeRecorder: NSObject {
         phase = .idle
         recoveryState = .none
         sessionStartedAt = nil
+        ambiguityReview = nil
+        pendingAmbiguitySave = nil
         sessionID = nil
         sessionOptions = nil
         sessionUptimeBase = nil
         lastAcceptedPoint = nil
         accumulator = RecordingDistanceAccumulator()
         elevationFilter.reset()
-        lastGraphPrefetchCoordinate = nil
+        latestMotionState = .unknown
+        requestedGraphRegions = []
         startRequested = false
         isActivating = false
         pendingResumeFlag = false
         acceptedFixRevision = 0
+        liveMatchWindow = []
+        liveMatchingTask?.cancel()
+        liveMatchingTask = nil
+        liveMatchingTaskID = nil
+        liveMatchNeedsRun = false
         journalTail = nil
         journalFlushTask?.cancel()
         journalFlushTask = nil

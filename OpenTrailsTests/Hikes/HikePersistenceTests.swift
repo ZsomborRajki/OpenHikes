@@ -185,6 +185,19 @@ struct HikePersistenceTests {
         #expect(reopened.route == route, "including the elevations, the timestamps, and their absence")
     }
 
+    @Test("route points written before motion metadata still decode")
+    func legacyRouteCoordinateDecodesWithoutMotion() throws {
+        let data = Data(
+            #"{"latitude":47.63,"longitude":12.86}"#.utf8
+        )
+        let point = try JSONDecoder().decode(
+            RouteCoordinate.self,
+            from: data
+        )
+
+        #expect(point.motion == nil)
+    }
+
     // MARK: Migration
 
     /// The case `Hike`'s comment is about: a store written before the

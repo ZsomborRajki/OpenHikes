@@ -6,16 +6,16 @@ Original review: 2026-08-11 at commit `2ee19ea`. Status updated against the work
 
 The app remains structurally sound. The infrastructure an earlier review called out as its outstanding risk is built: the tile pipeline, the background-relaunch path and the widget all have injectable seams, and the suites that used to share process-global singletons own their own state. Live hike recording now ships on the same terms — an app-scoped recorder, a crash-safe journal, injectable location/clock/sensor/transport seams, and no SwiftData write until Stop.
 
-No current finding is a crash or data-loss defect, and no measured per-event cost remains.
+No current finding is a crash or data-loss defect, and no measured per-event cost remains. The recording accuracy work identified by this review is now implemented: graph coverage extends with the hike, motion activity informs fix handling, matching runs live, and uncertain post-recording legs wait for an explicit choice.
 
-What is left is CI, and the accuracy half of trail matching: geometry is matched at Stop, but nothing is matched live and nothing asks the user to resolve a gap the matcher wasn't sure about.
+What is left is CI and product readiness rather than a known recording gap.
 
 ## Current build and test state
 
 | Surface | Result | Notes |
 |---|---:|---|
 | iOS app build | Pass | `OpenTrails`, iPhone 17 Pro simulator |
-| iOS app tests | Pass | **434 tests, 54 suites**, strict mode, 0 known issues, 0 skipped |
+| iOS app tests | Pass | **452 tests, 54 suites**, strict mode, 0 known issues, 0 skipped |
 | Widget tests | Pass | **17 tests, 2 suites** |
 | Shared package tests | Pass | **49 tests, 7 suites** |
 | macOS build | Pass | Unsigned, arm64 |
@@ -35,19 +35,19 @@ xcodebuild test … "SWIFT_ACTIVE_COMPILATION_CONDITIONS=\$(inherited) REQUIRE_A
 
 Nothing passes that yet, because nothing runs the tests except a person. It becomes real coverage the moment CI does.
 
-## Recording: what is built, and what is not
+## Recording: completed implementation
 
-Recording is complete as a feature — it records hikes, survives a jetsam kill, and saves one `Hike` at Stop. Matching is where the design outran the implementation, and the shortfalls below are the honest list.
+Recording now covers the full reviewed flow: it records hikes, survives a jetsam kill, and saves one `Hike` only after Stop and any required review.
 
-**Live matching never runs.** The HMM matcher (emission from each fix's own `horizontalAccuracy`, transition against graph shortest paths, Viterbi with backtrack) exists in `TrailMatcher` and runs exactly once, inside `HikeRecorder.persist(_:)`. The design's sliding window — a ~60 s tail that stays provisional while older geometry commits — is absent. The user-visible consequence is that `RecordingStats.matchedTrailName` is only ever assigned at save time, so `RecordingView`'s "Following: <trail>" line cannot appear during a recording at all. Either build the window, or drop the line.
+**Live matching uses a bounded provisional window.** `HikeRecorder` continuously runs the HMM matcher over at most 21 points while retaining roughly the latest 20 points / 60 seconds as provisional geometry. Older matched geometry becomes stable, newer fixes remain raw until the next pass, stale tasks cannot overwrite a newer session, and `RecordingStats.matchedTrailName` drives the live "Following:" status.
 
-**Ambiguity is detected and then discarded.** `TrailMatcher` computes a per-leg confidence margin, refuses to attribute a leg it isn't sure about, and reports `ambiguousLegCount`. `HikeRecorder` logs that count and throws it away. Nothing asks "which way did you go?", and an ambiguous leg is drawn exactly like a confident one — the raw geometry is preserved, which is the safe half, but the cleanest answer to sparse data (ask the person who was there) is not built.
+**Ambiguous legs wait for the hiker.** Sparse-route alternatives remain attached to the exact `TrailMatchResult` shown after Stop. The review presents option A, option B, and GPS for each uncertain leg, highlights that leg distinctly on the map, and does not insert a `Hike` until every choice is resolved. A finished journal survives relaunch until the review is saved or discarded. Successful opt-in Stadia matching remains canonical and bypasses this review; an online failure falls back to the on-device result and its choices.
 
-**The trail graph is fetched once and never extended.** `HikeRecorder.prefetchTrailGraphIfNeeded(around:)` returns early once `lastGraphPrefetchCoordinate` is set, so exactly one zoom-12 region — roughly 7–10 km across at temperate latitudes — is ever fetched, around the first accepted fix. A walk that leaves that region gets no geometry for the rest of the day and silently falls back to the raw trace. Abstention is the right failure, but extending the corridor as the walk leaves it is not implemented.
+**Graph coverage extends with the route.** Prefetching is keyed by exact zoom-12 graph regions, so every newly entered region is requested once rather than only the starting region. Cache readers await an active refresh and use expired data only when that refresh fails.
 
-**Motion activity is never consulted.** The speed gate is a fixed threshold. `CMMotionActivity` corroboration — distinguishing a stationary phone from a walking one, and a gondola or shuttle from an implausible GPS jump — is absent, so a lift is rejected as bad data rather than marked as a lift.
+**Motion activity participates in recording.** An injectable Core Motion source corroborates stationary periods and permits otherwise implausible non-pedestrian movement such as a lift or shuttle. That metadata is persisted on route coordinates and preserved when Stadia returns simplified geometry.
 
-Everything else in the design is present and tested: the entry point and `SheetRoute`, the isolated recording UI and chunked map trace, the fix policy and stationary-drift control, barometric elevation fusion, the fixed-width journal with torn-tail and open-session recovery, one-time save, Overpass fetching with a real `User-Agent` and 429 backoff, pedometer-constrained gap inference, opt-in post-Stop Stadia matching, widget anchor sampling, the recording snapshot takeover and deep link, and the four recording settings.
+The rest of the recording design remains present and tested: the entry point and `SheetRoute`, the isolated recording UI and chunked map trace, the accuracy-aware fix policy and stationary-drift control, barometric elevation fusion, the fixed-width journal with torn-tail and open-session recovery, one-time save, Overpass fetching with a real `User-Agent` and 429 backoff, pedometer-constrained gap inference, widget anchor sampling, the recording snapshot takeover and deep link, and the four recording settings.
 
 ## Repository hygiene
 
@@ -65,13 +65,6 @@ Carried over from the recording design, and still unanswered. Each one changes c
 5. **Battery profile default.** High accuracy is the right default for a hiking app and costs roughly 10%/hour with the screen off. Over a six-hour day that is a real bill, and Balanced may be the better default with High as an explicit choice.
 
 ## TODO
-
-### Recording accuracy
-
-- [ ] **Live sliding-window matching**, or remove the "Following:" line that can never populate without it.
-- [ ] **Post-recording ambiguity review**: offer option A / option B / "Use GPS only" for each leg `TrailMatcher` flagged ambiguous, and draw ambiguous legs distinctly instead of identically.
-- [ ] **Extend the trail-graph corridor** as a recording leaves its first prefetched region, instead of prefetching once and abstaining thereafter.
-- [ ] **Consult `CMMotionActivity`** so a lift or shuttle is marked rather than rejected, and so the stationary state machine has corroboration beyond position.
 
 ### Infrastructure
 

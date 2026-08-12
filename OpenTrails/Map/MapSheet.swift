@@ -544,6 +544,8 @@ private struct RecordingListStatusPill: View {
             "Paused"
         case .saving:
             "Saving"
+        case .reviewing:
+            "Review Route"
         case .failed:
             "Needs Attention"
         case .idle, .waitingForFix, .recording:

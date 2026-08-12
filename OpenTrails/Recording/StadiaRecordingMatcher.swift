@@ -304,11 +304,60 @@ actor StadiaRecordingMatcher: RecordingOnlineMatching {
         let matchedTotal = matchedDistances.last ?? 0
         let sourceTotal = sourceDistances.last ?? 0
 
+        func coordinate(at distance: Double) -> CLLocationCoordinate2D {
+            guard coordinates.count > 1 else {
+                return coordinates[0]
+            }
+            var upperIndex = 1
+            while upperIndex < matchedDistances.count - 1,
+                  matchedDistances[upperIndex] < distance {
+                upperIndex += 1
+            }
+            let lowerIndex = max(0, upperIndex - 1)
+            let lowerDistance = matchedDistances[lowerIndex]
+            let upperDistance = matchedDistances[upperIndex]
+            let fraction = upperDistance > lowerDistance
+                ? (distance - lowerDistance)
+                    / (upperDistance - lowerDistance)
+                : 0
+            return RouteGeometry.interpolate(
+                from: coordinates[lowerIndex],
+                to: coordinates[upperIndex],
+                fraction: min(max(fraction, 0), 1)
+            )
+        }
+
+        var samples = zip(matchedDistances, coordinates).map {
+            (distance: $0.0, coordinate: $0.1)
+        }
+        if matchedTotal > 0, sourceTotal > 0 {
+            for index in sourcePoints.indices
+            where sourcePoints[index].flags.contains(.nonPedestrian) {
+                let distance = matchedTotal
+                    * sourceDistances[index] / sourceTotal
+                samples.append(
+                    (
+                        distance: distance,
+                        coordinate: coordinate(at: distance)
+                    )
+                )
+            }
+        }
+        samples.sort { $0.distance < $1.distance }
+        var uniqueSamples: [(distance: Double, coordinate: CLLocationCoordinate2D)] = []
+        for sample in samples {
+            if let previous = uniqueSamples.last,
+               abs(previous.distance - sample.distance) <= 0.01 {
+                continue
+            }
+            uniqueSamples.append(sample)
+        }
+
         var sourceIndex = 1
-        return coordinates.indices.map { index in
+        return uniqueSamples.map { sample in
             let fraction = matchedTotal > 0
-                ? matchedDistances[index] / matchedTotal
-                : Double(index) / Double(max(1, coordinates.count - 1))
+                ? sample.distance / matchedTotal
+                : 0
             let sourceDistance = sourceTotal * fraction
             while sourceIndex < sourceDistances.count - 1,
                   sourceDistances[sourceIndex] < sourceDistance {
@@ -325,8 +374,8 @@ actor StadiaRecordingMatcher: RecordingOnlineMatching {
             let lower = sourcePoints[lowerIndex]
             let upper = sourcePoints[upperIndex]
             return RouteCoordinate(
-                latitude: coordinates[index].latitude,
-                longitude: coordinates[index].longitude,
+                latitude: sample.coordinate.latitude,
+                longitude: sample.coordinate.longitude,
                 elevation: interpolatedElevation(
                     lower.elevation,
                     upper.elevation,
@@ -335,7 +384,11 @@ actor StadiaRecordingMatcher: RecordingOnlineMatching {
                 timestamp: lower.timestamp.addingTimeInterval(
                     upper.timestamp.timeIntervalSince(lower.timestamp)
                         * localFraction
-                )
+                ),
+                motion: lower.flags.contains(.nonPedestrian)
+                    || upper.flags.contains(.nonPedestrian)
+                    ? .nonPedestrian
+                    : nil
             )
         }
     }

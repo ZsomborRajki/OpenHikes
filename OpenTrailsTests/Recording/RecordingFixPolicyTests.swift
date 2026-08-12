@@ -186,6 +186,31 @@ struct RecordingFixPolicyTests {
             now: timestamp
         ))
     }
+
+    @Test("non-pedestrian motion keeps a real fast segment with weak GPS speed")
+    func motionCanCorroborateFastTravel() {
+        let first = RecordingPoint(
+            location: recordingLocation(timestamp: start)
+        )
+        let timestamp = start.addingTimeInterval(5)
+        let fastFix = recordingLocation(
+            latitude: 47.63 + 100.0 / 111_000,
+            speed: 1,
+            timestamp: timestamp
+        )
+
+        #expect(!RecordingFixPolicy.accepts(
+            fastFix,
+            after: first,
+            now: timestamp
+        ))
+        #expect(RecordingFixPolicy.accepts(
+            fastFix,
+            after: first,
+            motionState: .nonPedestrian,
+            now: timestamp
+        ))
+    }
 }
 
 @Suite("Recording distance")
@@ -209,6 +234,67 @@ struct RecordingDistanceTests {
 
         #expect(accumulator.isStationary)
         #expect(accumulator.distanceMeters < 5)
+    }
+
+    @Test("motion activity corroborates stationary GPS drift")
+    func motionStationarySignalRetractsWiderDrift() {
+        var accumulator = RecordingDistanceAccumulator()
+        for step in 0...4 {
+            accumulator.append(
+                RecordingPoint(
+                    latitude: 47.63 + Double(step) * 10 / 111_000,
+                    longitude: 12.86,
+                    timestamp: start.addingTimeInterval(Double(step) * 10),
+                    horizontalAccuracy: 20,
+                    flags: [.motionStationary]
+                )
+            )
+        }
+
+        #expect(accumulator.isStationary)
+        #expect(accumulator.distanceMeters < 1)
+    }
+
+    @Test("stationary activity does not retract the approach to a stop")
+    func stationarySignalKeepsEarlierMovement() {
+        var accumulator = RecordingDistanceAccumulator()
+        accumulator.append(
+            RecordingPoint(
+                latitude: 47.63,
+                longitude: 12.86,
+                timestamp: start,
+                horizontalAccuracy: 8
+            )
+        )
+        accumulator.append(
+            RecordingPoint(
+                latitude: 47.63 + 100.0 / 111_000,
+                longitude: 12.86,
+                timestamp: start.addingTimeInterval(20),
+                horizontalAccuracy: 8
+            )
+        )
+        accumulator.append(
+            RecordingPoint(
+                latitude: 47.63 + 100.0 / 111_000,
+                longitude: 12.86,
+                timestamp: start.addingTimeInterval(25),
+                horizontalAccuracy: 8,
+                flags: [.motionStationary]
+            )
+        )
+        accumulator.append(
+            RecordingPoint(
+                latitude: 47.63 + 103.0 / 111_000,
+                longitude: 12.86,
+                timestamp: start.addingTimeInterval(55),
+                horizontalAccuracy: 8,
+                flags: [.motionStationary]
+            )
+        )
+
+        #expect(accumulator.isStationary)
+        #expect(abs(accumulator.distanceMeters - 100) < 2)
     }
 
     @Test("average speed ignores the time a pause took out of the hike")

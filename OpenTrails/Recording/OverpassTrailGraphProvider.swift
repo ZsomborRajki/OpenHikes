@@ -10,7 +10,16 @@ import CoreLocation
 import Foundation
 import OpenTrailsShared
 
+nonisolated struct TrailGraphRegion: Codable, Hashable, Sendable {
+    let zoom: Int
+    let x: Int
+    let y: Int
+}
+
 nonisolated protocol TrailGraphProviding: Sendable {
+    func region(
+        containing coordinate: CLLocationCoordinate2D
+    ) -> TrailGraphRegion?
     func prefetch(around coordinate: CLLocationCoordinate2D) async throws
     func cachedGraph(
         covering coordinates: [CLLocationCoordinate2D]
@@ -58,12 +67,6 @@ actor OverpassTrailGraphProvider: TrailGraphProviding {
         "via_ferrata"
     ]
 
-    private struct RegionKey: Codable, Hashable, Sendable {
-        let z: Int
-        let x: Int
-        let y: Int
-    }
-
     private struct CachedGraph: Codable, Sendable {
         let fetchedAt: Date
         let graph: TrailGraph
@@ -80,8 +83,8 @@ actor OverpassTrailGraphProvider: TrailGraphProviding {
     private let endpoint: URL
     private let transport: Transport
     private let clock: @Sendable () -> Date
-    private var memory: [RegionKey: CachedGraph] = [:]
-    private var inFlight: [RegionKey: Task<TrailGraph, Error>] = [:]
+    private var memory: [TrailGraphRegion: CachedGraph] = [:]
+    private var inFlight: [TrailGraphRegion: Task<TrailGraph, Error>] = [:]
     private var retryAfter: Date?
 
     init(
@@ -118,15 +121,20 @@ actor OverpassTrailGraphProvider: TrailGraphProviding {
         }
     }
 
-    func prefetch(around coordinate: CLLocationCoordinate2D) async throws {
+    nonisolated func region(
+        containing coordinate: CLLocationCoordinate2D
+    ) -> TrailGraphRegion? {
         guard Mercator.isRepresentable(
             latitude: coordinate.latitude,
             longitude: coordinate.longitude
         ) else {
-            return
+            return nil
         }
+        return Self.regionKey(for: coordinate)
+    }
 
-        let key = Self.regionKey(for: coordinate)
+    func prefetch(around coordinate: CLLocationCoordinate2D) async throws {
+        guard let key = region(containing: coordinate) else { return }
         if try cachedGraph(for: key, allowExpired: false) != nil { return }
         if let task = inFlight[key] {
             _ = try await task.value
@@ -171,15 +179,7 @@ actor OverpassTrailGraphProvider: TrailGraphProviding {
     func cachedGraph(
         covering coordinates: [CLLocationCoordinate2D]
     ) async throws -> TrailGraph? {
-        let keys = Set(coordinates.compactMap { coordinate -> RegionKey? in
-            guard Mercator.isRepresentable(
-                latitude: coordinate.latitude,
-                longitude: coordinate.longitude
-            ) else {
-                return nil
-            }
-            return Self.regionKey(for: coordinate)
-        })
+        let keys = Set(coordinates.compactMap(region(containing:)))
         guard !keys.isEmpty else { return nil }
 
         var combined: TrailGraph?
@@ -187,9 +187,27 @@ actor OverpassTrailGraphProvider: TrailGraphProviding {
             let graph: TrailGraph?
             if let cached = try cachedGraph(
                 for: key,
-                allowExpired: true
+                allowExpired: false
             ) {
                 graph = cached.graph
+            } else if let task = inFlight[key] {
+                do {
+                    graph = try await task.value
+                } catch {
+                    if let expired = try cachedGraph(
+                        for: key,
+                        allowExpired: true
+                    ) {
+                        graph = expired.graph
+                    } else {
+                        throw error
+                    }
+                }
+            } else if let expired = try cachedGraph(
+                for: key,
+                allowExpired: true
+            ) {
+                graph = expired.graph
             } else {
                 graph = nil
             }
@@ -202,7 +220,7 @@ actor OverpassTrailGraphProvider: TrailGraphProviding {
     }
 
     private func cachedGraph(
-        for key: RegionKey,
+        for key: TrailGraphRegion,
         allowExpired: Bool
     ) throws -> CachedGraph? {
         if let cached = memory[key] {
@@ -236,7 +254,10 @@ actor OverpassTrailGraphProvider: TrailGraphProviding {
         }
     }
 
-    private func write(_ cached: CachedGraph, for key: RegionKey) throws {
+    private func write(
+        _ cached: CachedGraph,
+        for key: TrailGraphRegion
+    ) throws {
         do {
             try FileManager.default.createDirectory(
                 at: directory,
@@ -270,18 +291,18 @@ actor OverpassTrailGraphProvider: TrailGraphProviding {
         }
     }
 
-    private func fileURL(for key: RegionKey) -> URL {
+    private func fileURL(for key: TrailGraphRegion) -> URL {
         directory.appendingPathComponent(
-            "\(key.z)-\(key.x)-\(key.y).json"
+            "\(key.zoom)-\(key.x)-\(key.y).json"
         )
     }
 
     private nonisolated static func regionKey(
         for coordinate: CLLocationCoordinate2D
-    ) -> RegionKey {
+    ) -> TrailGraphRegion {
         let count = 1 << cacheZoom
-        return RegionKey(
-            z: cacheZoom,
+        return TrailGraphRegion(
+            zoom: cacheZoom,
             x: SlippyTileMath.wrap(
                 SlippyTileMath.tileX(coordinate.longitude, z: cacheZoom),
                 to: count
@@ -294,15 +315,15 @@ actor OverpassTrailGraphProvider: TrailGraphProviding {
     }
 
     private nonisolated static func fetchGraph(
-        for key: RegionKey,
+        for key: TrailGraphRegion,
         endpoint: URL,
         transport: Transport
     ) async throws -> TrailGraph {
         let box = BoundingBox(
-            south: SlippyTileMath.lat(y: key.y + 1, z: key.z),
-            west: SlippyTileMath.lon(x: key.x, z: key.z),
-            north: SlippyTileMath.lat(y: key.y, z: key.z),
-            east: SlippyTileMath.lon(x: key.x + 1, z: key.z)
+            south: SlippyTileMath.lat(y: key.y + 1, z: key.zoom),
+            west: SlippyTileMath.lon(x: key.x, z: key.zoom),
+            north: SlippyTileMath.lat(y: key.y, z: key.zoom),
+            east: SlippyTileMath.lon(x: key.x + 1, z: key.zoom)
         )
         var request = URLRequest(url: endpoint)
         request.httpMethod = "POST"

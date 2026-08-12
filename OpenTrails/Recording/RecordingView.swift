@@ -211,6 +211,8 @@ private struct RecordingHeader: View {
             .orange
         case .paused:
             .secondary
+        case .reviewing:
+            .orange
         case .idle:
             .green
         case .failed:
@@ -234,6 +236,8 @@ private extension HikeRecorder.Phase {
             "Paused"
         case .saving:
             "Saving"
+        case .reviewing:
+            "Review Route"
         case .failed:
             "Needs Attention"
         }
@@ -328,6 +332,16 @@ private struct RecordingControls: View {
                 ProgressView("Saving recorded hike…")
                     .frame(maxWidth: .infinity)
 
+            case .reviewing:
+                if let review = recorder.ambiguityReview {
+                    RecordingAmbiguityReviewControls(
+                        recorder: recorder,
+                        review: review,
+                        onSaved: onSaved
+                    )
+                }
+                discardButton
+
             case .failed:
                 if recorder.isActive {
                     discardButton
@@ -362,8 +376,10 @@ private struct RecordingControls: View {
     private var stopButton: some View {
         Button("Stop", systemImage: "stop.fill") {
             Task {
-                guard let hike = try? await recorder.stop() else { return }
-                onSaved(hike)
+                guard let outcome = try? await recorder.stop() else { return }
+                if case .saved(let hike) = outcome {
+                    onSaved(hike)
+                }
             }
         }
         .buttonStyle(.borderedProminent)
@@ -375,5 +391,120 @@ private struct RecordingControls: View {
             showDiscardConfirmation = true
         }
         .buttonStyle(.bordered)
+    }
+}
+
+private struct RecordingAmbiguityReviewControls: View {
+    let recorder: HikeRecorder
+    let review: RecordingAmbiguityReview
+    var onSaved: (Hike) -> Void
+
+    var body: some View {
+        if let ambiguity = review.current {
+            VStack(alignment: .leading, spacing: 12) {
+                Text(
+                    "Trail choice \(review.currentIndex + 1) of "
+                        + "\(review.ambiguities.count)"
+                )
+                .font(.headline)
+                Text(
+                    "The highlighted section has more than one plausible route."
+                )
+                .font(.subheadline)
+                .foregroundStyle(.secondary)
+
+                choiceButton(
+                    title: "Use GPS only",
+                    subtitle: "Keep the recorded line for this section.",
+                    choice: .gps,
+                    ambiguity: ambiguity
+                )
+                ForEach(ambiguity.alternatives, id: \.id) { alternative in
+                    choiceButton(
+                        title: "Option \(optionLabel(alternative.id))",
+                        subtitle: alternativeSubtitle(alternative),
+                        choice: .alternative(alternative.id),
+                        ambiguity: ambiguity
+                    )
+                }
+
+                HStack {
+                    Button("Previous") {
+                        recorder.moveToPreviousAmbiguity()
+                    }
+                    .disabled(!review.canMoveBackward)
+                    Spacer()
+                    Button("Next") {
+                        recorder.moveToNextAmbiguity()
+                    }
+                    .disabled(!review.canMoveForward)
+                }
+
+                Button("Save Reviewed Hike") {
+                    Task {
+                        guard let hike = try? await
+                                recorder.saveReviewedRecording() else {
+                            return
+                        }
+                        onSaved(hike)
+                    }
+                }
+                .buttonStyle(.borderedProminent)
+                .frame(maxWidth: .infinity)
+            }
+            .frame(maxWidth: .infinity, alignment: .leading)
+        }
+    }
+
+    private func choiceButton(
+        title: String,
+        subtitle: String,
+        choice: TrailAmbiguityChoice,
+        ambiguity: TrailMatchAmbiguity
+    ) -> some View {
+        Button {
+            recorder.selectAmbiguityChoice(choice)
+        } label: {
+            HStack(alignment: .top, spacing: 10) {
+                Image(
+                    systemName: review.choices[ambiguity.id] == choice
+                        ? "checkmark.circle.fill"
+                        : "circle"
+                )
+                VStack(alignment: .leading, spacing: 2) {
+                    Text(title)
+                        .font(.subheadline.weight(.semibold))
+                    Text(subtitle)
+                        .font(.caption)
+                        .foregroundStyle(.secondary)
+                }
+                Spacer()
+            }
+            .contentShape(Rectangle())
+        }
+        .buttonStyle(.plain)
+        .padding(10)
+        .background(.secondary.opacity(0.08), in: RoundedRectangle(cornerRadius: 10))
+    }
+
+    private func optionLabel(_ index: Int) -> String {
+        guard index >= 0, index < 26,
+              let scalar = UnicodeScalar(65 + index) else {
+            return "\(index + 1)"
+        }
+        return String(Character(scalar))
+    }
+
+    private func alternativeSubtitle(
+        _ alternative: TrailMatchAlternative
+    ) -> String {
+        let distance = Measurement(
+            value: alternative.distanceMeters,
+            unit: UnitLength.meters
+        ).formatted(.measurement(width: .abbreviated, usage: .road))
+        let names = alternative.trailNames.isEmpty
+            ? "Unnamed trail"
+            : alternative.trailNames.joined(separator: ", ")
+        return "\(names) · \(distance)"
     }
 }

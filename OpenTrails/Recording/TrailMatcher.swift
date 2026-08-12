@@ -9,12 +9,70 @@
 import CoreLocation
 import Foundation
 
+nonisolated struct TrailMatchAlternative: Equatable, Sendable {
+    let id: Int
+    let points: [RecordingPoint]
+    let distanceMeters: Double
+    let trailNames: [String]
+}
+
+nonisolated struct TrailMatchAmbiguity: Equatable, Identifiable, Sendable {
+    let id: Int
+    let gpsPoints: [RecordingPoint]
+    let alternatives: [TrailMatchAlternative]
+}
+
+nonisolated enum TrailAmbiguityChoice: Equatable, Sendable {
+    case gps
+    case alternative(Int)
+}
+
+nonisolated struct TrailMatchLeg: Sendable {
+    let index: Int
+    let defaultPoints: [RecordingPoint]
+    let alternatives: [TrailMatchAlternative]
+}
+
 nonisolated struct TrailMatchResult: Sendable {
     let points: [RecordingPoint]
     let matchedLegCount: Int
     let ambiguousLegCount: Int
     let matchedTrailName: String?
+    let currentTrailName: String?
     let didMoveRoute: Bool
+    let ambiguities: [TrailMatchAmbiguity]
+    let legs: [TrailMatchLeg]
+
+    func points(
+        resolving choices: [Int: TrailAmbiguityChoice]
+    ) -> [RecordingPoint] {
+        guard !legs.isEmpty else { return points }
+        var output: [RecordingPoint] = []
+        for leg in legs {
+            let selected: [RecordingPoint]
+            switch choices[leg.index] ?? .gps {
+            case .gps:
+                selected = leg.defaultPoints
+            case .alternative(let alternativeID):
+                selected = leg.alternatives.first {
+                    $0.id == alternativeID
+                }?.points ?? leg.defaultPoints
+            }
+            if output.isEmpty {
+                output.append(contentsOf: selected)
+            } else if let previous = output.last,
+                      let first = selected.first,
+                      RouteGeometry.distanceMeters(
+                          from: previous.coordinate,
+                          to: first.coordinate
+                      ) <= 0.05 {
+                output.append(contentsOf: selected.dropFirst())
+            } else {
+                output.append(contentsOf: selected)
+            }
+        }
+        return output
+    }
 }
 
 nonisolated enum TrailMatcher {
@@ -49,7 +107,10 @@ nonisolated enum TrailMatcher {
                 matchedLegCount: 0,
                 ambiguousLegCount: 0,
                 matchedTrailName: nil,
-                didMoveRoute: false
+                currentTrailName: nil,
+                didMoveRoute: false,
+                ambiguities: [],
+                legs: []
             )
         }
 
@@ -166,6 +227,7 @@ nonisolated enum TrailMatcher {
         struct Leg {
             let transition: Transition?
             let isConfident: Bool
+            let isSparse: Bool
         }
         var legs: [Leg] = []
         legs.reserveCapacity(points.count - 1)
@@ -181,7 +243,13 @@ nonisolated enum TrailMatcher {
                   blockIDs[previousIndex] == blockIDs[indexInPoints],
                   !points[indexInPoints].flags.contains(.resumed)
             else {
-                legs.append(Leg(transition: nil, isConfident: false))
+                legs.append(
+                    Leg(
+                        transition: nil,
+                        isConfident: false,
+                        isSparse: false
+                    )
+                )
                 continue
             }
             let parameters = transitionParameters(
@@ -194,7 +262,13 @@ nonisolated enum TrailMatcher {
                 to: current,
                 parameters: parameters
             ) else {
-                legs.append(Leg(transition: nil, isConfident: false))
+                legs.append(
+                    Leg(
+                        transition: nil,
+                        isConfident: false,
+                        isSparse: parameters.isSparse
+                    )
+                )
                 continue
             }
 
@@ -206,7 +280,13 @@ nonisolated enum TrailMatcher {
                     !parameters.isSparse
                     || transition.likelihoodMargin >= confidenceLogMargin
                 )
-            legs.append(Leg(transition: transition, isConfident: confident))
+            legs.append(
+                Leg(
+                    transition: transition,
+                    isConfident: confident,
+                    isSparse: parameters.isSparse
+                )
+            )
             if confident {
                 matchedLegCount += 1
                 if previous.offRouteMeters > 1 || current.offRouteMeters > 1
@@ -219,16 +299,6 @@ nonisolated enum TrailMatcher {
             } else if parameters.isSparse {
                 ambiguousLegCount += 1
             }
-        }
-
-        guard matchedLegCount > 0 else {
-            return TrailMatchResult(
-                points: points,
-                matchedLegCount: 0,
-                ambiguousLegCount: ambiguousLegCount,
-                matchedTrailName: nil,
-                didMoveRoute: false
-            )
         }
 
         var usesMatchedAnchor = [Bool](repeating: false, count: points.count)
@@ -250,6 +320,8 @@ nonisolated enum TrailMatcher {
         }
 
         var output: [RecordingPoint] = []
+        var matchLegs: [TrailMatchLeg] = []
+        var ambiguities: [TrailMatchAmbiguity] = []
         for indexInPoints in 1..<points.count {
             let previousIndex = indexInPoints - 1
             let coordinates: [CLLocationCoordinate2D]
@@ -267,6 +339,42 @@ nonisolated enum TrailMatcher {
                 from: anchors[previousIndex],
                 to: anchors[indexInPoints]
             )
+            let alternatives: [TrailMatchAlternative]
+            if !legs[previousIndex].isConfident,
+               legs[previousIndex].isSparse,
+               let transition = legs[previousIndex].transition {
+                alternatives = transition.alternatives.enumerated().map {
+                    alternativeIndex, alternative in
+                    TrailMatchAlternative(
+                        id: alternativeIndex,
+                        points: recordingPoints(
+                            along: alternative.coordinates,
+                            from: anchors[previousIndex],
+                            to: anchors[indexInPoints]
+                        ),
+                        distanceMeters: alternative.distanceMeters,
+                        trailNames: alternative.trailNames
+                    )
+                }
+            } else {
+                alternatives = []
+            }
+            matchLegs.append(
+                TrailMatchLeg(
+                    index: previousIndex,
+                    defaultPoints: segment,
+                    alternatives: alternatives
+                )
+            )
+            if !alternatives.isEmpty {
+                ambiguities.append(
+                    TrailMatchAmbiguity(
+                        id: previousIndex,
+                        gpsPoints: segment,
+                        alternatives: alternatives
+                    )
+                )
+            }
             if output.isEmpty {
                 output.append(contentsOf: segment)
             } else {
@@ -278,12 +386,23 @@ nonisolated enum TrailMatcher {
             if $0.value == $1.value { return $0.key > $1.key }
             return $0.value < $1.value
         }?.key
+        let currentTrailName: String?
+        if let last = legs.last,
+           last.isConfident,
+           let transition = last.transition {
+            currentTrailName = transition.trailNames.sorted().first
+        } else {
+            currentTrailName = nil
+        }
         return TrailMatchResult(
             points: output,
             matchedLegCount: matchedLegCount,
             ambiguousLegCount: ambiguousLegCount,
             matchedTrailName: matchedTrailName,
-            didMoveRoute: didMoveRoute
+            currentTrailName: currentTrailName,
+            didMoveRoute: didMoveRoute,
+            ambiguities: ambiguities,
+            legs: matchLegs
         )
     }
 
@@ -412,7 +531,9 @@ nonisolated enum TrailMatcher {
         to end: RecordingPoint
     ) -> [RecordingPoint] {
         var coordinates: [CLLocationCoordinate2D] = []
-        for coordinate in rawCoordinates {
+        for coordinate in [start.coordinate]
+            + rawCoordinates
+            + [end.coordinate] {
             guard let previous = coordinates.last else {
                 coordinates.append(coordinate)
                 continue
@@ -440,6 +561,9 @@ nonisolated enum TrailMatcher {
         }
         let total = distances.last ?? 0
         let duration = end.timestamp.timeIntervalSince(start.timestamp)
+        let carriesNonPedestrianMotion =
+            start.flags.contains(.nonPedestrian)
+            || end.flags.contains(.nonPedestrian)
 
         return coordinates.indices.map { index in
             let fraction = total > 0
@@ -474,9 +598,17 @@ nonisolated enum TrailMatcher {
                 speed: index == 0
                     ? start.speed
                     : (index == coordinates.count - 1 ? end.speed : nil),
-                flags: index == 0
-                    ? start.flags
-                    : (index == coordinates.count - 1 ? end.flags : [])
+                flags: {
+                    var flags: RecordingPointFlags = carriesNonPedestrianMotion
+                        ? [.nonPedestrian]
+                        : []
+                    if index == 0 {
+                        flags.formUnion(start.flags)
+                    } else if index == coordinates.count - 1 {
+                        flags.formUnion(end.flags)
+                    }
+                    return flags
+                }()
             )
         }
     }
@@ -492,6 +624,13 @@ nonisolated enum TrailMatcher {
         let distanceMeters: Double
         let coordinates: [CLLocationCoordinate2D]
         let likelihoodMargin: Double
+        let trailNames: [String]
+        let alternatives: [TransitionAlternative]
+    }
+
+    private struct TransitionAlternative {
+        let distanceMeters: Double
+        let coordinates: [CLLocationCoordinate2D]
         let trailNames: [String]
     }
 
@@ -805,7 +944,16 @@ nonisolated enum TrailMatcher {
                 distanceMeters: best.distance,
                 coordinates: best.coordinates,
                 likelihoodMargin: likelihoodMargin,
-                trailNames: best.trailNames
+                trailNames: best.trailNames,
+                alternatives: parameters.isSparse
+                    ? ranked.prefix(2).map {
+                        TransitionAlternative(
+                            distanceMeters: $0.distance,
+                            coordinates: $0.coordinates,
+                            trailNames: $0.trailNames.sorted()
+                        )
+                    }
+                    : []
             )
         }
 

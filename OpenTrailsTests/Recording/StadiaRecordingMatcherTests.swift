@@ -57,7 +57,12 @@ struct StadiaRecordingMatcherTests {
             }
         )
         let points = [
-            point(matched[0], seconds: 0, elevation: 600),
+            point(
+                matched[0],
+                seconds: 0,
+                elevation: 600,
+                flags: [.nonPedestrian]
+            ),
             point(matched[2], seconds: 120, elevation: 620)
         ]
 
@@ -66,6 +71,7 @@ struct StadiaRecordingMatcherTests {
         #expect(route.count == 3)
         #expect(abs(route[1].latitude - matched[1].latitude) < 0.000001)
         #expect(abs((route[1].elevation ?? 0) - 610) < 0.1)
+        #expect(route.allSatisfy { $0.motion == .nonPedestrian })
         #expect(
             abs(
                 try #require(route[1].timestamp).timeIntervalSince(
@@ -93,6 +99,47 @@ struct StadiaRecordingMatcherTests {
         #expect((json["shape"] as? [[String: Any]])?.count == 2)
     }
 
+    @Test("a simplified online route keeps an interior motion segment")
+    func simplifiedRouteKeepsMotionBoundary() async throws {
+        let matched = [
+            CLLocationCoordinate2D(latitude: 47.6300, longitude: 12.8600),
+            CLLocationCoordinate2D(latitude: 47.6320, longitude: 12.8620)
+        ]
+        let data = try JSONSerialization.data(withJSONObject: [
+            "trip": [
+                "legs": [
+                    ["shape": encodePolyline6(matched)]
+                ]
+            ]
+        ])
+        let matcher = StadiaRecordingMatcher(
+            apiKey: "TEST_KEY",
+            transport: { _ in
+                RecordingOnlineHTTPResponse(
+                    data: data,
+                    statusCode: 200
+                )
+            }
+        )
+        let points = [
+            point(matched[0], seconds: 0),
+            point(
+                CLLocationCoordinate2D(
+                    latitude: 47.6310,
+                    longitude: 12.8610
+                ),
+                seconds: 60,
+                flags: [.nonPedestrian]
+            ),
+            point(matched[1], seconds: 120)
+        ]
+
+        let route = try await matcher.match(points: points)
+
+        #expect(route.count == 3)
+        #expect(route[1].motion == .nonPedestrian)
+    }
+
     @Test("server failures stay explicit so the recorder can fall back")
     func serverFailure() async {
         let matcher = StadiaRecordingMatcher(
@@ -117,7 +164,8 @@ struct StadiaRecordingMatcherTests {
     private func point(
         _ coordinate: CLLocationCoordinate2D,
         seconds: TimeInterval,
-        elevation: Double? = nil
+        elevation: Double? = nil,
+        flags: RecordingPointFlags = []
     ) -> RecordingPoint {
         RecordingPoint(
             latitude: coordinate.latitude,
@@ -126,7 +174,8 @@ struct StadiaRecordingMatcherTests {
             elevation: elevation,
             horizontalAccuracy: 8,
             course: 45,
-            speed: 1
+            speed: 1,
+            flags: flags
         )
     }
 

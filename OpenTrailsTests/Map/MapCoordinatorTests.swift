@@ -286,6 +286,32 @@ struct MapCoordinatorTests {
         )
     }
 
+    @Test("an ambiguous review leg is rendered as a distinct overlay")
+    func ambiguityReviewUsesADistinctOverlay() async throws {
+        let coordinator = MapView.Coordinator()
+        let map = makeMap(mapView(), coordinator)
+        defer { detach(map) }
+        let route = [
+            CLLocationCoordinate2D(latitude: 47.63, longitude: 12.86),
+            CLLocationCoordinate2D(latitude: 47.631, longitude: 12.861),
+            CLLocationCoordinate2D(latitude: 47.632, longitude: 12.862)
+        ]
+        recordingTrace.showReview(
+            route: route,
+            highlightedSegment: Array(route.suffix(2))
+        )
+        await settle()
+
+        let overlay = try #require(coordinator.recordingReviewOverlay)
+        let renderer = try #require(
+            coordinator.mapView(map, rendererFor: overlay)
+                as? MKPolylineRenderer
+        )
+        #expect(renderer.lineWidth == 7)
+        #expect(renderer.lineDashPattern == [3, 5])
+        #expect(coordinator.recordingTailOverlay != nil)
+    }
+
     // MARK: Route style
 
     /// A colour well and a width slider are dragged, so their writes arrive at

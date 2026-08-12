@@ -18,6 +18,33 @@ private actor OverpassRequestRecorder {
 
 @Suite("Overpass trail graph")
 struct OverpassTrailGraphProviderTests {
+    @Test("region identity changes exactly at the cache-tile boundary")
+    func regionIdentityTracksCoverage() throws {
+        let provider = OverpassTrailGraphProvider()
+        let coordinate = CLLocationCoordinate2D(
+            latitude: 47.63,
+            longitude: 12.86
+        )
+        let initial = try #require(
+            provider.region(containing: coordinate)
+        )
+        let eastBoundary = SlippyTileMath.lon(
+            x: initial.x + 1,
+            z: initial.zoom
+        )
+        let adjacent = try #require(
+            provider.region(
+                containing: CLLocationCoordinate2D(
+                    latitude: coordinate.latitude,
+                    longitude: eastBoundary + 0.000_001
+                )
+            )
+        )
+
+        #expect(adjacent != initial)
+        #expect(adjacent.x == initial.x + 1)
+    }
+
     @Test("OSM ways become junction edges with hiking relation names")
     func decodesGraph() throws {
         let graph = try OverpassTrailGraphProvider.decodeGraph(
@@ -101,6 +128,103 @@ struct OverpassTrailGraphProviderTests {
         )
         let graph = try await reloaded.cachedGraph(covering: [coordinate])
         #expect(graph?.edges.count == 1)
+    }
+
+    @Test("a final cache read waits for its in-flight prefetch")
+    func cacheReadAwaitsPrefetch() async throws {
+        let directory = FileManager.default.temporaryDirectory
+            .appendingPathComponent(
+                "trail-graph-in-flight-\(UUID().uuidString)",
+                isDirectory: true
+            )
+        defer { try? FileManager.default.removeItem(at: directory) }
+        let recorder = OverpassRequestRecorder()
+        let provider = OverpassTrailGraphProvider(
+            directory: directory,
+            transport: { request in
+                await recorder.record(request)
+                try await Task.sleep(for: .milliseconds(50))
+                return OverpassHTTPResponse(
+                    data: Data(Self.fixture.utf8),
+                    statusCode: 200,
+                    headers: [:]
+                )
+            }
+        )
+        let coordinate = CLLocationCoordinate2D(
+            latitude: 47.63,
+            longitude: 12.86
+        )
+
+        let prefetch = Task {
+            try await provider.prefetch(around: coordinate)
+        }
+        for _ in 0..<100 {
+            if !(await recorder.requests).isEmpty {
+                break
+            }
+            await Task.yield()
+        }
+        let graph = try await provider.cachedGraph(
+            covering: [coordinate]
+        )
+        try await prefetch.value
+
+        #expect(graph?.edges.count == 1)
+    }
+
+    @Test("an in-flight refresh wins over an expired graph")
+    func refreshReplacesExpiredGraph() async throws {
+        let directory = FileManager.default.temporaryDirectory
+            .appendingPathComponent(
+                "trail-graph-refresh-\(UUID().uuidString)",
+                isDirectory: true
+            )
+        defer { try? FileManager.default.removeItem(at: directory) }
+        let recorder = OverpassRequestRecorder()
+        let clock = TestClock()
+        let provider = OverpassTrailGraphProvider(
+            directory: directory,
+            clock: clock.read,
+            transport: { request in
+                await recorder.record(request)
+                if (await recorder.requests).count > 1 {
+                    try await Task.sleep(for: .milliseconds(50))
+                    return OverpassHTTPResponse(
+                        data: Data(#"{"elements":[]}"#.utf8),
+                        statusCode: 200,
+                        headers: [:]
+                    )
+                }
+                return OverpassHTTPResponse(
+                    data: Data(Self.fixture.utf8),
+                    statusCode: 200,
+                    headers: [:]
+                )
+            }
+        )
+        let coordinate = CLLocationCoordinate2D(
+            latitude: 47.63,
+            longitude: 12.86
+        )
+        try await provider.prefetch(around: coordinate)
+        clock.advance(by: 31 * 24 * 60 * 60)
+
+        let refresh = Task {
+            try await provider.prefetch(around: coordinate)
+        }
+        for _ in 0..<100 {
+            if (await recorder.requests).count == 2 {
+                break
+            }
+            await Task.yield()
+        }
+        let graph = try await provider.cachedGraph(
+            covering: [coordinate]
+        )
+        try await refresh.value
+
+        #expect(graph?.edges.isEmpty == true)
     }
 
     private nonisolated static let fixture = """

@@ -35,6 +35,7 @@ final class OpenTrailsModel {
             hikeRecorder: HikeRecorder(
                 container: container,
                 elevationSource: SystemRecordingElevationSource(),
+                motionSource: SystemRecordingMotionSource(),
                 trailGraphProvider: OverpassTrailGraphProvider(),
                 distanceEvidenceSource: SystemPedometerDistanceSource(),
                 onlineMatcher: stadiaKey.map {

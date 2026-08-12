@@ -110,6 +110,8 @@ nonisolated struct RecordingPointFlags: OptionSet, Codable, Hashable, Sendable {
     static let resumed = RecordingPointFlags(rawValue: 1 << 0)
     static let stationary = RecordingPointFlags(rawValue: 1 << 1)
     static let widgetSourced = RecordingPointFlags(rawValue: 1 << 2)
+    static let motionStationary = RecordingPointFlags(rawValue: 1 << 3)
+    static let nonPedestrian = RecordingPointFlags(rawValue: 1 << 4)
 }
 
 nonisolated struct RecordingPoint: Equatable, Sendable {
@@ -178,7 +180,10 @@ nonisolated struct RecordingPoint: Equatable, Sendable {
             latitude: latitude,
             longitude: longitude,
             elevation: elevation,
-            timestamp: timestamp
+            timestamp: timestamp,
+            motion: flags.contains(.nonPedestrian)
+                ? .nonPedestrian
+                : nil
         )
     }
 }
@@ -194,6 +199,7 @@ nonisolated enum RecordingFixPolicy {
     static func accepts(
         _ location: CLLocation,
         after previous: RecordingPoint?,
+        motionState: RecordingMotionState = .unknown,
         now: Date = .now
     ) -> Bool {
         guard LocationFixPolicy.accepts(
@@ -218,7 +224,9 @@ nonisolated enum RecordingFixPolicy {
             to: location.coordinate
         )
         let impliedSpeed = displacement / interval
-        if impliedSpeed > maximumSpeed, !reportedSpeedSupports(impliedSpeed, location.speed) {
+        if impliedSpeed > maximumSpeed,
+           motionState != .nonPedestrian,
+           !reportedSpeedSupports(impliedSpeed, location.speed) {
             return false
         }
 
@@ -268,6 +276,7 @@ nonisolated struct RecordingDistanceAccumulator: Sendable {
     private var movementWindowStart: RecordingPoint?
     private var movementWindowDistance = 0.0
     private var stationaryAnchor: RecordingPoint?
+    private var motionStationaryStartedAt: Date?
 
     private static let stationaryInterval: TimeInterval = 30
     private static let stationaryNetDisplacement: CLLocationDistance = 15
@@ -282,6 +291,7 @@ nonisolated struct RecordingDistanceAccumulator: Sendable {
         guard let previous else {
             self.previous = point
             movementWindowStart = point
+            _ = updateMotionStationaryStart(for: point)
             return distanceMeters
         }
 
@@ -291,9 +301,13 @@ nonisolated struct RecordingDistanceAccumulator: Sendable {
             movementWindowDistance = 0
             stationaryAnchor = nil
             isStationary = false
+            _ = updateMotionStationaryStart(for: point)
             return distanceMeters
         }
 
+        let beganMotionStationary = updateMotionStationaryStart(
+            for: point
+        )
         recordedDuration += max(
             0,
             point.timestamp.timeIntervalSince(previous.timestamp)
@@ -306,6 +320,9 @@ nonisolated struct RecordingDistanceAccumulator: Sendable {
                 to: point.coordinate
             )
             self.previous = point
+            if point.flags.contains(.motionStationary) {
+                return distanceMeters
+            }
             guard displacement > Self.resumeDisplacement else {
                 return distanceMeters
             }
@@ -325,6 +342,11 @@ nonisolated struct RecordingDistanceAccumulator: Sendable {
         distanceMeters += leg
         movementWindowDistance += leg
         self.previous = point
+        if beganMotionStationary {
+            movementWindowStart = point
+            movementWindowDistance = 0
+            return distanceMeters
+        }
 
         guard let movementWindowStart,
               point.timestamp.timeIntervalSince(movementWindowStart.timestamp)
@@ -337,7 +359,12 @@ nonisolated struct RecordingDistanceAccumulator: Sendable {
             from: movementWindowStart.coordinate,
             to: point.coordinate
         )
-        if netDisplacement < Self.stationaryNetDisplacement {
+        let motionConfirmsStationary = motionStationaryStartedAt.map {
+            point.timestamp.timeIntervalSince($0)
+                >= Self.stationaryInterval
+        } ?? false
+        if netDisplacement < Self.stationaryNetDisplacement
+            || motionConfirmsStationary {
             distanceMeters = max(0, distanceMeters - movementWindowDistance)
             movementWindowDistance = 0
             stationaryAnchor = movementWindowStart
@@ -347,6 +374,19 @@ nonisolated struct RecordingDistanceAccumulator: Sendable {
             movementWindowDistance = 0
         }
         return distanceMeters
+    }
+
+    private mutating func updateMotionStationaryStart(
+        for point: RecordingPoint
+    ) -> Bool {
+        if point.flags.contains(.motionStationary) {
+            guard motionStationaryStartedAt == nil else { return false }
+            motionStationaryStartedAt = point.timestamp
+            return true
+        } else {
+            motionStationaryStartedAt = nil
+            return false
+        }
     }
 }
 
@@ -359,6 +399,7 @@ nonisolated struct PreparedRecording: Sendable {
     let endedAt: Date
     let matchedTrailName: String?
     let ambiguousLegCount: Int
+    let matchResult: TrailMatchResult?
 }
 
 nonisolated enum RecordingPreparation {
@@ -369,12 +410,12 @@ nonisolated enum RecordingPreparation {
         endedAt: Date,
         graph: TrailGraph? = nil,
         gapDistances: [Int: Double] = [:],
-        keepRawGPSTrack: Bool = true
+        keepRawGPSTrack: Bool = true,
+        ambiguityChoices: [Int: TrailAmbiguityChoice]? = nil
     ) throws(RecordingFailure) -> PreparedRecording {
         let deduplicated = normalizedPoints(points)
         guard deduplicated.count > 1 else { throw .tooShort }
 
-        let rawRoute = deduplicated.map(\.routeCoordinate)
         let match = graph.map {
             TrailMatcher.match(
                 points: deduplicated,
@@ -382,11 +423,55 @@ nonisolated enum RecordingPreparation {
                 gapDistances: gapDistances
             )
         }
-        let usesMatchedRoute = (match?.matchedLegCount ?? 0) > 0
-            && match?.didMoveRoute == true
-        let preparedPoints = usesMatchedRoute
-            ? (match?.points ?? deduplicated)
-            : deduplicated
+        return preparedRecording(
+            points: deduplicated,
+            startedAt: startedAt,
+            endedAt: endedAt,
+            match: match,
+            keepRawGPSTrack: keepRawGPSTrack,
+            ambiguityChoices: ambiguityChoices
+        )
+    }
+
+    static func prepareResolved(
+        points: [RecordingPoint],
+        startedAt: Date,
+        endedAt: Date,
+        matchResult: TrailMatchResult,
+        choices: [Int: TrailAmbiguityChoice],
+        keepRawGPSTrack: Bool
+    ) throws(RecordingFailure) -> PreparedRecording {
+        let deduplicated = normalizedPoints(points)
+        guard deduplicated.count > 1 else { throw .tooShort }
+        return preparedRecording(
+            points: deduplicated,
+            startedAt: startedAt,
+            endedAt: endedAt,
+            match: matchResult,
+            keepRawGPSTrack: keepRawGPSTrack,
+            ambiguityChoices: choices
+        )
+    }
+
+    private static func preparedRecording(
+        points deduplicated: [RecordingPoint],
+        startedAt: Date,
+        endedAt: Date,
+        match: TrailMatchResult?,
+        keepRawGPSTrack: Bool,
+        ambiguityChoices: [Int: TrailAmbiguityChoice]?
+    ) -> PreparedRecording {
+        let rawRoute = deduplicated.map(\.routeCoordinate)
+        let preparedPoints: [RecordingPoint]
+        if let match, let ambiguityChoices {
+            preparedPoints = match.points(resolving: ambiguityChoices)
+        } else {
+            preparedPoints = match?.points ?? deduplicated
+        }
+        let usesMatchedRoute = routeMoved(
+            preparedPoints,
+            from: deduplicated
+        )
 
         let distanceMeters: Double
         if usesMatchedRoute {
@@ -409,7 +494,10 @@ nonisolated enum RecordingPreparation {
             matchedTrailName: usesMatchedRoute
                 ? match?.matchedTrailName
                 : nil,
-            ambiguousLegCount: match?.ambiguousLegCount ?? 0
+            ambiguousLegCount: ambiguityChoices == nil
+                ? match?.ambiguousLegCount ?? 0
+                : 0,
+            matchResult: match
         )
     }
 
@@ -484,6 +572,19 @@ nonisolated enum RecordingPreparation {
         }
         return distance
     }
+
+    private static func routeMoved(
+        _ route: [RecordingPoint],
+        from raw: [RecordingPoint]
+    ) -> Bool {
+        guard route.count == raw.count else { return true }
+        return zip(route, raw).contains {
+            RouteGeometry.distanceMeters(
+                from: $0.0.coordinate,
+                to: $0.1.coordinate
+            ) > 1
+        }
+    }
 }
 
 @MainActor
@@ -515,42 +616,126 @@ final class RecordingTrace {
 
     @ObservationIgnored private(set) var committedChunks: [[CLLocationCoordinate2D]] = []
     @ObservationIgnored private(set) var tail: [CLLocationCoordinate2D] = []
+    @ObservationIgnored private(set) var reviewSegment:
+        [CLLocationCoordinate2D] = []
     @ObservationIgnored private(set) var generation = 0
+    @ObservationIgnored private var stableTail: [CLLocationCoordinate2D] = []
+    @ObservationIgnored private var provisionalTail: [CLLocationCoordinate2D] = []
     private(set) var revision = 0
 
-    func append(_ coordinate: CLLocationCoordinate2D) {
-        tail.append(coordinate)
-        if tail.count >= Self.chunkSize {
-            committedChunks.append(tail)
-            tail = tail.last.map { [$0] } ?? []
+    func append(
+        _ coordinate: CLLocationCoordinate2D,
+        provisional: Bool = false
+    ) {
+        reviewSegment = []
+        if provisional {
+            Self.appendDistinct(coordinate, to: &provisionalTail)
+        } else {
+            appendStable([coordinate])
+            provisionalTail = []
         }
+        rebuildTail()
         revision &+= 1
     }
 
     func replace(with coordinates: [CLLocationCoordinate2D]) {
+        replace(stable: coordinates, provisional: [])
+    }
+
+    func replace(
+        stable stableCoordinates: [CLLocationCoordinate2D],
+        provisional provisionalCoordinates: [CLLocationCoordinate2D]
+    ) {
         generation &+= 1
         committedChunks = []
+        reviewSegment = []
+        stableTail = []
+        provisionalTail = []
         tail = []
-        guard !coordinates.isEmpty else {
+        guard !stableCoordinates.isEmpty
+                || !provisionalCoordinates.isEmpty else {
             revision &+= 1
             return
         }
 
-        var start = 0
-        while coordinates.count - start >= Self.chunkSize {
-            let end = start + Self.chunkSize
-            committedChunks.append(Array(coordinates[start..<end]))
-            start = end - 1
+        appendStable(stableCoordinates)
+        for coordinate in provisionalCoordinates {
+            Self.appendDistinct(coordinate, to: &provisionalTail)
         }
-        tail = Array(coordinates[start...])
+        rebuildTail()
+        revision &+= 1
+    }
+
+    @discardableResult
+    func applyLiveMatch(
+        committing stableCoordinates: [CLLocationCoordinate2D],
+        provisional provisionalCoordinates: [CLLocationCoordinate2D],
+        expectedGeneration: Int
+    ) -> Bool {
+        guard generation == expectedGeneration else { return false }
+        reviewSegment = []
+        appendStable(stableCoordinates)
+        provisionalTail = []
+        for coordinate in provisionalCoordinates {
+            Self.appendDistinct(coordinate, to: &provisionalTail)
+        }
+        rebuildTail()
+        revision &+= 1
+        return true
+    }
+
+    func showReview(
+        route: [CLLocationCoordinate2D],
+        highlightedSegment: [CLLocationCoordinate2D]?
+    ) {
+        replace(with: route)
+        reviewSegment = highlightedSegment ?? []
         revision &+= 1
     }
 
     func reset() {
         generation &+= 1
         committedChunks = []
+        reviewSegment = []
+        stableTail = []
+        provisionalTail = []
         tail = []
         revision &+= 1
+    }
+
+    private func appendStable(
+        _ coordinates: [CLLocationCoordinate2D]
+    ) {
+        for coordinate in coordinates {
+            Self.appendDistinct(coordinate, to: &stableTail)
+        }
+        while stableTail.count >= Self.chunkSize {
+            committedChunks.append(
+                Array(stableTail.prefix(Self.chunkSize))
+            )
+            stableTail.removeFirst(Self.chunkSize - 1)
+        }
+    }
+
+    private func rebuildTail() {
+        tail = stableTail
+        for coordinate in provisionalTail {
+            Self.appendDistinct(coordinate, to: &tail)
+        }
+    }
+
+    private static func appendDistinct(
+        _ coordinate: CLLocationCoordinate2D,
+        to coordinates: inout [CLLocationCoordinate2D]
+    ) {
+        if let previous = coordinates.last,
+           RouteGeometry.distanceMeters(
+               from: previous,
+               to: coordinate
+           ) <= 0.05 {
+            return
+        }
+        coordinates.append(coordinate)
     }
 
     func widgetPolyline(

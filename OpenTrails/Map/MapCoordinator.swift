@@ -20,6 +20,7 @@ extension MapView {
         var routeOverlay: MKPolyline?
         var recordingChunkOverlays: [MKPolyline] = []
         var recordingTailOverlay: MKPolyline?
+        var recordingReviewOverlay: MKPolyline?
         private var recordingTraceGeneration = -1
         /// The live renderer for the route line, kept so a tint change can recolor
         /// it in place without rebuilding the overlay.
@@ -301,8 +302,12 @@ extension MapView {
                 if let recordingTailOverlay {
                     mapView.removeOverlay(recordingTailOverlay)
                 }
+                if let recordingReviewOverlay {
+                    mapView.removeOverlay(recordingReviewOverlay)
+                }
                 recordingChunkOverlays = []
                 recordingTailOverlay = nil
+                recordingReviewOverlay = nil
                 recordingTraceGeneration = trace.generation
             }
 
@@ -324,13 +329,27 @@ extension MapView {
                 mapView.removeOverlay(recordingTailOverlay)
                 self.recordingTailOverlay = nil
             }
-            guard trace.tail.count > 1 else { return }
-            let tail = MKPolyline(
-                coordinates: trace.tail,
-                count: trace.tail.count
-            )
-            recordingTailOverlay = tail
-            mapView.addOverlay(tail, level: .aboveLabels)
+            if trace.tail.count > 1 {
+                let tail = MKPolyline(
+                    coordinates: trace.tail,
+                    count: trace.tail.count
+                )
+                recordingTailOverlay = tail
+                mapView.addOverlay(tail, level: .aboveLabels)
+            }
+
+            if let recordingReviewOverlay {
+                mapView.removeOverlay(recordingReviewOverlay)
+                self.recordingReviewOverlay = nil
+            }
+            if trace.reviewSegment.count > 1 {
+                let review = MKPolyline(
+                    coordinates: trace.reviewSegment,
+                    count: trace.reviewSegment.count
+                )
+                recordingReviewOverlay = review
+                mapView.addOverlay(review, level: .aboveLabels)
+            }
         }
 
         /// Adds/moves/removes the single highlight annotation. O(1).
@@ -441,6 +460,19 @@ extension MapView {
                 return CachingTileOverlayRenderer(overlay: tileOverlay)
             }
             if let polyline = overlay as? MKPolyline {
+                if recordingReviewOverlay === polyline {
+                    let renderer = MKPolylineRenderer(polyline: polyline)
+                    #if os(macOS)
+                    renderer.strokeColor = NSColor.systemOrange
+                    #else
+                    renderer.strokeColor = UIColor.systemOrange
+                    #endif
+                    renderer.lineWidth = 7
+                    renderer.lineDashPattern = [3, 5]
+                    renderer.lineJoin = .round
+                    renderer.lineCap = .round
+                    return renderer
+                }
                 if recordingTailOverlay === polyline
                     || recordingChunkOverlays.contains(where: { $0 === polyline }) {
                     let renderer = MKPolylineRenderer(polyline: polyline)
