@@ -185,7 +185,11 @@ nonisolated struct RouteProfile {
         let segmentLength = distances[upper] - distances[lower]
         guard segmentLength > 0 else { return coordinates[upper] }
         let fraction = (target - distances[lower]) / segmentLength
-        return Self.interpolate(from: coordinates[lower], to: coordinates[upper], fraction: fraction)
+        return RouteGeometry.interpolate(
+            from: coordinates[lower],
+            to: coordinates[upper],
+            fraction: fraction
+        )
     }
 
     /// Elevation sample nearest to a distance along the route. O(log n).
@@ -259,8 +263,14 @@ nonisolated struct RouteProfile {
         }
 
         func candidate(at index: Int) -> Candidate {
-            let start = Self.localOffset(from: coordinate, to: coordinates[index])
-            let end = Self.localOffset(from: coordinate, to: coordinates[index + 1])
+            let start = RouteGeometry.localOffset(
+                from: coordinate,
+                to: coordinates[index]
+            )
+            let end = RouteGeometry.localOffset(
+                from: coordinate,
+                to: coordinates[index + 1]
+            )
             let dx = end.x - start.x
             let dy = end.y - start.y
             let lengthSquared = dx * dx + dy * dy
@@ -334,45 +344,6 @@ nonisolated struct RouteProfile {
     private static func bearingDifference(_ a: Double, _ b: Double) -> Double {
         let delta = abs(a - b).truncatingRemainder(dividingBy: 360)
         return delta > 180 ? 360 - delta : delta
-    }
-
-    private static func localOffset(
-        from origin: CLLocationCoordinate2D,
-        to coordinate: CLLocationCoordinate2D
-    ) -> (x: Double, y: Double) {
-        let earthRadius = 6_371_008.8
-        let latitudeRadians = origin.latitude * .pi / 180
-        let longitudeDelta = normalizedLongitudeDelta(coordinate.longitude - origin.longitude)
-        return (
-            x: longitudeDelta * .pi / 180 * earthRadius * cos(latitudeRadians),
-            y: (coordinate.latitude - origin.latitude) * .pi / 180 * earthRadius
-        )
-    }
-
-    private static func interpolate(
-        from start: CLLocationCoordinate2D,
-        to end: CLLocationCoordinate2D,
-        fraction: Double
-    ) -> CLLocationCoordinate2D {
-        let longitude = start.longitude + normalizedLongitudeDelta(end.longitude - start.longitude) * fraction
-        return CLLocationCoordinate2D(
-            latitude: start.latitude + (end.latitude - start.latitude) * fraction,
-            longitude: normalizedLongitude(longitude)
-        )
-    }
-
-    private static func normalizedLongitudeDelta(_ delta: Double) -> Double {
-        var normalized = delta.truncatingRemainder(dividingBy: 360)
-        if normalized > 180 { normalized -= 360 }
-        if normalized < -180 { normalized += 360 }
-        return normalized
-    }
-
-    private static func normalizedLongitude(_ longitude: Double) -> Double {
-        var normalized = longitude.truncatingRemainder(dividingBy: 360)
-        if normalized >= 180 { normalized -= 360 }
-        if normalized < -180 { normalized += 360 }
-        return normalized
     }
 
     /// Index of the value in an ascending array closest to `target`. O(log n).

@@ -20,6 +20,9 @@ struct ContentView: View {
     let backgroundTracker: BackgroundTrailTracker
     /// Owned by `OpenTrailsApp`, so scene lifecycle events are handled there.
     let autoSaveController: AutoSaveController
+    /// App-scoped so recording survives navigation, locking and background
+    /// relaunches rather than belonging to the recording screen.
+    let hikeRecorder: HikeRecorder
 
     @State private var locationManager = LocationManager()
     @State private var weatherManager = WeatherManager()
@@ -31,7 +34,7 @@ struct ContentView: View {
     /// so a widget tap can push a hike's detail view (see `openHike(from:)`).
     /// The cost is that popping the detail view now re-evaluates this body
     /// too; `MapView` is `.equatable()`, so that diff stops at the map.
-    @State private var navigationPath: [Hike] = []
+    @State private var navigationPath: [SheetRoute] = []
     @State private var highlight = RouteHighlight()
     /// Set when a picked file couldn't become a hike; drives the alert that
     /// says so. `nil` the rest of the time.
@@ -88,6 +91,7 @@ struct ContentView: View {
             route: displayedRoute,
             routeStyle: routeStyle,
             highlight: highlight,
+            recordingTrace: hikeRecorder.trace,
             sheetMetrics: sheetMetrics,
             tileSource: activeTileSource,
             mapController: mapController
@@ -116,6 +120,7 @@ struct ContentView: View {
                     autoSave: autoSaveController,
                     locationManager: locationManager,
                     backgroundTracker: backgroundTracker,
+                    hikeRecorder: hikeRecorder,
                     onImportGPX: importGPX,
                     onImportFailed: { importFailure = .unreadable },
                     onSheetTopChange: { sheetMetrics.topY = $0 }
@@ -146,7 +151,7 @@ struct ContentView: View {
             .alert(isPresented: showingImportFailure, error: importFailure) {
                 Button("OK", role: .cancel) {}
             }
-            .onOpenURL { url in openHike(from: url) }
+            .onOpenURL { url in openWidgetLink(url) }
             // Follows the selected hike so auto-save always tracks what's on screen.
             .onChange(of: selectedHike) { _, hike in
                 if hike == nil {
@@ -166,16 +171,33 @@ struct ContentView: View {
             }
     }
 
-    /// Handles a tap on the trail widget: opens that hike's detail view.
+    /// Handles a widget tap, opening either the live recording or a hike.
     ///
     /// Does nothing if its detail view is already the thing on screen —
     /// coming back to the app you were already looking at shouldn't reshuffle
     /// it. Otherwise the hike is selected (drawing its route on the map) and
     /// pushed, replacing rather than stacking onto whatever was open, since
     /// the widget is a jump to one trail and not a step in a journey.
-    private func openHike(from url: URL) {
-        guard let id = TrailWidgetDeepLink.hikeID(from: url),
-              navigationPath.last?.id != id else { return }
+    private func openWidgetLink(_ url: URL) {
+        guard let destination = TrailWidgetDeepLink.destination(from: url)
+        else {
+            return
+        }
+        switch destination {
+        case .recording:
+            guard hikeRecorder.isActive else { return }
+            searchText = ""
+            SheetRoute.reopenRecording(in: &navigationPath)
+            withAnimation { sheetDetent = .medium }
+        case .hike(let id):
+            openHike(id: id)
+        }
+    }
+
+    private func openHike(id: UUID) {
+        if case let .hike(current)? = navigationPath.last, current.id == id {
+            return
+        }
 
         let descriptor = FetchDescriptor<Hike>(predicate: #Predicate { $0.id == id })
         // A hike deleted while the widget still showed it: open the app and
@@ -186,28 +208,27 @@ struct ContentView: View {
         // otherwise still be showing over the detail view.
         searchText = ""
         selectedHike = hike
-        navigationPath = [hike]
+        if navigationPath.contains(.recording) {
+            navigationPath.append(.hike(hike))
+        } else {
+            navigationPath = [.hike(hike)]
+        }
         // The compact detent is only tall enough for the search field, so a
         // push there would arrive off-screen.
         withAnimation { sheetDetent = .medium }
     }
 
-    /// Whether this process was launched to host a test bundle.
-    ///
-    /// Both test bundles are hosted by this app, so it launches — and runs its
-    /// `.task`s — before a single test does. Restoring a selection there
-    /// publishes a widget payload into the App Group and reloads the widget's
-    /// timelines, underneath suites whose whole subject is that one file. It's
-    /// a race no test can win, and it made a widget-feed assertion fail with
-    /// whatever trail this simulator was last left on.
-    private static let isHostingTests =
-        ProcessInfo.processInfo.environment["XCTestConfigurationFilePath"] != nil
-
     /// Restores the last-selected hike across launches — today `selectedHike`
     /// starts every launch as `nil`, so without this the widget would
     /// stay empty until the user reselects a trail by hand.
+    ///
+    /// Skipped while hosting tests: restoring a selection publishes a widget
+    /// payload into the App Group and reloads the widget's timelines,
+    /// underneath suites whose whole subject is that one file. It's a race no
+    /// test can win, and it made a widget-feed assertion fail with whatever
+    /// trail this simulator was last left on. See ``AppLaunchEnvironment``.
     private func restoreLastSelectedHike() {
-        guard !Self.isHostingTests,
+        guard !AppLaunchEnvironment.isHostingTests,
               selectedHike == nil,
               let stored = UserDefaults.standard.string(forKey: SettingsKey.lastSelectedHikeID),
               let id = UUID(uuidString: stored) else { return }
@@ -322,7 +343,13 @@ private struct WeatherBadge: View {
     let container = try! ModelContainer(for: Hike.self, configurations: .init(isStoredInMemoryOnly: true))
     ContentView(
         backgroundTracker: BackgroundTrailTracker(container: container),
-        autoSaveController: AutoSaveController()
+        autoSaveController: AutoSaveController(),
+        hikeRecorder: HikeRecorder(
+            container: container,
+            journalDirectory: FileManager.default.temporaryDirectory
+                .appendingPathComponent("recording-preview", isDirectory: true),
+            automaticallyRecovers: false
+        )
     )
     .modelContainer(container)
 }

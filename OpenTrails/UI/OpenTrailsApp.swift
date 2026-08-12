@@ -15,6 +15,7 @@ struct OpenTrailsApp: App {
     private let container: ModelContainer
     private let backgroundTracker: BackgroundTrailTracker
     private let autoSaveController: AutoSaveController
+    private let hikeRecorder: HikeRecorder
 
     init() {
         #if DEBUG
@@ -37,11 +38,27 @@ struct OpenTrailsApp: App {
         // location event has nothing to deliver to.
         self.backgroundTracker = BackgroundTrailTracker(container: container)
         self.autoSaveController = AutoSaveController()
+        let stadiaKey = Secrets.apiKey(for: .stadiaOutdoors)
+        self.hikeRecorder = HikeRecorder(
+            container: container,
+            elevationSource: SystemRecordingElevationSource(),
+            trailGraphProvider: OverpassTrailGraphProvider(),
+            distanceEvidenceSource: SystemPedometerDistanceSource(),
+            onlineMatcher: stadiaKey.map {
+                StadiaRecordingMatcher(apiKey: $0)
+            },
+            onlineMatchingAvailable: { stadiaKey != nil },
+            sharedStateStore: AppGroupRecordingSharedStateStore()
+        )
     }
 
     var body: some Scene {
         WindowGroup {
-            ContentView(backgroundTracker: backgroundTracker, autoSaveController: autoSaveController)
+            ContentView(
+                backgroundTracker: backgroundTracker,
+                autoSaveController: autoSaveController,
+                hikeRecorder: hikeRecorder
+            )
                 .ignoresSafeArea()
         }
         .modelContainer(container)
@@ -53,7 +70,9 @@ struct OpenTrailsApp: App {
             if phase == .active {
                 autoSaveController.sceneDidBecomeActive()
                 backgroundTracker.refreshBasemaps()
+                hikeRecorder.sceneDidBecomeActive()
             } else if phase == .inactive || phase == .background {
+                hikeRecorder.sceneWillResignActive()
                 autoSaveController.sceneWillResignActive {
                     try container.mainContext.save()
                 }

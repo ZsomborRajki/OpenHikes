@@ -99,8 +99,27 @@ struct TrailWidgetTests {
         )
     }
 
+    private static func recordingSnapshot(
+        sessionID: UUID = UUID(),
+        isCapturingFixes: Bool = true
+    ) -> SharedRecordingSnapshot {
+        SharedRecordingSnapshot(
+            sessionID: sessionID,
+            startedAt: Date(timeIntervalSince1970: 1_750_000_000),
+            distanceMeters: 1_200,
+            pointCount: 240,
+            polyline: [
+                .init(latitude: 47.6300, longitude: 12.8600),
+                .init(latitude: 47.6320, longitude: 12.8620)
+            ],
+            isCapturingFixes: isCapturingFixes
+        )
+    }
+
     init() {
         SharedStore.clear()
+        try? SharedStore.clearRecording()
+        try? SharedStore.clearPendingRecordingFixes()
     }
 
     // MARK: The timeline
@@ -146,6 +165,60 @@ struct TrailWidgetTests {
         #expect(entry.snapshot?.title == "Second")
     }
 
+    @Test("a live recording takes over the widget and deep links back to it")
+    func recordingTakesOver() throws {
+        defer { try? SharedStore.clearRecording() }
+        let trail = Self.snapshot(title: "Selected Trail")
+        let recording = Self.recordingSnapshot()
+        SharedStore.save(trail)
+        try SharedStore.saveRecording(recording)
+
+        let entry = TrailWidgetProvider.currentEntry()
+
+        #expect(entry.recordingSnapshot == recording)
+        #expect(entry.snapshot == nil)
+        #expect(entry.basemaps == nil)
+        let url = try #require(entry.deepLinkURL)
+        #expect(
+            TrailWidgetDeepLink.destination(from: url) == .recording
+        )
+    }
+
+    @Test("recordings ask WidgetKit for a sparse gap-filling refresh")
+    func recordingUsesShorterRefresh() throws {
+        defer { try? SharedStore.clearRecording() }
+        try SharedStore.saveRecording(Self.recordingSnapshot())
+        let now = Date(timeIntervalSince1970: 1_750_000_000)
+
+        let timeline = TrailWidgetProvider.currentTimeline(date: now)
+        let reload = TrailWidgetProvider.nextReload(
+            after: now,
+            recording: true
+        )
+
+        #expect(timeline.policy == .after(reload))
+        #expect(
+            reload.timeIntervalSince(now)
+                == Double(TrailWidgetProvider.recordingRefreshMinutes * 60)
+        )
+    }
+
+    @Test("a paused recording does not spend the location refresh budget")
+    func pausedRecordingUsesSafetyNetRefresh() throws {
+        defer { try? SharedStore.clearRecording() }
+        try SharedStore.saveRecording(
+            Self.recordingSnapshot(isCapturingFixes: false)
+        )
+        let now = Date(timeIntervalSince1970: 1_750_000_000)
+
+        let timeline = TrailWidgetProvider.currentTimeline(date: now)
+
+        #expect(
+            timeline.policy
+                == .after(TrailWidgetProvider.nextReload(after: now))
+        )
+    }
+
     /// Progress along the trail is precomputed by the app; the widget only
     /// reads it. This is the line the user actually sees.
     @Test("a live fix arrives as progress, not as raw coordinates")
@@ -173,6 +246,7 @@ struct TrailWidgetTests {
     @Test("with nothing stored the entry is empty rather than invented")
     func emptyStoreProducesAnEmptyEntry() {
         SharedStore.clear()
+        try? SharedStore.clearRecording()
 
         let entry = TrailWidgetProvider.currentEntry()
 
@@ -189,6 +263,7 @@ struct TrailWidgetTests {
         #expect(TrailWidgetProvider.currentEntry().snapshot != nil, "precondition: a trail was showing")
 
         SharedStore.clear()
+        try? SharedStore.clearRecording()
 
         let timeline = TrailWidgetProvider.currentTimeline()
         #expect(try #require(timeline.entries.first).snapshot == nil, "a deselected trail must not linger")

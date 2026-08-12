@@ -26,6 +26,7 @@ import Testing
 @Suite("Map coordinator")
 struct MapCoordinatorTests {
     private let highlight = RouteHighlight()
+    private let recordingTrace = RecordingTrace()
     private let sheetMetrics = SheetMetrics()
     private let mapController = MapController()
     private let routeStyle = RouteStyle()
@@ -59,6 +60,7 @@ struct MapCoordinatorTests {
             route: route,
             routeStyle: routeStyle,
             highlight: highlight,
+            recordingTrace: recordingTrace,
             sheetMetrics: sheetMetrics,
             tileSource: tileSource,
             mapController: mapController
@@ -243,6 +245,45 @@ struct MapCoordinatorTests {
         let renderer = try #require(coordinator.mapView(map, rendererFor: line) as? DirectionalPolylineRenderer)
         #expect(renderer.lineWidth == CGFloat(coordinator.routeWidth), "the line is drawn in the current style")
         #expect(coordinator.routeRenderer === renderer, "kept, so a colour drag can recolour it in place")
+    }
+
+    @Test("a live recording rebuilds only its bounded tail")
+    func recordingTraceUsesChunkedOverlays() async throws {
+        let coordinator = MapView.Coordinator()
+        let map = makeMap(mapView(), coordinator)
+        defer { detach(map) }
+
+        for step in 0..<RecordingTrace.chunkSize {
+            recordingTrace.append(
+                CLLocationCoordinate2D(
+                    latitude: 47.63 + Double(step) * 0.00001,
+                    longitude: 12.86
+                )
+            )
+        }
+        await settle()
+
+        #expect(coordinator.recordingChunkOverlays.count == 1)
+        let committed = try #require(coordinator.recordingChunkOverlays.first)
+        #expect(committed.pointCount == RecordingTrace.chunkSize)
+        #expect(coordinator.recordingTailOverlay == nil)
+
+        recordingTrace.append(
+            CLLocationCoordinate2D(latitude: 47.64, longitude: 12.86)
+        )
+        await settle()
+
+        #expect(coordinator.recordingChunkOverlays.first === committed)
+        let tail = try #require(coordinator.recordingTailOverlay)
+        #expect(tail.pointCount == 2)
+        #expect(
+            coordinator.mapView(map, rendererFor: tail)
+                is MKPolylineRenderer
+        )
+        #expect(
+            !(coordinator.mapView(map, rendererFor: tail)
+                is DirectionalPolylineRenderer)
+        )
     }
 
     // MARK: Route style

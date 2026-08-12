@@ -12,6 +12,7 @@ import Foundation
 public enum SharedStore {
     public static let appGroupID = "group.tappium.com.OpenTrails"
     private static let fileName = "trail-snapshot.json"
+    private static let recordingFileName = "recording-snapshot.json"
     private static let basemapSetFileName = "trail-basemaps.json"
     private static let basemapDirectoryName = "basemaps"
 
@@ -19,8 +20,22 @@ public enum SharedStore {
         FileManager.default.containerURL(forSecurityApplicationGroupIdentifier: appGroupID)
     }
 
+    /// The shared container root for app-owned cross-process files that do not
+    /// belong inside the trail snapshot itself.
+    public static func appGroupContainerURL() -> URL? {
+        containerURL
+    }
+
     private static var fileURL: URL? {
         containerURL?.appendingPathComponent(fileName)
+    }
+
+    private static var recordingFileURL: URL? {
+        containerURL?.appendingPathComponent(recordingFileName)
+    }
+
+    private static var pendingRecordingFixStore: PendingRecordingFixStore? {
+        containerURL.map(PendingRecordingFixStore.init(directory:))
     }
 
     /// The current snapshot, or `nil` if none has ever been written, the App
@@ -45,6 +60,96 @@ public enum SharedStore {
         guard let fileURL else { return }
         try? FileManager.default.removeItem(at: fileURL)
         clearBasemaps()
+    }
+
+    // MARK: Live recording
+
+    public static func loadRecording() -> SharedRecordingSnapshot? {
+        guard let recordingFileURL,
+              let data = try? Data(contentsOf: recordingFileURL)
+        else {
+            return nil
+        }
+        return try? JSONDecoder().decode(
+            SharedRecordingSnapshot.self,
+            from: data
+        )
+    }
+
+    public static func saveRecording(
+        _ snapshot: SharedRecordingSnapshot
+    ) throws {
+        guard let recordingFileURL, let pendingRecordingFixStore else {
+            throw SharedRecordingStoreError.containerUnavailable
+        }
+        try pendingRecordingFixStore.saveRecording(
+            snapshot,
+            to: recordingFileURL
+        )
+    }
+
+    public static func clearRecording(sessionID: UUID? = nil) throws {
+        guard let recordingFileURL, let pendingRecordingFixStore else {
+            throw SharedRecordingStoreError.containerUnavailable
+        }
+        try pendingRecordingFixStore.clearRecordingState(
+            sessionID: sessionID,
+            recordingURL: recordingFileURL
+        )
+    }
+
+    @discardableResult
+    public static func appendPendingRecordingFix(
+        _ fix: SharedRecordingFix
+    ) throws -> Bool {
+        guard let pendingRecordingFixStore, let recordingFileURL else {
+            throw SharedRecordingStoreError.containerUnavailable
+        }
+        return try pendingRecordingFixStore.append(
+            fix,
+            validatingRecordingAt: recordingFileURL
+        )
+    }
+
+    public static func loadPendingRecordingFixes() throws
+        -> [SharedRecordingFix] {
+        guard let pendingRecordingFixStore else {
+            throw SharedRecordingStoreError.containerUnavailable
+        }
+        return try pendingRecordingFixStore.load()
+    }
+
+    public static func removePendingRecordingFixes(
+        ids: Set<UUID>
+    ) throws {
+        guard let pendingRecordingFixStore else {
+            throw SharedRecordingStoreError.containerUnavailable
+        }
+        try pendingRecordingFixStore.remove(ids: ids)
+    }
+
+    public static func claimRecordingWidgetSample(
+        sessionID: UUID,
+        at date: Date = .now,
+        minimumInterval: TimeInterval
+    ) throws -> Bool {
+        guard let pendingRecordingFixStore else {
+            throw SharedRecordingStoreError.containerUnavailable
+        }
+        return try pendingRecordingFixStore.claimSample(
+            sessionID: sessionID,
+            at: date,
+            minimumInterval: minimumInterval
+        )
+    }
+
+    public static func clearPendingRecordingFixes(
+        sessionID: UUID? = nil
+    ) throws {
+        guard let pendingRecordingFixStore else {
+            throw SharedRecordingStoreError.containerUnavailable
+        }
+        try pendingRecordingFixStore.clear(sessionID: sessionID)
     }
 
     // MARK: Basemaps

@@ -15,8 +15,14 @@
 import Foundation
 
 public enum TrailWidgetDeepLink {
+    public enum Destination: Equatable, Sendable {
+        case hike(UUID)
+        case recording
+    }
+
     public static let scheme = "opentrails"
     private static let hikeHost = "hike"
+    private static let recordingHost = "recording"
 
     /// Link to a specific hike's detail view.
     public static func url(hikeID: UUID) -> URL? {
@@ -27,11 +33,34 @@ public enum TrailWidgetDeepLink {
         return components.url
     }
 
+    public static func recordingURL() -> URL? {
+        var components = URLComponents()
+        components.scheme = scheme
+        components.host = recordingHost
+        return components.url
+    }
+
+    public static func destination(from url: URL) -> Destination? {
+        guard url.scheme == scheme else { return nil }
+        switch url.host {
+        case hikeHost:
+            guard let id = UUID(uuidString: url.lastPathComponent) else {
+                return nil
+            }
+            return .hike(id)
+        case recordingHost:
+            guard url.path.isEmpty else { return nil }
+            return .recording
+        default:
+            return nil
+        }
+    }
+
     /// The hike a link points at, or `nil` for anything this doesn't
     /// recognise — including links from a future version, which should open
     /// the app rather than be acted on wrongly.
     public static func hikeID(from url: URL) -> UUID? {
-        guard url.scheme == scheme, url.host == hikeHost else { return nil }
-        return UUID(uuidString: url.lastPathComponent)
+        guard case .hike(let id) = destination(from: url) else { return nil }
+        return id
     }
 }

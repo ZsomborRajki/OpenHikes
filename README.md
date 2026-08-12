@@ -5,11 +5,13 @@ OpenTrails is a local-first SwiftUI and SwiftData trail viewer for iOS, iPadOS, 
 ## Features
 
 - GPX import with track metadata, route statistics, elevation chart scrubbing, route styling, and direction chevrons.
+- Live hike recording with selectable accuracy, background location, pause/resume, crash-safe recovery, barometric elevation fusion, and one-time SwiftData save.
+- Conservative on-device trail matching from a cached OpenStreetMap walking graph, plus opt-in post-recording Stadia matching; ambiguous or unavailable matches preserve the GPS trace.
 - Search across saved hikes and MapKit place suggestions.
 - OpenStreetMap, Stadia Outdoors, and Thunderforest Outdoors tile providers.
 - Live location, trail auto-follow with a progress readout, and current WeatherKit conditions.
 - Passive tile auto-save for browsed areas, plus bulk offline downloads where the provider permits them.
-- An iOS Home Screen widget with a pre-rendered basemap, trail progress, deep linking, and optional low-power background updates.
+- An iOS Home Screen widget with trail progress, live-recording takeover, recording deep links, and sparse location anchors that help repair degraded GPS gaps.
 - Local SwiftData and App Group storage; OpenTrails has no backend or account sync.
 
 ## Requirements
@@ -67,7 +69,7 @@ See [`.github/copilot-instructions.md`](.github/copilot-instructions.md) for arc
 
 ## Current limitations
 
-- Live hike recording is not implemented; routes are imported from GPX files.
+- Trail matching is in progress: recorded hikes use cached Overpass geometry when a confident path is available, but live sliding-window matching and the post-recording ambiguity review are not implemented yet.
 - Sign in with Apple is a disabled placeholder, and hikes do not sync between devices.
 - Third-party tile keys can only be supplied at build time.
 - There is no CI, so the test suites are only as protected as the person running them; details are tracked in `CODE_REVIEW.md`.

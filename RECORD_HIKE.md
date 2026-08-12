@@ -2,7 +2,7 @@
 
 Design doc for live hike recording: a second button beside Import, a dedicated recording view inside the sheet, a continuous location feed that survives the phone going into a pocket, and a matcher that turns those fixes into a route that follows the trails the walker actually took.
 
-Nothing here is built yet. `README.md` still lists recording under **Current limitations**, and that stays true until Phase 1 lands.
+Phase 1 is implemented: the Record entry point, `SheetRoute`, isolated recording UI and chunked map trace, app-scoped background recorder, filtering/stationary drift control, barometric elevation fusion, append-only journal with open and completed-session recovery, and one-time SwiftData save. Phase 2 is underway with bounded Overpass prefetch, a durable low-zoom graph cache, OSM graph construction, on-device HMM matching, pedometer-constrained sparse gaps, confidence-based abstention, raw-GPS fallback, and opt-in post-recording Stadia matching. Live sliding-window matching and the post-recording ambiguity review remain open. Phase 3 is implemented: widget sampling writes a capped, separately locked pending-fix file; the recorder folds and deduplicates those anchors into the journal; `SharedRecordingSnapshot` takes over the widget with a recording deep link; and recording accuracy, snapping, online improvement, and raw-track retention are persisted in Settings.
 
 ---
 
@@ -276,17 +276,17 @@ Store the fused value in `elevation`. `Hike.elevationGain` sums positive deltas 
 
 ### 7.1 The journal
 
-An append-only, fixed-width binary file in the App Group container (`SharedStore` already resolves it), so the widget can read session metadata:
+An append-only, fixed-width binary file in the App Group container (`SharedStore` already resolves it), so the widget can read session metadata — falling back to Application Support when the App Group is unprovisioned, since nothing outside the app reads the journal before §10 and a missing entitlement must not be the difference between recording a hike and refusing to:
 
 ```
 Header (64 B): magic "OTRK" | version u16 | sessionID uuid | startedAt f64 | reserved
-Record (40 B): lat f64 | lon f64 | timestamp f64 | elevation f32
+Record (44 B): lat f64 | lon f64 | timestamp f64 | elevation f32
                | horizontalAccuracy f32 | course f32 | speed f32 | flags u32
 ```
 
-Fixed width buys three things: point count is `(fileSize − 64) / 40` without parsing; a torn tail record from a kill mid-write is detectable by a non-zero remainder and discardable; and recovery is a `mmap` and a cast rather than a decode.
+The listed fields total 44 bytes. Fixed width buys three things: point count is `(fileSize − 64) / 44` without parsing; a torn tail record from a kill mid-write is detectable by a non-zero remainder and discardable; and recovery can decode complete records directly without a variable-length format.
 
-- Written through `FileHandle` on a serial off-main queue, batched every 10 points or 5 s, `synchronize()` after each batch. 5,000 points ≈ 200 KB.
+- Written through `FileHandle` on a serial off-main actor, batched every 10 points or 5 s, `synchronize()` after each batch. 5,000 points ≈ 220 KB.
 - Flush on `scenePhase` leaving `.active`, mirroring `AutoSaveController.sceneWillResignActive`.
 - `assertOffMainThread("Track journal writes must stay off the main thread")` — the repo's existing pattern for hot-path work.
 
@@ -346,6 +346,8 @@ The inline default is not optional politeness — it's the repo's documented mig
 
 Storing both roughly doubles a recorded hike's row (≈ 400 KB for a long day). If that proves too heavy, archive the journal file instead and reference it by session ID — but do not simply discard it.
 
+**Phase 1 leaves it empty, deliberately.** Until a matcher exists, `route` *is* the raw trace, so filling `rawRoute` with a second identical copy pays the whole doubling for no information at all. An empty `rawRoute` therefore reads as "this route has never been moved"; the first phase that moves one fills it in. The field ships now because adding it later is a migration, and adding it now is a default.
+
 ---
 
 ## 9. Trail alignment
@@ -360,11 +362,10 @@ Two problems, often conflated:
 | Phase | Matching against | Needs network | Value |
 |---|---|---|---|
 | 1 | nothing — raw filtered trace | no | Ships the feature |
-| 2 | the user's own saved hikes (`RouteProfile.nearestPoint`) | no | Covers "I'm walking a trail I already imported" — the single most common case for this app |
-| 3 | an OSM trail graph, HMM matching | prefetch only | The real feature |
-| 4 | widget sampling + hardened recovery | no | Rescues Tier C/D sessions |
+| 2 | an OSM trail graph, HMM matching | prefetch only | **In progress:** save-time matching is wired; live matching and review remain |
+| 3 | widget sampling + hardened recovery | no | Rescues Tier C/D sessions |
 
-Phase 2 is nearly free. `RouteProfile.nearestPoint(to:near:heading:)` already does projection with continuity anchoring and course agreement, and `FollowAnchor` already encodes when a match may be re-decided from scratch. Matching a recording against every saved hike within a few hundred metres reuses code that has already been debugged against loops and out-and-backs.
+Matching against the user's own saved hikes was considered and cut: the app is either recording a new hike or following an imported one — there is no in-between state for a matcher to serve.
 
 ### 9.2 The trail graph
 
@@ -432,7 +433,7 @@ A matcher that is confidently wrong is worse than one that abstains, because the
 
 ## 10. Widget-assisted sampling
 
-Worth building in Phase 4, worth being honest about now.
+Implemented in Phase 3, within the limits below.
 
 **What a widget can do.** A WidgetKit extension can use `CLLocationManager` and `requestLocation()`; access derives from the containing app's authorization, and is broader with Always than with When In Use.
 
@@ -460,7 +461,7 @@ New section, below Background Trail Tracking:
 
 | Setting | Default | Notes |
 |---|---|---|
-| Recording accuracy | High | High (`BestForNavigation`) / Balanced (`Best`, 10 m filter) / Battery Saver (100 m, significant-change) |
+| Recording accuracy | High | High (`BestForNavigation`) / Balanced (`Best`, 10 m filter) / Battery Saver (100 m desired accuracy, system-paced significant-change delivery) |
 | Snap to trails | On | Off preserves the raw trace verbatim |
 | Improve accuracy online | **Off** | Only selectable with a Stadia key; states plainly that the trace is sent to Stadia Maps |
 | Keep raw GPS track | On | Off halves recorded-hike storage, at the cost of re-matching |
@@ -478,9 +479,9 @@ Targets, all measurable, all worth a test:
 | Main-thread work per accepted fix | < 1 ms |
 | Map overlay update | ≤ 1 Hz, O(tail) — independent of hike length |
 | SwiftData writes during a session | **zero** |
-| Journal append | ≤ 40 B/point, batched, off-main |
-| Resident memory for the live track | O(1) — chunks are handed to MapKit, not retained in Swift arrays |
-| `RecordingView.body` invalidations | Only on phase change — not per fix |
+| Journal append | 44 B/point, batched, off-main |
+| Resident memory for the live track | O(points) in coordinates, and only that — committed chunks stay in `RecordingTrace` so a rebuilt `MapCoordinator` can redraw them, but nothing derived from them is retained. ~64 KB for a five-hour hike. |
+| `RecordingView.body` invalidations | Only on phase change — not per fix. Pinned by `RecordingIsolationTests.steadyRecordingDoesNotInvalidatePhaseReaders`, so it fails rather than merely getting slower. |
 | Battery, High accuracy | ≤ ~10%/hour on a modern iPhone with the screen off |
 
 `RENDER_SIGNPOST_LOG=1` in the scheme, and compare `RecordingBody` against `LiveFixAccepted`. If they fire at the same rate, isolation is broken.
@@ -514,7 +515,7 @@ Targets, all measurable, all worth a test:
 | Loop closing on itself; out-and-back | The known-hard case. HMM transitions handle it where `nearestPoint`'s tie-break can't; `Fixture.loopRoute` and `Fixture.outAndBackRoute` exist for exactly this. |
 | Off-trail walking | No match within radius → keep raw, don't force (§9.5). |
 | Trail missing from OSM | Same. |
-| Ski lift, gondola, shuttle bus | Speed gate flags it; `CMMotionActivity` can corroborate. Mark the segment rather than deleting it. |
+| Ski lift, gondola, shuttle bus | Speed gate flags it; `CMMotionActivity` can corroborate. Mark the segment rather than deleting it. **Phase 1 rejects instead:** without a way to mark a segment there is nowhere to put the distinction, and a lift whose receiver reports its real speed is accepted anyway (the gate only fires when the reported speed disagrees). Marking arrives with matching. |
 
 ### Time and data
 
@@ -568,7 +569,8 @@ Plus an injected `clock: @Sendable () -> Date` (use `TestClock`), an injected jo
 | `StationaryDriftTests` | Ten minutes of jitter at one spot adds < 5 m |
 | `TrackJournalTests` | Round-trip; torn-tail recovery; point count from file size |
 | `RecordingRecoveryTests` | Open sidecar → resume vs. offer-to-save; **no** auto-resume under `isHostingTests` |
-| `TrailMatcherTests` | `loopRoute`, `outAndBackRoute`, `antimeridianRoute`; a synthesized 12-minute gap with two plausible paths resolves correctly given a pedometer distance, and reports low confidence without one |
+| `TrailMatcherTests` | Dense snapping, antimeridian projection, and a synthesized 12-minute fork that resolves with pedometer distance and stays raw without it |
+| `OverpassTrailGraphProviderTests` | OSM way/relation decoding, identifying bounded request, durable cache reuse |
 | `RecordingWorkloadTests` | Journal writes and matching run off-main (`assertOffMainThread`), in the spirit of `ImportWorkloadTests` |
 | `RecordingRenderIsolationTests` | A fix updates `RecordingStats`/`RecordingTrace` without invalidating `RecordingView.body`, in the spirit of `RenderIsolationTests` |
 
@@ -583,9 +585,8 @@ Plus an injected `clock: @Sendable () -> Date` (use `TestClock`), an injected jo
 | Phase | Deliverable | Depends on |
 |---|---|---|
 | **1** | Button, `SheetRoute`, recording view, `HikeRecorder`, feed Tiers A+B, filtering, journal, crash recovery, save. No matching. | — |
-| **2** | Snap to the user's own saved hikes via `RouteProfile`. | 1 |
-| **3** | Overpass prefetch, trail graph, on-device HMM, pedometer-constrained gap inference, confidence + post-recording review. | 2 |
-| **4** | Widget sampling, `SharedRecordingSnapshot`, recording deep link, Settings. | 1, 3 |
+| **2** | Overpass prefetch, trail graph, on-device HMM, pedometer-constrained gap inference, confidence + post-recording review. | 1 |
+| **3** | Widget sampling, `SharedRecordingSnapshot`, recording deep link, Settings. | 1, 2 |
 
 Phase 1 is a complete, shippable feature on its own — it records hikes. Everything after it is accuracy.
 

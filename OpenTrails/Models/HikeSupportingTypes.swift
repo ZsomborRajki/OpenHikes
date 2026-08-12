@@ -95,9 +95,51 @@ nonisolated enum RouteGeometry {
         return 2 * earthRadiusMeters * atan2(sqrt(bounded), sqrt(1 - bounded))
     }
 
-    private static func normalizedLongitudeDelta(_ delta: Double) -> Double {
+    /// Local tangent-plane offset in metres. Accurate enough for projecting a
+    /// fix onto nearby trail segments, while preserving the short direction
+    /// across the antimeridian.
+    static func localOffset(
+        from origin: CLLocationCoordinate2D,
+        to coordinate: CLLocationCoordinate2D
+    ) -> (x: Double, y: Double) {
+        let latitudeRadians = origin.latitude * .pi / 180
+        let longitudeDelta = normalizedLongitudeDelta(
+            coordinate.longitude - origin.longitude
+        )
+        return (
+            x: longitudeDelta * .pi / 180
+                * earthRadiusMeters * cos(latitudeRadians),
+            y: (coordinate.latitude - origin.latitude) * .pi / 180
+                * earthRadiusMeters
+        )
+    }
+
+    static func interpolate(
+        from start: CLLocationCoordinate2D,
+        to end: CLLocationCoordinate2D,
+        fraction: Double
+    ) -> CLLocationCoordinate2D {
+        let bounded = min(max(fraction, 0), 1)
+        let longitude = start.longitude
+            + normalizedLongitudeDelta(end.longitude - start.longitude)
+                * bounded
+        return CLLocationCoordinate2D(
+            latitude: start.latitude
+                + (end.latitude - start.latitude) * bounded,
+            longitude: normalizedLongitude(longitude)
+        )
+    }
+
+    static func normalizedLongitudeDelta(_ delta: Double) -> Double {
         var normalized = delta.truncatingRemainder(dividingBy: 360)
         if normalized > 180 { normalized -= 360 }
+        if normalized < -180 { normalized += 360 }
+        return normalized
+    }
+
+    static func normalizedLongitude(_ longitude: Double) -> Double {
+        var normalized = longitude.truncatingRemainder(dividingBy: 360)
+        if normalized >= 180 { normalized -= 360 }
         if normalized < -180 { normalized += 360 }
         return normalized
     }

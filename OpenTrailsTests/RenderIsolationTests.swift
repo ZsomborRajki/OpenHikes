@@ -72,6 +72,111 @@ final class CoordinatePublisher {
 }
 
 @MainActor
+@Suite("Recording isolation")
+struct RecordingIsolationTests {
+    @Test("a fix wakes only the recording leaves that read its state")
+    func recordingStateIsSplitByConcern() async {
+        let stats = RecordingStats()
+        let trace = RecordingTrace()
+        let distanceCounter = ObservationCounter { _ = stats.distanceMeters }
+        let pointCounter = ObservationCounter { _ = stats.pointCount }
+        let traceCounter = ObservationCounter { _ = trace.revision }
+        await distanceCounter.settle()
+
+        stats.distanceMeters = 42
+        trace.append(
+            CLLocationCoordinate2D(latitude: 47.63, longitude: 12.86)
+        )
+        await distanceCounter.settle()
+
+        #expect(distanceCounter.count == 1)
+        #expect(pointCounter.count == 0)
+        #expect(traceCounter.count == 1)
+    }
+
+    /// `RecordingView.body` and the whole hikes sheet (via
+    /// `HikeRecorder.isActive`) read `phase`, and a recording writes it on
+    /// every accepted fix. `RECORD_HIKE.md` §12 budgets those bodies at "only
+    /// on phase change — not per fix", so a fix that leaves the phase alone
+    /// must wake nothing.
+    @Test("a fix that doesn't change the phase doesn't wake a body reading it")
+    func steadyRecordingDoesNotInvalidatePhaseReaders() async throws {
+        let container = try Fixture.modelContainer()
+        let source = IsolationRecordingSource()
+        let clock = TestClock()
+        let directory = FileManager.default.temporaryDirectory
+            .appendingPathComponent(
+                "recording-isolation-\(UUID().uuidString)",
+                isDirectory: true
+            )
+        defer { try? FileManager.default.removeItem(at: directory) }
+
+        let recorder = HikeRecorder(
+            container: container,
+            source: source,
+            journalDirectory: directory,
+            clock: clock.read,
+            journalFlushDelay: .zero,
+            automaticallyRecovers: false
+        )
+        await recorder.start()
+
+        let phaseCounter = ObservationCounter { _ = recorder.phase }
+        await phaseCounter.settle()
+
+        for step in 1...5 {
+            clock.advance(by: 10)
+            source.deliver(
+                CLLocation(
+                    coordinate: CLLocationCoordinate2D(
+                        latitude: 47.63 + Double(step) * 0.0002,
+                        longitude: 12.86
+                    ),
+                    altitude: 600,
+                    horizontalAccuracy: 8,
+                    verticalAccuracy: 5,
+                    course: 0,
+                    speed: 1,
+                    timestamp: clock.now
+                )
+            )
+            await phaseCounter.settle()
+        }
+
+        #expect(recorder.stats.pointCount == 5)
+        #expect(
+            phaseCounter.count == 1,
+            "only waitingForFix → recording; the four fixes after it change nothing"
+        )
+    }
+}
+
+/// The minimum `RecordingLocationSource` needed to push fixes at a recorder.
+@MainActor
+private final class IsolationRecordingSource: RecordingLocationSource {
+    var authorization: RecordingLocationAuthorization = .authorized
+    var hasFullAccuracy = true
+    private weak var delegateObject: AnyObject?
+
+    var sourceDelegate: CLLocationManagerDelegate? {
+        get { delegateObject as? CLLocationManagerDelegate }
+        set { delegateObject = newValue }
+    }
+
+    func requestWhenInUseAuthorization() {}
+    func requestTemporaryFullAccuracy() async {}
+    func startRecordingUpdates(profile: RecordingAccuracyProfile) {}
+    func stopRecordingUpdates() {}
+
+    func deliver(_ location: CLLocation) {
+        sourceDelegate?.locationManager?(
+            CLLocationManager(),
+            didUpdateLocations: [location]
+        )
+    }
+}
+
+@MainActor
 @Suite("Observation cost")
 struct ObservationCostTests {
     /// Observation filters a write that doesn't change an `Equatable` value.

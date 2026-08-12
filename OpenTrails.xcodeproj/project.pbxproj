@@ -66,6 +66,13 @@
 /* End PBXFileReference section */
 
 /* Begin PBXFileSystemSynchronizedBuildFileExceptionSet section */
+		AD0000000000000000000001 /* Exceptions for "OpenTrails" folder in "OpenTrails" target */ = {
+			isa = PBXFileSystemSynchronizedBuildFileExceptionSet;
+			membershipExceptions = (
+				Info.plist,
+			);
+			target = A85E854C2FE3EBF500558639 /* OpenTrails */;
+		};
 		A8838AF7302A232400FAEEEE /* Exceptions for "OpenWidget" folder in "OpenWidgetExtension" target */ = {
 			isa = PBXFileSystemSynchronizedBuildFileExceptionSet;
 			membershipExceptions = (
@@ -86,6 +93,9 @@
 /* Begin PBXFileSystemSynchronizedRootGroup section */
 		A85E854F2FE3EBF500558639 /* OpenTrails */ = {
 			isa = PBXFileSystemSynchronizedRootGroup;
+			exceptions = (
+				AD0000000000000000000001 /* Exceptions for "OpenTrails" folder in "OpenTrails" target */,
+			);
 			path = OpenTrails;
 			sourceTree = "<group>";
 		};
@@ -552,8 +562,9 @@
 				ENABLE_PREVIEWS = YES;
 				ENABLE_USER_SELECTED_FILES = readonly;
 				GENERATE_INFOPLIST_FILE = YES;
+				INFOPLIST_FILE = OpenTrails/Info.plist;
 				INFOPLIST_KEY_NSLocationAlwaysAndWhenInUseUsageDescription = "OpenTrails uses Always location, only when you turn on Background Trail Tracking in Settings, to keep your Home Screen widget showing your progress along the trail while the app isn't open.";
-				INFOPLIST_KEY_NSLocationWhenInUseUsageDescription = "OpenTrails uses your location to show where you are on the map.";
+				INFOPLIST_KEY_NSLocationWhenInUseUsageDescription = "OpenTrails uses your location to show where you are on the map and record hikes you choose to start.";
 				"INFOPLIST_KEY_UIApplicationSceneManifest_Generation[sdk=iphoneos*]" = YES;
 				"INFOPLIST_KEY_UIApplicationSceneManifest_Generation[sdk=iphonesimulator*]" = YES;
 				"INFOPLIST_KEY_UIApplicationSupportsIndirectInputEvents[sdk=iphoneos*]" = YES;
@@ -600,8 +611,9 @@
 				ENABLE_PREVIEWS = YES;
 				ENABLE_USER_SELECTED_FILES = readonly;
 				GENERATE_INFOPLIST_FILE = YES;
+				INFOPLIST_FILE = OpenTrails/Info.plist;
 				INFOPLIST_KEY_NSLocationAlwaysAndWhenInUseUsageDescription = "OpenTrails uses Always location, only when you turn on Background Trail Tracking in Settings, to keep your Home Screen widget showing your progress along the trail while the app isn't open.";
-				INFOPLIST_KEY_NSLocationWhenInUseUsageDescription = "OpenTrails uses your location to show where you are on the map.";
+				INFOPLIST_KEY_NSLocationWhenInUseUsageDescription = "OpenTrails uses your location to show where you are on the map and record hikes you choose to start.";
 				"INFOPLIST_KEY_UIApplicationSceneManifest_Generation[sdk=iphoneos*]" = YES;
 				"INFOPLIST_KEY_UIApplicationSceneManifest_Generation[sdk=iphonesimulator*]" = YES;
 				"INFOPLIST_KEY_UIApplicationSupportsIndirectInputEvents[sdk=iphoneos*]" = YES;

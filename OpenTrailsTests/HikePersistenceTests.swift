@@ -117,6 +117,7 @@ struct HikePersistenceTests {
                 routeWidth: 7,
                 symbol: "mountain.2",
                 route: Fixture.ridgeRoute,
+                rawRoute: Array(Fixture.ridgeRoute.reversed()),
                 offlineDownloads: [
                     OfflineDownloadRecord(providerID: "osm", scale: 2, maxZoom: 14, savedTileKeys: ["osm/14/1/1@2.0"])
                 ],
@@ -143,6 +144,7 @@ struct HikePersistenceTests {
         #expect(reopened.tintHex == "#FF9500FF")
         #expect(reopened.routeWidth == 7)
         #expect(reopened.symbol == "mountain.2")
+        #expect(reopened.rawRoute == Array(Fixture.ridgeRoute.reversed()))
         #expect(reopened.trackDescription == "A ridge")
         #expect(reopened.author == "Someone")
         #expect(reopened.keywords == "ridge, loop")
@@ -219,6 +221,7 @@ struct HikePersistenceTests {
         )
 
         // What the migration had to invent.
+        #expect(migrated.rawRoute.isEmpty, "an imported legacy hike has no recorded GPS trace")
         #expect(migrated.autoSavedTileKeys.isEmpty, "an old hike has auto-saved nothing yet")
         #expect(migrated.autoSaveTilesEnabled, "and gets the same default a new hike does")
         #expect(migrated.autoFollowEnabled)

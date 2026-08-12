@@ -39,6 +39,10 @@ struct MapView: MapViewRepresentable, Equatable {
     /// chart moves the marker without re-rendering any view.
     var highlight: RouteHighlight
 
+    /// The growing recorded track. Its revision is observed directly by the
+    /// coordinator so accepted fixes update only MapKit overlays.
+    var recordingTrace: RecordingTrace
+
     /// Observed directly by the map (not via SwiftUI) so dragging the sheet
     /// repositions the "my location" button without re-rendering any view.
     var sheetMetrics: SheetMetrics
@@ -56,7 +60,7 @@ struct MapView: MapViewRepresentable, Equatable {
     /// that touches this view's transaction (e.g. the sheet's per-frame drag
     /// updates), even though `routeStyle`/`highlight`/`sheetMetrics`/
     /// `mapController`/`locationManager` are deliberately observed outside
-    /// SwiftUI for exactly that scenario. Those five are reference types the
+    /// SwiftUI for exactly that scenario. Those controller models are reference types the
     /// parent always hands down as the same instance, so identity comparison is
     /// correct: their *contents* changing on their own is not a reason to
     /// re-run `updateUIView`.
@@ -64,6 +68,7 @@ struct MapView: MapViewRepresentable, Equatable {
         lhs.route == rhs.route
             && lhs.routeStyle === rhs.routeStyle
             && lhs.highlight === rhs.highlight
+            && lhs.recordingTrace === rhs.recordingTrace
             && lhs.sheetMetrics === rhs.sheetMetrics
             && lhs.tileSource == rhs.tileSource
             && lhs.mapController === rhs.mapController
@@ -85,6 +90,7 @@ struct MapView: MapViewRepresentable, Equatable {
         mapView.showsUserLocation = true
         mapView.pointOfInterestFilter = .includingAll
         coordinator.observeHighlight(highlight, on: mapView)
+        coordinator.observeRecordingTrace(recordingTrace, on: mapView)
         coordinator.observeSheetMetrics(sheetMetrics, on: mapView)
         coordinator.observeMapController(mapController, on: mapView)
         coordinator.observeRouteStyle(routeStyle, on: mapView)
@@ -169,7 +175,11 @@ struct MapView: MapViewRepresentable, Equatable {
         // takes the new polyline's style from those.
         let polyline = MKPolyline(coordinates: route.coordinates, count: route.coordinates.count)
         coordinator.routeOverlay = polyline
-        mapView.addOverlay(polyline, level: .aboveLabels)
+        if let tileOverlay = coordinator.tileOverlay {
+            mapView.insertOverlay(polyline, above: tileOverlay)
+        } else {
+            mapView.addOverlay(polyline, level: .aboveLabels)
+        }
 
         coordinator.fitToCurrentRoute(mapView, animated: true)
     }

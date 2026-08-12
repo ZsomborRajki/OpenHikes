@@ -3,19 +3,20 @@
 //  OpenWidget
 //
 //  Shows the shape of whichever trail is currently selected in OpenTrails,
-//  plus your last-known position along it. Never reads location itself —
-//  it only ever displays whatever the main app most recently wrote to
-//  SharedStore (see OpenTrailsShared), refreshed by the app calling
-//  WidgetCenter.shared.reloadTimelines(ofKind: TrailWidgetKind.id).
+//  plus your last-known position along it. During an active recording it may
+//  request one coarse location anchor on a sparse WidgetKit timeline; all
+//  displayed state still comes from SharedStore (see OpenTrailsShared).
 //
 
-import WidgetKit
-import SwiftUI
+import CoreLocation
 import OpenTrailsShared
+import SwiftUI
+import WidgetKit
 
 struct TrailWidgetEntry: TimelineEntry {
     let date: Date
     let snapshot: SharedTrailSnapshot?
+    let recordingSnapshot: SharedRecordingSnapshot?
     /// The map images the app rendered for `snapshot`'s trail, if any — see
     /// `TrailBasemapRenderer` in the app target. Only the manifest is carried
     /// here; the image itself is read at render time by whichever view ends
@@ -24,16 +25,28 @@ struct TrailWidgetEntry: TimelineEntry {
 
     /// Pairs a stored snapshot with its basemaps, which are only ever valid
     /// for the hike they were rendered for.
-    init(date: Date, snapshot: SharedTrailSnapshot?) {
+    init(
+        date: Date,
+        snapshot: SharedTrailSnapshot?,
+        recordingSnapshot: SharedRecordingSnapshot? = nil
+    ) {
         self.date = date
-        self.snapshot = snapshot
-        self.basemaps = snapshot.flatMap { SharedStore.loadBasemapSet(for: $0.hikeID) }
+        self.recordingSnapshot = recordingSnapshot
+        self.snapshot = recordingSnapshot == nil ? snapshot : nil
+        self.basemaps = self.snapshot.flatMap {
+            SharedStore.loadBasemapSet(for: $0.hikeID)
+        }
     }
 
     /// Where tapping the widget goes. Absent in the empty state, where there
     /// is no trail to open and a plain launch is the right outcome.
     var deepLinkURL: URL? {
-        snapshot.flatMap { TrailWidgetDeepLink.url(hikeID: $0.hikeID) }
+        if recordingSnapshot != nil {
+            return TrailWidgetDeepLink.recordingURL()
+        }
+        return snapshot.flatMap {
+            TrailWidgetDeepLink.url(hikeID: $0.hikeID)
+        }
     }
 }
 
@@ -47,6 +60,7 @@ struct TrailWidgetProvider: TimelineProvider {
     /// missed (e.g. the app is killed mid-write); it costs at most a couple of
     /// extra reloads a day against the system's daily budget.
     static let safetyNetHours = 6
+    static let recordingRefreshMinutes = 20
 
     func placeholder(in context: Context) -> TrailWidgetEntry {
         Self.placeholderEntry()
@@ -57,7 +71,19 @@ struct TrailWidgetProvider: TimelineProvider {
     }
 
     func getTimeline(in context: Context, completion: @escaping (Timeline<TrailWidgetEntry>) -> Void) {
-        completion(Self.currentTimeline())
+        let entry = Self.currentEntry()
+        guard let recording = entry.recordingSnapshot,
+              recording.isCapturingFixes else {
+            completion(Self.currentTimeline())
+            return
+        }
+        Task { @MainActor in
+            WidgetRecordingLocationSampler.shared.requestFix(
+                for: recording.sessionID
+            ) {
+                completion(Self.currentTimeline())
+            }
+        }
     }
 
     // The three below take the date rather than reading the clock, and are
@@ -67,7 +93,11 @@ struct TrailWidgetProvider: TimelineProvider {
 
     /// Whatever the app most recently wrote, with its basemaps if it has any.
     static func currentEntry(date: Date = .now) -> TrailWidgetEntry {
-        TrailWidgetEntry(date: date, snapshot: SharedStore.load())
+        TrailWidgetEntry(
+            date: date,
+            snapshot: SharedStore.load(),
+            recordingSnapshot: SharedStore.loadRecording()
+        )
     }
 
     static func placeholderEntry(date: Date = .now) -> TrailWidgetEntry {
@@ -75,12 +105,162 @@ struct TrailWidgetProvider: TimelineProvider {
     }
 
     static func currentTimeline(date: Date = .now) -> Timeline<TrailWidgetEntry> {
-        Timeline(entries: [currentEntry(date: date)], policy: .after(nextReload(after: date)))
+        let entry = currentEntry(date: date)
+        return Timeline(
+            entries: [entry],
+            policy: .after(
+                nextReload(
+                    after: date,
+                    recording:
+                        entry.recordingSnapshot?.isCapturingFixes == true
+                )
+            )
+        )
     }
 
-    static func nextReload(after date: Date) -> Date {
-        Calendar.current.date(byAdding: .hour, value: safetyNetHours, to: date)
+    static func nextReload(
+        after date: Date,
+        recording: Bool = false
+    ) -> Date {
+        if recording {
+            return Calendar.current.date(
+                byAdding: .minute,
+                value: recordingRefreshMinutes,
+                to: date
+            ) ?? date.addingTimeInterval(
+                Double(recordingRefreshMinutes) * 60
+            )
+        }
+        return Calendar.current.date(
+            byAdding: .hour,
+            value: safetyNetHours,
+            to: date
+        )
             ?? date.addingTimeInterval(Double(safetyNetHours) * 3600)
+    }
+
+    @MainActor
+    private final class WidgetRecordingLocationSampler: NSObject,
+        CLLocationManagerDelegate {
+        static let shared = WidgetRecordingLocationSampler()
+        private static let minimumSamplingInterval: TimeInterval = 15 * 60
+
+        private let manager = CLLocationManager()
+        private var sessionID: UUID?
+        private var completion: (() -> Void)?
+        private var timeoutTask: Task<Void, Never>?
+
+        private override init() {
+            super.init()
+            manager.delegate = self
+            manager.desiredAccuracy = kCLLocationAccuracyHundredMeters
+        }
+
+        func requestFix(for sessionID: UUID, completion: @escaping () -> Void) {
+            guard self.sessionID == nil else {
+                completion()
+                return
+            }
+            guard manager.isAuthorizedForWidgetUpdates else {
+                completion()
+                return
+            }
+            switch manager.authorizationStatus {
+            case .authorizedAlways, .authorizedWhenInUse:
+                break
+            case .notDetermined, .restricted, .denied:
+                completion()
+                return
+            @unknown default:
+                completion()
+                return
+            }
+            guard (
+                try? SharedStore.claimRecordingWidgetSample(
+                    sessionID: sessionID,
+                    minimumInterval: Self.minimumSamplingInterval
+                )
+            ) == true else {
+                completion()
+                return
+            }
+
+            self.sessionID = sessionID
+            self.completion = completion
+            manager.requestLocation()
+            timeoutTask = Task { [weak self] in
+                do {
+                    try await Task.sleep(for: .seconds(8))
+                } catch {
+                    return
+                }
+                self?.finish()
+            }
+        }
+
+        nonisolated func locationManager(
+            _ manager: CLLocationManager,
+            didUpdateLocations locations: [CLLocation]
+        ) {
+            let location = locations
+                .filter { $0.timestamp <= .now }
+                .max { $0.timestamp < $1.timestamp }
+            Task { @MainActor [weak self] in
+                self?.finish(with: location)
+            }
+        }
+
+        nonisolated func locationManager(
+            _ manager: CLLocationManager,
+            didFailWithError error: Error
+        ) {
+            Task { @MainActor [weak self] in
+                self?.finish()
+            }
+        }
+
+        private func finish(with location: CLLocation? = nil) {
+            timeoutTask?.cancel()
+            timeoutTask = nil
+            let requestedSessionID = sessionID
+            sessionID = nil
+            let completion = completion
+            self.completion = nil
+
+            if let location,
+               let requestedSessionID,
+               let recording = SharedStore.loadRecording(),
+               recording.sessionID == requestedSessionID,
+               recording.isCapturingFixes,
+               location.timestamp.timeIntervalSinceNow >= -5 * 60,
+               location.horizontalAccuracy >= 0,
+               location.horizontalAccuracy <= 200,
+               Mercator.isRepresentable(
+                   latitude: location.coordinate.latitude,
+                   longitude: location.coordinate.longitude
+               ) {
+                let elevation: Double?
+                if location.verticalAccuracy >= 0,
+                   location.verticalAccuracy <= 30 {
+                    elevation = location.altitude
+                } else {
+                    elevation = nil
+                }
+                try? SharedStore.appendPendingRecordingFix(
+                    SharedRecordingFix(
+                        sessionID: requestedSessionID,
+                        latitude: location.coordinate.latitude,
+                        longitude: location.coordinate.longitude,
+                        timestamp: location.timestamp,
+                        elevation: elevation,
+                        horizontalAccuracy: location.horizontalAccuracy,
+                        course: location.course >= 0 ? location.course : nil,
+                        speed: location.speed >= 0 ? location.speed : nil
+                    )
+                )
+            }
+            completion?()
+        }
     }
 
     /// A generic loop shown in the widget gallery / as a redacted placeholder
@@ -129,10 +309,63 @@ struct TrailWidgetEntryView: View {
 
     @ViewBuilder
     private var content: some View {
-        if let snapshot = entry.snapshot {
+        if let recording = entry.recordingSnapshot {
+            RecordingWidgetContent(snapshot: recording, family: family)
+        } else if let snapshot = entry.snapshot {
             TrailWidgetContent(snapshot: snapshot, basemaps: entry.basemaps, family: family)
         } else {
             emptyState
+        }
+    }
+
+    private struct RecordingWidgetContent: View {
+        let snapshot: SharedRecordingSnapshot
+        let family: WidgetFamily
+
+        private var layout: TrailWidgetLayout {
+            TrailWidgetLayout(family: family)
+        }
+
+        var body: some View {
+            VStack(alignment: .leading, spacing: 0) {
+                if layout.showsTitle {
+                    HStack(spacing: 7) {
+                        Circle()
+                            .fill(snapshot.isCapturingFixes ? .red : .secondary)
+                            .frame(width: 8, height: 8)
+                        Text(snapshot.title)
+                            .font(.subheadline.weight(.semibold))
+                            .lineLimit(1)
+                        Spacer()
+                        Text(snapshot.startedAt, style: .timer)
+                            .font(.caption2.monospacedDigit())
+                            .foregroundStyle(.secondary)
+                    }
+                }
+
+                Spacer(minLength: 0)
+
+                Text(snapshot.statusText)
+                    .font(
+                        family == .systemSmall
+                            ? .caption.weight(.semibold)
+                            : .caption
+                    )
+                    .foregroundStyle(.secondary)
+            }
+            .padding(layout.padding)
+            .containerBackground(for: .widget) {
+                ZStack {
+                    Rectangle().fill(.fill.tertiary)
+                    TrailMapView(
+                        polyline: snapshot.polyline,
+                        liveFix: snapshot.polyline.last,
+                        basemaps: nil,
+                        tint: .red,
+                        lineWidth: layout.routeLineWidth
+                    )
+                }
+            }
         }
     }
 
@@ -253,7 +486,7 @@ struct TrailWidget: Widget {
             TrailWidgetEntryView(entry: entry)
         }
         .configurationDisplayName("Trail")
-        .description("Shows the shape of your selected trail and your last-known position along it.")
+        .description("Shows your selected trail or a hike currently being recorded.")
         .supportedFamilies(Self.supportedFamilies)
     }
 }
@@ -262,5 +495,16 @@ struct TrailWidget: Widget {
     TrailWidget()
 } timeline: {
     TrailWidgetEntry(date: .now, snapshot: TrailWidgetProvider.placeholderSnapshot)
+    TrailWidgetEntry(
+        date: .now,
+        snapshot: nil,
+        recordingSnapshot: SharedRecordingSnapshot(
+            sessionID: UUID(),
+            startedAt: .now.addingTimeInterval(-1_200),
+            distanceMeters: 1_400,
+            pointCount: 320,
+            polyline: TrailWidgetProvider.placeholderSnapshot.polyline
+        )
+    )
     TrailWidgetEntry(date: .now, snapshot: nil)
 }

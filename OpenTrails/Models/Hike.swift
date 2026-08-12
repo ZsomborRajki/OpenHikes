@@ -26,6 +26,12 @@ final class Hike {
     var symbol: String
     /// Ordered track points making up the route.
     var route: [RouteCoordinate]
+    /// The unmatched GPS trace when trail matching moved a recorded route.
+    /// Imported hikes and recordings that stayed raw leave this empty.
+    ///
+    /// The inline default is required for lightweight migration of existing
+    /// stores, just like the defaults on the auto-save fields below.
+    var rawRoute: [RouteCoordinate] = []
 
     /// Records of offline tile downloads for this hike, enough to recompute (and
     /// so measure and remove) exactly the tiles each one saved.
@@ -62,6 +68,7 @@ final class Hike {
         routeWidth: Double = 3,
         symbol: String = "figure.hiking",
         route: [RouteCoordinate] = [],
+        rawRoute: [RouteCoordinate] = [],
         offlineDownloads: [OfflineDownloadRecord] = [],
         autoSavedTileKeys: [String] = [],
         autoSaveTilesEnabled: Bool = true,
@@ -78,6 +85,7 @@ final class Hike {
         self.routeWidth = routeWidth
         self.symbol = symbol
         self.route = route
+        self.rawRoute = rawRoute
         self.offlineDownloads = offlineDownloads
         self.autoSavedTileKeys = autoSavedTileKeys
         self.autoSaveTilesEnabled = autoSaveTilesEnabled

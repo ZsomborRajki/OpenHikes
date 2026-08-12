@@ -16,16 +16,17 @@ struct MapSheet: View {
     @Binding var detent: PresentationDetent
     @Binding var selectedHike: Hike?
     /// Owned by `ContentView` rather than this view, so a widget tap can push
-    /// a hike's detail view from outside the sheet. Typed as `[Hike]` (not
+    /// a hike's detail view from outside the sheet. Typed as `[SheetRoute]` (not
     /// `NavigationPath`) because the caller has to be able to ask what's
     /// already on screen before deciding to navigate — `NavigationPath` can
     /// be appended to but never read back.
-    @Binding var path: [Hike]
+    @Binding var path: [SheetRoute]
     var highlight: RouteHighlight
     var mapController: MapController
     var autoSave: AutoSaveController
     var locationManager: LocationManager
     var backgroundTracker: BackgroundTrailTracker
+    var hikeRecorder: HikeRecorder
 
     var onImportGPX: (URL) -> Void = { _ in }
     /// The document picker failed to produce a file at all.
@@ -75,16 +76,26 @@ struct MapSheet: View {
                         .padding(.top, 24)
                 }
             }
-            .navigationDestination(for: Hike.self) { hike in
-                HikeDetailView(
-                    hike: hike,
-                    highlight: highlight,
-                    mapController: mapController,
-                    autoSave: autoSave,
-                    locationManager: locationManager,
-                    backgroundTracker: backgroundTracker,
-                    onZoomToRoute: { withAnimation { detent = .medium } }
-                )
+            .navigationDestination(for: SheetRoute.self) { route in
+                switch route {
+                case .hike(let hike):
+                    HikeDetailView(
+                        hike: hike,
+                        highlight: highlight,
+                        mapController: mapController,
+                        autoSave: autoSave,
+                        locationManager: locationManager,
+                        backgroundTracker: backgroundTracker,
+                        onZoomToRoute: { withAnimation { detent = .medium } }
+                    )
+                case .recording:
+                    RecordingView(
+                        recorder: hikeRecorder,
+                        mapController: mapController,
+                        onSaved: showSavedRecording,
+                        onDiscarded: closeRecording
+                    )
+                }
             }
             #if os(iOS)
             // Set the title mode at the stack level so it's resolved before
@@ -189,6 +200,9 @@ struct MapSheet: View {
                     .font(.title2.bold())
                     .foregroundStyle(.primary)
                 Spacer()
+                if hikeRecorder.isActive {
+                    RecordingListStatusPill(recorder: hikeRecorder)
+                }
                 hikeActions
             }
             .padding(.horizontal)
@@ -203,14 +217,34 @@ struct MapSheet: View {
         }
     }
 
-    /// Always-visible icon button for importing a GPX.
-    ///
-    /// A record button sat beside this one, fully styled and tappable, wired to
-    /// an empty function — the one thing worse than an app that can't record a
-    /// hike is one that appears to and then doesn't. It comes back when there's
-    /// a recording session behind it.
+    /// Always-visible recording and GPX import actions.
     private var hikeActions: some View {
         HStack(spacing: 8) {
+            #if os(iOS)
+            Button {
+                Task {
+                    if !hikeRecorder.isActive {
+                        await hikeRecorder.start()
+                    }
+                    openRecording()
+                }
+            } label: {
+                Image(
+                    systemName: hikeRecorder.isActive
+                        ? "stop.circle.fill"
+                        : "record.circle"
+                )
+                    .foregroundStyle(.red)
+                    .frame(width: 40, height: 40)
+                    .sheetGlassBackground(in: Circle())
+            }
+            .accessibilityLabel(
+                hikeRecorder.isActive
+                    ? "Open hike recording"
+                    : "Record a hike"
+            )
+            #endif
+
             Button {
                 showImporter = true
             } label: {
@@ -230,7 +264,7 @@ struct MapSheet: View {
             ForEach(hikes) { hike in
                 Button {
                     selectedHike = hike
-                    path.append(hike)
+                    path.append(.hike(hike))
                 } label: {
                     HikeRow(hike: hike, isSelected: hike.id == selectedHike?.id)
                         .contentShape(.rect)
@@ -268,7 +302,7 @@ struct MapSheet: View {
         }
 
         // The same treatment for the navigation stack, which drives
-        // `navigationDestination(for: Hike.self)` off this very array. Clearing
+        // `navigationDestination(for: SheetRoute.self)` off this very array. Clearing
         // the selection stops the *map* drawing a deleted trail; without this
         // its detail view stays pushed, showing a hike that no longer exists —
         // stats, elevation chart, and live Offline/Auto-Save controls writing
@@ -278,7 +312,13 @@ struct MapSheet: View {
         // Unconditional, unlike the selection check above: a widget deep link
         // pushes onto this path directly, so "pushed" and "selected" aren't
         // guaranteed to be the same hike.
-        path.removeAll { $0.id == hike.id }
+        path.removeAll { route in
+            if case let .hike(pushedHike) = route {
+                pushedHike.id == hike.id
+            } else {
+                false
+            }
+        }
 
         // Free the tiles this hike had saved offline — but only the ones no
         // surviving hike still claims. Cache keys carry no hike identity, so
@@ -362,7 +402,7 @@ struct MapSheet: View {
         searchFocused = false
         completer.clear()
         selectedHike = hike
-        path.append(hike)
+        path.append(.hike(hike))
     }
 
     /// Resolves a tapped suggestion to a place and zooms the map to it.
@@ -416,6 +456,11 @@ struct MapSheet: View {
             Text("Tap \(importIcon) to import a GPX file.")
                 .font(.subheadline)
                 .foregroundStyle(.secondary)
+            #if os(iOS)
+            Text("Or tap \(recordIcon) to record one as you walk.")
+                .font(.subheadline)
+                .foregroundStyle(.secondary)
+            #endif
         }
         .multilineTextAlignment(.center)
         .frame(maxWidth: .infinity)
@@ -426,6 +471,84 @@ struct MapSheet: View {
     // string), so the icon keeps its own color inside the sentence.
     private var importIcon: Text {
         Text(Image(systemName: "square.and.arrow.down")).foregroundStyle(.tint)
+    }
+
+    private var recordIcon: Text {
+        Text(Image(systemName: "record.circle")).foregroundStyle(.red)
+    }
+
+    private func openRecording() {
+        SheetRoute.reopenRecording(in: &path)
+        withAnimation { detent = .medium }
+    }
+
+    private func closeRecording() {
+        path.removeAll { $0 == .recording }
+    }
+
+    private func showSavedRecording(_ hike: Hike) {
+        selectedHike = hike
+        closeRecording()
+        path.append(.hike(hike))
+        withAnimation { detent = .medium }
+    }
+}
+
+private struct RecordingListStatusPill: View {
+    let recorder: HikeRecorder
+
+    var body: some View {
+        Group {
+            if recorder.isCapturingFixes {
+                // Only a live session gets a running clock. A paused one is
+                // shown standing still, because that is what it is doing.
+                TimelineView(.periodic(from: .now, by: 1)) { _ in
+                    pill(
+                        "\(HikeFormat.duration(recorder.elapsedSeconds())) · \(distance)",
+                        tint: .red
+                    )
+                }
+            } else {
+                pill("\(idleLabel) · \(distance)", tint: .secondary)
+            }
+        }
+        .accessibilityLabel(
+            recorder.isCapturingFixes
+                ? "Recording in progress, \(distance)"
+                : "Recording \(idleLabel.lowercased()), \(distance)"
+        )
+    }
+
+    private func pill(_ text: String, tint: Color) -> some View {
+        Text(text)
+            .font(.caption.weight(.semibold).monospacedDigit())
+            .foregroundStyle(tint)
+            .padding(.horizontal, 10)
+            .padding(.vertical, 6)
+            .background(tint.opacity(0.12), in: Capsule())
+    }
+
+    private var idleLabel: String {
+        switch recorder.phase {
+        case .recovering:
+            "Recovering"
+        case .paused:
+            "Paused"
+        case .saving:
+            "Saving"
+        case .failed:
+            "Needs Attention"
+        case .idle, .waitingForFix, .recording:
+            "Paused"
+        }
+    }
+
+    private var distance: String {
+        Measurement(
+            value: recorder.stats.distanceMeters,
+            unit: UnitLength.meters
+        )
+        .formatted(.measurement(width: .abbreviated, usage: .road))
     }
 }
 

@@ -18,6 +18,9 @@ extension MapView {
         private var isObservingLocation = false
         var routeID: UUID?
         var routeOverlay: MKPolyline?
+        var recordingChunkOverlays: [MKPolyline] = []
+        var recordingTailOverlay: MKPolyline?
+        private var recordingTraceGeneration = -1
         /// The live renderer for the route line, kept so a tint change can recolor
         /// it in place without rebuilding the overlay.
         weak var routeRenderer: MKPolylineRenderer?
@@ -66,6 +69,7 @@ extension MapView {
         func observeMapController(_ controller: MapController, on mapView: MKMapView) {
             observeFitRoute(controller, on: mapView)
             observeShowRegion(controller, on: mapView)
+            observeFollowUser(controller, on: mapView)
         }
 
         private func observeFitRoute(_ controller: MapController, on mapView: MKMapView) {
@@ -96,6 +100,21 @@ extension MapView {
                         map.setRegion(map.regionThatFits(region), animated: true)
                     }
                     coordinator.observeShowRegion(model, on: map)
+                }
+            }
+        }
+
+        private func observeFollowUser(_ controller: MapController, on mapView: MKMapView) {
+            withObservationTracking {
+                _ = controller.followUserRequest
+            } onChange: { [weak self, weak mapView, weak controller] in
+                let coordinator = self
+                let map = mapView
+                let model = controller
+                Task { @MainActor in
+                    guard let coordinator, let map, let model else { return }
+                    map.setUserTrackingMode(.follow, animated: true)
+                    coordinator.observeFollowUser(model, on: map)
                 }
             }
         }
@@ -256,6 +275,64 @@ extension MapView {
             }
         }
 
+        /// Applies the live recording's immutable chunks plus its bounded tail,
+        /// then re-registers for the next revision.
+        func observeRecordingTrace(_ trace: RecordingTrace, on mapView: MKMapView) {
+            applyRecordingTrace(trace, on: mapView)
+            withObservationTracking {
+                _ = trace.revision
+            } onChange: { [weak self, weak mapView, weak trace] in
+                let coordinator = self
+                let map = mapView
+                let model = trace
+                Task { @MainActor in
+                    guard let coordinator, let map, let model else { return }
+                    coordinator.observeRecordingTrace(model, on: map)
+                }
+            }
+        }
+
+        private func applyRecordingTrace(
+            _ trace: RecordingTrace,
+            on mapView: MKMapView
+        ) {
+            if recordingTraceGeneration != trace.generation {
+                mapView.removeOverlays(recordingChunkOverlays)
+                if let recordingTailOverlay {
+                    mapView.removeOverlay(recordingTailOverlay)
+                }
+                recordingChunkOverlays = []
+                recordingTailOverlay = nil
+                recordingTraceGeneration = trace.generation
+            }
+
+            // No `count > 1` guard: the loop's index *is* `recordingChunkOverlays.count`,
+            // so skipping a chunk would stall every later one forever. A chunk
+            // is always `RecordingTrace.chunkSize` points by construction —
+            // both `append` and `replace(with:)` only ever commit full ones.
+            while recordingChunkOverlays.count < trace.committedChunks.count {
+                let coordinates = trace.committedChunks[recordingChunkOverlays.count]
+                let overlay = MKPolyline(
+                    coordinates: coordinates,
+                    count: coordinates.count
+                )
+                recordingChunkOverlays.append(overlay)
+                mapView.addOverlay(overlay, level: .aboveLabels)
+            }
+
+            if let recordingTailOverlay {
+                mapView.removeOverlay(recordingTailOverlay)
+                self.recordingTailOverlay = nil
+            }
+            guard trace.tail.count > 1 else { return }
+            let tail = MKPolyline(
+                coordinates: trace.tail,
+                count: trace.tail.count
+            )
+            recordingTailOverlay = tail
+            mapView.addOverlay(tail, level: .aboveLabels)
+        }
+
         /// Adds/moves/removes the single highlight annotation. O(1).
         private func applyHighlight(_ coordinate: CLLocationCoordinate2D?, on mapView: MKMapView) {
             guard let coordinate else {
@@ -364,6 +441,20 @@ extension MapView {
                 return CachingTileOverlayRenderer(overlay: tileOverlay)
             }
             if let polyline = overlay as? MKPolyline {
+                if recordingTailOverlay === polyline
+                    || recordingChunkOverlays.contains(where: { $0 === polyline }) {
+                    let renderer = MKPolylineRenderer(polyline: polyline)
+                    #if os(macOS)
+                    renderer.strokeColor = NSColor.systemRed.withAlphaComponent(0.9)
+                    #else
+                    renderer.strokeColor = UIColor.systemRed.withAlphaComponent(0.9)
+                    #endif
+                    renderer.lineWidth = 4
+                    renderer.lineDashPattern = [10, 6]
+                    renderer.lineJoin = .round
+                    renderer.lineCap = .round
+                    return renderer
+                }
                 let renderer = DirectionalPolylineRenderer(polyline: polyline)
                 applyStyle(to: renderer)
                 renderer.lineJoin = .round

@@ -77,6 +77,7 @@ final class MapController {
 
     private(set) var fitRouteRequest: Int = 0
     private(set) var showRegionRequest: Int = 0
+    private(set) var followUserRequest: Int = 0
     private(set) var region: MKCoordinateRegion?
 
     /// Ask the map to zoom to fit the currently drawn route.
@@ -86,5 +87,10 @@ final class MapController {
     func show(_ region: MKCoordinateRegion) {
         self.region = region
         showRegionRequest += 1
+    }
+
+    /// Ask the map to follow the user until they pan away.
+    func followUser() {
+        followUserRequest += 1
     }
 }
