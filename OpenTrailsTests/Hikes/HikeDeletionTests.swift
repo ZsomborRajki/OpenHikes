@@ -8,7 +8,7 @@
 //  the tiles thoroughly. What isn't covered is the object itself — a deleted
 //  `Hike` that other parts of the app are still holding a reference to.
 //
-//  `ContentView` holds two: `selectedHike`, and `navigationPath`, which is
+//  `OpenTrailsView` holds two: `selectedHike`, and `navigationPath`, which is
 //  typed `[Hike]` rather than `NavigationPath` so a widget tap can inspect it.
 //  `MapSheet.delete(_:)` clears the first when it matches and never touches
 //  the second, so a deleted model can stay in the navigation stack — and
@@ -71,7 +71,7 @@ struct HikeDeletionTests {
         let context = try Fixture.modelContext()
         let hike = Fixture.hike(in: context)
 
-        // The state `ContentView` holds, as `MapSheet` would leave it.
+        // The state `OpenTrailsView` holds, as `MapSheet` would leave it.
         var selectedHike: Hike? = hike
         var navigationPath: [Hike] = [hike]
 
@@ -100,7 +100,7 @@ struct HikeDeletionTests {
         #expect(navigationPath.map(\.id) == [survivor.id])
     }
 
-    /// The persisted "what was selected" pointer. `ContentView` writes it from
+    /// The persisted "what was selected" pointer. `OpenTrailsModel` writes it from
     /// `onChange(of: selectedHike)`, so a deletion that clears the selection
     /// clears it too — and `restoreLastSelectedHike` fetches by id, so a
     /// stale one resolves to nothing rather than to the wrong hike.

@@ -28,7 +28,7 @@ struct DisplayedRoute: Equatable {
 
     /// The route to draw for the current selection.
     ///
-    /// This is the *whole* read `ContentView.body` performs against the
+    /// This is the *whole* read `OpenTrailsView.body` performs against the
     /// selected `Hike`, which is why it lives here rather than inline in the
     /// view: the property this reads (`id`, and `route` only on a change of
     /// selection) is the property set that decides how often the root view —
@@ -104,7 +104,7 @@ final class RouteStyle {
 
     /// Tracks `hike`'s tint and width, or resets to the defaults with `nil`.
     ///
-    /// Called from `ContentView`'s selection change handler — deliberately not
+    /// Called from `OpenTrailsView`'s selection change handler — deliberately not
     /// from its `body`, which is the entire point of this type.
     func follow(_ hike: Hike?) {
         generation &+= 1

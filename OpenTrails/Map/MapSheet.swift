@@ -15,7 +15,7 @@ struct MapSheet: View {
     @Binding var searchText: String
     @Binding var detent: PresentationDetent
     @Binding var selectedHike: Hike?
-    /// Owned by `ContentView` rather than this view, so a widget tap can push
+    /// Owned by `OpenTrailsView` rather than this view, so a widget tap can push
     /// a hike's detail view from outside the sheet. Typed as `[SheetRoute]` (not
     /// `NavigationPath`) because the caller has to be able to ask what's
     /// already on screen before deciding to navigate — `NavigationPath` can
@@ -23,10 +23,6 @@ struct MapSheet: View {
     @Binding var path: [SheetRoute]
     var highlight: RouteHighlight
     var mapController: MapController
-    var autoSave: AutoSaveController
-    var locationManager: LocationManager
-    var backgroundTracker: BackgroundTrailTracker
-    var hikeRecorder: HikeRecorder
 
     var onImportGPX: (URL) -> Void = { _ in }
     /// The document picker failed to produce a file at all.
@@ -35,6 +31,7 @@ struct MapSheet: View {
     /// keep the "my location" button riding just above the sheet.
     var onSheetTopChange: (CGFloat) -> Void = { _ in }
 
+    @Environment(OpenTrailsModel.self) private var appModel
     @Environment(\.modelContext) private var modelContext
     @Query(sort: \Hike.date, order: .reverse) private var hikes: [Hike]
     @FocusState private var searchFocused: Bool
@@ -44,6 +41,14 @@ struct MapSheet: View {
     @State private var searchTask: Task<Void, Never>?
     /// Keeps the matching-hike ranking across body passes — see ``HikeSearch``.
     @State private var hikeSearch = HikeSearch()
+
+    private var autoSave: AutoSaveController {
+        appModel.autoSaveController
+    }
+
+    private var hikeRecorder: HikeRecorder {
+        appModel.hikeRecorder
+    }
 
     /// True at the smallest detent, where only the search field shows.
     private var isCompact: Bool { detent == .height(80) }
@@ -83,14 +88,14 @@ struct MapSheet: View {
                         hike: hike,
                         highlight: highlight,
                         mapController: mapController,
-                        autoSave: autoSave,
-                        locationManager: locationManager,
-                        backgroundTracker: backgroundTracker,
+                        autoSave: appModel.autoSaveController,
+                        locationManager: appModel.locationManager,
+                        backgroundTracker: appModel.backgroundTracker,
                         onZoomToRoute: { withAnimation { detent = .medium } }
                     )
                 case .recording:
                     RecordingView(
-                        recorder: hikeRecorder,
+                        recorder: appModel.hikeRecorder,
                         mapController: mapController,
                         onSaved: showSavedRecording,
                         onDiscarded: closeRecording
@@ -117,7 +122,10 @@ struct MapSheet: View {
         }
         // Also presented from inside the sheet so it layers above it.
         .sheet(isPresented: $showSettings) {
-            SettingsView(autoSave: autoSave, backgroundTracker: backgroundTracker)
+            SettingsView(
+                autoSave: appModel.autoSaveController,
+                backgroundTracker: appModel.backgroundTracker
+            )
         }
         // Focusing the search field expands the sheet to full height.
         .onChange(of: searchFocused) { _, focused in

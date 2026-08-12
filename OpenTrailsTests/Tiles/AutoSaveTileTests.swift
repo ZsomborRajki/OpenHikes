@@ -532,7 +532,8 @@ struct AutoSaveLifecycleTests {
     /// supposed to hand back — `activate` flushes before replacing the store's
     /// state, and this is the assertion that keeps that ordering honest under
     /// a same-hike re-activation, which the app does on every selection change
-    /// (`ContentView.onChange` and `HikeDetailView.task` both call it).
+    /// (`OpenTrailsModel.selectedHikeDidChange` and `HikeDetailView.task` both
+    /// call it).
     @Test("re-selecting the same hike doesn't lose or duplicate its pending tiles")
     func reactivatingTheSameHikeIsIdempotent() async throws {
         let context = try Fixture.modelContext()

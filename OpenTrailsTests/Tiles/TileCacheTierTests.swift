@@ -219,7 +219,7 @@ struct TileCacheTierTests {
     }
 
     /// The other launch-time sweep, with the same reasoning: `trimCache` runs
-    /// from `ContentView` on every launch, and a tile it leaves on disk must
+    /// from `OpenTrailsModel` on every launch, and a tile it leaves on disk must
     /// still be in memory afterwards. (An over-the-limit trim is what makes
     /// this reachable at all — under the limit it returns before touching
     /// anything.)

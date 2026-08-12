@@ -43,7 +43,7 @@ The empty state's copy ("Tap ⤓ to import a GPX file") gains a second line for 
 
 ### 2.2 Navigation — the one real integration cost
 
-`ContentView.navigationPath` is `[Hike]`, and `MapSheet` declares `.navigationDestination(for: Hike.self)`. A recording is not a `Hike` yet, so the path has to widen:
+`OpenTrailsView.navigationPath` is `[Hike]`, and `MapSheet` declares `.navigationDestination(for: Hike.self)`. A recording is not a `Hike` yet, so the path has to widen:
 
 ```swift
 enum SheetRoute: Hashable {
@@ -56,7 +56,7 @@ Three call sites move with it, and all three matter:
 
 | Site | Today | After |
 |---|---|---|
-| `ContentView.openHike(from:)` | `navigationPath.last?.id != id` | pattern-match `.hike(let h)`; a widget tap while recording must not silently replace the recording screen — push the hike on top instead |
+| `OpenTrailsView.openHike(id:)` | `navigationPath.last?.id != id` | pattern-match `.hike(let h)`; a widget tap while recording must not silently replace the recording screen — push the hike on top instead |
 | `MapSheet.delete(_:)` | `path.removeAll { $0.id == hike.id }` | pattern-match; `.recording` is never removed by a hike deletion |
 | `MapSheet.navigationDestination` | `for: Hike.self` | `for: SheetRoute.self`, switching to `HikeDetailView` or `RecordingView` |
 
@@ -110,7 +110,7 @@ final class RecordingStats {          // read ONLY by leaf stat views
 
 `RecordingView.body` never reads these properties. It passes the object down to a `RecordingStatsGrid` and a `RecordingHeader`, each of which reads only what it draws. Elapsed time is its own `TimelineView(.periodic(from:by:1))` — no state, no invalidation upward.
 
-Add `RenderSignpost.mark("RecordingBody")` at the top of the body, alongside the existing `ContentViewBody` / `HikeDetailBody` marks. If it fires at fix frequency, someone reintroduced a read.
+Add `RenderSignpost.mark("RecordingBody")` at the top of the body, alongside the existing `OpenTrailsViewBody` / `HikeDetailBody` marks. If it fires at fix frequency, someone reintroduced a read.
 
 ### 3.2 Live line on the map
 
@@ -299,7 +299,7 @@ On launch, `HikeRecorder` checks for an open sidecar:
 - Session interrupted < 5 minutes ago and location is still authorized → resume silently, with a banner.
 - Older → offer "Save the recorded track" or "Discard", with distance and duration so the user can decide.
 
-Under `ContentView.isHostingTests`, do neither. Both test bundles are hosted by the app, so it launches and runs before any test does; a recorder that auto-resumes a journal from a previous run races every suite that asserts on recording state — the same trap `restoreLastSelectedHike()` is already guarded for.
+Under `AppLaunchEnvironment.isHostingTests`, do neither. Both test bundles are hosted by the app, so it launches and runs before any test does; a recorder that auto-resumes a journal from a previous run races every suite that asserts on recording state — the same trap `restoreLastSelectedHike()` is already guarded for.
 
 ### 7.3 Interaction with existing subsystems
 

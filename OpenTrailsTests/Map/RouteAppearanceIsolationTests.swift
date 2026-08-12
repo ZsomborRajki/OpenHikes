@@ -8,7 +8,7 @@
 //  last: a hike's `tint` and `routeWidth`.
 //
 //  Both live on the SwiftData `@Model` and both are written continuously (a
-//  `ColorPicker` drag and a `Slider` drag). While `ContentView.body` read them
+//  `ColorPicker` drag and a `Slider` drag). While `OpenTrailsView.body` read them
 //  — to hand them to the map inside `DisplayedRoute` — every drag sample
 //  invalidated the root view, and with it the `.sheet` closure that builds
 //  `MapSheet`: `rankedMatchingHikes()` re-ran, the `NavigationStack` rebuilt,
@@ -31,7 +31,7 @@ import Testing
 @MainActor
 @Suite("Route appearance isolation")
 struct RouteAppearanceIsolationTests {
-    /// Observes exactly what `ContentView.body` reads of the selected hike —
+    /// Observes exactly what `OpenTrailsView.body` reads of the selected hike —
     /// the real call, not a restatement of it, so a read added back to
     /// `DisplayedRoute.forSelection` fails here rather than passing against a
     /// copy that no longer matches.

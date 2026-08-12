@@ -3,7 +3,7 @@
 //  OpenTrailsShared
 //
 //  A small, platform-portable subset of the app's own Color+Hex (see
-//  OpenTrails/Models/Color+Hex.swift) — just enough to turn a hike's stored
+//  OpenTrails/General/Color+Hex.swift) — just enough to turn a hike's stored
 //  tint back into a Color for widget rendering. This package only ever needs
 //  to read a hex string, never produce one.
 //

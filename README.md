@@ -57,12 +57,26 @@ Tests use Swift Testing. There is no separate lint or formatting command.
 
 ## Project layout
 
+Following Apple's [Food Truck](https://github.com/apple/sample-food-truck) and
+[Backyard Birds](https://github.com/apple/sample-backyard-birds) samples, app
+source is organized by product domain rather than generic `Managers`, `Models`,
+and `Views` layers. `OpenTrailsModel` is the composition root injected into the
+SwiftUI environment; feature-specific state and behavior remain in their
+domain folders.
+
 | Path | Purpose |
 |---|---|
-| `OpenTrails/` | SwiftUI/SwiftData app, MapKit integration, location, weather, GPX import, and tile storage. |
-| `OpenTrailsShared/` | Local Swift package shared by the app and widget. |
+| `OpenTrails/App/` | App entry point, shared app model, configuration, deep-link routing, and root navigation. |
+| `OpenTrails/Hikes/` | Persisted hike model, GPX import, route profile, statistics, and hike screens. |
+| `OpenTrails/Recording/` | Live recording, recovery journal, sensors, trail matching, and recording UI. |
+| `OpenTrails/Map/` | MapKit bridge, map state, search, location tracking, and map rendering. |
+| `OpenTrails/Tiles/` | Tile provider policy, cache, auto-save, offline downloads, and overlay rendering. |
+| `OpenTrails/Weather/` | WeatherKit polling and presentation state. |
+| `OpenTrails/Settings/` | User-facing app, recording, map, and storage settings. |
+| `OpenTrails/General/` | Cross-domain extensions and diagnostics. |
+| `OpenTrailsShared/` | Domain-foldered local Swift package shared by the app and widget. |
 | `OpenWidget/` | iOS Home Screen widget. |
-| `OpenTrailsTests/` | App-hosted test suite. |
+| `OpenTrailsTests/` | App-hosted tests mirroring the app's domain folders. |
 | `OpenWidgetTests/` | App-hosted tests for the widget's timeline, families, and basemap pairing. |
 
 See [`.github/copilot-instructions.md`](.github/copilot-instructions.md) for architecture and repository conventions. See [`CODE_REVIEW.md`](CODE_REVIEW.md) for verified build status, known issues, and remaining engineering work.

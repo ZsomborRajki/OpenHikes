@@ -146,7 +146,7 @@ enum SettingsKey {
         RecordingSettings.improveAccuracyOnlineKey
     static let keepRawRecordedGPSTrack =
         RecordingSettings.keepRawGPSTrackKey
-    /// The last-selected hike's `id.uuidString`, written by `ContentView` on
+    /// The last-selected hike's `id.uuidString`, written by `OpenTrailsModel` on
     /// every selection change. Serves two purposes: restoring the selection
     /// on a normal launch, and telling `BackgroundTrailTracker` which hike to
     /// match a fix against on a background relaunch, which has no in-memory

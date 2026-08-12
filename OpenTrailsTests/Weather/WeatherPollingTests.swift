@@ -61,7 +61,8 @@ struct WeatherPollingTests {
         #expect(shouldRequest)
     }
 
-    /// `ContentView` buckets the user's position to two decimal places — about
+    /// `OpenTrailsModel` buckets the user's position to two decimal places —
+    /// about
     /// 1.1 km — and any change of bucket resets this state wholesale:
     /// `lastSuccess`, `failureCount` and `nextAttempt` all go, and the next
     /// poll requests. That is right for someone who has genuinely moved, and

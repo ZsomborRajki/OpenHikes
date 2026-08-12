@@ -1,5 +1,5 @@
 //
-//  ContentView.swift
+//  OpenTrailsView.swift
 //  OpenTrails
 //
 //  Single full-screen OpenStreetMap view that zooms to the user on launch.
@@ -7,25 +7,13 @@
 
 import SwiftUI
 import SwiftData
-import CoreLocation
 import WeatherKit
 import OpenTrailsShared
 
-struct ContentView: View {
+struct OpenTrailsView: View {
+    @Environment(OpenTrailsModel.self) private var appModel
     @Environment(\.modelContext) private var modelContext
 
-    /// Owned by `OpenTrailsApp`, not here — it has to already exist (and be
-    /// delegated for location updates) before this view is ever built, so it
-    /// can catch a background relaunch that never reaches this view at all.
-    let backgroundTracker: BackgroundTrailTracker
-    /// Owned by `OpenTrailsApp`, so scene lifecycle events are handled there.
-    let autoSaveController: AutoSaveController
-    /// App-scoped so recording survives navigation, locking and background
-    /// relaunches rather than belonging to the recording screen.
-    let hikeRecorder: HikeRecorder
-
-    @State private var locationManager = LocationManager()
-    @State private var weatherManager = WeatherManager()
     @State private var showSheet = true
     @State private var searchText = ""
     @State private var sheetDetent: PresentationDetent = .height(80)
@@ -82,16 +70,17 @@ struct ContentView: View {
 
     var body: some View {
         // Fires on every re-evaluation of this view's body — the throttled
-        // `locationManager.coordinate` publish (~1/sec while moving) is the
+        // `appModel.locationManager.coordinate` publish (~1/sec while moving)
+        // is the
         // most likely repeat offender; compare its rate here against the
         // `MapUpdateCalled`/`MapCentered` marks in MapView.
-        RenderSignpost.mark("ContentViewBody")
+        RenderSignpost.mark("OpenTrailsViewBody")
         return MapView(
-            locationManager: locationManager,
+            locationManager: appModel.locationManager,
             route: displayedRoute,
             routeStyle: routeStyle,
             highlight: highlight,
-            recordingTrace: hikeRecorder.trace,
+            recordingTrace: appModel.hikeRecorder.trace,
             sheetMetrics: sheetMetrics,
             tileSource: activeTileSource,
             mapController: mapController
@@ -99,16 +88,16 @@ struct ContentView: View {
             .equatable()
             .ignoresSafeArea()
             .overlay(alignment: .topLeading) {
-                if let current = weatherManager.current {
+                if let current = appModel.weatherManager.current {
                     WeatherBadge(weather: current)
                         .padding(.leading)
                         .padding(.top, 96)
                 }
             }
-            .task { await locationManager.start() }
-            .task { await pollWeather() }
+            .task { await appModel.locationManager.start() }
+            .task { await appModel.pollWeather() }
             .task { restoreLastSelectedHike() }
-            .task { trimTileCache() }
+            .task { appModel.trimTileCache(in: modelContext) }
             .sheet(isPresented: $showSheet) {
                 MapSheet(
                     searchText: $searchText,
@@ -117,10 +106,6 @@ struct ContentView: View {
                     path: $navigationPath,
                     highlight: highlight,
                     mapController: mapController,
-                    autoSave: autoSaveController,
-                    locationManager: locationManager,
-                    backgroundTracker: backgroundTracker,
-                    hikeRecorder: hikeRecorder,
                     onImportGPX: importGPX,
                     onImportFailed: { importFailure = .unreadable },
                     onSheetTopChange: { sheetMetrics.topY = $0 }
@@ -162,12 +147,7 @@ struct ContentView: View {
                 // reading either value — a change handler is not a body pass,
                 // so nothing here becomes a dependency of this view.
                 routeStyle.follow(hike)
-                autoSaveController.hikeSelectionChanged(to: hike)
-                backgroundTracker.hikeSelectionChanged(to: hike)
-                // The one persisted record of "what's selected" — restores it
-                // on a normal launch (see `restoreLastSelectedHike`) and, on a
-                // background relaunch, is all `backgroundTracker` has to go on.
-                UserDefaults.standard.set(hike?.id.uuidString, forKey: SettingsKey.lastSelectedHikeID)
+                appModel.selectedHikeDidChange(to: hike)
             }
     }
 
@@ -185,7 +165,7 @@ struct ContentView: View {
         }
         switch destination {
         case .recording:
-            guard hikeRecorder.isActive else { return }
+            guard appModel.hikeRecorder.isActive else { return }
             searchText = ""
             SheetRoute.reopenRecording(in: &navigationPath)
             withAnimation { sheetDetent = .medium }
@@ -228,95 +208,28 @@ struct ContentView: View {
     /// test can win, and it made a widget-feed assertion fail with whatever
     /// trail this simulator was last left on. See ``AppLaunchEnvironment``.
     private func restoreLastSelectedHike() {
-        guard !AppLaunchEnvironment.isHostingTests,
-              selectedHike == nil,
-              let stored = UserDefaults.standard.string(forKey: SettingsKey.lastSelectedHikeID),
-              let id = UUID(uuidString: stored) else { return }
-        let descriptor = FetchDescriptor<Hike>(predicate: #Predicate { $0.id == id })
-        selectedHike = try? modelContext.fetch(descriptor).first
-    }
-
-    /// Once-per-launch housekeeping: brings tiles no hike claims back under
-    /// ``TileCache/cacheByteLimit``.
-    ///
-    /// Launch rather than a timer, and rather than on each save: browsing adds
-    /// tiles a few tens of kilobytes at a time, so a bound that's checked once
-    /// a session is checked often enough, and the check itself stats every
-    /// cached file. Offline coverage is exempt — reading the manifests here is
-    /// what makes it exempt, so this must not run before they can be read.
-    private func trimTileCache() {
-        // Auto-save can have tiles on disk that no manifest claims *yet*; a
-        // trim that ran first would count them as residue and be entitled to
-        // delete them.
-        autoSaveController.flushPendingKeys()
-        let claims = (try? modelContext.fetch(FetchDescriptor<Hike>()))?
-            .filter(\.hasStoredTiles)
-            .map(TileOwnership.init) ?? []
-        Task.detached {
-            let keys = claims.reduce(into: Set<String>()) { $0.formUnion($1.tileKeys()) }
-            TileCache.shared.trimCache(claimedBy: keys)
-        }
-    }
-
-    /// Polls without reading location from `body`, refreshing after movement or
-    /// when the current reading expires. Failures use capped backoff so a
-    /// stationary user recovers without continuously hitting WeatherKit.
-    private func pollWeather() async {
-        var state = WeatherPollState()
-        while !Task.isCancelled {
-            if let coordinate = locationManager.coordinate {
-                let key = Self.weatherKey(for: coordinate)
-                let requestedAt = Date()
-                if state.shouldRequest(key: key, at: requestedAt) {
-                    if await weatherManager.update(for: coordinate) {
-                        state.recordSuccess(key: key, at: .now)
-                    } else {
-                        state.recordFailure(key: key, at: .now)
-                    }
-                }
-            }
-            try? await Task.sleep(for: .seconds(1))
-        }
-    }
-
-    private static func weatherKey(for coordinate: CLLocationCoordinate2D) -> String {
-        "\(Int(coordinate.latitude * 100)),\(Int(coordinate.longitude * 100))"
+        guard selectedHike == nil else { return }
+        selectedHike = appModel.restoreLastSelectedHike(in: modelContext)
     }
 
     /// Parses a picked .gpx file, persists it as a `Hike`, and shows it on the map.
     /// A file that can't become a hike raises ``importFailure`` rather than
     /// leaving the user looking at an unchanged screen.
     private func importGPX(from url: URL) {
-        let scoped = url.startAccessingSecurityScopedResource()
         Task {
-            defer { if scoped { url.stopAccessingSecurityScopedResource() } }
-
-            let track: GPXImport.Track
             // Typed, so the catch below can't quietly widen to `any Error` and
             // start swallowing something this screen has no message for.
             do throws(GPXImport.ImportFailure) {
-                track = try await GPXImport.loadOffMain(from: url)
-                guard track.points.count > 1 else { throw .tooShort }
+                selectedHike = try await appModel.importHike(
+                    from: url,
+                    into: modelContext
+                )
             } catch {
                 importFailure = error
                 return
             }
 
-            let title = track.name ?? url.deletingPathExtension().lastPathComponent
-            let hike = Hike(
-                title: title,
-                distanceMeters: track.distanceMeters,
-                date: track.startTime ?? .now,
-                tintHex: Hike.randomTintHex(),
-                route: track.route,
-                trackDescription: track.trackDescription,
-                author: track.author,
-                keywords: track.keywords
-            )
-            modelContext.insert(hike)
-
-            // Select it (draws + zooms the route via `displayedRoute`) and reveal the map.
-            selectedHike = hike
+            // The selection draws the imported route; expanding reveals it.
             withAnimation { sheetDetent = .medium }
         }
     }
@@ -341,7 +254,8 @@ private struct WeatherBadge: View {
 
 #Preview {
     let container = try! ModelContainer(for: Hike.self, configurations: .init(isStoredInMemoryOnly: true))
-    ContentView(
+    let model = OpenTrailsModel(
+        container: container,
         backgroundTracker: BackgroundTrailTracker(container: container),
         autoSaveController: AutoSaveController(),
         hikeRecorder: HikeRecorder(
@@ -349,7 +263,11 @@ private struct WeatherBadge: View {
             journalDirectory: FileManager.default.temporaryDirectory
                 .appendingPathComponent("recording-preview", isDirectory: true),
             automaticallyRecovers: false
-        )
+        ),
+        locationManager: LocationManager(),
+        weatherManager: WeatherManager()
     )
-    .modelContainer(container)
+    OpenTrailsView()
+        .environment(model)
+        .modelContainer(container)
 }

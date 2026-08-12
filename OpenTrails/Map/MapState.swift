@@ -1,5 +1,5 @@
 //
-//  MapControllers.swift
+//  MapState.swift
 //  OpenTrails
 //
 //  Reference-type state observed directly by the map (not via SwiftUI), so

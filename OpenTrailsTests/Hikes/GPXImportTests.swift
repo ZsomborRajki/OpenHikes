@@ -328,7 +328,7 @@ struct GPXImportTests {
         """
         let track = try GPXImport.load(from: try gpxFile(xml))
         #expect(track.points.count == 1)
-        // The rule `ContentView.importGPX` applies to it.
+        // The rule `OpenTrailsModel.importHike` applies to it.
         #expect(track.points.count <= 1, "which is what makes it .tooShort at the import")
     }
 

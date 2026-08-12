@@ -111,7 +111,7 @@ final class BackgroundTrailTracker: NSObject {
     private let clock: @Sendable () -> Date
     private let container: ModelContainer
     /// The hike background delivery should match fixes against. Seeded at
-    /// launch from `SettingsKey.lastSelectedHikeID` (written by `ContentView`)
+    /// launch from `SettingsKey.lastSelectedHikeID` (written by `OpenTrailsModel`)
     /// since a background relaunch has no in-memory selection to read.
     private var trackedHikeID: UUID?
     /// Invalidates detached selection work when a newer selection arrives.

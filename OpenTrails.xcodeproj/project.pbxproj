@@ -66,13 +66,6 @@
 /* End PBXFileReference section */
 
 /* Begin PBXFileSystemSynchronizedBuildFileExceptionSet section */
-		AD0000000000000000000001 /* Exceptions for "OpenTrails" folder in "OpenTrails" target */ = {
-			isa = PBXFileSystemSynchronizedBuildFileExceptionSet;
-			membershipExceptions = (
-				Info.plist,
-			);
-			target = A85E854C2FE3EBF500558639 /* OpenTrails */;
-		};
 		A8838AF7302A232400FAEEEE /* Exceptions for "OpenWidget" folder in "OpenWidgetExtension" target */ = {
 			isa = PBXFileSystemSynchronizedBuildFileExceptionSet;
 			membershipExceptions = (
@@ -87,6 +80,13 @@
 				OpenWidgetBundle.swift,
 			);
 			target = AC0000000000000000000001 /* OpenWidgetTests */;
+		};
+		AD0000000000000000000001 /* Exceptions for "OpenTrails" folder in "OpenTrails" target */ = {
+			isa = PBXFileSystemSynchronizedBuildFileExceptionSet;
+			membershipExceptions = (
+				Info.plist,
+			);
+			target = A85E854C2FE3EBF500558639 /* OpenTrails */;
 		};
 /* End PBXFileSystemSynchronizedBuildFileExceptionSet section */
 
