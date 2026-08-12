@@ -135,8 +135,8 @@ private struct RecordingRecoveryNotice: View {
 }
 
 /// Warns about system settings that quietly degrade a recording without
-/// stopping it (`RECORD_HIKE.md` §13). Never blocks: a hike recorded in Low
-/// Power Mode is worth far more than one refused on principle.
+/// stopping it. Never blocks: a hike recorded in Low Power Mode is worth far
+/// more than one refused on principle.
 private struct RecordingConditionsNotice: View {
     let recorder: HikeRecorder
 

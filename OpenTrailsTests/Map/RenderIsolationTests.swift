@@ -96,8 +96,8 @@ struct RecordingIsolationTests {
 
     /// `RecordingView.body` and the whole hikes sheet (via
     /// `HikeRecorder.isActive`) read `phase`, and a recording writes it on
-    /// every accepted fix. `RECORD_HIKE.md` §12 budgets those bodies at "only
-    /// on phase change — not per fix", so a fix that leaves the phase alone
+    /// every accepted fix. Those bodies are budgeted at one invalidation per
+    /// phase change, not one per fix, so a fix that leaves the phase alone
     /// must wake nothing.
     @Test("a fix that doesn't change the phase doesn't wake a body reading it")
     func steadyRecordingDoesNotInvalidatePhaseReaders() async throws {

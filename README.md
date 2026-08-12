@@ -83,7 +83,7 @@ See [`.github/copilot-instructions.md`](.github/copilot-instructions.md) for arc
 
 ## Current limitations
 
-- Trail matching is in progress: recorded hikes use cached Overpass geometry when a confident path is available, but live sliding-window matching and the post-recording ambiguity review are not implemented yet.
+- Trail matching is in progress: recorded hikes use cached Overpass geometry when a confident path is available, but live sliding-window matching and the post-recording ambiguity review are not implemented yet. `CODE_REVIEW.md` tracks what is built and what is not.
 - Sign in with Apple is a disabled placeholder, and hikes do not sync between devices.
 - Third-party tile keys can only be supplied at build time.
 - There is no CI, so the test suites are only as protected as the person running them; details are tracked in `CODE_REVIEW.md`.

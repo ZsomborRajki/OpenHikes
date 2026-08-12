@@ -262,7 +262,7 @@ final class HikeRecorder: NSObject {
 
     /// How long this session has been running, from a monotonic source, so an
     /// NTP correction or a manual clock change mid-hike can't make the elapsed
-    /// readout jump or run backwards (`RECORD_HIKE.md` §13).
+    /// readout jump or run backwards.
     ///
     /// A session recovered from a journal has no in-process baseline — the
     /// uptime it started against belongs to a previous launch — so it falls
@@ -751,8 +751,8 @@ final class HikeRecorder: NSObject {
         // unconditional form is quiet *today* — but only because `Phase` is
         // `Equatable`. Give one case a non-`Equatable` payload and every body
         // reading `phase` (this view's, and the whole hikes sheet's via
-        // `isActive`) silently starts re-rendering at fix rate, which is
-        // exactly the budget `RECORD_HIKE.md` §12 sets. Say it out loud.
+        // `isActive`) silently starts re-rendering at fix rate, blowing the
+        // one-invalidation-per-phase-change budget. Say it out loud.
         if phase != .recording {
             phase = .recording
         }
