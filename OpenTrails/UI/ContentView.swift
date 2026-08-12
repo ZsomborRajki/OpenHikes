@@ -11,24 +11,6 @@ import CoreLocation
 import WeatherKit
 import OpenTrailsShared
 
-@MainActor
-final class DisplayedRouteCoordinateCache {
-    private var hikeID: UUID?
-    private var coordinates: [CLLocationCoordinate2D] = []
-
-    func coordinates(for hike: Hike) -> [CLLocationCoordinate2D] {
-        guard hike.id != hikeID else { return coordinates }
-        hikeID = hike.id
-        coordinates = hike.coordinates
-        return coordinates
-    }
-
-    func clear() {
-        hikeID = nil
-        coordinates = []
-    }
-}
-
 struct ContentView: View {
     @Environment(\.modelContext) private var modelContext
 
@@ -56,9 +38,15 @@ struct ContentView: View {
     @State private var importFailure: GPXImport.ImportFailure?
     /// Lets the hike detail view drive one-shot map commands (e.g. the Zoom button).
     @State private var mapController = MapController()
-    /// Route points are immutable after import and change only when the hike ID
-    /// changes. Keep their Core Location projection across unrelated body passes.
+    /// Keeps the selected route's Core Location projection across unrelated
+    /// body passes — see ``DisplayedRouteCoordinateCache``.
     @State private var displayedRouteCoordinateCache = DisplayedRouteCoordinateCache()
+    /// The drawn route's tint and width, observed directly by the map. Both are
+    /// written continuously — a `ColorPicker` drag and a `Slider` drag — so
+    /// reading them here would put every drag sample through this body and the
+    /// `.sheet` closure inside it. It follows the selected hike instead; see
+    /// ``RouteStyle``.
+    @State private var routeStyle = RouteStyle()
 
     /// The sheet's live top edge, observed directly by the map so dragging the
     /// sheet never re-renders this view or the sheet's contents.
@@ -68,14 +56,10 @@ struct ContentView: View {
     @AppStorage(SettingsKey.tileProviderID) private var tileProviderID = TileProvider.default.id
 
     /// The route drawn on the map — always the currently selected hike, if any.
+    /// Geometry only: its appearance reaches the map through ``routeStyle``,
+    /// which is what keeps a colour or width drag out of this body.
     private var displayedRoute: DisplayedRoute? {
-        guard let hike = selectedHike else { return nil }
-        return DisplayedRoute(
-            id: hike.id,
-            coordinates: displayedRouteCoordinateCache.coordinates(for: hike),
-            tint: hike.tint,
-            width: hike.routeWidth
-        )
+        DisplayedRoute.forSelection(selectedHike, cache: displayedRouteCoordinateCache)
     }
 
     /// Resolves the selected provider (with API key substituted) for the map.
@@ -102,6 +86,7 @@ struct ContentView: View {
         return MapView(
             locationManager: locationManager,
             route: displayedRoute,
+            routeStyle: routeStyle,
             highlight: highlight,
             sheetMetrics: sheetMetrics,
             tileSource: activeTileSource,
@@ -167,6 +152,11 @@ struct ContentView: View {
                 if hike == nil {
                     displayedRouteCoordinateCache.clear()
                 }
+                // Hands the map the new route's appearance, and re-points the
+                // tracking that keeps it current, without this body ever
+                // reading either value — a change handler is not a body pass,
+                // so nothing here becomes a dependency of this view.
+                routeStyle.follow(hike)
                 autoSaveController.hikeSelectionChanged(to: hike)
                 backgroundTracker.hikeSelectionChanged(to: hike)
                 // The one persisted record of "what's selected" — restores it

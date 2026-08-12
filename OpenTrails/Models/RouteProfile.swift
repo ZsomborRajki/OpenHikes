@@ -17,6 +17,17 @@ nonisolated struct RouteProfile {
     /// all agree on the same trail.
     static let followMatchThresholdMeters: Double = 75
 
+    /// How far a segment's direction may differ from the walker's own course
+    /// and still count as the way they are going.
+    ///
+    /// Less a tolerance than the question itself: does this leg of the trail
+    /// run *with* the walker, or against them? The two legs of an out-and-back
+    /// are 180° apart, so at 90° the answer survives a great deal of noise in
+    /// either the reported course or the individual segment — which is the
+    /// point, since a trail's own bearing wanders segment to segment while the
+    /// leg it belongs to does not.
+    static let courseAgreementDegrees: Double = 90
+
     /// Upper bound on how many points the elevation chart is asked to draw.
     /// One plotted point per two device pixels is already past what a 390 pt
     /// chart resolves at 3×; beyond that, every extra sample is main-thread
@@ -137,6 +148,29 @@ nonisolated struct RouteProfile {
         return low...high
     }
 
+    /// The route's full length in metres — the denominator behind every
+    /// progress readout.
+    var totalDistanceMeters: Double { distances.last ?? 0 }
+
+    /// How far along the route a distance is, as a fraction of the whole,
+    /// clamped to 0…1. `nil` for a route with no length, where a percentage
+    /// would mean nothing.
+    ///
+    /// Deliberately the same arithmetic as `SharedTrailSnapshot.fractionComplete`,
+    /// which the widget reads: both divide a matched distance-along-route by
+    /// the same haversine total, so the app and the widget can't show two
+    /// different percentages for one position.
+    func fractionComplete(atDistance distance: Double) -> Double? {
+        let total = totalDistanceMeters
+        guard total > 0 else { return nil }
+        return min(1, max(0, distance / total))
+    }
+
+    /// Distance still to walk from a position along the route, in metres.
+    func remainingDistanceMeters(atDistance distance: Double) -> Double {
+        max(0, totalDistanceMeters - distance)
+    }
+
     /// Map coordinate at a distance along the route, interpolated within the
     /// bracketing segment. O(log n).
     func coordinate(atDistance target: Double) -> CLLocationCoordinate2D? {
@@ -171,7 +205,37 @@ nonisolated struct RouteProfile {
     /// each other (e.g. a loop's start and finish); without this, ordinary
     /// jitter can flip the match between them — jumping the tracker across
     /// most of the route with no real movement.
-    func nearestPoint(to coordinate: CLLocationCoordinate2D, near referenceDistance: Double? = nil) -> (distanceAlongRoute: Double, offRouteMeters: Double)? {
+    ///
+    /// With no reference — the first fix after a hike is selected — ties are
+    /// broken toward the *start* of the route instead. There is no continuity
+    /// to preserve yet, and on a trail that returns along its outbound leg
+    /// every point has a twin that projects just as well, so the raw closest
+    /// segment is decided by nothing more than which of two overlapping legs
+    /// the GPX happened to sample a fraction of a metre nearer. That coin
+    /// flip put a walker who had just set off at the *finish* of the trail
+    /// about half the time — and because the match then becomes the continuity
+    /// reference for every later fix, it stayed there for the whole hike.
+    /// Preferring the earliest of the tied candidates starts them at the
+    /// trailhead, and continuity carries them forward from there.
+    ///
+    /// `heading` — the walker's course over ground, when the fix carries one
+    /// worth trusting (see ``LocationFixPolicy/course(of:)``) — settles that
+    /// question outright, and outranks the assumption about the start. The two
+    /// legs of an out-and-back run in opposite directions, so a walker already
+    /// on the way back is going the *wrong* way for the outbound leg and the
+    /// right way for the return one. It is consulted only when there is no
+    /// `referenceDistance`: once a match exists, continuity is the better
+    /// evidence, and letting a noisy course overrule it would reintroduce
+    /// exactly the jumping this parameter set out to stop — a walker pausing
+    /// to look back down the trail is not a walker who has turned around.
+    ///
+    /// A loop's junction stays ambiguous under this test, correctly: both
+    /// passes run the same way, so the start assumption still decides it.
+    func nearestPoint(
+        to coordinate: CLLocationCoordinate2D,
+        near referenceDistance: Double? = nil,
+        heading: CLLocationDirection? = nil
+    ) -> (distanceAlongRoute: Double, offRouteMeters: Double)? {
         guard !coordinates.isEmpty else { return nil }
         guard coordinates.count > 1 else {
             let only = coordinates[0]
@@ -182,6 +246,16 @@ nonisolated struct RouteProfile {
         struct Candidate {
             let distanceAlongRoute: Double
             let offRouteMeters: Double
+            /// The segment's local east/north components, pointing the way
+            /// distance-along-route increases. Kept as components rather than
+            /// a bearing so the `atan2` is paid only for the few candidates
+            /// that reach the heading test, not for every segment of a
+            /// five-hour track twice a second.
+            let dx: Double
+            let dy: Double
+
+            /// Direction the route runs here, degrees clockwise from north.
+            var bearingDegrees: Double { atan2(dx, dy) * 180 / .pi }
         }
 
         func candidate(at index: Int) -> Candidate {
@@ -197,35 +271,69 @@ nonisolated struct RouteProfile {
             let projectedY = start.y + fraction * dy
             return Candidate(
                 distanceAlongRoute: distances[index] + fraction * (distances[index + 1] - distances[index]),
-                offRouteMeters: hypot(projectedX, projectedY)
+                offRouteMeters: hypot(projectedX, projectedY),
+                dx: dx,
+                dy: dy
             )
         }
 
-        var best = Candidate(distanceAlongRoute: 0, offRouteMeters: .greatestFiniteMagnitude)
+        var best = Candidate(distanceAlongRoute: 0, offRouteMeters: .greatestFiniteMagnitude, dx: 0, dy: 0)
         for index in 0..<(coordinates.count - 1) {
             let candidate = candidate(at: index)
             if candidate.offRouteMeters < best.offRouteMeters { best = candidate }
         }
 
-        guard let referenceDistance else {
-            return (best.distanceAlongRoute, best.offRouteMeters)
+        // Ties are resolved against the previous match when there is one, and
+        // against the start of the route when there isn't — never left to the
+        // raw closest segment, which overlapping legs decide by sampling noise.
+        let anchor = referenceDistance ?? 0
+        // Direction of travel only gets a say while seeding; see above.
+        let course = referenceDistance == nil ? heading : nil
+
+        /// Whether this leg of the trail runs *with* the walker rather than
+        /// against them. Always `false` without a course, which collapses the
+        /// ranking below back to the anchor alone.
+        func runsWithTheWalker(_ candidate: Candidate) -> Bool {
+            guard let course else { return false }
+            return Self.bearingDifference(course, candidate.bearingDegrees) < Self.courseAgreementDegrees
         }
 
         // Among every segment projection within `tieBreakToleranceMeters` of
-        // the closest one, prefer whichever is nearest the previous match.
+        // the closest one, prefer whichever the walker is actually heading
+        // along; failing that (or between two that both qualify), whichever
+        // is nearest the anchor.
         let tieBreakToleranceMeters = 20.0
         var tied = best
-        var bestContinuity = abs(best.distanceAlongRoute - referenceDistance)
+        var tiedRunsWith = runsWithTheWalker(best)
+        var bestContinuity = abs(best.distanceAlongRoute - anchor)
         for index in 0..<(coordinates.count - 1) {
             let candidate = candidate(at: index)
             guard candidate.offRouteMeters <= best.offRouteMeters + tieBreakToleranceMeters else { continue }
-            let continuity = abs(candidate.distanceAlongRoute - referenceDistance)
+            let candidateRunsWith = runsWithTheWalker(candidate)
+            // Direction of travel is evidence about which leg the walker is
+            // on; proximity to the anchor is only an assumption. So a
+            // candidate they're heading along beats one they aren't, however
+            // the two sit relative to the anchor.
+            if candidateRunsWith != tiedRunsWith {
+                guard candidateRunsWith else { continue }
+                tied = candidate
+                tiedRunsWith = true
+                bestContinuity = abs(candidate.distanceAlongRoute - anchor)
+                continue
+            }
+            let continuity = abs(candidate.distanceAlongRoute - anchor)
             if continuity < bestContinuity {
                 bestContinuity = continuity
                 tied = candidate
             }
         }
         return (tied.distanceAlongRoute, tied.offRouteMeters)
+    }
+
+    /// Smallest absolute angle between two compass bearings, 0…180°.
+    private static func bearingDifference(_ a: Double, _ b: Double) -> Double {
+        let delta = abs(a - b).truncatingRemainder(dividingBy: 360)
+        return delta > 180 ? 360 - delta : delta
     }
 
     private static func localOffset(

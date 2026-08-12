@@ -290,7 +290,17 @@ final class BackgroundTrailTracker: NSObject {
         guard let hike = (try? context.fetch(descriptor))?.first, hike.pointCount > 1 else { return }
 
         let profile = RouteProfile(route: hike.route)
-        guard let match = profile.nearestPoint(to: location.coordinate, near: lastMatchedDistance),
+        // No equivalent of `HikeDetailView`'s re-seeding rule is needed here:
+        // significant-location-change delivery only happens because the device
+        // moved several hundred metres, so a fix that arrives without a usable
+        // course is the rare one — and whenever the detail view has been open,
+        // `publishLiveFix` has already left a course-settled `lastMatchedDistance`
+        // behind for this to continue from.
+        guard let match = profile.nearestPoint(
+                to: location.coordinate,
+                near: lastMatchedDistance,
+                heading: LocationFixPolicy.course(of: location)
+              ),
               match.offRouteMeters <= RouteProfile.followMatchThresholdMeters,
               let coordinate = profile.coordinate(atDistance: match.distanceAlongRoute) else {
             updateStoredLiveFix(nil, hike: hike, profile: profile)

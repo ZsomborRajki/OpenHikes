@@ -62,6 +62,38 @@ enum Fixture {
         return points
     }()
 
+    /// A trail that walks out to a turning point and comes back along the same
+    /// path — the shape that had auto-follow start a hike at its finish.
+    ///
+    /// The return leg is offset by well under a metre, the way a receiver's
+    /// second pass over the same ground really is: near enough that both legs
+    /// are the same trail, unequal enough that the segment *closest* to a fix
+    /// at the trailhead is decided by sampling noise rather than by where the
+    /// walker is standing. An exactly mirrored fixture would hide the bug —
+    /// with two identical candidates the earlier one wins by iteration order
+    /// alone, which is the coin landing the right way up, not a tie being
+    /// broken.
+    static let outAndBackRoute: [RouteCoordinate] = {
+        // ~0.75 m east at this latitude.
+        let returnLegOffset = 1e-5
+        let outbound = (0..<20).map { step in
+            RouteCoordinate(
+                latitude: 47.6300 + Double(step) * 0.0005, // ~56 m per step
+                longitude: 12.8600,
+                elevation: 600 + Double(step) * 8
+            )
+        }
+        // Back down the same path. The turning point isn't repeated.
+        let returning = outbound.dropLast().reversed().map { point in
+            RouteCoordinate(
+                latitude: point.latitude,
+                longitude: point.longitude + returnLegOffset,
+                elevation: point.elevation
+            )
+        }
+        return outbound + returning
+    }()
+
     /// A ~10 km walk in Fiji that steps across ±180°. Short on the ground, but
     /// the widest possible span if longitude is read as a plain `min`/`max`
     /// interval — which is the mistake both the bulk downloader and the

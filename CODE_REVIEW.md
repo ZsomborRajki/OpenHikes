@@ -1,44 +1,26 @@
 # OpenTrails Code Review
 
-Original review: 2026-08-11 at commit `2ee19ea`. Status updated against the working tree based on `9585e71` (`main`).
+Original review: 2026-08-11 at commit `2ee19ea`. Status updated against the working tree based on `d6fa7ad` (`main`).
 
 ## Executive summary
 
-The app remains structurally sound. Fixes after the original review moved GPX preparation off the main actor, tightened tile transport and cache behavior, bounded WeatherKit and WidgetKit throttles, and added workload and transport coverage. No current finding is a crash or data-loss defect.
+The app remains structurally sound. Fixes after the original review moved GPX preparation off the main actor, tightened tile transport and cache behavior, bounded WeatherKit and WidgetKit throttles, moved route tint and width out of `ContentView.body` into `RouteStyle`, and added workload and transport coverage. No current finding is a crash or data-loss defect.
 
-The remaining measured issues are concentrated in main-actor UI work: propagating route appearance changes through `ContentView`. Two tests pin those regressions with `withKnownIssue`; the suite stays green and will flag when the wrappers can be removed.
+No measured per-event cost remains: the sheet's hike ranking is now memoized in `HikeSearch` and skipped entirely while the search field is unfocused. The suite is green with no known issues.
 
-The larger outstanding risk is infrastructure: key system boundaries still lack injectable seams or integration targets, and the repository has no CI.
+The outstanding risk is infrastructure: key system boundaries still lack injectable seams or integration targets, and the repository has no CI.
 
 ## Current build and test state
 
 | Surface | Result | Notes |
 |---|---:|---|
 | iOS app build | Pass | `OpenTrails`, iPhone 17 Pro simulator |
-| iOS app tests | Pass | **300 tests, 35 suites**, 2 known issues, 0 skipped |
+| iOS app tests | Pass | **332 tests, 38 suites**, 0 known issues, 0 skipped |
 | Shared package tests | Pass | 43 tests, 5 suites |
 | macOS build | Pass | Unsigned, arm64 |
 | visionOS build | **Not verified** | No visionOS runtime installed on this machine |
 | iPadOS | **Not verified** | No iPad simulator installed |
 | CI | **Absent** | `.github/workflows` does not exist |
-
-## UI performance
-
-### 8. Route tint and width are the one hot path still inside SwiftUI
-
-`ContentView.displayedRoute` reads `hike.tint` and `hike.routeWidth` in `ContentView.body` to hand them to the map. Both live on the `@Model` and both are written continuously — a `Slider` drag and a `ColorPicker` drag — so **every drag sample invalidates the root view**, and with it the `.sheet` closure that builds `MapSheet`: `rankedMatchingHikes()` re-runs, the `NavigationStack` rebuilds, and the pushed `HikeDetailView` that owns the slider being dragged is re-evaluated.
-
-`MapView` is `.equatable()`, so the diff stops before MapKit. Nothing stops it before the sheet.
-
-Measured: 9 slider steps → 9 root-view invalidations; 10 colour writes → 10. A real `ColorPicker` drag emits touch samples, not integer steps.
-
-The fix is the pattern the rest of the app already uses: hold the drawn route's appearance in a stable `@Observable` reference type the coordinator observes directly, as `RouteHighlight` does, rather than reading it out of the model in `body`.
-
-**Tests:** `dragging the width slider doesn't invalidate the root view`, `dragging the colour picker doesn't invalidate the root view`, with `a new selection still reaches the map` pinning what must keep working.
-
-### 9. Per-event costs worth removing
-
-- **`MapSheet.body` calls `rankedMatchingHikes()` on every pass**, including the detent changes a sheet drag produces, whenever `searchText` is non-empty.
 
 ## Test gaps
 
@@ -69,16 +51,8 @@ The suite's algorithmic and storage coverage is genuinely strong. What remains i
 
 ## TODO
 
-Ordered by value per unit of risk. A ✅ test name is the test that already pins the item — it is wrapped in
-`withKnownIssue`, so fixing the code makes it fail with "known issue was not recorded", and the fix is
-finished when the wrapper comes off. Items with no test named need a seam built first.
-
-### Now — main-actor cost
-
-- [ ] **Move route tint and width out of `ContentView.body`** (finding 8) into a stable `@Observable` the
-      coordinator observes directly, as `RouteHighlight` does.
-      ✅ `dragging the width slider doesn't invalidate the root view`, `dragging the colour picker doesn't invalidate the root view`
-- [ ] **Memoize or gate `rankedMatchingHikes()`** so a sheet drag doesn't re-rank (finding 9).
+Ordered by value per unit of risk. Nothing below is pinned by a test yet — each item needs a seam or a
+measurement harness built first.
 
 ### Infrastructure — unblocks everything above
 

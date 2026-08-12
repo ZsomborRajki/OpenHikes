@@ -16,10 +16,45 @@ import Foundation
 import CoreLocation
 import Observation
 
+/// A fix accepted for route matching: where the walker is, and — when they're
+/// moving fast enough for it to mean anything — which way they're going.
+nonisolated struct RouteFix {
+    let coordinate: CLLocationCoordinate2D
+    /// Course over ground in degrees from true north, or `nil` when this fix
+    /// carries none worth trusting. Route matching uses it to tell the
+    /// outbound leg of a trail from the return one.
+    let course: CLLocationDirection?
+}
+
 nonisolated enum LocationFixPolicy {
     static let foregroundMaximumAge: TimeInterval = 30
     static let backgroundMaximumAge: TimeInterval = 5 * 60
     private static let futureTimestampTolerance: TimeInterval = 5
+
+    /// Below this speed a receiver's course is noise. A phone lying still on
+    /// a rock still reports *some* direction, and it wanders; 0.5 m/s is
+    /// under even a slow uphill walking pace and well clear of that drift.
+    static let minimumCourseSpeed: CLLocationSpeed = 0.5
+
+    /// A course this uncertain says nothing about which way along a trail
+    /// someone is walking, so it's treated as no course at all.
+    static let maximumCourseAccuracy: CLLocationDirectionAccuracy = 45
+
+    /// The direction of travel a fix carries, or `nil` when it carries none
+    /// worth trusting. Shared by the foreground and background feeds so both
+    /// answer "which way are they walking?" identically — a disagreement
+    /// there would show up as the app and its widget reporting two different
+    /// percentages of the same trail.
+    static func course(of location: CLLocation) -> CLLocationDirection? {
+        guard location.speed >= minimumCourseSpeed, location.course >= 0 else { return nil }
+        // A negative accuracy means the receiver reported no uncertainty at
+        // all — which is what simulated locations and plenty of recorded
+        // tracks carry — not that the course is bad. Only an uncertainty that
+        // is both reported and wide disqualifies it; absence of evidence is
+        // left to the speed gate above.
+        if location.courseAccuracy >= 0, location.courseAccuracy > maximumCourseAccuracy { return nil }
+        return location.course
+    }
 
     static func accepts(
         _ location: CLLocation,
@@ -118,16 +153,21 @@ final class LocationManager: NSObject {
     /// Returns a current fix only when its uncertainty is narrow enough for
     /// the caller's matching tolerance. Map centering and weather can still
     /// use reduced-accuracy locations through ``coordinate``.
-    func coordinateForRouteMatching(
-        maximumHorizontalAccuracy: CLLocationAccuracy
-    ) -> CLLocationCoordinate2D? {
+    ///
+    /// Position and course come from one `CLLocation` rather than from two
+    /// accessors, so a caller can't match a coordinate against the direction
+    /// the walker was going at some other moment.
+    func routeFix(maximumHorizontalAccuracy: CLLocationAccuracy) -> RouteFix? {
         guard let latestLocation,
               LocationFixPolicy.accepts(
                 latestLocation,
                 maximumAge: LocationFixPolicy.foregroundMaximumAge,
                 maximumHorizontalAccuracy: maximumHorizontalAccuracy
               ) else { return nil }
-        return latestLocation.coordinate
+        return RouteFix(
+            coordinate: latestLocation.coordinate,
+            course: LocationFixPolicy.course(of: latestLocation)
+        )
     }
 }
 

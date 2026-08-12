@@ -27,7 +27,13 @@ struct MapView: MapViewRepresentable, Equatable {
     var locationManager: LocationManager
 
     /// An imported/selected route to draw and zoom to. Draws a line and fits the map to it.
+    /// Geometry only — how it is drawn comes from `routeStyle` below.
     var route: DisplayedRoute?
+
+    /// The drawn route's tint and width. Observed directly by the map (not via
+    /// SwiftUI) so a colour or width drag restyles the existing polyline
+    /// renderer without re-rendering any view — see ``RouteStyle``.
+    var routeStyle: RouteStyle
 
     /// Observed directly by the map (not via SwiftUI) so scrubbing the elevation
     /// chart moves the marker without re-rendering any view.
@@ -48,14 +54,15 @@ struct MapView: MapViewRepresentable, Equatable {
     /// Lets `.equatable()` skip `updateUIView` when nothing actually changed —
     /// without it, SwiftUI calls `updateUIView` on every ancestor body pass
     /// that touches this view's transaction (e.g. the sheet's per-frame drag
-    /// updates), even though `highlight`/`sheetMetrics`/`mapController`/
-    /// `locationManager` are deliberately observed outside SwiftUI for
-    /// exactly that scenario. Those four are reference types the parent
-    /// always hands down as the same instance, so identity comparison is
+    /// updates), even though `routeStyle`/`highlight`/`sheetMetrics`/
+    /// `mapController`/`locationManager` are deliberately observed outside
+    /// SwiftUI for exactly that scenario. Those five are reference types the
+    /// parent always hands down as the same instance, so identity comparison is
     /// correct: their *contents* changing on their own is not a reason to
     /// re-run `updateUIView`.
     static func == (lhs: MapView, rhs: MapView) -> Bool {
         lhs.route == rhs.route
+            && lhs.routeStyle === rhs.routeStyle
             && lhs.highlight === rhs.highlight
             && lhs.sheetMetrics === rhs.sheetMetrics
             && lhs.tileSource == rhs.tileSource
@@ -77,6 +84,7 @@ struct MapView: MapViewRepresentable, Equatable {
         coordinator.observeHighlight(highlight, on: mapView)
         coordinator.observeSheetMetrics(sheetMetrics, on: mapView)
         coordinator.observeMapController(mapController, on: mapView)
+        coordinator.observeRouteStyle(routeStyle, on: mapView)
 
         // Raster tiles from the selected provider, replacing Apple's base map.
         applyTileSource(to: mapView, coordinator)
@@ -153,31 +161,14 @@ struct MapView: MapViewRepresentable, Equatable {
 
         guard let route, route.coordinates.count > 1 else { return }
 
-        coordinator.routeTint = route.tint
-        coordinator.routeWidth = route.width
+        // The line's colour and width aren't read here: `observeRouteStyle`
+        // keeps `coordinator.routeTint`/`routeWidth` current, and `rendererFor`
+        // takes the new polyline's style from those.
         let polyline = MKPolyline(coordinates: route.coordinates, count: route.coordinates.count)
         coordinator.routeOverlay = polyline
         mapView.addOverlay(polyline, level: .aboveLabels)
 
         coordinator.fitToCurrentRoute(mapView, animated: true)
-    }
-
-    /// Restyles the drawn route (color/alpha, width, and the highlight dot) when
-    /// those change without rebuilding the overlay — the route id stays the same.
-    private func updateRouteStyle(_ mapView: MKMapView, _ coordinator: Coordinator) {
-        guard let route, coordinator.routeOverlay != nil else { return }
-        let tintChanged = coordinator.routeTint != route.tint
-        let widthChanged = coordinator.routeWidth != route.width
-        guard tintChanged || widthChanged else { return }
-        coordinator.routeTint = route.tint
-        coordinator.routeWidth = route.width
-        RenderSignpost.mark("MapRouteRestyled")
-        if let renderer = coordinator.routeRenderer {
-            coordinator.applyStyle(to: renderer)
-            renderer.setNeedsDisplay()
-        }
-        // The dot mirrors the tint (opaque); only refresh it when the color moves.
-        if tintChanged { coordinator.refreshHighlightColor(on: mapView) }
     }
 
     private func update(_ mapView: MKMapView, _ coordinator: Coordinator) {
@@ -188,7 +179,11 @@ struct MapView: MapViewRepresentable, Equatable {
         RenderSignpost.mark("MapUpdateCalled")
         applyTileSource(to: mapView, coordinator)
         updateRoute(mapView, coordinator)
-        updateRouteStyle(mapView, coordinator)
+        // Restyling the line is deliberately absent: `observeRouteStyle` applies
+        // tint and width straight from `routeStyle`, so a colour or width drag
+        // never has to reach this method — which only runs when SwiftUI
+        // re-renders, and that is the cost the arrangement exists to avoid.
+        //
         // Idempotent — only the first call (after `updateRoute` above has set
         // `routeID`) actually starts the location tracking; see
         // `Coordinator.observeLocation`.

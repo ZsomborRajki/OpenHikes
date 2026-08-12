@@ -319,7 +319,7 @@ struct LocationPublishingTests {
         #expect(manager.coordinate?.latitude == approximate.coordinate.latitude)
         #expect(manager.coordinate?.longitude == approximate.coordinate.longitude)
         #expect(
-            manager.coordinateForRouteMatching(
+            manager.routeFix(
                 maximumHorizontalAccuracy: RouteProfile.followMatchThresholdMeters
             ) == nil
         )
@@ -342,6 +342,66 @@ struct LocationPublishingTests {
 
         #expect(staleManager.coordinate == nil)
         #expect(invalidManager.coordinate == nil)
+    }
+
+    /// A fix's course is what tells auto-follow which leg of an out-and-back
+    /// a walker is on, so what counts as a *usable* course decides whether
+    /// that works at all — and both the foreground and the background feed
+    /// ask this one question, so they can't drift apart.
+    @Test("only a fix from someone actually moving carries a usable course")
+    func courseNeedsMovement() {
+        func fix(course: CLLocationDirection, courseAccuracy: CLLocationDirectionAccuracy, speed: CLLocationSpeed) -> CLLocation {
+            CLLocation(
+                coordinate: .init(latitude: 47.63, longitude: 12.86),
+                altitude: 0,
+                horizontalAccuracy: 10,
+                verticalAccuracy: -1,
+                course: course,
+                courseAccuracy: courseAccuracy,
+                speed: speed,
+                speedAccuracy: -1,
+                timestamp: .now
+            )
+        }
+
+        #expect(LocationFixPolicy.course(of: fix(course: 180, courseAccuracy: 10, speed: 1.4)) == 180,
+                "walking, and the receiver is sure which way")
+
+        // Standing at a viewpoint: the reported course wanders and means nothing.
+        #expect(LocationFixPolicy.course(of: fix(course: 180, courseAccuracy: 10, speed: 0)) == nil)
+        // The receiver saying it doesn't know.
+        #expect(LocationFixPolicy.course(of: fix(course: -1, courseAccuracy: -1, speed: 1.4)) == nil)
+        // …or knowing so vaguely that it can't distinguish out from back.
+        #expect(LocationFixPolicy.course(of: fix(course: 180, courseAccuracy: 90, speed: 1.4)) == nil)
+        // No uncertainty reported at all is absence of evidence, not evidence
+        // of a bad course — simulated locations arrive exactly like this.
+        #expect(LocationFixPolicy.course(of: fix(course: 180, courseAccuracy: -1, speed: 1.4)) == 180)
+    }
+
+    /// Position and course have to describe the same instant, or a walker
+    /// gets matched against the way they were going somewhere else.
+    @Test("a route fix carries the course of the fix it came from")
+    func routeFixCarriesItsCourse() async throws {
+        let manager = LocationManager()
+        let walking = CLLocation(
+            coordinate: .init(latitude: 47.63, longitude: 12.86),
+            altitude: 0,
+            horizontalAccuracy: 10,
+            verticalAccuracy: -1,
+            course: 42,
+            courseAccuracy: 5,
+            speed: 1.4,
+            speedAccuracy: -1,
+            timestamp: .now
+        )
+        manager.locationManager(CLLocationManager(), didUpdateLocations: [walking])
+        await Task.yield()
+
+        let fix = try #require(
+            manager.routeFix(maximumHorizontalAccuracy: RouteProfile.followMatchThresholdMeters)
+        )
+        #expect(fix.coordinate.latitude == 47.63)
+        #expect(fix.course == 42)
     }
 
     /// CoreLocation can deliver far more often than once a second; the

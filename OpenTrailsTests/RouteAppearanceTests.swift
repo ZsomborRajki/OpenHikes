@@ -73,19 +73,20 @@ struct RouteAppearanceTests {
         }
     }
 
-    /// The map redraws its polyline when this changes, and deliberately
-    /// ignores the coordinates (they only ever change together with the id).
-    @Test("a displayed route compares by identity, tint and width")
+    /// The map rebuilds its polyline when this changes, so it must change for
+    /// a new selection and for nothing else. The coordinates are deliberately
+    /// ignored (they only ever change together with the id), and so is the
+    /// route's appearance — that lives in `RouteStyle` and reaches the map
+    /// without a redraw at all.
+    @Test("a displayed route compares by identity alone")
     func displayedRouteEquality() {
         let id = UUID()
         let coordinates = Fixture.coordinates(Fixture.ridgeRoute)
-        let base = DisplayedRoute(id: id, coordinates: coordinates, tint: .green, width: 3)
+        let base = DisplayedRoute(id: id, coordinates: coordinates)
 
-        #expect(base == DisplayedRoute(id: id, coordinates: coordinates, tint: .green, width: 3))
-        #expect(base != DisplayedRoute(id: UUID(), coordinates: coordinates, tint: .green, width: 3))
-        #expect(base != DisplayedRoute(id: id, coordinates: coordinates, tint: .red, width: 3))
-        #expect(base != DisplayedRoute(id: id, coordinates: coordinates, tint: .green, width: 8))
-        // Same hike, same style: not a redraw, whatever the coordinates say.
-        #expect(base == DisplayedRoute(id: id, coordinates: [], tint: .green, width: 3))
+        #expect(base == DisplayedRoute(id: id, coordinates: coordinates))
+        #expect(base != DisplayedRoute(id: UUID(), coordinates: coordinates))
+        // Same hike: not a redraw, whatever the coordinates say.
+        #expect(base == DisplayedRoute(id: id, coordinates: []))
     }
 }

@@ -24,8 +24,11 @@ extension MapView {
         /// The currently installed tile overlay and a key identifying its source.
         var tileOverlay: TileOverlay?
         var tileSourceKey: String?
-        var routeTint: Color = .green
-        var routeWidth: Double = 5
+        /// The style the line is currently drawn in. Seeded and then kept
+        /// current by `observeRouteStyle`, so it is what `rendererFor` reads
+        /// when MapKit asks for a renderer.
+        var routeTint: Color = RouteStyle.defaultTint
+        var routeWidth: Double = RouteStyle.defaultWidth
         var highlightAnnotation: MKPointAnnotation?
         var trackingBottomConstraint: NSLayoutConstraint?
         private weak var sheetMetrics: SheetMetrics?
@@ -192,6 +195,48 @@ extension MapView {
             // Fall back to a sensible estimate until the sheet reports its position.
             let sheetTop = reportedTop > 0 ? reportedTop : height - 92
             constraint.constant = max(sheetTop, height * 0.5) - spacing
+        }
+
+        /// Observes the drawn route's tint and width and restyles the line
+        /// imperatively, then re-registers — the same technique as
+        /// `observeHighlight`, and for the same reason: both a colour well and a
+        /// width slider are dragged, so their writes arrive at touch frequency
+        /// and must not travel through SwiftUI to reach the map.
+        func observeRouteStyle(_ style: RouteStyle, on mapView: MKMapView) {
+            applyRouteStyle(tint: style.tint, width: style.width, on: mapView)
+            withObservationTracking {
+                _ = style.tint
+                _ = style.width
+            } onChange: { [weak self, weak mapView, weak style] in
+                let coordinator = self
+                let map = mapView
+                let model = style
+                Task { @MainActor in
+                    guard let coordinator, let map, let model else { return }
+                    coordinator.observeRouteStyle(model, on: map)
+                }
+            }
+        }
+
+        /// Restyles the drawn line (colour/alpha, width, and the highlight dot)
+        /// without rebuilding the overlay — the route id hasn't changed.
+        ///
+        /// Safe to call before there is a line to restyle: with no renderer yet,
+        /// recording the values is enough, because `rendererFor` styles the
+        /// polyline from them when MapKit does ask for one.
+        private func applyRouteStyle(tint: Color, width: Double, on mapView: MKMapView) {
+            let tintChanged = routeTint != tint
+            let widthChanged = routeWidth != width
+            guard tintChanged || widthChanged else { return }
+            routeTint = tint
+            routeWidth = width
+            RenderSignpost.mark("MapRouteRestyled")
+            if let renderer = routeRenderer {
+                applyStyle(to: renderer)
+                renderer.setNeedsDisplay()
+            }
+            // The dot mirrors the tint (opaque); only refresh it when the color moves.
+            if tintChanged { refreshHighlightColor(on: mapView) }
         }
 
         /// Observes `highlight.coordinate` and applies changes imperatively, then

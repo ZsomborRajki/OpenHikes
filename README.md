@@ -7,7 +7,7 @@ OpenTrails is a local-first SwiftUI and SwiftData trail viewer for iOS, iPadOS, 
 - GPX import with track metadata, route statistics, elevation chart scrubbing, route styling, and direction chevrons.
 - Search across saved hikes and MapKit place suggestions.
 - OpenStreetMap, Stadia Outdoors, and Thunderforest Outdoors tile providers.
-- Live location, trail auto-follow, and current WeatherKit conditions.
+- Live location, trail auto-follow with a progress readout, and current WeatherKit conditions.
 - Passive tile auto-save for browsed areas, plus bulk offline downloads where the provider permits them.
 - An iOS Home Screen widget with a pre-rendered basemap, trail progress, deep linking, and optional low-power background updates.
 - Local SwiftData and App Group storage; OpenTrails has no backend or account sync.

@@ -6,6 +6,7 @@
 //  GPX file, with an interactive elevation graph at the top.
 //
 
+import CoreLocation
 import SwiftUI
 import SwiftData
 
@@ -27,6 +28,57 @@ final class TrackerState {
     /// `nil` when auto-follow is off, there's no fix, or the fix is too far
     /// from the trail to match.
     var liveTrackerDistance: Double?
+}
+
+/// The tie-break anchor auto-follow carries from one fix to the next: where
+/// the last fix matched along the route, and whether that match was settled
+/// by a real direction of travel or merely assumed.
+///
+/// A value type rather than two `@State` properties so the rule it encodes —
+/// when a match may be re-decided from scratch — is one testable thing
+/// instead of a condition spread across a SwiftUI view's body.
+struct FollowAnchor: Equatable {
+    /// Distance along the route of the last match, in metres.
+    var distance: Double
+    /// Whether that match was settled by a usable course.
+    ///
+    /// `false` while it rests on nothing better than
+    /// ``RouteProfile/nearestPoint(to:near:heading:)``'s assumption that a
+    /// hike starts at its start — which is what a walker gets if they open
+    /// the app *standing still* halfway round an out-and-back. They'd be
+    /// placed on the outbound leg, and continuity would then hold them there
+    /// for the rest of the walk however far they went.
+    var isCourseConfirmed: Bool
+
+    /// The distance a fix carrying `course` should be matched against, or
+    /// `nil` to work the leg out from scratch.
+    ///
+    /// An unconfirmed anchor yields to the first fix that actually carries a
+    /// course: direction of travel is evidence, and the anchor it would be
+    /// replacing is only an assumption. Giving up continuity for that one fix
+    /// is the price of getting the leg right, and it's paid at most once —
+    /// ``matched(at:course:from:)`` confirms the anchor from then on.
+    static func tieBreak(_ anchor: FollowAnchor?, course: CLLocationDirection?) -> Double? {
+        guard let anchor else { return nil }
+        if !anchor.isCourseConfirmed, course != nil { return nil }
+        return anchor.distance
+    }
+
+    /// The anchor left behind by a fix that matched at `distance`.
+    ///
+    /// Confirmation is sticky: once a course has settled which leg the walker
+    /// is on, later fixes without one — they stopped for a photo — can't
+    /// unsettle it and start the re-seeding over.
+    static func matched(
+        at distance: Double,
+        course: CLLocationDirection?,
+        from previous: FollowAnchor?
+    ) -> FollowAnchor {
+        FollowAnchor(
+            distance: distance,
+            isCourseConfirmed: previous?.isCourseConfirmed == true || course != nil
+        )
+    }
 }
 
 struct HikeDetailView: View {
@@ -72,13 +124,18 @@ struct HikeDetailView: View {
     /// True while a finger is actively dragging the elevation chart — pauses
     /// auto-follow's own updates to `trackerDistance` so it doesn't fight the drag.
     @State private var isScrubbing = false
-    /// Whether auto-follow has matched a fix at least once since this hike
-    /// was selected. `trackerDistance` starts at 0 on every selection — that's
-    /// a placeholder, not a real previous position, so it can't be trusted as
-    /// a tie-break anchor until a real match has actually happened. Once one
-    /// has, `trackerDistance` holds a genuine last-known position, and *should*
-    /// anchor ties again if the fix is briefly lost and reacquired.
-    @State private var hasMatchedOnce = false
+    /// Where auto-follow last matched a fix — the only thing allowed to anchor
+    /// the next match's tie-break.
+    ///
+    /// Deliberately not `tracker.trackerDistance`: that starts at 0 on every
+    /// selection (a placeholder, not a position) and is also driven by the
+    /// user's finger on the elevation chart. Anchoring on it let a scrub to
+    /// the far end of the trail decide where the next reacquired fix matched —
+    /// on an out-and-back, that is the difference between the start and the
+    /// finish. `nil` means no fix has been matched yet, which is what tells
+    /// ``RouteProfile/nearestPoint(to:near:heading:)`` to work out the leg
+    /// from scratch rather than continue from a position.
+    @State private var followAnchor: FollowAnchor?
 
     var body: some View {
         // Fires on every re-evaluation of this view's body. Auto-follow's
@@ -92,6 +149,7 @@ struct HikeDetailView: View {
         return ScrollView {
             VStack(alignment: .leading, spacing: 24) {
                 elevationSection
+                progressSection
                 header
                 statsGrid
                 if hasMetadata { metadataSection }
@@ -110,7 +168,7 @@ struct HikeDetailView: View {
             // Place the tracker at the start of the track, on both graph and map.
             tracker.trackerDistance = 0
             tracker.liveTrackerDistance = nil
-            hasMatchedOnce = false
+            followAnchor = nil
             highlight.move(to: built.coordinate(atDistance: 0))
             refreshStoredBytes()
             autoSave.hikeSelectionChanged(to: hike)
@@ -535,6 +593,18 @@ struct HikeDetailView: View {
         }
     }
 
+    // MARK: Progress
+
+    /// How far along the trail the tracked position is. Like the chart, this
+    /// is handed `tracker` as a reference and never reads it here, so the
+    /// once-a-second auto-follow tick redraws the bar and nothing above it.
+    @ViewBuilder
+    private var progressSection: some View {
+        if let profile, profile.totalDistanceMeters > 0 {
+            TrailProgressView(profile: profile, tint: hike.tintOpaque, tracker: tracker)
+        }
+    }
+
     // MARK: Auto-follow
 
     /// Polls the user's location once a second (throttled — GPS fixes can arrive
@@ -550,12 +620,13 @@ struct HikeDetailView: View {
 
     private func updateLiveFollow(profile: RouteProfile) {
         guard hike.autoFollowEnabled,
-              let coordinate = locationManager.coordinateForRouteMatching(
+              let fix = locationManager.routeFix(
                 maximumHorizontalAccuracy: RouteProfile.followMatchThresholdMeters
               ),
               let match = profile.nearestPoint(
-                to: coordinate,
-                near: hasMatchedOnce ? (tracker.liveTrackerDistance ?? tracker.trackerDistance) : nil
+                to: fix.coordinate,
+                near: FollowAnchor.tieBreak(followAnchor, course: fix.course),
+                heading: fix.course
               ),
               match.offRouteMeters <= RouteProfile.followMatchThresholdMeters else {
             // Guarded so a stationary/off-route poll (nil already) doesn't
@@ -574,7 +645,7 @@ struct HikeDetailView: View {
             }
             return
         }
-        hasMatchedOnce = true
+        followAnchor = .matched(at: match.distanceAlongRoute, course: fix.course, from: followAnchor)
         let moved = tracker.liveTrackerDistance != match.distanceAlongRoute
         // Guarded like `trackerDistance` below — reassigning `@Observable`
         // storage to an equal value still triggers dependent views, so an
@@ -619,6 +690,61 @@ struct HikeDetailView: View {
             }
         }
         .frame(height: 180)
+    }
+}
+
+/// How far along the trail the tracked position is, as a percentage and a
+/// bar.
+///
+/// Isolated for the same reason `ElevationChartView` is: it reads
+/// `TrackerState` directly, so an auto-follow tick invalidates this row alone
+/// rather than `HikeDetailView.body`. It also makes a bad route match legible
+/// — "97%" while standing at the trailhead is the symptom that a fix was
+/// matched to the wrong leg of an out-and-back, which a marker on a graph
+/// hides far better than a number does.
+private struct TrailProgressView: View {
+    let profile: RouteProfile
+    let tint: Color
+    /// Tracker/live-follow positions — see ``TrackerState``.
+    let tracker: TrackerState
+
+    var body: some View {
+        // The live match when auto-follow has one, otherwise wherever the
+        // tracker was last left: a scrub, or the start of the trail.
+        let live = tracker.liveTrackerDistance
+        let distance = live ?? tracker.trackerDistance
+        let fraction = profile.fractionComplete(atDistance: distance) ?? 0
+        let remaining = profile.remainingDistanceMeters(atDistance: distance)
+
+        VStack(alignment: .leading, spacing: 6) {
+            HStack(spacing: 6) {
+                Label(
+                    live == nil ? "Trail Progress" : "Live Progress",
+                    systemImage: live == nil ? "point.topleft.down.to.point.bottomright.curvepath" : "location.fill"
+                )
+                .font(.caption.weight(.medium))
+                .foregroundStyle(live == nil ? AnyShapeStyle(.secondary) : AnyShapeStyle(Color.blue))
+
+                Spacer()
+
+                Text("\(Int((fraction * 100).rounded()))% · \(Self.length(remaining)) left")
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
+                    .monospacedDigit()
+                    .lineLimit(1)
+            }
+            ProgressView(value: fraction)
+                .progressViewStyle(.linear)
+                .tint(tint)
+        }
+        .accessibilityElement(children: .ignore)
+        .accessibilityLabel(live == nil ? "Trail progress" : "Live trail progress")
+        .accessibilityValue("\(Int((fraction * 100).rounded())) percent, \(Self.length(remaining)) remaining")
+    }
+
+    private static func length(_ meters: Double) -> String {
+        Measurement(value: meters, unit: UnitLength.meters)
+            .formatted(.measurement(width: .abbreviated, usage: .road))
     }
 }
 

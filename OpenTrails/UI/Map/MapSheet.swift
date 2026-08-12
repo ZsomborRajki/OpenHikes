@@ -41,38 +41,19 @@ struct MapSheet: View {
     @State private var showSettings = false
     @State private var completer = SearchCompleter()
     @State private var searchTask: Task<Void, Never>?
-
-    /// Imported/recorded hikes whose title matches the current query, with
-    /// titles that start with the query ranked above ones that merely contain
-    /// it — surfaced above map suggestions so a user's own trails come first.
-    private func rankedMatchingHikes() -> [Hike] {
-        let query = searchText.trimmingCharacters(in: .whitespacesAndNewlines)
-        guard !query.isEmpty else { return [] }
-
-        let foldingOptions: String.CompareOptions = [.caseInsensitive, .diacriticInsensitive, .widthInsensitive]
-        let locale = Locale.current
-        let queryKey = query.folding(options: foldingOptions, locale: locale)
-
-        return hikes
-            .compactMap { hike -> (hike: Hike, prefixRank: Int, titleKey: String)? in
-                let titleKey = hike.title.folding(options: foldingOptions, locale: locale)
-                guard titleKey.contains(queryKey) else { return nil }
-                return (hike, titleKey.hasPrefix(queryKey) ? 0 : 1, titleKey)
-            }
-            .sorted { lhs, rhs in
-                if lhs.prefixRank != rhs.prefixRank {
-                    return lhs.prefixRank < rhs.prefixRank
-                }
-                return lhs.titleKey < rhs.titleKey
-            }
-            .map(\.hike)
-    }
+    /// Keeps the matching-hike ranking across body passes — see ``HikeSearch``.
+    @State private var hikeSearch = HikeSearch()
 
     /// True at the smallest detent, where only the search field shows.
     private var isCompact: Bool { detent == .height(80) }
 
     var body: some View {
-        let matchingHikes = rankedMatchingHikes()
+        // This body runs on every detent change a sheet drag produces, and the
+        // ranking below is the only real work in it. Two things keep it off
+        // that path: the results can only be shown while the field is focused,
+        // so an unfocused pass doesn't rank at all — and a focused pass reuses
+        // the last ranking unless the query or the hikes themselves changed.
+        let matchingHikes = searchFocused ? hikeSearch.rankedHikes(matching: searchText, in: hikes) : []
         let isSearching = searchFocused && (!completer.suggestions.isEmpty || !matchingHikes.isEmpty)
 
         return NavigationStack(path: $path) {
@@ -131,6 +112,11 @@ struct MapSheet: View {
         .onChange(of: searchFocused) { _, focused in
             if focused {
                 withAnimation { detent = .large }
+            } else {
+                // Nothing ranks while the field is unfocused, so there is no
+                // cached ranking worth keeping — and holding one would keep
+                // every matched hike alive behind a search nobody is running.
+                hikeSearch.clear()
             }
         }
         // Collapsing below full height (e.g. dragging to medium) drops focus.
