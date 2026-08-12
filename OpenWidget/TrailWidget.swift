@@ -29,34 +29,63 @@ struct TrailWidgetEntry: TimelineEntry {
         self.snapshot = snapshot
         self.basemaps = snapshot.flatMap { SharedStore.loadBasemapSet(for: $0.hikeID) }
     }
+
+    /// Where tapping the widget goes. Absent in the empty state, where there
+    /// is no trail to open and a plain launch is the right outcome.
+    var deepLinkURL: URL? {
+        snapshot.flatMap { TrailWidgetDeepLink.url(hikeID: $0.hikeID) }
+    }
 }
 
 struct TrailWidgetProvider: TimelineProvider {
+    /// How far ahead the timeline schedules its self-healing reload.
+    ///
+    /// Freshness is driven by the app's explicit `reloadTimelines` calls
+    /// (selection changes, the foreground follow loop, and background
+    /// significant-location-change events) — not by a fixed schedule. This
+    /// distant `.after` is only a safety net in case a reload call is ever
+    /// missed (e.g. the app is killed mid-write); it costs at most a couple of
+    /// extra reloads a day against the system's daily budget.
+    static let safetyNetHours = 6
+
     func placeholder(in context: Context) -> TrailWidgetEntry {
-        TrailWidgetEntry(date: .now, snapshot: Self.placeholderSnapshot)
+        Self.placeholderEntry()
     }
 
     func getSnapshot(in context: Context, completion: @escaping (TrailWidgetEntry) -> Void) {
-        let snapshot = context.isPreview ? Self.placeholderSnapshot : SharedStore.load()
-        completion(TrailWidgetEntry(date: .now, snapshot: snapshot))
+        completion(context.isPreview ? Self.placeholderEntry() : Self.currentEntry())
     }
 
     func getTimeline(in context: Context, completion: @escaping (Timeline<TrailWidgetEntry>) -> Void) {
-        let entry = TrailWidgetEntry(date: .now, snapshot: SharedStore.load())
-        // Freshness is driven by the app's explicit reloadTimelines calls
-        // (selection changes, the foreground follow loop, and background
-        // significant-location-change events) — not by a fixed schedule.
-        // This distant `.after` is only a self-healing safety net in case a
-        // reload call is ever missed (e.g. the app is killed mid-write);
-        // it costs at most a couple of extra reloads a day against the
-        // system's daily budget.
-        let safetyNet = Calendar.current.date(byAdding: .hour, value: 6, to: .now) ?? .now.addingTimeInterval(6 * 3600)
-        completion(Timeline(entries: [entry], policy: .after(safetyNet)))
+        completion(Self.currentTimeline())
+    }
+
+    // The three below take the date rather than reading the clock, and are
+    // separate from the protocol methods above, because `TimelineProviderContext`
+    // has no initializer available outside WidgetKit — so this is the widest
+    // surface a test can reach at all.
+
+    /// Whatever the app most recently wrote, with its basemaps if it has any.
+    static func currentEntry(date: Date = .now) -> TrailWidgetEntry {
+        TrailWidgetEntry(date: date, snapshot: SharedStore.load())
+    }
+
+    static func placeholderEntry(date: Date = .now) -> TrailWidgetEntry {
+        TrailWidgetEntry(date: date, snapshot: placeholderSnapshot)
+    }
+
+    static func currentTimeline(date: Date = .now) -> Timeline<TrailWidgetEntry> {
+        Timeline(entries: [currentEntry(date: date)], policy: .after(nextReload(after: date)))
+    }
+
+    static func nextReload(after date: Date) -> Date {
+        Calendar.current.date(byAdding: .hour, value: safetyNetHours, to: date)
+            ?? date.addingTimeInterval(Double(safetyNetHours) * 3600)
     }
 
     /// A generic loop shown in the widget gallery / as a redacted placeholder
     /// — never real trail data.
-    fileprivate static let placeholderSnapshot = SharedTrailSnapshot(
+    static let placeholderSnapshot = SharedTrailSnapshot(
         hikeID: UUID(),
         title: "Trail",
         tintHex: "#34C759",
@@ -71,6 +100,22 @@ struct TrailWidgetProvider: TimelineProvider {
     )
 }
 
+/// The size-dependent decisions the widget draws with, pulled out of the view
+/// so they can be checked for every family without rendering one.
+struct TrailWidgetLayout: Equatable {
+    /// The small family has no room for a title above the stat line.
+    let showsTitle: Bool
+    let routeLineWidth: Double
+    let padding: Double
+
+    init(family: WidgetFamily) {
+        let isSmall = family == .systemSmall
+        showsTitle = !isSmall
+        routeLineWidth = isSmall ? 3 : 4
+        padding = isSmall ? 12 : 14
+    }
+}
+
 struct TrailWidgetEntryView: View {
     @Environment(\.widgetFamily) private var family
     let entry: TrailWidgetEntry
@@ -78,9 +123,8 @@ struct TrailWidgetEntryView: View {
     var body: some View {
         content
             // Whole-widget tap target: opens the app straight to this trail's
-            // detail view. Absent in the empty state, where there's no trail
-            // to open and a plain launch is the right outcome.
-            .widgetURL(entry.snapshot.flatMap { TrailWidgetDeepLink.url(hikeID: $0.hikeID) })
+            // detail view.
+            .widgetURL(entry.deepLinkURL)
     }
 
     @ViewBuilder
@@ -112,8 +156,9 @@ private struct TrailWidgetContent: View {
     let basemaps: TrailBasemapSet?
     let family: WidgetFamily
 
+    private var layout: TrailWidgetLayout { TrailWidgetLayout(family: family) }
     private var tint: Color { Color(hex: snapshot.tintHex) ?? .green }
-    private var showsTitle: Bool { family != .systemSmall }
+    private var showsTitle: Bool { layout.showsTitle }
 
     /// Whether a rendered map is actually behind the text, which is what
     /// decides between light-on-map and standard label colors.
@@ -140,7 +185,7 @@ private struct TrailWidgetContent: View {
             statLine
         }
         .shadow(color: .black.opacity(hasMap ? 0.35 : 0), radius: 2, y: 1)
-        .padding(family == .systemSmall ? 12 : 14)
+        .padding(layout.padding)
         // The map is the widget's background rather than a subview, so it
         // runs edge to edge under the text and the system rounds it to the
         // widget's own corner radius. It also means the system can drop it
@@ -157,7 +202,7 @@ private struct TrailWidgetContent: View {
                     liveFix: snapshot.liveFix?.coordinate,
                     basemaps: basemaps,
                     tint: tint,
-                    lineWidth: family == .systemSmall ? 3 : 4
+                    lineWidth: layout.routeLineWidth
                 )
 
                 if hasMap { scrim }
@@ -199,13 +244,17 @@ private struct TrailWidgetContent: View {
 }
 
 struct TrailWidget: Widget {
+    /// Every size this widget offers. Named rather than inlined so a test can
+    /// check that each one has a layout to draw with.
+    static let supportedFamilies: [WidgetFamily] = [.systemSmall, .systemMedium, .systemLarge, .systemExtraLarge]
+
     var body: some WidgetConfiguration {
         StaticConfiguration(kind: TrailWidgetKind.id, provider: TrailWidgetProvider()) { entry in
             TrailWidgetEntryView(entry: entry)
         }
         .configurationDisplayName("Trail")
         .description("Shows the shape of your selected trail and your last-known position along it.")
-        .supportedFamilies([.systemSmall, .systemMedium, .systemLarge, .systemExtraLarge])
+        .supportedFamilies(Self.supportedFamilies)
     }
 }
 

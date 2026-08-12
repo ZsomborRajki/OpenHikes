@@ -37,14 +37,24 @@ struct MercatorTests {
     /// Every zoom the app actually uses, against every provider's maximum.
     static let zoomLevels = [0, 5, 10, 14, 17, 19, 20, 22]
 
+    /// Seeded per zoom level, so a coordinate the two formulas disagree on can
+    /// be generated again — re-run with `OPENTRAILS_TEST_SEED` set to the seed
+    /// quoted in the failure.
     @Test("tile indices match the formulas they replaced", arguments: zoomLevels)
     func tileIndicesUnchanged(z: Int) {
-        var generator = SystemRandomNumberGenerator()
+        var generator = SeededGenerator(seed: SeededGenerator.defaultSeed &+ UInt64(z))
+        let seed = generator.seed
         for _ in 0..<20_000 {
             let latitude = Double.random(in: -Mercator.latitudeLimit...Mercator.latitudeLimit, using: &generator)
             let longitude = Double.random(in: -180...180, using: &generator)
-            #expect(Int(floor(Mercator.unitX(longitude: longitude) * Double(1 << z))) == LegacyTileMath.tileX(longitude, z: z))
-            #expect(Int(floor(Mercator.unitY(latitude: latitude) * Double(1 << z))) == LegacyTileMath.tileY(latitude, z: z))
+            #expect(
+                Int(floor(Mercator.unitX(longitude: longitude) * Double(1 << z))) == LegacyTileMath.tileX(longitude, z: z),
+                "longitude \(longitude) at z\(z) (seed \(seed))"
+            )
+            #expect(
+                Int(floor(Mercator.unitY(latitude: latitude) * Double(1 << z))) == LegacyTileMath.tileY(latitude, z: z),
+                "latitude \(latitude) at z\(z) (seed \(seed))"
+            )
         }
     }
 
@@ -59,12 +69,14 @@ struct MercatorTests {
 
     @Test("projection round trips")
     func roundTrip() {
+        var generator = SeededGenerator()
+        let seed = generator.seed
         for _ in 0..<10_000 {
-            let latitude = Double.random(in: -85...85)
-            let longitude = Double.random(in: -180...180)
+            let latitude = Double.random(in: -85...85, using: &generator)
+            let longitude = Double.random(in: -180...180, using: &generator)
             let unit = Mercator.unitPoint(latitude: latitude, longitude: longitude)
-            #expect(abs(Mercator.latitude(unitY: unit.y) - latitude) < 1e-9)
-            #expect(abs(Mercator.longitude(unitX: unit.x) - longitude) < 1e-9)
+            #expect(abs(Mercator.latitude(unitY: unit.y) - latitude) < 1e-9, "latitude \(latitude) (seed \(seed))")
+            #expect(abs(Mercator.longitude(unitX: unit.x) - longitude) < 1e-9, "longitude \(longitude) (seed \(seed))")
         }
     }
 

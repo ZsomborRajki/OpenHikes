@@ -92,8 +92,13 @@ final class LocationManager: NSObject {
     /// Authorization callbacks can arrive as soon as the delegate is assigned.
     /// Only start hardware updates after the owning view has called `start()`.
     private var updatesRequested = false
+    /// Reads the current time for the throttle above. Injectable so a test can
+    /// step across the one-second window instead of sleeping through it —
+    /// which is both slower and, being a race against a real clock, flakier.
+    @ObservationIgnored private let clock: @Sendable () -> Date
 
-    override init() {
+    init(clock: @escaping @Sendable () -> Date = { Date() }) {
+        self.clock = clock
         super.init()
         manager.delegate = self
         manager.desiredAccuracy = kCLLocationAccuracyBest
@@ -142,7 +147,7 @@ final class LocationManager: NSObject {
         }
         // Only an actual publish restarts the throttle window, so the first
         // step after standing still reaches the map straight away.
-        let now = Date()
+        let now = clock()
         if let lastPublished, now.timeIntervalSince(lastPublished) < Self.minimumPublishInterval {
             return
         }

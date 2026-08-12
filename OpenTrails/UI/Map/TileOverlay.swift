@@ -29,9 +29,20 @@ nonisolated final class TileOverlay: MKTileOverlay, @unchecked Sendable {
     /// (`MapView.applyTileSource`), so there was never a reason for it to move.
     let providerID: String
 
-    init(providerID: String, urlTemplate: String?, cache: TileCache = .shared) {
+    /// Where a drawn tile is offered for auto-save. Injectable alongside
+    /// ``cache`` so a test's overlay can't claim tiles for whatever hike the
+    /// app's singleton happens to have active.
+    let autoSaveStore: AutoSaveTileStore
+
+    init(
+        providerID: String,
+        urlTemplate: String?,
+        cache: TileCache = .shared,
+        autoSaveStore: AutoSaveTileStore = .shared
+    ) {
         self.providerID = providerID
         self.cache = cache
+        self.autoSaveStore = autoSaveStore
         super.init(urlTemplate: urlTemplate)
     }
 
@@ -53,7 +64,7 @@ nonisolated final class TileOverlay: MKTileOverlay, @unchecked Sendable {
         // (e.g. an area zoomed into that the bulk pass didn't cover) for
         // providers that support both. Takes only the key: the tile's bytes are
         // in the cache the load above just populated, and get moved, not re-encoded.
-        AutoSaveTileStore.shared.considerPersisting(key: key, z: path.z, x: path.x, y: path.y)
+        autoSaveStore.considerPersisting(key: key, z: path.z, x: path.x, y: path.y)
         return true
     }
 

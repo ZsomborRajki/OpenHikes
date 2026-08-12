@@ -14,6 +14,7 @@
 		A8838B94302A305800FAEEEE /* OpenTrailsShared in Frameworks */ = {isa = PBXBuildFile; productRef = A8838B93302A305800FAEEEE /* OpenTrailsShared */; };
 		AA0000000000000000000003 /* CoreGPX in Frameworks */ = {isa = PBXBuildFile; productRef = AA0000000000000000000002 /* CoreGPX */; };
 		AB000000000000000000000D /* OpenTrailsShared in Frameworks */ = {isa = PBXBuildFile; productRef = AB000000000000000000000C /* OpenTrailsShared */; };
+		AC000000000000000000000D /* OpenTrailsShared in Frameworks */ = {isa = PBXBuildFile; productRef = AC000000000000000000000C /* OpenTrailsShared */; };
 /* End PBXBuildFile section */
 
 /* Begin PBXContainerItemProxy section */
@@ -25,6 +26,13 @@
 			remoteInfo = OpenWidgetExtension;
 		};
 		AB000000000000000000000B /* PBXContainerItemProxy */ = {
+			isa = PBXContainerItemProxy;
+			containerPortal = A85E85452FE3EBF500558639 /* Project object */;
+			proxyType = 1;
+			remoteGlobalIDString = A85E854C2FE3EBF500558639;
+			remoteInfo = OpenTrails;
+		};
+		AC000000000000000000000B /* PBXContainerItemProxy */ = {
 			isa = PBXContainerItemProxy;
 			containerPortal = A85E85452FE3EBF500558639 /* Project object */;
 			proxyType = 1;
@@ -54,6 +62,7 @@
 		A8838AE8302A232300FAEEEE /* SwiftUI.framework */ = {isa = PBXFileReference; lastKnownFileType = wrapper.framework; name = SwiftUI.framework; path = System/Library/Frameworks/SwiftUI.framework; sourceTree = SDKROOT; };
 		A8838B99302A30FA00FAEEEE /* OpenWidgetExtension.entitlements */ = {isa = PBXFileReference; lastKnownFileType = text.plist.entitlements; path = OpenWidgetExtension.entitlements; sourceTree = "<group>"; };
 		AB0000000000000000000008 /* OpenTrailsTests.xctest */ = {isa = PBXFileReference; explicitFileType = wrapper.cfbundle; includeInIndex = 0; path = OpenTrailsTests.xctest; sourceTree = BUILT_PRODUCTS_DIR; };
+		AC0000000000000000000008 /* OpenWidgetTests.xctest */ = {isa = PBXFileReference; explicitFileType = wrapper.cfbundle; includeInIndex = 0; path = OpenWidgetTests.xctest; sourceTree = BUILT_PRODUCTS_DIR; };
 /* End PBXFileReference section */
 
 /* Begin PBXFileSystemSynchronizedBuildFileExceptionSet section */
@@ -63,6 +72,14 @@
 				Info.plist,
 			);
 			target = A8838AE3302A232300FAEEEE /* OpenWidgetExtension */;
+		};
+		AC000000000000000000000E /* Exceptions for "OpenWidget" folder in "OpenWidgetTests" target */ = {
+			isa = PBXFileSystemSynchronizedBuildFileExceptionSet;
+			membershipExceptions = (
+				Info.plist,
+				OpenWidgetBundle.swift,
+			);
+			target = AC0000000000000000000001 /* OpenWidgetTests */;
 		};
 /* End PBXFileSystemSynchronizedBuildFileExceptionSet section */
 
@@ -76,6 +93,7 @@
 			isa = PBXFileSystemSynchronizedRootGroup;
 			exceptions = (
 				A8838AF7302A232400FAEEEE /* Exceptions for "OpenWidget" folder in "OpenWidgetExtension" target */,
+				AC000000000000000000000E /* Exceptions for "OpenWidget" folder in "OpenWidgetTests" target */,
 			);
 			path = OpenWidget;
 			sourceTree = "<group>";
@@ -83,6 +101,11 @@
 		AB0000000000000000000009 /* OpenTrailsTests */ = {
 			isa = PBXFileSystemSynchronizedRootGroup;
 			path = OpenTrailsTests;
+			sourceTree = "<group>";
+		};
+		AC0000000000000000000009 /* OpenWidgetTests */ = {
+			isa = PBXFileSystemSynchronizedRootGroup;
+			path = OpenWidgetTests;
 			sourceTree = "<group>";
 		};
 /* End PBXFileSystemSynchronizedRootGroup section */
@@ -115,6 +138,14 @@
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
+		AC0000000000000000000006 /* Frameworks */ = {
+			isa = PBXFrameworksBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+				AC000000000000000000000D /* OpenTrailsShared in Frameworks */,
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
 /* End PBXFrameworksBuildPhase section */
 
 /* Begin PBXGroup section */
@@ -125,6 +156,7 @@
 				A85E854F2FE3EBF500558639 /* OpenTrails */,
 				AB0000000000000000000009 /* OpenTrailsTests */,
 				A8838AEA302A232300FAEEEE /* OpenWidget */,
+				AC0000000000000000000009 /* OpenWidgetTests */,
 				A8838AE5302A232300FAEEEE /* Frameworks */,
 				A85E854E2FE3EBF500558639 /* Products */,
 			);
@@ -136,6 +168,7 @@
 				A85E854D2FE3EBF500558639 /* OpenTrails.app */,
 				AB0000000000000000000008 /* OpenTrailsTests.xctest */,
 				A8838AE4302A232300FAEEEE /* OpenWidgetExtension.appex */,
+				AC0000000000000000000008 /* OpenWidgetTests.xctest */,
 			);
 			name = Products;
 			sourceTree = "<group>";
@@ -225,6 +258,31 @@
 			productReference = AB0000000000000000000008 /* OpenTrailsTests.xctest */;
 			productType = "com.apple.product-type.bundle.unit-test";
 		};
+		AC0000000000000000000001 /* OpenWidgetTests */ = {
+			isa = PBXNativeTarget;
+			buildConfigurationList = AC0000000000000000000002 /* Build configuration list for PBXNativeTarget "OpenWidgetTests" */;
+			buildPhases = (
+				AC0000000000000000000005 /* Sources */,
+				AC0000000000000000000006 /* Frameworks */,
+				AC0000000000000000000007 /* Resources */,
+			);
+			buildRules = (
+			);
+			dependencies = (
+				AC000000000000000000000A /* PBXTargetDependency */,
+			);
+			fileSystemSynchronizedGroups = (
+				A8838AEA302A232300FAEEEE /* OpenWidget */,
+				AC0000000000000000000009 /* OpenWidgetTests */,
+			);
+			name = OpenWidgetTests;
+			packageProductDependencies = (
+				AC000000000000000000000C /* OpenTrailsShared */,
+			);
+			productName = OpenWidgetTests;
+			productReference = AC0000000000000000000008 /* OpenWidgetTests.xctest */;
+			productType = "com.apple.product-type.bundle.unit-test";
+		};
 /* End PBXNativeTarget section */
 
 /* Begin PBXProject section */
@@ -242,6 +300,10 @@
 						CreatedOnToolsVersion = 26.6;
 					};
 					AB0000000000000000000001 = {
+						CreatedOnToolsVersion = 26.6;
+						TestTargetID = A85E854C2FE3EBF500558639;
+					};
+					AC0000000000000000000001 = {
 						CreatedOnToolsVersion = 26.6;
 						TestTargetID = A85E854C2FE3EBF500558639;
 					};
@@ -268,6 +330,7 @@
 				A85E854C2FE3EBF500558639 /* OpenTrails */,
 				AB0000000000000000000001 /* OpenTrailsTests */,
 				A8838AE3302A232300FAEEEE /* OpenWidgetExtension */,
+				AC0000000000000000000001 /* OpenWidgetTests */,
 			);
 		};
 /* End PBXProject section */
@@ -288,6 +351,13 @@
 			runOnlyForDeploymentPostprocessing = 0;
 		};
 		AB0000000000000000000007 /* Resources */ = {
+			isa = PBXResourcesBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+		AC0000000000000000000007 /* Resources */ = {
 			isa = PBXResourcesBuildPhase;
 			buildActionMask = 2147483647;
 			files = (
@@ -318,6 +388,13 @@
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
+		AC0000000000000000000005 /* Sources */ = {
+			isa = PBXSourcesBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
 /* End PBXSourcesBuildPhase section */
 
 /* Begin PBXTargetDependency section */
@@ -331,6 +408,11 @@
 			isa = PBXTargetDependency;
 			target = A85E854C2FE3EBF500558639 /* OpenTrails */;
 			targetProxy = AB000000000000000000000B /* PBXContainerItemProxy */;
+		};
+		AC000000000000000000000A /* PBXTargetDependency */ = {
+			isa = PBXTargetDependency;
+			target = A85E854C2FE3EBF500558639 /* OpenTrails */;
+			targetProxy = AC000000000000000000000B /* PBXContainerItemProxy */;
 		};
 /* End PBXTargetDependency section */
 
@@ -682,6 +764,64 @@
 			};
 			name = Release;
 		};
+		AC0000000000000000000003 /* Debug */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				BUNDLE_LOADER = "$(TEST_HOST)";
+				CODE_SIGN_STYLE = Automatic;
+				CURRENT_PROJECT_VERSION = 1;
+				DEVELOPMENT_TEAM = 697EW27G9U;
+				GENERATE_INFOPLIST_FILE = YES;
+				IPHONEOS_DEPLOYMENT_TARGET = 26.5;
+				LD_RUNPATH_SEARCH_PATHS = (
+					"$(inherited)",
+					"@executable_path/Frameworks",
+					"@loader_path/Frameworks",
+				);
+				MARKETING_VERSION = 1.0;
+				PRODUCT_BUNDLE_IDENTIFIER = tappium.com.OpenWidgetTests;
+				PRODUCT_NAME = "$(TARGET_NAME)";
+				SDKROOT = iphoneos;
+				SUPPORTED_PLATFORMS = "iphoneos iphonesimulator";
+				SWIFT_APPROACHABLE_CONCURRENCY = YES;
+				SWIFT_EMIT_LOC_STRINGS = NO;
+				SWIFT_UPCOMING_FEATURE_MEMBER_IMPORT_VISIBILITY = YES;
+				SWIFT_VERSION = 5.0;
+				TARGETED_DEVICE_FAMILY = "1,2";
+				TEST_HOST = "$(BUILT_PRODUCTS_DIR)/OpenTrails.app/$(BUNDLE_EXECUTABLE_FOLDER_PATH)/OpenTrails";
+				TEST_TARGET_NAME = OpenTrails;
+			};
+			name = Debug;
+		};
+		AC0000000000000000000004 /* Release */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				BUNDLE_LOADER = "$(TEST_HOST)";
+				CODE_SIGN_STYLE = Automatic;
+				CURRENT_PROJECT_VERSION = 1;
+				DEVELOPMENT_TEAM = 697EW27G9U;
+				GENERATE_INFOPLIST_FILE = YES;
+				IPHONEOS_DEPLOYMENT_TARGET = 26.5;
+				LD_RUNPATH_SEARCH_PATHS = (
+					"$(inherited)",
+					"@executable_path/Frameworks",
+					"@loader_path/Frameworks",
+				);
+				MARKETING_VERSION = 1.0;
+				PRODUCT_BUNDLE_IDENTIFIER = tappium.com.OpenWidgetTests;
+				PRODUCT_NAME = "$(TARGET_NAME)";
+				SDKROOT = iphoneos;
+				SUPPORTED_PLATFORMS = "iphoneos iphonesimulator";
+				SWIFT_APPROACHABLE_CONCURRENCY = YES;
+				SWIFT_EMIT_LOC_STRINGS = NO;
+				SWIFT_UPCOMING_FEATURE_MEMBER_IMPORT_VISIBILITY = YES;
+				SWIFT_VERSION = 5.0;
+				TARGETED_DEVICE_FAMILY = "1,2";
+				TEST_HOST = "$(BUILT_PRODUCTS_DIR)/OpenTrails.app/$(BUNDLE_EXECUTABLE_FOLDER_PATH)/OpenTrails";
+				TEST_TARGET_NAME = OpenTrails;
+			};
+			name = Release;
+		};
 /* End XCBuildConfiguration section */
 
 /* Begin XCConfigurationList section */
@@ -717,6 +857,15 @@
 			buildConfigurations = (
 				AB0000000000000000000003 /* Debug */,
 				AB0000000000000000000004 /* Release */,
+			);
+			defaultConfigurationIsVisible = 0;
+			defaultConfigurationName = Release;
+		};
+		AC0000000000000000000002 /* Build configuration list for PBXNativeTarget "OpenWidgetTests" */ = {
+			isa = XCConfigurationList;
+			buildConfigurations = (
+				AC0000000000000000000003 /* Debug */,
+				AC0000000000000000000004 /* Release */,
 			);
 			defaultConfigurationIsVisible = 0;
 			defaultConfigurationName = Release;
@@ -757,6 +906,11 @@
 			productName = CoreGPX;
 		};
 		AB000000000000000000000C /* OpenTrailsShared */ = {
+			isa = XCSwiftPackageProductDependency;
+			package = A8838B90302A302500FAEEEE /* XCLocalSwiftPackageReference "OpenTrailsShared" */;
+			productName = OpenTrailsShared;
+		};
+		AC000000000000000000000C /* OpenTrailsShared */ = {
 			isa = XCSwiftPackageProductDependency;
 			package = A8838B90302A302500FAEEEE /* XCLocalSwiftPackageReference "OpenTrailsShared" */;
 			productName = OpenTrailsShared;

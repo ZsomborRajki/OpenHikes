@@ -276,9 +276,13 @@ struct OfflineDownloadStateTests {
 
     /// Starting counts the work up front, which is what the "Saving N tiles…"
     /// note reports.
-    @Test("starting a download counts the tiles it's going to fetch", .enabled(if: TileCache.shared.isOnline))
+    ///
+    /// Connectivity and the fetch itself are both injected, so this says the
+    /// same thing on a machine with no network as on one with — it used to be
+    /// gated on `TileCache.shared.isOnline`, i.e. it silently didn't run.
+    @Test("starting a download counts the tiles it's going to fetch")
     func startCountsTiles() {
-        let downloader = OfflineTileDownloader()
+        let downloader = OfflineTileDownloader(isOnline: { true }, saveTile: { _, _ in false })
         downloader.start(route: Fixture.coordinates(Fixture.ridgeRoute), source: unreachable, scale: 2)
         #expect(downloader.phase == .downloading)
         #expect(downloader.total > 0)
@@ -289,9 +293,17 @@ struct OfflineDownloadStateTests {
     /// after the abandoned run's in-flight fetches finish, which is the race
     /// the generation counter exists to close. A stale run reporting
     /// "finished" over a fresh one is the visible symptom.
-    @Test("a cancelled download stays cancelled while its tail unwinds", .enabled(if: TileCache.shared.isOnline))
+    ///
+    /// The tail is waited for rather than slept past: the saves are held open
+    /// until the test lets them go, and `waitForCurrentRun()` then returns
+    /// once the abandoned run has actually finished unwinding.
+    @Test("a cancelled download stays cancelled while its tail unwinds")
     func cancelIsFinal() async throws {
-        let downloader = OfflineTileDownloader()
+        let held = HeldSaves()
+        let downloader = OfflineTileDownloader(
+            isOnline: { true },
+            saveTile: { _, _ in await held.save() }
+        )
         downloader.start(route: Fixture.coordinates(Fixture.ridgeRoute), source: unreachable, scale: 2)
         #expect(downloader.phase == .downloading)
 
@@ -300,26 +312,34 @@ struct OfflineDownloadStateTests {
         #expect(downloader.completed == 0)
         #expect(downloader.total == 0)
 
-        // Long enough for the abandoned children to fail and unwind.
-        try await Task.sleep(for: .seconds(2))
-        #expect(downloader.phase == .idle)
+        await held.release()
+        await downloader.waitForCurrentRun()
+        #expect(downloader.phase == .idle, "the abandoned run must not report over a cancellation")
         #expect(downloader.total == 0)
     }
 
     /// Cancel-then-restart is one tap away in the UI (the same button), so the
     /// second download's state must survive the first one's tail.
-    @Test("restarting after a cancel isn't clobbered by the abandoned run", .enabled(if: TileCache.shared.isOnline))
+    @Test("restarting after a cancel isn't clobbered by the abandoned run")
     func restartAfterCancel() async throws {
-        let downloader = OfflineTileDownloader()
+        let held = HeldSaves()
+        let downloader = OfflineTileDownloader(
+            isOnline: { true },
+            saveTile: { _, _ in await held.save() }
+        )
         let route = Fixture.coordinates(Fixture.ridgeRoute)
         downloader.start(route: route, source: unreachable, scale: 2)
         downloader.cancel()
         downloader.start(route: route, source: unreachable, scale: 2)
         #expect(downloader.phase == .downloading)
 
-        try await Task.sleep(for: .seconds(1))
-        // Either still running or finished on its own terms — but never
-        // knocked back to idle by the run that was cancelled.
+        // Both runs' saves complete now, so the abandoned one's tail unwinds
+        // alongside the live one rather than after it.
+        await held.release()
+        await downloader.waitForCurrentRun()
+
+        // Finished on its own terms — but never knocked back to idle by the
+        // run that was cancelled.
         #expect(downloader.phase != .idle)
         downloader.cancel()
     }
@@ -391,6 +411,31 @@ struct OfflineDownloadStateTests {
 
         #expect(downloader.phase == .finished)
         #expect(downloader.completedRecord?.savedTileKeys == nil)
+    }
+}
+
+/// Holds every stubbed save open until the test lets it go.
+///
+/// What a cancellation test needs is fetches that are genuinely still in
+/// flight when `cancel()` lands, and then a way to know their tail has
+/// finished unwinding. Sleeping supplies neither: it only makes both *likely*,
+/// at the cost of the sleep on every run.
+private actor HeldSaves {
+    private var isReleased = false
+    private var waiting: [CheckedContinuation<Void, Never>] = []
+
+    func save() async -> Bool {
+        if !isReleased {
+            await withCheckedContinuation { waiting.append($0) }
+        }
+        return true
+    }
+
+    func release() {
+        isReleased = true
+        let resumed = waiting
+        waiting.removeAll()
+        for continuation in resumed { continuation.resume() }
     }
 }
 

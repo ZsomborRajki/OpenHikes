@@ -72,7 +72,10 @@ struct MapView: MapViewRepresentable, Equatable {
 
     func makeCoordinator() -> Coordinator { Coordinator() }
 
-    private func makeMapView(_ coordinator: Coordinator) -> MKMapView {
+    /// Internal rather than private so `MapCoordinatorTests` can drive the two
+    /// entry points SwiftUI drives — building the map and updating it — against
+    /// a real `MKMapView`. Everything below them stays private.
+    func makeMapView(_ coordinator: Coordinator) -> MKMapView {
         // Fires once per MKMapView creation — if this repeats, something is
         // destroying the representable's identity (e.g. an `.id()` upstream
         // churning), which throws away all MapKit state, not just SwiftUI's.
@@ -171,7 +174,7 @@ struct MapView: MapViewRepresentable, Equatable {
         coordinator.fitToCurrentRoute(mapView, animated: true)
     }
 
-    private func update(_ mapView: MKMapView, _ coordinator: Coordinator) {
+    func update(_ mapView: MKMapView, _ coordinator: Coordinator) {
         // Fires on every SwiftUI-driven update pass, whether or not any of the
         // steps below actually change anything — compare its rate against the
         // "Rebuilt"/"Centered"/"Restyled" marks to see how much of that is

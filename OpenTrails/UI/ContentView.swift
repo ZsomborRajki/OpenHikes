@@ -192,11 +192,23 @@ struct ContentView: View {
         withAnimation { sheetDetent = .medium }
     }
 
+    /// Whether this process was launched to host a test bundle.
+    ///
+    /// Both test bundles are hosted by this app, so it launches — and runs its
+    /// `.task`s — before a single test does. Restoring a selection there
+    /// publishes a widget payload into the App Group and reloads the widget's
+    /// timelines, underneath suites whose whole subject is that one file. It's
+    /// a race no test can win, and it made a widget-feed assertion fail with
+    /// whatever trail this simulator was last left on.
+    private static let isHostingTests =
+        ProcessInfo.processInfo.environment["XCTestConfigurationFilePath"] != nil
+
     /// Restores the last-selected hike across launches — today `selectedHike`
     /// starts every launch as `nil`, so without this the widget would
     /// stay empty until the user reselects a trail by hand.
     private func restoreLastSelectedHike() {
-        guard selectedHike == nil,
+        guard !Self.isHostingTests,
+              selectedHike == nil,
               let stored = UserDefaults.standard.string(forKey: SettingsKey.lastSelectedHikeID),
               let id = UUID(uuidString: stored) else { return }
         let descriptor = FetchDescriptor<Hike>(predicate: #Predicate { $0.id == id })

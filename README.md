@@ -61,6 +61,7 @@ Tests use Swift Testing. There is no separate lint or formatting command.
 | `OpenTrailsShared/` | Local Swift package shared by the app and widget. |
 | `OpenWidget/` | iOS Home Screen widget. |
 | `OpenTrailsTests/` | App-hosted test suite. |
+| `OpenWidgetTests/` | App-hosted tests for the widget's timeline, families, and basemap pairing. |
 
 See [`.github/copilot-instructions.md`](.github/copilot-instructions.md) for architecture and repository conventions. See [`CODE_REVIEW.md`](CODE_REVIEW.md) for verified build status, known issues, and remaining engineering work.
 
@@ -69,4 +70,4 @@ See [`.github/copilot-instructions.md`](.github/copilot-instructions.md) for arc
 - Live hike recording is not implemented; routes are imported from GPX files.
 - Sign in with Apple is a disabled placeholder, and hikes do not sync between devices.
 - Third-party tile keys can only be supplied at build time.
-- CI, widget-target tests, MapKit integration tests, and several testability seams remain open; details are tracked in `CODE_REVIEW.md`.
+- There is no CI, so the test suites are only as protected as the person running them; details are tracked in `CODE_REVIEW.md`.

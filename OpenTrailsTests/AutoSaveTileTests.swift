@@ -13,6 +13,11 @@
 //  and folds the saved keys back into its SwiftData manifest — the record
 //  that later measures and frees them.
 //
+//  Every suite here builds its own `TileSandbox`: its own tile directories and
+//  its own store with one active hike of its own. These used to be nested
+//  inside a `.serialized` parent because they drove the process-wide
+//  singletons instead, which made "add a suite" a question about parallelism.
+//
 
 import CoreLocation
 import Foundation
@@ -20,26 +25,15 @@ import SwiftData
 import Testing
 @testable import OpenTrails
 
-/// Serialized as one group: `AutoSaveTileStore.shared` is a process-wide
-/// singleton with exactly one active hike, mirroring the app — so the store
-/// tests and the controller tests can't run alongside each other either.
-@Suite("Auto-save", .serialized)
-struct AutoSaveTests {
-
 @Suite("Tile store")
 struct TileStoreTests {
-    private let store = AutoSaveTileStore.shared
+    private let sandbox = TileSandbox()
     private let hikeID = UUID()
-    /// Keys are namespaced per test run so nothing collides with a real
-    /// cached tile — the tile's own z/x/y is passed separately anyway.
-    private let namespace = "test-\(UUID().uuidString)"
 
-    init() {
-        store.clearActiveHike()
-    }
+    private var store: AutoSaveTileStore { sandbox.store }
 
     private func key(_ z: Int, _ x: Int, _ y: Int) -> String {
-        "\(namespace)/\(z)/\(x)/\(y)@2.0"
+        "\(z)/\(x)/\(y)@2.0"
     }
 
     /// Tile indices for a coordinate offset from the trail.
@@ -64,14 +58,9 @@ struct TileStoreTests {
     ///
     /// Pass `browsed: false` for the case where the bytes aren't there.
     private func persist(key: String, tile: (z: Int, x: Int, y: Int), browsed: Bool = true) async throws {
-        if browsed { try TileStore.browse(key: key) }
+        if browsed { try sandbox.browse(key: key) }
         let store = store
         await offMain { store.considerPersisting(key: key, z: tile.z, x: tile.x, y: tile.y) }
-    }
-
-    private func cleanUp(_ keys: [String]) async {
-        await offMain { TileCache.shared.removeTiles(forKeys: keys) }
-        store.clearActiveHike()
     }
 
     // MARK: What gets kept
@@ -83,9 +72,8 @@ struct TileStoreTests {
         try await persist(key: key, tile: tile())
 
         #expect(store.drainPendingKeys(for: hikeID) == [key])
-        #expect(TileStore.isSaved(key), "the tile should be kept for offline use, not just recorded")
-        #expect(!TileStore.isBrowsed(key), "and moved out of the cache rather than copied out of it")
-        await cleanUp([key])
+        #expect(sandbox.isSaved(key), "the tile should be kept for offline use, not just recorded")
+        #expect(!sandbox.isBrowsed(key), "and moved out of the cache rather than copied out of it")
     }
 
     /// Panning away from the trail is browsing, not saving — otherwise a
@@ -99,9 +87,8 @@ struct TileStoreTests {
         try await persist(key: key, tile: tile(northMeters: 25_000))
 
         #expect(store.drainPendingKeys(for: hikeID).isEmpty)
-        #expect(!TileStore.isSaved(key))
-        #expect(TileStore.isBrowsed(key), "it is still cache, and still clearable as such")
-        await cleanUp([key])
+        #expect(!sandbox.isSaved(key))
+        #expect(sandbox.isBrowsed(key), "it is still cache, and still clearable as such")
     }
 
     /// Re-viewing the same tile (every pan back and forth does) must not
@@ -115,7 +102,6 @@ struct TileStoreTests {
 
         try await persist(key: key, tile: tile())
         #expect(store.drainPendingKeys(for: hikeID).isEmpty)
-        await cleanUp([key])
     }
 
     /// Keys already in the hike's manifest are seeded in on activation, so a
@@ -126,43 +112,41 @@ struct TileStoreTests {
         activate(knownKeys: [key])
         try await persist(key: key, tile: tile())
         #expect(store.drainPendingKeys(for: hikeID).isEmpty)
-        await cleanUp([key])
     }
 
     @Test("an expired known tile is saved again when viewed")
     func refreshesExpiredKnownTile() async throws {
         let key = key(16, 3, 4)
-        try TileStore.browse(key: key)
-        #expect(await offMain { TileCache.shared.promoteCachedTile(forKey: key) })
-        try TileStore.age(key: key, byDays: 8)
-        _ = await offMain { TileCache.shared.removeExpiredTiles() }
-        #expect(!TileStore.isSaved(key), "precondition: launch cleanup removed the expired copy")
+        let sandbox = sandbox
+        try sandbox.browse(key: key)
+        #expect(await offMain { sandbox.cache.promoteCachedTile(forKey: key) })
+        try sandbox.age(key: key, byDays: 8)
+        _ = await offMain { sandbox.cache.removeExpiredTiles() }
+        #expect(!sandbox.isSaved(key), "precondition: launch cleanup removed the expired copy")
 
         activate(knownKeys: [key])
         try await persist(key: key, tile: tile())
 
-        #expect(TileStore.isSaved(key), "the stale manifest entry must not prevent fresh bytes being saved")
+        #expect(sandbox.isSaved(key), "the stale manifest entry must not prevent fresh bytes being saved")
         #expect(store.drainPendingKeys(for: hikeID).isEmpty, "the key was already present in the manifest")
-        await cleanUp([key])
     }
 
     // MARK: The cap
 
     @Test("the cap is measured against everything the hike already claims")
     func capCountsExistingKeys() async throws {
-        let existing = Set((0..<AutoSaveTileStore.tileCap).map { "\(namespace)/16/\($0)/0@2.0" })
+        let existing = Set((0..<AutoSaveTileStore.tileCap).map { "16/\($0)/0@2.0" })
         activate(knownKeys: existing)
         #expect(store.isCapReached(for: hikeID))
 
         let key = key(16, 4, 4)
         try await persist(key: key, tile: tile())
         #expect(store.drainPendingKeys(for: hikeID).isEmpty, "nothing more should be saved once the cap is reached")
-        await cleanUp([key])
     }
 
     @Test("the cap belongs to the active hike, not to the app")
     func capIsPerHike() {
-        activate(knownKeys: Set((0..<AutoSaveTileStore.tileCap).map { "\(namespace)/16/\($0)/0@2.0" }))
+        activate(knownKeys: Set((0..<AutoSaveTileStore.tileCap).map { "16/\($0)/0@2.0" }))
         #expect(store.isCapReached(for: hikeID))
         #expect(!store.isCapReached(for: UUID()), "a different hike has its own budget")
         store.clearActiveHike()
@@ -177,8 +161,7 @@ struct TileStoreTests {
         let key = key(16, 5, 5)
         try await persist(key: key, tile: tile())
         #expect(store.drainPendingKeys(for: hikeID).isEmpty)
-        #expect(!TileStore.isSaved(key))
-        await cleanUp([key])
+        #expect(!sandbox.isSaved(key))
     }
 
     @Test("suspending atomically blocks new tile claims until resume")
@@ -188,14 +171,13 @@ struct TileStoreTests {
 
         let key = key(16, 5, 6)
         try await persist(key: key, tile: tile())
-        #expect(!TileStore.isSaved(key))
-        #expect(TileStore.isBrowsed(key), "a tile finishing after suspension must remain ordinary cache")
+        #expect(!sandbox.isSaved(key))
+        #expect(sandbox.isBrowsed(key), "a tile finishing after suspension must remain ordinary cache")
 
         store.resumePersisting(for: hikeID)
         try await persist(key: key, tile: tile())
         #expect(store.drainPendingKeys(for: hikeID) == [key])
-        #expect(TileStore.isSaved(key))
-        await cleanUp([key])
+        #expect(sandbox.isSaved(key))
     }
 
     /// The drain is keyed by hike so a selection change mid-flight can't
@@ -208,7 +190,6 @@ struct TileStoreTests {
 
         #expect(store.drainPendingKeys(for: UUID()).isEmpty)
         #expect(store.drainPendingKeys(for: hikeID) == [key], "the real hike's keys must survive the wrong-hike query")
-        await cleanUp([key])
     }
 
     @Test("switching hikes drops the previous one's pending keys")
@@ -219,7 +200,6 @@ struct TileStoreTests {
 
         store.setActiveHike(id: UUID(), route: Fixture.coordinates(Fixture.ridgeRoute), knownKeys: [])
         #expect(store.drainPendingKeys(for: hikeID).isEmpty)
-        await cleanUp([key])
     }
 
     // MARK: Failure to save
@@ -235,20 +215,23 @@ struct TileStoreTests {
         let key = key(16, 8, 8)
         try await persist(key: key, tile: tile(), browsed: false)
 
-        #expect(!TileStore.isSaved(key), "precondition: nothing was saved")
+        #expect(!sandbox.isSaved(key), "precondition: nothing was saved")
         #expect(store.drainPendingKeys(for: hikeID).isEmpty, "a tile that isn't on disk must not be recorded as saved")
-        await cleanUp([key])
     }
 }
 
 @MainActor
-@Suite("Controller")
+@Suite("Auto-save controller")
 struct ControllerTests {
+    private let sandbox = TileSandbox()
     private let context: ModelContext
 
     init() throws {
         context = try Fixture.modelContext()
-        AutoSaveTileStore.shared.clearActiveHike()
+    }
+
+    private func makeController() -> AutoSaveController {
+        AutoSaveController(store: sandbox.store)
     }
 
     /// A hike whose manifest is already full. Activation seeds the store from
@@ -261,9 +244,19 @@ struct ControllerTests {
         }
     }
 
+    /// Saves one tile against the active hike through the tile-thread path.
+    private func persist(key: String, near hike: Hike, z: Int = 17) async throws {
+        let anchor = hike.coordinates[2]
+        let x = SlippyTileMath.tileX(anchor.longitude, z: z)
+        let y = SlippyTileMath.tileY(anchor.latitude, z: z)
+        let sandbox = sandbox
+        try sandbox.browse(key: key)
+        await offMain { sandbox.store.considerPersisting(key: key, z: z, x: x, y: y) }
+    }
+
     @Test("selecting a hike makes it the one being saved for")
     func selectionActivates() {
-        let controller = AutoSaveController()
+        let controller = makeController()
         let hike = fullHike()
         controller.hikeSelectionChanged(to: hike)
         #expect(controller.isCapReached(for: hike), "the store should be active, seeded from this hike's manifest")
@@ -271,7 +264,7 @@ struct ControllerTests {
 
     @Test("deselecting stops saving")
     func deselectionDeactivates() {
-        let controller = AutoSaveController()
+        let controller = makeController()
         let hike = fullHike()
         controller.hikeSelectionChanged(to: hike)
         controller.hikeSelectionChanged(to: nil)
@@ -280,7 +273,7 @@ struct ControllerTests {
 
     @Test("selecting another hike hands auto-save over to it")
     func selectionFollowsTheMap() {
-        let controller = AutoSaveController()
+        let controller = makeController()
         let first = fullHike()
         let second = Fixture.hike(title: "Second", in: context)
         controller.hikeSelectionChanged(to: first)
@@ -292,7 +285,7 @@ struct ControllerTests {
     /// should be saved for it.
     @Test("a hike with auto-save off is never activated")
     func disabledHikeIsNotActivated() {
-        let controller = AutoSaveController()
+        let controller = makeController()
         let hike = fullHike { $0.autoSaveTilesEnabled = false }
         controller.hikeSelectionChanged(to: hike)
         #expect(!controller.isCapReached(for: hike))
@@ -302,7 +295,7 @@ struct ControllerTests {
     /// disabled for it in the UI.
     @Test("a hike with fewer than two points is never activated")
     func degenerateHikeIsNotActivated() {
-        let controller = AutoSaveController()
+        let controller = makeController()
         let hike = Fixture.hike(
             route: [RouteCoordinate(latitude: 47.63, longitude: 12.86)],
             in: context
@@ -313,7 +306,7 @@ struct ControllerTests {
 
     @Test("the toggle writes through to the hike, and starts and stops saving")
     func toggleWritesThrough() {
-        let controller = AutoSaveController()
+        let controller = makeController()
         let hike = fullHike()
         controller.hikeSelectionChanged(to: hike)
 
@@ -331,20 +324,15 @@ struct ControllerTests {
     /// why the delete path flushes before it reads any manifest.
     @Test("draining folds newly saved keys into the hike's manifest")
     func flushMergesKeys() async throws {
-        let controller = AutoSaveController()
+        let controller = makeController()
         let hike = Fixture.hike(in: context)
         controller.hikeSelectionChanged(to: hike)
 
-        let store = AutoSaveTileStore.shared
         let anchor = hike.coordinates[2]
         let z = 17
         let x = SlippyTileMath.tileX(anchor.longitude, z: z)
-        let y = SlippyTileMath.tileY(anchor.latitude, z: z)
-        let keys = ["autosave-test/\(z)/\(x)/\(y)@2.0", "autosave-test/\(z)/\(x + 1)/\(y)@2.0"]
-        for key in keys {
-            try TileStore.browse(key: key)
-            await offMain { store.considerPersisting(key: key, z: z, x: x, y: y) }
-        }
+        let keys = ["autosave-test/\(z)/\(x)/a@2.0", "autosave-test/\(z)/\(x)/b@2.0"]
+        for key in keys { try await persist(key: key, near: hike) }
 
         controller.flushPendingKeys()
         #expect(Set(hike.autoSavedTileKeys) == Set(keys))
@@ -352,260 +340,214 @@ struct ControllerTests {
         // A second drain has nothing left to add — no duplicates in the manifest.
         controller.flushPendingKeys()
         #expect(hike.autoSavedTileKeys.count == keys.count)
-
-        await offMain { TileCache.shared.removeTiles(forKeys: keys) }
-        AutoSaveTileStore.shared.clearActiveHike()
     }
 
     @Test("a failed suspension save keeps ownership pending for retry")
     func failedSuspensionSaveKeepsPendingKeys() async throws {
         struct SaveFailure: Error {}
 
-        let controller = AutoSaveController()
+        let controller = makeController()
         let hike = Fixture.hike(in: context)
         controller.hikeSelectionChanged(to: hike)
 
-        let store = AutoSaveTileStore.shared
-        let anchor = hike.coordinates[2]
-        let z = 17
-        let x = SlippyTileMath.tileX(anchor.longitude, z: z)
-        let y = SlippyTileMath.tileY(anchor.latitude, z: z)
-        let key = "autosave-suspension-test/\(z)/\(x)/\(y)@2.0"
-        try TileStore.browse(key: key)
-        await offMain { store.considerPersisting(key: key, z: z, x: x, y: y) }
+        let key = "autosave-suspension-test/17/1/1@2.0"
+        try await persist(key: key, near: hike)
 
         controller.sceneWillResignActive { throw SaveFailure() }
         #expect(hike.autoSavedTileKeys.isEmpty, "a failed save must roll back the in-memory manifest update")
         #expect(
-            store.suspendAndSnapshotPendingKeys(for: hike.id) == [key],
+            sandbox.store.suspendAndSnapshotPendingKeys(for: hike.id) == [key],
             "ownership must remain pending until persistence succeeds"
         )
 
         controller.sceneDidBecomeActive()
         controller.flushPendingKeys()
         #expect(hike.autoSavedTileKeys == [key])
-
-        await offMain { TileCache.shared.removeTiles(forKeys: [key]) }
-        AutoSaveTileStore.shared.clearActiveHike()
     }
 
     @Test("suspension saves ownership already folded into the model")
     func suspensionSavesPreviouslyDrainedOwnership() async throws {
-        let controller = AutoSaveController()
+        let controller = makeController()
         let hike = Fixture.hike(in: context)
         controller.hikeSelectionChanged(to: hike)
 
-        let store = AutoSaveTileStore.shared
-        let anchor = hike.coordinates[2]
-        let z = 17
-        let x = SlippyTileMath.tileX(anchor.longitude, z: z)
-        let y = SlippyTileMath.tileY(anchor.latitude, z: z)
-        let key = "autosave-drained-test/\(z)/\(x)/\(y)@2.0"
-        try TileStore.browse(key: key)
-        await offMain { store.considerPersisting(key: key, z: z, x: x, y: y) }
+        try await persist(key: "autosave-drained-test/17/1/1@2.0", near: hike)
         controller.flushPendingKeys()
 
         var saveWasCalled = false
         controller.sceneWillResignActive { saveWasCalled = true }
         #expect(saveWasCalled, "suspension must save even when the timer already drained every pending key")
-
-        await offMain { TileCache.shared.removeTiles(forKeys: [key]) }
-        AutoSaveTileStore.shared.clearActiveHike()
     }
 
     @Test("selection changes during suspension preserve failed-save ownership")
     func suspendedSelectionChangePreservesPendingKeys() async throws {
         struct SaveFailure: Error {}
 
-        let controller = AutoSaveController()
+        let controller = makeController()
         let first = Fixture.hike(in: context)
         let second = Fixture.hike(title: "Second", in: context)
         controller.hikeSelectionChanged(to: first)
 
-        let store = AutoSaveTileStore.shared
-        let anchor = first.coordinates[2]
-        let z = 17
-        let x = SlippyTileMath.tileX(anchor.longitude, z: z)
-        let y = SlippyTileMath.tileY(anchor.latitude, z: z)
-        let key = "autosave-deferred-selection-test/\(z)/\(x)/\(y)@2.0"
-        try TileStore.browse(key: key)
-        await offMain { store.considerPersisting(key: key, z: z, x: x, y: y) }
+        let key = "autosave-deferred-selection-test/17/1/1@2.0"
+        try await persist(key: key, near: first)
 
         controller.sceneWillResignActive { throw SaveFailure() }
         controller.hikeSelectionChanged(to: second)
         #expect(
-            store.suspendAndSnapshotPendingKeys(for: first.id) == [key],
+            sandbox.store.suspendAndSnapshotPendingKeys(for: first.id) == [key],
             "changing selection while suspended must not replace the store's retained ownership"
         )
 
         controller.sceneDidBecomeActive()
         #expect(first.autoSavedTileKeys == [key])
-
-        await offMain { TileCache.shared.removeTiles(forKeys: [key]) }
-        AutoSaveTileStore.shared.clearActiveHike()
     }
 }
 
-    /// The lifecycle states the two suites above don't cross: the suspension
-    /// `sceneWillResignActive` enters, and the deletion paths that read a
-    /// hike's manifest in order to free tiles by it. Each is covered on its
-    /// own; what isn't is what the user-facing operations do *while*
-    /// suspension is in effect.
-    ///
-    /// That matters because suspension defers selection changes rather than
-    /// applying them, while every deletion path in the app is specified as
-    /// "flush first, then read the manifest" — and an unflushed pending set is
-    /// durable tiles on disk with nothing left pointing at them.
-    ///
-    /// Nested here, not in a file of its own, for the reason the outer suite
-    /// gives: `AutoSaveTileStore.shared` is process-wide, and two top-level
-    /// suites touching it run in parallel and corrupt each other's active hike.
-    @MainActor
-    @Suite("Auto-save lifecycle", .serialized)
-    struct AutoSaveLifecycleTests {
-        private static let store = AutoSaveTileStore.shared
+/// The lifecycle states the two suites above don't cross: the suspension
+/// `sceneWillResignActive` enters, and the deletion paths that read a
+/// hike's manifest in order to free tiles by it. Each is covered on its
+/// own; what isn't is what the user-facing operations do *while*
+/// suspension is in effect.
+///
+/// That matters because suspension defers selection changes rather than
+/// applying them, while every deletion path in the app is specified as
+/// "flush first, then read the manifest" — and an unflushed pending set is
+/// durable tiles on disk with nothing left pointing at them.
+@MainActor
+@Suite("Auto-save lifecycle")
+struct AutoSaveLifecycleTests {
+    private let sandbox = TileSandbox()
 
-        /// A tile inside the ridge fixture's corridor, saved through the same path
-        /// the renderer uses so the store's pending set is populated for real.
-        private func persistOneTile(key: String) async {
-            await offMain {
-                Self.store.considerPersisting(key: key, z: 14, x: 2_638, y: 6_357)
-            }
-        }
-
-        private func tileKey(_ id: String) -> String { "osm/14/2638/6357@2.0-\(id)" }
-
-        /// Turning the Auto-Save toggle off is how the hike sheet's Delete button
-        /// folds the last drain window's tiles into the manifest before reading
-        /// it — `deleteStoredTiles()` calls `setEnabled(false, for:)` first,
-        /// because "reading the manifest ahead of that would delete a snapshot
-        /// taken up to two seconds ago and strand everything saved since —
-        /// durably, where nothing would reclaim it."
-        ///
-        /// While suspended, `setEnabled` takes the deferred branch and returns
-        /// *without* deactivating, so that flush never happens. What saves the
-        /// delete is a second mechanism entirely: `sceneWillResignActive` already
-        /// folded the pending set in on its way out, and `acceptsNewClaims` is
-        /// false from that moment, so there is nothing left un-flushed to strand.
-        ///
-        /// Two independent guarantees standing on each other is worth a test of
-        /// its own: the deferred branch is only safe *because* suspension both
-        /// flushes and stops claiming, and neither of those facts is stated
-        /// anywhere near `setEnabled`.
-        @Test("a delete during suspension still sees every tile that reached disk")
-        func disablingWhileSuspendedLosesNothing() async throws {
-            let context = try Fixture.modelContext()
-            let controller = AutoSaveController()
-            let hike = Fixture.hike(in: context) { $0.autoSaveTilesEnabled = true }
-            controller.hikeSelectionChanged(to: hike)
-
-            let key = tileKey(UUID().uuidString)
-            try TileStore.browse(key: key)
-            defer { try? FileManager.default.removeItem(at: TileStore.savedFile(for: key)) }
-            await persistOneTile(key: key)
-            #expect(TileStore.isSaved(key), "precondition: it really did reach durable storage")
-
-            // The scene resigns active — a phone call, a swipe up, App Switcher.
-            controller.sceneWillResignActive { }
-            // …and the user taps Delete on the hike sheet, whose first act is to
-            // turn auto-save off. This is the branch that does not flush.
-            controller.setEnabled(false, for: hike)
-
-            #expect(
-                hike.autoSavedTileKeys.contains(key),
-                "the tile is durably on disk; the manifest is the only thing that can free it"
-            )
-
-            // And nothing new can be claimed in the window either, which is the
-            // other half of why the deferred branch gets away with it.
-            let laterKey = tileKey(UUID().uuidString)
-            try TileStore.browse(key: laterKey)
-            defer { try? FileManager.default.removeItem(at: TileStore.browsedFile(for: laterKey)) }
-            await persistOneTile(key: laterKey)
-            #expect(!TileStore.isSaved(laterKey), "a suspended store must not take new claims")
-        }
-
-        /// The same window, reached the other way: deleting the hike outright.
-        /// `hikeWillBeDeleted` exists precisely to flush regardless of suspension
-        /// (`flushWhileSuspended: true`), so this one must hold — it's the
-        /// contrast that shows the gap above is an omission rather than the
-        /// intended policy.
-        @Test("deleting a hike folds in what it just saved, suspended or not")
-        func deletingWhileSuspendedStillFlushes() async throws {
-            let context = try Fixture.modelContext()
-            let controller = AutoSaveController()
-            let hike = Fixture.hike(in: context) { $0.autoSaveTilesEnabled = true }
-            controller.hikeSelectionChanged(to: hike)
-
-            let key = tileKey(UUID().uuidString)
-            try TileStore.browse(key: key)
-            defer { try? FileManager.default.removeItem(at: TileStore.savedFile(for: key)) }
-            await persistOneTile(key: key)
-
-            controller.sceneWillResignActive { }
-            controller.hikeWillBeDeleted(hike)
-
-            #expect(
-                hike.autoSavedTileKeys.contains(key),
-                "the delete path flushes past suspension so the tiles it frees are all of them"
-            )
-        }
-
-        /// `sceneWillResignActive` appends the pending snapshot to the manifest
-        /// and rolls it back if the save throws. The rollback removes by *count*
-        /// (`removeSubrange(previousCount...)`), which is only correct while
-        /// nothing else has appended in between — and `flushPendingKeys` runs on a
-        /// two-second timer that is not stopped for the duration.
-        ///
-        /// Pinned rather than fixed: the window is small and the timer is
-        /// main-actor bound, so today the two can't interleave. It becomes a real
-        /// corruption the moment any flush moves off that timer.
-        @Test("a failed suspension save leaves the manifest exactly as it found it")
-        func failedSuspensionSaveRestoresTheManifest() async throws {
-            let context = try Fixture.modelContext()
-            let controller = AutoSaveController()
-            let hike = Fixture.hike(in: context) { $0.autoSaveTilesEnabled = true }
-            hike.autoSavedTileKeys = ["osm/14/1/1@2.0", "osm/14/1/2@2.0"]
-            controller.hikeSelectionChanged(to: hike)
-            let before = hike.autoSavedTileKeys
-
-            let key = tileKey(UUID().uuidString)
-            try TileStore.browse(key: key)
-            defer { try? FileManager.default.removeItem(at: TileStore.savedFile(for: key)) }
-            await persistOneTile(key: key)
-
-            struct SaveFailed: Error {}
-            controller.sceneWillResignActive { throw SaveFailed() }
-
-            #expect(hike.autoSavedTileKeys == before, "a failed save must not leave a half-written manifest")
-        }
-
-        /// Two hikes over the same ground both auto-save, and the cap is per hike.
-        /// Nothing pins what happens when the *second* one is activated while the
-        /// first still has pending keys that the activation's own flush is
-        /// supposed to hand back — `activate` flushes before replacing the store's
-        /// state, and this is the assertion that keeps that ordering honest under
-        /// a same-hike re-activation, which the app does on every selection change
-        /// (`ContentView.onChange` and `HikeDetailView.task` both call it).
-        @Test("re-selecting the same hike doesn't lose or duplicate its pending tiles")
-        func reactivatingTheSameHikeIsIdempotent() async throws {
-            let context = try Fixture.modelContext()
-            let controller = AutoSaveController()
-            let hike = Fixture.hike(in: context) { $0.autoSaveTilesEnabled = true }
-            controller.hikeSelectionChanged(to: hike)
-
-            let key = tileKey(UUID().uuidString)
-            try TileStore.browse(key: key)
-            defer { try? FileManager.default.removeItem(at: TileStore.savedFile(for: key)) }
-            await persistOneTile(key: key)
-
-            // The two call sites that both fire for one tap.
-            controller.hikeSelectionChanged(to: hike)
-            controller.hikeSelectionChanged(to: hike)
-            controller.flushPendingKeys()
-
-            #expect(hike.autoSavedTileKeys.filter { $0 == key }.count == 1, "one tile, one entry")
+    /// A tile inside the ridge fixture's corridor, saved through the same path
+    /// the renderer uses so the store's pending set is populated for real.
+    private func persistOneTile(key: String) async throws {
+        let sandbox = sandbox
+        try sandbox.browse(key: key)
+        await offMain {
+            sandbox.store.considerPersisting(key: key, z: 14, x: 2_638, y: 6_357)
         }
     }
 
+    private func tileKey(_ id: String) -> String { "osm/14/2638/6357@2.0-\(id)" }
+
+    /// Turning the Auto-Save toggle off is how the hike sheet's Delete button
+    /// folds the last drain window's tiles into the manifest before reading
+    /// it — `deleteStoredTiles()` calls `setEnabled(false, for:)` first,
+    /// because "reading the manifest ahead of that would delete a snapshot
+    /// taken up to two seconds ago and strand everything saved since —
+    /// durably, where nothing would reclaim it."
+    ///
+    /// While suspended, `setEnabled` takes the deferred branch and returns
+    /// *without* deactivating, so that flush never happens. What saves the
+    /// delete is a second mechanism entirely: `sceneWillResignActive` already
+    /// folded the pending set in on its way out, and `acceptsNewClaims` is
+    /// false from that moment, so there is nothing left un-flushed to strand.
+    ///
+    /// Two independent guarantees standing on each other is worth a test of
+    /// its own: the deferred branch is only safe *because* suspension both
+    /// flushes and stops claiming, and neither of those facts is stated
+    /// anywhere near `setEnabled`.
+    @Test("a delete during suspension still sees every tile that reached disk")
+    func disablingWhileSuspendedLosesNothing() async throws {
+        let context = try Fixture.modelContext()
+        let controller = AutoSaveController(store: sandbox.store)
+        let hike = Fixture.hike(in: context) { $0.autoSaveTilesEnabled = true }
+        controller.hikeSelectionChanged(to: hike)
+
+        let key = tileKey(UUID().uuidString)
+        try await persistOneTile(key: key)
+        #expect(sandbox.isSaved(key), "precondition: it really did reach durable storage")
+
+        // The scene resigns active — a phone call, a swipe up, App Switcher.
+        controller.sceneWillResignActive { }
+        // …and the user taps Delete on the hike sheet, whose first act is to
+        // turn auto-save off. This is the branch that does not flush.
+        controller.setEnabled(false, for: hike)
+
+        #expect(
+            hike.autoSavedTileKeys.contains(key),
+            "the tile is durably on disk; the manifest is the only thing that can free it"
+        )
+
+        // And nothing new can be claimed in the window either, which is the
+        // other half of why the deferred branch gets away with it.
+        let laterKey = tileKey(UUID().uuidString)
+        try await persistOneTile(key: laterKey)
+        #expect(!sandbox.isSaved(laterKey), "a suspended store must not take new claims")
+    }
+
+    /// The same window, reached the other way: deleting the hike outright.
+    /// `hikeWillBeDeleted` exists precisely to flush regardless of suspension
+    /// (`flushWhileSuspended: true`), so this one must hold — it's the
+    /// contrast that shows the gap above is an omission rather than the
+    /// intended policy.
+    @Test("deleting a hike folds in what it just saved, suspended or not")
+    func deletingWhileSuspendedStillFlushes() async throws {
+        let context = try Fixture.modelContext()
+        let controller = AutoSaveController(store: sandbox.store)
+        let hike = Fixture.hike(in: context) { $0.autoSaveTilesEnabled = true }
+        controller.hikeSelectionChanged(to: hike)
+
+        let key = tileKey(UUID().uuidString)
+        try await persistOneTile(key: key)
+
+        controller.sceneWillResignActive { }
+        controller.hikeWillBeDeleted(hike)
+
+        #expect(
+            hike.autoSavedTileKeys.contains(key),
+            "the delete path flushes past suspension so the tiles it frees are all of them"
+        )
+    }
+
+    /// `sceneWillResignActive` appends the pending snapshot to the manifest
+    /// and rolls it back if the save throws. The rollback removes by *count*
+    /// (`removeSubrange(previousCount...)`), which is only correct while
+    /// nothing else has appended in between — and `flushPendingKeys` runs on a
+    /// two-second timer that is not stopped for the duration.
+    ///
+    /// Pinned rather than fixed: the window is small and the timer is
+    /// main-actor bound, so today the two can't interleave. It becomes a real
+    /// corruption the moment any flush moves off that timer.
+    @Test("a failed suspension save leaves the manifest exactly as it found it")
+    func failedSuspensionSaveRestoresTheManifest() async throws {
+        let context = try Fixture.modelContext()
+        let controller = AutoSaveController(store: sandbox.store)
+        let hike = Fixture.hike(in: context) { $0.autoSaveTilesEnabled = true }
+        hike.autoSavedTileKeys = ["osm/14/1/1@2.0", "osm/14/1/2@2.0"]
+        controller.hikeSelectionChanged(to: hike)
+        let before = hike.autoSavedTileKeys
+
+        try await persistOneTile(key: tileKey(UUID().uuidString))
+
+        struct SaveFailed: Error {}
+        controller.sceneWillResignActive { throw SaveFailed() }
+
+        #expect(hike.autoSavedTileKeys == before, "a failed save must not leave a half-written manifest")
+    }
+
+    /// Two hikes over the same ground both auto-save, and the cap is per hike.
+    /// Nothing pins what happens when the *second* one is activated while the
+    /// first still has pending keys that the activation's own flush is
+    /// supposed to hand back — `activate` flushes before replacing the store's
+    /// state, and this is the assertion that keeps that ordering honest under
+    /// a same-hike re-activation, which the app does on every selection change
+    /// (`ContentView.onChange` and `HikeDetailView.task` both call it).
+    @Test("re-selecting the same hike doesn't lose or duplicate its pending tiles")
+    func reactivatingTheSameHikeIsIdempotent() async throws {
+        let context = try Fixture.modelContext()
+        let controller = AutoSaveController(store: sandbox.store)
+        let hike = Fixture.hike(in: context) { $0.autoSaveTilesEnabled = true }
+        controller.hikeSelectionChanged(to: hike)
+
+        let key = tileKey(UUID().uuidString)
+        try await persistOneTile(key: key)
+
+        // The two call sites that both fire for one tap.
+        controller.hikeSelectionChanged(to: hike)
+        controller.hikeSelectionChanged(to: hike)
+        controller.flushPendingKeys()
+
+        #expect(hike.autoSavedTileKeys.filter { $0 == key }.count == 1, "one tile, one entry")
+    }
 }

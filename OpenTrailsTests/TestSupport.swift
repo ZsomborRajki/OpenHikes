@@ -191,13 +191,11 @@ enum Fixture {
     }
 }
 
-/// Stands in for the tile pipeline's two on-disk tiers.
+/// The bytes the tile pipeline moves around.
 ///
-/// `TileCache` keeps both the directories and the key→filename mapping
-/// private, so they're restated here; a change to either belongs in this type
-/// too. Reaching in is the point: auto-save no longer takes an image and
-/// encodes it, it moves the bytes a fetch already cached, so a test that wants
-/// a tile to be savable has to put those bytes where a fetch would have.
+/// Auto-save no longer takes an image and encodes it, it moves the bytes a
+/// fetch already cached, so a test that wants a tile to be savable has to put
+/// those bytes where a fetch would have — see ``TileSandbox``.
 enum TileStore {
     /// A real, decodable tile as bytes — what a fetch actually writes. Tests
     /// read tiles back through `TileCache`, so filler bytes wouldn't do.
@@ -214,42 +212,102 @@ enum TileStore {
     }()
 
     static var tileByteCount: Int64 { Int64(tileData.count) }
+}
 
-    private static func file(for key: String, in directory: URL) -> URL {
-        let name = key.replacingOccurrences(of: "/", with: "_").replacingOccurrences(of: "@", with: "_")
-        return directory.appendingPathComponent(name)
+/// One test's private copy of the whole tile pipeline: a ``TileCache`` whose
+/// two tiers live under a temporary directory, and an ``AutoSaveTileStore``
+/// wired to it with an active hike of its own.
+///
+/// This is the seam the suites used to do without. `TileCache.shared` writes
+/// into the host app's real `Caches`/`Application Support` pair and
+/// `AutoSaveTileStore.shared` has exactly one active hike, so every suite that
+/// touched either was mutating state its neighbours could see — and since
+/// Swift Testing runs top-level suites in parallel, the only thing keeping
+/// them apart was a hand-written `.serialized` nesting that had to be
+/// rediscovered by breaking it. A sandbox per suite makes that impossible to
+/// get wrong: there is nothing shared left to corrupt.
+///
+/// `TileCache` keeps the directory names and the key→filename mapping private,
+/// so they're restated here; a change to either belongs in this type too.
+nonisolated final class TileSandbox: Sendable {
+    let root: URL
+    let cache: TileCache
+    let store: AutoSaveTileStore
+
+    /// - Parameters:
+    ///   - reachable: seeds the cache's connectivity flag. The cache never
+    ///     watches `NWPathMonitor`, so a test isn't at the mercy of the
+    ///     machine's own connection.
+    ///   - sessionConfiguration: `nil` leaves the standard transport, which is
+    ///     enough for the suites that place files by hand; pass
+    ///     `StubTileProtocol.sessionConfiguration()` to script the responses.
+    init(reachable: Bool = true, sessionConfiguration: URLSessionConfiguration? = nil) {
+        root = FileManager.default.temporaryDirectory
+            .appendingPathComponent("tilesandbox-\(UUID().uuidString)", isDirectory: true)
+        cache = TileCache(
+            storageRoot: root,
+            sessionConfiguration: sessionConfiguration,
+            monitorsNetwork: false
+        )
+        store = AutoSaveTileStore(tileCache: cache)
+        if !reachable { cache.setReachable(false) }
     }
 
-    /// `Caches/OSMTiles` — where a tile fetched to draw the map lands, whether
-    /// or not any hike will ever claim it.
-    static func browsedFile(for key: String) -> URL {
-        let caches = FileManager.default.urls(for: .cachesDirectory, in: .userDomainMask)[0]
-        return file(for: key, in: caches.appendingPathComponent("OSMTiles", isDirectory: true))
+    deinit {
+        try? FileManager.default.removeItem(at: root)
     }
 
-    /// `Application Support/OSMTilesSaved` — where a tile kept for offline use
-    /// lands, out of reach of the OS reclaiming storage.
-    static func savedFile(for key: String) -> URL {
-        let support = FileManager.default.urls(for: .applicationSupportDirectory, in: .userDomainMask)[0]
-        return file(for: key, in: support.appendingPathComponent("OSMTilesSaved", isDirectory: true))
+    private func fileName(for key: String) -> String {
+        key.replacingOccurrences(of: "/", with: "_").replacingOccurrences(of: "@", with: "_")
+    }
+
+    /// `OSMTiles` — where a tile fetched to draw the map lands, whether or not
+    /// any hike will ever claim it.
+    func browsedFile(for key: String) -> URL {
+        root.appendingPathComponent("OSMTiles", isDirectory: true).appendingPathComponent(fileName(for: key))
+    }
+
+    /// `OSMTilesSaved` — where a tile kept for offline use lands, out of reach
+    /// of the OS reclaiming storage.
+    func savedFile(for key: String) -> URL {
+        root.appendingPathComponent("OSMTilesSaved", isDirectory: true).appendingPathComponent(fileName(for: key))
+    }
+
+    func isBrowsed(_ key: String) -> Bool {
+        FileManager.default.fileExists(atPath: browsedFile(for: key).path)
+    }
+
+    func isSaved(_ key: String) -> Bool {
+        FileManager.default.fileExists(atPath: savedFile(for: key).path)
     }
 
     /// Puts a tile in the browsing cache, as drawing it would have.
-    static func browse(key: String) throws {
-        let file = browsedFile(for: key)
+    func browse(key: String) throws {
+        try place(key, in: browsedFile(for: key))
+    }
+
+    /// Puts a tile in durable storage, as a previous session's save would have.
+    func save(key: String) throws {
+        try place(key, in: savedFile(for: key))
+    }
+
+    /// Puts a tile in a tier directly, optionally backdated.
+    func place(_ key: String, in file: URL, agedByDays days: Double = 0) throws {
         try FileManager.default.createDirectory(
             at: file.deletingLastPathComponent(), withIntermediateDirectories: true
         )
-        try tileData.write(to: file, options: .atomic)
-    }
-
-    static func isBrowsed(_ key: String) -> Bool {
-        FileManager.default.fileExists(atPath: browsedFile(for: key).path)
+        try TileStore.tileData.write(to: file, options: .atomic)
+        if days > 0 {
+            try FileManager.default.setAttributes(
+                [.modificationDate: Date(timeIntervalSinceNow: -days * 86_400)],
+                ofItemAtPath: file.path
+            )
+        }
     }
 
     /// Ages a tile on disk, so eviction order — which is by modification date,
     /// i.e. when the tile was last fetched — can be driven without waiting.
-    static func age(key: String, byDays days: Double) throws {
+    func age(key: String, byDays days: Double) throws {
         for file in [browsedFile(for: key), savedFile(for: key)]
         where FileManager.default.fileExists(atPath: file.path) {
             try FileManager.default.setAttributes(
@@ -259,8 +317,11 @@ enum TileStore {
         }
     }
 
-    static func isSaved(_ key: String) -> Bool {
-        FileManager.default.fileExists(atPath: savedFile(for: key).path)
+    /// Removes a key from both tiers, for the tests that assert on what a
+    /// second pass finds rather than on what the first one left.
+    func remove(key: String) {
+        try? FileManager.default.removeItem(at: browsedFile(for: key))
+        try? FileManager.default.removeItem(at: savedFile(for: key))
     }
 }
 
@@ -268,9 +329,70 @@ enum TileStore {
 /// lives in. Present in the real app (and in a test host that
 /// inherits its entitlements), absent if the capability is ever dropped — in
 /// which case the feed suites skip rather than fail for the wrong reason.
+///
+/// Whether a skip is acceptable is `SuitePrecondition`'s question, not this
+/// one's.
 enum SharedStoreProbe {
     static var isAvailable: Bool {
         FileManager.default.containerURL(forSecurityApplicationGroupIdentifier: SharedStore.appGroupID) != nil
+    }
+}
+
+/// Preconditions a suite can't create for itself, and what a run does when one
+/// is missing.
+///
+/// A run that skipped a conditional suite prints the same "all tests passed" as
+/// a run that executed it, so a dropped entitlement silently turns coverage off
+/// rather than failing. Strict mode makes the difference visible: a missing
+/// precondition is recorded as a failure. Without it the gap is still named in
+/// the output — just not fatally, because a developer running the suite on a
+/// machine that can't satisfy it is not the same event as coverage
+/// disappearing from a shared build.
+///
+/// Turn it on with either
+///
+/// ```sh
+/// xcodebuild test … "SWIFT_ACTIVE_COMPILATION_CONDITIONS=\$(inherited) REQUIRE_ALL_SUITES"
+/// ```
+///
+/// or by setting `OPENTRAILS_REQUIRE_ALL_SUITES=1` in the scheme's test
+/// action. Both exist because a simulator-hosted test bundle inherits nothing
+/// from the shell that launched `xcodebuild`: the compilation condition is the
+/// half that works from a command line, the environment variable the half that
+/// works from Xcode.
+enum SuitePrecondition {
+    static let strictEnvironmentKey = "OPENTRAILS_REQUIRE_ALL_SUITES"
+
+    static var isStrict: Bool {
+        #if REQUIRE_ALL_SUITES
+        return true
+        #else
+        return ProcessInfo.processInfo.environment[strictEnvironmentKey] == "1"
+        #endif
+    }
+
+    /// Reports a precondition this run could not satisfy.
+    static func check(_ isSatisfied: Bool, _ description: String) {
+        guard !isSatisfied else { return }
+        let message = "Precondition not met: \(description)."
+        if isStrict {
+            Issue.record(Comment(rawValue: "\(message) The suites depending on it did not run."))
+        } else {
+            print("⚠︎ Skipped coverage — \(message) Set \(strictEnvironmentKey)=1 to make this a failure.")
+        }
+    }
+}
+
+/// Runs unconditionally, and is the only place a conditional suite's absence
+/// is visible at all.
+@Suite("Suite preconditions")
+struct SuitePreconditionTests {
+    @Test("the App Group the widget feeds are written to is reachable")
+    func appGroupIsReachable() {
+        SuitePrecondition.check(
+            SharedStoreProbe.isAvailable,
+            "the App Group container \(SharedStore.appGroupID) is unreachable, so the widget feed suites were skipped"
+        )
     }
 }
 
@@ -280,4 +402,60 @@ enum SharedStoreProbe {
 /// hop first.
 func offMain<T: Sendable>(_ work: @Sendable @escaping () -> T) async -> T {
     await Task.detached(priority: .userInitiated) { work() }.value
+}
+
+/// A clock a test moves by hand.
+///
+/// The alternative — sleeping past a real interval — spends the interval on
+/// every run and still only *probably* clears it, which is the definition of a
+/// flaky test that is also a slow one.
+nonisolated final class TestClock: @unchecked Sendable {
+    private let lock = NSLock()
+    private var instant: Date
+
+    init(_ start: Date = Date(timeIntervalSince1970: 1_750_000_000)) {
+        instant = start
+    }
+
+    var now: Date {
+        lock.lock()
+        defer { lock.unlock() }
+        return instant
+    }
+
+    func advance(by interval: TimeInterval) {
+        lock.lock()
+        instant += interval
+        lock.unlock()
+    }
+
+    /// Passed straight to the injection points that take `() -> Date`.
+    var read: @Sendable () -> Date {
+        { [self] in now }
+    }
+}
+
+/// A deterministic `RandomNumberGenerator` (SplitMix64), so a test that sweeps
+/// thousands of random values can be re-run on exactly the values that failed
+/// it. Override the seed with `OPENTRAILS_TEST_SEED` in the environment; the
+/// tests that use it quote the seed in their failure messages.
+struct SeededGenerator: RandomNumberGenerator {
+    static let defaultSeed: UInt64 = ProcessInfo.processInfo.environment["OPENTRAILS_TEST_SEED"]
+        .flatMap(UInt64.init) ?? 0x4F70_656E_5472_6169
+
+    let seed: UInt64
+    private var state: UInt64
+
+    init(seed: UInt64 = defaultSeed) {
+        self.seed = seed
+        state = seed
+    }
+
+    mutating func next() -> UInt64 {
+        state &+= 0x9E37_79B9_7F4A_7C15
+        var z = state
+        z = (z ^ (z >> 30)) &* 0xBF58_476D_1CE4_E5B9
+        z = (z ^ (z >> 27)) &* 0x94D0_49BB_1331_11EB
+        return z ^ (z >> 31)
+    }
 }

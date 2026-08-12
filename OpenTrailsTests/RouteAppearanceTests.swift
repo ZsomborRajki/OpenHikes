@@ -62,14 +62,19 @@ struct RouteAppearanceTests {
 
     /// The generated per-hike tint has to be storable — it goes straight into
     /// `Hike.tintHex` on import.
+    /// Seeded, so a hue that round-trips wrong is reproducible: re-run with
+    /// `OPENTRAILS_TEST_SEED` set to the seed quoted below and this sweep
+    /// generates exactly the same tints.
     @Test("a generated tint is a valid stored tint")
     func randomTintIsStorable() throws {
+        var generator = SeededGenerator()
+        let seed = generator.seed
         for _ in 0..<50 {
-            let hex = Hike.randomTintHex()
-            #expect(hex.count == 9, "expected #RRGGBBAA, got \(hex)")
-            let color = try #require(Color(hex: hex))
-            #expect(color.hexRGBA == hex)
-            #expect(hex.hasSuffix("FF"), "a generated tint should be fully opaque")
+            let hex = Hike.randomTintHex(using: &generator)
+            #expect(hex.count == 9, "expected #RRGGBBAA, got \(hex) (seed \(seed))")
+            let color = try #require(Color(hex: hex), "seed \(seed)")
+            #expect(color.hexRGBA == hex, "seed \(seed)")
+            #expect(hex.hasSuffix("FF"), "a generated tint should be fully opaque (seed \(seed))")
         }
     }
 

@@ -408,7 +408,8 @@ struct LocationPublishingTests {
     /// throttle is what keeps that off every observer downstream.
     @Test("a burst of fixes publishes once")
     func burstIsThrottled() async {
-        let manager = LocationManager()
+        let clock = TestClock()
+        let manager = LocationManager(clock: clock.read)
         let counter = ObservationCounter { _ = manager.coordinate }
         await counter.settle()
 
@@ -419,7 +420,6 @@ struct LocationPublishingTests {
             )
         }
         await counter.settle()
-        try? await Task.sleep(for: .milliseconds(100))
         await counter.settle()
         #expect(counter.count == 1, "ten fixes in one runloop turn should reach observers once")
     }
@@ -436,24 +436,23 @@ struct LocationPublishingTests {
     /// nobody to tell.
     @Test("an unchanged fix isn't republished")
     func unchangedFixIsNotRepublished() async throws {
-        let manager = LocationManager()
+        let clock = TestClock()
+        let manager = LocationManager(clock: clock.read)
         let counter = ObservationCounter { _ = manager.coordinate }
         await counter.settle()
 
         let stationary = CLLocation(latitude: 47.6300, longitude: 12.8600)
         manager.locationManager(CLLocationManager(), didUpdateLocations: [stationary])
-        try await Task.sleep(for: .milliseconds(100))
         await counter.settle()
         #expect(counter.count == 1, "precondition: the first fix is published")
 
         // Past the 1 s throttle, so this one is not being dropped for timing —
         // it's the same place.
-        try await Task.sleep(for: .milliseconds(1_100))
+        clock.advance(by: 1.1)
         manager.locationManager(
             CLLocationManager(),
             didUpdateLocations: [CLLocation(latitude: stationary.coordinate.latitude, longitude: stationary.coordinate.longitude)]
         )
-        try await Task.sleep(for: .milliseconds(100))
         await counter.settle()
         #expect(counter.count == 1, "standing still should not wake the map's observation every second")
     }
@@ -461,14 +460,15 @@ struct LocationPublishingTests {
     /// …while actually moving must still publish, or auto-follow stops.
     @Test("a fix that moved is published")
     func movedFixIsPublished() async throws {
-        let manager = LocationManager()
+        let clock = TestClock()
+        let manager = LocationManager(clock: clock.read)
         let counter = ObservationCounter { _ = manager.coordinate }
         await counter.settle()
 
         manager.locationManager(CLLocationManager(), didUpdateLocations: [CLLocation(latitude: 47.6300, longitude: 12.8600)])
-        try await Task.sleep(for: .milliseconds(1_100))
+        await counter.settle()
+        clock.advance(by: 1.1)
         manager.locationManager(CLLocationManager(), didUpdateLocations: [CLLocation(latitude: 47.6305, longitude: 12.8600)])
-        try await Task.sleep(for: .milliseconds(100))
         await counter.settle()
 
         #expect(counter.count == 2)
@@ -490,10 +490,12 @@ struct DownloadProgressTests {
     func progressNotifiesPerTile() async throws {
         let downloader = OfflineTileDownloader(
             isOnline: { true },
-            // Spaced out so completions land in separate runloop turns, the
-            // way real fetches do.
+            // Suspends before answering, so completions land in separate
+            // runloop turns the way real fetches do — by yielding rather than
+            // by sleeping, which would spend the same wall-clock time on every
+            // run to buy the same ordering.
             saveTile: { _, _ in
-                try? await Task.sleep(for: .milliseconds(20))
+                for _ in 0..<4 { await Task.yield() }
                 return true
             }
         )

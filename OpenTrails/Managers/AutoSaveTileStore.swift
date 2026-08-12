@@ -49,6 +49,16 @@ nonisolated final class AutoSaveTileStore: @unchecked Sendable {
 
     private let state = OSAllocatedUnfairLock<ActiveHike?>(initialState: nil)
 
+    /// Where claimed tiles are promoted from browsing storage to durable
+    /// storage. Injectable for the same reason ``TileCache/init(storageRoot:sessionConfiguration:monitorsNetwork:)``
+    /// takes a root: a test gets a store with its own directories and its own
+    /// single active hike, instead of sharing the process's one of each.
+    private let tileCache: TileCache
+
+    init(tileCache: TileCache = .shared) {
+        self.tileCache = tileCache
+    }
+
     /// Makes `hikeID` the active auto-save target. Replaces any previously
     /// active hike.
     func setActiveHike(
@@ -110,7 +120,7 @@ nonisolated final class AutoSaveTileStore: @unchecked Sendable {
         // cap, is reported as saved, and — being "known" — is never
         // reconsidered, so the tile stays missing offline with nothing retrying
         // it. The move fails when there's no cached copy left to move.
-        guard TileCache.shared.promoteCachedTile(forKey: key) else {
+        guard tileCache.promoteCachedTile(forKey: key) else {
             if claim.isNewKey {
                 releaseClaim(on: key, by: claim.hikeID)
             }

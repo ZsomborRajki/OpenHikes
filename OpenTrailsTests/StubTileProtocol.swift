@@ -155,63 +155,37 @@ final class StubTileProtocol: URLProtocol, @unchecked Sendable {
     }
 }
 
-/// A `TileCache` with its own directories and its own scripted transport, so
-/// a test owns everything the cache can see. Nothing here touches the app's
-/// real cache directories or `TileCache.shared`.
+/// A ``TileSandbox`` whose transport is this scripted `URLProtocol`, so a test
+/// owns everything the cache can see: its two directories, its auto-save
+/// store, and every response it gets back.
 struct StubbedTileCache {
-    let cache: TileCache
-    let root: URL
+    let sandbox: TileSandbox
+
+    var cache: TileCache { sandbox.cache }
+    var store: AutoSaveTileStore { sandbox.store }
+    var root: URL { sandbox.root }
 
     init(reachable: Bool = true) {
-        root = FileManager.default.temporaryDirectory
-            .appendingPathComponent("tilecache-\(UUID().uuidString)", isDirectory: true)
         StubTileProtocol.reset()
-        cache = TileCache(
-            storageRoot: root,
-            sessionConfiguration: StubTileProtocol.sessionConfiguration(),
-            monitorsNetwork: false
+        sandbox = TileSandbox(
+            reachable: reachable,
+            sessionConfiguration: StubTileProtocol.sessionConfiguration()
         )
-        if !reachable { cache.setReachable(false) }
     }
 
-    /// `TileCache` keeps its key→filename mapping private, so it's restated
-    /// here exactly as `TileStore` does for the real directories.
-    private func fileName(for key: String) -> String {
-        key.replacingOccurrences(of: "/", with: "_").replacingOccurrences(of: "@", with: "_")
-    }
-
-    func browsedFile(for key: String) -> URL {
-        root.appendingPathComponent("OSMTiles", isDirectory: true).appendingPathComponent(fileName(for: key))
-    }
-
-    func savedFile(for key: String) -> URL {
-        root.appendingPathComponent("OSMTilesSaved", isDirectory: true).appendingPathComponent(fileName(for: key))
-    }
-
-    func isBrowsed(_ key: String) -> Bool {
-        FileManager.default.fileExists(atPath: browsedFile(for: key).path)
-    }
-
-    func isSaved(_ key: String) -> Bool {
-        FileManager.default.fileExists(atPath: savedFile(for: key).path)
-    }
+    func browsedFile(for key: String) -> URL { sandbox.browsedFile(for: key) }
+    func savedFile(for key: String) -> URL { sandbox.savedFile(for: key) }
+    func isBrowsed(_ key: String) -> Bool { sandbox.isBrowsed(key) }
+    func isSaved(_ key: String) -> Bool { sandbox.isSaved(key) }
 
     /// Puts a tile in a tier directly, as a previous session would have left it.
     func place(_ key: String, in file: URL, agedByDays days: Double = 0) throws {
-        try FileManager.default.createDirectory(
-            at: file.deletingLastPathComponent(), withIntermediateDirectories: true
-        )
-        try TileStore.tileData.write(to: file, options: .atomic)
-        if days > 0 {
-            try FileManager.default.setAttributes(
-                [.modificationDate: Date(timeIntervalSinceNow: -days * 86_400)],
-                ofItemAtPath: file.path
-            )
-        }
+        try sandbox.place(key, in: file, agedByDays: days)
     }
 
+    /// Clears the process-wide response script. The directories go with the
+    /// sandbox when it falls out of scope.
     func tearDown() {
         StubTileProtocol.reset()
-        try? FileManager.default.removeItem(at: root)
     }
 }

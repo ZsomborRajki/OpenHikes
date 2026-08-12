@@ -40,6 +40,16 @@
                ReferencedContainer = "container:OpenTrails.xcodeproj">
             </BuildableReference>
          </TestableReference>
+         <TestableReference
+            skipped = "NO">
+            <BuildableReference
+               BuildableIdentifier = "primary"
+               BlueprintIdentifier = "AC0000000000000000000001"
+               BuildableName = "OpenWidgetTests.xctest"
+               BlueprintName = "OpenWidgetTests"
+               ReferencedContainer = "container:OpenTrails.xcodeproj">
+            </BuildableReference>
+         </TestableReference>
       </Testables>
    </TestAction>
    <LaunchAction

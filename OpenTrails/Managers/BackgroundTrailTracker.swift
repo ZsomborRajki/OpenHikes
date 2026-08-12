@@ -28,10 +28,87 @@ import WidgetKit
 import Observation
 import OpenTrailsShared
 
+/// The slice of `CLLocationManager` this tracker uses: authorization, and
+/// significant-location-change delivery.
+///
+/// Exists so the background-relaunch path has a seam. It is the app's least
+/// testable surface and its most failure-prone one — a relaunch has no
+/// in-memory state, so everything it does is decided by authorization, by
+/// what `UserDefaults` says the selection was, and by a fix arriving through a
+/// delegate callback. None of those three could be driven from a test while
+/// this was a `private let manager = CLLocationManager()`.
+///
+/// The members are renamed rather than reusing `CLLocationManager`'s own, and
+/// authorization is exposed as two questions rather than as a
+/// `CLAuthorizationStatus`: neither `.authorizedAlways` nor the
+/// significant-change API exists on every platform this app builds for. The
+/// `#if os(iOS)` guards therefore live in the adapter below, and the tracker
+/// itself has one code path — which is also the one the tests drive.
+@MainActor
+protocol SignificantLocationMonitor: AnyObject {
+    /// Whether Always authorization is granted right now.
+    var isAlwaysAuthorized: Bool { get }
+    /// Whether asking for it could still change that — i.e. the user has
+    /// neither granted nor refused it yet.
+    var canRequestAlwaysAccess: Bool { get }
+    var monitorDelegate: CLLocationManagerDelegate? { get set }
+    func requestAlwaysAccess()
+    func startSignificantLocationUpdates()
+    func stopSignificantLocationUpdates()
+}
+
+extension CLLocationManager: SignificantLocationMonitor {
+    var isAlwaysAuthorized: Bool {
+        #if os(iOS)
+        authorizationStatus == .authorizedAlways
+        #else
+        false
+        #endif
+    }
+
+    var canRequestAlwaysAccess: Bool {
+        #if os(iOS)
+        switch authorizationStatus {
+        case .notDetermined, .authorizedWhenInUse: true
+        default: false
+        }
+        #else
+        false
+        #endif
+    }
+
+    var monitorDelegate: CLLocationManagerDelegate? {
+        get { delegate }
+        set { delegate = newValue }
+    }
+
+    func requestAlwaysAccess() {
+        #if os(iOS)
+        requestAlwaysAuthorization()
+        #endif
+    }
+
+    func startSignificantLocationUpdates() {
+        #if os(iOS)
+        startMonitoringSignificantLocationChanges()
+        #endif
+    }
+
+    func stopSignificantLocationUpdates() {
+        #if os(iOS)
+        stopMonitoringSignificantLocationChanges()
+        #endif
+    }
+}
+
 @MainActor
 @Observable
 final class BackgroundTrailTracker: NSObject {
-    private let manager = CLLocationManager()
+    private let monitor: any SignificantLocationMonitor
+    private let defaults: UserDefaults
+    /// Reads the current time for the two throttles below — injectable so a
+    /// test can step across a 45-second window rather than wait it out.
+    private let clock: @Sendable () -> Date
     private let container: ModelContainer
     /// The hike background delivery should match fixes against. Seeded at
     /// launch from `SettingsKey.lastSelectedHikeID` (written by `ContentView`)
@@ -49,15 +126,15 @@ final class BackgroundTrailTracker: NSObject {
     /// background relaunch, which starts with no in-memory state at all.
     private var lastMatchedDistance: Double? {
         get {
-            UserDefaults.standard.object(forKey: Keys.lastMatchedDistance) != nil
-                ? UserDefaults.standard.double(forKey: Keys.lastMatchedDistance)
+            defaults.object(forKey: Keys.lastMatchedDistance) != nil
+                ? defaults.double(forKey: Keys.lastMatchedDistance)
                 : nil
         }
         set {
             if let newValue {
-                UserDefaults.standard.set(newValue, forKey: Keys.lastMatchedDistance)
+                defaults.set(newValue, forKey: Keys.lastMatchedDistance)
             } else {
-                UserDefaults.standard.removeObject(forKey: Keys.lastMatchedDistance)
+                defaults.removeObject(forKey: Keys.lastMatchedDistance)
             }
         }
     }
@@ -90,22 +167,37 @@ final class BackgroundTrailTracker: NSObject {
     /// grudging, and only by the width of this band.
     private static let offRouteExitMeters = RouteProfile.followMatchThresholdMeters * 1.5
 
-    private enum Keys {
+    enum Keys {
         static let lastMatchedDistance = "trailTracking.lastMatchedDistance"
     }
 
-    init(container: ModelContainer) {
+    /// - Parameters:
+    ///   - monitor: significant-change delivery. Deliberately a *separate*
+    ///     manager from `LocationManager`'s — see the file comment.
+    ///   - defaults: where the selection, the settings toggle and the matching
+    ///     continuity reference are read from. A test passes a suite of its
+    ///     own rather than editing the ones the host app is using.
+    ///   - clock: reads the current time for the publish throttles.
+    init(
+        container: ModelContainer,
+        monitor: (any SignificantLocationMonitor)? = nil,
+        defaults: UserDefaults = .standard,
+        clock: @escaping @Sendable () -> Date = { Date() }
+    ) {
         let selectionGeneration = SelectionGeneration()
         self.container = container
+        self.monitor = monitor ?? CLLocationManager()
+        self.defaults = defaults
+        self.clock = clock
         self.selectionGeneration = selectionGeneration
         self.selectionWriter = SelectionSnapshotWriter(generation: selectionGeneration)
         super.init()
-        manager.delegate = self
-        trackedHikeID = UUID(uuidString: UserDefaults.standard.string(forKey: SettingsKey.lastSelectedHikeID) ?? "")
+        self.monitor.monitorDelegate = self
+        trackedHikeID = UUID(uuidString: defaults.string(forKey: SettingsKey.lastSelectedHikeID) ?? "")
         // Re-arm on every launch: the system wakes the app specifically so it
         // can call this again and receive the pending event — monitoring
         // doesn't itself persist across process launches.
-        if UserDefaults.standard.bool(forKey: SettingsKey.backgroundTrackingEnabled) {
+        if defaults.bool(forKey: SettingsKey.backgroundTrackingEnabled) {
             startIfAuthorized()
         }
     }
@@ -113,30 +205,23 @@ final class BackgroundTrailTracker: NSObject {
     // MARK: Settings toggle
 
     func setEnabled(_ enabled: Bool) {
-        #if os(iOS)
-        if enabled {
-            switch manager.authorizationStatus {
-            case .notDetermined, .authorizedWhenInUse:
-                manager.requestAlwaysAuthorization()
-            case .authorizedAlways:
-                manager.startMonitoringSignificantLocationChanges()
-            case .denied, .restricted:
-                break
-            @unknown default:
-                break
-            }
-        } else {
-            manager.stopMonitoringSignificantLocationChanges()
+        guard enabled else {
+            monitor.stopSignificantLocationUpdates()
+            return
         }
-        #endif
+        if monitor.isAlwaysAuthorized {
+            monitor.startSignificantLocationUpdates()
+        } else if monitor.canRequestAlwaysAccess {
+            // The grant, if it comes, arrives at `authorizationChanged()` —
+            // the user has to leave the app to answer the prompt.
+            monitor.requestAlwaysAccess()
+        }
+        // Denied or restricted: nothing to ask and nothing to start.
     }
 
     private func startIfAuthorized() {
-        #if os(iOS)
-        if manager.authorizationStatus == .authorizedAlways {
-            manager.startMonitoringSignificantLocationChanges()
-        }
-        #endif
+        guard monitor.isAlwaysAuthorized else { return }
+        monitor.startSignificantLocationUpdates()
     }
 
     // MARK: Selection
@@ -243,7 +328,7 @@ final class BackgroundTrailTracker: NSObject {
         let threshold = wasOnRoute ? Self.offRouteExitMeters : RouteProfile.followMatchThresholdMeters
         let isOnRoute = (match?.offRouteMeters).map { $0 <= threshold } ?? false
 
-        let now = Date()
+        let now = clock()
         if let last = lastForegroundPublish {
             let intervalElapsed = now.timeIntervalSince(last.date) >= Self.foregroundPublishInterval
             // A flip may bypass the interval, but not more often than
@@ -450,12 +535,19 @@ extension BackgroundTrailTracker: CLLocationManagerDelegate {
     }
 
     nonisolated func locationManagerDidChangeAuthorization(_ manager: CLLocationManager) {
-        #if os(iOS)
-        Task { @MainActor in
-            guard manager.authorizationStatus == .authorizedAlways,
-                  UserDefaults.standard.bool(forKey: SettingsKey.backgroundTrackingEnabled) else { return }
-            manager.startMonitoringSignificantLocationChanges()
-        }
-        #endif
+        // Read back from the injected monitor rather than from the manager
+        // handed in: they are the same object in the app, and only the former
+        // is something a test can decide the answer for.
+        Task { @MainActor in authorizationChanged() }
+    }
+
+    /// Arms monitoring the moment Always is granted — the grant arrives long
+    /// after `setEnabled(true)` asked for it, because the user has to leave
+    /// the app and answer a system prompt in between.
+    @MainActor
+    private func authorizationChanged() {
+        guard monitor.isAlwaysAuthorized,
+              defaults.bool(forKey: SettingsKey.backgroundTrackingEnabled) else { return }
+        monitor.startSignificantLocationUpdates()
     }
 }

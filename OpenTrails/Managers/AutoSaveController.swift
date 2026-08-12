@@ -30,8 +30,14 @@ final class AutoSaveController {
     @ObservationIgnored
     private var hasDeferredSelectionChange = false
     private weak var deferredHike: Hike?
+    /// The tile store this controller drives. Injectable so a test drives one
+    /// with its own active hike and its own tile directories rather than the
+    /// process-wide singleton the app uses.
+    @ObservationIgnored
+    private let store: AutoSaveTileStore
 
-    init() {
+    init(store: AutoSaveTileStore = .shared) {
+        self.store = store
         drainTask = Task { [weak self] in
             while true {
                 try? await Task.sleep(for: .seconds(2))
@@ -75,7 +81,7 @@ final class AutoSaveController {
     }
 
     func isCapReached(for hike: Hike) -> Bool {
-        AutoSaveTileStore.shared.isCapReached(for: hike.id)
+        store.isCapReached(for: hike.id)
     }
 
     /// The hike auto-save is currently running for, if any.
@@ -90,7 +96,6 @@ final class AutoSaveController {
     /// confirms the manifest was persisted.
     func sceneWillResignActive(save: () throws -> Void) {
         isSuspended = true
-        let store = AutoSaveTileStore.shared
         let hike = activeHike
         let newKeys = hike.map { store.suspendAndSnapshotPendingKeys(for: $0.id) } ?? []
 
@@ -117,7 +122,7 @@ final class AutoSaveController {
             return
         }
         guard let hike = activeHike else { return }
-        AutoSaveTileStore.shared.resumePersisting(for: hike.id)
+        store.resumePersisting(for: hike.id)
     }
 
     /// Called just before `hike` is deleted, so the delete that follows sees a
@@ -144,7 +149,7 @@ final class AutoSaveController {
         // already on disk.
         flushPendingKeys()
         activeHike = hike
-        AutoSaveTileStore.shared.setActiveHike(
+        store.setActiveHike(
             id: hike.id,
             route: hike.coordinates,
             knownKeys: Set(hike.autoSavedTileKeys),
@@ -161,7 +166,7 @@ final class AutoSaveController {
             flushPendingKeys()
         }
         activeHike = nil
-        AutoSaveTileStore.shared.clearActiveHike()
+        store.clearActiveHike()
     }
 
     /// Folds tiles persisted since the last pass into the active hike's
@@ -177,7 +182,7 @@ final class AutoSaveController {
 
     private func flushPendingKeysIgnoringSuspension() {
         guard let hike = activeHike else { return }
-        let newKeys = AutoSaveTileStore.shared.drainPendingKeys(for: hike.id)
+        let newKeys = store.drainPendingKeys(for: hike.id)
         guard !newKeys.isEmpty else { return }
         hike.autoSavedTileKeys.append(contentsOf: newKeys)
     }

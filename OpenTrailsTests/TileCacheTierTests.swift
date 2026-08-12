@@ -27,15 +27,15 @@ import UIKit
 import AppKit
 #endif
 
-/// Nested inside `AutoSaveTests` to inherit its `.serialized` trait, for the
-/// same reason `StorageAccountingTests` is: these write into — and, through
-/// `removeExpiredTiles()`, delete across — the process's one real tile
-/// directory pair, so they cannot run alongside anything else that does.
-extension AutoSaveTests {
-
 @Suite("Tile cache tiers")
 struct TileCacheTierTests {
-    private static func key(_ suffix: String = UUID().uuidString) -> String {
+    /// Its own directory pair: these write into — and, through
+    /// `removeExpiredTiles()`, delete across — both tiers wholesale, which is
+    /// exactly the operation that used to make them unsafe to run beside
+    /// anything else.
+    private let sandbox = TileSandbox()
+
+    private func makeKey(_ suffix: String = UUID().uuidString) -> String {
         "tiertest-\(suffix)/12/2200/1400@2.0"
     }
 
@@ -43,18 +43,35 @@ struct TileCacheTierTests {
     /// a concurrent `promoteCachedTile` leave behind: the move creates the
     /// durable copy, and the fetch that was already in flight writes the
     /// ephemeral one back a moment later.
-    private static func writeBothTiers(_ key: String) throws {
-        try TileStore.browse(key: key)
-        let saved = TileStore.savedFile(for: key)
-        try FileManager.default.createDirectory(
-            at: saved.deletingLastPathComponent(), withIntermediateDirectories: true
-        )
-        try TileStore.tileData.write(to: saved, options: .atomic)
+    private func writeBothTiers(_ key: String) throws {
+        try sandbox.browse(key: key)
+        try sandbox.save(key: key)
     }
 
-    private static func removeBothTiers(_ key: String) {
-        try? FileManager.default.removeItem(at: TileStore.browsedFile(for: key))
-        try? FileManager.default.removeItem(at: TileStore.savedFile(for: key))
+    /// The cache operations, run off the main thread as the pipeline demands.
+    private func promoteCachedTile(forKey key: String) async -> Bool {
+        let cache = sandbox.cache
+        return await offMain { cache.promoteCachedTile(forKey: key) }
+    }
+
+    private func bytes(forKeys keys: [String]) async -> Int64 {
+        let cache = sandbox.cache
+        return await offMain { cache.bytes(forKeys: keys) }
+    }
+
+    private func diskUsage(claimedBy keys: Set<String>) async -> TileCache.DiskUsage {
+        let cache = sandbox.cache
+        return await offMain { cache.diskUsage(claimedBy: keys) }
+    }
+
+    private func removeExpiredTiles() async -> Int {
+        let cache = sandbox.cache
+        return await offMain { cache.removeExpiredTiles() }
+    }
+
+    private func trimCache(claimedBy keys: Set<String>, limit: Int64) async -> Int64 {
+        let cache = sandbox.cache
+        return await offMain { cache.trimCache(claimedBy: keys, limit: limit) }
     }
 
     /// How a tile ends up in both tiers at once: the map's renderer and the
@@ -71,14 +88,13 @@ struct TileCacheTierTests {
     /// that `trimCache` then worked to bring back down.
     @Test("promoting a tile that's already saved reclaims the redundant copy")
     func promotionReclaimsTheEphemeralDuplicate() async throws {
-        let key = Self.key()
-        defer { Self.removeBothTiers(key) }
-        try Self.writeBothTiers(key)
+        let key = makeKey()
+        try writeBothTiers(key)
 
-        let promoted = await offMain { TileCache.shared.promoteCachedTile(forKey: key) }
+        let promoted = await promoteCachedTile(forKey: key)
         #expect(promoted, "precondition: the tile counts as durably saved")
-        #expect(TileStore.isSaved(key))
-        #expect(!TileStore.isBrowsed(key), "one tile should not sit in two directories")
+        #expect(sandbox.isSaved(key))
+        #expect(!sandbox.isBrowsed(key), "one tile should not sit in two directories")
     }
 
     /// What that duplication did to the number the user reads. The hike sheet
@@ -88,11 +104,10 @@ struct TileCacheTierTests {
     /// described 12 MB of map.
     @Test("a duplicated tile isn't reported as twice the coverage")
     func bytesDoesNotDoubleCountAcrossTiers() async throws {
-        let key = Self.key()
-        defer { Self.removeBothTiers(key) }
-        try Self.writeBothTiers(key)
+        let key = makeKey()
+        try writeBothTiers(key)
 
-        let measured = await offMain { TileCache.shared.bytes(forKeys: [key]) }
+        let measured = await bytes(forKeys: [key])
         #expect(measured == TileStore.tileByteCount)
     }
 
@@ -102,20 +117,19 @@ struct TileCacheTierTests {
     /// fell into.
     @Test("a duplicated tile is measured once by Settings")
     func diskUsageDoesNotDoubleCountAcrossTiers() async throws {
-        let key = Self.key()
-        defer { Self.removeBothTiers(key) }
-        try Self.writeBothTiers(key)
+        let key = makeKey()
+        try writeBothTiers(key)
 
-        let claimed = await offMain { TileCache.shared.diskUsage(claimedBy: [key]) }
+        let claimed = await diskUsage(claimedBy: [key])
         #expect(claimed.claimed == TileStore.tileByteCount, "counted once as coverage")
 
-        let unclaimed = await offMain { TileCache.shared.diskUsage(claimedBy: []) }
+        let unclaimed = await diskUsage(claimedBy: [])
         #expect(
             unclaimed.unclaimed >= TileStore.tileByteCount,
             "and once as cache when nothing claims it"
         )
         #expect(
-            unclaimed.unclaimed - (await offMain { TileCache.shared.diskUsage(claimedBy: [key]) }).unclaimed
+            unclaimed.unclaimed - (await diskUsage(claimedBy: [key])).unclaimed
                 == TileStore.tileByteCount,
             "the key accounts for exactly one tile's worth either way"
         )
@@ -127,17 +141,16 @@ struct TileCacheTierTests {
     /// are left holding them.
     @Test("saving a tile durably doesn't leave the browsed copy behind")
     func durableSaveReclaimsTheBrowsedCopy() async throws {
-        let key = Self.key()
-        defer { Self.removeBothTiers(key) }
-        try TileStore.browse(key: key)
+        let key = makeKey()
+        try sandbox.browse(key: key)
 
         // An unreachable URL: a tile already on disk needs no fetch.
         let url = try #require(URL(string: "https://tile.invalid/never-fetched.png"))
-        #expect(await TileCache.shared.saveTileDurably(forKey: key, url: url))
+        #expect(await sandbox.cache.saveTileDurably(forKey: key, url: url))
 
-        #expect(TileStore.isSaved(key))
-        #expect(!TileStore.isBrowsed(key), "the browsing-tier copy is gone, not duplicated")
-        #expect(await offMain { TileCache.shared.bytes(forKeys: [key]) } == TileStore.tileByteCount)
+        #expect(sandbox.isSaved(key))
+        #expect(!sandbox.isBrowsed(key), "the browsing-tier copy is gone, not duplicated")
+        #expect(await bytes(forKeys: [key]) == TileStore.tileByteCount)
     }
 
     /// An expired tile is deleted where it lies and refetched. If the refetch
@@ -148,35 +161,33 @@ struct TileCacheTierTests {
     /// second copy of the same key.
     @Test("refetching an expired tile keeps it in the tier it was in")
     func refetchPreservesTheDurableTier() async throws {
-        let key = Self.key()
-        defer { Self.removeBothTiers(key) }
+        let key = makeKey()
 
         // Durably saved, then aged past the seven-day TTL.
-        try Self.writeBothTiers(key)
-        try? FileManager.default.removeItem(at: TileStore.browsedFile(for: key))
-        try TileStore.age(key: key, byDays: 8)
+        try writeBothTiers(key)
+        try? FileManager.default.removeItem(at: sandbox.browsedFile(for: key))
+        try sandbox.age(key: key, byDays: 8)
 
         let url = try #require(URL(string: "https://tile.invalid/never-fetched.png"))
-        _ = await TileCache.shared.loadTile(forKey: key, url: url)
+        _ = await sandbox.cache.loadTile(forKey: key, url: url)
 
         // The fetch fails (unreachable), so what's pinned here is that the
         // expired durable copy was dropped and nothing was written to the
         // browsing tier in its place.
-        #expect(!TileStore.isBrowsed(key), "an expired durable tile must not reappear as cache")
+        #expect(!sandbox.isBrowsed(key), "an expired durable tile must not reappear as cache")
     }
 
     /// Installs that already have duplicates from earlier builds heal at the
     /// next launch rather than carrying them for another seven days.
     @Test("launch housekeeping reclaims duplicates left by earlier builds")
     func expiryPassReclaimsDuplicates() async throws {
-        let key = Self.key()
-        defer { Self.removeBothTiers(key) }
-        try Self.writeBothTiers(key)
+        let key = makeKey()
+        try writeBothTiers(key)
 
-        let removed = await offMain { TileCache.shared.removeExpiredTiles() }
+        let removed = await removeExpiredTiles()
         #expect(removed >= 1)
-        #expect(TileStore.isSaved(key), "the durable copy is the one that's kept")
-        #expect(!TileStore.isBrowsed(key))
+        #expect(sandbox.isSaved(key), "the durable copy is the one that's kept")
+        #expect(!sandbox.isBrowsed(key))
     }
 
     /// `OpenTrailsApp.init` kicks off `removeExpiredTiles()` on a detached task
@@ -190,20 +201,19 @@ struct TileCacheTierTests {
     /// rejects those lazily on read.
     @Test("launch housekeeping doesn't evict tiles that haven't expired")
     func expiryPassKeepsFreshMemoryTiles() async throws {
-        let key = Self.key()
-        defer { Self.removeBothTiers(key) }
-        try TileStore.browse(key: key)
+        let key = makeKey()
+        try sandbox.browse(key: key)
 
         // A disk read is what populates the memory tier — no network involved.
-        let loaded = await TileCache.shared.loadTile(forKey: key, url: URL(string: "http://127.0.0.1:9/x.png")!)
+        let loaded = await sandbox.cache.loadTile(forKey: key, url: URL(string: "http://127.0.0.1:9/x.png")!)
         try #require(loaded != nil, "precondition: the tile is cached in memory")
-        try #require(TileCache.shared.memoryImage(forKey: key) != nil)
+        try #require(sandbox.cache.memoryImage(forKey: key) != nil)
 
-        let removed = await offMain { TileCache.shared.removeExpiredTiles() }
+        let removed = await removeExpiredTiles()
         #expect(removed == 0, "the tile is fresh, so nothing should have been deleted from disk")
-        #expect(TileStore.isBrowsed(key), "and it's still on disk")
+        #expect(sandbox.isBrowsed(key), "and it's still on disk")
         #expect(
-            TileCache.shared.memoryImage(forKey: key) != nil,
+            sandbox.cache.memoryImage(forKey: key) != nil,
             "a fresh tile shouldn't have to be read back off disk because an unrelated one expired"
         )
     }
@@ -215,21 +225,18 @@ struct TileCacheTierTests {
     /// anything.)
     @Test("a cache trim doesn't evict tiles it decided to keep")
     func trimKeepsFreshMemoryTiles() async throws {
-        let kept = Self.key()
-        defer { Self.removeBothTiers(kept) }
-        try TileStore.browse(key: kept)
+        let kept = makeKey()
+        try sandbox.browse(key: kept)
 
-        let loaded = await TileCache.shared.loadTile(forKey: kept, url: URL(string: "http://127.0.0.1:9/x.png")!)
+        let loaded = await sandbox.cache.loadTile(forKey: kept, url: URL(string: "http://127.0.0.1:9/x.png")!)
         try #require(loaded != nil, "precondition: the tile is cached in memory")
 
         // Claimed, so the trim can't delete it however far over the limit we are.
-        let freed = await offMain {
-            TileCache.shared.trimCache(claimedBy: [kept], limit: TileStore.tileByteCount)
-        }
+        let freed = await trimCache(claimedBy: [kept], limit: TileStore.tileByteCount)
         #expect(freed >= 0)
-        #expect(TileStore.isBrowsed(kept), "precondition: a claimed tile survives the trim")
+        #expect(sandbox.isBrowsed(kept), "precondition: a claimed tile survives the trim")
         #expect(
-            TileCache.shared.memoryImage(forKey: kept) != nil,
+            sandbox.cache.memoryImage(forKey: kept) != nil,
             "a tile the trim kept on disk shouldn't be dropped from memory by it"
         )
     }
@@ -239,15 +246,14 @@ struct TileCacheTierTests {
     /// eviction can't accidentally stop evicting.
     @Test("launch housekeeping still drops tiles that have expired")
     func expiryPassRemovesStaleTiles() async throws {
-        let key = Self.key()
-        defer { Self.removeBothTiers(key) }
-        try TileStore.browse(key: key)
-        try TileStore.age(key: key, byDays: 8)
+        let key = makeKey()
+        try sandbox.browse(key: key)
+        try sandbox.age(key: key, byDays: 8)
 
-        let removed = await offMain { TileCache.shared.removeExpiredTiles() }
+        let removed = await removeExpiredTiles()
         #expect(removed >= 1)
-        #expect(!TileStore.isBrowsed(key))
-        #expect(TileCache.shared.memoryImage(forKey: key) == nil)
+        #expect(!sandbox.isBrowsed(key))
+        #expect(sandbox.cache.memoryImage(forKey: key) == nil)
     }
 
     // MARK: - What the memory tier is bounded by
@@ -289,12 +295,7 @@ struct TileCacheTierTests {
     /// binds — which is the whole point of the change.
     @Test("the memory tier is bounded in bytes, and that's the bound that binds")
     func memoryTierIsBoundedInBytes() throws {
-        let root = FileManager.default.temporaryDirectory
-            .appendingPathComponent("memory-limit-\(UUID().uuidString)", isDirectory: true)
-        defer { try? FileManager.default.removeItem(at: root) }
-        let cache = TileCache(storageRoot: root, monitorsNetwork: false)
-
-        let limits = cache.memoryLimits
+        let limits = sandbox.cache.memoryLimits
         #expect(limits.bytes == TileCache.memoryByteLimit)
 
         let tileCost = TileCache.decodedByteCost(of: try #require(Fixture.fullSizeTileImage(scale: 3)))
@@ -313,20 +314,17 @@ struct TileCacheTierTests {
     /// age is when it was cached, which no amount of backdating on disk moves.
     @Test("an expired tile is never served from memory")
     func memoryLookupRejectsExpiredTiles() async throws {
-        let key = Self.key()
-        defer { Self.removeBothTiers(key) }
-        try TileStore.browse(key: key)
+        let key = makeKey()
+        try sandbox.browse(key: key)
 
-        let loaded = await TileCache.shared.loadTile(forKey: key, url: URL(string: "http://127.0.0.1:9/x.png")!)
+        let loaded = await sandbox.cache.loadTile(forKey: key, url: URL(string: "http://127.0.0.1:9/x.png")!)
         try #require(loaded != nil, "precondition: the tile is cached in memory")
 
         let pastTTL = Date(timeIntervalSinceNow: TileCache.tileExpirationInterval + 60)
-        #expect(TileCache.shared.memoryImage(forKey: key, referenceDate: pastTTL) == nil)
+        #expect(sandbox.cache.memoryImage(forKey: key, referenceDate: pastTTL) == nil)
         #expect(
-            TileCache.shared.memoryImage(forKey: key) == nil,
+            sandbox.cache.memoryImage(forKey: key) == nil,
             "and the lookup evicts it, rather than only declining to return it"
         )
     }
-}
-
 }

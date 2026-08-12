@@ -20,7 +20,15 @@ extension Hike {
     /// every hue stays legible on the map and in the UI. Used to give each
     /// newly imported hike its own default tint instead of always green.
     static func randomTintHex() -> String {
-        Color(hue: .random(in: 0..<1), saturation: 0.65, brightness: 0.85).hexRGBA
+        var generator = SystemRandomNumberGenerator()
+        return randomTintHex(using: &generator)
+    }
+
+    /// The same tint, from a caller-supplied source of randomness — so a test
+    /// that sweeps hundreds of generated tints can seed it and reproduce a
+    /// failure on exactly the hue that caused it.
+    static func randomTintHex<G: RandomNumberGenerator>(using generator: inout G) -> String {
+        Color(hue: .random(in: 0..<1, using: &generator), saturation: 0.65, brightness: 0.85).hexRGBA
     }
 
     /// Tint forced fully opaque — used everywhere except the map line (graph,

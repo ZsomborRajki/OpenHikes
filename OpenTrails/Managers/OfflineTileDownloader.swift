@@ -40,6 +40,11 @@ final class OfflineTileDownloader {
     var isFailed: Bool { if case .failed = phase { return true } else { return false } }
 
     private var task: Task<Void, Never>?
+    /// The most recently started run, kept past a `cancel()` that clears
+    /// `task`. Only ``waitForCurrentRun()`` reads it: an abandoned run's tail
+    /// is exactly what the cancellation tests are about, and without a handle
+    /// on it the only way to wait for one is to sleep and hope.
+    private var lastRun: Task<Void, Never>?
     /// Bumped on every `start()`/`cancel()` so a stale `run()` from a prior,
     /// cancelled download can tell it's no longer current and skip mutating
     /// state that now belongs to a newer download.
@@ -96,6 +101,7 @@ final class OfflineTileDownloader {
         task = Task { [weak self] in
             await self?.run(tiles: tiles, source: source, scale: scale, generation: currentGeneration)
         }
+        lastRun = task
     }
 
     func cancel() {
@@ -213,9 +219,10 @@ final class OfflineTileDownloader {
         }
     }
 
-    /// Test/support hook that waits for the current run without polling time.
+    /// Test/support hook that waits for the latest run without polling time —
+    /// including one that has been cancelled, whose tail is still unwinding.
     func waitForCurrentRun() async {
-        await task?.value
+        await lastRun?.value
     }
 
     // MARK: - Stored-tile bookkeeping

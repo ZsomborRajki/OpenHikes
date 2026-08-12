@@ -13,9 +13,9 @@
 //  actually does, whether the identifying User-Agent OSM's usage policy
 //  requires is really sent, or whether a cache hit really avoids a request.
 //
-//  Each test owns its own `TileCache`, so nothing here can disturb — or be
-//  disturbed by — the suites that use `TileCache.shared`. The suite is
-//  serialized only because `StubTileProtocol`'s script is process-wide.
+//  Each test owns its own `TileCache` and auto-save store (see `TileSandbox`),
+//  so nothing here can disturb — or be disturbed by — any other suite. This
+//  one is serialized only because `StubTileProtocol`'s script is process-wide.
 //
 
 import Foundation
@@ -380,16 +380,14 @@ struct TileTransportTests {
     func overlayReportsSuccess() async throws {
         let stub = StubbedTileCache()
         defer { stub.tearDown() }
-        AutoSaveTileStore.shared.clearActiveHike()
         StubTileProtocol.alwaysRespond(with: .tile())
 
         let overlay = TileOverlay(
             providerID: "osm",
             urlTemplate: "https://tiles.example.invalid/{z}/{x}/{y}.png",
-            cache: stub.cache
+            cache: stub.cache,
+            autoSaveStore: stub.store
         )
-        // Mid-Atlantic, so no fixture's auto-save corridor can claim it if a
-        // parallel suite leaves a hike active.
         let path = MKTileOverlayPath(x: 9_500, y: 14_600, z: 15, contentScaleFactor: 2)
 
         let loaded = await offMain { await overlay.cacheTile(at: path) }
@@ -401,13 +399,13 @@ struct TileTransportTests {
     func overlayReportsFailure() async throws {
         let stub = StubbedTileCache()
         defer { stub.tearDown() }
-        AutoSaveTileStore.shared.clearActiveHike()
         StubTileProtocol.alwaysRespond(with: .status(500))
 
         let overlay = TileOverlay(
             providerID: "osm",
             urlTemplate: "https://tiles.example.invalid/{z}/{x}/{y}.png",
-            cache: stub.cache
+            cache: stub.cache,
+            autoSaveStore: stub.store
         )
         let path = MKTileOverlayPath(x: 9_500, y: 14_600, z: 15, contentScaleFactor: 2)
 
