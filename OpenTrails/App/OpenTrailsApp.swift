@@ -17,10 +17,14 @@ struct OpenTrailsApp: App {
 
     init() {
         #if DEBUG
-        MainThreadWatchdog.start()
+        if !AppLaunchEnvironment.isUITesting {
+            MainThreadWatchdog.start()
+        }
         #endif
-        TileCache.scheduleMaintenance {
-            TileCache.shared.removeExpiredTiles()
+        if !AppLaunchEnvironment.isUITesting {
+            TileCache.scheduleMaintenance {
+                TileCache.shared.removeExpiredTiles()
+            }
         }
 
         // Constructed here, not lazily inside a view, because a background
@@ -36,6 +40,7 @@ struct OpenTrailsApp: App {
         WindowGroup {
             OpenTrailsView()
                 .environment(model)
+                .defaultAppStorage(model.defaults)
                 .ignoresSafeArea()
         }
         .modelContainer(model.container)

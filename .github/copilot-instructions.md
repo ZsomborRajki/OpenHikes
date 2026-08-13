@@ -30,6 +30,10 @@ xcodebuild test -project OpenTrails.xcodeproj -scheme OpenTrails \
   -destination 'platform=iOS Simulator,name=iPhone 17 Pro' \
   -only-testing:OpenWidgetTests
 
+# Run simulator UI automation and launch performance metrics
+xcodebuild test -project OpenTrails.xcodeproj -scheme OpenTrailsUI \
+  -destination 'platform=iOS Simulator,name=iPhone 17 Pro'
+
 # Run the standalone shared-package suite
 swift test --package-path OpenTrailsShared
 
@@ -39,9 +43,11 @@ swift test --package-path OpenTrailsShared \
   --filter 'OpenTrailsSharedTests.MercatorTests/tileIndicesUnchanged'
 ```
 
-Tests use Swift Testing (`@Suite`, `@Test`, `#expect`), not XCTest. `xcodebuild test` runs two app-hosted bundles: `OpenTrailsTests` and `OpenWidgetTests` (which compiles `OpenWidget/TrailWidget.swift` into itself, since an app extension cannot host a test bundle).
+Unit and integration tests use Swift Testing (`@Suite`, `@Test`, `#expect`). The `OpenTrailsUITests` simulator bundle uses XCTest/XCUITest because Apple's UI automation and performance metrics are not available through Swift Testing. The main `xcodebuild test` action runs the two app-hosted bundles, `OpenTrailsTests` and `OpenWidgetTests`, plus `OpenTrailsUITests`; the dedicated `OpenTrailsUI` scheme runs only UI automation. `OpenWidgetTests` compiles `OpenWidget/TrailWidget.swift` into itself, since an app extension cannot host a test bundle.
 
 App tests use the in-memory SwiftData fixtures in `OpenTrailsTests/General/TestSupport.swift`. A suite that touches the tile pipeline builds a `TileSandbox` — its own `TileCache` directories and its own `AutoSaveTileStore` — rather than `TileCache.shared`; the singletons belong to the app, and suites run in parallel. Likewise `BackgroundTrailTracker`, `LocationManager` and `OfflineTileDownloader` take injectable location, defaults, clock and transport, so no test depends on wall-clock time, a real connection, or the host app's settings.
+
+UI-test app launches pass `--ui-testing`, which selects an in-memory SwiftData store and isolated `UserDefaults`. Additional launch arguments can expand the sheet (`--ui-test-expanded-sheet`), enable real simulator Core Location (`--ui-test-enable-location`), or import a bundled GPX fixture (`--ui-test-import-gpx=ThumseeLoopFast`). XCUITest drives static locations through `XCUIDevice.shared.location`; longer route playback remains available through `Scripts/simulate-hike.sh`.
 
 A suite that genuinely cannot run without an environment capability (today: the App Group container) stays conditionally enabled, but must report the skip through `SuitePrecondition`; strict mode turns a missing precondition into a failure — `xcodebuild test … "SWIFT_ACTIVE_COMPILATION_CONDITIONS=\$(inherited) REQUIRE_ALL_SUITES"` from a command line, or `OPENTRAILS_REQUIRE_ALL_SUITES=1` in the scheme's test action from Xcode (a simulator-hosted test bundle inherits nothing from the invoking shell, which is why there are two). There is no dedicated lint or formatting command.
 
@@ -52,7 +58,7 @@ A suite that genuinely cannot run without an environment capability (today: the 
 - The map is an imperative MapKit subsystem behind `MapView`. `MapCoordinator` observes stable controller objects and updates `MKMapView` directly. Tile drawing flows through `CachingTileOverlayRenderer` and `TileOverlay` into `TileCache`; passive durable saves go through `AutoSaveTileStore`, while policy-permitted bulk downloads go through `OfflineTileDownloader`.
 - `OpenTrailsShared` is a local Swift package consumed by the app and iOS widget. Its source and tests mirror the `Recording/`, `Trails/`, `Widget/`, and `General/` domains; put cross-target payloads, projections, deep links, and shared presentation logic there rather than duplicating them in targets.
 - The app precomputes a compact `SharedTrailSnapshot`, writes it atomically through `SharedStore`, and reloads widget timelines. The iOS widget reads that App Group store directly and does not recompute route matching or read location itself.
-- Target folders are Xcode file-system-synchronized groups. New Swift files under `OpenTrails/`, `OpenTrailsTests/`, `OpenWidget/`, or `OpenWidgetTests/` are discovered by their corresponding targets; place files in the target that should compile them. `OpenWidget/` is synchronized into two targets — the extension and `OpenWidgetTests` — with `OpenWidgetBundle.swift` excluded from the latter, since a test bundle must not carry a second `@main`.
+- Target folders are Xcode file-system-synchronized groups. New Swift files under `OpenTrails/`, `OpenTrailsTests/`, `OpenTrailsUITests/`, `OpenWidget/`, or `OpenWidgetTests/` are discovered by their corresponding targets; place files in the target that should compile them. `OpenWidget/` is synchronized into two targets — the extension and `OpenWidgetTests` — with `OpenWidgetBundle.swift` excluded from the latter, since a test bundle must not carry a second `@main`.
 
 ## Repository-specific conventions
 
@@ -62,6 +68,6 @@ A suite that genuinely cannot run without an environment capability (today: the 
 - `TileCache` intentionally has memory, ephemeral cache, and durable Application Support tiers. Do not turn a render miss into synchronous disk/network work, and do not move expensive storage measurement into a SwiftUI body.
 - When adding non-optional properties to the SwiftData `Hike` model, give them inline declaration defaults as well as initializer defaults so lightweight migration can backfill existing stores.
 - Keep persisted identifiers stable: provider IDs, `SettingsKey` strings, `SharedStore.appGroupID`, widget kind, cache-key shape, and deep-link format are shared across launches or targets. Update all entitlements/consumers together if an App Group contract changes.
-- Both test bundles are hosted by the app, so it launches and runs its `.task`s before any test does. Startup work that writes shared state — today `OpenTrailsView.restoreLastSelectedHike()`, which publishes a widget payload — must stay behind the `isHostingTests` guard, or it races the suites that assert on that state.
+- Both unit-test bundles are hosted by the app, so it launches and runs its `.task`s before any test does. Startup work that writes shared state — today `OpenTrailsView.restoreLastSelectedHike()`, which publishes a widget payload — must stay behind the `isRunningTests` guard, or it races the suites that assert on that state. UI tests run out-of-process and identify the app-under-test with `--ui-testing`.
 - Cross-platform app code must continue compiling for iOS/iPadOS, macOS, and visionOS. Follow the existing `canImport(UIKit)`/`canImport(AppKit)` aliases and `#if os(iOS)` patterns for platform-specific APIs.
 - Never commit `OpenTrails/Secrets.plist`. Copy `Secrets.example.plist` locally for Stadia or Thunderforest keys; OpenStreetMap remains the keyless default.

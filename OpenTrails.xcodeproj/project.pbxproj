@@ -44,6 +44,13 @@
 			remoteGlobalIDString = A85E854C2FE3EBF500558639;
 			remoteInfo = OpenTrails;
 		};
+		AE000000000000000000000B /* PBXContainerItemProxy */ = {
+			isa = PBXContainerItemProxy;
+			containerPortal = A85E85452FE3EBF500558639 /* Project object */;
+			proxyType = 1;
+			remoteGlobalIDString = A85E854C2FE3EBF500558639;
+			remoteInfo = OpenTrails;
+		};
 /* End PBXContainerItemProxy section */
 
 /* Begin PBXCopyFilesBuildPhase section */
@@ -68,6 +75,7 @@
 		A8838B99302A30FA00FAEEEE /* OpenWidgetExtension.entitlements */ = {isa = PBXFileReference; lastKnownFileType = text.plist.entitlements; path = OpenWidgetExtension.entitlements; sourceTree = "<group>"; };
 		AB0000000000000000000008 /* OpenTrailsTests.xctest */ = {isa = PBXFileReference; explicitFileType = wrapper.cfbundle; includeInIndex = 0; path = OpenTrailsTests.xctest; sourceTree = BUILT_PRODUCTS_DIR; };
 		AC0000000000000000000008 /* OpenWidgetTests.xctest */ = {isa = PBXFileReference; explicitFileType = wrapper.cfbundle; includeInIndex = 0; path = OpenWidgetTests.xctest; sourceTree = BUILT_PRODUCTS_DIR; };
+		AE0000000000000000000008 /* OpenTrailsUITests.xctest */ = {isa = PBXFileReference; explicitFileType = wrapper.cfbundle; includeInIndex = 0; path = OpenTrailsUITests.xctest; sourceTree = BUILT_PRODUCTS_DIR; };
 /* End PBXFileReference section */
 
 /* Begin PBXFileSystemSynchronizedBuildFileExceptionSet section */
@@ -123,6 +131,11 @@
 			path = OpenWidgetTests;
 			sourceTree = "<group>";
 		};
+		AE0000000000000000000009 /* OpenTrailsUITests */ = {
+			isa = PBXFileSystemSynchronizedRootGroup;
+			path = OpenTrailsUITests;
+			sourceTree = "<group>";
+		};
 /* End PBXFileSystemSynchronizedRootGroup section */
 
 /* Begin PBXFrameworksBuildPhase section */
@@ -166,6 +179,13 @@
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
+		AE0000000000000000000006 /* Frameworks */ = {
+			isa = PBXFrameworksBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
 /* End PBXFrameworksBuildPhase section */
 
 /* Begin PBXGroup section */
@@ -177,6 +197,7 @@
 				AB0000000000000000000009 /* OpenTrailsTests */,
 				A8838AEA302A232300FAEEEE /* OpenWidget */,
 				AC0000000000000000000009 /* OpenWidgetTests */,
+				AE0000000000000000000009 /* OpenTrailsUITests */,
 				A8838AE5302A232300FAEEEE /* Frameworks */,
 				A85E854E2FE3EBF500558639 /* Products */,
 			);
@@ -189,6 +210,7 @@
 				AB0000000000000000000008 /* OpenTrailsTests.xctest */,
 				A8838AE4302A232300FAEEEE /* OpenWidgetExtension.appex */,
 				AC0000000000000000000008 /* OpenWidgetTests.xctest */,
+				AE0000000000000000000008 /* OpenTrailsUITests.xctest */,
 			);
 			name = Products;
 			sourceTree = "<group>";
@@ -312,6 +334,29 @@
 			productReference = AC0000000000000000000008 /* OpenWidgetTests.xctest */;
 			productType = "com.apple.product-type.bundle.unit-test";
 		};
+		AE0000000000000000000001 /* OpenTrailsUITests */ = {
+			isa = PBXNativeTarget;
+			buildConfigurationList = AE0000000000000000000002 /* Build configuration list for PBXNativeTarget "OpenTrailsUITests" */;
+			buildPhases = (
+				AE0000000000000000000005 /* Sources */,
+				AE0000000000000000000006 /* Frameworks */,
+				AE0000000000000000000007 /* Resources */,
+			);
+			buildRules = (
+			);
+			dependencies = (
+				AE000000000000000000000A /* PBXTargetDependency */,
+			);
+			fileSystemSynchronizedGroups = (
+				AE0000000000000000000009 /* OpenTrailsUITests */,
+			);
+			name = OpenTrailsUITests;
+			packageProductDependencies = (
+			);
+			productName = OpenTrailsUITests;
+			productReference = AE0000000000000000000008 /* OpenTrailsUITests.xctest */;
+			productType = "com.apple.product-type.bundle.ui-testing";
+		};
 /* End PBXNativeTarget section */
 
 /* Begin PBXProject section */
@@ -333,6 +378,10 @@
 						TestTargetID = A85E854C2FE3EBF500558639;
 					};
 					AC0000000000000000000001 = {
+						CreatedOnToolsVersion = 26.6;
+						TestTargetID = A85E854C2FE3EBF500558639;
+					};
+					AE0000000000000000000001 = {
 						CreatedOnToolsVersion = 26.6;
 						TestTargetID = A85E854C2FE3EBF500558639;
 					};
@@ -364,6 +413,7 @@
 				AB0000000000000000000001 /* OpenTrailsTests */,
 				A8838AE3302A232300FAEEEE /* OpenWidgetExtension */,
 				AC0000000000000000000001 /* OpenWidgetTests */,
+				AE0000000000000000000001 /* OpenTrailsUITests */,
 			);
 		};
 /* End PBXProject section */
@@ -391,6 +441,13 @@
 			runOnlyForDeploymentPostprocessing = 0;
 		};
 		AC0000000000000000000007 /* Resources */ = {
+			isa = PBXResourcesBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+		AE0000000000000000000007 /* Resources */ = {
 			isa = PBXResourcesBuildPhase;
 			buildActionMask = 2147483647;
 			files = (
@@ -428,6 +485,13 @@
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
+		AE0000000000000000000005 /* Sources */ = {
+			isa = PBXSourcesBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
 /* End PBXSourcesBuildPhase section */
 
 /* Begin PBXTargetDependency section */
@@ -454,6 +518,11 @@
 			isa = PBXTargetDependency;
 			target = A85E854C2FE3EBF500558639 /* OpenTrails */;
 			targetProxy = AC000000000000000000000B /* PBXContainerItemProxy */;
+		};
+		AE000000000000000000000A /* PBXTargetDependency */ = {
+			isa = PBXTargetDependency;
+			target = A85E854C2FE3EBF500558639 /* OpenTrails */;
+			targetProxy = AE000000000000000000000B /* PBXContainerItemProxy */;
 		};
 		E18FCCCC29AF416C97E1F400 /* PBXTargetDependency */ = {
 			isa = PBXTargetDependency;
@@ -875,6 +944,62 @@
 			};
 			name = Release;
 		};
+		AE0000000000000000000003 /* Debug */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				CODE_SIGN_STYLE = Automatic;
+				CURRENT_PROJECT_VERSION = 1;
+				DEVELOPMENT_TEAM = 697EW27G9U;
+				GENERATE_INFOPLIST_FILE = YES;
+				IPHONEOS_DEPLOYMENT_TARGET = 26.5;
+				LD_RUNPATH_SEARCH_PATHS = (
+					"$(inherited)",
+					"@executable_path/Frameworks",
+					"@loader_path/Frameworks",
+				);
+				MARKETING_VERSION = 1.0;
+				PRODUCT_BUNDLE_IDENTIFIER = tappium.com.OpenTrailsUITests;
+				PRODUCT_NAME = "$(TARGET_NAME)";
+				SDKROOT = iphoneos;
+				SUPPORTED_PLATFORMS = "iphoneos iphonesimulator";
+				SWIFT_APPROACHABLE_CONCURRENCY = YES;
+				SWIFT_EMIT_LOC_STRINGS = NO;
+				SWIFT_STRICT_CONCURRENCY = complete;
+				SWIFT_UPCOMING_FEATURE_MEMBER_IMPORT_VISIBILITY = YES;
+				SWIFT_VERSION = 5.0;
+				TARGETED_DEVICE_FAMILY = "1,2";
+				TEST_TARGET_NAME = OpenTrails;
+			};
+			name = Debug;
+		};
+		AE0000000000000000000004 /* Release */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				CODE_SIGN_STYLE = Automatic;
+				CURRENT_PROJECT_VERSION = 1;
+				DEVELOPMENT_TEAM = 697EW27G9U;
+				GENERATE_INFOPLIST_FILE = YES;
+				IPHONEOS_DEPLOYMENT_TARGET = 26.5;
+				LD_RUNPATH_SEARCH_PATHS = (
+					"$(inherited)",
+					"@executable_path/Frameworks",
+					"@loader_path/Frameworks",
+				);
+				MARKETING_VERSION = 1.0;
+				PRODUCT_BUNDLE_IDENTIFIER = tappium.com.OpenTrailsUITests;
+				PRODUCT_NAME = "$(TARGET_NAME)";
+				SDKROOT = iphoneos;
+				SUPPORTED_PLATFORMS = "iphoneos iphonesimulator";
+				SWIFT_APPROACHABLE_CONCURRENCY = YES;
+				SWIFT_EMIT_LOC_STRINGS = NO;
+				SWIFT_STRICT_CONCURRENCY = complete;
+				SWIFT_UPCOMING_FEATURE_MEMBER_IMPORT_VISIBILITY = YES;
+				SWIFT_VERSION = 5.0;
+				TARGETED_DEVICE_FAMILY = "1,2";
+				TEST_TARGET_NAME = OpenTrails;
+			};
+			name = Release;
+		};
 /* End XCBuildConfiguration section */
 
 /* Begin XCConfigurationList section */
@@ -919,6 +1044,15 @@
 			buildConfigurations = (
 				AC0000000000000000000003 /* Debug */,
 				AC0000000000000000000004 /* Release */,
+			);
+			defaultConfigurationIsVisible = 0;
+			defaultConfigurationName = Release;
+		};
+		AE0000000000000000000002 /* Build configuration list for PBXNativeTarget "OpenTrailsUITests" */ = {
+			isa = XCConfigurationList;
+			buildConfigurations = (
+				AE0000000000000000000003 /* Debug */,
+				AE0000000000000000000004 /* Release */,
 			);
 			defaultConfigurationIsVisible = 0;
 			defaultConfigurationName = Release;

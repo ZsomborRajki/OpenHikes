@@ -7,6 +7,7 @@
 included:
   - OpenTrails
   - OpenTrailsTests
+  - OpenTrailsUITests
   - OpenTrailsShared/Sources
   - OpenTrailsShared/Tests
   - OpenWidget

@@ -35,14 +35,84 @@ final class OpenTrailsModel {
     let weatherManager: WeatherManager
     var startupIssue: StorageStartupIssue?
 
-    private let defaults: UserDefaults
+    let defaults: UserDefaults
 
     convenience init() {
+        let launchDefaults = AppLaunchEnvironment.makeDefaults()
+
+        if AppLaunchEnvironment.isUITesting {
+            do {
+                try self.init(
+                    uiTestingDefaults: launchDefaults
+                )
+                return
+            } catch {
+                fatalError(
+                    "OpenTrails could not create its UI-testing container: "
+                        + error.localizedDescription
+                )
+            }
+        }
+
         // Built explicitly so background relaunch services and the view
         // hierarchy share one SwiftData store.
-        let load: ContainerLoadResult
+        let load = Self.loadDefaultContainer()
+
+        self.init(
+            container: load.container,
+            backgroundTracker: BackgroundTrailTracker(
+                container: load.container,
+                defaults: launchDefaults
+            ),
+            autoSaveController: AutoSaveController(),
+            hikeRecorder: HikeRecorder(
+                container: load.container,
+                elevationSource: SystemRecordingElevationSource(),
+                motionSource: SystemRecordingMotionSource(),
+                trailGraphProvider: OverpassTrailGraphProvider(),
+                distanceEvidenceSource: SystemPedometerDistanceSource(),
+                defaults: launchDefaults,
+                sharedStateStore: AppGroupRecordingSharedStateStore()
+            ),
+            locationManager: LocationManager(),
+            weatherManager: WeatherManager(),
+            defaults: launchDefaults,
+            startupIssue: load.startupIssue
+        )
+    }
+
+    private convenience init(
+        uiTestingDefaults: UserDefaults
+    ) throws {
+        let testingContainer = try ModelContainer(
+            for: Hike.self,
+            configurations: ModelConfiguration(
+                isStoredInMemoryOnly: true
+            )
+        )
+        self.init(
+            container: testingContainer,
+            backgroundTracker: BackgroundTrailTracker(
+                container: testingContainer,
+                defaults: uiTestingDefaults
+            ),
+            autoSaveController: AutoSaveController(),
+            hikeRecorder: HikeRecorder(
+                container: testingContainer,
+                defaults: uiTestingDefaults,
+                journalDirectory:
+                    AppLaunchEnvironment.recordingJournalDirectory(),
+                automaticallyRecovers: false
+            ),
+            locationManager: LocationManager(),
+            weatherManager: WeatherManager(),
+            defaults: uiTestingDefaults
+        )
+    }
+
+    private static func loadDefaultContainer() -> ContainerLoadResult {
         do {
-            load = try Self.loadContainer(
+            return try loadContainer(
                 persistent: {
                     try ModelContainer(for: Hike.self)
                 },
@@ -58,28 +128,9 @@ final class OpenTrailsModel {
         } catch {
             let msg = "Neither the persistent nor temporary SwiftData store"
                 + " could be opened: \(error.localizedDescription)"
-            Self.logger.fault("\(msg, privacy: .public)")
+            logger.fault("\(msg, privacy: .public)")
             fatalError("OpenTrails could not create a SwiftData container.")
         }
-
-        self.init(
-            container: load.container,
-            backgroundTracker: BackgroundTrailTracker(
-                container: load.container
-            ),
-            autoSaveController: AutoSaveController(),
-            hikeRecorder: HikeRecorder(
-                container: load.container,
-                elevationSource: SystemRecordingElevationSource(),
-                motionSource: SystemRecordingMotionSource(),
-                trailGraphProvider: OverpassTrailGraphProvider(),
-                distanceEvidenceSource: SystemPedometerDistanceSource(),
-                sharedStateStore: AppGroupRecordingSharedStateStore()
-            ),
-            locationManager: LocationManager(),
-            weatherManager: WeatherManager(),
-            startupIssue: load.startupIssue
-        )
     }
 
     static func loadContainer(
@@ -126,7 +177,9 @@ final class OpenTrailsModel {
 
     func sceneDidBecomeActive() {
         autoSaveController.sceneDidBecomeActive()
-        backgroundTracker.refreshBasemaps()
+        if !AppLaunchEnvironment.isUITesting {
+            backgroundTracker.refreshBasemaps()
+        }
         hikeRecorder.sceneDidBecomeActive()
     }
 
@@ -148,7 +201,9 @@ final class OpenTrailsModel {
             ) ? nil : selectedHike
         }
         autoSaveController.hikeSelectionChanged(to: finishedHike)
-        backgroundTracker.hikeSelectionChanged(to: finishedHike)
+        if !AppLaunchEnvironment.isUITesting {
+            backgroundTracker.hikeSelectionChanged(to: finishedHike)
+        }
         defaults.set(
             finishedHike?.id.uuidString,
             forKey: SettingsKey.lastSelectedHikeID
@@ -156,7 +211,7 @@ final class OpenTrailsModel {
     }
 
     func restoreLastSelectedHike(in modelContext: ModelContext) -> Hike? {
-        guard !AppLaunchEnvironment.isHostingTests,
+        guard !AppLaunchEnvironment.isRunningTests,
               let stored = defaults.string(
                 forKey: SettingsKey.lastSelectedHikeID
               ),

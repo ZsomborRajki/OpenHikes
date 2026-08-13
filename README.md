@@ -66,10 +66,22 @@ xcodebuild test \
   -scheme OpenTrails \
   -destination 'platform=iOS Simulator,name=iPhone 17 Pro'
 
+# Run simulator UI automation and launch metrics only
+xcodebuild test \
+  -project OpenTrails.xcodeproj \
+  -scheme OpenTrailsUI \
+  -destination 'platform=iOS Simulator,name=iPhone 17 Pro'
+
 swift test --package-path OpenTrailsShared
 ```
 
-Tests use Swift Testing. There is no separate lint or formatting command.
+Unit and integration tests use Swift Testing. `OpenTrailsUITests` uses
+XCTest/XCUITest because Apple's UI automation and launch-performance metrics
+are not available through Swift Testing. UI-test launches use an in-memory
+SwiftData store and isolated preferences; coverage includes app/settings smoke
+navigation, bundled GPX import, programmatic simulator location, recording
+startup, and `XCTApplicationLaunchMetric`. There is no separate lint or
+formatting command.
 
 ## Project layout
 
@@ -94,6 +106,7 @@ domain folders.
 | `OpenWidget/` | iOS Home Screen widget. |
 | `OpenTrailsTests/` | App-hosted tests mirroring the app's domain folders. |
 | `OpenWidgetTests/` | App-hosted tests for the widget's timeline, families, and basemap pairing. |
+| `OpenTrailsUITests/` | iOS Simulator UI automation, location spoofing, and launch metrics. |
 
 See [`.github/copilot-instructions.md`](.github/copilot-instructions.md) for architecture and repository conventions. See [`CODE_REVIEW.md`](CODE_REVIEW.md) for verified build status, known issues, and remaining engineering work.
 

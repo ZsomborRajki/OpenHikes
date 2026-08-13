@@ -199,6 +199,7 @@ private struct RecordingHeader: View {
             }
         }
         .accessibilityElement(children: .combine)
+        .accessibilityIdentifier("recording-phase")
     }
 
     private var phaseTitle: String {

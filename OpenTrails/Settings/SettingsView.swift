@@ -64,6 +64,7 @@ struct SettingsView: View {
             }
             .task { await refreshUsage() }
         }
+        .accessibilityIdentifier("settings-screen")
     }
 
     // MARK: - Account

@@ -156,7 +156,7 @@ final class HikeRecorder: NSObject {
             ProcessInfo.processInfo.systemUptime
         },
         journalFlushDelay: Duration = .seconds(5),
-        automaticallyRecovers: Bool = !AppLaunchEnvironment.isHostingTests
+        automaticallyRecovers: Bool = !AppLaunchEnvironment.isRunningTests
     ) {
         let resolvedDirectory = journalDirectory
             ?? Self.journalDirectory(

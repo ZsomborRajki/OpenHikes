@@ -95,6 +95,7 @@ struct MapSheet: View {
             .navigationBarTitleDisplayMode(.inline)
             #endif
         }
+        .accessibilityIdentifier("map-sheet")
         // Presented from inside the sheet so it isn't blocked by the sheet's
         // own presentation context.
         .fileImporter(isPresented: $showImporter, allowedContentTypes: Self.gpxContentTypes) { result in
@@ -147,6 +148,7 @@ struct MapSheet: View {
                 .accessibilityHidden(true)
 
             TextField("Search Maps", text: $searchText)
+                .accessibilityIdentifier("map-search")
                 .focused($searchFocused)
                 .autocorrectionDisabled()
                 .submitLabel(.search)
@@ -188,6 +190,7 @@ struct MapSheet: View {
         }
         .buttonStyle(.plain)
         .accessibilityLabel("Profile and settings")
+        .accessibilityIdentifier("settings-button")
     }
 
     @ViewBuilder
@@ -259,6 +262,7 @@ struct MapSheet: View {
                     ? "Open hike recording"
                     : "Record a hike"
             )
+            .accessibilityIdentifier("record-hike-button")
             #endif
 
             Button {
@@ -270,6 +274,7 @@ struct MapSheet: View {
                     .sheetGlassBackground(in: Circle())
             }
             .accessibilityLabel("Import GPX file")
+            .accessibilityIdentifier("import-gpx-button")
         }
         .font(.title3)
         .buttonStyle(.plain)

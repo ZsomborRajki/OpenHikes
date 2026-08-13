@@ -47,6 +47,7 @@ struct OpenTrailsView: View {
     /// The sheet's live top edge, observed directly by the map so dragging the
     /// sheet never re-renders this view or the sheet's contents.
     @State private var sheetMetrics = SheetMetrics()
+    @State private var didProcessLaunchFixture = false
 
     /// The selected tile provider, persisted by the settings sheet.
     @AppStorage(SettingsKey.tileProviderID)
@@ -56,6 +57,14 @@ struct OpenTrailsView: View {
     private static let compactDetentHeight: CGFloat = 80
     /// Top padding for the weather badge, sitting below the Dynamic Island/notch.
     private static let weatherBadgeTopPadding: CGFloat = 96
+
+    init() {
+        _sheetDetent = State(
+            initialValue: AppLaunchEnvironment.startsWithExpandedSheet
+                ? .medium
+                : .height(Self.compactDetentHeight)
+        )
+    }
 
     /// The route drawn on the map — always the currently selected hike, if any.
     /// Geometry only: its appearance reaches the map through ``routeStyle``,
@@ -125,6 +134,7 @@ struct OpenTrailsView: View {
             mapController: mapController
         )
             .equatable()
+            .accessibilityIdentifier("trail-map")
             .ignoresSafeArea()
             .overlay(alignment: .topLeading) {
                 if let current = appModel.weatherManager.current {
@@ -135,10 +145,19 @@ struct OpenTrailsView: View {
             }
             .onAppear {
                 restoreLastSelectedHike()
-                appModel.locationManager.start()
-                appModel.trimTileCache(in: modelContext)
+                if AppLaunchEnvironment.usesLiveLocation {
+                    appModel.locationManager.start()
+                }
+                if !AppLaunchEnvironment.isUITesting {
+                    appModel.trimTileCache(in: modelContext)
+                }
             }
-            .task { await appModel.pollWeather() }
+            .task {
+                if !AppLaunchEnvironment.isUITesting {
+                    await appModel.pollWeather()
+                }
+            }
+            .task { await importRequestedGPXFixture() }
             .sheet(isPresented: $showSheet) {
                 MapSheet(
                     searchText: $searchText,
@@ -297,38 +316,56 @@ struct OpenTrailsView: View {
     /// A file that can't become a hike raises ``importFailure`` rather than
     /// leaving the user looking at an unchanged screen.
     private func importGPX(from url: URL) {
+        Task { await performImport(from: url) }
+    }
+
+    private func importRequestedGPXFixture() async {
+        guard !didProcessLaunchFixture,
+              let name = AppLaunchEnvironment.importedGPXFixtureName else {
+            return
+        }
+        didProcessLaunchFixture = true
+        guard let url = Bundle.main.url(
+            forResource: name,
+            withExtension: "gpx"
+        ) else {
+            importFailure = .unreadable
+            return
+        }
+        await performImport(from: url)
+    }
+
+    private func performImport(from url: URL) async {
         let selectionToken = importSelectionGate.token(
             selectedHikeID: selectedHike?.id,
             path: navigationPath
         )
-        Task {
-            let importedHike: Hike
-            // Typed, so the catch below can't quietly widen to `any Error` and
-            // start swallowing something this screen has no message for.
-            do throws(GPXImport.ImportFailure) {
-                importedHike = try await appModel.importHike(
-                    from: url,
-                    into: modelContext
-                )
-            } catch {
-                importFailure = error
-                return
-            }
-
-            // The imported row remains persisted when another action won the
-            // selection race; only its stale attempt to take over the map and
-            // sheet is dropped.
-            guard importSelectionGate.permits(
-                token: selectionToken,
-                selectedHikeID: selectedHike?.id,
-                path: navigationPath,
-                currentRecordingHikeID: currentRecordingHikeID,
-                recordingPresented: navigationPath.last == .recording
-            ) else { return }
-            selectedHike = importedHike
-            // The selection draws the imported route; expanding reveals it.
-            withAnimation { sheetDetent = .medium }
+        let importedHike: Hike
+        // Typed, so the catch below can't quietly widen to `any Error` and
+        // start swallowing something this screen has no message for.
+        do throws(GPXImport.ImportFailure) {
+            importedHike = try await appModel.importHike(
+                from: url,
+                into: modelContext
+            )
+        } catch {
+            importFailure = error
+            return
         }
+
+        // The imported row remains persisted when another action won the
+        // selection race; only its stale attempt to take over the map and
+        // sheet is dropped.
+        guard importSelectionGate.permits(
+            token: selectionToken,
+            selectedHikeID: selectedHike?.id,
+            path: navigationPath,
+            currentRecordingHikeID: currentRecordingHikeID,
+            recordingPresented: navigationPath.last == .recording
+        ) else { return }
+        selectedHike = importedHike
+        // The selection draws the imported route; expanding reveals it.
+        withAnimation { sheetDetent = .medium }
     }
 }
 
