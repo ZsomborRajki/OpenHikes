@@ -10,6 +10,111 @@ import AsyncAlgorithms
 import SwiftData
 import SwiftUI
 
+nonisolated struct HikeDetailPreparedContent: Sendable {
+    let profile: RouteProfile
+    let stats: [Stat]
+}
+
+nonisolated enum HikeDetailPreparation {
+    static func prepare(
+        route: [RouteCoordinate],
+        distanceMeters: Double
+    ) throws(CancellationError) -> HikeDetailPreparedContent {
+        let statistics = try HikeRouteStatistics.cancellable(
+            distanceMeters: distanceMeters,
+            route: route
+        )
+        return HikeDetailPreparedContent(
+            profile: try RouteProfile.cancellable(route: route),
+            stats: makeStats(
+                distanceMeters: distanceMeters,
+                statistics: statistics
+            )
+        )
+    }
+
+    static func runOffMain<Value: Sendable>(
+        _ work: @Sendable @escaping () throws(CancellationError) -> Value
+    ) async throws(CancellationError) -> Value {
+        let task = Task.detached(priority: .userInitiated) { () -> Result<Value, CancellationError> in
+            assertOffMainThread(
+                "Hike detail route preparation must stay off the main thread"
+            )
+            guard !Task.isCancelled else {
+                return .failure(CancellationError())
+            }
+            do throws(CancellationError) {
+                return .success(try work())
+            } catch {
+                return .failure(error)
+            }
+        }
+        let result = await withTaskCancellationHandler {
+            await task.value
+        } onCancel: {
+            task.cancel()
+        }
+        return try result.get()
+    }
+
+    private static func makeStats(
+        distanceMeters: Double,
+        statistics: HikeRouteStatistics
+    ) -> [Stat] {
+        let items: [Stat?] = [
+            Stat(
+                "Distance",
+                Measurement(value: distanceMeters, unit: UnitLength.meters)
+                    .formatted(
+                        .measurement(
+                            width: .abbreviated,
+                            usage: .road
+                        )
+                    )
+            ),
+            statistics.duration.map { duration in
+                Stat("Duration", HikeFormat.duration(duration))
+            },
+            statistics.elevationGain.map { gain in
+                Stat("Elevation Gain", HikeFormat.length(gain))
+            },
+            statistics.elevationLoss.map { loss in
+                Stat("Elevation Loss", HikeFormat.length(loss))
+            },
+            statistics.maxElevation.map { elevation in
+                Stat("Max Elevation", HikeFormat.length(elevation))
+            },
+            statistics.minElevation.map { elevation in
+                Stat("Min Elevation", HikeFormat.length(elevation))
+            },
+            statistics.averageSpeed.map { speed in
+                Stat("Avg Speed", HikeFormat.speed(speed))
+            },
+            statistics.maxSpeed.map { speed in
+                Stat("Max Speed", HikeFormat.speed(speed))
+            },
+            Stat(
+                "Track Points",
+                statistics.pointCount.formatted()
+            ),
+            statistics.startDate.map { date in
+                Stat("Start", formatted(date))
+            },
+            statistics.endDate.map { date in
+                Stat("End", formatted(date))
+            },
+        ]
+        return items.compactMap(\.self)
+    }
+
+    private static func formatted(_ date: Date) -> String {
+        date.formatted(
+            date: .abbreviated,
+            time: .shortened
+        )
+    }
+}
+
 struct HikeDetailView: View {
     let hike: Hike
     /// Reference type the map observes directly — writing to it doesn't re-render this view.
@@ -59,8 +164,8 @@ struct HikeDetailView: View {
     /// Built once per hike in `.task`, never in `init`. Scrubbing then resolves
     /// points in O(log n).
     @State private var profile: RouteProfile?
-    /// Stat tiles, computed once per hike (each stat is an O(n) pass over the
-    /// route, so they must not be recomputed on every body invalidation).
+    /// Stat tiles, computed once per hike with the route profile off the main
+    /// actor so navigation does not pay the route-sized work.
     @State private var statItems: [Stat] = []
     /// Tracker/live-follow positions, isolated in a reference type — see
     /// ``TrackerState``. Drawn on the chart as two separate markers so a manual
@@ -107,9 +212,23 @@ struct HikeDetailView: View {
         .navigationBarTitleDisplayMode(.inline)
         #endif
         .task(id: hike.id) {
-            let built = RouteProfile(route: hike.route)
+            let route = hike.route
+            let distanceMeters = hike.distanceMeters
+            let prepared: HikeDetailPreparedContent
+            do throws(CancellationError) {
+                prepared = try await HikeDetailPreparation.runOffMain {
+                    () throws(CancellationError) -> HikeDetailPreparedContent in
+                    try HikeDetailPreparation.prepare(
+                        route: route,
+                        distanceMeters: distanceMeters
+                    )
+                }
+            } catch {
+                return
+            }
+            let built = prepared.profile
             profile = built
-            statItems = Self.makeStats(for: hike)
+            statItems = prepared.stats
             // Place the tracker at the start of the track, on both graph and map.
             tracker.trackerDistance = 0
             tracker.liveTrackerDistance = nil
@@ -147,10 +266,6 @@ struct HikeDetailView: View {
             hike.mergeOfflineDownload(record)
             refreshStoredBytes()
         }
-        // Keeps the byte count live as the background auto-save drain grows it.
-        // Watches `.count`, not the array itself — comparing two multi-thousand-
-        // element `[String]`s on every drain cycle is itself main-thread work.
-        .onChange(of: hike.autoSavedTileKeys.count) { _, _ in scheduleStoredBytesRefresh() }
         .task {
             // A trailing measurement, once the auto-save drain settles. The
             // task's own lifetime retires it when the view goes away, so
@@ -183,7 +298,7 @@ private extension HikeDetailView {
     /// and recolor the route line.
     private var actionBar: some View {
         VStack(spacing: 12) {
-            HStack(spacing: 12) {
+            RouteAppearanceControls(hike: hike) {
                 zoomButton
                 if activeProvider.supportsBulkDownload {
                     OfflineDownloadButton(
@@ -197,13 +312,18 @@ private extension HikeDetailView {
                         )
                     }
                 }
-                colorControl
+            } middleControls: {
+                autoSaveToggle
+                autoFollowToggle
             }
-            autoSaveToggle
-            autoFollowToggle
-            widthSlider
-            OfflineDownloadStatus(downloader: downloader, idleNote: autoSaveNote)
-            storedTilesRow
+            OfflineStorageStatus(
+                hike: hike,
+                autoSave: autoSave,
+                downloader: downloader,
+                storedBytes: storedBytes,
+                scheduleStoredBytesRefresh: scheduleStoredBytesRefresh,
+                deleteStoredTiles: deleteStoredTiles
+            )
         }
     }
 
@@ -253,59 +373,8 @@ private extension HikeDetailView {
         )
     }
 
-    private var colorControl: some View {
-        tile {
-            // `supportsOpacity` lets the user set the line's transparency here; the
-            // alpha is applied to the map polyline only (other UI uses `tintOpaque`).
-            ColorPicker("Route color", selection: tintBinding, supportsOpacity: true)
-                .labelsHidden()
-            Text("Color")
-                .font(.caption2.weight(.medium))
-                .foregroundStyle(.secondary)
-        }
-    }
-
-    /// Reads the hike's tint and writes the picked color (with alpha) back as
-    /// "#RRGGBBAA", which live-updates the map polyline.
-    private var tintBinding: Binding<Color> {
-        Binding(get: { hike.tint }, set: { hike.tintHex = $0.hexRGBA })
-    }
-
-    private var widthSlider: some View {
-        VStack(alignment: .leading, spacing: 2) {
-            HStack {
-                Label("Line width", systemImage: "lineweight")
-                    .font(.caption.weight(.medium))
-                Spacer()
-                Text("\(Int(hike.routeWidth)) pt")
-                    .font(.caption)
-                    .foregroundStyle(.secondary)
-                    .monospacedDigit()
-            }
-            Slider(value: widthBinding, in: 1...12, step: 1)
-                .tint(hike.tintOpaque)
-        }
-    }
-
-    private var widthBinding: Binding<Double> {
-        Binding(get: { hike.routeWidth }, set: { hike.routeWidth = $0 })
-    }
-
     private var canDownload: Bool {
         activeProvider.supportsBulkDownload && hike.pointCount > 1
-    }
-
-    /// Status copy for auto-save — the only offline note for OSM-style
-    /// providers, and the fallback once a bulk download (if any) is idle.
-    private var autoSaveNote: String? {
-        guard hike.autoSaveTilesEnabled else {
-            return "Turn on Auto-Save, then pan and zoom around the trail to save its tiles for offline use."
-        }
-        let count = hike.autoSavedTileKeys.count
-        if autoSave.isCapReached(for: hike) {
-            return "Auto-saved \(count) tiles near the trail — storage limit reached."
-        }
-        return "Auto-saving tiles near the trail as you browse (\(count) so far)."
     }
 
     private func actionTile(icon: String, title: String, tint: Color = .accentColor) -> some View {
@@ -331,21 +400,11 @@ private extension HikeDetailView {
 
     private var activeTileSource: ActiveTileSource { ActiveTileSource(activeProvider) }
 
-    private enum HeaderLayout {
-        static let symbolSize: CGFloat = 56
-        static let symbolCornerRadius: CGFloat = 14
-    }
-
     // MARK: Header
 
     private var header: some View {
         HStack(spacing: 14) {
-            Image(systemName: hike.symbol)
-                .font(.system(size: 24, weight: .semibold))
-                .foregroundStyle(.white)
-                .frame(width: HeaderLayout.symbolSize, height: HeaderLayout.symbolSize)
-                .background(hike.tintOpaque, in: RoundedRectangle(cornerRadius: HeaderLayout.symbolCornerRadius))
-                .accessibilityHidden(true)
+            HikeHeaderSymbol(hike: hike)
 
             VStack(alignment: .leading, spacing: 4) {
                 if isEditingTitle {
@@ -402,27 +461,6 @@ private extension HikeDetailView {
         }
     }
 
-    private static func makeStats(for hike: Hike) -> [Stat] {
-        var items: [Stat] = [
-            Stat("Distance", hike.distance.formatted(.measurement(width: .abbreviated, usage: .road)))
-        ]
-        if let duration = hike.duration { items.append(Stat("Duration", HikeFormat.duration(duration))) }
-        if let gain = hike.elevationGain { items.append(Stat("Elevation Gain", HikeFormat.length(gain))) }
-        if let loss = hike.elevationLoss { items.append(Stat("Elevation Loss", HikeFormat.length(loss))) }
-        if let maxEl = hike.maxElevation { items.append(Stat("Max Elevation", HikeFormat.length(maxEl))) }
-        if let minEl = hike.minElevation { items.append(Stat("Min Elevation", HikeFormat.length(minEl))) }
-        if let avg = hike.averageSpeed { items.append(Stat("Avg Speed", HikeFormat.speed(avg))) }
-        if let maxSpeed = hike.maxSpeed { items.append(Stat("Max Speed", HikeFormat.speed(maxSpeed))) }
-        items.append(Stat("Track Points", hike.pointCount.formatted()))
-        if let start = hike.startDate {
-            items.append(Stat("Start", start.formatted(date: .abbreviated, time: .shortened)))
-        }
-        if let end = hike.endDate {
-            items.append(Stat("End", end.formatted(date: .abbreviated, time: .shortened)))
-        }
-        return items
-    }
-
     // MARK: Metadata
 
     private var hasMetadata: Bool {
@@ -444,10 +482,9 @@ private extension HikeDetailView {
         if let profile, profile.samples.count > 1 {
             // `tracker` is passed down as a reference, never read here — that's
             // what keeps this body from re-running on every auto-follow tick.
-            // `Equatable` still covers slider/color churn (tint/profile changes).
-            ElevationChartView(
+            HikeElevationChart(
+                hike: hike,
                 profile: profile,
-                tint: hike.tintOpaque,
                 tracker: tracker,
                 onScrub: { distance in
                     tracker.trackerDistance = distance
@@ -463,9 +500,8 @@ private extension HikeDetailView {
                     }
                 }
             )
-            .equatable()
         } else {
-            elevationPlaceholder
+            HikeElevationPlaceholder(hike: hike)
         }
     }
 
@@ -476,7 +512,11 @@ private extension HikeDetailView {
     /// once-a-second auto-follow tick redraws the bar and nothing above it.
     @ViewBuilder private var progressSection: some View {
         if let profile, profile.totalDistanceMeters > 0 {
-            TrailProgressView(profile: profile, tint: hike.tintOpaque, tracker: tracker)
+            HikeTrailProgress(
+                hike: hike,
+                profile: profile,
+                tracker: tracker
+            )
         }
     }
 
@@ -553,22 +593,4 @@ private extension HikeDetailView {
         backgroundTracker.publishLiveFix(hike: hike, profile: profile, match: match)
     }
 
-    private static let placeholderTintOpacity = 0.12
-
-    private var elevationPlaceholder: some View {
-        ZStack {
-            RoundedRectangle(cornerRadius: 16)
-                .fill(hike.tintOpaque.opacity(Self.placeholderTintOpacity))
-            VStack(spacing: 8) {
-                Image(systemName: "chart.xyaxis.line")
-                    .font(.largeTitle)
-                    .foregroundStyle(hike.tintOpaque)
-                    .accessibilityHidden(true)
-                Text("No elevation data in this file")
-                    .font(.subheadline)
-                    .foregroundStyle(.secondary)
-            }
-        }
-        .frame(height: 180)
-    }
 }

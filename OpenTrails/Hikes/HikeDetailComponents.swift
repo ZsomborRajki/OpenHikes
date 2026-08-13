@@ -64,6 +64,173 @@ struct TrailProgressView: View {
     }
 }
 
+/// Keeps route-tint updates local to the header symbol.
+struct HikeHeaderSymbol: View {
+    private static let size: CGFloat = 56
+    private static let cornerRadius: CGFloat = 14
+
+    let hike: Hike
+
+    var body: some View {
+        Image(systemName: hike.symbol)
+            .font(.system(size: 24, weight: .semibold))
+            .foregroundStyle(.white)
+            .frame(width: Self.size, height: Self.size)
+            .background(
+                hike.tintOpaque,
+                in: RoundedRectangle(cornerRadius: Self.cornerRadius)
+            )
+            .accessibilityHidden(true)
+    }
+}
+
+/// Keeps route-tint changes inside the chart wrapper while tracker updates
+/// continue to invalidate only `ElevationChartView`.
+struct HikeElevationChart: View {
+    let hike: Hike
+    let profile: RouteProfile
+    let tracker: TrackerState
+    let onScrub: (Double) -> Void
+    let onScrubbingChanged: (Bool) -> Void
+
+    var body: some View {
+        ElevationChartView(
+            profile: profile,
+            tint: hike.tintOpaque,
+            tracker: tracker,
+            onScrub: onScrub,
+            onScrubbingChanged: onScrubbingChanged
+        )
+        .equatable()
+    }
+}
+
+/// Keeps the progress-bar tint observation out of `HikeDetailView.body`.
+struct HikeTrailProgress: View {
+    let hike: Hike
+    let profile: RouteProfile
+    let tracker: TrackerState
+
+    var body: some View {
+        TrailProgressView(
+            profile: profile,
+            tint: hike.tintOpaque,
+            tracker: tracker
+        )
+    }
+}
+
+/// Keeps the empty chart's tint observation out of `HikeDetailView.body`.
+struct HikeElevationPlaceholder: View {
+    private static let tintOpacity = 0.12
+
+    let hike: Hike
+
+    var body: some View {
+        ZStack {
+            RoundedRectangle(cornerRadius: 16)
+                .fill(
+                    hike.tintOpaque.opacity(Self.tintOpacity)
+                )
+            VStack(spacing: 8) {
+                Image(systemName: "chart.xyaxis.line")
+                    .font(.largeTitle)
+                    .foregroundStyle(hike.tintOpaque)
+                    .accessibilityHidden(true)
+                Text("No elevation data in this file")
+                    .font(.subheadline)
+                    .foregroundStyle(.secondary)
+            }
+        }
+        .frame(height: 180)
+    }
+}
+
+/// Owns appearance-control observations while preserving the action bar's
+/// original action, toggle, and width-control order.
+struct RouteAppearanceControls<
+    Actions: View,
+    MiddleControls: View
+>: View {
+    let hike: Hike
+    private let actions: Actions
+    private let middleControls: MiddleControls
+
+    init(
+        hike: Hike,
+        @ViewBuilder actions: () -> Actions,
+        @ViewBuilder middleControls: () -> MiddleControls
+    ) {
+        self.hike = hike
+        self.actions = actions()
+        self.middleControls = middleControls()
+    }
+
+    var body: some View {
+        VStack(spacing: 12) {
+            HStack(spacing: 12) {
+                actions
+                colorControl
+            }
+            middleControls
+            widthSlider
+        }
+    }
+
+    private var colorControl: some View {
+        tile {
+            ColorPicker(
+                "Route color",
+                selection: tintBinding,
+                supportsOpacity: true
+            )
+            .labelsHidden()
+            Text("Color")
+                .font(.caption2.weight(.medium))
+                .foregroundStyle(.secondary)
+        }
+    }
+
+    private var widthSlider: some View {
+        VStack(alignment: .leading, spacing: 2) {
+            HStack {
+                Label("Line width", systemImage: "lineweight")
+                    .font(.caption.weight(.medium))
+                Spacer()
+                Text("\(Int(hike.routeWidth)) pt")
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
+                    .monospacedDigit()
+            }
+            Slider(value: widthBinding, in: 1...12, step: 1)
+                .tint(hike.tintOpaque)
+        }
+    }
+
+    private var tintBinding: Binding<Color> {
+        Binding(
+            get: { hike.tint },
+            set: { hike.tintHex = $0.hexRGBA }
+        )
+    }
+
+    private var widthBinding: Binding<Double> {
+        Binding(
+            get: { hike.routeWidth },
+            set: { hike.routeWidth = $0 }
+        )
+    }
+
+    private func tile<Content: View>(
+        @ViewBuilder _ content: () -> Content
+    ) -> some View {
+        VStack(spacing: 5) { content() }
+            .frame(maxWidth: .infinity)
+            .padding(.vertical, 8)
+            .background(.quaternary, in: RoundedRectangle(cornerRadius: 12))
+    }
+}
+
 /// Owns the high-frequency download observations so per-tile progress only
 /// rebuilds this tile rather than the entire hike detail hierarchy.
 struct OfflineDownloadButton: View {
@@ -145,5 +312,74 @@ struct OfflineDownloadStatus: View {
                 .frame(maxWidth: .infinity, alignment: .center)
                 .multilineTextAlignment(.center)
         }
+    }
+}
+
+/// Owns auto-save manifest observations so each drain updates only the note
+/// and storage row. The parent is notified only when a debounced byte
+/// measurement should be scheduled.
+struct OfflineStorageStatus: View {
+    let hike: Hike
+    let autoSave: AutoSaveController
+    let downloader: OfflineTileDownloader
+    let storedBytes: Int64?
+    let scheduleStoredBytesRefresh: () -> Void
+    let deleteStoredTiles: () -> Void
+
+    var body: some View {
+        VStack(spacing: 12) {
+            OfflineDownloadStatus(
+                downloader: downloader,
+                idleNote: autoSaveNote
+            )
+            storedTilesRow
+        }
+        .onChange(of: hike.autoSavedTileKeys.count) { _, _ in
+            scheduleStoredBytesRefresh()
+        }
+    }
+
+    private var autoSaveNote: String? {
+        guard hike.autoSaveTilesEnabled else {
+            return "Turn on Auto-Save, then pan and zoom around the trail to save its tiles for offline use."
+        }
+        let count = hike.autoSavedTileKeys.count
+        if autoSave.isCapReached(for: hike) {
+            return "Auto-saved \(count) tiles near the trail — storage limit reached."
+        }
+        return "Auto-saving tiles near the trail as you browse (\(count) so far)."
+    }
+
+    @ViewBuilder private var storedTilesRow: some View {
+        if !hike.offlineDownloads.isEmpty || !hike.autoSavedTileKeys.isEmpty {
+            HStack {
+                Label(
+                    storedBytes.map { bytes in
+                        "Offline tiles · \(Self.byteText(bytes))"
+                    } ?? "Offline tiles",
+                    systemImage: "internaldrive"
+                )
+                .font(.caption)
+                .foregroundStyle(.secondary)
+
+                Spacer()
+
+                Button(
+                    role: .destructive,
+                    action: deleteStoredTiles
+                ) {
+                    Text("Delete").font(.caption.weight(.medium))
+                }
+                .buttonStyle(.bordered)
+                .controlSize(.small)
+            }
+        }
+    }
+
+    private static func byteText(_ bytes: Int64) -> String {
+        ByteCountFormatter.string(
+            fromByteCount: bytes,
+            countStyle: .file
+        )
     }
 }

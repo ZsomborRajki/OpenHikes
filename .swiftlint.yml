@@ -12,8 +12,6 @@ included:
   - OpenTrailsShared/Tests
   - OpenWidget
   - OpenWidgetTests
-  - "OpenWatch Watch App"
-  - OpenWatchWidget
 
 excluded:
   - .build

@@ -11,7 +11,7 @@ import Algorithms
 import CoreLocation
 import Foundation
 
-nonisolated struct RouteProfile {
+nonisolated struct RouteProfile: Sendable {
     /// How far off the route (in meters) a GPS fix can be and still count as
     /// "on the trail" — shared by every consumer of `nearestPoint(to:near:)`
     /// (in-app auto-follow, the foreground/background widget feeds) so they
@@ -48,6 +48,36 @@ nonisolated struct RouteProfile {
     private let sampleDistances: [Double]
 
     init(route: [RouteCoordinate]) {
+        self = Self.build(route: route) { true }
+    }
+
+    static func cancellable(
+        route: [RouteCoordinate]
+    ) throws(CancellationError) -> Self {
+        let profile = Self.build(route: route) {
+            !Task.isCancelled
+        }
+        guard !Task.isCancelled else {
+            throw CancellationError()
+        }
+        return profile
+    }
+
+    private init(
+        coordinates: [CLLocationCoordinate2D],
+        distances: [Double],
+        samples: [ElevationSample]
+    ) {
+        self.coordinates = coordinates
+        self.distances = distances
+        self.samples = samples
+        sampleDistances = samples.map(\.distanceMeters)
+    }
+
+    private static func build(
+        route: [RouteCoordinate],
+        shouldContinue: () -> Bool
+    ) -> Self {
         var routeCoordinates: [CLLocationCoordinate2D] = []
         var routeDistances: [Double] = []
         var routeSamples: [ElevationSample] = []
@@ -56,7 +86,10 @@ nonisolated struct RouteProfile {
 
         var cumulative = 0.0
         var previous: CLLocationCoordinate2D?
-        for point in route {
+        for (index, point) in route.enumerated() {
+            if index.isMultiple(of: 255), !shouldContinue() {
+                break
+            }
             let coordinate = point.clCoordinate
             if let previous {
                 cumulative += RouteGeometry.distanceMeters(from: previous, to: coordinate)
@@ -70,10 +103,11 @@ nonisolated struct RouteProfile {
         }
 
         let plotted = Self.downsampledForDrawing(routeSamples)
-        coordinates = routeCoordinates
-        distances = routeDistances
-        samples = plotted
-        sampleDistances = plotted.map(\.distanceMeters)
+        return Self(
+            coordinates: routeCoordinates,
+            distances: routeDistances,
+            samples: plotted
+        )
     }
 
     /// Thins the elevation samples down to ``plottedSampleBudget`` for drawing,

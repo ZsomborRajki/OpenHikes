@@ -8,7 +8,7 @@
 
 import SwiftUI
 
-struct Stat: Identifiable {
+nonisolated struct Stat: Identifiable, Sendable {
     let id = UUID()
     let label: String
     let value: String

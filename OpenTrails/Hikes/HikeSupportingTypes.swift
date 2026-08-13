@@ -40,7 +40,7 @@ struct OfflineDownloadRecord: Codable, Hashable {
 /// along the route is unique within a profile (``RouteProfile`` keeps the plotted
 /// samples strictly ascending) and identical across rebuilds — and free, where
 /// `UUID()` was over half the cost of building a long profile.
-struct ElevationSample: Identifiable, Equatable {
+nonisolated struct ElevationSample: Identifiable, Equatable, Sendable {
     var id: Double { distanceMeters }
     let distanceMeters: Double
     let elevation: Double

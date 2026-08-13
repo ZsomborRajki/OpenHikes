@@ -41,6 +41,7 @@ import Foundation
 import os
 
 #if DEBUG
+@MainActor
 enum RenderSignpost {
     private static let signposter = OSSignposter(subsystem: "OpenTrails", category: "Rendering")
     private static let logger = Logger(subsystem: "OpenTrails", category: "Rendering")
@@ -98,6 +99,7 @@ enum RenderSignpost {
     }
 }
 #else
+@MainActor
 enum RenderSignpost {
     @inline(__always)
     static func mark(_ name: StaticString, _ detail: @autoclosure () -> String = "") {

@@ -95,28 +95,4 @@ extension HikeDetailView {
         }
     }
 
-    @ViewBuilder var storedTilesRow: some View {
-        if !hike.offlineDownloads.isEmpty || !hike.autoSavedTileKeys.isEmpty {
-            HStack {
-                Label(
-                    storedBytes.map { "Offline tiles · \(Self.byteText($0))" } ?? "Offline tiles",
-                    systemImage: "internaldrive"
-                )
-                .font(.caption)
-                .foregroundStyle(.secondary)
-
-                Spacer()
-
-                Button(role: .destructive, action: deleteStoredTiles) {
-                    Text("Delete").font(.caption.weight(.medium))
-                }
-                .buttonStyle(.bordered)
-                .controlSize(.small)
-            }
-        }
-    }
-
-    static func byteText(_ bytes: Int64) -> String {
-        ByteCountFormatter.string(fromByteCount: bytes, countStyle: .file)
-    }
 }

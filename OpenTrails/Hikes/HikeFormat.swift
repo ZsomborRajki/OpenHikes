@@ -7,7 +7,7 @@
 
 import Foundation
 
-enum HikeFormat {
+nonisolated enum HikeFormat {
     static func duration(_ interval: TimeInterval) -> String {
         let formatter = DateComponentsFormatter()
         formatter.allowedUnits = interval >= 3600 ? [.hour, .minute] : [.minute, .second]

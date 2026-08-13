@@ -10,6 +10,7 @@ xcuserdata/
 # Build products
 build/
 DerivedData/
+violations.txt
 *.xcarchive
 *.ipa
 *.dSYM.zip

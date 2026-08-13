@@ -10,10 +10,6 @@ final class OpenTrailsUITests: XCTestCase {
     private static let importedHikeTitle =
         "Thumsee Loop (fast, simulated)"
 
-    override func setUpWithError() throws {
-        continueAfterFailure = false
-    }
-
     @MainActor
     func testLaunchesMapAndOpensSettings() {
         let app = makeApp()
@@ -99,6 +95,7 @@ final class OpenTrailsUITests: XCTestCase {
     private func makeApp(
         arguments: [String] = []
     ) -> XCUIApplication {
+        continueAfterFailure = false
         let app = XCUIApplication()
         app.launchArguments = ["--ui-testing"] + arguments
         return app
