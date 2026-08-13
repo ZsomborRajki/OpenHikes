@@ -56,8 +56,12 @@ enum RenderSignpost {
     /// gives each printed line a running tally and a time-since-last-fire
     /// gap, which is what actually shows "this is re-rendering way more
     /// than expected" without needing Instruments' timeline view.
+    ///
+    /// Timed on `ContinuousClock` rather than `CFAbsoluteTimeGetCurrent`: the
+    /// latter is wall-clock, so an NTP correction mid-run can make an interval
+    /// come out negative and a gap read as time travel.
     private static var callCounts: [String: Int] = [:]
-    private static var lastFireTimes: [String: CFAbsoluteTime] = [:]
+    private static var lastFireTimes: [String: ContinuousClock.Instant] = [:]
 
     /// A single point-in-time marker — e.g. "a body evaluated" or "an update
     /// call ran". `detail` should say what happened (or didn't) so the
@@ -75,22 +79,26 @@ enum RenderSignpost {
     /// matters, not just its frequency (e.g. tile draw, route rebuild).
     static func interval<T>(_ name: StaticString, _ body: () -> T) -> T {
         let state = signposter.beginInterval(name)
-        let start = consoleLoggingEnabled ? CFAbsoluteTimeGetCurrent() : nil
+        let start = consoleLoggingEnabled ? ContinuousClock.now : nil
         defer {
             signposter.endInterval(name, state)
             if let start {
-                let ms = (CFAbsoluteTimeGetCurrent() - start) * 1000
-                logToConsole(name: "\(name)", detail: String(format: "%.2fms", ms))
+                let elapsed = ContinuousClock.now - start
+                logToConsole(
+                    name: "\(name)",
+                    detail: elapsed.formatted(.units(allowed: [.milliseconds], fractionalPart: .show(length: 2)))
+                )
             }
         }
         return body()
     }
 
     private static func logToConsole(name: String, detail: String) {
-        let now = CFAbsoluteTimeGetCurrent()
+        let now = ContinuousClock.now
         let count = (callCounts[name] ?? 0) + 1
         callCounts[name] = count
-        let gap = lastFireTimes[name].map { String(format: "+%.0fms", (now - $0) * 1000) } ?? "first"
+        let gap = lastFireTimes[name]
+            .map { "+" + (now - $0).formatted(.units(allowed: [.milliseconds], fractionalPart: .hide)) } ?? "first"
         lastFireTimes[name] = now
         let suffix = detail.isEmpty ? "" : " — \(detail)"
         logger.debug(

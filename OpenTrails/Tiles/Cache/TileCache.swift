@@ -9,6 +9,7 @@ import Foundation
 import MapKit
 import Network
 import os
+import Synchronization
 
 #if canImport(UIKit)
 import UIKit
@@ -30,6 +31,12 @@ protocol TileCacheObserver: AnyObject, Sendable {
 
 /// Caches map tiles in memory (`NSCache`) and on disk, fetching missing tiles
 /// over the network. Safe to call from any thread/task.
+///
+/// `@unchecked` because of `memory`: `NSCache` is thread-safe but is not
+/// declared `Sendable` by the SDK, and there is no Swift-native equivalent
+/// with cost-based eviction to replace it. Every other stored property is
+/// either immutable or a `Mutex`, and so `Sendable` on its own — the
+/// annotation covers the `NSCache` and nothing else.
 nonisolated final class TileCache: @unchecked Sendable {
     static let shared = TileCache()
 
@@ -58,6 +65,9 @@ nonisolated final class TileCache: @unchecked Sendable {
         }.value
     }
 
+    /// `@unchecked` because of `image`: `TileImage` (`UIImage`/`NSImage`) is
+    /// not declared `Sendable`, though a decoded tile is never mutated after
+    /// construction. The other two properties are immutable value types.
     final class MemoryTile: @unchecked Sendable {
         let image: TileImage
         let storedAt: Date
@@ -132,7 +142,7 @@ nonisolated final class TileCache: @unchecked Sendable {
     /// Live network reachability, updated by `NWPathMonitor`. Tile loads short-
     /// circuit when this is `false`, so an offline app doesn't fire (and log) a
     /// doomed request for every visible tile.
-    private let online = OSAllocatedUnfairLock(initialState: true)
+    private let online = Mutex(true)
     var isOnline: Bool { online.withLock { $0 } }
 
     /// Network fetches currently in flight, keyed by cache key.
@@ -146,7 +156,7 @@ nonisolated final class TileCache: @unchecked Sendable {
     ///
     /// Keyed by cache key rather than URL: the key is what both callers already
     /// agree identifies a tile, and it's what the tiers file it under.
-    private let inFlightFetches = OSAllocatedUnfairLock(initialState: [String: Task<FetchedTile?, Never>]())
+    private let inFlightFetches = Mutex([String: Task<FetchedTile?, Never>]())
 
     private struct MutationToken: Equatable {
         let global: UInt64
@@ -161,15 +171,13 @@ nonisolated final class TileCache: @unchecked Sendable {
     /// Orders disk/memory writes against explicit deletion. A fetch captures
     /// a token before awaiting the network; deleting that key invalidates the
     /// token so the late response cannot put the tile back.
-    let mutationVersions = OSAllocatedUnfairLock(
-        initialState: MutationVersions()
-    )
+    let mutationVersions = Mutex(MutationVersions())
 
     /// Weakly-held reconnect listeners. A boxed array keeps the reference weak so
     /// a deallocated renderer drops out without needing to unregister.
     private struct WeakObserver: Sendable { weak var value: TileCacheObserver? }
 
-    private let observers = OSAllocatedUnfairLock(initialState: [WeakObserver]())
+    private let observers = Mutex([WeakObserver]())
 
     private let monitor = NWPathMonitor()
     private let monitorsNetwork: Bool

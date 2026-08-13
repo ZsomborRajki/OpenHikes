@@ -11,6 +11,7 @@
 
 import Foundation
 import os
+import Synchronization
 
 /// Fails a debug build if the calling thread is main — for the top of a
 /// function whose cost (disk I/O, tile-grid enumeration, image encoding, …)
@@ -43,40 +44,62 @@ nonisolated enum MainThreadWatchdog {
     private static let warnThreshold: TimeInterval = 0.15
     private static let pingInterval: TimeInterval = 0.2
     private static let retryInterval: TimeInterval = 0.05
-    private static let nanosPerSecond: Double = 1_000_000_000
 
-    private static let started = OSAllocatedUnfairLock(initialState: false)
+    /// Set on the main queue, polled from the watchdog thread. A reference box
+    /// because the ping closure escapes, and `Atomic` — like `Mutex` — is
+    /// non-copyable and so cannot itself be captured.
+    private final class PingFlag: Sendable {
+        private let answered = Atomic<Bool>(false)
+
+        func markAnswered() { answered.store(true, ordering: .releasing) }
+
+        var isAnswered: Bool { answered.load(ordering: .acquiring) }
+    }
+
+    /// Once-only start guard. `compareExchange` states the whole intent in one
+    /// operation — "claim the start if nobody else has" — where a lock had to
+    /// read, test and write as three.
+    private static let hasStarted = Atomic<Bool>(false)
 
     /// Starts the watchdog. Safe to call more than once — only the first call
     /// takes effect. Call once, early, e.g. from the app's `init`.
     static func start() {
-        let alreadyStarted = started.withLock { started -> Bool in
-            let was = started
-            started = true
-            return was
-        }
-        guard !alreadyStarted else { return }
+        let (claimed, _) = hasStarted.compareExchange(
+            expected: false,
+            desired: true,
+            ordering: .relaxed
+        )
+        guard claimed else { return }
 
+        // Deliberately a dedicated `Thread` rather than a `Task`: the
+        // cooperative pool is one of the things a stall backs up (see
+        // `CachingTileOverlayRenderer`'s note on tile loads jamming it), so a
+        // watchdog scheduled on that pool would be starved by the very
+        // condition it exists to report, and would time its own delay as the
+        // main thread's. A watchdog has to be scheduled independently of
+        // everything it measures.
         let thread = Thread {
             while true {
-                let sentAt = DispatchTime.now()
-                let responded = OSAllocatedUnfairLock(initialState: false)
+                let sentAt = ContinuousClock.now
+                let ping = PingFlag()
 
+                // Also deliberately the main *queue* rather than a `@MainActor`
+                // hop, which would route the ping through the cooperative pool
+                // first and measure that scheduling too.
                 DispatchQueue.main.async {
-                    responded.withLock { $0 = true }
+                    ping.markAnswered()
                 }
 
                 Thread.sleep(forTimeInterval: warnThreshold)
-                if !(responded.withLock({ $0 })) {
+                if !ping.isAnswered {
                     // Keep waiting so the logged duration is the real stall
                     // length, not just "at least warnThreshold".
-                    while !(responded.withLock({ $0 })) {
+                    while !ping.isAnswered {
                         Thread.sleep(forTimeInterval: retryInterval)
                     }
-                    let elapsedNanos = DispatchTime.now().uptimeNanoseconds - sentAt.uptimeNanoseconds
-                    let elapsedSeconds = Double(elapsedNanos) / nanosPerSecond
+                    let elapsed = ContinuousClock.now - sentAt
                     let stallMsg = "Main thread unresponsive for"
-                        + " \(String(format: "%.2f", elapsedSeconds))s"
+                        + " \(elapsed.formatted(.units(allowed: [.seconds], fractionalPart: .show(length: 2))))"
                         + " — something synchronous (disk I/O, a big collection op,"
                         + " SwiftData work) is running on it."
                         + " Pause in the debugger or profile with Instruments to find what."

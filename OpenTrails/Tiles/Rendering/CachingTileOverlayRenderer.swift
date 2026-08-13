@@ -12,6 +12,7 @@
 
 import MapKit
 import os
+import Synchronization
 
 // Why the tile loads below go through a gate at all:
 //
@@ -34,10 +35,13 @@ import os
 /// `@unchecked Sendable` for the same reason ``TileOverlay`` is: it is an
 /// `MKOverlayRenderer` (which the MapKit SDK does not declare `Sendable`)
 /// whose own mutable state — the in-flight set, the failure log and the
-/// pending retry wake-up — lives behind `OSAllocatedUnfairLock`s, and whose
-/// tile loads run as unstructured tasks off the main thread. The one member
-/// that genuinely requires the main thread, `setNeedsDisplay`, is called
-/// through an explicit hop at every one of those sites.
+/// pending retry wake-up — lives behind `Mutex`es, and whose tile loads run
+/// as unstructured tasks off the main thread. The one member that genuinely
+/// requires the main thread, `setNeedsDisplay`, is called through an explicit
+/// hop at every one of those sites.
+///
+/// The annotation stays `@unchecked` only because of the superclass: every
+/// stored property below is `Sendable` on its own.
 nonisolated final class CachingTileOverlayRenderer: MKOverlayRenderer, TileCacheObserver, @unchecked Sendable {
     private struct Fallback {
         let image: TileImage
@@ -50,14 +54,14 @@ nonisolated final class CachingTileOverlayRenderer: MKOverlayRenderer, TileCache
     private let maxFallbackDepth = 8
 
     /// Keys of tiles currently being fetched, to avoid duplicate requests.
-    private let inFlight = OSAllocatedUnfairLock(initialState: Set<String>())
+    private let inFlight = Mutex(Set<String>())
 
     /// Tiles that failed to load (offline, 500, timeout, undecodable, 404),
     /// and when each may be asked for again. Skipping them is what stops a
     /// failed tile spinning a request/redraw loop; expiring the skip is what
     /// stops a transient server error leaving a permanent hole in the map.
     /// See ``TileFailureLog``.
-    private let failures = OSAllocatedUnfairLock(initialState: TileFailureLog())
+    private let failures = Mutex(TileFailureLog())
 
     /// The pending "a backoff has elapsed, redraw" wake-up, and when it fires.
     /// At most one is scheduled at a time: a redraw retries every tile that
@@ -67,7 +71,7 @@ nonisolated final class CachingTileOverlayRenderer: MKOverlayRenderer, TileCache
         var dueAt: ContinuousClock.Instant?
     }
 
-    private let retryWake = OSAllocatedUnfairLock(initialState: RetryWake())
+    private let retryWake = Mutex(RetryWake())
 
     private let tileOverlay: TileOverlay
 

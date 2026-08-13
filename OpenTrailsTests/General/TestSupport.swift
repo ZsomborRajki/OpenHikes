@@ -12,6 +12,7 @@ import Foundation
 @testable import OpenTrails
 import OpenTrailsShared
 import SwiftData
+import Synchronization
 import Testing
 
 #if canImport(UIKit)
@@ -470,30 +471,25 @@ func offMain<T: Sendable>(_ work: @Sendable @escaping () -> T) async -> T {
 /// The alternative — sleeping past a real interval — spends the interval on
 /// every run and still only *probably* clears it, which is the definition of a
 /// flaky test that is also a slow one.
-nonisolated final class TestClock: @unchecked Sendable {
+nonisolated final class TestClock: Sendable {
     private enum Constants {
         // swiftlint:disable no_magic_numbers
         static let defaultStartTimestamp: TimeInterval = 1_750_000_000
         // swiftlint:enable no_magic_numbers
     }
 
-    private let lock = NSLock()
-    private var instant: Date
+    private let instant: Mutex<Date>
 
     init(_ start: Date = Date(timeIntervalSince1970: Constants.defaultStartTimestamp)) {
-        instant = start
+        instant = Mutex(start)
     }
 
     var now: Date {
-        lock.lock()
-        defer { lock.unlock() }
-        return instant
+        instant.withLock { $0 }
     }
 
     func advance(by interval: TimeInterval) {
-        lock.lock()
-        instant += interval
-        lock.unlock()
+        instant.withLock { $0 += interval }
     }
 
     /// Passed straight to the injection points that take `() -> Date`.

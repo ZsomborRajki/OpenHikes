@@ -25,8 +25,8 @@ import CoreLocation
 import Foundation
 import Observation
 import OpenTrailsShared
-import os
 import SwiftData
+import Synchronization
 import WidgetKit
 
 /// The slice of `CLLocationManager` this tracker uses: authorization, and
@@ -461,18 +461,18 @@ final class BackgroundTrailTracker: NSObject {
     /// whether its result is still wanted.
     ///
     /// A box rather than a plain `UInt64` because those two hold the same
-    /// counter, and `OSAllocatedUnfairLock` — the guard the tile layer already
-    /// uses for exactly this shape of shared scalar — makes it `Sendable`
+    /// counter, and `Atomic` — which is what a shared scalar needs, without
+    /// the mutual exclusion a mutex would also impose — makes it `Sendable`
     /// outright instead of by assertion.
     nonisolated private final class SelectionGeneration: Sendable {
-        private let value = OSAllocatedUnfairLock<UInt64>(initialState: 0)
+        private let value = Atomic<UInt64>(0)
 
         func update(to newValue: UInt64) {
-            value.withLock { $0 = newValue }
+            value.store(newValue, ordering: .releasing)
         }
 
         func matches(_ candidate: UInt64) -> Bool {
-            value.withLock { $0 == candidate }
+            value.load(ordering: .acquiring) == candidate
         }
     }
 

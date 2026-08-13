@@ -103,6 +103,56 @@ One pass producing all of it would be cheaper, would allocate almost nothing, an
 
 `DisplayedRouteCoordinateCache` exists because this is expensive, and it caches the map's copy. `HikeDetailView.zoomButton`'s download path and `refreshStoredBytes` each remap independently — the latter correctly does so inside its detached task, the former on the main actor at tap time.
 
+## API modernization
+
+A scan for legacy types and superseded APIs found the codebase already clear of the usual suspects: no Combine, no `ObservableObject`/`@Published`/`@StateObject`, no `NSKeyedArchiver`, no `Timer`/`RunLoop`, no `NotificationCenter`. Observation is `@Observable` throughout, ordered background work is `AsyncStream`, and the two `DispatchQueue`s that remain are `Task.detached(executorPreference:)` targets — SE-0417, not GCD holdovers. What the scan did find is a codebase that has adopted every *setting* Swift 6 asks for without adopting the *language mode* or the standard library that comes with it.
+
+### The app still compiles in Swift 5 language mode
+
+All **10** build configurations in `project.pbxproj` carry `SWIFT_VERSION = 5.0`, while the same configurations already set `SWIFT_STRICT_CONCURRENCY = complete`, `SWIFT_DEFAULT_ACTOR_ISOLATION = MainActor` and `SWIFT_APPROACHABLE_CONCURRENCY = YES`, against an iOS/macOS/visionOS 26.5 floor. `OpenTrailsShared` is already `swift-tools-version: 6.0` and therefore already builds in Swift 6 mode.
+
+This is the last step of the migration the *Correctness* section above started, and the cheapest one remaining: raising strict concurrency to `complete` was the change that surfaces the real diagnostics, and that has landed. The language-mode flip mostly promotes what are already warnings into errors, which is the point — it is what stops the next regression from being merged as a warning nobody read.
+
+### `OSAllocatedUnfairLock` predates the standard library's own answer
+
+`import Synchronization` appears **zero** times in the repository. The lock pattern the tile layer established — and which the rest of the codebase correctly follows — is `OSAllocatedUnfairLock`, an `os`-framework type from before the standard library had one. `Mutex` requires iOS 18 / macOS 15 / visionOS 2; the app's floor is 26.5, so it is available on every target that ships.
+
+**14** declarations and **49** `withLock` call sites across seven files:
+
+| File | Locks |
+|---|---|
+| `Tiles/Cache/TileCache.swift` | 4 — `online`, `inFlightFetches`, `mutationVersions`, `observers` |
+| `Tiles/Rendering/CachingTileOverlayRenderer.swift` | 3 — `inFlight`, `failures`, `retryWake` |
+| `Tiles/AutoSave/AutoSaveTileStore.swift` | 1 — `state` |
+| `General/Diagnostics/MainThreadWatchdog.swift` | 2 — `started`, `responded` |
+| `Map/Location/BackgroundTrailTracker.swift` | 1 — a generation counter |
+| `OpenTrailsTests/General/StubTileProtocol.swift` | 1 — `state` |
+| `OpenTrailsTests/General/TestSupport.swift` | 1 — **`NSLock`** |
+
+The migration is worth more than a type swap, because `Mutex` is `Sendable` by construction. Where a class's *only* reason for `@unchecked Sendable` was lock-guarded stored properties, the annotation becomes a plain conformance — a promise the compiler checks instead of one it takes on faith. `AutoSaveTileStore` and the test suite's `TestClock` are both in that position.
+
+The rest are not, and it is worth being precise about why: `TileCache` holds an `NSCache`, `MemoryTile` and `FetchedTile` hold a `TileImage`, and `CachingTileOverlayRenderer`, `TileOverlay` and `StubTileProtocol` all inherit from Objective-C classes the SDK does not declare `Sendable`. No lock migration can fix those, because the lock was never what made them unchecked. They keep the annotation, and their doc comments should say the superclass is the reason rather than leaving a reader to assume the locks were.
+
+Two sites deserve narrower treatment than a mutex:
+
+- **`BackgroundTrailTracker.swift:468`** wraps a bare `UInt64` counter in a lock. `Atomic<UInt64>` from the same module expresses exactly that, without the mutual exclusion the counter never needed.
+- **`TestSupport.swift:480`** is the repository's only real `NSLock`, and the only lock not following the pattern every other file follows. It guards a single `Date` behind manual `lock()`/`defer { unlock() }` pairs.
+
+### Smaller items
+
+- **`RenderInstrumentation.swift`** measures elapsed time with four `CFAbsoluteTimeGetCurrent()` calls. `CFAbsoluteTime` is wall-clock: it can jump backwards on an NTP correction and report a negative interval. `ContinuousClock` is monotonic and is what the retry path in `CachingTileOverlayRenderer` already uses.
+- **`MainThreadWatchdog.swift`** runs its ping loop on a raw `Thread` with `Thread.sleep` and `DispatchQueue.main.async`, and guards a start flag and a ping flag with two locks. The *flags* should be `Atomic<Bool>` — the start guard in particular is a `compareExchange`, stated as one operation rather than a lock's read-test-write. The `Thread` should stay: a watchdog scheduled on the cooperative pool would be starved by exactly the congestion it exists to report (see this renderer's own note on tile loads jamming that pool) and would time its own delay as the main thread's. The same goes for `DispatchQueue.main.async` over a `@MainActor` hop, which would route the ping through the pool before it ever reached the main queue.
+- **`String(format: "%.2f")`** at four sites predates `Duration.formatted(.units(...))` and `.formatted(.number.precision(...))`.
+- **`TileCache.swift:294`** holds a lone `DispatchQueue.main.async` in a file that is otherwise structured concurrency throughout.
+
+### Deliberate, and to be left alone
+
+Three findings look legacy and are not. Each is already documented in place, and the scan confirms the reasoning still holds:
+
+- **`CLLocationManagerDelegate` over `CLLocationUpdate.liveUpdates()`** (`LocationManager.swift:7`): the newer async-stream API stalls after the first fix when the Simulator's location is driven by `simctl location … start`, which is how this project's GPX playback works.
+- **`NSCache` in `TileCache`**: no Swift-native equivalent offers cost-based eviction. The three sites are already annotated `// swiftlint:disable:next legacy_objc_type`.
+- **`@preconcurrency MKLocalSearchCompleterDelegate`** (`SearchCompleter.swift:39`): this *replaced* a hand-written `MainActor.assumeIsolated`. It is the newer form, not the older one.
+
 ## Code to remove
 
 - **`violations.txt` (43 KB) is tracked in git.** It is a stale SwiftLint report: it lists errors under rules the current `.swiftlint.yml` no longer trips, and a fresh `swiftlint lint` over the whole project now reports **2** violations, not the hundreds in the file. Delete it and add the pattern to `.gitignore`.
@@ -188,6 +238,16 @@ Ordered by priority within each group. Each item names the file it lands in, so 
 
 - [x] **Compute the hike statistics in one pass** (`OpenTrails/Hikes/Hike+Statistics.swift`): today `makeStats` triggers roughly ten full walks of the route, four `elevations` arrays and four `timestamps` arrays. `HikeStatisticsTests` already covers the behaviour to refactor against.
 - [x] **Stop `maxSpeed` allocating two `CLLocation`s per segment** (`OpenTrails/Hikes/Hike+Statistics.swift`): use `RouteGeometry.distanceMeters`, which exists in this repo precisely to avoid that allocation, and folds into the single pass above.
+
+### API modernization
+
+- [x] **Replace `NSLock` in `TestClock` with `Mutex`** (`OpenTrailsTests/General/TestSupport.swift`): the repository's only `NSLock`, and the only lock not following the pattern every other file follows. Guards a single `Date` behind manual `lock()`/`defer { unlock() }` pairs; `Mutex<Date>` removes both the pairs and the `@unchecked Sendable`.
+- [x] **Use `Atomic<UInt64>` for the generation counter** (`OpenTrails/Map/Location/BackgroundTrailTracker.swift`): a bare counter currently wrapped in `OSAllocatedUnfairLock`, which is mutual exclusion it never needed.
+- [x] **Migrate `OSAllocatedUnfairLock` to `Synchronization.Mutex`** (`TileCache.swift`, `TileCache+StorageManagement.swift`, `CachingTileOverlayRenderer.swift`, `AutoSaveTileStore.swift`, `MainThreadWatchdog.swift`, `StubTileProtocol.swift`): 14 declarations and 49 `withLock` sites. `Mutex` needs iOS 18 / macOS 15 / visionOS 2 and the floor is 26.5, so every shipping target qualifies. Zero `OSAllocatedUnfairLock` remain.
+- [x] **Drop the `@unchecked Sendable` the migration makes redundant**: `AutoSaveTileStore` and `TestClock` are now plain `Sendable`. The remaining eight are *not* lock-related and stay — `TileCache` holds an `NSCache`, `MemoryTile`/`FetchedTile` hold a `TileImage`, and `CachingTileOverlayRenderer`, `TileOverlay` and `StubTileProtocol` inherit from Objective-C classes the SDK does not declare `Sendable`. Their doc comments now name the superclass as the reason rather than the locks.
+- [x] **Raise `SWIFT_VERSION` to `6.0`** on all 10 build configurations: the app and widget compiled in Swift 6 mode with **zero** source changes — the earlier `SWIFT_STRICT_CONCURRENCY = complete` work had already absorbed the cost. The four errors it did surface were all in test code and all genuine: two file-scope constants implicitly `@MainActor` under `SWIFT_DEFAULT_ACTOR_ISOLATION` but read from `nonisolated` contexts (`RecordingFixPolicyTests`, `OverpassTrailGraphProviderTests`), a main-actor `store` captured by a `@Sendable` closure (`AutoSaveTileTests`), and one trailing closure that SE-0286's forward scan binds to `clock:` rather than `transport:` (`OverpassTrailGraphProviderTests`) — a silent mis-binding Swift 5 mode's backward-scan fallback had been hiding.
+- [x] **Use `ContinuousClock` for elapsed-time measurement** (`OpenTrails/General/Diagnostics/RenderInstrumentation.swift`): four `CFAbsoluteTimeGetCurrent()` calls measured intervals with a wall clock that can jump backwards on an NTP correction and report a negative duration. Also replaced the two `String(format:)` calls with `Duration.formatted(.units(...))`.
+- [x] **Modernize the watchdog's flags, keep its thread** (`OpenTrails/General/Diagnostics/MainThreadWatchdog.swift`): both locks became `Atomic<Bool>`, the once-only start guard becoming a single `compareExchange` instead of a lock's read-test-write. The raw `Thread` and `DispatchQueue.main.async` were **deliberately kept** and are now documented as such: a watchdog scheduled on the cooperative pool would be starved by the same congestion it exists to report, and a `@MainActor` hop would measure the pool's scheduling on top of the main queue's. Replacing them would have been a regression dressed as a modernization.
 
 ### Code to remove
 

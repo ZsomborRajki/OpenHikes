@@ -59,7 +59,7 @@ struct TileStoreTests {
     /// Pass `browsed: false` for the case where the bytes aren't there.
     private func persist(key: String, tile: (z: Int, x: Int, y: Int), browsed: Bool = true) async throws {
         if browsed { try sandbox.browse(key: key) }
-        await offMain { store.considerPersisting(key: key, z: tile.z, x: tile.x, y: tile.y) }
+        await offMain { [store] in store.considerPersisting(key: key, z: tile.z, x: tile.x, y: tile.y) }
     }
 
     // MARK: What gets kept
@@ -228,7 +228,7 @@ struct TileStoreTests {
             try sandbox.browse(key: key)
         }
 
-        await withTaskGroup(of: Void.self) { group in
+        await withTaskGroup(of: Void.self) { [store] group in
             for key in keys {
                 for _ in 0..<4 {
                     group.addTask {

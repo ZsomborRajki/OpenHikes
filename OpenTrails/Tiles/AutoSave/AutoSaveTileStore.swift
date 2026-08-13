@@ -13,11 +13,12 @@
 import CoreLocation
 import Foundation
 import os
+import Synchronization
 
 /// Thread-safe singleton bridging the (background) tile-load path to the one
 /// hike the user currently has auto-save turned on for. Safe to call from any
 /// thread/task, mirroring ``TileCache``.
-nonisolated final class AutoSaveTileStore: @unchecked Sendable {
+nonisolated final class AutoSaveTileStore: Sendable {
     static let shared = AutoSaveTileStore()
 
     private static let logger = Logger(subsystem: "OpenTrails", category: "AutoSaveTiles")
@@ -47,7 +48,7 @@ nonisolated final class AutoSaveTileStore: @unchecked Sendable {
         let isNewKey: Bool
     }
 
-    private let state = OSAllocatedUnfairLock<ActiveHike?>(initialState: nil)
+    private let state = Mutex<ActiveHike?>(nil)
 
     /// Where claimed tiles are promoted from browsing storage to durable
     /// storage. Injectable for the same reason ``TileCache/init(storageRoot:sessionConfiguration:monitorsNetwork:)``

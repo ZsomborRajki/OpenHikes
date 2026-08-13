@@ -16,7 +16,7 @@ private actor OverpassRequestRecorder {
     }
 }
 
-private enum RateLimitFixture {
+nonisolated private enum RateLimitFixture {
     static let statusCode = 429
     static let responseCount = 2
 }
@@ -151,9 +151,7 @@ struct OverpassTrailGraphProviderTests {
             )
         defer { try? FileManager.default.removeItem(at: directory) }
         let recorder = OverpassRequestRecorder()
-        let provider = OverpassTrailGraphProvider(
-            directory: directory
-        ) { request in
+        let transport: OverpassTrailGraphProvider.Transport = { request in
             await recorder.record(request)
             try await Task.sleep(for: .milliseconds(50))
             return OverpassHTTPResponse(
@@ -162,6 +160,10 @@ struct OverpassTrailGraphProviderTests {
                 headers: [:]
             )
         }
+        let provider = OverpassTrailGraphProvider(
+            directory: directory,
+            transport: transport
+        )
         let coordinate = CLLocationCoordinate2D(
             latitude: 47.63,
             longitude: 12.86

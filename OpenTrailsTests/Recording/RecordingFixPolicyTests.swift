@@ -8,7 +8,7 @@ import Foundation
 @testable import OpenTrails
 import Testing
 
-private let recordingAltitude: CLLocationDistance = 600
+nonisolated private let recordingAltitude: CLLocationDistance = 600
 
 nonisolated private func recordingLocation(
     timestamp: Date,

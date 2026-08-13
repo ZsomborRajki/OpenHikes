@@ -1,0 +1,58 @@
+{
+  "configurations" : [
+    {
+      "id" : "5ECF0865-9A5F-46A8-AF5B-1FC4FAC75D3F",
+      "name" : "Test Scheme Action",
+      "options" : {
+
+      }
+    }
+  ],
+  "defaultOptions" : {
+    "environmentVariableEntries" : [
+      {
+        "key" : "RENDER_SIGNPOST_LOG",
+        "value" : "1"
+      }
+    ],
+    "performanceAntipatternCheckerEnabled" : true,
+    "targetForVariableExpansion" : {
+      "containerPath" : "container:OpenTrails.xcodeproj",
+      "identifier" : "A85E854C2FE3EBF500558639",
+      "name" : "OpenTrails"
+    }
+  },
+  "testTargets" : [
+    {
+      "selectedTags" : {
+        "includeXCTests" : true
+      },
+      "target" : {
+        "containerPath" : "container:OpenTrails.xcodeproj",
+        "identifier" : "AB0000000000000000000001",
+        "name" : "OpenTrailsTests"
+      }
+    },
+    {
+      "selectedTags" : {
+        "includeXCTests" : true
+      },
+      "target" : {
+        "containerPath" : "container:OpenTrails.xcodeproj",
+        "identifier" : "AC0000000000000000000001",
+        "name" : "OpenWidgetTests"
+      }
+    },
+    {
+      "selectedTags" : {
+        "includeXCTests" : true
+      },
+      "target" : {
+        "containerPath" : "container:OpenTrails.xcodeproj",
+        "identifier" : "AE0000000000000000000001",
+        "name" : "OpenTrailsUITests"
+      }
+    }
+  ],
+  "version" : 1
+}

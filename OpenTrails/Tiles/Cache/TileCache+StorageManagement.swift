@@ -5,6 +5,7 @@
 
 import Foundation
 import os
+import Synchronization
 
 nonisolated extension TileCache {
 

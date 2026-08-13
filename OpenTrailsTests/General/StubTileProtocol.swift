@@ -15,8 +15,10 @@
 
 import Foundation
 @testable import OpenTrails
-import os
+import Synchronization
 
+/// `@unchecked` because of the superclass: `URLProtocol` is not declared
+/// `Sendable` by the SDK. The one piece of shared state is a `Mutex`.
 nonisolated final class StubTileProtocol: URLProtocol, @unchecked Sendable {
     private static let httpOK = 200
 
@@ -55,7 +57,7 @@ nonisolated final class StubTileProtocol: URLProtocol, @unchecked Sendable {
         var delay: Duration?
     }
 
-    private static let state = OSAllocatedUnfairLock(initialState: State())
+    private static let state = Mutex(State())
 
     /// A session configuration that routes every request here.
     static func sessionConfiguration() -> URLSessionConfiguration {
