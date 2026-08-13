@@ -20,7 +20,6 @@ private final class StubRecordingLocationSource: RecordingLocationSource {
     private(set) var stopCount = 0
     private(set) var authorizationRequests = 0
     private(set) var fullAccuracyRequests = 0
-    private(set) var startedProfiles: [RecordingAccuracyProfile] = []
 
     var sourceDelegate: CLLocationManagerDelegate? {
         get { delegateObject as? CLLocationManagerDelegate }
@@ -35,9 +34,8 @@ private final class StubRecordingLocationSource: RecordingLocationSource {
         fullAccuracyRequests += 1
     }
 
-    func startRecordingUpdates(profile: RecordingAccuracyProfile) {
+    func startRecordingUpdates() {
         startCount += 1
-        startedProfiles.append(profile)
     }
 
     func stopRecordingUpdates() {
@@ -213,40 +211,6 @@ private actor StubRecordingSharedStateStore:
     }
 }
 
-private actor StubOnlineRecordingMatcher: RecordingOnlineMatching {
-    let route: [RouteCoordinate]
-    let delay: Duration?
-    let shouldFail: Bool
-    private(set) var callCount = 0
-
-    init(
-        route: [RouteCoordinate],
-        delay: Duration? = nil,
-        shouldFail: Bool = false
-    ) {
-        self.route = route
-        self.delay = delay
-        self.shouldFail = shouldFail
-    }
-
-    func match(
-        points: [RecordingPoint]
-    ) async throws -> [RouteCoordinate] {
-        callCount += 1
-        if let delay {
-            try await Task.sleep(for: delay)
-        }
-        if shouldFail {
-            throw URLError(.cannotConnectToHost)
-        }
-        return route
-    }
-
-    func calls() -> Int {
-        callCount
-    }
-}
-
 @MainActor
 @Suite("Hike recorder")
 final class HikeRecorderTests {
@@ -278,7 +242,6 @@ final class HikeRecorderTests {
         elevationSource: (any RecordingElevationSource)? = nil,
         motionSource: (any RecordingMotionSource)? = nil,
         trailGraphProvider: (any TrailGraphProviding)? = nil,
-        onlineMatcher: (any RecordingOnlineMatching)? = nil,
         sharedStateStore: (any RecordingSharedStateStoring)? = nil,
         automaticallyRecovers: Bool = false,
         configureDefaults: (UserDefaults) -> Void = { _ in }
@@ -293,9 +256,7 @@ final class HikeRecorderTests {
             elevationSource: elevationSource,
             motionSource: motionSource,
             trailGraphProvider: trailGraphProvider,
-            onlineMatcher: onlineMatcher,
             defaults: defaults,
-            onlineMatchingAvailable: { true },
             sharedStateStore: sharedStateStore,
             journalDirectory: directory,
             clock: clock.read,
@@ -412,20 +373,6 @@ final class HikeRecorderTests {
             )
         }
         return hike
-    }
-
-    @Test("recording accuracy is captured when the session starts")
-    func recordingAccuracyProfileIsApplied() async {
-        let recorder = makeRecorder { defaults in
-            defaults.set(
-                RecordingAccuracyProfile.batterySaver.rawValue,
-                forKey: RecordingSettings.recordingAccuracyKey
-            )
-        }
-
-        await recorder.start()
-
-        #expect(source.startedProfiles.last == .batterySaver)
     }
 
     @Test("barometric elevation is fused into the saved route")
@@ -762,153 +709,14 @@ final class HikeRecorderTests {
         #expect(hike.rawRoute.isEmpty)
     }
 
-    @Test("online improvement runs only after recording stops")
-    func optedInOnlineMatchRunsAtStop() async throws {
-        let matchedRoute = [
-            RouteCoordinate(
-                latitude: 47.63,
-                longitude: 12.8598,
-                timestamp: clock.now
-            ),
-            RouteCoordinate(
-                latitude: 47.6302,
-                longitude: 12.8598,
-                timestamp: clock.now.addingTimeInterval(10)
-            )
-        ]
-        let onlineMatcher = StubOnlineRecordingMatcher(
-            route: matchedRoute
-        )
-        let recorder = makeRecorder(
-            onlineMatcher: onlineMatcher,
-            configureDefaults: { defaults in
-                defaults.set(
-                    true,
-                    forKey: RecordingSettings.improveAccuracyOnlineKey
-                )
-            }
-        )
-        await recorder.start()
-        source.deliver(fix(latitude: 47.63))
-        await settleDelegateHop()
-        clock.advance(by: 10)
-        source.deliver(fix(latitude: 47.6302))
-        await settleDelegateHop()
-
-        #expect(await onlineMatcher.calls() == 0)
-        let hike = try savedHike(from: await recorder.stop())
-
-        #expect(await onlineMatcher.calls() == 1)
-        #expect(hike.route == matchedRoute)
-        #expect(hike.rawRoute.count == 2)
-    }
-
-    @Test("a successful online match bypasses offline ambiguity review")
-    func onlineSuccessBypassesAmbiguityReview() async throws {
-        let onlineMatcher = StubOnlineRecordingMatcher(
-            route: [
-                RouteCoordinate(
-                    latitude: 47.63,
-                    longitude: 12.8599,
-                    timestamp: clock.now
-                ),
-                RouteCoordinate(
-                    latitude: 47.63,
-                    longitude: 12.8639,
-                    timestamp: clock.now.addingTimeInterval(720)
-                )
-            ]
-        )
-        let recorder = makeRecorder(
-            trailGraphProvider: StubTrailGraphProvider(
-                graph: ambiguityGraph()
-            ),
-            onlineMatcher: onlineMatcher,
-            configureDefaults: { defaults in
-                defaults.set(
-                    true,
-                    forKey: RecordingSettings.improveAccuracyOnlineKey
-                )
-            }
-        )
-        await recorder.start()
-        source.deliver(fix(latitude: 47.63, longitude: 12.86))
-        await settleDelegateHop()
-        clock.advance(by: 720)
-        source.deliver(fix(latitude: 47.63, longitude: 12.864))
-        await settleDelegateHop()
-
-        let hike = try savedHike(from: await recorder.stop())
-
-        #expect(await onlineMatcher.calls() == 1)
-        #expect(recorder.phase == .idle)
-        #expect(recorder.ambiguityReview == nil)
-        #expect(hike.route.count == 2)
-    }
-
-    @Test("an online failure falls back to offline ambiguity review")
-    func onlineFailureFallsBackToReview() async throws {
-        let onlineMatcher = StubOnlineRecordingMatcher(
-            route: [],
-            shouldFail: true
-        )
-        let recorder = makeRecorder(
-            trailGraphProvider: StubTrailGraphProvider(
-                graph: ambiguityGraph()
-            ),
-            onlineMatcher: onlineMatcher,
-            configureDefaults: { defaults in
-                defaults.set(
-                    true,
-                    forKey: RecordingSettings.improveAccuracyOnlineKey
-                )
-            }
-        )
-        await recorder.start()
-        source.deliver(fix(latitude: 47.63, longitude: 12.86))
-        await settleDelegateHop()
-        clock.advance(by: 720)
-        source.deliver(fix(latitude: 47.63, longitude: 12.864))
-        await settleDelegateHop()
-
-        let outcome = try await recorder.stop()
-
-        guard case .needsReview = outcome else {
-            Issue.record("offline ambiguity should survive an online failure")
-            return
-        }
-        #expect(await onlineMatcher.calls() == 1)
-        #expect(recorder.phase == .reviewing)
-        await recorder.discard()
-    }
-
     @Test("turning off trail snapping preserves the filtered GPS route")
-    func disablingTrailSnappingSkipsOnlineMatching() async throws {
-        let onlineMatcher = StubOnlineRecordingMatcher(
-            route: [
-                RouteCoordinate(
-                    latitude: 47.63,
-                    longitude: 12.8598,
-                    timestamp: clock.now
-                ),
-                RouteCoordinate(
-                    latitude: 47.6302,
-                    longitude: 12.8598,
-                    timestamp: clock.now.addingTimeInterval(10)
-                )
-            ]
-        )
+    func disablingTrailSnappingPreservesGPSRoute() async throws {
         let recorder = makeRecorder(
-            onlineMatcher: onlineMatcher,
             configureDefaults: { defaults in
                 defaults.set(
                     false,
                     forKey: RecordingSettings.snapToTrailsKey
                 )
-                defaults.set(
-                    true,
-                    forKey: RecordingSettings.improveAccuracyOnlineKey
-                )
             }
         )
         await recorder.start()
@@ -917,10 +725,8 @@ final class HikeRecorderTests {
         clock.advance(by: 10)
         source.deliver(fix(latitude: 47.6302))
         await settleDelegateHop()
-
         let hike = try savedHike(from: await recorder.stop())
 
-        #expect(await onlineMatcher.calls() == 0)
         #expect(hike.route.allSatisfy {
             abs($0.longitude - 12.86) < 0.00001
         })
@@ -1011,6 +817,39 @@ final class HikeRecorderTests {
         )
     }
 
+    private func acceleratedLocations(
+        from track: GPXImport.Track,
+        endingAt endDate: Date,
+        duration: TimeInterval = 20
+    ) -> [CLLocation] {
+        guard track.points.count > 1 else { return [] }
+        let interval = duration / Double(track.points.count - 1)
+        let startedAt = endDate.addingTimeInterval(-duration)
+
+        return track.points.enumerated().map { index, point in
+            let speed: CLLocationSpeed
+            if index == 0 {
+                speed = 0
+            } else {
+                speed = RouteGeometry.distanceMeters(
+                    from: track.points[index - 1].coordinate,
+                    to: point.coordinate
+                ) / interval
+            }
+            return CLLocation(
+                coordinate: point.coordinate,
+                altitude: point.elevation ?? 0,
+                horizontalAccuracy: 5,
+                verticalAccuracy: point.elevation == nil ? -1 : 5,
+                course: 0,
+                speed: speed,
+                timestamp: startedAt.addingTimeInterval(
+                    Double(index) * interval
+                )
+            )
+        }
+    }
+
     @Test("a hike is written once at Stop and keeps its raw trace")
     func savesAtStop() async throws {
         let recorder = makeRecorder()
@@ -1039,6 +878,54 @@ final class HikeRecorderTests {
         )
         #expect(hike.distanceMeters > 20)
         #expect(recorder.phase == .idle)
+    }
+
+    @Test("the bundled Thumsee simulator route records and saves end to end")
+    func bundledDemoRouteRecordsHike() async throws {
+        let routeURL = try #require(
+            Bundle.main.url(
+                forResource: "ThumseeLoopFast",
+                withExtension: "gpx"
+            )
+        )
+        let track = try GPXImport.load(from: routeURL)
+        let locations = acceleratedLocations(
+            from: track,
+            endingAt: clock.now
+        )
+        let recorder = makeRecorder()
+
+        await recorder.start()
+        source.deliver(locations)
+        await settleDelegateHop()
+
+        let acceptedPointCount = recorder.stats.pointCount
+        let hike = try savedHike(from: await recorder.stop())
+        let first = try #require(hike.route.first)
+        let last = try #require(hike.route.last)
+        let sourceFirst = try #require(track.points.first)
+        let sourceLast = try #require(track.points.last)
+
+        #expect(track.points.count > 300)
+        #expect(acceptedPointCount > 250)
+        #expect(hike.route.count == acceptedPointCount)
+        #expect(
+            RouteGeometry.distanceMeters(
+                from: first.clCoordinate,
+                to: sourceFirst.coordinate
+            ) < 1
+        )
+        #expect(
+            RouteGeometry.distanceMeters(
+                from: last.clCoordinate,
+                to: sourceLast.coordinate
+            ) < 1
+        )
+        #expect(
+            abs(hike.distanceMeters - track.distanceMeters)
+                < track.distanceMeters * 0.15
+        )
+        #expect(hike.rawRoute.isEmpty)
     }
 
     @Test("the journal falls back to Application Support without an App Group")
@@ -1396,30 +1283,11 @@ final class HikeRecorderTests {
 
     @Test("a second Stop cannot start another persistence operation")
     func stopIsNotReentrant() async throws {
-        let matchedRoute = [
-            RouteCoordinate(
-                latitude: 47.63,
-                longitude: 12.8598,
-                timestamp: clock.now
-            ),
-            RouteCoordinate(
-                latitude: 47.6302,
-                longitude: 12.8598,
-                timestamp: clock.now.addingTimeInterval(10)
-            )
-        ]
-        let onlineMatcher = StubOnlineRecordingMatcher(
-            route: matchedRoute,
-            delay: .milliseconds(100)
-        )
         let recorder = makeRecorder(
-            onlineMatcher: onlineMatcher,
-            configureDefaults: { defaults in
-                defaults.set(
-                    true,
-                    forKey: RecordingSettings.improveAccuracyOnlineKey
-                )
-            }
+            trailGraphProvider: StubTrailGraphProvider(
+                graph: .empty,
+                cachedGraphDelay: .milliseconds(100)
+            )
         )
         await recorder.start()
         source.deliver(fix(latitude: 47.63))
@@ -1446,7 +1314,7 @@ final class HikeRecorderTests {
         }
         let hike = try savedHike(from: await firstStop.value)
 
-        #expect(hike.route == matchedRoute)
+        #expect(hike.route.count == 2)
         #expect(try context.fetch(FetchDescriptor<Hike>()).count == 1)
         #expect(recorder.phase == .idle)
     }

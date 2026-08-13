@@ -41,7 +41,7 @@ Recording now covers the full reviewed flow: it records hikes, survives a jetsam
 
 **Live matching uses a bounded provisional window.** `HikeRecorder` continuously runs the HMM matcher over at most 21 points while retaining roughly the latest 20 points / 60 seconds as provisional geometry. Older matched geometry becomes stable, newer fixes remain raw until the next pass, stale tasks cannot overwrite a newer session, and `RecordingStats.matchedTrailName` drives the live "Following:" status.
 
-**Ambiguous legs wait for the hiker.** Sparse-route alternatives remain attached to the exact `TrailMatchResult` shown after Stop. The review presents option A, option B, and GPS for each uncertain leg, highlights that leg distinctly on the map, and does not insert a `Hike` until every choice is resolved. A finished journal survives relaunch until the review is saved or discarded. Successful opt-in Stadia matching remains canonical and bypasses this review; an online failure falls back to the on-device result and its choices.
+**Ambiguous legs wait for the hiker.** Sparse-route alternatives remain attached to the exact `TrailMatchResult` shown after Stop. The review presents option A, option B, and GPS for each uncertain leg, highlights that leg distinctly on the map, and does not insert a `Hike` until every choice is resolved. A finished journal survives relaunch until the review is saved or discarded.
 
 **Graph coverage extends with the route.** Prefetching is keyed by exact zoom-12 graph regions, so every newly entered region is requested once rather than only the starting region. Cache readers await an active refresh and use expired data only when that refresh fails.
 

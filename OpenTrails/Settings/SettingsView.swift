@@ -24,12 +24,8 @@ struct SettingsView: View {
 
     @AppStorage(SettingsKey.tileProviderID) private var tileProviderID = TileProvider.default.id
     @AppStorage(SettingsKey.backgroundTrackingEnabled) private var backgroundTrackingEnabled = false
-    @AppStorage(SettingsKey.recordingAccuracy)
-    private var recordingAccuracy = RecordingAccuracyProfile.high.rawValue
     @AppStorage(SettingsKey.snapRecordedHikesToTrails)
     private var snapRecordedHikesToTrails = true
-    @AppStorage(SettingsKey.improveRecordingAccuracyOnline)
-    private var improveRecordingAccuracyOnline = false
     @AppStorage(SettingsKey.keepRawRecordedGPSTrack)
     private var keepRawRecordedGPSTrack = true
 
@@ -171,29 +167,10 @@ struct SettingsView: View {
     private var recordingSection: some View {
         #if os(iOS)
         Section {
-            Picker("Recording Accuracy", selection: $recordingAccuracy) {
-                ForEach(RecordingAccuracyProfile.allCases) { profile in
-                    Text(profile.title).tag(profile.rawValue)
-                }
-            }
-
-            if let profile = RecordingAccuracyProfile(
-                rawValue: recordingAccuracy
-            ) {
-                Text(profile.summary)
-                    .font(.caption)
-                    .foregroundStyle(.secondary)
-            }
-
             Toggle(
                 "Snap to Trails",
                 isOn: $snapRecordedHikesToTrails
             )
-            Toggle(
-                "Improve Accuracy Online",
-                isOn: $improveRecordingAccuracyOnline
-            )
-            .disabled(!hasStadiaKey || !snapRecordedHikesToTrails)
             Toggle(
                 "Keep Raw GPS Track",
                 isOn: $keepRawRecordedGPSTrack
@@ -205,30 +182,12 @@ struct SettingsView: View {
                 Text(
                     "Trail snapping uses the cached OpenStreetMap graph on this device. Turning it off keeps the filtered GPS route unchanged."
                 )
-                if hasStadiaKey {
-                    Text(
-                        "Online improvement sends the finished GPS trace to Stadia Maps after Stop. Live recording is never uploaded."
-                    )
-                } else {
-                    Text(
-                        "Online improvement needs a Stadia API key in Secrets.plist."
-                    )
-                }
                 Text(
                     "Keeping the raw track makes a matched recording reversible, but uses more storage."
                 )
             }
         }
-        .task {
-            if !hasStadiaKey {
-                improveRecordingAccuracyOnline = false
-            }
-        }
         #endif
-    }
-
-    private var hasStadiaKey: Bool {
-        Secrets.apiKey(for: .stadiaOutdoors) != nil
     }
 
     // MARK: - Offline

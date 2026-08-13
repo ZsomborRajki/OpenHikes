@@ -5,8 +5,8 @@ OpenTrails is a local-first SwiftUI and SwiftData trail viewer for iOS, iPadOS, 
 ## Features
 
 - GPX import with track metadata, route statistics, elevation chart scrubbing, route styling, and direction chevrons.
-- Live hike recording with selectable accuracy, background location, pause/resume, crash-safe recovery, motion-aware fix handling, barometric elevation fusion, and one-time SwiftData save.
-- Bounded live trail matching from an extending cached OpenStreetMap walking graph, post-recording A/B/GPS review for ambiguous legs, and optional Stadia matching; unavailable matches preserve the GPS trace.
+- Live hike recording with balanced location accuracy, background location, pause/resume, crash-safe recovery, motion-aware fix handling, barometric elevation fusion, and one-time SwiftData save.
+- Bounded live trail matching from an extending cached OpenStreetMap walking graph and post-recording A/B/GPS review for ambiguous legs; unavailable matches preserve the GPS trace.
 - Search across saved hikes and MapKit place suggestions.
 - OpenStreetMap, Stadia Outdoors, and Thunderforest Outdoors tile providers.
 - Live location, trail auto-follow with a progress readout, and current WeatherKit conditions.
@@ -35,7 +35,23 @@ OpenStreetMap is the keyless default. Stadia and Thunderforest require build-tim
 
    Add your keys to the copied file. `OpenTrails/Secrets.plist` is gitignored and must never be committed; unavailable providers remain disabled in Settings.
 
-5. Build and run. For simulated location features, use Xcode's location controls or `OpenTrails/SimulatedLocations/ThumseeLoopFast.gpx`.
+5. Build and run. For simulated location features, use Xcode's location controls or the recording demo below.
+
+## Recording demo
+
+Build and launch OpenTrails on a booted iOS Simulator, open **Record Hike**, and tap **Start Recording**. From the repository root, replay the first 60 points of the bundled Thumsee route:
+
+```sh
+Scripts/simulate-hike.sh start
+```
+
+The default is an accelerated roughly 1.7 km preview. Use `--full --speed 4` for the complete 9.3 km route at a more realistic pace. Stop and clear location playback with:
+
+```sh
+Scripts/simulate-hike.sh stop
+```
+
+Run `Scripts/simulate-hike.sh --help` to select a simulator, another GPX file, playback speed, update interval, or point count.
 
 ## Build and test
 

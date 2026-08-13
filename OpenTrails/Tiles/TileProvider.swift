@@ -138,12 +138,8 @@ enum SettingsKey {
     /// Whether Background Trail Tracking is on, read by `BackgroundTrailTracker`
     /// at launch to decide whether to re-arm significant-change monitoring.
     static let backgroundTrackingEnabled = "settings.backgroundTrackingEnabled"
-    static let recordingAccuracy =
-        RecordingSettings.recordingAccuracyKey
     static let snapRecordedHikesToTrails =
         RecordingSettings.snapToTrailsKey
-    static let improveRecordingAccuracyOnline =
-        RecordingSettings.improveAccuracyOnlineKey
     static let keepRawRecordedGPSTrack =
         RecordingSettings.keepRawGPSTrackKey
     /// The last-selected hike's `id.uuidString`, written by `OpenTrailsModel` on

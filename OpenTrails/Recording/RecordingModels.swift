@@ -11,79 +11,28 @@ import Foundation
 import Observation
 import OpenTrailsShared
 
-nonisolated enum RecordingAccuracyProfile: String, Codable, CaseIterable,
-    Identifiable, Sendable {
-    case high
-    case balanced
-    case batterySaver
-
-    var id: String { rawValue }
-
-    var title: String {
-        switch self {
-        case .high:
-            "High"
-        case .balanced:
-            "Balanced"
-        case .batterySaver:
-            "Battery Saver"
-        }
-    }
-
-    var summary: String {
-        switch self {
-        case .high:
-            "Best navigation accuracy with continuous fixes."
-        case .balanced:
-            "Best accuracy with a 10 m movement filter."
-        case .batterySaver:
-            "System-paced significant changes for minimum battery use."
-        }
-    }
-}
-
 nonisolated enum RecordingSettings {
-    static let recordingAccuracyKey = "settings.recordingAccuracy"
     static let snapToTrailsKey = "settings.snapRecordedHikesToTrails"
-    static let improveAccuracyOnlineKey =
-        "settings.improveRecordingAccuracyOnline"
     static let keepRawGPSTrackKey =
         "settings.keepRawRecordedGPSTrack"
 }
 
 nonisolated struct RecordingSessionOptions: Codable, Equatable, Sendable {
-    var accuracyProfile: RecordingAccuracyProfile
     var snapToTrails: Bool
-    var improveAccuracyOnline: Bool
     var keepRawGPSTrack: Bool
 
     static let defaults = RecordingSessionOptions(
-        accuracyProfile: .high,
         snapToTrails: true,
-        improveAccuracyOnline: false,
         keepRawGPSTrack: true
     )
 
-    static func load(
-        from defaults: UserDefaults,
-        onlineMatchingAvailable: Bool
-    ) -> RecordingSessionOptions {
-        let profile = defaults.string(
-            forKey: RecordingSettings.recordingAccuracyKey
-        ).flatMap(RecordingAccuracyProfile.init(rawValue:)) ?? .high
+    static func load(from defaults: UserDefaults) -> RecordingSessionOptions {
         return RecordingSessionOptions(
-            accuracyProfile: profile,
             snapToTrails: storedBool(
                 RecordingSettings.snapToTrailsKey,
                 defaultValue: true,
                 in: defaults
             ),
-            improveAccuracyOnline: onlineMatchingAvailable
-                && storedBool(
-                    RecordingSettings.improveAccuracyOnlineKey,
-                    defaultValue: false,
-                    in: defaults
-                ),
             keepRawGPSTrack: storedBool(
                 RecordingSettings.keepRawGPSTrackKey,
                 defaultValue: true,

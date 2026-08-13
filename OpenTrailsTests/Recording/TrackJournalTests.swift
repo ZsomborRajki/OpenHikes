@@ -46,9 +46,7 @@ struct TrackJournalTests {
         let sessionID = UUID()
 
         let options = RecordingSessionOptions(
-            accuracyProfile: .balanced,
             snapToTrails: false,
-            improveAccuracyOnline: false,
             keepRawGPSTrack: false
         )
         try await journal.start(

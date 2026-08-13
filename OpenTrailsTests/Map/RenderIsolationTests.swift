@@ -216,7 +216,7 @@ private final class IsolationRecordingSource: RecordingLocationSource {
 
     func requestWhenInUseAuthorization() {}
     func requestTemporaryFullAccuracy() async {}
-    func startRecordingUpdates(profile: RecordingAccuracyProfile) {}
+    func startRecordingUpdates() {}
     func stopRecordingUpdates() {}
 
     func deliver(_ location: CLLocation) {

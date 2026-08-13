@@ -32,50 +32,29 @@ nonisolated private func recordingLocation(
 
 @Suite("Recording settings")
 struct RecordingSettingsTests {
-    @Test("defaults are high accuracy, local snapping, and raw retention")
+    @Test("defaults are local snapping and raw retention")
     func defaults() throws {
         let suite = "recording-settings-\(UUID().uuidString)"
         let defaults = try #require(UserDefaults(suiteName: suite))
         defer { defaults.removePersistentDomain(forName: suite) }
 
-        let options = RecordingSessionOptions.load(
-            from: defaults,
-            onlineMatchingAvailable: true
-        )
+        let options = RecordingSessionOptions.load(from: defaults)
 
         #expect(options == .defaults)
     }
 
-    @Test("persisted choices are captured and unavailable online matching is off")
+    @Test("persisted choices are captured")
     func persistedChoices() throws {
         let suite = "recording-settings-\(UUID().uuidString)"
         let defaults = try #require(UserDefaults(suiteName: suite))
         defer { defaults.removePersistentDomain(forName: suite) }
-        defaults.set(
-            RecordingAccuracyProfile.balanced.rawValue,
-            forKey: RecordingSettings.recordingAccuracyKey
-        )
         defaults.set(false, forKey: RecordingSettings.snapToTrailsKey)
-        defaults.set(
-            true,
-            forKey: RecordingSettings.improveAccuracyOnlineKey
-        )
         defaults.set(false, forKey: RecordingSettings.keepRawGPSTrackKey)
 
-        let unavailable = RecordingSessionOptions.load(
-            from: defaults,
-            onlineMatchingAvailable: false
-        )
-        let available = RecordingSessionOptions.load(
-            from: defaults,
-            onlineMatchingAvailable: true
-        )
+        let options = RecordingSessionOptions.load(from: defaults)
 
-        #expect(unavailable.accuracyProfile == .balanced)
-        #expect(!unavailable.snapToTrails)
-        #expect(!unavailable.improveAccuracyOnline)
-        #expect(!unavailable.keepRawGPSTrack)
-        #expect(available.improveAccuracyOnline)
+        #expect(!options.snapToTrails)
+        #expect(!options.keepRawGPSTrack)
     }
 }
 

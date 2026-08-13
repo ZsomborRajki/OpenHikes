@@ -69,7 +69,7 @@ protocol RecordingLocationSource: AnyObject {
 
     func requestWhenInUseAuthorization()
     func requestTemporaryFullAccuracy() async
-    func startRecordingUpdates(profile: RecordingAccuracyProfile)
+    func startRecordingUpdates()
     func stopRecordingUpdates()
 }
 
@@ -120,33 +120,20 @@ final class SystemRecordingLocationSource: RecordingLocationSource {
         #endif
     }
 
-    func startRecordingUpdates(profile: RecordingAccuracyProfile) {
+    func startRecordingUpdates() {
         manager.activityType = .fitness
         manager.pausesLocationUpdatesAutomatically = false
         #if os(iOS)
         manager.allowsBackgroundLocationUpdates = true
         manager.showsBackgroundLocationIndicator = true
         #endif
-
-        switch profile {
-        case .high:
-            manager.desiredAccuracy = kCLLocationAccuracyBestForNavigation
-            manager.distanceFilter = kCLDistanceFilterNone
-            manager.startUpdatingLocation()
-        case .balanced:
-            manager.desiredAccuracy = kCLLocationAccuracyBest
-            manager.distanceFilter = 10
-            manager.startUpdatingLocation()
-        case .batterySaver:
-            manager.desiredAccuracy = kCLLocationAccuracyHundredMeters
-            manager.distanceFilter = 100
-            manager.startMonitoringSignificantLocationChanges()
-        }
+        manager.desiredAccuracy = kCLLocationAccuracyBest
+        manager.distanceFilter = 10
+        manager.startUpdatingLocation()
     }
 
     func stopRecordingUpdates() {
         manager.stopUpdatingLocation()
-        manager.stopMonitoringSignificantLocationChanges()
         #if os(iOS)
         manager.allowsBackgroundLocationUpdates = false
         manager.showsBackgroundLocationIndicator = false
@@ -265,11 +252,7 @@ final class HikeRecorder: NSObject {
         (any TrailGraphProviding)?
     @ObservationIgnored private let distanceEvidenceSource:
         (any RecordingDistanceEvidenceSource)?
-    @ObservationIgnored private let onlineMatcher:
-        (any RecordingOnlineMatching)?
     @ObservationIgnored private let defaults: UserDefaults
-    @ObservationIgnored private let onlineMatchingAvailable:
-        @Sendable () -> Bool
     @ObservationIgnored private let sharedStateStore:
         (any RecordingSharedStateStoring)?
     @ObservationIgnored private let journal: TrackJournal?
@@ -374,11 +357,7 @@ final class HikeRecorder: NSObject {
         trailGraphProvider: (any TrailGraphProviding)? = nil,
         distanceEvidenceSource:
             (any RecordingDistanceEvidenceSource)? = nil,
-        onlineMatcher: (any RecordingOnlineMatching)? = nil,
         defaults: UserDefaults = .standard,
-        onlineMatchingAvailable: @escaping @Sendable () -> Bool = {
-            Secrets.apiKey(for: .stadiaOutdoors) != nil
-        },
         sharedStateStore: (any RecordingSharedStateStoring)? = nil,
         journalDirectory: URL? = nil,
         clock: @escaping @Sendable () -> Date = { Date() },
@@ -398,9 +377,7 @@ final class HikeRecorder: NSObject {
         self.motionSource = motionSource
         self.trailGraphProvider = trailGraphProvider
         self.distanceEvidenceSource = distanceEvidenceSource
-        self.onlineMatcher = onlineMatcher
         self.defaults = defaults
-        self.onlineMatchingAvailable = onlineMatchingAvailable
         self.sharedStateStore = sharedStateStore
         self.journal = resolvedDirectory.map {
             TrackJournal(directory: $0, clock: clock)
@@ -498,9 +475,7 @@ final class HikeRecorder: NSObject {
             anchorElevation: elevationAnchor
         )
         startMotionUpdates()
-        source.startRecordingUpdates(
-            profile: activeSessionOptions.accuracyProfile
-        )
+        source.startRecordingUpdates()
         phase = stats.pointCount == 0 ? .waitingForFix : .recording
         publishSharedRecordingSnapshot(force: true)
     }
@@ -716,9 +691,7 @@ final class HikeRecorder: NSObject {
                 anchorElevation: lastAcceptedPoint?.elevation
             )
             startMotionUpdates()
-            source.startRecordingUpdates(
-                profile: activeSessionOptions.accuracyProfile
-            )
+            source.startRecordingUpdates()
             phase = session.points.isEmpty ? .waitingForFix : .recording
             recoveryState = .resumed
         } else {
@@ -747,11 +720,7 @@ final class HikeRecorder: NSObject {
 
         let id = UUID()
         let startedAt = clock()
-        let options = RecordingSessionOptions.load(
-            from: defaults,
-            onlineMatchingAvailable:
-                onlineMatcher != nil && onlineMatchingAvailable()
-        )
+        let options = RecordingSessionOptions.load(from: defaults)
         do {
             try await journal.start(
                 sessionID: id,
@@ -779,7 +748,7 @@ final class HikeRecorder: NSObject {
         recoveryState = .none
         startElevationUpdates()
         startMotionUpdates()
-        source.startRecordingUpdates(profile: options.accuracyProfile)
+        source.startRecordingUpdates()
         phase = .waitingForFix
         publishSharedRecordingSnapshot(force: true)
     }
@@ -1331,7 +1300,7 @@ final class HikeRecorder: NSObject {
             throw .save("The recording has not been finished yet.")
         }
 
-        var prepared: PreparedRecording
+        let prepared: PreparedRecording
         let options = session.metadata.recordingOptions
             ?? activeSessionOptions
         let normalized: [RecordingPoint]
@@ -1373,35 +1342,6 @@ final class HikeRecorder: NSObject {
                     keepRawGPSTrack: options.keepRawGPSTrack
                 )
             }.value
-
-            if options.snapToTrails,
-               options.improveAccuracyOnline,
-               !normalized.contains(where: {
-                   $0.flags.contains(.resumed)
-               }),
-               let onlineMatcher {
-                do {
-                    let onlineRoute = try await onlineMatcher.match(
-                        points: normalized
-                    )
-                    prepared = PreparedRecording(
-                        route: onlineRoute,
-                        rawRoute: options.keepRawGPSTrack
-                            ? normalized.map(\.routeCoordinate)
-                            : [],
-                        distanceMeters: Self.routeDistance(onlineRoute),
-                        startedAt: prepared.startedAt,
-                        endedAt: prepared.endedAt,
-                        matchedTrailName: prepared.matchedTrailName,
-                        ambiguousLegCount: 0,
-                        matchResult: nil
-                    )
-                } catch {
-                    Self.logger.error(
-                        "Online recording match failed; keeping the on-device result: \(error.localizedDescription, privacy: .public)"
-                    )
-                }
-            }
         } catch let failure as RecordingFailure {
             throw failure
         } catch {
@@ -1685,25 +1625,6 @@ final class HikeRecorder: NSObject {
         }
     }
 
-    private nonisolated static func routeDistance(
-        _ route: [RouteCoordinate]
-    ) -> Double {
-        guard route.count > 1 else { return 0 }
-        var distance = 0.0
-        for index in 1..<route.count {
-            distance += RouteGeometry.distanceMeters(
-                from: CLLocationCoordinate2D(
-                    latitude: route[index - 1].latitude,
-                    longitude: route[index - 1].longitude
-                ),
-                to: CLLocationCoordinate2D(
-                    latitude: route[index].latitude,
-                    longitude: route[index].longitude
-                )
-            )
-        }
-        return distance
-    }
 }
 
 extension HikeRecorder: CLLocationManagerDelegate {

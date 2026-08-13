@@ -26,7 +26,6 @@ final class OpenTrailsModel {
         // Built explicitly so background relaunch services and the view
         // hierarchy share one SwiftData store.
         let container = try! ModelContainer(for: Hike.self)
-        let stadiaKey = Secrets.apiKey(for: .stadiaOutdoors)
 
         self.init(
             container: container,
@@ -38,10 +37,6 @@ final class OpenTrailsModel {
                 motionSource: SystemRecordingMotionSource(),
                 trailGraphProvider: OverpassTrailGraphProvider(),
                 distanceEvidenceSource: SystemPedometerDistanceSource(),
-                onlineMatcher: stadiaKey.map {
-                    StadiaRecordingMatcher(apiKey: $0)
-                },
-                onlineMatchingAvailable: { stadiaKey != nil },
                 sharedStateStore: AppGroupRecordingSharedStateStore()
             ),
             locationManager: LocationManager(),
