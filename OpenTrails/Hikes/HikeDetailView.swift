@@ -18,7 +18,6 @@ import SwiftData
 /// only ever passes this object down; it never reads its properties directly,
 /// so mutating them invalidates `ElevationChartView` (which does read them)
 /// and nothing above it.
-@MainActor
 @Observable
 final class TrackerState {
     /// Persistent tracker position along the route (metres from start). Starts

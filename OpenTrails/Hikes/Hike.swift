@@ -117,7 +117,6 @@ extension Hike {
     }
 }
 
-@MainActor
 extension Hike {
     /// Adds complete or partial bulk coverage without accumulating redundant
     /// records for repeated attempts at the same provider/scale/depth.

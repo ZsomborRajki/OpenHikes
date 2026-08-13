@@ -25,7 +25,6 @@ import Testing
 struct WidgetFeedSuites {}
 
 extension WidgetFeedSuites {
-@MainActor
 @Suite("Feed behavior", .serialized)
 final class WidgetFeedTests {
     private let container: ModelContainer

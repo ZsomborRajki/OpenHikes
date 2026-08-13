@@ -14,7 +14,6 @@ import os
 import CoreMotion
 #endif
 
-@MainActor
 protocol RecordingElevationSource: AnyObject {
     var isAvailable: Bool { get }
 
@@ -24,7 +23,6 @@ protocol RecordingElevationSource: AnyObject {
     func stop()
 }
 
-@MainActor
 final class SystemRecordingElevationSource: RecordingElevationSource {
     private static let logger = Logger(
         subsystem: "OpenTrails",
@@ -83,7 +81,6 @@ nonisolated enum RecordingMotionState: Equatable, Sendable {
     case nonPedestrian
 }
 
-@MainActor
 protocol RecordingMotionSource: AnyObject {
     var isAvailable: Bool { get }
 
@@ -95,7 +92,6 @@ protocol RecordingMotionSource: AnyObject {
     func stop()
 }
 
-@MainActor
 final class SystemRecordingMotionSource: RecordingMotionSource {
     #if os(iOS) && canImport(CoreMotion)
     private let manager = CMMotionActivityManager()

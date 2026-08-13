@@ -232,7 +232,6 @@ struct OfflineTileEnumerationTests {
     }
 }
 
-@MainActor
 @Suite("Offline download state")
 struct OfflineDownloadStateTests {
     /// A source that can't reach anything: enough to drive the state machine
@@ -457,7 +456,6 @@ private actor AttemptCounter {
     }
 }
 
-@MainActor
 @Suite("Offline download manifest")
 struct OfflineDownloadManifestTests {
     private let context: ModelContext

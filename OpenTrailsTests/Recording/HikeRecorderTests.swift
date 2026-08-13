@@ -10,7 +10,6 @@ import SwiftData
 import Testing
 @testable import OpenTrails
 
-@MainActor
 private final class StubRecordingLocationSource: RecordingLocationSource {
     var authorization: RecordingLocationAuthorization = .authorized
     var hasFullAccuracy = true
@@ -55,7 +54,6 @@ private final class StubRecordingLocationSource: RecordingLocationSource {
 
 }
 
-@MainActor
 private final class StubRecordingElevationSource: RecordingElevationSource {
     var isAvailable = true
     private var handler: (@Sendable (Double) -> Void)?
@@ -79,7 +77,6 @@ private final class StubRecordingElevationSource: RecordingElevationSource {
     }
 }
 
-@MainActor
 private final class StubRecordingMotionSource: RecordingMotionSource {
     var isAvailable = true
     private var handler: (@Sendable (RecordingMotionState) -> Void)?
@@ -248,7 +245,6 @@ private actor BlockingClearRecordingSharedStateStore:
     }
 }
 
-@MainActor
 @Suite("Hike recorder")
 final class HikeRecorderTests {
     private let container: ModelContainer

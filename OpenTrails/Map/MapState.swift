@@ -12,7 +12,6 @@ import MapKit
 /// The scrub-highlight location, held in a reference type so it can be updated at
 /// drag frequency *without* re-rendering any SwiftUI view. The map observes it
 /// directly and moves a single annotation.
-@MainActor
 @Observable
 final class RouteHighlight {
     /// Non-isolated so releasing the last reference never requires proving
@@ -54,7 +53,6 @@ final class RouteHighlight {
 /// The sheet's live top edge (global Y), held in a reference type so the sheet can
 /// update it at drag frequency *without* re-rendering any SwiftUI view. The map
 /// observes it directly and repositions the "my location" button.
-@MainActor
 @Observable
 final class SheetMetrics {
     /// Non-isolated so releasing the last reference never requires proving
@@ -68,7 +66,6 @@ final class SheetMetrics {
 /// reference type the map observes directly, so triggering one doesn't re-render
 /// any SwiftUI view. `fitRouteRequest` is a token — bumping it asks the map to
 /// re-fit the current route into view.
-@MainActor
 @Observable
 final class MapController {
     /// Non-isolated so releasing the last reference never requires proving

@@ -23,7 +23,6 @@ import Testing
 /// Stands in for the app's second `CLLocationManager` — the significant-change
 /// one. Records what the tracker asked it to do, and answers the two
 /// authorization questions however the test says.
-@MainActor
 final class StubLocationMonitor: SignificantLocationMonitor {
     enum Authorization {
         case notDetermined, whenInUse, always, denied
@@ -74,7 +73,6 @@ final class StubLocationMonitor: SignificantLocationMonitor {
 
 /// A `UserDefaults` nobody else in the process is reading, so a test can seed
 /// a "previous launch" without editing the host app's own settings.
-@MainActor
 func makeScratchDefaults() throws -> UserDefaults {
     let suite = "OpenTrailsTests.\(UUID().uuidString)"
     return try #require(UserDefaults(suiteName: suite))
@@ -90,7 +88,6 @@ func settleDelegateHop() async {
 
 /// No App Group needed: none of these publish anything. They're about which
 /// CoreLocation calls the tracker makes, and when.
-@MainActor
 @Suite("Background tracking authorization")
 final class BackgroundTrackingAuthorizationTests {
     private let container: ModelContainer
@@ -220,7 +217,6 @@ final class BackgroundTrackingAuthorizationTests {
 extension WidgetFeedSuites {
 /// These write the App Group payload, so they share the file the other two
 /// feed suites use and are serialized alongside them.
-@MainActor
 @Suite("Background delivery", .serialized)
 final class BackgroundDeliveryTests {
     private let container: ModelContainer

@@ -27,7 +27,6 @@ import Testing
 
 /// Counts `withObservationTracking` notifications, re-registering after each
 /// one exactly the way `MapView.Coordinator` does.
-@MainActor
 final class ObservationCounter {
     private(set) var count = 0
     private var track: (() -> Void)?
@@ -65,13 +64,11 @@ final class ObservationCounter {
 /// is the *premise* those models' guards rest on — so it has to be measurable
 /// on something unguarded, or the evidence for the guards disappears the moment
 /// they're added.
-@MainActor
 @Observable
 final class CoordinatePublisher {
     var coordinate: CLLocationCoordinate2D?
 }
 
-@MainActor
 @Suite("Recording isolation")
 struct RecordingIsolationTests {
     @Test("a fix wakes only the recording leaves that read its state")
@@ -203,7 +200,6 @@ struct RecordingIsolationTests {
 }
 
 /// The minimum `RecordingLocationSource` needed to push fixes at a recorder.
-@MainActor
 private final class IsolationRecordingSource: RecordingLocationSource {
     var authorization: RecordingLocationAuthorization = .authorized
     var hasFullAccuracy = true
@@ -227,7 +223,6 @@ private final class IsolationRecordingSource: RecordingLocationSource {
     }
 }
 
-@MainActor
 @Suite("Observation cost")
 struct ObservationCostTests {
     /// Observation filters a write that doesn't change an `Equatable` value.
@@ -334,7 +329,6 @@ struct ObservationCostTests {
     }
 }
 
-@MainActor
 @Suite("Route highlight")
 struct RouteHighlightTests {
     private static let viewpoint = CLLocationCoordinate2D(latitude: 47.6300, longitude: 12.8600)
@@ -444,7 +438,6 @@ struct RouteHighlightTests {
     }
 }
 
-@MainActor
 @Suite("Location publishing")
 struct LocationPublishingTests {
     private func location(
@@ -632,7 +625,6 @@ struct LocationPublishingTests {
     }
 }
 
-@MainActor
 @Suite("Download progress")
 struct DownloadProgressTests {
     /// Progress still publishes once per saved tile, but only the focused

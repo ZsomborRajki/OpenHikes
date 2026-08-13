@@ -10,7 +10,6 @@
 import Foundation
 import os
 
-@MainActor
 @Observable
 final class AutoSaveController {
     private static let logger = Logger(subsystem: "OpenTrails", category: "AutoSaveTiles")
@@ -22,7 +21,7 @@ final class AutoSaveController {
     /// Not UI state, so excluded from observation tracking. `nonisolated(unsafe)`:
     /// only ever written in `init`/`deinit`, and `Task` cancellation is
     /// thread-safe, so this is safe to touch from `deinit` (which, on a
-    /// `@MainActor` class, runs nonisolated).
+    /// main-actor-isolated class, runs nonisolated).
     @ObservationIgnored
     private nonisolated(unsafe) var drainTask: Task<Void, Never>?
     @ObservationIgnored

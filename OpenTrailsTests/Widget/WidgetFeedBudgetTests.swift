@@ -22,7 +22,6 @@ import Testing
 @testable import OpenTrails
 
 extension WidgetFeedSuites {
-@MainActor
 @Suite("Feed budget", .serialized)
 final class WidgetFeedBudgetTests {
     private let container: ModelContainer

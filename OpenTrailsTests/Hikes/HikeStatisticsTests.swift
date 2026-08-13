@@ -16,7 +16,6 @@ import SwiftData
 import Testing
 @testable import OpenTrails
 
-@MainActor
 @Suite("Hike statistics")
 struct HikeStatisticsTests {
     private let context: ModelContext

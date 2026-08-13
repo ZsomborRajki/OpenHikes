@@ -116,7 +116,6 @@ nonisolated struct WeatherPollState: Sendable {
     }
 }
 
-@MainActor
 @Observable
 final class WeatherManager {
     private(set) var current: CurrentWeather?

@@ -18,7 +18,6 @@ import SwiftData
 import Testing
 @testable import OpenTrails
 
-@MainActor
 @Suite("Tile ownership")
 struct TileOwnershipTests {
     private let context: ModelContext

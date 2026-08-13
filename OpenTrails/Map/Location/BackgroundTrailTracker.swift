@@ -44,7 +44,6 @@ import OpenTrailsShared
 /// significant-change API exists on every platform this app builds for. The
 /// `#if os(iOS)` guards therefore live in the adapter below, and the tracker
 /// itself has one code path — which is also the one the tests drive.
-@MainActor
 protocol SignificantLocationMonitor: AnyObject {
     /// Whether Always authorization is granted right now.
     var isAlwaysAuthorized: Bool { get }
@@ -101,7 +100,6 @@ extension CLLocationManager: SignificantLocationMonitor {
     }
 }
 
-@MainActor
 @Observable
 final class BackgroundTrailTracker: NSObject {
     private let monitor: any SignificantLocationMonitor
@@ -441,7 +439,6 @@ final class BackgroundTrailTracker: NSObject {
         let totalDistanceMeters: Double
         let route: [RouteCoordinate]
 
-        @MainActor
         init(hike: Hike) {
             hikeID = hike.id
             title = hike.title
@@ -544,7 +541,6 @@ extension BackgroundTrailTracker: CLLocationManagerDelegate {
     /// Arms monitoring the moment Always is granted — the grant arrives long
     /// after `setEnabled(true)` asked for it, because the user has to leave
     /// the app and answer a system prompt in between.
-    @MainActor
     private func authorizationChanged() {
         guard monitor.isAlwaysAuthorized,
               defaults.bool(forKey: SettingsKey.backgroundTrackingEnabled) else { return }

@@ -29,7 +29,6 @@ nonisolated struct TileOwnership: Sendable {
     /// first if tiles may have been auto-saved since the last periodic flush —
     /// this reads the manifest, and anything not yet folded into it is
     /// invisible here.
-    @MainActor
     init(_ hike: Hike) {
         route = hike.route
         offlineDownloads = hike.offlineDownloads
@@ -74,7 +73,6 @@ nonisolated struct StoredTileDeletionPlan: Sendable {
     private let doomed: TileOwnership
     private let survivors: [TileOwnership]
 
-    @MainActor
     init(removing hike: Hike, among hikes: [Hike]) {
         doomed = TileOwnership(hike)
         survivors = hikes
@@ -87,7 +85,6 @@ nonisolated struct StoredTileDeletionPlan: Sendable {
     }
 }
 
-@MainActor
 extension Hike {
     /// Whether this hike has any stored tiles — answered from two small
     /// arrays, without touching `route`.

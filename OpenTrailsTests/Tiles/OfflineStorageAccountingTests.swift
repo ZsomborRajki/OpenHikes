@@ -23,7 +23,6 @@ import SwiftData
 import Testing
 @testable import OpenTrails
 
-@MainActor
 @Suite("Storage accounting")
 struct StorageAccountingTests {
     /// This suite's own tile directories and its own auto-save store, so it

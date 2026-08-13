@@ -106,7 +106,6 @@ struct HikeRenameTests {
     // MARK: Persistence
 
     @Test("customName survives a SwiftData round-trip")
-    @MainActor
     func customNamePersists() throws {
         let container = try ModelContainer(
             for: Hike.self,
@@ -127,7 +126,6 @@ struct HikeRenameTests {
     }
 
     @Test("nil customName is preserved on save")
-    @MainActor
     func nilCustomNamePersists() throws {
         let container = try ModelContainer(
             for: Hike.self,

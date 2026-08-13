@@ -255,7 +255,6 @@ struct TileStoreTests {
     }
 }
 
-@MainActor
 @Suite("Auto-save controller")
 struct ControllerTests {
     private let sandbox = TileSandbox()
@@ -448,7 +447,6 @@ struct ControllerTests {
 /// applying them, while every deletion path in the app is specified as
 /// "flush first, then read the manifest" — and an unflushed pending set is
 /// durable tiles on disk with nothing left pointing at them.
-@MainActor
 @Suite("Auto-save lifecycle")
 struct AutoSaveLifecycleTests {
     private let sandbox = TileSandbox()

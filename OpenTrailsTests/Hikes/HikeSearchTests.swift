@@ -14,7 +14,6 @@ import SwiftData
 import Testing
 @testable import OpenTrails
 
-@MainActor
 @Suite("Hike search")
 struct HikeSearchTests {
     /// The sheet hands over `@Query`'s array; these are its titles in its

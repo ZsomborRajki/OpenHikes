@@ -17,7 +17,7 @@ import Foundation
 import os
 @testable import OpenTrails
 
-final class StubTileProtocol: URLProtocol, @unchecked Sendable {
+nonisolated final class StubTileProtocol: URLProtocol, @unchecked Sendable {
     /// What the tile server says back.
     struct Response: Sendable {
         var statusCode: Int = 200

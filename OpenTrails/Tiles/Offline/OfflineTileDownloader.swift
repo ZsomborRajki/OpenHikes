@@ -12,7 +12,6 @@ import Foundation
 import CoreLocation
 import os
 
-@MainActor
 @Observable
 final class OfflineTileDownloader {
     /// `nonisolated`: logged from within `group.addTask`, which runs off the

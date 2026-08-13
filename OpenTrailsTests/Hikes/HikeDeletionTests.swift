@@ -23,7 +23,6 @@ import SwiftData
 import Testing
 @testable import OpenTrails
 
-@MainActor
 @Suite("Hike deletion")
 struct HikeDeletionTests {
     /// What a deleted `Hike` still answers. SwiftData doesn't invalidate the

@@ -46,19 +46,19 @@ struct ElevationSample: Identifiable, Equatable {
     let elevation: Double
 }
 
-enum RouteMotion: String, Codable, Hashable, Sendable {
+nonisolated enum RouteMotion: String, Codable, Hashable, Sendable {
     case nonPedestrian
 }
 
 /// A single Codable track point. Stored inline by SwiftData as part of ``Hike/route``.
-struct RouteCoordinate: Codable, Hashable, Sendable {
+nonisolated struct RouteCoordinate: Codable, Hashable, Sendable {
     var latitude: Double
     var longitude: Double
     var elevation: Double?
     var timestamp: Date?
     var motion: RouteMotion?
 
-    nonisolated init(
+    init(
         latitude: Double,
         longitude: Double,
         elevation: Double? = nil,
@@ -72,13 +72,13 @@ struct RouteCoordinate: Codable, Hashable, Sendable {
         self.motion = motion
     }
 
-    nonisolated init(_ coordinate: CLLocationCoordinate2D) {
+    init(_ coordinate: CLLocationCoordinate2D) {
         self.latitude = coordinate.latitude
         self.longitude = coordinate.longitude
         self.motion = nil
     }
 
-    nonisolated var clCoordinate: CLLocationCoordinate2D {
+    var clCoordinate: CLLocationCoordinate2D {
         CLLocationCoordinate2D(latitude: latitude, longitude: longitude)
     }
 }

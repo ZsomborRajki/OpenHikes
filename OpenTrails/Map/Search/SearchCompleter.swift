@@ -9,7 +9,6 @@
 import MapKit
 import Observation
 
-@MainActor
 @Observable
 final class SearchCompleter: NSObject, MKLocalSearchCompleterDelegate {
     /// Live autocomplete suggestions for the current query fragment.

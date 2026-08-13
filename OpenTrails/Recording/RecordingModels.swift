@@ -476,7 +476,6 @@ nonisolated enum RecordingPreparation {
     }
 }
 
-@MainActor
 @Observable
 final class RecordingStats {
     nonisolated deinit {}
@@ -496,7 +495,6 @@ final class RecordingStats {
     }
 }
 
-@MainActor
 @Observable
 final class RecordingTrace {
     nonisolated deinit {}

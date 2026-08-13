@@ -30,7 +30,6 @@ import SwiftUI
 import Testing
 @testable import OpenTrails
 
-@MainActor
 @Suite("Elevation chart workload")
 struct ElevationChartWorkloadTests {
     /// A plausible recorded hike: one point a second for five hours, with

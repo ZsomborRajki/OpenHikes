@@ -34,7 +34,6 @@ struct DisplayedRoute: Equatable {
     /// selection) is the property set that decides how often the root view —
     /// and with it the sheet closure inside it — is invalidated. Keeping it in
     /// one named place is what lets a test observe exactly that set.
-    @MainActor
     static func forSelection(
         _ hike: Hike?,
         recordingPresented: Bool = false,
@@ -51,7 +50,6 @@ struct DisplayedRoute: Equatable {
 /// so their Core Location projection is kept across unrelated body passes
 /// rather than remapped on each one. Active recording drafts never enter this
 /// cache.
-@MainActor
 final class DisplayedRouteCoordinateCache {
     private var hikeID: UUID?
     private var cached: [CLLocationCoordinate2D] = []
@@ -79,13 +77,12 @@ final class DisplayedRouteCoordinateCache {
 /// detail view's controls write). This follows it rather than being written
 /// alongside it, so there is no second place a colour can be set and no pair of
 /// values that can drift apart.
-@MainActor
 @Observable
 final class RouteStyle {
     /// Non-isolated so releasing the last reference never requires proving
     /// we're on the main actor — deinit does nothing actor-sensitive, and
     /// without this, dropping a `RouteStyle` off the main actor (e.g. a
-    /// `@MainActor` test suite instance deallocated on Swift Testing's
+    /// main-actor-isolated test suite instance deallocated on Swift Testing's
     /// cooperative pool) traps in `MainActor.assumeIsolated`.
     nonisolated deinit {}
 

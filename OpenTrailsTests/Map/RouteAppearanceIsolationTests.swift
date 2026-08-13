@@ -28,7 +28,6 @@ import SwiftUI
 import Testing
 @testable import OpenTrails
 
-@MainActor
 @Suite("Route appearance isolation")
 struct RouteAppearanceIsolationTests {
     /// Observes exactly what `OpenTrailsView.body` reads of the selected hike —
@@ -111,7 +110,6 @@ struct RouteAppearanceIsolationTests {
     }
 }
 
-@MainActor
 @Suite("Route style")
 struct RouteStyleTests {
     /// Selecting a hike must put its colour and width on the map before

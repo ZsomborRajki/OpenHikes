@@ -7,7 +7,6 @@ import CoreLocation
 import Testing
 @testable import OpenTrails
 
-@MainActor
 @Suite("Displayed route coordinate cache")
 struct DisplayedRouteCoordinateCacheTests {
     @Test("clearing the selection releases the cached route")

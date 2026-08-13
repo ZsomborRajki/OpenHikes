@@ -7,7 +7,6 @@ import Foundation
 import Testing
 @testable import OpenTrails
 
-@MainActor
 @Suite("Sheet route")
 struct SheetRouteTests {
     @Test("reopening recording pops anything pushed above it")

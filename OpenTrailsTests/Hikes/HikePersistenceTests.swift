@@ -59,7 +59,6 @@ enum HikeSchemaBeforeAutoSave: VersionedSchema {
     }
 }
 
-@MainActor
 @Suite("Hike persistence")
 struct HikePersistenceTests {
     /// A store file of this test's own, deleted with the sandbox directory.

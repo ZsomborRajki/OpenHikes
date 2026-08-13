@@ -7,7 +7,6 @@ import SwiftData
 import Testing
 @testable import OpenTrails
 
-@MainActor
 @Suite("OpenTrails model")
 struct OpenTrailsModelTests {
     private enum PersistentStoreFailure: Error {

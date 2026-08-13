@@ -28,7 +28,7 @@ import Foundation
 /// main actor must not do — and keeping submission synchronous is also what
 /// keeps it ordered, since two concurrent suspending sends could arrive in
 /// either order.
-final class SerialAsyncQueue: Sendable {
+nonisolated final class SerialAsyncQueue: Sendable {
     typealias Operation = @Sendable () async -> Void
 
     private let continuation: AsyncStream<Operation>.Continuation

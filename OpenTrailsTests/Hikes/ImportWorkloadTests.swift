@@ -18,7 +18,6 @@ import SwiftData
 import Testing
 @testable import OpenTrails
 
-@MainActor
 @Suite("Import workload", .serialized)
 struct ImportWorkloadTests {
     private struct ObservedParse: Sendable {

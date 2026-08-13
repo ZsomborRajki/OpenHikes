@@ -25,7 +25,6 @@ import Foundation
 /// part of it because two trails can share a title, and returning the previous
 /// pass's `Hike` objects for a list that has since been replaced would hand
 /// the sheet rows pointing at deleted models.
-@MainActor
 final class HikeSearch {
     /// The trimmed query ``results`` answers. Empty means nothing is cached.
     private var query = ""

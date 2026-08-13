@@ -55,14 +55,12 @@ nonisolated enum RecordingFailure: LocalizedError, Equatable, Sendable {
     }
 }
 
-@MainActor
 enum RecordingLocationAuthorization: Equatable {
     case notDetermined
     case authorized
     case denied
 }
 
-@MainActor
 protocol RecordingLocationSource: AnyObject {
     var authorization: RecordingLocationAuthorization { get }
     var hasFullAccuracy: Bool { get }
@@ -74,7 +72,6 @@ protocol RecordingLocationSource: AnyObject {
     func stopRecordingUpdates()
 }
 
-@MainActor
 final class SystemRecordingLocationSource: RecordingLocationSource {
     private let manager = CLLocationManager()
 
@@ -149,13 +146,11 @@ nonisolated struct RecordingRecoverySummary: Equatable, Sendable {
     let pointCount: Int
 }
 
-@MainActor
 enum RecordingStopOutcome {
     case saved(Hike)
     case needsReview
 }
 
-@MainActor
 @Observable
 final class RecordingAmbiguityReview {
     nonisolated deinit {}
@@ -207,7 +202,6 @@ nonisolated private struct PendingAmbiguitySave: Sendable {
     let matchResult: TrailMatchResult
 }
 
-@MainActor
 @Observable
 final class HikeRecorder: NSObject {
     nonisolated private static let logger = Logger(

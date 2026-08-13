@@ -15,7 +15,6 @@ nonisolated struct StorageStartupIssue: Equatable, Sendable {
     let underlyingDescription: String
 }
 
-@MainActor
 @Observable
 final class OpenTrailsModel {
     struct ContainerLoadResult {

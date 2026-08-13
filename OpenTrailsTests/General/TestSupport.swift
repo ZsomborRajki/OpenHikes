@@ -24,7 +24,7 @@ enum Fixture {
     /// A short out-and-back near Cupertino: ~1.4 km, climbs then descends,
     /// one point per minute. Small enough to reason about by hand, real
     /// enough that distances/gradients aren't degenerate.
-    static let ridgeRoute: [RouteCoordinate] = {
+    nonisolated static let ridgeRoute: [RouteCoordinate] = {
         let start = Date(timeIntervalSince1970: 1_750_000_000)
         let points: [(Double, Double, Double)] = [
             (37.3300, -122.0300, 100),
@@ -47,7 +47,7 @@ enum Fixture {
     /// A closed loop whose finish comes back within a few metres of its
     /// start — the geometry that makes route-matching ambiguous, and the
     /// reason `RouteProfile.nearestPoint` takes a continuity reference.
-    static let loopRoute: [RouteCoordinate] = {
+    nonisolated static let loopRoute: [RouteCoordinate] = {
         let center = CLLocationCoordinate2D(latitude: 47.6300, longitude: 12.8600)
         let radius = 0.0045 // ~500 m
         var points = (0..<36).map { step -> RouteCoordinate in
@@ -73,7 +73,7 @@ enum Fixture {
     /// with two identical candidates the earlier one wins by iteration order
     /// alone, which is the coin landing the right way up, not a tie being
     /// broken.
-    static let outAndBackRoute: [RouteCoordinate] = {
+    nonisolated static let outAndBackRoute: [RouteCoordinate] = {
         // ~0.75 m east at this latitude.
         let returnLegOffset = 1e-5
         let outbound = (0..<20).map { step in
@@ -99,19 +99,18 @@ enum Fixture {
     /// interval — which is the mistake both the bulk downloader and the
     /// auto-save corridor have to avoid, so they're both tested against this
     /// same trail.
-    static let antimeridianRoute: [CLLocationCoordinate2D] = [
+    nonisolated static let antimeridianRoute: [CLLocationCoordinate2D] = [
         CLLocationCoordinate2D(latitude: -17.70, longitude: 179.95),
         CLLocationCoordinate2D(latitude: -17.71, longitude: -179.95)
     ]
 
     /// The route as the map/downloader see it.
-    static func coordinates(_ route: [RouteCoordinate]) -> [CLLocationCoordinate2D] {
+    nonisolated static func coordinates(_ route: [RouteCoordinate]) -> [CLLocationCoordinate2D] {
         route.map(\.clCoordinate)
     }
 
     /// A hike backed by an in-memory store, so `@Model` bookkeeping
     /// (`autoSavedTileKeys`, `offlineDownloads`) behaves as it does in the app.
-    @MainActor
     static func hike(
         title: String = "Ridge Loop",
         route: [RouteCoordinate] = ridgeRoute,
@@ -129,7 +128,6 @@ enum Fixture {
         return hike
     }
 
-    @MainActor
     static func modelContainer() throws -> ModelContainer {
         try ModelContainer(
             for: Hike.self,
@@ -137,7 +135,6 @@ enum Fixture {
         )
     }
 
-    @MainActor
     static func modelContext() throws -> ModelContext {
         ModelContext(try modelContainer())
     }
@@ -171,7 +168,7 @@ enum Fixture {
         #endif
     }
 
-    static func tileImage() -> TileImage? {
+    nonisolated static func tileImage() -> TileImage? {
         let size = CGSize(width: 1, height: 1)
         #if canImport(UIKit)
         return UIGraphicsImageRenderer(size: size).image { context in
@@ -196,7 +193,7 @@ enum Fixture {
 /// Auto-save no longer takes an image and encodes it, it moves the bytes a
 /// fetch already cached, so a test that wants a tile to be savable has to put
 /// those bytes where a fetch would have — see ``TileSandbox``.
-enum TileStore {
+nonisolated enum TileStore {
     /// A real, decodable tile as bytes — what a fetch actually writes. Tests
     /// read tiles back through `TileCache`, so filler bytes wouldn't do.
     static let tileData: Data = {
@@ -332,7 +329,7 @@ nonisolated final class TileSandbox: Sendable {
 ///
 /// Whether a skip is acceptable is `SuitePrecondition`'s question, not this
 /// one's.
-enum SharedStoreProbe {
+nonisolated enum SharedStoreProbe {
     static var isAvailable: Bool {
         FileManager.default.containerURL(forSecurityApplicationGroupIdentifier: SharedStore.appGroupID) != nil
     }

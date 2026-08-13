@@ -22,7 +22,6 @@ import SwiftUI
 import Testing
 @testable import OpenTrails
 
-@MainActor
 @Suite("Map coordinator")
 struct MapCoordinatorTests {
     private let highlight = RouteHighlight()
