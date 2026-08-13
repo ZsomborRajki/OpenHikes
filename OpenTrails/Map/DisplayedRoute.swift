@@ -108,6 +108,9 @@ final class RouteStyle {
     /// was registered under and is dropped rather than allowed to reinstate
     /// that hike's colour over the newly selected one's.
     @ObservationIgnored private var generation = 0
+    
+    /// The hike currently being tracked for style changes.
+    @ObservationIgnored private var trackedHike: Hike?
 
     /// Tracks `hike`'s tint and width, or resets to the defaults with `nil`.
     ///
@@ -120,7 +123,8 @@ final class RouteStyle {
             return
         }
         apply(tint: hike.tint, width: hike.routeWidth)
-        track(hike, generation: generation)
+        trackedHike = hike
+        track(generation: generation)
     }
 
     /// Observes the followed hike's appearance imperatively and re-registers
@@ -128,17 +132,17 @@ final class RouteStyle {
     /// own observations. The values are re-read in the callback rather than
     /// carried by it, so two writes landing in one turn — the second of which
     /// arrives while no registration is armed — still converge on the latest.
-    private func track(_ hike: Hike, generation: Int) {
+    private func track(generation: Int) {
+        guard let hike = trackedHike else { return }
         withObservationTracking {
             _ = hike.tint
             _ = hike.routeWidth
-        } onChange: { [weak self, weak hike] in
-            let style = self
-            let followed = hike
+        } onChange: { [weak self] in
+            guard let style = self else { return }
             Task { @MainActor in
-                guard let style, let followed, generation == style.generation else { return }
+                guard generation == style.generation, let followed = style.trackedHike else { return }
                 style.apply(tint: followed.tint, width: followed.routeWidth)
-                style.track(followed, generation: generation)
+                style.track(generation: generation)
             }
         }
     }

@@ -9,6 +9,10 @@ import SwiftUI
 import CoreLocation
 
 extension Hike {
+    /// The name shown everywhere in the UI. Returns ``customName`` when the
+    /// user has set one, otherwise falls back to the original ``title``.
+    var displayTitle: String { customName?.isEmpty == false ? customName! : title }
+
     var distance: Measurement<UnitLength> {
         Measurement(value: distanceMeters, unit: .meters)
     }

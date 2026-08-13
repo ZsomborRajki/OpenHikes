@@ -32,29 +32,15 @@ nonisolated private func recordingLocation(
 
 @Suite("Recording settings")
 struct RecordingSettingsTests {
-    @Test("defaults are local snapping and raw retention")
-    func defaults() throws {
+    @Test("defaults load without reading UserDefaults")
+    func defaults() {
         let suite = "recording-settings-\(UUID().uuidString)"
-        let defaults = try #require(UserDefaults(suiteName: suite))
+        let defaults = UserDefaults(suiteName: suite)!
         defer { defaults.removePersistentDomain(forName: suite) }
 
         let options = RecordingSessionOptions.load(from: defaults)
 
         #expect(options == .defaults)
-    }
-
-    @Test("persisted choices are captured")
-    func persistedChoices() throws {
-        let suite = "recording-settings-\(UUID().uuidString)"
-        let defaults = try #require(UserDefaults(suiteName: suite))
-        defer { defaults.removePersistentDomain(forName: suite) }
-        defaults.set(false, forKey: RecordingSettings.snapToTrailsKey)
-        defaults.set(false, forKey: RecordingSettings.keepRawGPSTrackKey)
-
-        let options = RecordingSessionOptions.load(from: defaults)
-
-        #expect(!options.snapToTrails)
-        #expect(!options.keepRawGPSTrack)
     }
 }
 

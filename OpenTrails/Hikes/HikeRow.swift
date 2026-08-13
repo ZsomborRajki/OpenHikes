@@ -26,7 +26,7 @@ struct HikeRow: View {
                 .background(hike.tintOpaque, in: Circle())
 
             VStack(alignment: .leading, spacing: 2) {
-                Text(hike.title)
+                Text(hike.displayTitle)
                     .font(.body.weight(.medium))
                     .foregroundStyle(.primary)
                 HStack(spacing: 6) {

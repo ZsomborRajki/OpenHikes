@@ -146,6 +146,10 @@ struct HikeDetailView: View {
     @State private var storedBytesMeasurementTask: Task<Void, Never>?
     @State private var storedBytesMeasurementGeneration = 0
     @State private var storageDeletionFailed = false
+    /// Whether the title is currently being edited inline.
+    @State private var isEditingTitle = false
+    /// Draft text while the inline title field is open.
+    @State private var titleDraft = ""
     private static let storedBytesRefreshDebounce: Duration = .seconds(5)
 
     /// Built once per hike in `.task`, never in `init`. Scrubbing then resolves
@@ -194,7 +198,7 @@ struct HikeDetailView: View {
             }
             .padding()
         }
-        .navigationTitle(hike.title)
+        .navigationTitle(hike.displayTitle)
         #if os(iOS)
         .navigationBarTitleDisplayMode(.inline)
         #endif
@@ -534,8 +538,32 @@ struct HikeDetailView: View {
                 .background(hike.tintOpaque, in: RoundedRectangle(cornerRadius: 14))
 
             VStack(alignment: .leading, spacing: 4) {
-                Text(hike.title)
-                    .font(.title2.bold())
+                if isEditingTitle {
+                    TextField(hike.title, text: $titleDraft)
+                        .font(.title2.bold())
+                        .onSubmit { commitTitleEdit() }
+                        .toolbar {
+                            ToolbarItemGroup(placement: .keyboard) {
+                                Spacer()
+                                Button("Done") { commitTitleEdit() }
+                            }
+                        }
+                } else {
+                    HStack(alignment: .firstTextBaseline, spacing: 6) {
+                        Text(hike.displayTitle)
+                            .font(.title2.bold())
+                        Button {
+                            titleDraft = hike.displayTitle
+                            isEditingTitle = true
+                        } label: {
+                            Image(systemName: "pencil")
+                                .font(.subheadline)
+                                .foregroundStyle(.secondary)
+                        }
+                        .buttonStyle(.plain)
+                        .accessibilityLabel("Rename hike")
+                    }
+                }
                 Text(hike.date.formatted(date: .complete, time: .omitted))
                     .font(.subheadline)
                     .foregroundStyle(.secondary)
@@ -543,6 +571,12 @@ struct HikeDetailView: View {
 
             Spacer()
         }
+    }
+
+    private func commitTitleEdit() {
+        let trimmed = titleDraft.trimmingCharacters(in: .whitespacesAndNewlines)
+        hike.customName = trimmed.isEmpty ? nil : trimmed
+        isEditingTitle = false
     }
 
     // MARK: Stats

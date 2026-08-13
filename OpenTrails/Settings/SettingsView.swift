@@ -24,10 +24,6 @@ struct SettingsView: View {
 
     @AppStorage(SettingsKey.tileProviderID) private var tileProviderID = TileProvider.default.id
     @AppStorage(SettingsKey.backgroundTrackingEnabled) private var backgroundTrackingEnabled = false
-    @AppStorage(SettingsKey.snapRecordedHikesToTrails)
-    private var snapRecordedHikesToTrails = true
-    @AppStorage(SettingsKey.keepRawRecordedGPSTrack)
-    private var keepRawRecordedGPSTrack = true
 
     /// Tile bytes on disk, split into offline coverage and browsing residue;
     /// `nil` until measured.
@@ -48,7 +44,6 @@ struct SettingsView: View {
                 accountSection
                 mapProviderSection
                 backgroundTrackingSection
-                recordingSection
                 offlineStorageSection
             }
             .navigationTitle("Settings")
@@ -159,35 +154,6 @@ struct SettingsView: View {
                 backgroundTracker.setEnabled(newValue)
             }
         )
-    }
-
-    // MARK: - Recording
-
-    @ViewBuilder
-    private var recordingSection: some View {
-        #if os(iOS)
-        Section {
-            Toggle(
-                "Snap to Trails",
-                isOn: $snapRecordedHikesToTrails
-            )
-            Toggle(
-                "Keep Raw GPS Track",
-                isOn: $keepRawRecordedGPSTrack
-            )
-        } header: {
-            Text("Recording")
-        } footer: {
-            VStack(alignment: .leading, spacing: 6) {
-                Text(
-                    "Trail snapping uses the cached OpenStreetMap graph on this device. Turning it off keeps the filtered GPS route unchanged."
-                )
-                Text(
-                    "Keeping the raw track makes a matched recording reversible, but uses more storage."
-                )
-            }
-        }
-        #endif
     }
 
     // MARK: - Offline

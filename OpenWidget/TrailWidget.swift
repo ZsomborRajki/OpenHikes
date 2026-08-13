@@ -283,7 +283,7 @@ struct TrailWidgetProvider: TimelineProvider {
                 } else {
                     elevation = nil
                 }
-                try? SharedStore.appendPendingRecordingFix(
+                _ = try? SharedStore.appendPendingRecordingFix(
                     SharedRecordingFix(
                         sessionID: requestedSessionID,
                         latitude: location.coordinate.latitude,

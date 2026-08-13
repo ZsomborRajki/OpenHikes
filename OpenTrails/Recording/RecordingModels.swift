@@ -13,45 +13,11 @@ import Foundation
 import Observation
 import OpenTrailsShared
 
-nonisolated enum RecordingSettings {
-    static let snapToTrailsKey = "settings.snapRecordedHikesToTrails"
-    static let keepRawGPSTrackKey =
-        "settings.keepRawRecordedGPSTrack"
-}
-
 nonisolated struct RecordingSessionOptions: Codable, Equatable, Sendable {
-    var snapToTrails: Bool
-    var keepRawGPSTrack: Bool
-
-    static let defaults = RecordingSessionOptions(
-        snapToTrails: true,
-        keepRawGPSTrack: true
-    )
+    static let defaults = RecordingSessionOptions()
 
     static func load(from defaults: UserDefaults) -> RecordingSessionOptions {
-        return RecordingSessionOptions(
-            snapToTrails: storedBool(
-                RecordingSettings.snapToTrailsKey,
-                defaultValue: true,
-                in: defaults
-            ),
-            keepRawGPSTrack: storedBool(
-                RecordingSettings.keepRawGPSTrackKey,
-                defaultValue: true,
-                in: defaults
-            )
-        )
-    }
-
-    private static func storedBool(
-        _ key: String,
-        defaultValue: Bool,
-        in defaults: UserDefaults
-    ) -> Bool {
-        guard defaults.object(forKey: key) != nil else {
-            return defaultValue
-        }
-        return defaults.bool(forKey: key)
+        RecordingSessionOptions()
     }
 }
 
@@ -361,7 +327,6 @@ nonisolated enum RecordingPreparation {
         endedAt: Date,
         graph: TrailGraph? = nil,
         gapDistances: [Int: Double] = [:],
-        keepRawGPSTrack: Bool = true,
         ambiguityChoices: [Int: TrailAmbiguityChoice]? = nil
     ) throws(RecordingFailure) -> PreparedRecording {
         let deduplicated = normalizedPoints(points)
@@ -379,7 +344,6 @@ nonisolated enum RecordingPreparation {
             startedAt: startedAt,
             endedAt: endedAt,
             match: match,
-            keepRawGPSTrack: keepRawGPSTrack,
             ambiguityChoices: ambiguityChoices
         )
     }
@@ -389,8 +353,7 @@ nonisolated enum RecordingPreparation {
         startedAt: Date,
         endedAt: Date,
         matchResult: TrailMatchResult,
-        choices: [Int: TrailAmbiguityChoice],
-        keepRawGPSTrack: Bool
+        choices: [Int: TrailAmbiguityChoice]
     ) throws(RecordingFailure) -> PreparedRecording {
         let deduplicated = normalizedPoints(points)
         guard deduplicated.count > 1 else { throw .tooShort }
@@ -399,7 +362,6 @@ nonisolated enum RecordingPreparation {
             startedAt: startedAt,
             endedAt: endedAt,
             match: matchResult,
-            keepRawGPSTrack: keepRawGPSTrack,
             ambiguityChoices: choices
         )
     }
@@ -409,7 +371,6 @@ nonisolated enum RecordingPreparation {
         startedAt: Date,
         endedAt: Date,
         match: TrailMatchResult?,
-        keepRawGPSTrack: Bool,
         ambiguityChoices: [Int: TrailAmbiguityChoice]?
     ) -> PreparedRecording {
         let rawRoute = deduplicated.map(\.routeCoordinate)
@@ -438,7 +399,7 @@ nonisolated enum RecordingPreparation {
             route: preparedPoints.map(\.routeCoordinate),
             // No match means `route` already is the raw trace; a second copy
             // would double the row without preserving any additional fact.
-            rawRoute: usesMatchedRoute && keepRawGPSTrack ? rawRoute : [],
+            rawRoute: usesMatchedRoute ? rawRoute : [],
             distanceMeters: distanceMeters,
             startedAt: startedAt,
             endedAt: endedAt,

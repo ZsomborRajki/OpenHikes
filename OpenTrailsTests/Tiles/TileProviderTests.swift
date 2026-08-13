@@ -146,14 +146,6 @@ struct TileProviderTests {
     func settingsKeys() {
         #expect(SettingsKey.tileProviderID == "settings.tileProviderID")
         #expect(SettingsKey.backgroundTrackingEnabled == "settings.backgroundTrackingEnabled")
-        #expect(
-            SettingsKey.snapRecordedHikesToTrails
-                == "settings.snapRecordedHikesToTrails"
-        )
-        #expect(
-            SettingsKey.keepRawRecordedGPSTrack
-                == "settings.keepRawRecordedGPSTrack"
-        )
         #expect(SettingsKey.lastSelectedHikeID == "selection.lastHikeID")
     }
 

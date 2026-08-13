@@ -292,6 +292,8 @@ private struct RecordingControls: View {
     var onDiscarded: (UUID?) -> Void
 
     @State private var showDiscardConfirmation = false
+    @State private var showStopAlert = false
+    @State private var stopNameDraft = ""
 
     var body: some View {
         VStack(spacing: 12) {
@@ -372,16 +374,24 @@ private struct RecordingControls: View {
         } message: {
             Text("The recorded track cannot be recovered after it is discarded.")
         }
+        .alert("Name Your Hike", isPresented: $showStopAlert) {
+            TextField(
+                recorder.currentHike?.title ?? "Hike name",
+                text: $stopNameDraft
+            )
+            Button("Save") {
+                Task { await stopAndSave() }
+            }
+            Button("Cancel", role: .cancel) {}
+        } message: {
+            Text("Give this hike a name, or leave it blank to keep the default.")
+        }
     }
 
     private var stopButton: some View {
         Button("Stop", systemImage: "stop.fill") {
-            Task {
-                guard let outcome = try? await recorder.stop() else { return }
-                if case .saved(let hike) = outcome {
-                    onSaved(hike)
-                }
-            }
+            stopNameDraft = recorder.currentHike?.title ?? ""
+            showStopAlert = true
         }
         .buttonStyle(.borderedProminent)
         .tint(.red)
@@ -392,6 +402,17 @@ private struct RecordingControls: View {
             showDiscardConfirmation = true
         }
         .buttonStyle(.bordered)
+    }
+
+    private func stopAndSave() async {
+        guard let outcome = try? await recorder.stop() else { return }
+        let trimmed = stopNameDraft.trimmingCharacters(in: .whitespacesAndNewlines)
+        if case .saved(let hike) = outcome {
+            if !trimmed.isEmpty {
+                hike.customName = trimmed
+            }
+            onSaved(hike)
+        }
     }
 }
 

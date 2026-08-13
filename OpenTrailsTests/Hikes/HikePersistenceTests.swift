@@ -129,6 +129,7 @@ struct HikePersistenceTests {
                 author: "Someone",
                 keywords: "ridge, loop"
             )
+            hike.customName = "My Ridge"
             context.insert(hike)
             try context.save()
         }
@@ -140,6 +141,8 @@ struct HikePersistenceTests {
         )
 
         #expect(reopened.title == "Ridge Loop")
+        #expect(reopened.customName == "My Ridge")
+        #expect(reopened.displayTitle == "My Ridge")
         #expect(reopened.distanceMeters == 1_234.5)
         #expect(reopened.date == date)
         #expect(reopened.tintHex == "#FF9500FF")

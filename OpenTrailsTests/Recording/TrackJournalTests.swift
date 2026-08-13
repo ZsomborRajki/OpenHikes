@@ -45,10 +45,7 @@ struct TrackJournalTests {
         let journal = TrackJournal(directory: directory, clock: clock.read)
         let sessionID = UUID()
 
-        let options = RecordingSessionOptions(
-            snapToTrails: false,
-            keepRawGPSTrack: false
-        )
+        let options = RecordingSessionOptions()
         try await journal.start(
             sessionID: sessionID,
             startedAt: start,

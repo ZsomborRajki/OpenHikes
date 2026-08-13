@@ -26,6 +26,13 @@ final class Hike {
     var symbol: String
     /// Ordered track points making up the route.
     var route: [RouteCoordinate]
+    /// A user-chosen name that overrides the GPS/import-derived ``title``.
+    /// `nil` means no override is set and the original title is displayed.
+    ///
+    /// The inline `= nil` default is required for SwiftData lightweight
+    /// migration so existing stores can backfill the new optional column.
+    var customName: String? = nil
+
     /// The unmatched GPS trace when trail matching moved a recorded route.
     /// Imported hikes and recordings that stayed raw leave this empty.
     ///

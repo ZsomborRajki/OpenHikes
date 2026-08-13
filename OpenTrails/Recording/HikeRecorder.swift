@@ -204,14 +204,13 @@ final class RecordingAmbiguityReview {
 nonisolated private struct PendingAmbiguitySave: Sendable {
     let session: TrackJournalSession
     let normalizedPoints: [RecordingPoint]
-    let options: RecordingSessionOptions
     let matchResult: TrailMatchResult
 }
 
 @MainActor
 @Observable
 final class HikeRecorder: NSObject {
-    private static let logger = Logger(
+    nonisolated private static let logger = Logger(
         subsystem: "OpenTrails",
         category: "HikeRecorder"
     )
@@ -262,8 +261,6 @@ final class HikeRecorder: NSObject {
     @ObservationIgnored private let uptime: @Sendable () -> TimeInterval
     @ObservationIgnored private let journalFlushDelay: Duration
     @ObservationIgnored private var sessionID: UUID?
-    @ObservationIgnored private var sessionOptions:
-        RecordingSessionOptions?
     @ObservationIgnored private var sessionUptimeBase: TimeInterval?
     @ObservationIgnored private var lastAcceptedPoint: RecordingPoint?
     @ObservationIgnored private var accumulator = RecordingDistanceAccumulator()
@@ -620,7 +617,6 @@ final class HikeRecorder: NSObject {
 
         sessionID = session.metadata.sessionID
         sessionStartedAt = session.metadata.startedAt
-        sessionOptions = session.metadata.recordingOptions ?? .defaults
         let recoveryLastUpdatedAt = session.metadata.lastUpdatedAt
         startRequested = true
         let recoveredHike: Hike
@@ -748,12 +744,11 @@ final class HikeRecorder: NSObject {
 
         let id = UUID()
         let startedAt = clock()
-        let options = RecordingSessionOptions.load(from: defaults)
         do {
             try await journal.start(
                 sessionID: id,
                 startedAt: startedAt,
-                recordingOptions: options
+                recordingOptions: .defaults
             )
         } catch {
             fail(.storage(error.localizedDescription), endLocationUpdates: false)
@@ -779,7 +774,6 @@ final class HikeRecorder: NSObject {
 
         sessionID = id
         sessionStartedAt = startedAt
-        sessionOptions = options
         sessionUptimeBase = uptime()
         cancelLiveMatching(clearWindow: true)
         stats.reset()
@@ -840,8 +834,7 @@ final class HikeRecorder: NSObject {
         lastAcceptedPoint = point
         acceptedFixRevision &+= 1
 
-        let liveMatchingEnabled = activeSessionOptions.snapToTrails
-            && trailGraphProvider != nil
+        let liveMatchingEnabled = trailGraphProvider != nil
         if liveMatchingEnabled {
             liveMatchWindow.append(point)
         }
@@ -907,8 +900,7 @@ final class HikeRecorder: NSObject {
     private func prefetchTrailGraphIfNeeded(
         around coordinate: CLLocationCoordinate2D
     ) {
-        guard activeSessionOptions.snapToTrails,
-              let trailGraphProvider,
+        guard let trailGraphProvider,
               let region = trailGraphProvider.region(containing: coordinate),
               requestedGraphRegions.insert(region).inserted else {
             return
@@ -930,7 +922,6 @@ final class HikeRecorder: NSObject {
 
     private func scheduleLiveMatching() {
         guard phase == .waitingForFix || phase == .recording,
-              activeSessionOptions.snapToTrails,
               let trailGraphProvider,
               liveMatchWindow.count > 1 else {
             stats.matchedTrailName = nil
@@ -1130,10 +1121,6 @@ final class HikeRecorder: NSObject {
         }
     }
 
-    private var activeSessionOptions: RecordingSessionOptions {
-        sessionOptions ?? .defaults
-    }
-
     private func schedulePendingWidgetFixMerge() {
         guard phase == .waitingForFix
                 || phase == .recording
@@ -1318,8 +1305,7 @@ final class HikeRecorder: NSObject {
         stats.pointCount = points.count
         stats.horizontalAccuracy = points.last?.horizontalAccuracy
         stats.averageSpeedMetersPerSecond = accumulator.averageSpeedMetersPerSecond
-        if activeSessionOptions.snapToTrails,
-           trailGraphProvider != nil,
+        if trailGraphProvider != nil,
            !points.isEmpty {
             let windowStart = Self.liveWindowRetainedStart(in: points)
             liveMatchWindow = Array(points[windowStart...])
@@ -1347,8 +1333,6 @@ final class HikeRecorder: NSObject {
         }
 
         let prepared: PreparedRecording
-        let options = session.metadata.recordingOptions
-            ?? activeSessionOptions
         let normalized: [RecordingPoint]
         let graph: TrailGraph?
         let gapEvidence: [Int: Double]
@@ -1361,8 +1345,7 @@ final class HikeRecorder: NSObject {
                 )
                 return RecordingPreparation.normalizedPoints(session.points)
             }.value
-            if options.snapToTrails,
-               let trailGraphProvider {
+            if let trailGraphProvider {
                 do {
                     graph = try await trailGraphProvider.cachedGraph(
                         covering: normalized.map(\.coordinate)
@@ -1384,8 +1367,7 @@ final class HikeRecorder: NSObject {
                     startedAt: session.metadata.startedAt,
                     endedAt: endedAt,
                     graph: graph,
-                    gapDistances: gapEvidence,
-                    keepRawGPSTrack: options.keepRawGPSTrack
+                    gapDistances: gapEvidence
                 )
             }.value
         } catch let failure as RecordingFailure {
@@ -1401,7 +1383,6 @@ final class HikeRecorder: NSObject {
             review = PendingAmbiguitySave(
                 session: session,
                 normalizedPoints: normalized,
-                options: options,
                 matchResult: matchResult
             )
         } else {
@@ -1631,9 +1612,7 @@ final class HikeRecorder: NSObject {
                     startedAt: startedAt,
                     endedAt: endedAt,
                     matchResult: pendingAmbiguitySave.matchResult,
-                    choices: choices,
-                    keepRawGPSTrack:
-                        pendingAmbiguitySave.options.keepRawGPSTrack
+                    choices: choices
                 )
             }.value
             let hike = try persist(
@@ -1724,7 +1703,6 @@ final class HikeRecorder: NSObject {
         ambiguityReview = nil
         pendingAmbiguitySave = nil
         sessionID = nil
-        sessionOptions = nil
         sessionUptimeBase = nil
         lastAcceptedPoint = nil
         accumulator = RecordingDistanceAccumulator()
