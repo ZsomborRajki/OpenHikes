@@ -119,6 +119,33 @@ struct TrailMatcherTests {
         #expect(result.points == points)
     }
 
+    @Test("disconnected sparse candidates do not invent a reviewable ambiguity")
+    func disconnectedSparseCandidatesAreNotAmbiguous() {
+        let graph = graph(
+            nodes: [
+                (1, 47.6300, 12.8600),
+                (2, 47.6310, 12.8600),
+                (3, 47.6500, 12.9000),
+                (4, 47.6510, 12.9000)
+            ],
+            ways: [
+                (10, [1, 2], "West Trail"),
+                (20, [3, 4], "East Trail")
+            ]
+        )
+        let points = [
+            point(47.6305, 12.8600, at: 0, accuracy: 5),
+            point(47.6505, 12.9000, at: 720, accuracy: 5)
+        ]
+
+        let result = TrailMatcher.match(points: points, graph: graph)
+
+        #expect(result.ambiguousLegCount == 0)
+        #expect(result.ambiguities.isEmpty)
+        #expect(result.ambiguousLegCount == result.ambiguities.count)
+        #expect(result.points == points)
+    }
+
     @Test("pedometer evidence can select a same-edge turnaround")
     func sameEdgeTurnaroundUsesDistanceEvidence() {
         let graph = graph(

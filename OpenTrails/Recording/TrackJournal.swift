@@ -7,6 +7,7 @@
 //
 
 import Foundation
+import OpenTrailsShared
 
 nonisolated enum TrackJournalError: Error, Equatable, Sendable {
     case invalidHeader
@@ -141,17 +142,24 @@ actor TrackJournal {
         } catch {
             throw TrackJournalError.io(error.localizedDescription)
         }
-        var timestamps = Self.decodeRecords(data).map(\.timestamp)
+        let timestamps = TimestampIndex(
+            Self.decodeRecords(data).map(\.timestamp)
+        )
         var accepted: [RecordingPoint] = []
+        let tolerance = max(0, duplicateInterval)
+        var lastAcceptedTimestamp: Date?
         for point in points.sorted(by: { $0.timestamp < $1.timestamp }) {
-            guard !timestamps.contains(where: {
-                abs($0.timeIntervalSince(point.timestamp))
-                    <= duplicateInterval
-            }) else {
+            let duplicatesAccepted = lastAcceptedTimestamp.map {
+                point.timestamp.timeIntervalSince($0) <= tolerance
+            } ?? false
+            guard !timestamps.contains(
+                point.timestamp,
+                within: tolerance
+            ), !duplicatesAccepted else {
                 continue
             }
             accepted.append(point)
-            timestamps.append(point.timestamp)
+            lastAcceptedTimestamp = point.timestamp
         }
         pending.append(contentsOf: accepted)
         if !accepted.isEmpty {
@@ -278,23 +286,39 @@ actor TrackJournal {
         assertOffMainThread("Track journal recovery must stay off the main thread")
         guard fileHandle == nil else { return }
         do {
-            fileHandle = try FileHandle(forWritingTo: journalURL)
-            let size = try fileHandle?.seekToEnd() ?? 0
+            let metadataData = try Data(contentsOf: metadataURL)
+            let metadata = try JSONDecoder().decode(
+                TrackJournalMetadata.self,
+                from: metadataData
+            )
+            let data = try Data(contentsOf: journalURL)
+            let header = try Self.decodeHeader(data)
+            guard header.sessionID == metadata.sessionID,
+                  abs(
+                    header.startedAt.timeIntervalSince(metadata.startedAt)
+                  ) < 0.001
+            else {
+                throw TrackJournalError.invalidHeader
+            }
+
+            let fileHandle = try FileHandle(forWritingTo: journalURL)
+            self.fileHandle = fileHandle
+            let size = try fileHandle.seekToEnd()
             let completeSize = UInt64(
                 Self.headerByteCount
                     + Self.pointCount(fileSize: Int64(size))
                         * Self.recordByteCount
             )
             if size != completeSize {
-                try fileHandle?.truncate(atOffset: completeSize)
+                try fileHandle.truncate(atOffset: completeSize)
             }
-            try fileHandle?.seekToEnd()
-            let metadataData = try Data(contentsOf: metadataURL)
-            metadata = try JSONDecoder().decode(
-                TrackJournalMetadata.self,
-                from: metadataData
-            )
+            try fileHandle.seekToEnd()
+            self.metadata = metadata
             lastFlushAt = clock()
+        } catch let error as TrackJournalError {
+            try? fileHandle?.close()
+            fileHandle = nil
+            throw error
         } catch {
             try? fileHandle?.close()
             fileHandle = nil

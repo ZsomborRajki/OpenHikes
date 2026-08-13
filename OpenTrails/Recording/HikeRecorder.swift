@@ -805,6 +805,8 @@ final class HikeRecorder: NSObject {
             maximumAge: LocationFixPolicy.foregroundMaximumAge,
             now: clock()
         ) {
+            // Keep rejected low-quality fixes visible as "Weak signal" while
+            // the stricter recording policy waits for usable geometry.
             stats.horizontalAccuracy = location.horizontalAccuracy
         }
         guard RecordingFixPolicy.accepts(

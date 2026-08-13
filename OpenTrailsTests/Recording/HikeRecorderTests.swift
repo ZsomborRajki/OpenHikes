@@ -1141,6 +1141,28 @@ final class HikeRecorderTests {
         #expect(recorder.stats.pointCount == 2)
     }
 
+    @Test("a rejected weak fix still reports weak GPS signal")
+    func rejectedWeakFixUpdatesAccuracyOnly() async {
+        let recorder = makeRecorder()
+        await recorder.start()
+
+        source.deliver(
+            fix(
+                latitude: 47.63,
+                accuracy:
+                    RecordingFixPolicy.maximumHorizontalAccuracy + 450
+            )
+        )
+        await settleDelegateHop()
+
+        #expect(
+            recorder.stats.horizontalAccuracy
+                == RecordingFixPolicy.maximumHorizontalAccuracy + 450
+        )
+        #expect(recorder.stats.pointCount == 0)
+        #expect(recorder.phase == .waitingForFix)
+    }
+
     @Test("a lone accepted fix is flushed without waiting for ten points")
     func sparseFixesAreFlushedOnDeadline() async throws {
         let recorder = makeRecorder()

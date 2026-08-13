@@ -168,7 +168,8 @@ actor OverpassTrailGraphProvider: TrailGraphProviding {
         } catch let error as TrailGraphProviderError {
             inFlight[key] = nil
             if case .rateLimited(let delay) = error {
-                retryAfter = clock().addingTimeInterval(delay)
+                let candidate = clock().addingTimeInterval(delay)
+                retryAfter = max(retryAfter ?? .distantPast, candidate)
             }
             throw error
         } catch {

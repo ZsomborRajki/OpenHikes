@@ -16,6 +16,31 @@ private actor OverpassRequestRecorder {
     }
 }
 
+private actor ConsecutiveRateLimitTransport {
+    private(set) var requestCount = 0
+
+    func response() async -> OverpassHTTPResponse {
+        requestCount += 1
+        let requestIndex = requestCount
+        if requestIndex == 1 {
+            while requestCount < 2 {
+                await Task.yield()
+            }
+            return OverpassHTTPResponse(
+                data: Data(),
+                statusCode: 429,
+                headers: ["retry-after": "120"]
+            )
+        }
+        try? await Task.sleep(for: .milliseconds(25))
+        return OverpassHTTPResponse(
+            data: Data(),
+            statusCode: 429,
+            headers: ["retry-after": "10"]
+        )
+    }
+}
+
 @Suite("Overpass trail graph")
 struct OverpassTrailGraphProviderTests {
     @Test("region identity changes exactly at the cache-tile boundary")
@@ -225,6 +250,67 @@ struct OverpassTrailGraphProviderTests {
         try await refresh.value
 
         #expect(graph?.edges.isEmpty == true)
+    }
+
+    @Test("consecutive 429s preserve the longest retry floor")
+    func repeatedRateLimitsKeepLongestFloor() async throws {
+        let transport = ConsecutiveRateLimitTransport()
+        let clock = TestClock()
+        let provider = OverpassTrailGraphProvider(
+            clock: clock.read,
+            transport: { _ in
+                await transport.response()
+            }
+        )
+        let first = CLLocationCoordinate2D(
+            latitude: 47.63,
+            longitude: 12.86
+        )
+        let region = try #require(provider.region(containing: first))
+        let second = CLLocationCoordinate2D(
+            latitude: first.latitude,
+            longitude: SlippyTileMath.lon(
+                x: region.x + 1,
+                z: region.zoom
+            ) + 0.000_001
+        )
+        let third = CLLocationCoordinate2D(
+            latitude: first.latitude,
+            longitude: SlippyTileMath.lon(
+                x: region.x + 2,
+                z: region.zoom
+            ) + 0.000_001
+        )
+
+        let firstRequest = Task {
+            try await provider.prefetch(around: first)
+        }
+        let secondRequest = Task {
+            try await provider.prefetch(around: second)
+        }
+        for request in [firstRequest, secondRequest] {
+            do {
+                try await request.value
+                Issue.record("A scripted 429 unexpectedly succeeded.")
+            } catch let error as TrailGraphProviderError {
+                guard case .rateLimited = error else {
+                    Issue.record("Expected a rate-limit error, got \(error).")
+                    continue
+                }
+            }
+        }
+
+        do {
+            try await provider.prefetch(around: third)
+            Issue.record("The provider ignored its retry floor.")
+        } catch let error as TrailGraphProviderError {
+            guard case .rateLimited(let retryAfter) = error else {
+                Issue.record("Expected a rate-limit error, got \(error).")
+                return
+            }
+            #expect(retryAfter == 120)
+        }
+        #expect(await transport.requestCount == 2)
     }
 
     private nonisolated static let fixture = """

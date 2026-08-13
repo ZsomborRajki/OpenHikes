@@ -342,6 +342,83 @@ struct RecordingDistanceTests {
 
         #expect(abs(prepared.distanceMeters - 222) < 5)
     }
+
+    @Test("resume clears the pre-pause motion-stationary window")
+    func resumeClearsMotionStationaryWindow() {
+        var accumulator = RecordingDistanceAccumulator()
+        accumulator.append(
+            RecordingPoint(
+                latitude: 47.63,
+                longitude: 12.86,
+                timestamp: start,
+                horizontalAccuracy: 8,
+                flags: [.motionStationary]
+            )
+        )
+        accumulator.append(
+            RecordingPoint(
+                latitude: 47.6301,
+                longitude: 12.86,
+                timestamp: start.addingTimeInterval(20),
+                horizontalAccuracy: 8,
+                flags: [.motionStationary]
+            )
+        )
+        accumulator.append(
+            RecordingPoint(
+                latitude: 47.64,
+                longitude: 12.86,
+                timestamp: start.addingTimeInterval(3_600),
+                horizontalAccuracy: 8,
+                flags: [.resumed]
+            )
+        )
+        accumulator.append(
+            RecordingPoint(
+                latitude: 47.6401,
+                longitude: 12.86,
+                timestamp: start.addingTimeInterval(3_610),
+                horizontalAccuracy: 8,
+                flags: [.motionStationary]
+            )
+        )
+
+        #expect(!accumulator.isStationary)
+    }
+
+    @Test("alternating motion flags restart stationary detection")
+    func alternatingMotionFlagsRestartDetection() {
+        var accumulator = RecordingDistanceAccumulator()
+        let samples: [(TimeInterval, Double, RecordingPointFlags)] = [
+            (0, 47.6300, [.motionStationary]),
+            (10, 47.6301, []),
+            (20, 47.6302, [.motionStationary]),
+            (40, 47.6304, [.motionStationary])
+        ]
+        for (offset, latitude, flags) in samples {
+            accumulator.append(
+                RecordingPoint(
+                    latitude: latitude,
+                    longitude: 12.86,
+                    timestamp: start.addingTimeInterval(offset),
+                    horizontalAccuracy: 8,
+                    flags: flags
+                )
+            )
+        }
+        #expect(!accumulator.isStationary)
+
+        accumulator.append(
+            RecordingPoint(
+                latitude: 47.6305,
+                longitude: 12.86,
+                timestamp: start.addingTimeInterval(50),
+                horizontalAccuracy: 8,
+                flags: [.motionStationary]
+            )
+        )
+        #expect(accumulator.isStationary)
+    }
 }
 
 @Suite("Recording preparation")

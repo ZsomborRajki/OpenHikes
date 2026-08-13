@@ -324,6 +324,29 @@ struct RouteProfileTests {
         #expect(standingStill.distanceAlongRoute < total / 2)
     }
 
+    @Test("heading comparison wraps cleanly across north")
+    func headingWrapsAcrossNorth() throws {
+        let profile = RouteProfile(route: Fixture.outAndBackRoute)
+        let total = try #require(profile.distances.last)
+        let coordinate = profile.coordinates[8]
+
+        let justWestOfNorth = try #require(
+            profile.nearestPoint(to: coordinate, heading: 359)
+        )
+        let justEastOfNorth = try #require(
+            profile.nearestPoint(to: coordinate, heading: 1)
+        )
+
+        #expect(justWestOfNorth.distanceAlongRoute < total / 2)
+        #expect(justEastOfNorth.distanceAlongRoute < total / 2)
+        #expect(
+            abs(
+                justWestOfNorth.distanceAlongRoute
+                    - justEastOfNorth.distanceAlongRoute
+            ) < 1
+        )
+    }
+
     /// The percentage the walker actually sees, end to end: the same fix that
     /// reads as a third of the way along the trail while walking out reads as
     /// two thirds while walking home.
@@ -506,6 +529,36 @@ struct RouteProfileTests {
         #expect(match.distanceAlongRoute == 0)
         #expect(match.offRouteMeters < 1)
         #expect(profile.coordinate(atDistance: 999) != nil)
+    }
+
+    @Test("zero-length segments do not poison matching or interpolation")
+    func zeroLengthSegmentsRemainUsable() throws {
+        let start = RouteCoordinate(
+            latitude: 47.63,
+            longitude: 12.86
+        )
+        let end = RouteCoordinate(
+            latitude: 47.631,
+            longitude: 12.86
+        )
+        let profile = RouteProfile(route: [start, start, end])
+        let total = try #require(profile.distances.last)
+        let midpoint = CLLocationCoordinate2D(
+            latitude: 47.6305,
+            longitude: 12.86
+        )
+
+        let match = try #require(
+            profile.nearestPoint(to: midpoint, heading: 0)
+        )
+        let coordinate = try #require(
+            profile.coordinate(atDistance: total / 2)
+        )
+
+        #expect(match.distanceAlongRoute.isFinite)
+        #expect(match.offRouteMeters.isFinite)
+        #expect(abs(match.distanceAlongRoute - total / 2) < 1)
+        #expect(abs(coordinate.latitude - midpoint.latitude) < 1e-6)
     }
 }
 

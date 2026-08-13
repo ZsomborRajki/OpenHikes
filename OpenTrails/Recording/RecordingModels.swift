@@ -466,18 +466,16 @@ nonisolated enum RecordingPreparation {
             }
             return $0.horizontalAccuracy < $1.horizontalAccuracy
         }
-        let foregroundTimestamps = ordered.compactMap {
-            $0.flags.contains(.widgetSourced) ? nil : $0.timestamp
-        }
+        let foregroundTimestamps = TimestampIndex(
+            ordered.compactMap {
+                $0.flags.contains(.widgetSourced) ? nil : $0.timestamp
+            }
+        )
         var deduplicated: [RecordingPoint] = []
         deduplicated.reserveCapacity(ordered.count)
         for point in ordered {
             if point.flags.contains(.widgetSourced),
-               hasTimestamp(
-                   near: point.timestamp,
-                   in: foregroundTimestamps,
-                   tolerance: 5
-               ) {
+               foregroundTimestamps.contains(point.timestamp, within: 5) {
                 continue
             }
             guard point.timestamp != deduplicated.last?.timestamp else {
@@ -486,18 +484,6 @@ nonisolated enum RecordingPreparation {
             deduplicated.append(point)
         }
         return deduplicated
-    }
-
-    private static func hasTimestamp(
-        near timestamp: Date,
-        in orderedTimestamps: [Date],
-        tolerance: TimeInterval
-    ) -> Bool {
-        let earliest = timestamp.addingTimeInterval(-tolerance)
-        let candidate = orderedTimestamps.partitioningIndex { $0 >= earliest }
-        guard candidate < orderedTimestamps.count else { return false }
-        return orderedTimestamps[candidate]
-            <= timestamp.addingTimeInterval(tolerance)
     }
 
     private static func matchedDistance(

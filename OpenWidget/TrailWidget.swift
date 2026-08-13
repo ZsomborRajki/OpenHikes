@@ -50,6 +50,42 @@ struct TrailWidgetEntry: TimelineEntry {
     }
 }
 
+nonisolated enum WidgetRecordingFixPolicy {
+    static let maximumAge: TimeInterval = 5 * 60
+    static let maximumHorizontalAccuracy: CLLocationAccuracy = 200
+
+    static func accepts(_ location: CLLocation, now: Date) -> Bool {
+        let age = now.timeIntervalSince(location.timestamp)
+        return age >= 0
+            && age <= maximumAge
+            && location.horizontalAccuracy >= 0
+            && location.horizontalAccuracy <= maximumHorizontalAccuracy
+            && Mercator.isRepresentable(
+                latitude: location.coordinate.latitude,
+                longitude: location.coordinate.longitude
+            )
+    }
+}
+
+@MainActor
+final class WidgetRecordingRequest {
+    typealias Completion = () -> Void
+
+    let sessionID: UUID
+    private var completion: Completion?
+
+    init(sessionID: UUID, completion: @escaping Completion) {
+        self.sessionID = sessionID
+        self.completion = completion
+    }
+
+    func consume() -> (sessionID: UUID, completion: Completion)? {
+        guard let completion else { return nil }
+        self.completion = nil
+        return (sessionID, completion)
+    }
+}
+
 struct TrailWidgetProvider: TimelineProvider {
     /// How far ahead the timeline schedules its self-healing reload.
     ///
@@ -146,8 +182,7 @@ struct TrailWidgetProvider: TimelineProvider {
         private static let minimumSamplingInterval: TimeInterval = 15 * 60
 
         private let manager = CLLocationManager()
-        private var sessionID: UUID?
-        private var completion: (() -> Void)?
+        private var request: WidgetRecordingRequest?
         private var timeoutTask: Task<Void, Never>?
 
         private override init() {
@@ -157,7 +192,7 @@ struct TrailWidgetProvider: TimelineProvider {
         }
 
         func requestFix(for sessionID: UUID, completion: @escaping () -> Void) {
-            guard self.sessionID == nil else {
+            guard request == nil else {
                 completion()
                 return
             }
@@ -185,8 +220,10 @@ struct TrailWidgetProvider: TimelineProvider {
                 return
             }
 
-            self.sessionID = sessionID
-            self.completion = completion
+            request = WidgetRecordingRequest(
+                sessionID: sessionID,
+                completion: completion
+            )
             manager.requestLocation()
             timeoutTask = Task { [weak self] in
                 do {
@@ -202,11 +239,12 @@ struct TrailWidgetProvider: TimelineProvider {
             _ manager: CLLocationManager,
             didUpdateLocations locations: [CLLocation]
         ) {
+            let now = Date()
             let location = locations
-                .filter { $0.timestamp <= .now }
+                .filter { $0.timestamp <= now }
                 .max { $0.timestamp < $1.timestamp }
             Task { @MainActor [weak self] in
-                self?.finish(with: location)
+                self?.finish(with: location, now: now)
             }
         }
 
@@ -219,25 +257,24 @@ struct TrailWidgetProvider: TimelineProvider {
             }
         }
 
-        private func finish(with location: CLLocation? = nil) {
+        private func finish(
+            with location: CLLocation? = nil,
+            now: Date = Date()
+        ) {
             timeoutTask?.cancel()
             timeoutTask = nil
-            let requestedSessionID = sessionID
-            sessionID = nil
-            let completion = completion
-            self.completion = nil
+            let completedRequest = request?.consume()
+            request = nil
+            let requestedSessionID = completedRequest?.sessionID
 
             if let location,
                let requestedSessionID,
                let recording = SharedStore.loadRecording(),
                recording.sessionID == requestedSessionID,
                recording.isCapturingFixes,
-               location.timestamp.timeIntervalSinceNow >= -5 * 60,
-               location.horizontalAccuracy >= 0,
-               location.horizontalAccuracy <= 200,
-               Mercator.isRepresentable(
-                   latitude: location.coordinate.latitude,
-                   longitude: location.coordinate.longitude
+               WidgetRecordingFixPolicy.accepts(
+                   location,
+                   now: now
                ) {
                 let elevation: Double?
                 if location.verticalAccuracy >= 0,
@@ -259,7 +296,7 @@ struct TrailWidgetProvider: TimelineProvider {
                     )
                 )
             }
-            completion?()
+            completedRequest?.completion()
         }
     }
 

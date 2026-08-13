@@ -115,6 +115,34 @@ struct TrackJournalTests {
         #expect(session.points.last?.flags.contains(.widgetSourced) == true)
     }
 
+    @Test("widget deduplication includes both five-second boundaries")
+    func widgetFixBoundaryIsInclusive() async throws {
+        let directory = try sandbox()
+        defer { try? FileManager.default.removeItem(at: directory) }
+        let journal = TrackJournal(directory: directory)
+
+        try await journal.start(sessionID: UUID(), startedAt: start)
+        try await journal.append(point(1))
+        try await journal.flush()
+
+        let fixes = [-5, 5, -5.001, 5.001].map { offset in
+            RecordingPoint(
+                latitude: 47.64 + offset / 100_000,
+                longitude: 12.86,
+                timestamp: point(1).timestamp.addingTimeInterval(offset),
+                horizontalAccuracy: 60,
+                flags: [.widgetSourced]
+            )
+        }
+
+        #expect(try await journal.mergeWidgetFixes([fixes[0]]) == 0)
+        #expect(try await journal.mergeWidgetFixes([fixes[1]]) == 0)
+        #expect(try await journal.mergeWidgetFixes([fixes[2]]) == 1)
+        #expect(try await journal.mergeWidgetFixes([fixes[3]]) == 1)
+        let session = try #require(try await journal.loadSession())
+        #expect(session.points.count == 3)
+    }
+
     @Test("reading an open journal does not make a stale session recent")
     func loadingDoesNotRefreshMetadata() async throws {
         let directory = try sandbox()
@@ -190,6 +218,49 @@ struct TrackJournalTests {
             #expect(abs((actual.course ?? 0) - (expected.course ?? 0)) < 0.001)
             #expect(abs((actual.speed ?? 0) - (expected.speed ?? 0)) < 0.001)
             #expect(actual.flags == expected.flags)
+        }
+    }
+
+    @Test("reopening refuses a journal with bad magic")
+    func badMagicIsRefusedBeforeAppending() async throws {
+        let directory = try sandbox()
+        defer { try? FileManager.default.removeItem(at: directory) }
+        let journal = TrackJournal(directory: directory)
+        try await journal.start(sessionID: UUID(), startedAt: start)
+        try await journal.close()
+
+        var data = try Data(contentsOf: journal.journalURL)
+        data[0] = 0
+        try data.write(to: journal.journalURL, options: .atomic)
+
+        let recovered = TrackJournal(directory: directory)
+        do {
+            try await recovered.reopenForAppending()
+            Issue.record("A journal with bad magic was reopened.")
+        } catch let error as TrackJournalError {
+            #expect(error == .invalidHeader)
+        }
+    }
+
+    @Test("reopening refuses an unsupported journal version")
+    func unsupportedVersionIsRefusedBeforeAppending() async throws {
+        let directory = try sandbox()
+        defer { try? FileManager.default.removeItem(at: directory) }
+        let journal = TrackJournal(directory: directory)
+        try await journal.start(sessionID: UUID(), startedAt: start)
+        try await journal.close()
+
+        var data = try Data(contentsOf: journal.journalURL)
+        data[4] = 2
+        data[5] = 0
+        try data.write(to: journal.journalURL, options: .atomic)
+
+        let recovered = TrackJournal(directory: directory)
+        do {
+            try await recovered.reopenForAppending()
+            Issue.record("A journal with an unsupported version was reopened.")
+        } catch let error as TrackJournalError {
+            #expect(error == .unsupportedVersion(2))
         }
     }
 

@@ -70,13 +70,26 @@ nonisolated final class TileOverlay: MKTileOverlay, @unchecked Sendable {
 
     /// Provider-namespaced cache key, so switching providers doesn't reuse tiles.
     private func cacheKey(for path: MKTileOverlayPath) -> String {
-        "\(providerID)/\(path.cacheKey)"
+        TileCacheKey.namespaced(
+            providerID: providerID,
+            z: path.z,
+            x: path.x,
+            y: path.y,
+            scale: path.contentScaleFactor
+        )
     }
 }
 
 nonisolated extension MKTileOverlayPath {
     /// Stable string key (MKTileOverlayPath isn't Hashable).
-    var cacheKey: String { "\(z)/\(x)/\(y)@\(contentScaleFactor)" }
+    var cacheKey: String {
+        TileCacheKey.path(
+            z: z,
+            x: x,
+            y: y,
+            scale: contentScaleFactor
+        )
+    }
 
     /// The tile one zoom level out that contains this one.
     var parent: MKTileOverlayPath {

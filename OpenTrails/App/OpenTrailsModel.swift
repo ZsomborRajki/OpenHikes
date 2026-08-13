@@ -8,31 +8,69 @@
 import CoreLocation
 import Foundation
 import Observation
+import os
 import SwiftData
+
+nonisolated struct StorageStartupIssue: Equatable, Sendable {
+    let underlyingDescription: String
+}
 
 @MainActor
 @Observable
 final class OpenTrailsModel {
+    struct ContainerLoadResult {
+        let container: ModelContainer
+        let startupIssue: StorageStartupIssue?
+    }
+
+    private static let logger = Logger(
+        subsystem: "OpenTrails",
+        category: "Persistence"
+    )
+
     let container: ModelContainer
     let backgroundTracker: BackgroundTrailTracker
     let autoSaveController: AutoSaveController
     let hikeRecorder: HikeRecorder
     let locationManager: LocationManager
     let weatherManager: WeatherManager
+    var startupIssue: StorageStartupIssue?
 
     private let defaults: UserDefaults
 
     convenience init() {
         // Built explicitly so background relaunch services and the view
         // hierarchy share one SwiftData store.
-        let container = try! ModelContainer(for: Hike.self)
+        let load: ContainerLoadResult
+        do {
+            load = try Self.loadContainer(
+                persistent: {
+                    try ModelContainer(for: Hike.self)
+                },
+                fallback: {
+                    try ModelContainer(
+                        for: Hike.self,
+                        configurations: ModelConfiguration(
+                            isStoredInMemoryOnly: true
+                        )
+                    )
+                }
+            )
+        } catch {
+            Self.logger.fault(
+                "Neither the persistent nor temporary SwiftData store could be opened: \(error.localizedDescription, privacy: .public)"
+            )
+            fatalError("OpenTrails could not create a SwiftData container.")
+        }
 
         self.init(
-            container: container,
-            backgroundTracker: BackgroundTrailTracker(container: container),
+            container: load.container,
+            backgroundTracker: BackgroundTrailTracker(
+                container: load.container
+            ),
             autoSaveController: AutoSaveController(),
             hikeRecorder: HikeRecorder(
-                container: container,
+                container: load.container,
                 elevationSource: SystemRecordingElevationSource(),
                 motionSource: SystemRecordingMotionSource(),
                 trailGraphProvider: OverpassTrailGraphProvider(),
@@ -40,8 +78,31 @@ final class OpenTrailsModel {
                 sharedStateStore: AppGroupRecordingSharedStateStore()
             ),
             locationManager: LocationManager(),
-            weatherManager: WeatherManager()
+            weatherManager: WeatherManager(),
+            startupIssue: load.startupIssue
         )
+    }
+
+    static func loadContainer(
+        persistent: () throws -> ModelContainer,
+        fallback: () throws -> ModelContainer
+    ) throws -> ContainerLoadResult {
+        do {
+            return ContainerLoadResult(
+                container: try persistent(),
+                startupIssue: nil
+            )
+        } catch {
+            logger.error(
+                "The persistent SwiftData store could not be opened; using temporary storage for this launch: \(error.localizedDescription, privacy: .public)"
+            )
+            return ContainerLoadResult(
+                container: try fallback(),
+                startupIssue: StorageStartupIssue(
+                    underlyingDescription: error.localizedDescription
+                )
+            )
+        }
     }
 
     init(
@@ -51,7 +112,8 @@ final class OpenTrailsModel {
         hikeRecorder: HikeRecorder,
         locationManager: LocationManager,
         weatherManager: WeatherManager,
-        defaults: UserDefaults = .standard
+        defaults: UserDefaults = .standard,
+        startupIssue: StorageStartupIssue? = nil
     ) {
         self.container = container
         self.backgroundTracker = backgroundTracker
@@ -60,6 +122,7 @@ final class OpenTrailsModel {
         self.locationManager = locationManager
         self.weatherManager = weatherManager
         self.defaults = defaults
+        self.startupIssue = startupIssue
     }
 
     func sceneDidBecomeActive() {

@@ -218,6 +218,41 @@ struct TileStoreTests {
         #expect(!sandbox.isSaved(key), "precondition: nothing was saved")
         #expect(store.drainPendingKeys(for: hikeID).isEmpty, "a tile that isn't on disk must not be recorded as saved")
     }
+
+    @Test("concurrent drains claim each tile exactly once")
+    func concurrentClaimsRemainConsistent() async throws {
+        activate()
+        let tile = tile()
+        let keys = (0..<48).map {
+            "concurrent/\(tile.z)/\(tile.x)/\(tile.y)-\($0)@2.0"
+        }
+        for key in keys {
+            try sandbox.browse(key: key)
+        }
+        let store = store
+
+        await withTaskGroup(of: Void.self) { group in
+            for key in keys {
+                for _ in 0..<4 {
+                    group.addTask {
+                        await offMain {
+                            store.considerPersisting(
+                                key: key,
+                                z: tile.z,
+                                x: tile.x,
+                                y: tile.y
+                            )
+                        }
+                    }
+                }
+            }
+        }
+
+        #expect(store.drainPendingKeys(for: hikeID) == Set(keys))
+        #expect(keys.allSatisfy(sandbox.isSaved))
+        #expect(keys.allSatisfy { !sandbox.isBrowsed($0) })
+        #expect(store.drainPendingKeys(for: hikeID).isEmpty)
+    }
 }
 
 @MainActor

@@ -92,6 +92,13 @@ struct OpenTrailsView: View {
         )
     }
 
+    private var showingStorageStartupIssue: Binding<Bool> {
+        Binding(
+            get: { appModel.startupIssue != nil },
+            set: { if !$0 { appModel.startupIssue = nil } }
+        )
+    }
+
     var body: some View {
         // Fires on every re-evaluation of this view's body — the throttled
         // `appModel.locationManager.coordinate` publish (~1/sec while moving)
@@ -159,6 +166,16 @@ struct OpenTrailsView: View {
             // reliably appear.
             .alert(isPresented: showingImportFailure, error: importFailure) {
                 Button("OK", role: .cancel) {}
+            }
+            .alert(
+                "Saved Hikes Unavailable",
+                isPresented: showingStorageStartupIssue
+            ) {
+                Button("OK", role: .cancel) {}
+            } message: {
+                Text(
+                    "OpenTrails couldn’t open its saved hikes. This launch is using temporary storage, so changes won’t survive a relaunch. Existing data was left untouched."
+                )
             }
             .onOpenURL { url in openWidgetLink(url) }
             // Follows finished selections for map styling, auto-save, and

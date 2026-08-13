@@ -73,6 +73,15 @@ struct OfflineTileEnumerationTests {
         let downloaderKey = OfflineTileDownloader.Tile(z: path.z, x: path.x, y: path.y)
             .cacheKey(providerID: TileProvider.openStreetMap.id, scale: path.contentScaleFactor)
         #expect(rendererKey == downloaderKey)
+        #expect(
+            downloaderKey == TileCacheKey.namespaced(
+                providerID: TileProvider.openStreetMap.id,
+                z: path.z,
+                x: path.x,
+                y: path.y,
+                scale: path.contentScaleFactor
+            )
+        )
         #expect(downloaderKey == "osm/14/8723/5685@2.0")
     }
 

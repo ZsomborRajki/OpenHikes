@@ -370,6 +370,61 @@ struct TileTransportTests {
         #expect(StubTileProtocol.requestCount == 2)
     }
 
+    @Test("removing a key invalidates its in-flight fetch")
+    func removalWinsAgainstInFlightFetch() async throws {
+        let stub = StubbedTileCache()
+        defer { stub.tearDown() }
+        StubTileProtocol.alwaysRespond(with: .tile())
+        StubTileProtocol.setDelay(.milliseconds(150))
+
+        let cache = stub.cache
+        let load = Task {
+            await cache.loadTile(forKey: key, url: url())
+        }
+        for _ in 0..<100 {
+            if StubTileProtocol.requestCount == 1 { break }
+            await Task.yield()
+        }
+
+        await Task.detached {
+            cache.removeTiles(forKeys: [key])
+        }.value
+        let image = await load.value
+
+        #expect(image == nil)
+        #expect(!stub.isBrowsed(key))
+        #expect(!stub.isSaved(key))
+        #expect(cache.memoryImage(forKey: key) == nil)
+    }
+
+    @Test("same-key callers share the first in-flight URL")
+    func sameKeyDifferentURLUsesFirstRequest() async throws {
+        let stub = StubbedTileCache()
+        defer { stub.tearDown() }
+        StubTileProtocol.alwaysRespond(with: .tile())
+        StubTileProtocol.setDelay(.milliseconds(150))
+        let firstURL = url("first.png")
+        let secondURL = url("second.png")
+
+        let first = Task {
+            await stub.cache.loadTile(forKey: key, url: firstURL)
+        }
+        for _ in 0..<100 {
+            if StubTileProtocol.requestCount == 1 { break }
+            await Task.yield()
+        }
+        async let second = stub.cache.loadTile(
+            forKey: key,
+            url: secondURL
+        )
+        let (firstImage, secondImage) = await (first.value, second)
+
+        #expect(firstImage != nil)
+        #expect(secondImage != nil)
+        #expect(StubTileProtocol.requestCount == 1)
+        #expect(StubTileProtocol.requests.first?.url == firstURL)
+    }
+
     // MARK: The overlay's contract with the renderer
 
     /// `CachingTileOverlayRenderer` decides whether to record a failure — and

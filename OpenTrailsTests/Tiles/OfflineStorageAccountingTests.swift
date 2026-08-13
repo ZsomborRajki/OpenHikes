@@ -113,6 +113,45 @@ struct StorageAccountingTests {
         return await offMain { cache.promoteCachedTile(forKey: key) }
     }
 
+    @Test("partial and complete records enumerate their exact union")
+    func partialAndCompleteRecordsUnion() async throws {
+        let route = Fixture.coordinates(Fixture.ridgeRoute)
+        let provider = TileProvider.default
+        let fullRecord = OfflineDownloadRecord(
+            providerID: provider.id,
+            scale: 2,
+            maxZoom: 12
+        )
+        let fullKeys = Set(
+            OfflineTileDownloader.tileKeys(
+                for: route,
+                providerID: provider.id,
+                providerMaxZoom: provider.maximumZ,
+                maxZoom: 12,
+                scale: 2
+            )
+        )
+        let overlap = try #require(fullKeys.first)
+        let extra = "\(provider.id)/13/999/999@2.0"
+        let partialRecord = OfflineDownloadRecord(
+            providerID: provider.id,
+            scale: 2,
+            maxZoom: 12,
+            savedTileKeys: [overlap, extra]
+        )
+
+        let stored = await offMain {
+            Set(
+                OfflineTileDownloader.storedTileKeys(
+                    route: route,
+                    offlineDownloads: [partialRecord, fullRecord]
+                )
+            )
+        }
+
+        #expect(stored == fullKeys.union([extra]))
+    }
+
     /// The delete-a-hike path from `MapSheet.delete(_:)`, minus the SwiftUI.
     private func deleteHike(_ hike: Hike, survivors: [Hike] = [], using controller: AutoSaveController) async {
         controller.hikeWillBeDeleted(hike)

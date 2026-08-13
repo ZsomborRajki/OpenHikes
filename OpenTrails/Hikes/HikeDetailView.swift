@@ -82,6 +82,36 @@ struct FollowAnchor: Equatable {
     }
 }
 
+enum FollowHighlightUpdate {
+    case unchanged
+    case clear
+    case move(CLLocationCoordinate2D)
+}
+
+enum FollowInteractionPolicy {
+    static func highlightUpdate(
+        autoFollowEnabled: Bool,
+        isScrubbing: Bool,
+        profile: RouteProfile?,
+        trackerDistance: Double
+    ) -> FollowHighlightUpdate {
+        guard !isScrubbing else { return .unchanged }
+        if autoFollowEnabled { return .clear }
+        guard let coordinate = profile?.coordinate(
+            atDistance: trackerDistance
+        ) else {
+            return .unchanged
+        }
+        return .move(coordinate)
+    }
+
+    static func appliesMatchToPersistentTracker(
+        isScrubbing: Bool
+    ) -> Bool {
+        !isScrubbing
+    }
+}
+
 struct HikeDetailView: View {
     let hike: Hike
     /// Reference type the map observes directly — writing to it doesn't re-render this view.
@@ -188,16 +218,21 @@ struct HikeDetailView: View {
         // auto-follow right away, rather than leaving a stale manual pin up
         // to a second until the next poll clears it.
         .onChange(of: hike.autoFollowEnabled) { _, enabled in
-            if enabled {
-                if !isScrubbing { highlight.move(to: nil) }
-            } else {
+            if !enabled {
                 tracker.liveTrackerDistance = nil
-                // Hand the pin back to the persistent tracker so it reappears
-                // at the last-followed/scrubbed position instead of staying
-                // hidden from auto-follow's ownership of the map.
-                if !isScrubbing {
-                    highlight.move(to: profile?.coordinate(atDistance: tracker.trackerDistance))
-                }
+            }
+            switch FollowInteractionPolicy.highlightUpdate(
+                autoFollowEnabled: enabled,
+                isScrubbing: isScrubbing,
+                profile: profile,
+                trackerDistance: tracker.trackerDistance
+            ) {
+            case .unchanged:
+                break
+            case .clear:
+                highlight.move(to: nil)
+            case .move(let coordinate):
+                highlight.move(to: coordinate)
             }
         }
         // Record verified coverage from complete and partial downloads so
@@ -652,7 +687,9 @@ struct HikeDetailView: View {
         if moved { tracker.liveTrackerDistance = match.distanceAlongRoute }
         // Don't fight an in-progress manual scrub; the live dot still moves,
         // but the persistent tracker stays under the user's finger.
-        guard !isScrubbing else {
+        guard FollowInteractionPolicy.appliesMatchToPersistentTracker(
+            isScrubbing: isScrubbing
+        ) else {
             RenderSignpost.mark("LiveFollowUpdate", moved ? "moved-scrubbing" : "unchanged-scrubbing")
             return
         }

@@ -62,7 +62,7 @@ Carried over from the recording design, and still unanswered. Each one changes c
 2. **Pause semantics.** A pause stops distance accumulation and journals a marker, but the saved route stays one continuous segment. If a pause should produce a genuine break in the drawn line, `GPXImport`'s flattening assumption and the single-segment route model both have to change together.
 3. **Shipped trail graphs.** Overpass-on-demand with a local cache works offline only where you have already been. Prebuilt regional graphs from Geofabrik extracts would work offline where you are going, at the cost of a build pipeline and a download story. Worth it?
 4. **Widget takeover.** A live recording currently displaces the selected hike on the widget entirely. The alternative is keeping the trail on screen with a small recording badge.
-5. **Battery profile default.** High accuracy is the right default for a hiking app and costs roughly 10%/hour with the screen off. Over a six-hour day that is a real bill, and Balanced may be the better default with High as an explicit choice.
+
 
 ## TODO
 
