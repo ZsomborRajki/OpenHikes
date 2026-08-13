@@ -45,7 +45,7 @@ struct HikeStatisticsTests {
             RouteCoordinate(latitude: 47.63, longitude: 12.86),
             RouteCoordinate(latitude: 47.64, longitude: 12.86),
         ]
-        let hike = Fixture.hike(route: route, in: context)
+        let hike = Fixture.hike(in: context, route: route)
         #expect(hike.elevationGain == nil)
         #expect(hike.elevationLoss == nil)
         #expect(hike.maxElevation == nil)
@@ -60,7 +60,7 @@ struct HikeStatisticsTests {
             RouteCoordinate(latitude: 47.63, longitude: 12.86, elevation: 600),
             RouteCoordinate(latitude: 47.64, longitude: 12.86),
         ]
-        let hike = Fixture.hike(route: route, in: context)
+        let hike = Fixture.hike(in: context, route: route)
         #expect(hike.elevationGain == nil)
         #expect(hike.elevationLoss == nil)
         #expect(hike.maxElevation?.value == 600)
@@ -73,7 +73,7 @@ struct HikeStatisticsTests {
         let route = (0..<4).map { idx in
             RouteCoordinate(latitude: 47.63 + Double(idx) * 0.001, longitude: 12.86, elevation: 600)
         }
-        let hike = Fixture.hike(route: route, in: context)
+        let hike = Fixture.hike(in: context, route: route)
         #expect(try #require(hike.elevationGain).value == 0)
         #expect(try #require(hike.elevationLoss).value == 0)
     }
@@ -94,7 +94,7 @@ struct HikeStatisticsTests {
             RouteCoordinate(latitude: 47.63, longitude: 12.86, elevation: 600),
             RouteCoordinate(latitude: 47.64, longitude: 12.86, elevation: 610),
         ]
-        let hike = Fixture.hike(route: route, in: context)
+        let hike = Fixture.hike(in: context, route: route)
         #expect(hike.duration == nil)
         #expect(hike.averageSpeed == nil)
         #expect(hike.maxSpeed == nil)
@@ -109,7 +109,7 @@ struct HikeStatisticsTests {
         let route = (0..<3).map { idx in
             RouteCoordinate(latitude: 47.63 + Double(idx) * 0.001, longitude: 12.86, elevation: 600, timestamp: stamp)
         }
-        let hike = Fixture.hike(route: route, in: context)
+        let hike = Fixture.hike(in: context, route: route)
         #expect(hike.duration == nil)
         #expect(hike.averageSpeed == nil)
         #expect(hike.maxSpeed == nil)
@@ -136,7 +136,7 @@ struct HikeStatisticsTests {
             RouteCoordinate(latitude: 47.631, longitude: 12.86, timestamp: start.addingTimeInterval(10)),
             RouteCoordinate(latitude: 47.632, longitude: 12.86, timestamp: start.addingTimeInterval(110)),
         ]
-        let hike = Fixture.hike(route: route, in: context)
+        let hike = Fixture.hike(in: context, route: route)
         let fastest = try #require(hike.maxSpeed).converted(to: .metersPerSecond).value
         let average = try #require(hike.averageSpeed).converted(to: .metersPerSecond).value
         #expect(abs(fastest - 11.1) < 0.5)
@@ -154,7 +154,7 @@ struct HikeStatisticsTests {
             RouteCoordinate(latitude: 47.632, longitude: 12.86, timestamp: start),                  // no elapsed time
             RouteCoordinate(latitude: 47.633, longitude: 12.86, timestamp: start.addingTimeInterval(100)),
         ]
-        let hike = Fixture.hike(route: route, in: context)
+        let hike = Fixture.hike(in: context, route: route)
         let fastest = try #require(hike.maxSpeed).converted(to: .metersPerSecond).value
         #expect(fastest.isFinite)
         #expect(abs(fastest - 1.11) < 0.1)
@@ -168,7 +168,7 @@ struct HikeStatisticsTests {
         let route = (0..<3).map { idx in
             RouteCoordinate(latitude: 47.63, longitude: 12.86, timestamp: start.addingTimeInterval(Double(idx) * 60))
         }
-        #expect(Fixture.hike(route: route, in: context).maxSpeed == nil)
+        #expect(Fixture.hike(in: context, route: route).maxSpeed == nil)
     }
 
     // MARK: Presentation

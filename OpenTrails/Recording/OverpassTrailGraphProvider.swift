@@ -295,6 +295,36 @@ actor OverpassTrailGraphProvider: TrailGraphProviding {
 
 // MARK: - Static helpers
 
+extension OverpassTrailGraphProvider {
+    nonisolated static func decodeGraph(from data: Data) throws -> TrailGraph {
+        let response: OverpassResponse
+        do {
+            response = try JSONDecoder().decode(OverpassResponse.self, from: data)
+        } catch {
+            throw TrailGraphProviderError.malformedGraph(
+                error.localizedDescription
+            )
+        }
+
+        let elementsByKey = buildElementIndex(from: response.elements)
+        let nodeCoordinates = extractNodeCoordinates(from: response.elements)
+        let hikingRouteNames = extractHikingRouteNames(from: elementsByKey)
+        let (graphNodes, edges) = buildGraphEdges(
+            from: elementsByKey,
+            nodeCoordinates: nodeCoordinates,
+            hikingRouteNames: hikingRouteNames
+        )
+
+        return TrailGraph(
+            nodes: graphNodes.values.sorted { lhs, rhs in lhs.id < rhs.id },
+            edges: edges.sorted { lhs, rhs in
+                if lhs.id.wayID == rhs.id.wayID { return lhs.id.segmentIndex < rhs.id.segmentIndex }
+                return lhs.id.wayID < rhs.id.wayID
+            }
+        )
+    }
+}
+
 private extension OverpassTrailGraphProvider {
     nonisolated static func regionKey(
         for coordinate: CLLocationCoordinate2D
@@ -360,34 +390,6 @@ private extension OverpassTrailGraphProvider {
         (.trails;.routes;.trailNodes;);
         out body;
         """
-    }
-
-    nonisolated static func decodeGraph(from data: Data) throws -> TrailGraph {
-        let response: OverpassResponse
-        do {
-            response = try JSONDecoder().decode(OverpassResponse.self, from: data)
-        } catch {
-            throw TrailGraphProviderError.malformedGraph(
-                error.localizedDescription
-            )
-        }
-
-        let elementsByKey = buildElementIndex(from: response.elements)
-        let nodeCoordinates = extractNodeCoordinates(from: response.elements)
-        let hikingRouteNames = extractHikingRouteNames(from: elementsByKey)
-        let (graphNodes, edges) = buildGraphEdges(
-            from: elementsByKey,
-            nodeCoordinates: nodeCoordinates,
-            hikingRouteNames: hikingRouteNames
-        )
-
-        return TrailGraph(
-            nodes: graphNodes.values.sorted { lhs, rhs in lhs.id < rhs.id },
-            edges: edges.sorted { lhs, rhs in
-                if lhs.id.wayID == rhs.id.wayID { return lhs.id.segmentIndex < rhs.id.segmentIndex }
-                return lhs.id.wayID < rhs.id.wayID
-            }
-        )
     }
 
     nonisolated static func buildElementIndex(

@@ -305,7 +305,7 @@ struct ControllerTests {
     func selectionFollowsTheMap() {
         let controller = makeController()
         let first = fullHike()
-        let second = Fixture.hike(title: "Second", in: context)
+        let second = Fixture.hike(in: context, title: "Second")
         controller.hikeSelectionChanged(to: first)
         controller.hikeSelectionChanged(to: second)
         #expect(!controller.isCapReached(for: first), "the previous hike is no longer the active one")
@@ -327,8 +327,8 @@ struct ControllerTests {
     func degenerateHikeIsNotActivated() {
         let controller = makeController()
         let hike = Fixture.hike(
-            route: [RouteCoordinate(latitude: 47.63, longitude: 12.86)],
-            in: context
+            in: context,
+            route: [RouteCoordinate(latitude: 47.63, longitude: 12.86)]
         ) { $0.autoSavedTileKeys = (0..<AutoSaveTileStore.tileCap).map { "saved/\($0)" } }
         controller.hikeSelectionChanged(to: hike)
         #expect(!controller.isCapReached(for: hike))
@@ -415,7 +415,7 @@ struct ControllerTests {
 
         let controller = makeController()
         let first = Fixture.hike(in: context)
-        let second = Fixture.hike(title: "Second", in: context)
+        let second = Fixture.hike(in: context, title: "Second")
         controller.hikeSelectionChanged(to: first)
 
         let key = "autosave-deferred-selection-test/17/1/1@2.0"

@@ -85,8 +85,8 @@ struct TileOwnershipTests {
     /// The case the whole type exists for.
     @Test("tiles two hikes share are not freed when one is deleted")
     func sharedTilesSurvive() async {
-        let doomed = Fixture.hike(title: "Doomed", in: context)
-        let survivor = Fixture.hike(title: "Survivor", in: context)
+        let doomed = Fixture.hike(in: context, title: "Doomed")
+        let survivor = Fixture.hike(in: context, title: "Survivor")
         download(doomed)
         download(survivor)
 
@@ -99,8 +99,8 @@ struct TileOwnershipTests {
     /// or "Delete" quietly frees nothing.
     @Test("a hike somewhere else reclaims all of its own tiles")
     func unsharedTilesAreFreed() async {
-        let doomed = Fixture.hike(title: "Doomed", in: context)
-        let elsewhere = Fixture.hike(title: "Elsewhere", route: alpineRoute, in: context)
+        let doomed = Fixture.hike(in: context, title: "Doomed")
+        let elsewhere = Fixture.hike(in: context, title: "Elsewhere", route: alpineRoute)
         download(doomed)
         download(elsewhere)
 
@@ -115,15 +115,15 @@ struct TileOwnershipTests {
     /// share the overview tiles and nothing else.
     @Test("only the genuinely shared tiles are held back")
     func partialOverlap() async {
-        let doomed = Fixture.hike(title: "Doomed", in: context)
+        let doomed = Fixture.hike(in: context, title: "Doomed")
         let neighbour = Fixture.hike(
+            in: context,
             title: "Neighbour",
             // A few hundred metres north of the ridge fixture: different
             // close-in tiles, same overview tile.
             route: Fixture.ridgeRoute.map { coord in
                 RouteCoordinate(latitude: coord.latitude + 0.02, longitude: coord.longitude, elevation: coord.elevation)
-            },
-            in: context
+            }
         )
         download(doomed, maxZoom: 16)
         download(neighbour, maxZoom: 16)
@@ -143,9 +143,9 @@ struct TileOwnershipTests {
     /// (`hasStoredTiles`), and must not affect the answer either way.
     @Test("hikes with no stored tiles don't hold anything back")
     func emptySurvivorsDontBlock() async {
-        let doomed = Fixture.hike(title: "Doomed", in: context)
+        let doomed = Fixture.hike(in: context, title: "Doomed")
         download(doomed)
-        let bystander = Fixture.hike(title: "Bystander", in: context)
+        let bystander = Fixture.hike(in: context, title: "Bystander")
 
         let doomedOwnership = TileOwnership(doomed)
         let bystanderOwnership = TileOwnership(bystander)

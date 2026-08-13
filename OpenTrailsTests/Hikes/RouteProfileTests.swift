@@ -150,7 +150,7 @@ struct RouteProfileTests {
     @Test("elevation lookups only ever return charted samples")
     func sampleLookup() throws {
         let profile = RouteProfile(route: Fixture.ridgeRoute)
-        let mid = try #require(profile.distances.last).halved
+        let mid = try #require(profile.distances.last) / 2
         let sample = try #require(profile.sample(atDistance: mid))
         #expect(profile.samples.contains { $0.id == sample.id })
     }

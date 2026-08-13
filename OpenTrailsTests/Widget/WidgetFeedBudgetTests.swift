@@ -162,7 +162,7 @@ final class WidgetFeedBudgetTests {
     /// route profiling, decimation, encoding, and the App Group write do not.
     @Test("selecting a long trail doesn't spend a frame on the main actor")
     func selectionStaysInsideAFrame() async {
-        let hike = Fixture.hike(title: "Five hours", route: Self.longRoute, in: context)
+        let hike = Fixture.hike(in: context, title: "Five hours", route: Self.longRoute)
 
         let elapsed = milliseconds { tracker.hikeSelectionChanged(to: hike) }
         #expect(elapsed < 4, "selection should only snapshot values and schedule the publication")
@@ -174,7 +174,7 @@ final class WidgetFeedBudgetTests {
     /// rebuilding from the hike would publish the hike's range instead.
     @Test("publishing a fix doesn't rebuild a route profile the caller already has")
     func publishDoesNotRebuildTheProfile() async throws {
-        let hike = Fixture.hike(title: "Five hours", route: Self.longRoute, in: context)
+        let hike = Fixture.hike(in: context, title: "Five hours", route: Self.longRoute)
         let suppliedRoute = Self.longRoute.map { coordinate in
             RouteCoordinate(
                 latitude: coordinate.latitude,

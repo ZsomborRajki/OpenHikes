@@ -29,8 +29,8 @@ struct TrackJournalTests {
             latitude: 47.63 + Double(index) * 0.0001,
             longitude: 12.86,
             timestamp: start.addingTimeInterval(Double(index) * 10),
-            elevation: 600 + Double(index),
             horizontalAccuracy: 8,
+            elevation: 600 + Double(index),
             course: 15,
             speed: 1.2,
             flags: index == 5 ? .resumed : []

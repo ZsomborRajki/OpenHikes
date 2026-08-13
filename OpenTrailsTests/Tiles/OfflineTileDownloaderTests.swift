@@ -379,10 +379,10 @@ struct OfflineDownloadStateTests {
 
         #expect(downloader.isFailed)
         let record = downloader.completedRecord
-        #expect(record?.savedTileKeys?.isEmpty == false)
-        #expect((record?.savedTileKeys?.count ?? 0) < downloader.total)
+        #expect(record?.savedTileKeys.isEmpty == false)
+        #expect((record?.savedTileKeys.count ?? 0) < downloader.total)
         // The bar and the "Saved N of M" message read the same number.
-        #expect(downloader.completed == record?.savedTileKeys?.count)
+        #expect(downloader.completed == record?.savedTileKeys.count)
         #expect(downloader.completed < downloader.total, "half the tiles saved is not a full bar")
     }
 
@@ -432,7 +432,7 @@ struct OfflineDownloadStateTests {
         await downloader.waitForCurrentRun()
 
         #expect(downloader.phase == .finished)
-        #expect(downloader.completedRecord?.savedTileKeys == nil)
+        #expect(downloader.completedRecord?.savedTileKeys.isEmpty == true)
     }
 }
 
@@ -521,13 +521,13 @@ struct OfflineDownloadManifestTests {
         )
 
         #expect(hike.offlineDownloads.count == 1)
-        #expect(hike.offlineDownloads[0].savedTileKeys == nil)
+        #expect(hike.offlineDownloads[0].savedTileKeys.isEmpty)
     }
 
-    @Test("legacy records decode as complete coverage")
-    func legacyRecordDecodes() throws {
-        let data = Data(#"{"providerID":"test","scale":2,"maxZoom":12}"#.utf8)
+    @Test("a record without partial keys decodes as complete coverage")
+    func completeRecordDecodes() throws {
+        let data = Data(#"{"providerID":"test","scale":2,"maxZoom":12,"savedTileKeys":[]}"#.utf8)
         let record = try JSONDecoder().decode(OfflineDownloadRecord.self, from: data)
-        #expect(record.savedTileKeys == nil)
+        #expect(record.savedTileKeys.isEmpty)
     }
 }

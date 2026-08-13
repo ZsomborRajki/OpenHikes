@@ -113,7 +113,7 @@ struct HikeRenameTests {
         )
         let context = ModelContext(container)
         let id = UUID()
-        let hike = Hike(id: id, title: "Ridge Loop", distanceMeters: 1000)
+        let hike = Hike(title: "Ridge Loop", distanceMeters: 1000, id: id)
         hike.customName = "Persisted Name"
         context.insert(hike)
         try context.save()
@@ -133,7 +133,7 @@ struct HikeRenameTests {
         )
         let context = ModelContext(container)
         let id = UUID()
-        context.insert(Hike(id: id, title: "No Rename", distanceMeters: 500))
+        context.insert(Hike(title: "No Rename", distanceMeters: 500, id: id))
         try context.save()
 
         let fetched = try #require(

@@ -90,7 +90,7 @@ struct HikeDeletionTests {
     func deletionKeepsUnrelatedNavigation() throws {
         let context = try Fixture.modelContext()
         let doomed = Fixture.hike(in: context)
-        let survivor = Fixture.hike(title: "Survivor", route: Fixture.loopRoute, in: context)
+        let survivor = Fixture.hike(in: context, title: "Survivor", route: Fixture.loopRoute)
 
         var navigationPath: [Hike] = [survivor, doomed]
         navigationPath.removeAll { $0.id == doomed.id }

@@ -164,13 +164,13 @@ struct TrailWidgetTests {
             title: title,
             tintHex: "#34C759FF",
             totalDistanceMeters: 4200,
-            elevationLowMeters: 600,
-            elevationHighMeters: 900,
             polyline: [
                 .init(latitude: 47.6300, longitude: 12.8600),
                 .init(latitude: 47.6320, longitude: 12.8620),
                 .init(latitude: 47.6340, longitude: 12.8600),
             ],
+            elevationLowMeters: 600,
+            elevationHighMeters: 900,
             liveFix: liveFix
         )
     }

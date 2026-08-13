@@ -108,9 +108,9 @@ struct HikePersistenceTests {
             let container = try openContainer()
             let context = ModelContext(container)
             let hike = Hike(
-                id: id,
                 title: "Ridge Loop",
                 distanceMeters: 1234.5,
+                id: id,
                 date: date,
                 tintHex: "#FF9500FF",
                 routeWidth: 7,
@@ -176,7 +176,7 @@ struct HikePersistenceTests {
         do {
             let container = try openContainer()
             let context = ModelContext(container)
-            context.insert(Hike(id: id, title: "Ridge", distanceMeters: 1, route: route))
+            context.insert(Hike(title: "Ridge", distanceMeters: 1, id: id, route: route))
             try context.save()
         }
 
@@ -219,9 +219,9 @@ struct HikePersistenceTests {
             let container = try openLegacyContainer()
             let context = ModelContext(container)
             let legacy = HikeSchemaBeforeAutoSave.Hike(
-                id: id,
                 title: "Imported last year",
                 distanceMeters: 4200,
+                id: id,
                 date: date,
                 route: Fixture.ridgeRoute
             )
@@ -265,7 +265,7 @@ struct HikePersistenceTests {
             let container = try openLegacyContainer()
             let context = ModelContext(container)
             context.insert(
-                HikeSchemaBeforeAutoSave.Hike(id: id, title: "Old", distanceMeters: 10, route: Fixture.ridgeRoute)
+                HikeSchemaBeforeAutoSave.Hike(title: "Old", distanceMeters: 10, id: id, route: Fixture.ridgeRoute)
             )
             try context.save()
         }
@@ -300,7 +300,7 @@ struct HikePersistenceTests {
         do {
             let container = try openContainer()
             let context = ModelContext(container)
-            let hike = Hike(id: id, title: "Doomed", distanceMeters: 1, route: Fixture.ridgeRoute)
+            let hike = Hike(title: "Doomed", distanceMeters: 1, id: id, route: Fixture.ridgeRoute)
             context.insert(hike)
             try context.save()
             context.delete(hike)

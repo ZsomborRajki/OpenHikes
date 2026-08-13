@@ -56,8 +56,7 @@ struct TileCorridorTests {
         let anchor = Fixture.coordinates(Fixture.ridgeRoute)[2]
         for (north, east) in [(800.0, 0.0), (0.0, 800.0), (-800.0, 0.0), (0.0, -800.0), (700.0, 700.0)] {
             let tile = tile(at: offset(anchor, northMeters: north, eastMeters: east), z: z)
-            let msg = "\(north)m N / \(east)m E should be inside the corridor"
-            #expect(corridor.overlaps(z: z, x: tile.x, y: tile.y), msg)
+            #expect(corridor.overlaps(z: z, x: tile.x, y: tile.y), "\(north)m N / \(east)m E should be inside the corridor")
         }
     }
 
@@ -68,8 +67,7 @@ struct TileCorridorTests {
         let anchor = Fixture.coordinates(Fixture.ridgeRoute)[2]
         for (north, east) in [(6000.0, 0.0), (0.0, 6000.0), (-6000.0, 0.0), (0.0, -6000.0)] {
             let tile = tile(at: offset(anchor, northMeters: north, eastMeters: east), z: z)
-            let msg = "\(north)m N / \(east)m E should be outside the corridor"
-            #expect(!corridor.overlaps(z: z, x: tile.x, y: tile.y), msg)
+            #expect(!corridor.overlaps(z: z, x: tile.x, y: tile.y), "\(north)m N / \(east)m E should be outside the corridor")
         }
     }
 
@@ -146,8 +144,7 @@ struct TileCorridorTests {
 
         for coordinate in Fixture.antimeridianRoute {
             let tile = tile(at: coordinate, z: z)
-            let ownTileMsg = "the trail's own tiles are always in its corridor"
-            #expect(antiCorridor.overlaps(z: z, x: tile.x, y: tile.y), ownTileMsg)
+            #expect(antiCorridor.overlaps(z: z, x: tile.x, y: tile.y), "the trail's own tiles are always in its corridor")
         }
 
         // Same latitude, half a world away — the tiles a globe-wide box would
@@ -155,8 +152,7 @@ struct TileCorridorTests {
         for longitude in [0.0, 90.0, -90.0, 45.0] {
             let far = CLLocationCoordinate2D(latitude: Fixture.antimeridianRoute[0].latitude, longitude: longitude)
             let tile = tile(at: far, z: z)
-            let msg = "\(longitude)° is not near a trail on the antimeridian"
-            #expect(!antiCorridor.overlaps(z: z, x: tile.x, y: tile.y), msg)
+            #expect(!antiCorridor.overlaps(z: z, x: tile.x, y: tile.y), "\(longitude)° is not near a trail on the antimeridian")
         }
     }
 
@@ -175,8 +171,7 @@ struct TileCorridorTests {
         for longitude in [179.97, -179.97] {
             let nearAnti = CLLocationCoordinate2D(latitude: latitude, longitude: longitude)
             let tile = tile(at: nearAnti, z: z)
-            let msg = "\(longitude)° is a few hundred metres from the trail"
-            #expect(antiCorridor.overlaps(z: z, x: tile.x, y: tile.y), msg)
+            #expect(antiCorridor.overlaps(z: z, x: tile.x, y: tile.y), "\(longitude)° is a few hundred metres from the trail")
         }
     }
 

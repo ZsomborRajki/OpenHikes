@@ -22,8 +22,8 @@ struct TrailMatcherTests {
             latitude: latitude,
             longitude: longitude,
             timestamp: start.addingTimeInterval(offset),
-            elevation: 600 + offset / 60,
-            horizontalAccuracy: accuracy
+            horizontalAccuracy: accuracy,
+            elevation: 600 + offset / 60
         )
     }
 

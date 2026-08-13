@@ -98,8 +98,8 @@ struct RouteAppearanceIsolationTests {
     @Test("a new selection still reaches the map")
     func selectionStillInvalidates() throws {
         let context = try Fixture.modelContext()
-        let first = Fixture.hike(title: "First", in: context)
-        let second = Fixture.hike(title: "Second", in: context)
+        let first = Fixture.hike(in: context, title: "First")
+        let second = Fixture.hike(in: context, title: "Second")
         let cache = DisplayedRouteCoordinateCache()
 
         let a = DisplayedRoute.forSelection(first, cache: cache)
@@ -180,8 +180,8 @@ struct RouteStyleTests {
     @Test("a hike that is no longer selected can't restyle the route")
     func staleFollowIsIgnored() async throws {
         let context = try Fixture.modelContext()
-        let previous = Fixture.hike(title: "Previous", in: context) { $0.tintHex = "#FF0000FF" }
-        let current = Fixture.hike(title: "Current", in: context) { hike in
+        let previous = Fixture.hike(in: context, title: "Previous") { $0.tintHex = "#FF0000FF" }
+        let current = Fixture.hike(in: context, title: "Current") { hike in
             hike.tintHex = "#0000FFFF"
             hike.routeWidth = 7
         }

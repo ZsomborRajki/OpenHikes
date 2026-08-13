@@ -240,7 +240,7 @@ final class BackgroundDeliveryTests {
     /// A hike stored in the container and recorded as the last selection —
     /// which is all a relaunched process has to go on.
     private func selectedHike(route: [RouteCoordinate] = Fixture.ridgeRoute) -> Hike {
-        let hike = Fixture.hike(route: route, in: context)
+        let hike = Fixture.hike(in: context, route: route)
         try? context.save()
         defaults.set(hike.id.uuidString, forKey: SettingsKey.lastSelectedHikeID)
         return hike

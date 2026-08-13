@@ -34,8 +34,8 @@ struct SheetRouteTests {
     @Test("opening recording selects its durable hike entry")
     func recordingSelectsItsHike() throws {
         let context = try Fixture.modelContext()
-        let previous = Fixture.hike(title: "Imported", in: context)
-        let recording = Fixture.hike(title: "Morning Hike", route: [], in: context) { hike in
+        let previous = Fixture.hike(in: context, title: "Imported")
+        let recording = Fixture.hike(in: context, title: "Morning Hike", route: []) { hike in
             hike.isRecording = true
         }
         var selectedHike: Hike? = previous

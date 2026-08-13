@@ -68,14 +68,14 @@ struct RecordingFixPolicyTests {
         ))
         #expect(!RecordingFixPolicy.accepts(
             recordingLocation(
-                accuracy: RecordingFixPolicy.maximumHorizontalAccuracy + 1,
-                timestamp: start
+                timestamp: start,
+                accuracy: RecordingFixPolicy.maximumHorizontalAccuracy + 1
             ),
             after: nil,
             now: start
         ))
         #expect(!RecordingFixPolicy.accepts(
-            recordingLocation(latitude: 90, timestamp: start),
+            recordingLocation(timestamp: start, latitude: 90),
             after: nil,
             now: start
         ))
@@ -90,16 +90,16 @@ struct RecordingFixPolicyTests {
 
         #expect(!RecordingFixPolicy.accepts(
             recordingLocation(
-                latitude: 47.63 + twoMetersNorth,
-                timestamp: start.addingTimeInterval(5)
+                timestamp: start.addingTimeInterval(5),
+                latitude: 47.63 + twoMetersNorth
             ),
             after: first,
             now: start.addingTimeInterval(5)
         ))
         #expect(RecordingFixPolicy.accepts(
             recordingLocation(
-                latitude: 47.63 + twoMetersNorth,
-                timestamp: start.addingTimeInterval(10)
+                timestamp: start.addingTimeInterval(10),
+                latitude: 47.63 + twoMetersNorth
             ),
             after: first,
             now: start.addingTimeInterval(10)
@@ -110,16 +110,16 @@ struct RecordingFixPolicyTests {
     func bearingGate() {
         let first = RecordingPoint(
             location: recordingLocation(
+                timestamp: start,
                 course: 0,
-                speed: 1,
-                timestamp: start
+                speed: 1
             )
         )
         let next = recordingLocation(
+            timestamp: start.addingTimeInterval(2),
             latitude: 47.63001,
             course: 30,
-            speed: 1,
-            timestamp: start.addingTimeInterval(2)
+            speed: 1
         )
 
         #expect(RecordingFixPolicy.accepts(
@@ -139,18 +139,18 @@ struct RecordingFixPolicyTests {
 
         #expect(!RecordingFixPolicy.accepts(
             recordingLocation(
+                timestamp: timestamp,
                 latitude: 47.63 + farNorth,
-                speed: 1,
-                timestamp: timestamp
+                speed: 1
             ),
             after: first,
             now: timestamp
         ))
         #expect(RecordingFixPolicy.accepts(
             recordingLocation(
+                timestamp: timestamp,
                 latitude: 47.63 + farNorth,
-                speed: 20,
-                timestamp: timestamp
+                speed: 20
             ),
             after: first,
             now: timestamp
@@ -164,9 +164,9 @@ struct RecordingFixPolicyTests {
         )
         let timestamp = start.addingTimeInterval(5)
         let fastFix = recordingLocation(
+            timestamp: timestamp,
             latitude: 47.63 + 100.0 / 111_000,
-            speed: 1,
-            timestamp: timestamp
+            speed: 1
         )
 
         #expect(!RecordingFixPolicy.accepts(

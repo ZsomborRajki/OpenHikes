@@ -19,7 +19,7 @@ struct HikeSearchTests {
     /// The sheet hands over `@Query`'s array; these are its titles in its
     /// order (newest first), so a test reads like the list on screen.
     private func hikes(_ titles: [String], in context: ModelContext) -> [Hike] {
-        titles.map { Fixture.hike(title: $0, in: context) }
+        titles.map { Fixture.hike(in: context, title: $0) }
     }
 
     @Test("titles starting with the query rank above titles merely containing it")
@@ -112,7 +112,7 @@ struct HikeSearchTests {
 
         #expect(search.rankedHikes(matching: "ridge", in: hikes).map(\.title) == ["Ridge Loop"])
 
-        hikes.insert(Fixture.hike(title: "Ridgeway Path", in: context), at: 0)
+        hikes.insert(Fixture.hike(in: context, title: "Ridgeway Path"), at: 0)
         #expect(search.rankedHikes(matching: "ridge", in: hikes).map(\.title) == ["Ridge Loop", "Ridgeway Path"])
 
         hikes.removeAll { $0.title == "Ridge Loop" }

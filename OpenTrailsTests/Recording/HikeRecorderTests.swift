@@ -10,7 +10,7 @@ import OpenTrailsShared
 import SwiftData
 import Testing
 
-private final class StubRecordingLocationSource: RecordingLocationSource {
+final class StubRecordingLocationSource: RecordingLocationSource {
     var authorization: RecordingLocationAuthorization = .authorized
     var hasFullAccuracy = true
     weak var delegateObject: AnyObject?
@@ -54,7 +54,7 @@ private final class StubRecordingLocationSource: RecordingLocationSource {
 
 }
 
-private final class StubRecordingElevationSource: RecordingElevationSource {
+final class StubRecordingElevationSource: RecordingElevationSource {
     var isAvailable = true
     private var handler: (@Sendable (Double) -> Void)?
     private(set) var startCount = 0
@@ -77,7 +77,7 @@ private final class StubRecordingElevationSource: RecordingElevationSource {
     }
 }
 
-private final class StubRecordingMotionSource: RecordingMotionSource {
+final class StubRecordingMotionSource: RecordingMotionSource {
     var isAvailable = true
     private var handler: (@Sendable (RecordingMotionState) -> Void)?
     private(set) var startCount = 0
@@ -102,7 +102,7 @@ private final class StubRecordingMotionSource: RecordingMotionSource {
     }
 }
 
-private actor StubTrailGraphProvider: TrailGraphProviding {
+actor StubTrailGraphProvider: TrailGraphProviding {
     let graph: TrailGraph
     let cachedGraphDelay: Duration?
     private var prefetchedRegions: [TrailGraphRegion] = []
@@ -149,7 +149,7 @@ private actor StubTrailGraphProvider: TrailGraphProviding {
     }
 }
 
-private actor StubRecordingSharedStateStore:
+actor StubRecordingSharedStateStore:
     RecordingSharedStateStoring {
     private var snapshots: [SharedRecordingSnapshot] = []
     private var reloadFlags: [Bool] = []
@@ -206,7 +206,7 @@ private actor StubRecordingSharedStateStore:
     }
 }
 
-private actor BlockingClearRecordingSharedStateStore:
+actor BlockingClearRecordingSharedStateStore:
     RecordingSharedStateStoring {
     private var clearStarted = false
     private var clearContinuation: CheckedContinuation<Void, Never>?
@@ -245,16 +245,16 @@ private actor BlockingClearRecordingSharedStateStore:
 
 @Suite("Hike recorder")
 final class HikeRecorderTests {
-    private let container: ModelContainer
-    private let context: ModelContext
-    private let source = StubRecordingLocationSource()
-    private let clock = TestClock()
-    private let directory = FileManager.default.temporaryDirectory
+    let container: ModelContainer
+    let context: ModelContext
+    let source = StubRecordingLocationSource()
+    let clock = TestClock()
+    let directory = FileManager.default.temporaryDirectory
         .appendingPathComponent(
             "recording-sandbox-\(UUID().uuidString)",
             isDirectory: true
         )
-    private var recorder: HikeRecorder?
+    var recorder: HikeRecorder?
 
     init() throws {
         container = try Fixture.modelContainer()
@@ -269,7 +269,7 @@ final class HikeRecorderTests {
         try? FileManager.default.removeItem(at: directory)
     }
 
-    private func makeRecorder(
+    func makeRecorder(
         elevationSource: (any RecordingElevationSource)? = nil,
         motionSource: (any RecordingMotionSource)? = nil,
         trailGraphProvider: (any TrailGraphProviding)? = nil,
@@ -298,7 +298,38 @@ final class HikeRecorderTests {
         return instance
     }
 
-    private func liveMatchingGraph() -> TrailGraph {
+    func matchedPathGraph() -> TrailGraph {
+        let from = TrailGraphNode(
+            id: 201,
+            coordinate: CLLocationCoordinate2D(latitude: 47.6298, longitude: 12.8599)
+        )
+        let to = TrailGraphNode(
+            id: 202,
+            coordinate: CLLocationCoordinate2D(latitude: 47.6305, longitude: 12.8599)
+        )
+        return TrailGraph(
+            nodes: [from, to],
+            edges: [
+                TrailGraphEdge(
+                    id: TrailGraphEdgeID(wayID: 201, segmentIndex: 0),
+                    fromNodeID: from.id,
+                    toNodeID: to.id,
+                    lengthMeters: RouteGeometry.distanceMeters(
+                        from: from.coordinate,
+                        to: to.coordinate
+                    ),
+                    name: "Matched Path",
+                    hikingRouteName: nil,
+                    sacScale: nil,
+                    trailVisibility: nil,
+                    access: nil,
+                    surface: nil
+                ),
+            ]
+        )
+    }
+
+    func liveMatchingGraph() -> TrailGraph {
         let from = TrailGraphNode(
             id: 101,
             coordinate: CLLocationCoordinate2D(
@@ -335,7 +366,7 @@ final class HikeRecorderTests {
         )
     }
 
-    private func ambiguityGraph() -> TrailGraph {
+    func ambiguityGraph() -> TrailGraph {
         let definitions: [(Int64, Double, Double)] = [
             (1, 47.6300, 12.8600),
             (2, 47.6302, 12.8600),
@@ -393,7 +424,7 @@ final class HikeRecorderTests {
         return TrailGraph(nodes: nodes, edges: edges)
     }
 
-    private func savedHike(
+    func savedHike(
         from outcome: RecordingStopOutcome
     ) throws -> Hike {
         guard case .saved(let hike) = outcome else {
@@ -405,7 +436,7 @@ final class HikeRecorderTests {
         return hike
     }
 
-    private func fix(
+    func fix(
         latitude: Double,
         longitude: Double = 12.86,
         accuracy: CLLocationAccuracy = 8,
@@ -425,7 +456,7 @@ final class HikeRecorderTests {
         )
     }
 
-    private func acceleratedLocations(
+    func acceleratedLocations(
         from track: GPXImport.Track,
         endingAt endDate: Date,
         duration: TimeInterval = 20

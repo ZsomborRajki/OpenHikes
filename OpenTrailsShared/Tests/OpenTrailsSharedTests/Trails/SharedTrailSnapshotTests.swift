@@ -23,12 +23,12 @@ struct SharedTrailSnapshotTests {
             title: "Thumsee Loop",
             tintHex: "#34C759FF",
             totalDistanceMeters: total,
-            elevationLowMeters: 600,
-            elevationHighMeters: 900,
             polyline: [
                 .init(latitude: 47.63, longitude: 12.86),
                 .init(latitude: 47.64, longitude: 12.87),
             ],
+            elevationLowMeters: 600,
+            elevationHighMeters: 900,
             liveFix: along.map { distance in
                 .init(
                     coordinate: .init(latitude: 47.635, longitude: 12.865),

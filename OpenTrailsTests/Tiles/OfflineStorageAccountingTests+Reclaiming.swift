@@ -22,10 +22,10 @@ extension StorageAccountingTests {
     func deleteAllKeepsAutoSavePreferences() async throws {
         let controller = makeController()
         let selected = Fixture.hike(in: context) { $0.autoSaveTilesEnabled = true }
-        let other = Fixture.hike(title: "Other", route: Fixture.loopRoute, in: context) { hike in
+        let other = Fixture.hike(in: context, title: "Other", route: Fixture.loopRoute) { hike in
             hike.autoSaveTilesEnabled = true
         }
-        let optedOut = Fixture.hike(title: "Opted out", in: context) { $0.autoSaveTilesEnabled = false }
+        let optedOut = Fixture.hike(in: context, title: "Opted out") { $0.autoSaveTilesEnabled = false }
         controller.hikeSelectionChanged(to: selected)
 
         let saved = key(16, 30, 30)

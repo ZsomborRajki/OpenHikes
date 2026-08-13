@@ -92,7 +92,7 @@ final class WidgetFeedTests {
     func degenerateHikeClears() async {
         tracker.hikeSelectionChanged(to: hike())
         await tracker.waitForSelectionPublish()
-        let stub = Fixture.hike(route: [RouteCoordinate(latitude: 47.63, longitude: 12.86)], in: context)
+        let stub = Fixture.hike(in: context, route: [RouteCoordinate(latitude: 47.63, longitude: 12.86)])
         tracker.hikeSelectionChanged(to: stub)
         await tracker.waitForSelectionPublish()
         #expect(SharedStore.load() == nil)
@@ -182,7 +182,7 @@ final class WidgetFeedTests {
     @Test("a fix for a hike that isn't the tracked one is ignored")
     func ignoresUntrackedHikes() async throws {
         let tracked = hike()
-        let other = Fixture.hike(title: "Elsewhere", in: context)
+        let other = Fixture.hike(in: context, title: "Elsewhere")
         tracker.hikeSelectionChanged(to: tracked)
         await tracker.waitForSelectionPublish()
 
@@ -207,7 +207,7 @@ final class WidgetFeedTests {
         tracker.publishLiveFix(hike: first, profile: profile, match: match)
         #expect(SharedStore.load()?.liveFix != nil)
 
-        let second = Fixture.hike(title: "Second", in: context)
+        let second = Fixture.hike(in: context, title: "Second")
         tracker.hikeSelectionChanged(to: second)
         await tracker.waitForSelectionPublish()
         let snapshot = try #require(SharedStore.load())
@@ -218,7 +218,7 @@ final class WidgetFeedTests {
     @Test("rapid selection changes publish only the latest trail")
     func rapidSelectionPublishesLatest() async throws {
         let first = hike()
-        let second = Fixture.hike(title: "Second", route: Fixture.loopRoute, in: context)
+        let second = Fixture.hike(in: context, title: "Second", route: Fixture.loopRoute)
 
         tracker.hikeSelectionChanged(to: first)
         tracker.hikeSelectionChanged(to: second)

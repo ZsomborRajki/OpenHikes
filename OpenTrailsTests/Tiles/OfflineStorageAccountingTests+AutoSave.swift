@@ -37,7 +37,7 @@ extension StorageAccountingTests {
     func switchingHikesFoldsInPendingKeys() async throws {
         let controller = makeController()
         let first = Fixture.hike(in: context)
-        let second = Fixture.hike(title: "Second", route: Fixture.loopRoute, in: context)
+        let second = Fixture.hike(in: context, title: "Second", route: Fixture.loopRoute)
         controller.hikeSelectionChanged(to: first)
 
         let saved = key(17, 7, 7)
@@ -86,7 +86,7 @@ extension StorageAccountingTests {
     func deletingKeepsSharedTiles() async throws {
         let controller = makeController()
         let doomed = Fixture.hike(in: context)
-        let survivor = Fixture.hike(title: "Survivor", in: context)
+        let survivor = Fixture.hike(in: context, title: "Survivor")
         controller.hikeSelectionChanged(to: doomed)
 
         let shared = key(17, 10, 10)
@@ -94,15 +94,15 @@ extension StorageAccountingTests {
         controller.flushPendingKeys()
         survivor.autoSavedTileKeys = [shared]
 
-        await deleteHike(doomed, survivors: [survivor], using: controller)
+        await deleteHike(doomed, using: controller, survivors: [survivor])
         #expect(await bytes([shared]) > 0, "the surviving hike still lists this tile")
     }
 
     @Test("clearing one hike's offline tiles keeps another hike's shared coverage")
     func clearingStoredTilesKeepsSharedTiles() async throws {
         let controller = makeController()
-        let cleared = Fixture.hike(title: "Cleared", in: context)
-        let survivor = Fixture.hike(title: "Survivor", in: context)
+        let cleared = Fixture.hike(in: context, title: "Cleared")
+        let survivor = Fixture.hike(in: context, title: "Survivor")
         controller.hikeSelectionChanged(to: cleared)
 
         let shared = key(17, 11, 11)

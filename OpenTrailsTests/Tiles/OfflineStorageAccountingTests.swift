@@ -27,28 +27,28 @@ import Testing
 struct StorageAccountingTests {
     /// This suite's own tile directories and its own auto-save store, so it
     /// neither sees nor disturbs any other suite's tiles.
-    private let sandbox = TileSandbox()
-    private let context: ModelContext
+    let sandbox = TileSandbox()
+    let context: ModelContext
 
-    private var store: AutoSaveTileStore { sandbox.store }
+    var store: AutoSaveTileStore { sandbox.store }
 
     init() throws {
         context = try Fixture.modelContext()
     }
 
     /// A controller wired to this suite's store rather than the app's.
-    private func makeController() -> AutoSaveController {
+    func makeController() -> AutoSaveController {
         AutoSaveController(store: sandbox.store)
     }
 
     // MARK: - Harness
 
-    private func key(_ z: Int, _ x: Int, _ y: Int) -> String {
+    func key(_ z: Int, _ x: Int, _ y: Int) -> String {
         "\(z)/\(x)/\(y)@2.0"
     }
 
     /// Tile indices for a point on (or offset from) the fixture trail.
-    private func tile(northMeters: Double = 0, z: Int = 16) -> (z: Int, x: Int, y: Int) {
+    func tile(northMeters: Double = 0, z: Int = 16) -> (z: Int, x: Int, y: Int) {
         let anchor = Fixture.coordinates(Fixture.ridgeRoute)[2]
         let latitude = anchor.latitude + northMeters / 111_320
         return (z, SlippyTileMath.tileX(anchor.longitude, z: z), SlippyTileMath.tileY(latitude, z: z))
@@ -57,19 +57,19 @@ struct StorageAccountingTests {
     /// Runs the tile-thread path: the tile has been drawn, so its bytes are in
     /// the browsing cache, and `considerPersisting` moves them if the hike
     /// wants them.
-    private func persist(key: String, tile: (z: Int, x: Int, y: Int)) async throws {
+    func persist(key: String, tile: (z: Int, x: Int, y: Int)) async throws {
         try sandbox.browse(key: key)
         let autoSaveStore = store
         await offMain { autoSaveStore.considerPersisting(key: key, z: tile.z, x: tile.x, y: tile.y) }
     }
 
-    private func bytes(_ keys: [String]) async -> Int64 {
+    func bytes(_ keys: [String]) async -> Int64 {
         let cache = sandbox.cache
         return await offMain { cache.bytes(forKeys: keys) }
     }
 
     /// What the hike sheets add up to: the tiles every hike's manifest claims.
-    private func claimedKeys(of hikes: Hike...) async -> Set<String> {
+    func claimedKeys(of hikes: Hike...) async -> Set<String> {
         let ownerships = hikes.map(TileOwnership.init)
         return await offMain {
             ownerships.reduce(into: Set<String>()) { $0.formUnion($1.tileKeys()) }
@@ -77,7 +77,7 @@ struct StorageAccountingTests {
     }
 
     /// The two numbers Settings shows: offline coverage, and browsing residue.
-    private func diskUsage(claimedBy keys: Set<String>) async -> TileCache.DiskUsage {
+    func diskUsage(claimedBy keys: Set<String>) async -> TileCache.DiskUsage {
         let cache = sandbox.cache
         return await offMain { cache.diskUsage(claimedBy: keys) }
     }
@@ -85,29 +85,29 @@ struct StorageAccountingTests {
     /// The Clear Map Cache button. This really does empty the host app's tile
     /// store of everything `keys` doesn't name — which is the behaviour under
     /// test. Nothing else in the target keeps tile files across suites.
-    private func clearMapCache(claimedBy keys: Set<String>) async {
+    func clearMapCache(claimedBy keys: Set<String>) async {
         let cache = sandbox.cache
         await offMain { cache.removeTiles(unclaimedBy: keys) }
     }
 
     /// "Delete All Saved Tiles" in Settings.
-    private func removeAllTiles() async {
+    func removeAllTiles() async {
         let cache = sandbox.cache
         await offMain { cache.removeAllTiles() }
     }
 
     /// The launch-time sweeps, run on demand.
-    private func trim(claimedBy keys: Set<String>, limit: Int64) async -> Int64 {
+    func trim(claimedBy keys: Set<String>, limit: Int64) async -> Int64 {
         let cache = sandbox.cache
         return await offMain { cache.trimCache(claimedBy: keys, limit: limit) }
     }
 
-    private func removeExpiredTiles() async -> Int {
+    func removeExpiredTiles() async -> Int {
         let cache = sandbox.cache
         return await offMain { cache.removeExpiredTiles() }
     }
 
-    private func promoteCachedTile(forKey key: String) async -> Bool {
+    func promoteCachedTile(forKey key: String) async -> Bool {
         let cache = sandbox.cache
         return await offMain { cache.promoteCachedTile(forKey: key) }
     }
@@ -152,7 +152,7 @@ struct StorageAccountingTests {
     }
 
     /// The delete-a-hike path from `MapSheet.delete(_:)`, minus the SwiftUI.
-    private func deleteHike(_ hike: Hike, using controller: AutoSaveController, survivors: [Hike] = []) async {
+    func deleteHike(_ hike: Hike, using controller: AutoSaveController, survivors: [Hike] = []) async {
         controller.hikeWillBeDeleted(hike)
         let deletionPlan = StoredTileDeletionPlan(removing: hike, among: [hike] + survivors)
         let cache = sandbox.cache
@@ -163,7 +163,7 @@ struct StorageAccountingTests {
     }
 
     /// The Delete button in `HikeDetailView`, minus the SwiftUI.
-    private func clearStoredTiles(
+    func clearStoredTiles(
         for hike: Hike,
         among hikes: [Hike],
         using controller: AutoSaveController

@@ -265,9 +265,9 @@ extension HikeRecorderTests {
         let sessionID = UUID()
         context.insert(
             Hike(
-                id: sessionID,
                 title: "Already Saved",
                 distanceMeters: 10,
+                id: sessionID,
                 route: Fixture.ridgeRoute
             )
         )

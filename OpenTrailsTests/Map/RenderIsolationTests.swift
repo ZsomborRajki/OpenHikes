@@ -267,8 +267,7 @@ struct ObservationCostTests {
 
         publisher.coordinate = CLLocationCoordinate2D(latitude: 47.63, longitude: 12.86)
         await counter.settle()
-        let sameMsg = "same place, still a notification — the coordinate publishers must compare for themselves"
-        #expect(counter.count == 1, sameMsg)
+        #expect(counter.count == 1, "same place, still a notification — the coordinate publishers must compare for themselves")
     }
 
     /// The other half of the same idea: the guard genuinely costs nothing when
