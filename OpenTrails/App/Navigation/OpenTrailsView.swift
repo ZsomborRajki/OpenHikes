@@ -133,10 +133,12 @@ struct OpenTrailsView: View {
                         .padding(.top, Self.weatherBadgeTopPadding)
                 }
             }
-            .task { await appModel.locationManager.start() }
+            .onAppear {
+                restoreLastSelectedHike()
+                appModel.locationManager.start()
+                appModel.trimTileCache(in: modelContext)
+            }
             .task { await appModel.pollWeather() }
-            .task { restoreLastSelectedHike() }
-            .task { appModel.trimTileCache(in: modelContext) }
             .sheet(isPresented: $showSheet) {
                 MapSheet(
                     searchText: $searchText,

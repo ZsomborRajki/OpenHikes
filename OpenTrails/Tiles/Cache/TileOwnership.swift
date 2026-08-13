@@ -55,7 +55,7 @@ nonisolated struct TileOwnership: Sendable {
     /// The keys `self` claims that none of `others` do — i.e. exactly what can
     /// be deleted along with this hike without quietly stripping offline
     /// coverage from a hike that's still around and still lists it.
-    func exclusiveTileKeys(against others: [TileOwnership]) -> Set<String> {
+    func exclusiveTileKeys(against others: [Self]) -> Set<String> {
         var keys = tileKeys()
         for other in others where other.hasStoredTiles {
             keys.subtract(other.tileKeys())

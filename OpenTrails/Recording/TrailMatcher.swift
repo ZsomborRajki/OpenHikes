@@ -102,7 +102,7 @@ nonisolated enum TrailMatcher {
 
 // MARK: - Private types
 
-private extension TrailMatcher {
+nonisolated private extension TrailMatcher {
     struct MatchLeg {
         let transition: Transition?
         let isConfident: Bool
@@ -127,7 +127,7 @@ private extension TrailMatcher {
 
 // MARK: - Viterbi
 
-private extension TrailMatcher {
+nonisolated private extension TrailMatcher {
     static func viterbiAndBacktrack(
         points: [RecordingPoint],
         candidates: [[Candidate]],
@@ -273,7 +273,7 @@ private extension TrailMatcher {
 
 // MARK: - Match leg and output building
 
-private extension TrailMatcher {
+nonisolated private extension TrailMatcher {
     static func buildMatchingLegs(
         points: [RecordingPoint],
         selected: [Candidate?],

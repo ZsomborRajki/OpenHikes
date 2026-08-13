@@ -8,7 +8,7 @@
 import CoreLocation
 import Foundation
 
-extension TrailMatcherGraphIndex {
+nonisolated extension TrailMatcherGraphIndex {
     /// A uniform grid over the graph's edges, so a fix is projected
     /// against the segments near it rather than against every segment in
     /// the region.

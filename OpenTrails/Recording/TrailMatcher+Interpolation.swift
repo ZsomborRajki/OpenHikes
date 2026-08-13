@@ -9,7 +9,7 @@ import Algorithms
 import CoreLocation
 import Foundation
 
-extension TrailMatcher {
+nonisolated extension TrailMatcher {
     struct InterpolationContext {
         let coordinates: [CLLocationCoordinate2D]
         let distances: [Double]

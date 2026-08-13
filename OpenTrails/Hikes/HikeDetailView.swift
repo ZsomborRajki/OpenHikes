@@ -32,6 +32,8 @@ struct HikeDetailView: View {
     private var tileProviderID = TileProvider.default.id
     @Environment(\.displayScale)
     private var displayScale
+    // Shared with offline-storage helpers in the companion extension file.
+    // swiftlint:disable private_swiftui_state
     @Environment(\.modelContext)
     var modelContext
     @State var downloader = OfflineTileDownloader()
@@ -47,6 +49,7 @@ struct HikeDetailView: View {
     @State var storedBytesMeasurementTask: Task<Void, Never>?
     @State var storedBytesMeasurementGeneration = 0
     @State var storageDeletionFailed = false
+    // swiftlint:enable private_swiftui_state
     /// Whether the title is currently being edited inline.
     @State private var isEditingTitle = false
     /// Draft text while the inline title field is open.

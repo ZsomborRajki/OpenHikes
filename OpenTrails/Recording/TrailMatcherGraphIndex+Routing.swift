@@ -8,7 +8,7 @@
 import Foundation
 import HeapModule
 
-extension TrailMatcherGraphIndex {
+nonisolated extension TrailMatcherGraphIndex {
     struct NodePath {
         let nodes: [Int64]
         let edgeIndices: [Int]
@@ -54,7 +54,7 @@ extension TrailMatcherGraphIndex {
     }
 }
 
-extension TrailMatcherGraphIndex {
+nonisolated extension TrailMatcherGraphIndex {
     mutating func pathOptions(
         from start: Int64,
         to end: Int64,

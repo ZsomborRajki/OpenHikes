@@ -6,7 +6,7 @@
 import CoreLocation
 import Foundation
 
-extension TrailMatcher {
+nonisolated extension TrailMatcher {
     static func emptyMatchResult(points: [RecordingPoint]) -> TrailMatchResult {
         TrailMatchResult(
             points: points,

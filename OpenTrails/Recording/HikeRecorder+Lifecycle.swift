@@ -37,8 +37,8 @@ extension HikeRecorder {
         let (recoveredHike, recoveryLastUpdatedAt): (Hike, Date)
         do {
             (recoveredHike, recoveryLastUpdatedAt) = try prepareRecoveredSession(from: session)
-        } catch let failure as RecordingFailure {
-            fail(failure, endLocationUpdates: false)
+        } catch {
+            fail(error, endLocationUpdates: false)
             return
         }
         if !recoveredHike.isRecording {
@@ -77,8 +77,8 @@ extension HikeRecorder {
             phase = .saving
             do {
                 _ = try await finishPreparedSession(session, journal: journal)
-            } catch let failure as RecordingFailure {
-                fail(failure, endLocationUpdates: false)
+            } catch {
+                fail(error, endLocationUpdates: false)
             }
             return
         }
@@ -129,8 +129,8 @@ extension HikeRecorder {
         }
         do {
             try deleteOrphanedRecordingHikes()
-        } catch let failure as RecordingFailure {
-            fail(failure, endLocationUpdates: false)
+        } catch {
+            fail(error, endLocationUpdates: false)
             return
         }
         let id = UUID()
@@ -147,7 +147,8 @@ extension HikeRecorder {
         }
         do {
             _ = try ensureRecordingHike(sessionID: id, startedAt: startedAt, title: nil)
-        } catch let failure as RecordingFailure {
+        } catch {
+            let failure = error
             do {
                 try await journal.discard()
             } catch {

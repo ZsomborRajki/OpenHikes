@@ -16,7 +16,10 @@ import SwiftData
 
 @Observable
 final class HikeRecorder: NSObject {
-    static let logger = Logger(subsystem: "OpenTrails", category: "HikeRecorder")
+    nonisolated static let logger = Logger(
+        subsystem: "OpenTrails",
+        category: "HikeRecorder"
+    )
 
     enum Phase: Equatable {
         case idle

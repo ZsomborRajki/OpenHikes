@@ -12,7 +12,7 @@ import OrderedCollections
 
 // MARK: - Shared types (used by TrailMatcher and TrailMatcherGraphIndex)
 
-struct TrailMatcherCandidate: Comparable {
+nonisolated struct TrailMatcherCandidate: Comparable {
     let edgeIndex: Int
     let projectedCoordinate: CLLocationCoordinate2D
     let offsetMeters: Double
@@ -30,13 +30,13 @@ struct TrailMatcherCandidate: Comparable {
     }
 }
 
-struct TrailMatcherTransitionAlternative {
+nonisolated struct TrailMatcherTransitionAlternative {
     let distanceMeters: Double
     let coordinates: [CLLocationCoordinate2D]
     let trailNames: [String]
 }
 
-struct TrailMatcherTransition {
+nonisolated struct TrailMatcherTransition {
     let distanceMeters: Double
     let coordinates: [CLLocationCoordinate2D]
     let likelihoodMargin: Double
@@ -44,7 +44,7 @@ struct TrailMatcherTransition {
     let alternatives: [TrailMatcherTransitionAlternative]
 }
 
-struct TrailMatcherTransitionParameters {
+nonisolated struct TrailMatcherTransitionParameters {
     let expectedDistance: Double
     let maximumDistance: Double
     let beta: Double
@@ -56,7 +56,7 @@ struct TrailMatcherTransitionParameters {
 
 // MARK: - Graph Index
 
-struct TrailMatcherGraphIndex {
+nonisolated struct TrailMatcherGraphIndex {
     struct Adjacency {
         let nodeID: Int64
         let edgeIndex: Int
@@ -136,7 +136,7 @@ struct TrailMatcherGraphIndex {
 
 // MARK: - Candidate lookup
 
-extension TrailMatcherGraphIndex {
+nonisolated extension TrailMatcherGraphIndex {
     private static let candidateSearchRadiusMeters = 50.0
     private static let candidateSearchAccuracyFactor = 3.0
 
@@ -181,7 +181,7 @@ extension TrailMatcherGraphIndex {
 
 // MARK: - Transition lookup
 
-extension TrailMatcherGraphIndex {
+nonisolated extension TrailMatcherGraphIndex {
     private static let similarityThresholdFraction = 0.15
 
     mutating func transition(
