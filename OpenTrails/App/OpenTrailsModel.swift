@@ -100,6 +100,11 @@ final class OpenTrailsModel {
             autoSaveController: AutoSaveController(),
             hikeRecorder: HikeRecorder(
                 container: testingContainer,
+                trailGraphProvider: AppLaunchEnvironment
+                    .trailGraphFixtureName
+                    .flatMap { name in
+                        BundledTrailGraphProvider(fixtureName: name)
+                    },
                 defaults: uiTestingDefaults,
                 journalDirectory:
                     AppLaunchEnvironment.recordingJournalDirectory(),

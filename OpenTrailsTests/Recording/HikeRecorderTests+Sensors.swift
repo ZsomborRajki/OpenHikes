@@ -84,7 +84,13 @@ extension HikeRecorderTests {
             abs(coord.longitude - 12.8599) < 0.00001
         })
 
-        let hike = try savedHike(from: await recorder.stop())
+        // A moved route is reviewed before it is stored; keeping the default
+        // choice is what makes the matched line canonical.
+        guard case .needsReview = try await recorder.stop() else {
+            Issue.record("a moved route should be reviewed before saving")
+            return
+        }
+        let hike = try await recorder.saveReviewedRecording()
 
         #expect(hike.rawRoute.count == 2)
         #expect(hike.route.count == 2)
@@ -195,8 +201,9 @@ extension HikeRecorderTests {
         #expect(try context.fetch(FetchDescriptor<Hike>()).count == 1)
         #expect(draft.isRecording)
         #expect(draft.route.isEmpty)
-        let ambiguity = try #require(recorder.ambiguityReview?.current)
-        #expect(ambiguity.alternatives.count >= 2)
+        let section = try #require(recorder.routeReview?.current)
+        #expect(section.kind == .ambiguous)
+        #expect(section.alternatives.count >= 2)
         #expect(recorder.trace.reviewSegment.count == 2)
         #expect(FileManager.default.fileExists(atPath: TrackJournal(directory: directory).journalURL.path))
         let sessionID = try #require(
@@ -215,8 +222,8 @@ extension HikeRecorderTests {
         #expect(recorder.stats.pointCount == 2)
         #expect(!(await sharedStore.removedIDs()).contains(lateWidgetFix.id))
 
-        let alternative = try #require(ambiguity.alternatives.first)
-        recorder.selectAmbiguityChoice(
+        let alternative = try #require(section.alternatives.first)
+        recorder.selectRouteChoice(
             .alternative(alternative.id)
         )
         #expect(recorder.trace.reviewSegment.count > 2)

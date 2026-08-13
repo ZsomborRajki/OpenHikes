@@ -227,24 +227,27 @@ enum RecordingStopOutcome {
     case saved(Hike)
 }
 
+/// The sections of a finished recording the hiker can still change, and what
+/// they are currently set to. The recording is not saved until this is
+/// resolved, so a review that vanishes silently would lose the hike.
 @Observable
-final class RecordingAmbiguityReview {
+final class RecordingRouteReview {
     nonisolated deinit { /* intentionally ignored */ }
 
-    let ambiguities: [TrailMatchAmbiguity]
+    let sections: [RouteReviewSection]
     private(set) var currentIndex = 0
-    private(set) var choices: [Int: TrailAmbiguityChoice]
+    private(set) var choices: [Int: TrailRouteChoice]
 
-    init(ambiguities: [TrailMatchAmbiguity]) {
-        self.ambiguities = ambiguities
+    init(sections: [RouteReviewSection]) {
+        self.sections = sections
         choices = Dictionary(
-            uniqueKeysWithValues: ambiguities.map { ($0.id, .gps) }
+            uniqueKeysWithValues: sections.map { ($0.id, $0.defaultChoice) }
         )
     }
 
-    var current: TrailMatchAmbiguity? {
-        ambiguities.indices.contains(currentIndex)
-            ? ambiguities[currentIndex]
+    var current: RouteReviewSection? {
+        sections.indices.contains(currentIndex)
+            ? sections[currentIndex]
             : nil
     }
 
@@ -253,10 +256,27 @@ final class RecordingAmbiguityReview {
     }
 
     var canMoveForward: Bool {
-        currentIndex + 1 < ambiguities.count
+        currentIndex + 1 < sections.count
     }
 
-    func select(_ choice: TrailAmbiguityChoice) {
+    /// The section choices expanded onto the legs they cover, which is the
+    /// form ``TrailMatchResult/points(resolving:)`` consumes.
+    var legChoices: [Int: TrailRouteChoice] {
+        var expanded: [Int: TrailRouteChoice] = [:]
+        for section in sections {
+            let choice = choices[section.id] ?? section.defaultChoice
+            for legIndex in section.legIndices {
+                expanded[legIndex] = choice
+            }
+        }
+        return expanded
+    }
+
+    func choice(for section: RouteReviewSection) -> TrailRouteChoice {
+        choices[section.id] ?? section.defaultChoice
+    }
+
+    func select(_ choice: TrailRouteChoice) {
         guard let current else {
             return
         }
@@ -278,8 +298,11 @@ final class RecordingAmbiguityReview {
     }
 }
 
-nonisolated struct PendingAmbiguitySave: Sendable {
+nonisolated struct PendingReviewSave: Sendable {
     let session: TrackJournalSession
     let normalizedPoints: [RecordingPoint]
     let matchResult: TrailMatchResult
+    /// Grouped once off the main actor, so the decision to review and the
+    /// review itself cannot disagree about what there is to review.
+    let sections: [RouteReviewSection]
 }

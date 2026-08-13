@@ -44,7 +44,7 @@ final class HikeRecorder: NSObject {
     var recoveryState: RecoveryState = .absent
     var sessionStartedAt: Date?
     var currentHike: Hike?
-    var ambiguityReview: RecordingAmbiguityReview?
+    var routeReview: RecordingRouteReview?
 
     let stats = RecordingStats()
     let trace = RecordingTrace()
@@ -76,7 +76,7 @@ final class HikeRecorder: NSObject {
     @ObservationIgnored var liveMatchingTask: Task<Void, Never>?
     @ObservationIgnored var liveMatchingTaskID: UUID?
     @ObservationIgnored var liveMatchNeedsRun = false
-    @ObservationIgnored var pendingAmbiguitySave: PendingAmbiguitySave?
+    @ObservationIgnored var pendingReviewSave: PendingReviewSave?
     @ObservationIgnored let journalQueue = SerialAsyncQueue()
     @ObservationIgnored var journalFlushTask: Task<Void, Never>?
     @ObservationIgnored var pendingFixMergeTask: Task<Void, Never>?
@@ -358,7 +358,7 @@ extension HikeRecorder {
         guard case .failed = phase else { return }
         if sessionID == nil {
             resetSession()
-        } else if pendingAmbiguitySave != nil {
+        } else if pendingReviewSave != nil {
             phase = .reviewing
         } else {
             phase = .paused
@@ -371,54 +371,54 @@ extension HikeRecorder {
         }
     }
 
-    func selectAmbiguityChoice(_ choice: TrailAmbiguityChoice) {
-        guard phase == .reviewing, let ambiguityReview else { return }
-        ambiguityReview.select(choice)
-        updateAmbiguityPreview()
+    func selectRouteChoice(_ choice: TrailRouteChoice) {
+        guard phase == .reviewing, let routeReview else { return }
+        routeReview.select(choice)
+        updateReviewPreview()
     }
 
-    func moveToPreviousAmbiguity() {
-        guard phase == .reviewing, let ambiguityReview else { return }
-        ambiguityReview.moveBackward()
-        updateAmbiguityPreview()
+    func moveToPreviousReviewSection() {
+        guard phase == .reviewing, let routeReview else { return }
+        routeReview.moveBackward()
+        updateReviewPreview()
     }
 
-    func moveToNextAmbiguity() {
-        guard phase == .reviewing, let ambiguityReview else { return }
-        ambiguityReview.moveForward()
-        updateAmbiguityPreview()
+    func moveToNextReviewSection() {
+        guard phase == .reviewing, let routeReview else { return }
+        routeReview.moveForward()
+        updateReviewPreview()
     }
 
     func saveReviewedRecording() async throws -> Hike {
         guard phase == .reviewing,
-              let pendingAmbiguitySave,
-              let ambiguityReview,
+              let pendingReviewSave,
+              let routeReview,
               let journal else {
-            throw RecordingFailure.save("No ambiguous recording is ready to save.")
+            throw RecordingFailure.save("No reviewed recording is ready to save.")
         }
         phase = .saving
         do {
-            let points = pendingAmbiguitySave.normalizedPoints
-            let choices = ambiguityReview.choices
-            let startedAt = pendingAmbiguitySave.session.metadata.startedAt
+            let points = pendingReviewSave.normalizedPoints
+            let choices = routeReview.legChoices
+            let startedAt = pendingReviewSave.session.metadata.startedAt
             let endedAt = try {
-                guard let endedAt = pendingAmbiguitySave.session.metadata.endedAt else {
+                guard let endedAt = pendingReviewSave.session.metadata.endedAt else {
                     throw RecordingFailure.save("The recording has not been finished yet.")
                 }
                 return endedAt
             }()
             let prepared = try await Task.detached(priority: .userInitiated) {
-                assertOffMainThread("Ambiguity resolution must stay off the main thread")
+                assertOffMainThread("Route review resolution must stay off the main thread")
                 return try RecordingPreparation.prepareResolved(
                     points: points,
                     startedAt: startedAt,
                     endedAt: endedAt,
-                    matchResult: pendingAmbiguitySave.matchResult,
+                    matchResult: pendingReviewSave.matchResult,
                     choices: choices
                 )
             }.value
-            let hike = try persist(pendingAmbiguitySave.session, prepared: prepared)
-            await finishSavedSession(pendingAmbiguitySave.session, journal: journal)
+            let hike = try persist(pendingReviewSave.session, prepared: prepared)
+            await finishSavedSession(pendingReviewSave.session, journal: journal)
             return hike
         } catch let failure as RecordingFailure {
             fail(failure, endLocationUpdates: false)

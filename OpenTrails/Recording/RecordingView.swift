@@ -243,6 +243,10 @@ private struct RecordingStatsGrid: View {
         ) {
             StatTile(label: "Distance", value: distance)
             StatTile(label: "Points", value: stats.pointCount.formatted())
+                .accessibilityElement(children: .ignore)
+                .accessibilityLabel("Points")
+                .accessibilityValue(stats.pointCount.formatted())
+                .accessibilityIdentifier("recording-point-count")
             StatTile(label: "Avg Speed", value: averageSpeed)
             StatTile(label: "Accuracy", value: accuracy)
         }
@@ -281,6 +285,7 @@ private struct RecordingControls: View {
     @State private var showDiscardConfirmation = false
     @State private var showStopAlert = false
     @State private var stopNameDraft = ""
+    @State private var pendingName = ""
 
     var body: some View {
         VStack(spacing: 12) {
@@ -353,12 +358,14 @@ private struct RecordingControls: View {
             ProgressView("Saving recorded hike…")
                 .frame(maxWidth: .infinity)
         case .reviewing:
-            if let review = recorder.ambiguityReview {
-                RecordingAmbiguityReviewControls(
+            if let review = recorder.routeReview {
+                RecordingRouteReviewControls(
                     recorder: recorder,
-                    review: review,
-                    onSaved: onSaved
-                )
+                    review: review
+                ) { hike in
+                    apply(pendingName, to: hike)
+                    onSaved(hike)
+                }
             }
             discardButton
         case .failed:
@@ -390,145 +397,20 @@ private struct RecordingControls: View {
     }
 
     private func stopAndSave() async {
+        pendingName = stopNameDraft.trimmingCharacters(
+            in: .whitespacesAndNewlines
+        )
         guard let outcome = try? await recorder.stop() else { return }
-        let trimmed = stopNameDraft.trimmingCharacters(in: .whitespacesAndNewlines)
         if case .saved(let hike) = outcome {
-            if !trimmed.isEmpty {
-                hike.customName = trimmed
-            }
+            apply(pendingName, to: hike)
             onSaved(hike)
         }
     }
-}
 
-private struct RecordingAmbiguityReviewControls: View {
-    let recorder: HikeRecorder
-    let review: RecordingAmbiguityReview
-    var onSaved: (Hike) -> Void
-
-    private let choicePadding: CGFloat = 10
-    private let choiceRadius: CGFloat = 10
-    private let choiceOpacity: Double = 0.08
-    private let alphabetCount = 26
-    private let uppercaseAScalar: Int = 65
-
-    var body: some View {
-        if let ambiguity = review.current {
-            ambiguityContent(for: ambiguity)
-                .frame(maxWidth: .infinity, alignment: .leading)
-        }
-    }
-
-    @ViewBuilder
-    private func ambiguityContent(for ambiguity: TrailMatchAmbiguity) -> some View {
-        VStack(alignment: .leading, spacing: 12) {
-            Text(
-                "Trail choice \(review.currentIndex + 1) of "
-                    + "\(review.ambiguities.count)"
-            )
-            .font(.headline)
-            Text(
-                "The highlighted section has more than one plausible route."
-            )
-            .font(.subheadline)
-            .foregroundStyle(.secondary)
-
-            choiceButton(
-                title: "Use GPS only",
-                subtitle: "Keep the recorded line for this section.",
-                choice: .gps,
-                ambiguity: ambiguity
-            )
-            ForEach(ambiguity.alternatives, id: \.id) { alternative in
-                choiceButton(
-                    title: "Option \(optionLabel(alternative.id))",
-                    subtitle: alternativeSubtitle(alternative),
-                    choice: .alternative(alternative.id),
-                    ambiguity: ambiguity
-                )
-            }
-
-            ambiguityNavigationButtons
-            saveReviewedHikeButton
-        }
-        .frame(maxWidth: .infinity)
-    }
-
-    @ViewBuilder private var ambiguityNavigationButtons: some View {
-        HStack {
-            Button("Previous") {
-                recorder.moveToPreviousAmbiguity()
-            }
-            .disabled(!review.canMoveBackward)
-            Spacer()
-            Button("Next") {
-                recorder.moveToNextAmbiguity()
-            }
-            .disabled(!review.canMoveForward)
-        }
-    }
-
-    private var saveReviewedHikeButton: some View {
-        Button("Save Reviewed Hike") {
-            Task {
-                guard let hike = try? await recorder.saveReviewedRecording() else {
-                    return
-                }
-                onSaved(hike)
-            }
-        }
-        .buttonStyle(.borderedProminent)
-        .frame(maxWidth: .infinity)
-    }
-
-    private func choiceButton(
-        title: String,
-        subtitle: String,
-        choice: TrailAmbiguityChoice,
-        ambiguity: TrailMatchAmbiguity
-    ) -> some View {
-        Button {
-            recorder.selectAmbiguityChoice(choice)
-        } label: {
-            HStack(alignment: .top, spacing: 10) {
-                Image(
-                    systemName: review.choices[ambiguity.id] == choice
-                        ? "checkmark.circle.fill"
-                        : "circle"
-                )
-                .accessibilityHidden(true)
-                VStack(alignment: .leading, spacing: 2) {
-                    Text(title)
-                        .font(.subheadline.weight(.semibold))
-                    Text(subtitle)
-                        .font(.caption)
-                        .foregroundStyle(.secondary)
-                }
-                Spacer()
-            }
-            .contentShape(Rectangle())
-        }
-        .buttonStyle(.plain)
-        .padding(choicePadding)
-        .background(.secondary.opacity(choiceOpacity), in: RoundedRectangle(cornerRadius: choiceRadius))
-    }
-
-    private func optionLabel(_ index: Int) -> String {
-        guard index >= 0, index < alphabetCount,
-              let scalar = UnicodeScalar(uppercaseAScalar + index) else { return "\(index + 1)" }
-        return String(Character(scalar))
-    }
-
-    private func alternativeSubtitle(
-        _ alternative: TrailMatchAlternative
-    ) -> String {
-        let distance = Measurement(
-            value: alternative.distanceMeters,
-            unit: UnitLength.meters
-        ).formatted(.measurement(width: .abbreviated, usage: .road))
-        let names = alternative.trailNames.isEmpty
-            ? "Unnamed trail"
-            : alternative.trailNames.joined(separator: ", ")
-        return "\(names) · \(distance)"
+    /// A name typed into the stop alert has to survive the review step, which
+    /// saves the hike itself.
+    private func apply(_ name: String, to hike: Hike) {
+        guard !name.isEmpty else { return }
+        hike.customName = name
     }
 }

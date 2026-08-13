@@ -15,11 +15,13 @@ nonisolated enum AppLaunchEnvironment {
         private static let expandedSheetArgument = "--ui-test-expanded-sheet"
         private static let liveLocationArgument = "--ui-test-enable-location"
         private static let importGPXPrefix = "--ui-test-import-gpx="
+        private static let trailGraphPrefix = "--ui-test-trail-graph="
 
         let isUITesting: Bool
         let startsWithExpandedSheet: Bool
         let usesLiveLocation: Bool
         let importedGPXFixtureName: String?
+        let trailGraphFixtureName: String?
 
         init(arguments: [String]) {
             isUITesting = arguments.contains(Self.uiTestingArgument)
@@ -27,17 +29,35 @@ nonisolated enum AppLaunchEnvironment {
                 && arguments.contains(Self.expandedSheetArgument)
             usesLiveLocation = !isUITesting
                 || arguments.contains(Self.liveLocationArgument)
+            importedGPXFixtureName = Self.fixtureName(
+                in: arguments,
+                prefix: Self.importGPXPrefix,
+                isUITesting: isUITesting
+            )
+            trailGraphFixtureName = Self.fixtureName(
+                in: arguments,
+                prefix: Self.trailGraphPrefix,
+                isUITesting: isUITesting
+            )
+        }
 
+        /// Reads a bundled fixture name out of a launch argument. A name that
+        /// could escape the bundle is refused rather than sanitized, because
+        /// the only caller that should ever set one is the UI test runner.
+        private static func fixtureName(
+            in arguments: [String],
+            prefix: String,
+            isUITesting: Bool
+        ) -> String? {
             guard isUITesting,
                   let argument = arguments.first(where: { argument in
-                      argument.hasPrefix(Self.importGPXPrefix)
+                      argument.hasPrefix(prefix)
                   }) else {
-                importedGPXFixtureName = nil
-                return
+                return nil
             }
 
-            let name = String(argument.dropFirst(Self.importGPXPrefix.count))
-            importedGPXFixtureName = name.isEmpty
+            let name = String(argument.dropFirst(prefix.count))
+            return name.isEmpty
                 || name.contains("/")
                 || name.contains("\\")
                 ? nil
@@ -72,6 +92,10 @@ nonisolated enum AppLaunchEnvironment {
     static let usesLiveLocation = configuration.usesLiveLocation
     static let importedGPXFixtureName =
         configuration.importedGPXFixtureName
+    /// Name of the bundled trail graph UI automation records against, so a
+    /// review section does not depend on reaching Overpass.
+    static let trailGraphFixtureName =
+        configuration.trailGraphFixtureName
 
     /// Gives UI automation fresh settings without erasing the normal
     /// simulator app's preferences.

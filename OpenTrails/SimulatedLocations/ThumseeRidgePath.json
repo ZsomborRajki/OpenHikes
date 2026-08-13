@@ -1,0 +1,26 @@
+{
+  "nodes": [
+    {
+      "id": 1,
+      "latitude": 47.71835,
+      "longitude": 12.8317
+    },
+    {
+      "id": 2,
+      "latitude": 47.7189,
+      "longitude": 12.8317
+    }
+  ],
+  "edges": [
+    {
+      "id": {
+        "wayID": 10,
+        "segmentIndex": 0
+      },
+      "fromNodeID": 1,
+      "toNodeID": 2,
+      "lengthMeters": 61.157,
+      "name": "Thumsee Ridge Path"
+    }
+  ]
+}

@@ -2,7 +2,7 @@
 //  HikeRecorder+Persistence.swift
 //  OpenTrails
 //
-//  Persistence, ambiguity review, session lifecycle, and failure/reset helpers
+//  Persistence, route review, session lifecycle, and failure/reset helpers
 //  for HikeRecorder, split out to keep HikeRecorderHelpers.swift under the
 //  file-length limit.
 //
@@ -23,7 +23,7 @@ extension HikeRecorder {
         _ session: TrackJournalSession
     ) async throws(RecordingFailure) -> (
         prepared: PreparedRecording,
-        review: PendingAmbiguitySave?
+        review: PendingReviewSave?
     ) {
         guard let endedAt = session.metadata.endedAt else {
             throw .save("The recording has not been finished yet.")
@@ -50,14 +50,25 @@ extension HikeRecorder {
             throw .save(error.localizedDescription)
         }
 
-        let review: PendingAmbiguitySave?
+        let sections = await groupedSections(in: prepared.matchResult)
+        Self.logger.debug(
+            """
+            Prepared recording: points=\(normalized.count, privacy: .public) \
+            graph=\(graph != nil, privacy: .public) \
+            matched=\(prepared.matchResult != nil, privacy: .public) \
+            sections=\(sections.count, privacy: .public)
+            """
+        )
+
+        let review: PendingReviewSave?
         if graph != nil,
            let matchResult = prepared.matchResult,
-           !matchResult.ambiguities.isEmpty {
-            review = PendingAmbiguitySave(
+           !sections.isEmpty {
+            review = PendingReviewSave(
                 session: session,
                 normalizedPoints: normalized,
-                matchResult: matchResult
+                matchResult: matchResult,
+                sections: sections
             )
         } else {
             review = nil
@@ -65,10 +76,23 @@ extension HikeRecorder {
         return (prepared, review)
     }
 
+    /// Grouping walks every leg, so it joins the rest of the save pipeline off
+    /// the main thread rather than running at stop time on the UI.
+    private func groupedSections(
+        in matchResult: TrailMatchResult?
+    ) async -> [RouteReviewSection] {
+        guard let matchResult else { return [] }
+        return await Task.detached(priority: .userInitiated) {
+            assertOffMainThread(
+                "Route review grouping must stay off the main thread"
+            )
+            return RouteReviewSection.sections(in: matchResult)
+        }.value
+    }
+
     func normalizeSession(
         _ session: TrackJournalSession
-    ) async -> (
-        normalized: [RecordingPoint],
+    ) async -> (        normalized: [RecordingPoint],
         graph: TrailGraph?,
         gapEvidence: [Int: Double]
     ) {
@@ -246,12 +270,10 @@ extension HikeRecorder {
 
         let result = try await prepareForSave(session)
         if let pending = result.review {
-            pendingAmbiguitySave = pending
-            ambiguityReview = RecordingAmbiguityReview(
-                ambiguities: pending.matchResult.ambiguities
-            )
+            pendingReviewSave = pending
+            routeReview = RecordingRouteReview(sections: pending.sections)
             phase = .reviewing
-            updateAmbiguityPreview()
+            updateReviewPreview()
             publishSharedRecordingSnapshot(force: true)
             return .needsReview
         }
@@ -272,27 +294,19 @@ extension HikeRecorder {
         }
     }
 
-    // MARK: Ambiguity review
+    // MARK: Route review
 
-    func updateAmbiguityPreview() {
-        guard let pendingAmbiguitySave,
-              let ambiguityReview else {
+    func updateReviewPreview() {
+        guard let pendingReviewSave,
+              let routeReview else {
             return
         }
-        let points = pendingAmbiguitySave.matchResult.points(
-            resolving: ambiguityReview.choices
+        let points = pendingReviewSave.matchResult.points(
+            resolving: routeReview.legChoices
         )
-        let highlighted = ambiguityReview.current.map { ambiguity in
-            switch ambiguityReview.choices[ambiguity.id] ?? .gps {
-            case .gps:
-                return ambiguity.gpsPoints.map(\.coordinate)
-
-            case .alternative(let alternativeID):
-                let match = ambiguity.alternatives.first { alternative in
-                    alternative.id == alternativeID
-                }
-                return (match?.points ?? ambiguity.gpsPoints).map(\.coordinate)
-            }
+        let highlighted = routeReview.current.map { section in
+            section.points(for: routeReview.choice(for: section))
+                .map(\.coordinate)
         }
         trace.showReview(
             route: points.map(\.coordinate),
@@ -341,8 +355,8 @@ extension HikeRecorder {
         recoveryState = .absent
         sessionStartedAt = nil
         currentHike = nil
-        ambiguityReview = nil
-        pendingAmbiguitySave = nil
+        routeReview = nil
+        pendingReviewSave = nil
         sessionID = nil
         sessionUptimeBase = nil
         lastAcceptedPoint = nil

@@ -26,7 +26,7 @@ nonisolated enum RecordingPreparation {
         endedAt: Date,
         graph: TrailGraph? = nil,
         gapDistances: [Int: Double] = [:],
-        ambiguityChoices: [Int: TrailAmbiguityChoice] = [:]
+        routeChoices: [Int: TrailRouteChoice] = [:]
     ) throws(RecordingFailure) -> PreparedRecording {
         let deduplicated = normalizedPoints(points)
         guard deduplicated.count > 1 else { throw .tooShort }
@@ -43,7 +43,7 @@ nonisolated enum RecordingPreparation {
             startedAt: startedAt,
             endedAt: endedAt,
             match: match,
-            ambiguityChoices: ambiguityChoices
+            routeChoices: routeChoices
         )
     }
 
@@ -52,7 +52,7 @@ nonisolated enum RecordingPreparation {
         startedAt: Date,
         endedAt: Date,
         matchResult: TrailMatchResult,
-        choices: [Int: TrailAmbiguityChoice]
+        choices: [Int: TrailRouteChoice]
     ) throws(RecordingFailure) -> PreparedRecording {
         let deduplicated = normalizedPoints(points)
         guard deduplicated.count > 1 else { throw .tooShort }
@@ -61,7 +61,7 @@ nonisolated enum RecordingPreparation {
             startedAt: startedAt,
             endedAt: endedAt,
             match: matchResult,
-            ambiguityChoices: choices
+            routeChoices: choices
         )
     }
 
@@ -70,12 +70,12 @@ nonisolated enum RecordingPreparation {
         startedAt: Date,
         endedAt: Date,
         match: TrailMatchResult?,
-        ambiguityChoices: [Int: TrailAmbiguityChoice]
+        routeChoices: [Int: TrailRouteChoice]
     ) -> PreparedRecording {
         let rawRoute = deduplicated.map(\.routeCoordinate)
         let preparedPoints: [RecordingPoint]
-        if let match, !ambiguityChoices.isEmpty {
-            preparedPoints = match.points(resolving: ambiguityChoices)
+        if let match, !routeChoices.isEmpty {
+            preparedPoints = match.points(resolving: routeChoices)
         } else {
             preparedPoints = match?.points ?? deduplicated
         }
@@ -105,7 +105,7 @@ nonisolated enum RecordingPreparation {
             matchedTrailName: usesMatchedRoute
                 ? match?.matchedTrailName
                 : nil,
-            ambiguousLegCount: ambiguityChoices.isEmpty
+            ambiguousLegCount: routeChoices.isEmpty
                 ? match?.ambiguousLegCount ?? 0
                 : 0,
             matchResult: match
@@ -174,7 +174,7 @@ nonisolated enum RecordingPreparation {
             RouteGeometry.distanceMeters(
                 from: routePoint.coordinate,
                 to: rawPoint.coordinate
-            ) > 1
+            ) > RouteReviewSection.movedThresholdMeters
         }
     }
 }

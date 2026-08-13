@@ -374,14 +374,17 @@ nonisolated private extension TrailMatcher {
         for indexInPoints in 1..<points.count {
             let previousIndex = indexInPoints - 1
             let coordinates: [CLLocationCoordinate2D]
+            let trailNames: [String]
             if legs[previousIndex].isConfident,
                let transition = legs[previousIndex].transition {
                 coordinates = transition.coordinates
+                trailNames = transition.trailNames
             } else {
                 coordinates = [
                     anchors[previousIndex].coordinate,
                     anchors[indexInPoints].coordinate,
                 ]
+                trailNames = []
             }
             let segment = recordingPoints(
                 along: coordinates,
@@ -397,7 +400,9 @@ nonisolated private extension TrailMatcher {
             matchLegs.append(TrailMatchLeg(
                 index: previousIndex,
                 defaultPoints: segment,
-                alternatives: alternatives
+                rawPoints: [points[previousIndex], points[indexInPoints]],
+                alternatives: alternatives,
+                trailNames: trailNames
             ))
             if !alternatives.isEmpty {
                 ambiguities.append(TrailMatchAmbiguity(

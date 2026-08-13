@@ -48,7 +48,7 @@ extension HikeRecorderTests {
         await recorder.recoverOpenSession()
 
         #expect(recorder.phase == .reviewing)
-        #expect(recorder.ambiguityReview?.ambiguities.count == 1)
+        #expect(recorder.routeReview?.sections.count == 1)
         #expect(recorder.currentHike?.id == sessionID)
         #expect(recorder.currentHike?.isRecording == true)
         #expect(try context.fetch(FetchDescriptor<Hike>()).count == 1)
@@ -305,7 +305,7 @@ extension HikeRecorderTests {
         #expect(hikes.count == 1)
         #expect(hikes.first?.title == "Already Saved")
         #expect(recorder.phase == .idle)
-        #expect(recorder.ambiguityReview == nil)
+        #expect(recorder.routeReview == nil)
         #expect(!FileManager.default.fileExists(atPath: journal.journalURL.path))
     }
 

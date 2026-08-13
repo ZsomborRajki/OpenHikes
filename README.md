@@ -6,7 +6,7 @@ OpenTrails is a local-first SwiftUI and SwiftData trail viewer for iOS, iPadOS, 
 
 - GPX import with track metadata, route statistics, elevation chart scrubbing, route styling, and direction chevrons.
 - Live hike recording with balanced location accuracy, background location, pause/resume, crash-safe recovery, motion-aware fix handling, barometric elevation fusion, and one-time SwiftData save.
-- Bounded live trail matching from an extending cached OpenStreetMap walking graph and post-recording A/B/GPS review for ambiguous legs; unavailable matches preserve the GPS trace.
+- Bounded live trail matching from an extending cached OpenStreetMap walking graph, and a post-recording review where every section the matcher moved or found ambiguous can be kept as the mapped trail, handed back to the raw GPS trace, or swapped for an alternative route; unavailable matches preserve the GPS trace.
 - Search across saved hikes and MapKit place suggestions.
 - OpenStreetMap, Stadia Outdoors, and Thunderforest Outdoors tile providers.
 - Live location, trail auto-follow with a progress readout, and current WeatherKit conditions.
@@ -72,6 +72,10 @@ xcodebuild test \
   -scheme OpenTrailsUI \
   -destination 'platform=iOS Simulator,name=iPhone 17 Pro'
 
+# Or run one UI test on a simulator; --list shows the available tests
+Scripts/run-ui-tests.sh --test testReviewsSnappedRouteAfterStopping
+Scripts/run-ui-tests.sh --all
+
 swift test --package-path OpenTrailsShared
 ```
 
@@ -80,8 +84,8 @@ XCTest/XCUITest because Apple's UI automation and launch-performance metrics
 are not available through Swift Testing. UI-test launches use an in-memory
 SwiftData store and isolated preferences; coverage includes app/settings smoke
 navigation, bundled GPX import, programmatic simulator location, recording
-startup, and `XCTApplicationLaunchMetric`. There is no separate lint or
-formatting command.
+startup, the record → review → save round trip, and
+`XCTApplicationLaunchMetric`. There is no separate lint or formatting command.
 
 ## Project layout
 
@@ -108,7 +112,7 @@ domain folders.
 | `OpenWidgetTests/` | App-hosted tests for the widget's timeline, families, and basemap pairing. |
 | `OpenTrailsUITests/` | iOS Simulator UI automation, location spoofing, and launch metrics. |
 
-See [`.github/copilot-instructions.md`](.github/copilot-instructions.md) for architecture and repository conventions. See [`CODE_REVIEW.md`](CODE_REVIEW.md) for verified build status, known issues, and remaining engineering work.
+See [`.github/copilot-instructions.md`](.github/copilot-instructions.md) for architecture and repository conventions. See [`CODE_REVIEW.md`](CODE_REVIEW.md) for the open code-quality action plan and unresolved design decisions.
 
 ## Current limitations
 
