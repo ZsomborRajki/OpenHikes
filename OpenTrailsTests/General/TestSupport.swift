@@ -21,7 +21,7 @@ import AppKit
 #endif
 
 enum Fixture {
-    private enum RidgeRoute {
+    nonisolated private enum RidgeRoute {
         static let startTimestamp: TimeInterval = 1_750_000_000
         static let longitude: Double = -122.0300
         static let lat1: Double = 37.3300
@@ -39,7 +39,7 @@ enum Fixture {
         static let secondsPerStep: Double = 60
     }
 
-    private enum LoopRoute {
+    nonisolated private enum LoopRoute {
         static let centerLatitude: Double = 47.6300
         static let centerLongitude: Double = 12.8600
         static let radius: Double = 0.0045 // ~500 m
@@ -48,7 +48,7 @@ enum Fixture {
         static let elevationAmplitude: Double = 40
     }
 
-    private enum OutAndBackRoute {
+    nonisolated private enum OutAndBackRoute {
         static let startLatitude: Double = 47.6300
         static let startLongitude: Double = 12.8600
         static let stepCount: Int = 20
@@ -57,17 +57,14 @@ enum Fixture {
         static let baseElevation: Double = 600
     }
 
-    private enum AntimeridianRoute {
+    nonisolated private enum AntimeridianRoute {
         static let latitude1: Double = -17.70
         static let longitude1: Double = 179.95
         static let latitude2: Double = -17.71
         static let longitude2: Double = -179.95
     }
 
-    /// A short out-and-back near Cupertino: ~1.4 km, climbs then descends,
-    /// one point per minute. Small enough to reason about by hand, real
-    /// enough that distances/gradients aren't degenerate.
-    nonisolated static let ridgeRoute: [RouteCoordinate] = {
+    nonisolated private static func makeRidgeRoute() -> [RouteCoordinate] {
         let start = Date(timeIntervalSince1970: RidgeRoute.startTimestamp)
         let points: [(Double, Double, Double)] = [
             (RidgeRoute.lat1, RidgeRoute.longitude, RidgeRoute.ele1),
@@ -85,12 +82,14 @@ enum Fixture {
                 timestamp: start.addingTimeInterval(Double(index) * RidgeRoute.secondsPerStep)
             )
         }
-    }()
+    }
 
-    /// A closed loop whose finish comes back within a few metres of its
-    /// start — the geometry that makes route-matching ambiguous, and the
-    /// reason `RouteProfile.nearestPoint` takes a continuity reference.
-    nonisolated static let loopRoute: [RouteCoordinate] = {
+    /// A short out-and-back near Cupertino: ~1.4 km, climbs then descends,
+    /// one point per minute. Small enough to reason about by hand, real
+    /// enough that distances/gradients aren't degenerate.
+    nonisolated static let ridgeRoute: [RouteCoordinate] = makeRidgeRoute()
+
+    nonisolated private static func makeLoopRoute() -> [RouteCoordinate] {
         let center = CLLocationCoordinate2D(latitude: LoopRoute.centerLatitude, longitude: LoopRoute.centerLongitude)
         let radius = LoopRoute.radius
         var points = (0..<LoopRoute.stepCount).map { step -> RouteCoordinate in
@@ -103,7 +102,31 @@ enum Fixture {
         }
         points.append(points[0]) // close the loop
         return points
-    }()
+    }
+
+    /// A closed loop whose finish comes back within a few metres of its
+    /// start — the geometry that makes route-matching ambiguous, and the
+    /// reason `RouteProfile.nearestPoint` takes a continuity reference.
+    nonisolated static let loopRoute: [RouteCoordinate] = makeLoopRoute()
+
+    nonisolated private static func makeOutAndBackRoute() -> [RouteCoordinate] {
+        let returnLegOffset = 1e-5
+        let outbound = (0..<OutAndBackRoute.stepCount).map { step in
+            RouteCoordinate(
+                latitude: OutAndBackRoute.startLatitude + Double(step) * OutAndBackRoute.latStepSize,
+                longitude: OutAndBackRoute.startLongitude,
+                elevation: OutAndBackRoute.baseElevation + Double(step) * OutAndBackRoute.eleStepSize
+            )
+        }
+        let returning = outbound.dropLast().reversed().map { point in
+            RouteCoordinate(
+                latitude: point.latitude,
+                longitude: point.longitude + returnLegOffset,
+                elevation: point.elevation
+            )
+        }
+        return outbound + returning
+    }
 
     /// A trail that walks out to a turning point and comes back along the same
     /// path — the shape that had auto-follow start a hike at its finish.
@@ -116,26 +139,7 @@ enum Fixture {
     /// with two identical candidates the earlier one wins by iteration order
     /// alone, which is the coin landing the right way up, not a tie being
     /// broken.
-    nonisolated static let outAndBackRoute: [RouteCoordinate] = {
-        // ~0.75 m east at this latitude.
-        let returnLegOffset = 1e-5
-        let outbound = (0..<OutAndBackRoute.stepCount).map { step in
-            RouteCoordinate(
-                latitude: OutAndBackRoute.startLatitude + Double(step) * OutAndBackRoute.latStepSize, // ~56 m per step
-                longitude: OutAndBackRoute.startLongitude,
-                elevation: OutAndBackRoute.baseElevation + Double(step) * OutAndBackRoute.eleStepSize
-            )
-        }
-        // Back down the same path. The turning point isn't repeated.
-        let returning = outbound.dropLast().reversed().map { point in
-            RouteCoordinate(
-                latitude: point.latitude,
-                longitude: point.longitude + returnLegOffset,
-                elevation: point.elevation
-            )
-        }
-        return outbound + returning
-    }()
+    nonisolated static let outAndBackRoute: [RouteCoordinate] = makeOutAndBackRoute()
 
     /// A ~10 km walk in Fiji that steps across ±180°. Short on the ground, but
     /// the widest possible span if longitude is read as a plain `min`/`max`

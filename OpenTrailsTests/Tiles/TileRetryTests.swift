@@ -230,7 +230,10 @@ struct TileRetryTests {
         #expect(policy.delay(afterFailures: 3) == .seconds(45))
         #expect(policy.delay(afterFailures: 4) == .seconds(120))
         #expect(policy.delay(afterFailures: 5) == .seconds(300))
-        #expect(policy.delay(afterFailures: 50) == .seconds(300), "a real 404 settles at one request every five minutes")
+        #expect(
+            policy.delay(afterFailures: 50) == .seconds(300),
+            "a real 404 settles at one request every five minutes"
+        )
 
         // Every delay is longer than the last, or the backoff isn't one.
         for (previous, next) in zip(policy.delays, policy.delays.dropFirst()) {
