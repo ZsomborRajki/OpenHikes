@@ -5,14 +5,14 @@
 //  Fetches current conditions for a coordinate via WeatherKit.
 //
 
-import Foundation
 import CoreLocation
+import Foundation
+import Observation
 import OrderedCollections
 import WeatherKit
-import Observation
 
 nonisolated struct WeatherPollingPolicy: Sendable {
-    static let standard = WeatherPollingPolicy(
+    static let standard = Self(
         freshnessInterval: 15 * 60,
         retryDelays: [5, 30, 2 * 60, 15 * 60]
     )
@@ -97,7 +97,7 @@ nonisolated struct WeatherPollState: Sendable {
     }
 
     private mutating func touch(_ key: String) {
-        update(key) { _ in }
+        update(key) { _ in /* no-op: just moves key to most-recently-used position */ }
     }
 
     /// Applies `change` to `key`'s state and marks it the most recently
@@ -129,8 +129,6 @@ final class WeatherManager {
         do {
             current = try await service.weather(for: location, including: .current)
             return true
-        } catch {
-            return false
-        }
+        } catch { return false }
     }
 }

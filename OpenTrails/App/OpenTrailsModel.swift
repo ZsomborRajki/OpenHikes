@@ -56,9 +56,9 @@ final class OpenTrailsModel {
                 }
             )
         } catch {
-            Self.logger.fault(
-                "Neither the persistent nor temporary SwiftData store could be opened: \(error.localizedDescription, privacy: .public)"
-            )
+            let msg = "Neither the persistent nor temporary SwiftData store"
+                + " could be opened: \(error.localizedDescription)"
+            Self.logger.fault("\(msg, privacy: .public)")
             fatalError("OpenTrails could not create a SwiftData container.")
         }
 
@@ -92,9 +92,9 @@ final class OpenTrailsModel {
                 startupIssue: nil
             )
         } catch {
-            logger.error(
-                "The persistent SwiftData store could not be opened; using temporary storage for this launch: \(error.localizedDescription, privacy: .public)"
-            )
+            let msg = "The persistent SwiftData store could not be opened;"
+                + " using temporary storage for this launch: \(error.localizedDescription)"
+            logger.error("\(msg, privacy: .public)")
             return ContainerLoadResult(
                 container: try fallback(),
                 startupIssue: StorageStartupIssue(
@@ -142,10 +142,10 @@ final class OpenTrailsModel {
         // finished route to browse, auto-save for, or match background fixes
         // against. The recorder owns its live trace and widget state.
         let currentRecordingHikeID = hikeRecorder.currentHike?.id
-        let finishedHike = hike.flatMap {
-            $0.belongsToActiveRecording(
+        let finishedHike = hike.flatMap { selectedHike in
+            selectedHike.belongsToActiveRecording(
                 currentHikeID: currentRecordingHikeID
-            ) ? nil : $0
+            ) ? nil : selectedHike
         }
         autoSaveController.hikeSelectionChanged(to: finishedHike)
         backgroundTracker.hikeSelectionChanged(to: finishedHike)
@@ -160,9 +160,7 @@ final class OpenTrailsModel {
               let stored = defaults.string(
                 forKey: SettingsKey.lastSelectedHikeID
               ),
-              let id = UUID(uuidString: stored) else {
-            return nil
-        }
+              let id = UUID(uuidString: stored) else { return nil }
 
         let descriptor = FetchDescriptor<Hike>(
             predicate: #Predicate { $0.id == id }
@@ -208,9 +206,9 @@ final class OpenTrailsModel {
             .filter(\.hasStoredTiles)
             .map(TileOwnership.init) ?? []
 
-        Task.detached {
-            let keys = claims.reduce(into: Set<String>()) {
-                $0.formUnion($1.tileKeys())
+        TileCache.scheduleMaintenance {
+            let keys = claims.reduce(into: Set<String>()) { result, ownership in
+                result.formUnion(ownership.tileKeys())
             }
             TileCache.shared.trimCache(claimedBy: keys)
         }

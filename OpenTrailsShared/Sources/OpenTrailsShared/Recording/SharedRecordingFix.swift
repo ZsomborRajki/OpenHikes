@@ -25,13 +25,13 @@ public struct SharedRecordingFix: Codable, Sendable, Equatable, Identifiable {
     public var speed: Double?
 
     public init(
-        id: UUID = UUID(),
         sessionID: UUID,
         latitude: Double,
         longitude: Double,
         timestamp: Date,
-        elevation: Double? = nil,
         horizontalAccuracy: Double,
+        id: UUID = UUID(),
+        elevation: Double? = nil,
         course: Double? = nil,
         speed: Double? = nil
     ) {
@@ -55,6 +55,7 @@ public enum SharedRecordingStoreError: LocalizedError, Sendable {
         switch self {
         case .containerUnavailable:
             "The shared recording container is unavailable."
+
         case .io(let detail):
             detail
         }
@@ -88,8 +89,7 @@ public struct PendingRecordingFixStore: Sendable {
         }
     }
 
-    @discardableResult
-    public func append(
+    @discardableResult public func append(
         _ fix: SharedRecordingFix,
         validatingRecordingAt recordingURL: URL
     ) throws -> Bool {
@@ -98,9 +98,7 @@ public struct PendingRecordingFixStore: Sendable {
                 from: recordingURL
             ),
             recording.sessionID == fix.sessionID,
-            recording.isCapturingFixes else {
-                return false
-            }
+            recording.isCapturingFixes else { return false }
             try appendUnlocked(fix)
             return true
         }
@@ -131,7 +129,7 @@ public struct PendingRecordingFixStore: Sendable {
     public func remove(ids: Set<UUID>) throws {
         guard !ids.isEmpty else { return }
         try withExclusiveLock {
-            let remaining = try loadUnlocked().filter { !ids.contains($0.id) }
+            let remaining = try loadUnlocked().filter { fix in !ids.contains(fix.id) }
             try writeUnlocked(remaining)
         }
     }
@@ -145,9 +143,7 @@ public struct PendingRecordingFixStore: Sendable {
             var samples = try loadSamplingUnlocked()
             let key = sessionID.uuidString
             if let previous = samples[key],
-               date.timeIntervalSince(previous) < minimumInterval {
-                return false
-            }
+               date.timeIntervalSince(previous) < minimumInterval { return false }
             samples[key] = date
             try writeSamplingUnlocked(samples)
             return true
@@ -161,8 +157,8 @@ public struct PendingRecordingFixStore: Sendable {
     }
 
     public func clearRecordingState(
-        sessionID: UUID? = nil,
-        recordingURL: URL
+        recordingURL: URL,
+        sessionID: UUID? = nil
     ) throws {
         try withExclusiveLock {
             let removesSnapshot: Bool
@@ -213,8 +209,8 @@ public struct PendingRecordingFixStore: Sendable {
             }
             return
         }
-        let remaining = try loadUnlocked().filter {
-            $0.sessionID != sessionID
+        let remaining = try loadUnlocked().filter { fix in
+            fix.sessionID != sessionID
         }
         try writeUnlocked(remaining)
         var samples = try loadSamplingUnlocked()
@@ -225,9 +221,7 @@ public struct PendingRecordingFixStore: Sendable {
     private func loadRecordingUnlocked(
         from recordingURL: URL
     ) throws -> SharedRecordingSnapshot? {
-        guard FileManager.default.fileExists(atPath: recordingURL.path) else {
-            return nil
-        }
+        guard FileManager.default.fileExists(atPath: recordingURL.path) else { return nil }
         do {
             let data = try Data(contentsOf: recordingURL)
             return try JSONDecoder().decode(
@@ -240,9 +234,7 @@ public struct PendingRecordingFixStore: Sendable {
     }
 
     private func loadUnlocked() throws -> [SharedRecordingFix] {
-        guard FileManager.default.fileExists(atPath: fileURL.path) else {
-            return []
-        }
+        guard FileManager.default.fileExists(atPath: fileURL.path) else { return [] }
         do {
             let data = try Data(contentsOf: fileURL)
             return try JSONDecoder().decode([SharedRecordingFix].self, from: data)
@@ -267,9 +259,7 @@ public struct PendingRecordingFixStore: Sendable {
     }
 
     private func loadSamplingUnlocked() throws -> [String: Date] {
-        guard FileManager.default.fileExists(atPath: samplingURL.path) else {
-            return [:]
-        }
+        guard FileManager.default.fileExists(atPath: samplingURL.path) else { return [:] }
         do {
             let data = try Data(contentsOf: samplingURL)
             return try JSONDecoder().decode([String: Date].self, from: data)

@@ -8,9 +8,9 @@
 //
 
 import Foundation
+@testable import OpenTrails
 import SwiftData
 import Testing
-@testable import OpenTrails
 
 @Suite("Hike rename")
 struct HikeRenameTests {
@@ -19,28 +19,28 @@ struct HikeRenameTests {
 
     @Test("displayTitle returns title when customName is nil")
     func displayTitleFallsBackToTitle() {
-        let hike = Hike(title: "Ridge Loop", distanceMeters: 1_000)
+        let hike = Hike(title: "Ridge Loop", distanceMeters: 1000)
         #expect(hike.customName == nil)
         #expect(hike.displayTitle == "Ridge Loop")
     }
 
     @Test("displayTitle returns customName when set")
     func displayTitleReturnsCustomName() {
-        let hike = Hike(title: "Ridge Loop", distanceMeters: 1_000)
+        let hike = Hike(title: "Ridge Loop", distanceMeters: 1000)
         hike.customName = "My Favourite Hike"
         #expect(hike.displayTitle == "My Favourite Hike")
     }
 
     @Test("displayTitle falls back to title when customName is empty string")
     func displayTitleIgnoresEmptyCustomName() {
-        let hike = Hike(title: "Ridge Loop", distanceMeters: 1_000)
+        let hike = Hike(title: "Ridge Loop", distanceMeters: 1000)
         hike.customName = ""
         #expect(hike.displayTitle == "Ridge Loop")
     }
 
     @Test("displayTitle falls back to title when customName is whitespace only")
     func displayTitleIgnoresBlankCustomName() {
-        let hike = Hike(title: "Ridge Loop", distanceMeters: 1_000)
+        let hike = Hike(title: "Ridge Loop", distanceMeters: 1000)
         hike.customName = "   "
         // Whitespace-only strings pass the isEmpty guard; the presenter
         // trims before writing, but if a raw whitespace value is ever stored
@@ -54,7 +54,7 @@ struct HikeRenameTests {
 
     @Test("clearing customName restores original title")
     func clearingCustomNameRestoresTitle() {
-        let hike = Hike(title: "Ridge Loop", distanceMeters: 1_000)
+        let hike = Hike(title: "Ridge Loop", distanceMeters: 1000)
         hike.customName = "Renamed"
         #expect(hike.displayTitle == "Renamed")
         hike.customName = nil
@@ -71,7 +71,7 @@ struct HikeRenameTests {
 
     @Test("committing a non-empty draft sets customName")
     func commitNonEmptyDraftSetsCustomName() {
-        let hike = Hike(title: "Ridge Loop", distanceMeters: 1_000)
+        let hike = Hike(title: "Ridge Loop", distanceMeters: 1000)
         applyRename(to: hike, draft: "Custom Name")
         #expect(hike.customName == "Custom Name")
         #expect(hike.displayTitle == "Custom Name")
@@ -79,7 +79,7 @@ struct HikeRenameTests {
 
     @Test("committing an empty draft clears customName")
     func commitEmptyDraftClearsCustomName() {
-        let hike = Hike(title: "Ridge Loop", distanceMeters: 1_000)
+        let hike = Hike(title: "Ridge Loop", distanceMeters: 1000)
         hike.customName = "Old Custom Name"
         applyRename(to: hike, draft: "")
         #expect(hike.customName == nil)
@@ -88,7 +88,7 @@ struct HikeRenameTests {
 
     @Test("committing a whitespace-only draft clears customName")
     func commitWhitespaceDraftClearsCustomName() {
-        let hike = Hike(title: "Ridge Loop", distanceMeters: 1_000)
+        let hike = Hike(title: "Ridge Loop", distanceMeters: 1000)
         hike.customName = "Old"
         applyRename(to: hike, draft: "   \t\n  ")
         #expect(hike.customName == nil)
@@ -97,7 +97,7 @@ struct HikeRenameTests {
 
     @Test("committing a draft trims surrounding whitespace")
     func commitDraftTrimsWhitespace() {
-        let hike = Hike(title: "Ridge Loop", distanceMeters: 1_000)
+        let hike = Hike(title: "Ridge Loop", distanceMeters: 1000)
         applyRename(to: hike, draft: "  Sunrise Walk  ")
         #expect(hike.customName == "Sunrise Walk")
         #expect(hike.displayTitle == "Sunrise Walk")
@@ -113,7 +113,7 @@ struct HikeRenameTests {
         )
         let context = ModelContext(container)
         let id = UUID()
-        let hike = Hike(id: id, title: "Ridge Loop", distanceMeters: 1_000)
+        let hike = Hike(id: id, title: "Ridge Loop", distanceMeters: 1000)
         hike.customName = "Persisted Name"
         context.insert(hike)
         try context.save()

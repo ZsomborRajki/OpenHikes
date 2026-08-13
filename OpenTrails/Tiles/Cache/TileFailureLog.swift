@@ -28,7 +28,7 @@ import Foundation
 /// How long to wait before re-requesting a tile that failed, by how many
 /// times in a row it has now failed.
 nonisolated struct TileRetryPolicy: Sendable {
-    static let standard = TileRetryPolicy()
+    static let standard = Self()
 
     /// Indexed by consecutive-failure count; the last entry is the ceiling.
     ///
@@ -38,17 +38,19 @@ nonisolated struct TileRetryPolicy: Sendable {
     /// ceiling is deliberately long: by the fifth failure the tile is
     /// probably genuinely absent, and the cost of asking is a request the
     /// provider's usage policy would rather we didn't make.
+    private static let maximumRetryDelaySecs: Int = 300
+
     var delays: [Duration] = [
-        .seconds(5), .seconds(15), .seconds(45), .seconds(120), .seconds(300)
+        .seconds(5), .seconds(15), .seconds(45), .seconds(120), .seconds(Self.maximumRetryDelaySecs)
     ]
 
     /// Ceiling on how many failed tiles are remembered at once. Without one
     /// this grows with every tile the user ever pans across while a provider
     /// is misbehaving, and never shrinks.
-    var maximumTrackedFailures: Int = 1_024
+    var maximumTrackedFailures: Int = 1024
 
     func delay(afterFailures failures: Int) -> Duration {
-        guard let last = delays.last else { return .seconds(300) }
+        guard let last = delays.last else { return .seconds(Self.maximumRetryDelaySecs) }
         guard failures > 0 else { return delays[0] }
         return failures <= delays.count ? delays[failures - 1] : last
     }
@@ -84,8 +86,10 @@ nonisolated struct TileFailureLog: Sendable {
     }
 
     /// Records a failure and returns when the tile may next be tried.
-    @discardableResult
-    mutating func recordFailure(_ key: String, at now: ContinuousClock.Instant) -> ContinuousClock.Instant {
+    @discardableResult mutating func recordFailure(
+        _ key: String,
+        at now: ContinuousClock.Instant
+    ) -> ContinuousClock.Instant {
         let failures = (entries[key]?.failures ?? 0) + 1
         let retryAt = now.advanced(by: policy.delay(afterFailures: failures))
         entries[key] = Entry(failures: failures, retryAt: retryAt)
@@ -102,8 +106,7 @@ nonisolated struct TileFailureLog: Sendable {
 
     /// Forgets everything, and reports how much — the reconnect path, where
     /// every past failure is equally out of date.
-    @discardableResult
-    mutating func removeAll() -> Int {
+    @discardableResult mutating func removeAll() -> Int {
         let cleared = entries.count
         entries.removeAll()
         return cleared
@@ -135,10 +138,10 @@ nonisolated struct TileFailureLog: Sendable {
         // Sorted on the key as well as the instant: entries recorded in the
         // same instant share a retry time, and `Dictionary` would otherwise
         // offer them up in a hash-seeded order.
-        let doomed = entries.min(count: excess) {
-            $0.value.retryAt == $1.value.retryAt
-                ? $0.key < $1.key
-                : $0.value.retryAt < $1.value.retryAt
+        let doomed = entries.min(count: excess) { lhs, rhs in
+            lhs.value.retryAt == rhs.value.retryAt
+                ? lhs.key < rhs.key
+                : lhs.value.retryAt < rhs.value.retryAt
         }
         for entry in doomed { entries.removeValue(forKey: entry.key) }
     }

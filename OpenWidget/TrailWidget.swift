@@ -33,19 +33,17 @@ struct TrailWidgetEntry: TimelineEntry {
         self.date = date
         self.recordingSnapshot = recordingSnapshot
         self.snapshot = recordingSnapshot == nil ? snapshot : nil
-        self.basemaps = self.snapshot.flatMap {
-            SharedStore.loadBasemapSet(for: $0.hikeID)
+        basemaps = self.snapshot.flatMap { snapshot in
+            SharedStore.loadBasemapSet(for: snapshot.hikeID)
         }
     }
 
     /// Where tapping the widget goes. Absent in the empty state, where there
     /// is no trail to open and a plain launch is the right outcome.
     var deepLinkURL: URL? {
-        if recordingSnapshot != nil {
-            return TrailWidgetDeepLink.recordingURL()
-        }
-        return snapshot.flatMap {
-            TrailWidgetDeepLink.url(hikeID: $0.hikeID)
+        if recordingSnapshot != nil { return TrailWidgetDeepLink.recordingURL() }
+        return snapshot.flatMap { snapshot in
+            TrailWidgetDeepLink.url(hikeID: snapshot.hikeID)
         }
     }
 }
@@ -102,7 +100,7 @@ struct TrailWidgetProvider: TimelineProvider {
         Self.placeholderEntry()
     }
 
-    func getSnapshot(in context: Context, completion: @escaping (TrailWidgetEntry) -> Void) {
+    func getSnapshot(in context: Context, completion: (TrailWidgetEntry) -> Void) {
         completion(context.isPreview ? Self.placeholderEntry() : Self.currentEntry())
     }
 
@@ -185,7 +183,7 @@ struct TrailWidgetProvider: TimelineProvider {
         private var request: WidgetRecordingRequest?
         private var timeoutTask: Task<Void, Never>?
 
-        private override init() {
+        override private init() {
             super.init()
             manager.delegate = self
             manager.desiredAccuracy = kCLLocationAccuracyHundredMeters
@@ -228,9 +226,7 @@ struct TrailWidgetProvider: TimelineProvider {
             timeoutTask = Task { [weak self] in
                 do {
                     try await Task.sleep(for: .seconds(8))
-                } catch {
-                    return
-                }
+                } catch { return }
                 self?.finish()
             }
         }
@@ -289,8 +285,8 @@ struct TrailWidgetProvider: TimelineProvider {
                         latitude: location.coordinate.latitude,
                         longitude: location.coordinate.longitude,
                         timestamp: location.timestamp,
-                        elevation: elevation,
                         horizontalAccuracy: location.horizontalAccuracy,
+                        elevation: elevation,
                         course: location.course >= 0 ? location.course : nil,
                         speed: location.speed >= 0 ? location.speed : nil
                     )
@@ -300,19 +296,33 @@ struct TrailWidgetProvider: TimelineProvider {
         }
     }
 
+    private enum Placeholder {
+        static let totalDistanceMeters: Double = 4200
+        static let lat0: Double = 37.3349
+        static let lon0: Double = -122.0140
+        static let lat1: Double = 37.3372
+        static let lon1: Double = -122.0098
+        static let lat2: Double = 37.3358
+        static let lon2: Double = -122.0050
+        static let lat3: Double = 37.3400
+        static let lon3: Double = -122.0020
+        static let lat4: Double = 37.3440
+        static let lon4: Double = -122.0060
+    }
+
     /// A generic loop shown in the widget gallery / as a redacted placeholder
     /// — never real trail data.
     static let placeholderSnapshot = SharedTrailSnapshot(
         hikeID: UUID(),
         title: "Trail",
         tintHex: "#34C759",
-        totalDistanceMeters: 4200,
+        totalDistanceMeters: Placeholder.totalDistanceMeters,
         polyline: [
-            .init(latitude: 37.3349, longitude: -122.0140),
-            .init(latitude: 37.3372, longitude: -122.0098),
-            .init(latitude: 37.3358, longitude: -122.0050),
-            .init(latitude: 37.3400, longitude: -122.0020),
-            .init(latitude: 37.3440, longitude: -122.0060)
+            .init(latitude: Placeholder.lat0, longitude: Placeholder.lon0),
+            .init(latitude: Placeholder.lat1, longitude: Placeholder.lon1),
+            .init(latitude: Placeholder.lat2, longitude: Placeholder.lon2),
+            .init(latitude: Placeholder.lat3, longitude: Placeholder.lon3),
+            .init(latitude: Placeholder.lat4, longitude: Placeholder.lon4),
         ]
     )
 }
@@ -334,7 +344,8 @@ struct TrailWidgetLayout: Equatable {
 }
 
 struct TrailWidgetEntryView: View {
-    @Environment(\.widgetFamily) private var family
+    @Environment(\.widgetFamily)
+    private var family
     let entry: TrailWidgetEntry
 
     var body: some View {
@@ -344,8 +355,7 @@ struct TrailWidgetEntryView: View {
             .widgetURL(entry.deepLinkURL)
     }
 
-    @ViewBuilder
-    private var content: some View {
+    @ViewBuilder private var content: some View {
         if let recording = entry.recordingSnapshot {
             RecordingWidgetContent(snapshot: recording, family: family)
         } else if let snapshot = entry.snapshot {
@@ -396,9 +406,9 @@ struct TrailWidgetEntryView: View {
                     Rectangle().fill(.fill.tertiary)
                     TrailMapView(
                         polyline: snapshot.polyline,
-                        liveFix: snapshot.polyline.last,
                         basemaps: nil,
                         tint: .red,
+                        liveFix: snapshot.polyline.last,
                         lineWidth: layout.routeLineWidth
                     )
                 }
@@ -425,6 +435,18 @@ private struct TrailWidgetContent: View {
     let snapshot: SharedTrailSnapshot
     let basemaps: TrailBasemapSet?
     let family: WidgetFamily
+
+    private enum Layout {
+        static let shadowOpacity: Double = 0.35
+        static let timestampOpacity: Double = 0.7
+    }
+
+    private enum Scrim {
+        static let topOpacity: Double = 0.45
+        static let topClearLocation: Double = 0.3
+        static let bottomClearLocation: Double = 0.6
+        static let bottomOpacity: Double = 0.55
+    }
 
     private var layout: TrailWidgetLayout { TrailWidgetLayout(family: family) }
     private var tint: Color { Color(hex: snapshot.tintHex) ?? .green }
@@ -454,7 +476,7 @@ private struct TrailWidgetContent: View {
 
             statLine
         }
-        .shadow(color: .black.opacity(hasMap ? 0.35 : 0), radius: 2, y: 1)
+        .shadow(color: .black.opacity(hasMap ? Layout.shadowOpacity : 0), radius: 2, y: 1)
         .padding(layout.padding)
         // The map is the widget's background rather than a subview, so it
         // runs edge to edge under the text and the system rounds it to the
@@ -469,9 +491,9 @@ private struct TrailWidgetContent: View {
 
                 TrailMapView(
                     polyline: snapshot.polyline,
-                    liveFix: snapshot.liveFix?.coordinate,
                     basemaps: basemaps,
                     tint: tint,
+                    liveFix: snapshot.liveFix?.coordinate,
                     lineWidth: layout.routeLineWidth
                 )
 
@@ -486,18 +508,17 @@ private struct TrailWidgetContent: View {
     private var scrim: some View {
         LinearGradient(
             stops: [
-                .init(color: .black.opacity(showsTitle ? 0.45 : 0), location: 0),
-                .init(color: .clear, location: showsTitle ? 0.3 : 0),
-                .init(color: .clear, location: 0.6),
-                .init(color: .black.opacity(0.55), location: 1)
+                .init(color: .black.opacity(showsTitle ? Scrim.topOpacity : 0), location: 0),
+                .init(color: .clear, location: showsTitle ? Scrim.topClearLocation : 0),
+                .init(color: .clear, location: Scrim.bottomClearLocation),
+                .init(color: .black.opacity(Scrim.bottomOpacity), location: 1),
             ],
             startPoint: .top,
             endPoint: .bottom
         )
     }
 
-    @ViewBuilder
-    private var statLine: some View {
+    @ViewBuilder private var statLine: some View {
         HStack {
             Text(snapshot.statusText)
                 .font(family == .systemSmall ? .caption.weight(.semibold) : .caption)
@@ -507,7 +528,11 @@ private struct TrailWidgetContent: View {
             if showsTitle, let timestamp = snapshot.liveFix?.timestamp {
                 Text(timestamp, style: .relative)
                     .font(.caption2)
-                    .foregroundStyle(hasMap ? AnyShapeStyle(Color.white.opacity(0.7)) : AnyShapeStyle(.tertiary))
+                    .foregroundStyle(
+                        hasMap
+                            ? AnyShapeStyle(Color.white.opacity(Layout.timestampOpacity))
+                            : AnyShapeStyle(.tertiary)
+                    )
             }
         }
     }
@@ -537,8 +562,8 @@ struct TrailWidget: Widget {
         snapshot: nil,
         recordingSnapshot: SharedRecordingSnapshot(
             sessionID: UUID(),
-            startedAt: .now.addingTimeInterval(-1_200),
-            distanceMeters: 1_400,
+            startedAt: .now.addingTimeInterval(-1200),
+            distanceMeters: 1400,
             pointCount: 320,
             polyline: TrailWidgetProvider.placeholderSnapshot.polyline
         )

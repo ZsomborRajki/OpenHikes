@@ -11,8 +11,8 @@
 //
 
 import Foundation
-import Testing
 @testable import OpenTrails
+import Testing
 
 @Suite("Tile providers")
 struct TileProviderTests {
@@ -160,7 +160,8 @@ struct TileProviderTests {
                 maximumZ: provider.maximumZ
             )
         }
-        #expect(source(for: .openStreetMap) == source(for: .openStreetMap))
+        let osmSource = source(for: .openStreetMap)
+        #expect(osmSource == source(for: .openStreetMap))
         #expect(source(for: .openStreetMap) != source(for: .stadiaOutdoors))
     }
 
@@ -168,7 +169,7 @@ struct TileProviderTests {
     /// downloader silently skips any tile whose URL doesn't.
     @Test("a filled template produces a usable tile URL", arguments: TileProvider.all)
     func tileURLs(provider: TileProvider) throws {
-        let tile = OfflineTileDownloader.Tile(z: 14, x: 8_723, y: 5_685)
+        let tile = OfflineTileDownloader.Tile(z: 14, x: 8723, y: 5685)
         let url = try #require(tile.url(from: provider.resolvedTemplate(apiKey: "K")))
         #expect(url.absoluteString.contains("14"))
         #expect(url.absoluteString.contains("8723"))

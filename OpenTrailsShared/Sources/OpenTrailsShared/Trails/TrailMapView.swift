@@ -34,7 +34,8 @@ public struct TrailMapView: View {
     private let lineWidth: CGFloat
     private let imageData: (String) -> Data?
 
-    @Environment(\.colorScheme) private var colorScheme
+    @Environment(\.colorScheme)
+    private var colorScheme
 
     /// - Parameter imageData: where the rendered bytes come from. Defaults to
     ///   the App Group, which is the only place they live in the shipping
@@ -42,9 +43,9 @@ public struct TrailMapView: View {
     ///   test, neither of which has an App Group container to read from.
     public init(
         polyline: [SharedTrailSnapshot.CodableCoordinate],
-        liveFix: SharedTrailSnapshot.CodableCoordinate? = nil,
         basemaps: TrailBasemapSet?,
         tint: Color,
+        liveFix: SharedTrailSnapshot.CodableCoordinate? = nil,
         lineWidth: CGFloat = 3,
         imageData: @escaping (String) -> Data? = SharedStore.basemapImageData(named:)
     ) {
@@ -70,7 +71,10 @@ public struct TrailMapView: View {
 
                     let rect = resolved.basemap.visibleRect
                     func place(_ coordinate: SharedTrailSnapshot.CodableCoordinate) -> CGPoint {
-                        let normalized = rect.normalizedPoint(latitude: coordinate.latitude, longitude: coordinate.longitude)
+                        let normalized = rect.normalizedPoint(
+                            latitude: coordinate.latitude,
+                            longitude: coordinate.longitude
+                        )
                         return CGPoint(
                             x: imageRect.minX + normalized.x * imageRect.width,
                             y: imageRect.minY + normalized.y * imageRect.height
@@ -92,7 +96,7 @@ public struct TrailMapView: View {
                 // over this view. The fit-to-bounds glyph has no such margin
                 // and would otherwise run to the edges — and under the text —
                 // now that this fills its whole container.
-                TrailGlyphView(polyline: polyline, liveFix: liveFix, tint: tint, lineWidth: lineWidth)
+                TrailGlyphView(polyline: polyline, tint: tint, liveFix: liveFix, lineWidth: lineWidth)
                     .padding(lineWidth * 4)
             }
         }
@@ -123,9 +127,7 @@ public struct TrailMapView: View {
     /// `size` and centered — i.e. `.scaledToFill()`, computed rather than
     /// applied so the projection above can use the same numbers.
     static func aspectFillRect(aspectRatio: Double, in size: CGSize) -> CGRect {
-        guard aspectRatio.isFinite, aspectRatio > 0, size.height > 0 else {
-            return CGRect(origin: .zero, size: size)
-        }
+        guard aspectRatio.isFinite, aspectRatio > 0, size.height > 0 else { return CGRect(origin: .zero, size: size) }
         let viewAspect = size.width / size.height
         let filled = aspectRatio > viewAspect
             ? CGSize(width: size.height * aspectRatio, height: size.height)

@@ -12,8 +12,8 @@
 
 import CoreLocation
 import Foundation
-import Testing
 @testable import OpenTrails
+import Testing
 
 @Suite("GPX import")
 struct GPXImportTests {
@@ -32,22 +32,22 @@ struct GPXImportTests {
     private static let fullTrack = """
     <?xml version="1.0" encoding="UTF-8"?>
     <gpx version="1.1" creator="OpenTrailsTests" xmlns="http://www.topografix.com/GPX/1/1">
-      <metadata>
+        <metadata>
         <name>Metadata Name</name>
         <desc>Metadata description</desc>
         <author><name>Ada Lovelace</name></author>
         <keywords>hiking, bavaria</keywords>
         <time>2026-06-01T08:00:00Z</time>
-      </metadata>
-      <trk>
+        </metadata>
+        <trk>
         <name>Thumsee Loop</name>
         <desc>A lakeside loop.</desc>
         <trkseg>
-          <trkpt lat="47.6300" lon="12.8600"><ele>600.0</ele><time>2026-06-01T08:05:00Z</time></trkpt>
-          <trkpt lat="47.6310" lon="12.8600"><ele>620.0</ele><time>2026-06-01T08:06:00Z</time></trkpt>
-          <trkpt lat="47.6320" lon="12.8600"><ele>610.0</ele><time>2026-06-01T08:07:00Z</time></trkpt>
+            <trkpt lat="47.6300" lon="12.8600"><ele>600.0</ele><time>2026-06-01T08:05:00Z</time></trkpt>
+            <trkpt lat="47.6310" lon="12.8600"><ele>620.0</ele><time>2026-06-01T08:06:00Z</time></trkpt>
+            <trkpt lat="47.6320" lon="12.8600"><ele>610.0</ele><time>2026-06-01T08:07:00Z</time></trkpt>
         </trkseg>
-      </trk>
+        </trk>
     </gpx>
     """
 
@@ -89,10 +89,10 @@ struct GPXImportTests {
         let xml = """
         <?xml version="1.0" encoding="UTF-8"?>
         <gpx version="1.1" creator="OpenTrailsTests" xmlns="http://www.topografix.com/GPX/1/1">
-          <trk><trkseg>
+            <trk><trkseg>
             <trkpt lat="47.6300" lon="12.8600"><ele>600.0</ele></trkpt>
             <trkpt lat="47.6310" lon="12.8600"><ele>620.0</ele><time>2026-06-01T09:30:00Z</time></trkpt>
-          </trkseg></trk>
+            </trkseg></trk>
         </gpx>
         """
         let track = try GPXImport.load(from: try gpxFile(xml))
@@ -106,11 +106,11 @@ struct GPXImportTests {
         let xml = """
         <?xml version="1.0" encoding="UTF-8"?>
         <gpx version="1.1" creator="OpenTrailsTests" xmlns="http://www.topografix.com/GPX/1/1">
-          <trk><trkseg>
+            <trk><trkseg>
             <trkpt lat="47.6300" lon="12.8600"/>
             <trkpt lat="47.6310" lon="12.8600"/>
             <trkpt lat="47.6300" lon="12.8600"/>
-          </trkseg></trk>
+            </trkseg></trk>
         </gpx>
         """
         let track = try GPXImport.load(from: try gpxFile(xml))
@@ -123,7 +123,7 @@ struct GPXImportTests {
         let xml = """
         <?xml version="1.0" encoding="UTF-8"?>
         <gpx version="1.1" creator="OpenTrailsTests" xmlns="http://www.topografix.com/GPX/1/1">
-          <trk><trkseg><trkpt lat="47.6300" lon="12.8600"/></trkseg></trk>
+            <trk><trkseg><trkpt lat="47.6300" lon="12.8600"/></trkseg></trk>
         </gpx>
         """
         let track = try GPXImport.load(from: try gpxFile(xml))
@@ -138,15 +138,15 @@ struct GPXImportTests {
         let xml = """
         <?xml version="1.0" encoding="UTF-8"?>
         <gpx version="1.1" creator="OpenTrailsTests" xmlns="http://www.topografix.com/GPX/1/1">
-          <trk>
+            <trk>
             <trkseg>
-              <trkpt lat="47.6300" lon="12.8600"/>
-              <trkpt lat="47.6310" lon="12.8600"/>
+                <trkpt lat="47.6300" lon="12.8600"/>
+                <trkpt lat="47.6310" lon="12.8600"/>
             </trkseg>
             <trkseg>
-              <trkpt lat="47.6320" lon="12.8600"/>
+                <trkpt lat="47.6320" lon="12.8600"/>
             </trkseg>
-          </trk>
+            </trk>
         </gpx>
         """
         let track = try GPXImport.load(from: try gpxFile(xml))
@@ -162,10 +162,10 @@ struct GPXImportTests {
         let xml = """
         <?xml version="1.0" encoding="UTF-8"?>
         <gpx version="1.1" creator="OpenTrailsTests" xmlns="http://www.topografix.com/GPX/1/1">
-          <rte>
+            <rte>
             <rtept lat="47.6300" lon="12.8600"><ele>600.0</ele></rtept>
             <rtept lat="47.6310" lon="12.8600"><ele>620.0</ele></rtept>
-          </rte>
+            </rte>
         </gpx>
         """
         let track = try GPXImport.load(from: try gpxFile(xml))
@@ -179,8 +179,8 @@ struct GPXImportTests {
         let xml = """
         <?xml version="1.0" encoding="UTF-8"?>
         <gpx version="1.1" creator="OpenTrailsTests" xmlns="http://www.topografix.com/GPX/1/1">
-          <wpt lat="47.6300" lon="12.8600"><ele>600.0</ele></wpt>
-          <wpt lat="47.6310" lon="12.8600"><ele>620.0</ele></wpt>
+            <wpt lat="47.6300" lon="12.8600"><ele>600.0</ele></wpt>
+            <wpt lat="47.6310" lon="12.8600"><ele>620.0</ele></wpt>
         </gpx>
         """
         let track = try GPXImport.load(from: try gpxFile(xml))
@@ -195,12 +195,12 @@ struct GPXImportTests {
         let xml = """
         <?xml version="1.0" encoding="UTF-8"?>
         <gpx version="1.1" creator="OpenTrailsTests" xmlns="http://www.topografix.com/GPX/1/1">
-          <wpt lat="10.0" lon="10.0"/>
-          <rte><rtept lat="20.0" lon="20.0"/></rte>
-          <trk><trkseg>
+            <wpt lat="10.0" lon="10.0"/>
+            <rte><rtept lat="20.0" lon="20.0"/></rte>
+            <trk><trkseg>
             <trkpt lat="47.6300" lon="12.8600"/>
             <trkpt lat="47.6310" lon="12.8600"/>
-          </trkseg></trk>
+            </trkseg></trk>
         </gpx>
         """
         let track = try GPXImport.load(from: try gpxFile(xml))
@@ -218,13 +218,13 @@ struct GPXImportTests {
         let xml = """
         <?xml version="1.0" encoding="UTF-8"?>
         <gpx version="1.1" creator="OpenTrailsTests" xmlns="http://www.topografix.com/GPX/1/1">
-          <trk><trkseg>
+            <trk><trkseg>
             <trkpt lat="47.6300" lon="12.8600"/>
             <trkpt lat="90.0" lon="12.8600"/>
             <trkpt lat="-90.0" lon="12.8600"/>
             <trkpt lat="47.6310" lon="360.0"/>
             <trkpt lat="47.6320" lon="12.8600"/>
-          </trkseg></trk>
+            </trkseg></trk>
         </gpx>
         """
         let track = try GPXImport.load(from: try gpxFile(xml))
@@ -248,21 +248,21 @@ struct GPXImportTests {
         """
         <?xml version="1.0" encoding="UTF-8"?>
         <gpx version="1.1" xmlns="http://www.topografix.com/GPX/1/1">
-          <trk><trkseg><trkpt lat="91.0" lon="12.86"/><trkpt lat="47.63" lon="181.0"/></trkseg></trk>
+            <trk><trkseg><trkpt lat="91.0" lon="12.86"/><trkpt lat="47.63" lon="181.0"/></trkseg></trk>
         </gpx>
         """,
         // Points missing coordinates entirely.
         """
         <?xml version="1.0" encoding="UTF-8"?>
         <gpx version="1.1" xmlns="http://www.topografix.com/GPX/1/1">
-          <trk><trkseg><trkpt><ele>600</ele></trkpt></trkseg></trk>
+            <trk><trkseg><trkpt><ele>600</ele></trkpt></trkseg></trk>
         </gpx>
         """,
         // Well-formed XML that simply isn't GPX. CoreGPX parses it happily
         // into a document with no tracks, so it can't be told apart from an
         // empty GPX file — which is why `.noUsablePoints` is worded to cover
         // "this may not be a GPX file" too.
-        "<?xml version=\"1.0\"?><html><body>Not a GPX file</body></html>"
+        "<?xml version=\"1.0\"?><html><body>Not a GPX file</body></html>",
     ])
     func refusesEmptyFiles(xml: String) throws {
         #expect(throws: GPXImport.ImportFailure.noUsablePoints) {
@@ -323,7 +323,7 @@ struct GPXImportTests {
         let xml = """
         <?xml version="1.0" encoding="UTF-8"?>
         <gpx version="1.1" creator="OpenTrailsTests" xmlns="http://www.topografix.com/GPX/1/1">
-          <trk><trkseg><trkpt lat="47.6300" lon="12.8600"/></trkseg></trk>
+            <trk><trkseg><trkpt lat="47.6300" lon="12.8600"/></trkseg></trk>
         </gpx>
         """
         let track = try GPXImport.load(from: try gpxFile(xml))
@@ -340,11 +340,11 @@ struct GPXImportTests {
         let xml = """
         <?xml version="1.0" encoding="UTF-8"?>
         <gpx version="1.1" xmlns="http://www.topografix.com/GPX/1/1">
-          <metadata><desc>   </desc><keywords></keywords><author><name> </name></author></metadata>
-          <trk><name>  </name><trkseg>
+            <metadata><desc>   </desc><keywords></keywords><author><name> </name></author></metadata>
+            <trk><name>  </name><trkseg>
             <trkpt lat="47.6300" lon="12.8600"/>
             <trkpt lat="47.6310" lon="12.8600"/>
-          </trkseg></trk>
+            </trkseg></trk>
         </gpx>
         """
         let track = try GPXImport.load(from: try gpxFile(xml))

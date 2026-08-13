@@ -92,12 +92,19 @@ enum RenderSignpost {
         let gap = lastFireTimes[name].map { String(format: "+%.0fms", (now - $0) * 1000) } ?? "first"
         lastFireTimes[name] = now
         let suffix = detail.isEmpty ? "" : " — \(detail)"
-        logger.debug("[RenderSignpost] \(name, privacy: .public) #\(count) \(gap, privacy: .public)\(suffix, privacy: .public)")
+        logger.debug(
+            "[RenderSignpost] \(name, privacy: .public) #\(count) \(gap, privacy: .public)\(suffix, privacy: .public)"
+        )
     }
 }
 #else
 enum RenderSignpost {
-    @inline(__always) static func mark(_ name: StaticString, _ detail: @autoclosure () -> String = "") {}
-    @inline(__always) static func interval<T>(_ name: StaticString, _ body: () -> T) -> T { body() }
+    @inline(__always)
+    static func mark(_ name: StaticString, _ detail: @autoclosure () -> String = "") {
+        // no-op in release builds
+    }
+
+    @inline(__always)
+    static func interval<T>(_ name: StaticString, _ body: () -> T) -> T { body() }
 }
 #endif

@@ -6,7 +6,7 @@
 import Foundation
 import os
 
-extension TileCache {
+nonisolated extension TileCache {
 
     func allTileFiles(in directory: URL) -> [URL] {
         do {
@@ -74,7 +74,7 @@ extension TileCache {
         return modified
     }
 
-    private static func createDirectoryIfNeeded(at url: URL) {
+    static func createDirectoryIfNeeded(at url: URL) {
         do {
             try FileManager.default.createDirectory(
                 at: url,
@@ -82,8 +82,8 @@ extension TileCache {
             )
         } catch {
             logger.error(
-                "Could not create tile directory \(url.path, privacy: .public): "
-                    + "\(error.localizedDescription, privacy: .public)"
+                // swiftlint:disable:next line_length
+                "Could not create tile directory \(url.path, privacy: .public): \(error.localizedDescription, privacy: .public)"
             )
         }
     }
@@ -113,8 +113,8 @@ extension TileCache {
             return
         }
         Self.logger.error(
-            "Could not \(operation, privacy: .public) at \(url.path, privacy: .public): "
-                + "\(error.localizedDescription, privacy: .public)"
+            // swiftlint:disable:next line_length
+            "Could not \(operation, privacy: .public) at \(url.path, privacy: .public): \(error.localizedDescription, privacy: .public)"
         )
     }
 

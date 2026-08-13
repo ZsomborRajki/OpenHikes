@@ -10,8 +10,8 @@
 //  bulk pass missed still gets saved the moment it's actually browsed.
 //
 
-import Foundation
 import CoreLocation
+import Foundation
 import os
 
 /// Thread-safe singleton bridging the (background) tile-load path to the one
@@ -25,9 +25,9 @@ nonisolated final class AutoSaveTileStore: @unchecked Sendable {
     /// Soft per-hike cap. Smaller than the bulk downloader's budget (4,000)
     /// since this accrues silently across many casual sessions rather than one
     /// deliberate action.
-    static let tileCap = 3_000
+    static let tileCap = 3000
     /// How far past the route's bounding box a tile is still fair game to save.
-    static let corridorBufferMeters: CLLocationDistance = 1_500
+    static let corridorBufferMeters: CLLocationDistance = 1500
 
     private struct ActiveHike {
         let id: UUID
@@ -68,8 +68,8 @@ nonisolated final class AutoSaveTileStore: @unchecked Sendable {
         acceptsNewClaims: Bool = true
     ) {
         let corridor = TileCorridor(route: route, bufferMeters: Self.corridorBufferMeters)
-        state.withLock {
-            $0 = ActiveHike(
+        state.withLock { activeLock in
+            activeLock = ActiveHike(
                 id: id,
                 corridor: corridor,
                 acceptsNewClaims: acceptsNewClaims,

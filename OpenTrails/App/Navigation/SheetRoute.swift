@@ -7,14 +7,14 @@ enum SheetRoute: Hashable {
     case hike(Hike)
     case recording
 
-    static func reopenRecording(in path: inout [SheetRoute]) {
+    static func reopenRecording(in path: inout [Self]) {
         path = [.recording]
     }
 
     static func openRecording(
         hike: Hike?,
         selectedHike: inout Hike?,
-        in path: inout [SheetRoute]
+        in path: inout [Self]
     ) {
         if let hike {
             selectedHike = hike

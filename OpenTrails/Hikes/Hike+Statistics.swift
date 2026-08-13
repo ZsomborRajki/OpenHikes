@@ -5,8 +5,8 @@
 //  Derived statistics computed from a Hike's route points.
 //
 
-import Foundation
 import CoreLocation
+import Foundation
 
 extension Hike {
     var pointCount: Int { route.count }

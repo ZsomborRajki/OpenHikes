@@ -150,39 +150,39 @@ public struct UnitMercatorRect: Codable, Sendable, Equatable {
         toAspectRatio aspectRatio: Double,
         padding: Double = 0.15,
         minimumSpanMeters: Double = 400
-    ) -> UnitMercatorRect {
+    ) -> Self {
         guard aspectRatio.isFinite, aspectRatio > 0 else { return self }
         let minimumSpan = minimumSpanMeters / max(Mercator.metersPerUnit(atLatitude: centerLatitude), 1)
         let growth = 1 + 2 * padding
 
-        var width = max(self.width, minimumSpan) * growth
-        var height = max(self.height, minimumSpan) * growth
+        var newWidth = max(width, minimumSpan) * growth
+        var newHeight = max(height, minimumSpan) * growth
         // Grow the deficient axis rather than cropping the other one, so the
         // trail keeps all the padding it was given.
-        if width / height < aspectRatio {
-            width = height * aspectRatio
+        if newWidth / newHeight < aspectRatio {
+            newWidth = newHeight * aspectRatio
         } else {
-            height = width / aspectRatio
+            newHeight = newWidth / aspectRatio
         }
-        width = min(width, 1)
-        height = min(height, 1)
+        newWidth = min(newWidth, 1)
+        newHeight = min(newHeight, 1)
 
-        return UnitMercatorRect(
-            originX: midX - width / 2,
+        return Self(
+            originX: midX - newWidth / 2,
             // Latitude doesn't wrap: a trail near the top or bottom of the
             // projection gets a shifted window rather than one running off
             // the edge of the world. (Longitude does wrap, and MapKit handles
             // that itself, so x is left alone.)
-            originY: min(max(midY - height / 2, 0), 1 - height),
-            width: width,
-            height: height
+            originY: min(max(midY - newHeight / 2, 0), 1 - newHeight),
+            width: newWidth,
+            height: newHeight
         )
     }
 
     /// Whether `other` is the same rect to within `tolerance`, measured
     /// relative to this rect's own size — the test for whether a trail has
     /// moved or resized enough to be worth re-rendering its basemap.
-    public func isEquivalent(to other: UnitMercatorRect, tolerance: Double = 0.02) -> Bool {
+    public func isEquivalent(to other: Self, tolerance: Double = 0.02) -> Bool {
         let slack = max(width, height) * tolerance
         guard slack > 0 else { return self == other }
         return abs(originX - other.originX) <= slack
@@ -199,15 +199,24 @@ public struct UnitMercatorRect: Codable, Sendable, Equatable {
 /// and aspect-*fills* it, so the leftover mismatch crops into the padding the
 /// renderer leaves around the trail rather than into the trail itself.
 public enum TrailBasemapVariant: String, Codable, Sendable, CaseIterable {
-    case square
-    case wide
+    case square = "square"
+    case wide = "wide"
+
+    private enum PointSize {
+        static let squareSide: CGFloat = 320
+        static let wideWidth: CGFloat = 380
+        static let wideHeight: CGFloat = 180
+    }
 
     /// Render size in points. Kept modest on purpose — a widget extension has
     /// a hard memory ceiling and these get decoded inside it.
     public var pointSize: CGSize {
         switch self {
-        case .square: CGSize(width: 320, height: 320)
-        case .wide: CGSize(width: 380, height: 180)
+        case .square:
+            CGSize(width: PointSize.squareSide, height: PointSize.squareSide)
+
+        case .wide:
+            CGSize(width: PointSize.wideWidth, height: PointSize.wideHeight)
         }
     }
 
@@ -215,10 +224,10 @@ public enum TrailBasemapVariant: String, Codable, Sendable, CaseIterable {
 
     /// The variant closest to `aspectRatio`, compared logarithmically so
     /// "twice as wide" and "half as wide" count as equally far off.
-    public static func best(forAspectRatio aspectRatio: Double) -> TrailBasemapVariant {
+    public static func best(forAspectRatio aspectRatio: Double) -> Self {
         guard aspectRatio.isFinite, aspectRatio > 0 else { return .square }
-        return allCases.min {
-            abs(log($0.aspectRatio / aspectRatio)) < abs(log($1.aspectRatio / aspectRatio))
+        return allCases.min { lhs, rhs in
+            abs(log(lhs.aspectRatio / aspectRatio)) < abs(log(rhs.aspectRatio / aspectRatio))
         } ?? .square
     }
 }
@@ -227,8 +236,8 @@ public enum TrailBasemapVariant: String, Codable, Sendable, CaseIterable {
 /// single timeline entry in both appearances, so both are shipped and the
 /// view picks per render pass.
 public enum TrailBasemapAppearance: String, Codable, Sendable, CaseIterable {
-    case light
-    case dark
+    case dark = "dark"
+    case light = "light"
 }
 
 /// One rendered basemap image: what shape it is, and where on Earth it is.

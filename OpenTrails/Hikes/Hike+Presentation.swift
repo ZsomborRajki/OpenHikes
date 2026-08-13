@@ -5,13 +5,16 @@
 //  Display-facing helpers derived from a Hike's stored properties.
 //
 
-import SwiftUI
 import CoreLocation
+import SwiftUI
 
 extension Hike {
     /// The name shown everywhere in the UI. Returns ``customName`` when the
     /// user has set one, otherwise falls back to the original ``title``.
-    var displayTitle: String { customName?.isEmpty == false ? customName! : title }
+    var displayTitle: String {
+        if let customName, !customName.isEmpty { return customName }
+        return title
+    }
 
     var distance: Measurement<UnitLength> {
         Measurement(value: distanceMeters, unit: .meters)
@@ -19,6 +22,9 @@ extension Hike {
 
     /// Full tint including the user's chosen alpha — used for the map polyline.
     var tint: Color { Color(hex: tintHex) ?? .green }
+
+    private static let tintSaturation: Double = 0.65
+    private static let tintBrightness: Double = 0.85
 
     /// A random, visually distinct route color — fixed saturation/brightness so
     /// every hue stays legible on the map and in the UI. Used to give each
@@ -32,7 +38,11 @@ extension Hike {
     /// that sweeps hundreds of generated tints can seed it and reproduce a
     /// failure on exactly the hue that caused it.
     static func randomTintHex<G: RandomNumberGenerator>(using generator: inout G) -> String {
-        Color(hue: .random(in: 0..<1, using: &generator), saturation: 0.65, brightness: 0.85).hexRGBA
+        Color(
+            hue: .random(in: 0..<1, using: &generator),
+            saturation: Self.tintSaturation,
+            brightness: Self.tintBrightness
+        ).hexRGBA
     }
 
     /// Tint forced fully opaque — used everywhere except the map line (graph,

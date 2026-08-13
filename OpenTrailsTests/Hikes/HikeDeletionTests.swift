@@ -18,10 +18,10 @@
 //
 
 import Foundation
+@testable import OpenTrails
 import OpenTrailsShared
 import SwiftData
 import Testing
-@testable import OpenTrails
 
 @Suite("Hike deletion")
 struct HikeDeletionTests {

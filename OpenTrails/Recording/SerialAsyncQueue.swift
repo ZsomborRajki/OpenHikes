@@ -34,10 +34,10 @@ nonisolated final class SerialAsyncQueue: Sendable {
     private let continuation: AsyncStream<Operation>.Continuation
 
     init() {
-        let (stream, continuation) = AsyncStream<Operation>.makeStream(
+        let (stream, streamContinuation) = AsyncStream<Operation>.makeStream(
             bufferingPolicy: .unbounded
         )
-        self.continuation = continuation
+        continuation = streamContinuation
         Task {
             for await operation in stream {
                 await operation()
@@ -62,9 +62,9 @@ nonisolated final class SerialAsyncQueue: Sendable {
     /// Work submitted *after* it may or may not have run; anything that has to
     /// be ordered against the barrier belongs on the queue itself.
     func drain() async {
-        await withCheckedContinuation { continuation in
+        await withCheckedContinuation { checkedContinuation in
             enqueue {
-                continuation.resume()
+                checkedContinuation.resume()
             }
         }
     }

@@ -10,9 +10,9 @@
 //
 
 import Foundation
+@testable import OpenTrails
 import SwiftData
 import Testing
-@testable import OpenTrails
 
 @Suite("Hike search")
 struct HikeSearchTests {

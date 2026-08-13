@@ -3,9 +3,9 @@
 //  OpenTrailsTests
 //
 
+@testable import OpenTrails
 import SwiftData
 import Testing
-@testable import OpenTrails
 
 @Suite("OpenTrails model")
 struct OpenTrailsModelTests {

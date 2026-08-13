@@ -5,12 +5,13 @@
 //  Created by Zsombor Rajki on 2026. 06. 18..
 //
 
-import SwiftUI
 import SwiftData
+import SwiftUI
 
 @main
 struct OpenTrailsApp: App {
-    @Environment(\.scenePhase) private var scenePhase
+    @Environment(\.scenePhase)
+    private var scenePhase
 
     @State private var model: OpenTrailsModel
 
@@ -18,7 +19,7 @@ struct OpenTrailsApp: App {
         #if DEBUG
         MainThreadWatchdog.start()
         #endif
-        Task.detached {
+        TileCache.scheduleMaintenance {
             TileCache.shared.removeExpiredTiles()
         }
 

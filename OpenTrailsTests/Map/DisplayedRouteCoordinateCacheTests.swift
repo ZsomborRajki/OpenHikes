@@ -4,8 +4,8 @@
 //
 
 import CoreLocation
-import Testing
 @testable import OpenTrails
+import Testing
 
 @Suite("Displayed route coordinate cache")
 struct DisplayedRouteCoordinateCacheTests {
@@ -13,9 +13,9 @@ struct DisplayedRouteCoordinateCacheTests {
     func clearDropsCachedCoordinates() {
         let originalRoute = [
             RouteCoordinate(latitude: 47.63, longitude: 12.86),
-            RouteCoordinate(latitude: 47.64, longitude: 12.87)
+            RouteCoordinate(latitude: 47.64, longitude: 12.87),
         ]
-        let hike = Hike(title: "Cached", distanceMeters: 1_000, route: originalRoute)
+        let hike = Hike(title: "Cached", distanceMeters: 1000, route: originalRoute)
         let cache = DisplayedRouteCoordinateCache()
 
         #expect(cache.coordinates(for: hike).count == 2)
@@ -33,7 +33,7 @@ struct DisplayedRouteCoordinateCacheTests {
     func recordingPresentationSuppressesFinishedRoute() {
         let hike = Hike(
             title: "Imported Track",
-            distanceMeters: 1_000,
+            distanceMeters: 1000,
             route: Fixture.ridgeRoute
         )
         let cache = DisplayedRouteCoordinateCache()
@@ -41,8 +41,8 @@ struct DisplayedRouteCoordinateCacheTests {
         #expect(
             DisplayedRoute.forSelection(
                 hike,
-                recordingPresented: true,
-                cache: cache
+                cache: cache,
+                recordingPresented: true
             ) == nil
         )
         #expect(

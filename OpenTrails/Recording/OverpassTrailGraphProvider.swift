@@ -29,23 +29,18 @@ nonisolated protocol TrailGraphProviding: Sendable {
 
 nonisolated enum TrailGraphProviderError: LocalizedError, Equatable, Sendable {
     case invalidResponse
-    case server(statusCode: Int)
-    case rateLimited(retryAfter: TimeInterval)
     case malformedGraph(String)
+    case rateLimited(retryAfter: TimeInterval)
+    case server(statusCode: Int)
     case storage(String)
 
     var errorDescription: String? {
         switch self {
-        case .invalidResponse:
-            "Overpass returned an invalid response."
-        case .server(let statusCode):
-            "Overpass returned HTTP \(statusCode)."
-        case .rateLimited:
-            "Overpass temporarily rate-limited trail downloads."
-        case .malformedGraph:
-            "The downloaded trail graph could not be decoded."
-        case .storage:
-            "The trail graph cache could not be updated."
+        case .invalidResponse: "Overpass returned an invalid response."
+        case .server(let statusCode): "Overpass returned HTTP \(statusCode)."
+        case .rateLimited: "Overpass temporarily rate-limited trail downloads."
+        case .malformedGraph: "The downloaded trail graph could not be decoded."
+        case .storage: "The trail graph cache could not be updated."
         }
     }
 }
@@ -63,9 +58,13 @@ actor OverpassTrailGraphProvider: TrailGraphProviding {
     private static let cacheZoom = 12
     private static let cacheLifetime: TimeInterval = 30 * 24 * 60 * 60
     private static let maximumCacheFiles = 64
+    private static let requestTimeoutInterval: TimeInterval = 35
+    private static let defaultRetryDelay: TimeInterval = 60
+    private static let httpSuccessRange = 200..<300
+    private static let httpRateLimitCode = 429
     private static let allowedHighways: Set<String> = [
         "path", "footway", "track", "bridleway", "steps", "cycleway",
-        "via_ferrata"
+        "via_ferrata",
     ]
 
     private struct CachedGraph: Codable, Sendable {
@@ -92,7 +91,9 @@ actor OverpassTrailGraphProvider: TrailGraphProviding {
         directory: URL? = FileManager.default.urls(
             for: .applicationSupportDirectory,
             in: .userDomainMask
-        ).first?.appendingPathComponent("TrailGraphs", isDirectory: true),
+        )
+        .first?
+        .appendingPathComponent("TrailGraphs", isDirectory: true),
         endpoint: URL = URL(
             string: "https://overpass-api.de/api/interpreter"
         )!,
@@ -105,18 +106,18 @@ actor OverpassTrailGraphProvider: TrailGraphProviding {
         self.endpoint = endpoint
         self.clock = clock
         self.transport = transport ?? { request in
-            let (data, response) = try await URLSession.shared.data(for: request)
-            guard let response = response as? HTTPURLResponse else {
+            let (data, urlResponse) = try await URLSession.shared.data(for: request)
+            guard let httpResponse = urlResponse as? HTTPURLResponse else {
                 throw TrailGraphProviderError.invalidResponse
             }
             var headers: [String: String] = [:]
-            for (key, value) in response.allHeaderFields {
+            for (key, value) in httpResponse.allHeaderFields {
                 headers[String(describing: key).lowercased()]
                     = String(describing: value)
             }
             return OverpassHTTPResponse(
                 data: data,
-                statusCode: response.statusCode,
+                statusCode: httpResponse.statusCode,
                 headers: headers
             )
         }
@@ -128,9 +129,7 @@ actor OverpassTrailGraphProvider: TrailGraphProviding {
         guard Mercator.isRepresentable(
             latitude: coordinate.latitude,
             longitude: coordinate.longitude
-        ) else {
-            return nil
-        }
+        ) else { return nil }
         return Self.regionKey(for: coordinate)
     }
 
@@ -147,13 +146,13 @@ actor OverpassTrailGraphProvider: TrailGraphProviding {
             )
         }
 
-        let endpoint = self.endpoint
-        let transport = self.transport
+        let capturedEndpoint = endpoint
+        let capturedTransport = transport
         let task = Task {
             try await Self.fetchGraph(
                 for: key,
-                endpoint: endpoint,
-                transport: transport
+                endpoint: capturedEndpoint,
+                transport: capturedTransport
             )
         }
         inFlight[key] = task
@@ -186,21 +185,21 @@ actor OverpassTrailGraphProvider: TrailGraphProviding {
 
         var combined: TrailGraph?
         for key in keys {
-            let graph: TrailGraph?
+            let resolvedGraph: TrailGraph?
             if let cached = try cachedGraph(
                 for: key,
                 allowExpired: false
             ) {
-                graph = cached.graph
+                resolvedGraph = cached.graph
             } else if let task = inFlight[key] {
                 do {
-                    graph = try await task.value
+                    resolvedGraph = try await task.value
                 } catch {
                     if let expired = try cachedGraph(
                         for: key,
                         allowExpired: true
                     ) {
-                        graph = expired.graph
+                        resolvedGraph = expired.graph
                     } else {
                         throw error
                     }
@@ -209,13 +208,13 @@ actor OverpassTrailGraphProvider: TrailGraphProviding {
                 for: key,
                 allowExpired: true
             ) {
-                graph = expired.graph
+                resolvedGraph = expired.graph
             } else {
-                graph = nil
+                resolvedGraph = nil
             }
 
-            if let graph {
-                combined = combined?.merging(graph) ?? graph
+            if let resolvedGraph {
+                combined = combined?.merging(resolvedGraph) ?? resolvedGraph
             }
         }
         return combined
@@ -227,27 +226,21 @@ actor OverpassTrailGraphProvider: TrailGraphProviding {
     ) throws -> CachedGraph? {
         if let cached = memory[key] {
             if allowExpired || clock().timeIntervalSince(cached.fetchedAt)
-                    <= Self.cacheLifetime {
-                return cached
-            }
+                <= Self.cacheLifetime { return cached }
             return nil
         }
 
         let url = fileURL(for: key)
-        guard FileManager.default.fileExists(atPath: url.path) else {
-            return nil
-        }
+        guard FileManager.default.fileExists(atPath: url.path) else { return nil }
         do {
             let cached = try JSONDecoder().decode(
                 CachedGraph.self,
                 from: Data(contentsOf: url)
             )
             guard allowExpired
-                    || clock().timeIntervalSince(cached.fetchedAt)
-                        <= Self.cacheLifetime
-            else {
-                return nil
-            }
+                || clock().timeIntervalSince(cached.fetchedAt)
+                    <= Self.cacheLifetime
+            else { return nil }
             memory[key] = cached
             return cached
         } catch {
@@ -279,15 +272,15 @@ actor OverpassTrailGraphProvider: TrailGraphProviding {
             at: directory,
             includingPropertiesForKeys: [.contentModificationDateKey],
             options: [.skipsHiddenFiles]
-        ), files.count > Self.maximumCacheFiles else {
-            return
-        }
-        let doomed = files.map { url in
+        ), files.count > Self.maximumCacheFiles else { return }
+        let mapped = files.map { url in
             let date = (try? url.resourceValues(
                 forKeys: [.contentModificationDateKey]
             ).contentModificationDate) ?? .distantPast
             return (url, date)
-        }.min(count: files.count - Self.maximumCacheFiles) { $0.1 < $1.1 }
+        }
+        let doomed = mapped
+            .min(count: files.count - Self.maximumCacheFiles) { $0.1 < $1.1 }
         for (url, _) in doomed {
             try? FileManager.default.removeItem(at: url)
         }
@@ -298,8 +291,12 @@ actor OverpassTrailGraphProvider: TrailGraphProviding {
             "\(key.zoom)-\(key.x)-\(key.y).json"
         )
     }
+}
 
-    private nonisolated static func regionKey(
+// MARK: - Static helpers
+
+private extension OverpassTrailGraphProvider {
+    nonisolated static func regionKey(
         for coordinate: CLLocationCoordinate2D
     ) -> TrailGraphRegion {
         let count = 1 << cacheZoom
@@ -316,7 +313,7 @@ actor OverpassTrailGraphProvider: TrailGraphProviding {
         )
     }
 
-    private nonisolated static func fetchGraph(
+    nonisolated static func fetchGraph(
         for key: TrailGraphRegion,
         endpoint: URL,
         transport: Transport
@@ -329,7 +326,7 @@ actor OverpassTrailGraphProvider: TrailGraphProviding {
         )
         var request = URLRequest(url: endpoint)
         request.httpMethod = "POST"
-        request.timeoutInterval = 35
+        request.timeoutInterval = requestTimeoutInterval
         request.setValue(
             "application/x-www-form-urlencoded; charset=utf-8",
             forHTTPHeaderField: "Content-Type"
@@ -344,20 +341,16 @@ actor OverpassTrailGraphProvider: TrailGraphProviding {
 
         let response = try await transport(request)
         switch response.statusCode {
-        case 200..<300:
-            return try decodeGraph(from: response.data)
-        case 429:
+        case httpSuccessRange: return try decodeGraph(from: response.data)
+        case httpRateLimitCode:
             let delay = response.headers["retry-after"]
-                .flatMap(TimeInterval.init) ?? 60
+                .flatMap(TimeInterval.init) ?? defaultRetryDelay
             throw TrailGraphProviderError.rateLimited(retryAfter: delay)
-        default:
-            throw TrailGraphProviderError.server(
-                statusCode: response.statusCode
-            )
+        default: throw TrailGraphProviderError.server(statusCode: response.statusCode)
         }
     }
 
-    private nonisolated static func query(for box: BoundingBox) -> String {
+    nonisolated private static func query(for box: BoundingBox) -> String {
         let bounds = "\(box.south),\(box.west),\(box.north),\(box.east)"
         return """
         [out:json][timeout:25];
@@ -370,53 +363,73 @@ actor OverpassTrailGraphProvider: TrailGraphProviding {
     }
 
     nonisolated static func decodeGraph(from data: Data) throws -> TrailGraph {
-        struct Member: Decodable {
-            let type: String
-            let ref: Int64
-        }
-        struct Element: Decodable {
-            let type: String
-            let id: Int64
-            let lat: Double?
-            let lon: Double?
-            let nodes: [Int64]?
-            let tags: [String: String]?
-            let members: [Member]?
-        }
-        struct Response: Decodable {
-            let elements: [Element]
-        }
-
-        let response: Response
+        let response: OverpassResponse
         do {
-            response = try JSONDecoder().decode(Response.self, from: data)
+            response = try JSONDecoder().decode(OverpassResponse.self, from: data)
         } catch {
             throw TrailGraphProviderError.malformedGraph(
                 error.localizedDescription
             )
         }
 
-        var nodeCoordinates: [Int64: CLLocationCoordinate2D] = [:]
-        var elementsByKey: [String: Element] = [:]
-        for element in response.elements {
-            elementsByKey["\(element.type)/\(element.id)"] = element
-            if element.type == "node", let lat = element.lat, let lon = element.lon,
-               Mercator.isRepresentable(latitude: lat, longitude: lon) {
-                nodeCoordinates[element.id] = CLLocationCoordinate2D(
-                    latitude: lat,
-                    longitude: lon
-                )
-            }
-        }
+        let elementsByKey = buildElementIndex(from: response.elements)
+        let nodeCoordinates = extractNodeCoordinates(from: response.elements)
+        let hikingRouteNames = extractHikingRouteNames(from: elementsByKey)
+        let (graphNodes, edges) = buildGraphEdges(
+            from: elementsByKey,
+            nodeCoordinates: nodeCoordinates,
+            hikingRouteNames: hikingRouteNames
+        )
 
-        var hikingRouteNames: [Int64: String] = [:]
-        for element in elementsByKey.values where element.type == "relation" {
-            guard element.tags?["route"] == "hiking",
-                  let name = element.tags?["name"] ?? element.tags?["ref"]
+        return TrailGraph(
+            nodes: graphNodes.values.sorted { lhs, rhs in lhs.id < rhs.id },
+            edges: edges.sorted { lhs, rhs in
+                if lhs.id.wayID == rhs.id.wayID { return lhs.id.segmentIndex < rhs.id.segmentIndex }
+                return lhs.id.wayID < rhs.id.wayID
+            }
+        )
+    }
+
+    nonisolated static func buildElementIndex(
+        from elements: [OverpassElement]
+    ) -> [String: OverpassElement] {
+        var index: [String: OverpassElement] = [:]
+        for element in elements {
+            index["\(element.type)/\(element.id)"] = element
+        }
+        return index
+    }
+
+    nonisolated static func extractNodeCoordinates(
+        from elements: [OverpassElement]
+    ) -> [Int64: CLLocationCoordinate2D] {
+        var nodeCoordinates: [Int64: CLLocationCoordinate2D] = [:]
+        for element in elements where element.type == "node" {
+            guard let lat = element.lat,
+                  let lon = element.lon,
+                  Mercator.isRepresentable(latitude: lat, longitude: lon)
             else {
                 continue
             }
-            for member in element.members ?? [] where member.type == "way" {
+            nodeCoordinates[element.id] = CLLocationCoordinate2D(
+                latitude: lat,
+                longitude: lon
+            )
+        }
+        return nodeCoordinates
+    }
+
+    nonisolated static func extractHikingRouteNames(
+        from elementsByKey: [String: OverpassElement]
+    ) -> [Int64: String] {
+        var hikingRouteNames: [Int64: String] = [:]
+        for element in elementsByKey.values where element.type == "relation" {
+            guard element.tags["route"] == "hiking",
+                  let name = element.tags["name"] ?? element.tags["ref"]
+            else {
+                continue
+            }
+            for member in element.members where member.type == "way" {
                 if let existing = hikingRouteNames[member.ref] {
                     hikingRouteNames[member.ref] = min(existing, name)
                 } else {
@@ -424,20 +437,26 @@ actor OverpassTrailGraphProvider: TrailGraphProviding {
                 }
             }
         }
+        return hikingRouteNames
+    }
 
+    nonisolated static func buildGraphEdges(
+        from elementsByKey: [String: OverpassElement],
+        nodeCoordinates: [Int64: CLLocationCoordinate2D],
+        hikingRouteNames: [Int64: String]
+    ) -> (nodes: [Int64: TrailGraphNode], edges: [TrailGraphEdge]) {
         var graphNodes: [Int64: TrailGraphNode] = [:]
         var edges: [TrailGraphEdge] = []
         for element in elementsByKey.values where element.type == "way" {
-            guard let tags = element.tags,
-                  let highway = tags["highway"],
+            guard let highway = element.tags["highway"],
                   allowedHighways.contains(highway),
-                  let nodeIDs = element.nodes,
-                  nodeIDs.count > 1,
-                  permitsWalking(tags)
+                  element.nodes.count > 1,
+                  permitsWalking(element.tags)
             else {
                 continue
             }
 
+            let nodeIDs = element.nodes
             for index in 0..<(nodeIDs.count - 1) {
                 let fromID = nodeIDs[index]
                 let toID = nodeIDs[index + 1]
@@ -449,56 +468,34 @@ actor OverpassTrailGraphProvider: TrailGraphProviding {
                 }
                 let length = RouteGeometry.distanceMeters(from: from, to: to)
                 guard length.isFinite, length > 0 else { continue }
-                graphNodes[fromID] = TrailGraphNode(
-                    id: fromID,
-                    coordinate: from
-                )
-                graphNodes[toID] = TrailGraphNode(
-                    id: toID,
-                    coordinate: to
-                )
+                graphNodes[fromID] = TrailGraphNode(id: fromID, coordinate: from)
+                graphNodes[toID] = TrailGraphNode(id: toID, coordinate: to)
                 edges.append(
                     TrailGraphEdge(
-                        id: TrailGraphEdgeID(
-                            wayID: element.id,
-                            segmentIndex: index
-                        ),
+                        id: TrailGraphEdgeID(wayID: element.id, segmentIndex: index),
                         fromNodeID: fromID,
                         toNodeID: toID,
                         lengthMeters: length,
-                        name: tags["name"],
+                        name: element.tags["name"],
                         hikingRouteName: hikingRouteNames[element.id],
-                        sacScale: tags["sac_scale"],
-                        trailVisibility: tags["trail_visibility"],
-                        access: tags["access"],
-                        surface: tags["surface"]
+                        sacScale: element.tags["sac_scale"],
+                        trailVisibility: element.tags["trail_visibility"],
+                        access: element.tags["access"],
+                        surface: element.tags["surface"]
                     )
                 )
             }
         }
-
-        return TrailGraph(
-            nodes: graphNodes.values.sorted { $0.id < $1.id },
-            edges: edges.sorted {
-                if $0.id.wayID == $1.id.wayID {
-                    return $0.id.segmentIndex < $1.id.segmentIndex
-                }
-                return $0.id.wayID < $1.id.wayID
-            }
-        )
+        return (graphNodes, edges)
     }
 
-    private nonisolated static func permitsWalking(
+    nonisolated static func permitsWalking(
         _ tags: [String: String]
     ) -> Bool {
-        if let foot = tags["foot"], foot == "no" || foot == "private" {
-            return false
-        }
+        if let foot = tags["foot"], foot == "no" || foot == "private" { return false }
         guard let access = tags["access"],
               access == "no" || access == "private"
-        else {
-            return true
-        }
+        else { return true }
         return ["yes", "designated", "permissive"].contains(tags["foot"])
     }
 }

@@ -21,9 +21,9 @@
 
 import CoreLocation
 import Foundation
+@testable import OpenTrails
 import SwiftData
 import Testing
-@testable import OpenTrails
 
 @Suite("Tile store")
 struct TileStoreTests {
@@ -59,7 +59,6 @@ struct TileStoreTests {
     /// Pass `browsed: false` for the case where the bytes aren't there.
     private func persist(key: String, tile: (z: Int, x: Int, y: Int), browsed: Bool = true) async throws {
         if browsed { try sandbox.browse(key: key) }
-        let store = store
         await offMain { store.considerPersisting(key: key, z: tile.z, x: tile.x, y: tile.y) }
     }
 
@@ -117,7 +116,6 @@ struct TileStoreTests {
     @Test("an expired known tile is saved again when viewed")
     func refreshesExpiredKnownTile() async throws {
         let key = key(16, 3, 4)
-        let sandbox = sandbox
         try sandbox.browse(key: key)
         #expect(await offMain { sandbox.cache.promoteCachedTile(forKey: key) })
         try sandbox.age(key: key, byDays: 8)
@@ -223,13 +221,12 @@ struct TileStoreTests {
     func concurrentClaimsRemainConsistent() async throws {
         activate()
         let tile = tile()
-        let keys = (0..<48).map {
-            "concurrent/\(tile.z)/\(tile.x)/\(tile.y)-\($0)@2.0"
+        let keys = (0..<48).map { idx in
+            "concurrent/\(tile.z)/\(tile.x)/\(tile.y)-\(idx)@2.0"
         }
         for key in keys {
             try sandbox.browse(key: key)
         }
-        let store = store
 
         await withTaskGroup(of: Void.self) { group in
             for key in keys {
@@ -271,7 +268,7 @@ struct ControllerTests {
     /// A hike whose manifest is already full. Activation seeds the store from
     /// that manifest, so "is the cap reached for this hike?" doubles as an
     /// observable answer to "did the controller actually activate it?".
-    private func fullHike(configure: (Hike) -> Void = { _ in }) -> Hike {
+    private func fullHike(configure: (Hike) -> Void = { _ in /* no-op */ }) -> Hike {
         Fixture.hike(in: context) { hike in
             hike.autoSavedTileKeys = (0..<AutoSaveTileStore.tileCap).map { "saved/\($0)" }
             configure(hike)
@@ -283,7 +280,6 @@ struct ControllerTests {
         let anchor = hike.coordinates[2]
         let x = SlippyTileMath.tileX(anchor.longitude, z: z)
         let y = SlippyTileMath.tileY(anchor.latitude, z: z)
-        let sandbox = sandbox
         try sandbox.browse(key: key)
         await offMain { sandbox.store.considerPersisting(key: key, z: z, x: x, y: y) }
     }
@@ -454,10 +450,9 @@ struct AutoSaveLifecycleTests {
     /// A tile inside the ridge fixture's corridor, saved through the same path
     /// the renderer uses so the store's pending set is populated for real.
     private func persistOneTile(key: String) async throws {
-        let sandbox = sandbox
         try sandbox.browse(key: key)
         await offMain {
-            sandbox.store.considerPersisting(key: key, z: 14, x: 2_638, y: 6_357)
+            sandbox.store.considerPersisting(key: key, z: 14, x: 2638, y: 6357)
         }
     }
 
@@ -492,7 +487,7 @@ struct AutoSaveLifecycleTests {
         #expect(sandbox.isSaved(key), "precondition: it really did reach durable storage")
 
         // The scene resigns active — a phone call, a swipe up, App Switcher.
-        controller.sceneWillResignActive { }
+        controller.sceneWillResignActive { /* scene resigned active */ }
         // …and the user taps Delete on the hike sheet, whose first act is to
         // turn auto-save off. This is the branch that does not flush.
         controller.setEnabled(false, for: hike)
@@ -524,7 +519,7 @@ struct AutoSaveLifecycleTests {
         let key = tileKey(UUID().uuidString)
         try await persistOneTile(key: key)
 
-        controller.sceneWillResignActive { }
+        controller.sceneWillResignActive { /* scene resigned active */ }
         controller.hikeWillBeDeleted(hike)
 
         #expect(

@@ -72,14 +72,12 @@ struct RecordingView: View {
                 Button("Open Settings") {
                     guard let url = URL(
                         string: UIApplication.openSettingsURLString
-                    ) else {
-                        return
-                    }
+                    ) else { return }
                     UIApplication.shared.open(url)
                 }
             }
             #endif
-            Button("OK", role: .cancel) {}
+            Button("OK", role: .cancel) { /* no-op */ }
         }
     }
 }
@@ -87,13 +85,17 @@ struct RecordingView: View {
 private struct RecordingRecoveryNotice: View {
     let recorder: HikeRecorder
 
-    @ViewBuilder
-    var body: some View {
+    private let noticePadding: CGFloat = 12
+    private let noticeRadius: CGFloat = 12
+    private let noticeSpacingResumed: CGFloat = 10
+    private let noticeSpacingDecision: CGFloat = 6
+    private let noticeBgOpacity: Double = 0.12
+
+    @ViewBuilder var body: some View {
         switch recorder.recoveryState {
-        case .none:
-            EmptyView()
+        case .absent: EmptyView()
         case .resumed:
-            HStack(spacing: 10) {
+            HStack(spacing: noticeSpacingResumed) {
                 Label(
                     "Recording resumed after OpenTrails restarted.",
                     systemImage: "arrow.clockwise.circle"
@@ -105,10 +107,10 @@ private struct RecordingRecoveryNotice: View {
                 }
                 .font(.caption)
             }
-            .padding(12)
-            .background(.orange.opacity(0.12), in: RoundedRectangle(cornerRadius: 12))
+            .padding(noticePadding)
+            .background(.orange.opacity(noticeBgOpacity), in: RoundedRectangle(cornerRadius: noticeRadius))
         case .needsDecision(let summary):
-            VStack(alignment: .leading, spacing: 6) {
+            VStack(alignment: .leading, spacing: noticeSpacingDecision) {
                 Label("Recovered recording", systemImage: "clock.arrow.circlepath")
                     .font(.headline)
                 Text(
@@ -123,8 +125,8 @@ private struct RecordingRecoveryNotice: View {
                     .foregroundStyle(.secondary)
             }
             .frame(maxWidth: .infinity, alignment: .leading)
-            .padding(12)
-            .background(.orange.opacity(0.12), in: RoundedRectangle(cornerRadius: 12))
+            .padding(noticePadding)
+            .background(.orange.opacity(noticeBgOpacity), in: RoundedRectangle(cornerRadius: noticeRadius))
         }
     }
 
@@ -205,18 +207,12 @@ private struct RecordingHeader: View {
 
     private var phaseColor: Color {
         switch recorder.phase {
-        case .recording:
-            .red
-        case .recovering, .waitingForFix, .saving:
-            .orange
-        case .paused:
-            .secondary
-        case .reviewing:
-            .orange
-        case .idle:
-            .green
-        case .failed:
-            .red
+        case .recording: .red
+        case .recovering, .waitingForFix, .saving: .orange
+        case .paused: .secondary
+        case .reviewing: .orange
+        case .idle: .green
+        case .failed: .red
         }
     }
 }
@@ -224,22 +220,14 @@ private struct RecordingHeader: View {
 private extension HikeRecorder.Phase {
     var accessibilityTitle: String {
         switch self {
-        case .idle:
-            "Ready"
-        case .recovering:
-            "Recovering"
-        case .waitingForFix:
-            "Finding GPS"
-        case .recording:
-            "Recording"
-        case .paused:
-            "Paused"
-        case .saving:
-            "Saving"
-        case .reviewing:
-            "Review Route"
-        case .failed:
-            "Needs Attention"
+        case .idle: "Ready"
+        case .recovering: "Recovering"
+        case .waitingForFix: "Finding GPS"
+        case .recording: "Recording"
+        case .paused: "Paused"
+        case .saving: "Saving"
+        case .reviewing: "Review Route"
+        case .failed: "Needs Attention"
         }
     }
 }
@@ -278,11 +266,9 @@ private struct RecordingStatsGrid: View {
     }
 
     private var accuracy: String {
-        guard let accuracy = stats.horizontalAccuracy else { return "Searching…" }
-        guard accuracy <= RecordingFixPolicy.maximumHorizontalAccuracy else {
-            return "Weak signal"
-        }
-        return "±\(Int(accuracy.rounded())) m"
+        guard let horizontalAccuracy = stats.horizontalAccuracy else { return "Searching…" }
+        guard horizontalAccuracy <= RecordingFixPolicy.maximumHorizontalAccuracy else { return "Weak signal" }
+        return "±\(Int(horizontalAccuracy.rounded())) m"
     }
 }
 
@@ -297,63 +283,7 @@ private struct RecordingControls: View {
 
     var body: some View {
         VStack(spacing: 12) {
-            switch recorder.phase {
-            case .idle:
-                Button("Start Recording", systemImage: "record.circle") {
-                    Task { await recorder.start() }
-                }
-                .buttonStyle(.borderedProminent)
-                .tint(.red)
-
-            case .recovering:
-                ProgressView("Recovering recorded hike…")
-                    .frame(maxWidth: .infinity)
-
-            case .waitingForFix, .recording:
-                HStack {
-                    Button("Pause", systemImage: "pause.fill") {
-                        recorder.pause()
-                    }
-                    .buttonStyle(.bordered)
-
-                    stopButton
-                }
-
-            case .paused:
-                HStack {
-                    Button("Resume", systemImage: "play.fill") {
-                        Task { await recorder.resume() }
-                    }
-                    .buttonStyle(.bordered)
-
-                    stopButton
-                }
-                discardButton
-
-            case .saving:
-                ProgressView("Saving recorded hike…")
-                    .frame(maxWidth: .infinity)
-
-            case .reviewing:
-                if let review = recorder.ambiguityReview {
-                    RecordingAmbiguityReviewControls(
-                        recorder: recorder,
-                        review: review,
-                        onSaved: onSaved
-                    )
-                }
-                discardButton
-
-            case .failed:
-                if recorder.isActive {
-                    discardButton
-                } else {
-                    Button("Try Again") {
-                        recorder.dismissFailure()
-                    }
-                    .buttonStyle(.borderedProminent)
-                }
-            }
+            phaseControls
         }
         .frame(maxWidth: .infinity)
         .confirmationDialog(
@@ -370,7 +300,7 @@ private struct RecordingControls: View {
                     }
                 }
             }
-            Button("Cancel", role: .cancel) {}
+            Button("Cancel", role: .cancel) { /* no-op */ }
         } message: {
             Text("The recorded track cannot be recovered after it is discarded.")
         }
@@ -382,9 +312,63 @@ private struct RecordingControls: View {
             Button("Save") {
                 Task { await stopAndSave() }
             }
-            Button("Cancel", role: .cancel) {}
+            Button("Cancel", role: .cancel) { /* no-op */ }
         } message: {
             Text("Give this hike a name, or leave it blank to keep the default.")
+        }
+    }
+
+    @ViewBuilder private var phaseControls: some View {
+        switch recorder.phase {
+        case .idle:
+            Button("Start Recording", systemImage: "record.circle") {
+                Task { await recorder.start() }
+            }
+            .buttonStyle(.borderedProminent)
+            .tint(.red)
+        case .recovering:
+            ProgressView("Recovering recorded hike…")
+                .frame(maxWidth: .infinity)
+        case .waitingForFix, .recording:
+            HStack {
+                Button("Pause", systemImage: "pause.fill") {
+                    recorder.pause()
+                }
+                .buttonStyle(.bordered)
+
+                stopButton
+            }
+        case .paused:
+            HStack {
+                Button("Resume", systemImage: "play.fill") {
+                    Task { await recorder.resume() }
+                }
+                .buttonStyle(.bordered)
+
+                stopButton
+            }
+            discardButton
+        case .saving:
+            ProgressView("Saving recorded hike…")
+                .frame(maxWidth: .infinity)
+        case .reviewing:
+            if let review = recorder.ambiguityReview {
+                RecordingAmbiguityReviewControls(
+                    recorder: recorder,
+                    review: review,
+                    onSaved: onSaved
+                )
+            }
+            discardButton
+        case .failed:
+            if recorder.isActive {
+                discardButton
+            } else {
+                Button("Try Again") {
+                    recorder.dismissFailure()
+                }
+                .buttonStyle(.borderedProminent)
+            }
         }
     }
 
@@ -421,61 +405,79 @@ private struct RecordingAmbiguityReviewControls: View {
     let review: RecordingAmbiguityReview
     var onSaved: (Hike) -> Void
 
+    private let choicePadding: CGFloat = 10
+    private let choiceRadius: CGFloat = 10
+    private let choiceOpacity: Double = 0.08
+    private let alphabetCount = 26
+    private let uppercaseAScalar: Int = 65
+
     var body: some View {
         if let ambiguity = review.current {
-            VStack(alignment: .leading, spacing: 12) {
-                Text(
-                    "Trail choice \(review.currentIndex + 1) of "
-                        + "\(review.ambiguities.count)"
-                )
-                .font(.headline)
-                Text(
-                    "The highlighted section has more than one plausible route."
-                )
-                .font(.subheadline)
-                .foregroundStyle(.secondary)
+            ambiguityContent(for: ambiguity)
+                .frame(maxWidth: .infinity, alignment: .leading)
+        }
+    }
 
+    @ViewBuilder
+    private func ambiguityContent(for ambiguity: TrailMatchAmbiguity) -> some View {
+        VStack(alignment: .leading, spacing: 12) {
+            Text(
+                "Trail choice \(review.currentIndex + 1) of "
+                    + "\(review.ambiguities.count)"
+            )
+            .font(.headline)
+            Text(
+                "The highlighted section has more than one plausible route."
+            )
+            .font(.subheadline)
+            .foregroundStyle(.secondary)
+
+            choiceButton(
+                title: "Use GPS only",
+                subtitle: "Keep the recorded line for this section.",
+                choice: .gps,
+                ambiguity: ambiguity
+            )
+            ForEach(ambiguity.alternatives, id: \.id) { alternative in
                 choiceButton(
-                    title: "Use GPS only",
-                    subtitle: "Keep the recorded line for this section.",
-                    choice: .gps,
+                    title: "Option \(optionLabel(alternative.id))",
+                    subtitle: alternativeSubtitle(alternative),
+                    choice: .alternative(alternative.id),
                     ambiguity: ambiguity
                 )
-                ForEach(ambiguity.alternatives, id: \.id) { alternative in
-                    choiceButton(
-                        title: "Option \(optionLabel(alternative.id))",
-                        subtitle: alternativeSubtitle(alternative),
-                        choice: .alternative(alternative.id),
-                        ambiguity: ambiguity
-                    )
-                }
-
-                HStack {
-                    Button("Previous") {
-                        recorder.moveToPreviousAmbiguity()
-                    }
-                    .disabled(!review.canMoveBackward)
-                    Spacer()
-                    Button("Next") {
-                        recorder.moveToNextAmbiguity()
-                    }
-                    .disabled(!review.canMoveForward)
-                }
-
-                Button("Save Reviewed Hike") {
-                    Task {
-                        guard let hike = try? await
-                                recorder.saveReviewedRecording() else {
-                            return
-                        }
-                        onSaved(hike)
-                    }
-                }
-                .buttonStyle(.borderedProminent)
-                .frame(maxWidth: .infinity)
             }
-            .frame(maxWidth: .infinity, alignment: .leading)
+
+            ambiguityNavigationButtons
+            saveReviewedHikeButton
         }
+        .frame(maxWidth: .infinity)
+    }
+
+    @ViewBuilder private var ambiguityNavigationButtons: some View {
+        HStack {
+            Button("Previous") {
+                recorder.moveToPreviousAmbiguity()
+            }
+            .disabled(!review.canMoveBackward)
+            Spacer()
+            Button("Next") {
+                recorder.moveToNextAmbiguity()
+            }
+            .disabled(!review.canMoveForward)
+        }
+    }
+
+    private var saveReviewedHikeButton: some View {
+        Button("Save Reviewed Hike") {
+            Task {
+                guard let hike = try? await recorder.saveReviewedRecording() else {
+                    return
+                }
+                onSaved(hike)
+            }
+        }
+        .buttonStyle(.borderedProminent)
+        .frame(maxWidth: .infinity)
     }
 
     private func choiceButton(
@@ -493,6 +495,7 @@ private struct RecordingAmbiguityReviewControls: View {
                         ? "checkmark.circle.fill"
                         : "circle"
                 )
+                .accessibilityHidden(true)
                 VStack(alignment: .leading, spacing: 2) {
                     Text(title)
                         .font(.subheadline.weight(.semibold))
@@ -505,15 +508,13 @@ private struct RecordingAmbiguityReviewControls: View {
             .contentShape(Rectangle())
         }
         .buttonStyle(.plain)
-        .padding(10)
-        .background(.secondary.opacity(0.08), in: RoundedRectangle(cornerRadius: 10))
+        .padding(choicePadding)
+        .background(.secondary.opacity(choiceOpacity), in: RoundedRectangle(cornerRadius: choiceRadius))
     }
 
     private func optionLabel(_ index: Int) -> String {
-        guard index >= 0, index < 26,
-              let scalar = UnicodeScalar(65 + index) else {
-            return "\(index + 1)"
-        }
+        guard index >= 0, index < alphabetCount,
+              let scalar = UnicodeScalar(uppercaseAScalar + index) else { return "\(index + 1)" }
         return String(Character(scalar))
     }
 

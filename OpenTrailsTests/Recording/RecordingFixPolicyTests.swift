@@ -5,23 +5,25 @@
 
 import CoreLocation
 import Foundation
-import Testing
 @testable import OpenTrails
+import Testing
+
+private let recordingAltitude: CLLocationDistance = 600
 
 nonisolated private func recordingLocation(
+    timestamp: Date,
     latitude: Double = 47.63,
     longitude: Double = 12.86,
     accuracy: CLLocationAccuracy = 8,
     course: CLLocationDirection = -1,
-    speed: CLLocationSpeed = -1,
-    timestamp: Date
+    speed: CLLocationSpeed = -1
 ) -> CLLocation {
     CLLocation(
         coordinate: CLLocationCoordinate2D(
             latitude: latitude,
             longitude: longitude
         ),
-        altitude: 600,
+        altitude: recordingAltitude,
         horizontalAccuracy: accuracy,
         verticalAccuracy: 5,
         course: course,
@@ -35,7 +37,10 @@ struct RecordingSettingsTests {
     @Test("defaults load without reading UserDefaults")
     func defaults() {
         let suite = "recording-settings-\(UUID().uuidString)"
-        let defaults = UserDefaults(suiteName: suite)!
+        guard let defaults = UserDefaults(suiteName: suite) else {
+            Issue.record("Failed to create UserDefaults with suite \(suite)")
+            return
+        }
         defer { defaults.removePersistentDomain(forName: suite) }
 
         let options = RecordingSessionOptions.load(from: defaults)
@@ -270,8 +275,8 @@ struct RecordingDistanceTests {
         let legs: [(Double, TimeInterval, RecordingPointFlags)] = [
             (47.63, 0, []),
             (47.631, 60, []),
-            (47.64, 3_660, .resumed),
-            (47.641, 3_720, [])
+            (47.64, 3660, .resumed),
+            (47.641, 3720, []),
         ]
         for (latitude, offset, flags) in legs {
             accumulator.append(
@@ -317,7 +322,7 @@ struct RecordingDistanceTests {
                 longitude: 12.86,
                 timestamp: start.addingTimeInterval(660),
                 horizontalAccuracy: 8
-            )
+            ),
         ]
 
         let prepared = try RecordingPreparation.prepare(
@@ -354,7 +359,7 @@ struct RecordingDistanceTests {
             RecordingPoint(
                 latitude: 47.64,
                 longitude: 12.86,
-                timestamp: start.addingTimeInterval(3_600),
+                timestamp: start.addingTimeInterval(3600),
                 horizontalAccuracy: 8,
                 flags: [.resumed]
             )
@@ -363,7 +368,7 @@ struct RecordingDistanceTests {
             RecordingPoint(
                 latitude: 47.6401,
                 longitude: 12.86,
-                timestamp: start.addingTimeInterval(3_610),
+                timestamp: start.addingTimeInterval(3610),
                 horizontalAccuracy: 8,
                 flags: [.motionStationary]
             )
@@ -379,7 +384,7 @@ struct RecordingDistanceTests {
             (0, 47.6300, [.motionStationary]),
             (10, 47.6301, []),
             (20, 47.6302, [.motionStationary]),
-            (40, 47.6304, [.motionStationary])
+            (40, 47.6304, [.motionStationary]),
         ]
         for (offset, latitude, flags) in samples {
             accumulator.append(
@@ -426,7 +431,7 @@ struct RecordingPreparationTests {
                 longitude: 12.86,
                 timestamp: start.addingTimeInterval(3),
                 horizontalAccuracy: 8
-            )
+            ),
         ])
 
         let point = try #require(normalized.first)

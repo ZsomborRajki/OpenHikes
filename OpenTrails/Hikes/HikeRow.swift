@@ -8,6 +8,9 @@
 import SwiftUI
 
 struct HikeRow: View {
+    private static let symbolFrameSize: CGFloat = 38
+    private static let statusBadgeOpacity: Double = 0.12
+
     struct Status {
         let title: String
         let tint: Color
@@ -15,14 +18,14 @@ struct HikeRow: View {
 
     let hike: Hike
     var isSelected: Bool = false
-    var status: Status? = nil
+    var status: Status?
 
     var body: some View {
         HStack(spacing: 12) {
             Image(systemName: hike.symbol)
                 .font(.system(size: 16, weight: .semibold))
                 .foregroundStyle(.white)
-                .frame(width: 38, height: 38)
+                .frame(width: Self.symbolFrameSize, height: Self.symbolFrameSize)
                 .background(hike.tintOpaque, in: Circle())
 
             VStack(alignment: .leading, spacing: 2) {
@@ -36,7 +39,7 @@ struct HikeRow: View {
                             .foregroundStyle(status.tint)
                             .padding(.horizontal, 6)
                             .padding(.vertical, 2)
-                            .background(status.tint.opacity(0.12), in: Capsule())
+                            .background(status.tint.opacity(Self.statusBadgeOpacity), in: Capsule())
                     }
                     Text(hike.subtitle)
                         .font(.subheadline)

@@ -22,18 +22,14 @@ final class AutoSaveController {
     /// only ever written in `init`/`deinit`, and `Task` cancellation is
     /// thread-safe, so this is safe to touch from `deinit` (which, on a
     /// main-actor-isolated class, runs nonisolated).
-    @ObservationIgnored
-    private nonisolated(unsafe) var drainTask: Task<Void, Never>?
-    @ObservationIgnored
-    private var isSuspended = false
-    @ObservationIgnored
-    private var hasDeferredSelectionChange = false
+    @ObservationIgnored nonisolated(unsafe) private var drainTask: Task<Void, Never>?
+    @ObservationIgnored private var isSuspended = false
+    @ObservationIgnored private var hasDeferredSelectionChange = false
     private weak var deferredHike: Hike?
     /// The tile store this controller drives. Injectable so a test drives one
     /// with its own active hike and its own tile directories rather than the
     /// process-wide singleton the app uses.
-    @ObservationIgnored
-    private let store: AutoSaveTileStore
+    @ObservationIgnored private let store: AutoSaveTileStore
 
     init(store: AutoSaveTileStore = .shared) {
         self.store = store
@@ -41,7 +37,7 @@ final class AutoSaveController {
             while true {
                 try? await Task.sleep(for: .seconds(2))
                 guard let self, !Task.isCancelled else { break }
-                self.flushPendingKeys()
+                flushPendingKeys()
             }
         }
     }
@@ -53,8 +49,8 @@ final class AutoSaveController {
     /// Called whenever the map's selected hike changes, so auto-save follows
     /// whatever is actually on screen.
     func hikeSelectionChanged(to hike: Hike?) {
-        let eligibleHike = hike.flatMap {
-            $0.autoSaveTilesEnabled && $0.pointCount > 1 ? $0 : nil
+        let eligibleHike = hike.flatMap { candidateHike in
+            candidateHike.autoSaveTilesEnabled && candidateHike.pointCount > 1 ? candidateHike : nil
         }
         guard !isSuspended else {
             deferredHike = eligibleHike
@@ -107,7 +103,9 @@ final class AutoSaveController {
             }
         } catch {
             hike?.autoSavedTileKeys.removeSubrange(previousCount...)
-            Self.logger.error("Could not persist auto-saved tile ownership: \(error.localizedDescription, privacy: .public)")
+            Self.logger.error(
+                "Could not persist auto-saved tile ownership: \(error.localizedDescription, privacy: .public)"
+            )
         }
     }
 

@@ -48,11 +48,15 @@ struct WidgetPreconditionTests {
     @Test("the App Group the widget reads from is reachable")
     func appGroupIsReachable() {
         guard !WidgetStoreProbe.isAvailable else { return }
-        let message = "the App Group container \(SharedStore.appGroupID) is unreachable, so the widget suites were skipped"
+        let message =
+            "the App Group container \(SharedStore.appGroupID) is unreachable, so the widget suites were skipped"
         if WidgetStoreProbe.isStrict {
             Issue.record(Comment(rawValue: "Precondition not met: \(message)."))
         } else {
-            print("⚠︎ Skipped coverage — precondition not met: \(message). Set OPENTRAILS_REQUIRE_ALL_SUITES=1 to make this a failure.")
+            print(
+                "⚠︎ Skipped coverage — precondition not met: \(message)." +
+                " Set OPENTRAILS_REQUIRE_ALL_SUITES=1 to make this a failure."
+            )
         }
     }
 }
@@ -159,13 +163,13 @@ struct TrailWidgetTests {
             hikeID: hikeID,
             title: title,
             tintHex: "#34C759FF",
-            totalDistanceMeters: 4_200,
+            totalDistanceMeters: 4200,
             elevationLowMeters: 600,
             elevationHighMeters: 900,
             polyline: [
                 .init(latitude: 47.6300, longitude: 12.8600),
                 .init(latitude: 47.6320, longitude: 12.8620),
-                .init(latitude: 47.6340, longitude: 12.8600)
+                .init(latitude: 47.6340, longitude: 12.8600),
             ],
             liveFix: liveFix
         )
@@ -184,7 +188,7 @@ struct TrailWidgetTests {
                     pixelWidth: 320,
                     pixelHeight: 320,
                     visibleRect: rect
-                )
+                ),
             ]
         )
     }
@@ -196,11 +200,11 @@ struct TrailWidgetTests {
         SharedRecordingSnapshot(
             sessionID: sessionID,
             startedAt: Date(timeIntervalSince1970: 1_750_000_000),
-            distanceMeters: 1_200,
+            distanceMeters: 1200,
             pointCount: 240,
             polyline: [
                 .init(latitude: 47.6300, longitude: 12.8600),
-                .init(latitude: 47.6320, longitude: 12.8620)
+                .init(latitude: 47.6320, longitude: 12.8620),
             ],
             isCapturingFixes: isCapturingFixes
         )
@@ -236,13 +240,13 @@ struct TrailWidgetTests {
         #expect(timeline.policy == .after(reload), "a missed push would otherwise be permanent")
         #expect(timeline.policy != .never)
         #expect(
-            reload.timeIntervalSince(now) >= 5 * 3_600,
+            reload.timeIntervalSince(now) >= 5 * 3600,
             "a near reload would spend the daily budget the pushes need"
         )
     }
 
     @Test("the timeline's entry carries the trail the app last wrote")
-    func timelineReflectsTheStoredTrail() throws {
+    func timelineReflectsTheStoredTrail() {
         let first = Self.snapshot(title: "First")
         SharedStore.save(first)
         #expect(TrailWidgetProvider.currentEntry().snapshot?.title == "First")
@@ -315,7 +319,7 @@ struct TrailWidgetTests {
     func liveFixIsCarriedThrough() throws {
         let fix = SharedTrailSnapshot.LiveFix(
             coordinate: .init(latitude: 47.6320, longitude: 12.8620),
-            distanceAlongRouteMeters: 2_100,
+            distanceAlongRouteMeters: 2100,
             offRouteMeters: 4,
             timestamp: Date(timeIntervalSince1970: 1_750_000_000)
         )
@@ -323,7 +327,7 @@ struct TrailWidgetTests {
 
         let entry = TrailWidgetProvider.currentEntry()
         let snapshot = try #require(entry.snapshot)
-        #expect(snapshot.liveFix?.distanceAlongRouteMeters == 2_100)
+        #expect(snapshot.liveFix?.distanceAlongRouteMeters == 2100)
         #expect(snapshot.fractionComplete == 0.5)
         #expect(snapshot.statusText.contains("%"))
     }

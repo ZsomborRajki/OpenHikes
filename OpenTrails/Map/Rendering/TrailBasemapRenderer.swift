@@ -22,8 +22,8 @@
 
 import Foundation
 import MapKit
-import WidgetKit
 import OpenTrailsShared
+import WidgetKit
 
 #if canImport(UIKit)
 import UIKit
@@ -33,13 +33,19 @@ import AppKit
 
 actor TrailBasemapRenderer {
     static let shared = TrailBasemapRenderer()
+    private static let jpegCompressionQuality: CGFloat = 0.9
+    private static let fnvOffsetBasis: UInt64 = 0xcbf2_9ce4_8422_2325
+    private static let fnvPrime: UInt64 = 0x100_0000_01b3
 
     /// Rendered at 2× rather than the device's own scale: a 3× image is 2.25×
     /// the bytes and gets decoded inside a widget extension, which has a hard
     /// memory ceiling and no way to recover from crossing it.
     private static let renderScale: CGFloat = 2
 
-    private static let renderQueue = DispatchQueue(label: "com.opentrails.basemap-render", qos: .utility)
+    private static let renderExecutor = DispatchQueue(
+        label: "com.opentrails.basemap-render",
+        qos: .utility
+    )
 
     private struct RenderRequest: Equatable {
         let hikeID: UUID
@@ -79,9 +85,7 @@ actor TrailBasemapRenderer {
            // A manifest whose images have been pruned away is worse than no
            // manifest: without this check it would keep claiming the work is
            // done while the widget quietly fell back to the line glyph.
-           SharedStore.hasAllBasemapImages(in: existing) {
-            return
-        }
+           SharedStore.hasAllBasemapImages(in: existing) { return }
 
         inFlight = request
         let startedAt = generation
@@ -108,10 +112,19 @@ actor TrailBasemapRenderer {
         for variant in TrailBasemapVariant.allCases {
             let framed = coverage.framed(toAspectRatio: variant.aspectRatio)
             for appearance in TrailBasemapAppearance.allCases {
-                guard let rendered = await Self.render(unitRect: framed, size: variant.pointSize, appearance: appearance) else { continue }
+                guard let rendered = await Self.render(
+                    unitRect: framed,
+                    size: variant.pointSize,
+                    appearance: appearance
+                ) else { continue }
                 guard stillCurrent(request, since: startedAt) else { return }
 
-                let fileName = Self.fileName(hikeID: hikeID, coverage: coverage, variant: variant, appearance: appearance)
+                let fileName = Self.fileName(
+                    hikeID: hikeID,
+                    coverage: coverage,
+                    variant: variant,
+                    appearance: appearance
+                )
                 guard SharedStore.writeBasemapImage(rendered.data, named: fileName) else { continue }
                 written.insert(fileName)
                 images.append(
@@ -162,11 +175,11 @@ actor TrailBasemapRenderer {
         variant: TrailBasemapVariant,
         appearance: TrailBasemapAppearance
     ) -> String {
-        var hash: UInt64 = 0xcbf2_9ce4_8422_2325
+        var hash: UInt64 = Self.fnvOffsetBasis
         for value in [coverage.originX, coverage.originY, coverage.width, coverage.height] {
             withUnsafeBytes(of: value.bitPattern.littleEndian) { bytes in
                 for byte in bytes {
-                    hash = (hash ^ UInt64(byte)) &* 0x100_0000_01b3
+                    hash = (hash ^ UInt64(byte)) &* Self.fnvPrime
                 }
             }
         }
@@ -229,16 +242,16 @@ actor TrailBasemapRenderer {
         )
 
         let snapshotter = MKMapSnapshotter(options: options)
-        let rendered = await withCheckedContinuation { continuation in
-            snapshotter.start(with: renderQueue) { snapshot, _ in
-                continuation.resume(returning: snapshot.flatMap { measure($0, northWest: northWest, southEast: southEast) })
+        return await withTaskExecutorPreference(renderExecutor) {
+            guard let snapshot = try? await snapshotter.start() else {
+                return nil
             }
+            return measure(
+                snapshot,
+                northWest: northWest,
+                southEast: southEast
+            )
         }
-        // Nothing else holds the snapshotter, and it isn't documented to
-        // retain itself while working — so keep it alive across the await
-        // rather than trusting the optimizer not to release it mid-render.
-        withExtendedLifetime(snapshotter) {}
-        return rendered
     }
 
     /// Works out what the snapshot *actually* covers, rather than trusting it
@@ -264,8 +277,18 @@ actor TrailBasemapRenderer {
         guard let visibleRect = UnitMercatorRect(
             imageWidth: Double(imageSize.width),
             imageHeight: Double(imageSize.height),
-            .init(latitude: northWest.latitude, longitude: northWest.longitude, x: Double(pointNW.x), y: Double(pointNW.y)),
-            .init(latitude: southEast.latitude, longitude: southEast.longitude, x: Double(pointSE.x), y: Double(pointSE.y))
+            .init(
+                latitude: northWest.latitude,
+                longitude: northWest.longitude,
+                x: Double(pointNW.x),
+                y: Double(pointNW.y)
+            ),
+            .init(
+                latitude: southEast.latitude,
+                longitude: southEast.longitude,
+                x: Double(pointSE.x),
+                y: Double(pointSE.y)
+            )
         ) else { return nil }
 
         guard let encoded = encode(snapshot.image) else { return nil }
@@ -289,7 +312,7 @@ actor TrailBasemapRenderer {
     /// never baked in.
     private static func encode(_ image: PlatformImage) -> Encoded? {
         #if canImport(UIKit)
-        guard let data = image.jpegData(compressionQuality: 0.9) else { return nil }
+        guard let data = image.jpegData(compressionQuality: jpegCompressionQuality) else { return nil }
         return Encoded(
             data: data,
             pixelWidth: Int((image.size.width * image.scale).rounded()),
@@ -298,7 +321,10 @@ actor TrailBasemapRenderer {
         #elseif canImport(AppKit)
         guard let tiff = image.tiffRepresentation,
               let representation = NSBitmapImageRep(data: tiff),
-              let data = representation.representation(using: .jpeg, properties: [.compressionFactor: 0.9])
+              let data = representation.representation(
+                  using: .jpeg,
+                  properties: [.compressionFactor: jpegCompressionQuality]
+              )
         else { return nil }
         return Encoded(data: data, pixelWidth: representation.pixelsWide, pixelHeight: representation.pixelsHigh)
         #else

@@ -25,8 +25,8 @@ public struct TrailGlyphView: View {
 
     public init(
         polyline: [SharedTrailSnapshot.CodableCoordinate],
-        liveFix: SharedTrailSnapshot.CodableCoordinate? = nil,
         tint: Color,
+        liveFix: SharedTrailSnapshot.CodableCoordinate? = nil,
         lineWidth: CGFloat = 3,
         showsFixDot: Bool = true
     ) {
@@ -53,6 +53,13 @@ public struct TrailGlyphView: View {
             )
         }
     }
+
+    // Minimum cos(latitude) to prevent degenerate near-polar bounding boxes from
+    // blowing up the projection scale.
+    private static let minCosLat: Double = 0.15
+    // Near-zero floor for bounding-box extents, preventing division by zero on
+    // single-point or perfectly vertical/horizontal routes.
+    private static let minBoundsExtent: Double = 1e-9
 
     private struct Projected {
         let points: [CGPoint]
@@ -82,7 +89,7 @@ public struct TrailGlyphView: View {
         let centerLat = (minLat + maxLat) / 2
         // Clamped well away from zero so a degenerate (near-polar, never
         // realistic for a hiking trail) bounding box can't blow up the scale.
-        let cosLat = max(cos(centerLat * .pi / 180), 0.15)
+        let cosLat = max(cos(centerLat * .pi / 180), Self.minCosLat)
 
         func flat(_ c: SharedTrailSnapshot.CodableCoordinate) -> CGPoint {
             // Screen y grows downward; latitude grows north, so flip it.
@@ -92,20 +99,20 @@ public struct TrailGlyphView: View {
         let rawPoints = polyline.map(flat)
         var minX = rawPoints[0].x, maxX = rawPoints[0].x
         var minY = rawPoints[0].y, maxY = rawPoints[0].y
-        for p in rawPoints {
-            minX = min(minX, p.x); maxX = max(maxX, p.x)
-            minY = min(minY, p.y); maxY = max(maxY, p.y)
+        for rawPoint in rawPoints {
+            minX = min(minX, rawPoint.x); maxX = max(maxX, rawPoint.x)
+            minY = min(minY, rawPoint.y); maxY = max(maxY, rawPoint.y)
         }
-        let boundsWidth = max(maxX - minX, 1e-9)
-        let boundsHeight = max(maxY - minY, 1e-9)
+        let boundsWidth = max(maxX - minX, Self.minBoundsExtent)
+        let boundsHeight = max(maxY - minY, Self.minBoundsExtent)
         let availableWidth = max(size.width - inset * 2, 1)
         let availableHeight = max(size.height - inset * 2, 1)
         let scale = min(availableWidth / boundsWidth, availableHeight / boundsHeight)
         let originX = (size.width - boundsWidth * scale) / 2
         let originY = (size.height - boundsHeight * scale) / 2
 
-        func fit(_ p: CGPoint) -> CGPoint {
-            CGPoint(x: originX + (p.x - minX) * scale, y: originY + (p.y - minY) * scale)
+        func fit(_ pt: CGPoint) -> CGPoint {
+            CGPoint(x: originX + (pt.x - minX) * scale, y: originY + (pt.y - minY) * scale)
         }
 
         return Projected(points: rawPoints.map(fit), liveFixPoint: liveFix.map { fit(flat($0)) })
@@ -117,6 +124,11 @@ public struct TrailGlyphView: View {
 /// basemap) and ``TrailMapView`` (Mercator, registered to a rendered map) so
 /// the trail reads identically on every surface regardless of what's under it.
 enum TrailStroke {
+    private static let casingOpacity: Double = 0.85
+    private static let casingWidthBonus: CGFloat = 2.5
+    private static let ringDiameterMultiplier: CGFloat = 2.6
+    private static let dotDiameterMultiplier: CGFloat = 1.6
+
     /// - Parameter casing: draws a light halo beneath the line. Off over a
     ///   flat background where it would only add fuzz; on over map imagery,
     ///   where a bare stroke loses contrast the moment it crosses a road or a
@@ -137,17 +149,33 @@ enum TrailStroke {
         if casing {
             context.stroke(
                 path,
-                with: .color(.white.opacity(0.85)),
-                style: StrokeStyle(lineWidth: lineWidth + 2.5, lineCap: .round, lineJoin: .round)
+                with: .color(.white.opacity(casingOpacity)),
+                style: StrokeStyle(lineWidth: lineWidth + casingWidthBonus, lineCap: .round, lineJoin: .round)
             )
         }
-        context.stroke(path, with: .color(tint), style: StrokeStyle(lineWidth: lineWidth, lineCap: .round, lineJoin: .round))
+        context.stroke(
+            path,
+            with: .color(tint),
+            style: StrokeStyle(lineWidth: lineWidth, lineCap: .round, lineJoin: .round)
+        )
 
         guard let dot = liveFixPoint else { return }
-        let ringDiameter = lineWidth * 2.6
-        let dotDiameter = lineWidth * 1.6
-        context.fill(Path(ellipseIn: CGRect(x: dot.x - ringDiameter / 2, y: dot.y - ringDiameter / 2, width: ringDiameter, height: ringDiameter)), with: .color(.white))
-        context.fill(Path(ellipseIn: CGRect(x: dot.x - dotDiameter / 2, y: dot.y - dotDiameter / 2, width: dotDiameter, height: dotDiameter)), with: .color(tint))
+        let ringDiameter = lineWidth * ringDiameterMultiplier
+        let dotDiameter = lineWidth * dotDiameterMultiplier
+        let ringRect = CGRect(
+            x: dot.x - ringDiameter / 2,
+            y: dot.y - ringDiameter / 2,
+            width: ringDiameter,
+            height: ringDiameter
+        )
+        let dotRect = CGRect(
+            x: dot.x - dotDiameter / 2,
+            y: dot.y - dotDiameter / 2,
+            width: dotDiameter,
+            height: dotDiameter
+        )
+        context.fill(Path(ellipseIn: ringRect), with: .color(.white))
+        context.fill(Path(ellipseIn: dotRect), with: .color(tint))
     }
 }
 
@@ -157,10 +185,10 @@ enum TrailStroke {
             .init(latitude: 37.3349, longitude: -122.0090),
             .init(latitude: 37.3372, longitude: -122.0060),
             .init(latitude: 37.3358, longitude: -122.0020),
-            .init(latitude: 37.3400, longitude: -122.0005)
+            .init(latitude: 37.3400, longitude: -122.0005),
         ],
-        liveFix: .init(latitude: 37.3372, longitude: -122.0060),
         tint: .green,
+        liveFix: .init(latitude: 37.3372, longitude: -122.0060),
         lineWidth: 4
     )
     .frame(width: 160, height: 160)

@@ -21,8 +21,8 @@
 //
 
 import Foundation
-import Testing
 @testable import OpenTrails
+import Testing
 
 @Suite("Tile retry")
 struct TileRetryTests {
@@ -32,7 +32,7 @@ struct TileRetryTests {
 
     private func log(
         delays: [Duration] = [.seconds(5), .seconds(15), .seconds(45)],
-        maximumTrackedFailures: Int = 1_024
+        maximumTrackedFailures: Int = 1024
     ) -> TileFailureLog {
         TileFailureLog(
             policy: TileRetryPolicy(delays: delays, maximumTrackedFailures: maximumTrackedFailures)
@@ -138,7 +138,10 @@ struct TileRetryTests {
 
         #expect(!log.mayAttempt(key, at: start.advanced(by: .seconds(5)), isOnline: false))
         #expect(!log.mayAttempt(key, at: start.advanced(by: .seconds(6 * 60 * 60)), isOnline: false))
-        #expect(log.mayAttempt(key, at: start.advanced(by: .seconds(5)), isOnline: true), "and are released the moment it's back")
+        #expect(
+            log.mayAttempt(key, at: start.advanced(by: .seconds(5)), isOnline: true),
+            "and are released the moment it's back"
+        )
     }
 
     /// Reconnecting invalidates every past failure at once, whatever each
@@ -227,7 +230,8 @@ struct TileRetryTests {
         #expect(policy.delay(afterFailures: 3) == .seconds(45))
         #expect(policy.delay(afterFailures: 4) == .seconds(120))
         #expect(policy.delay(afterFailures: 5) == .seconds(300))
-        #expect(policy.delay(afterFailures: 50) == .seconds(300), "a real 404 settles at one request every five minutes")
+        let msg = "a real 404 settles at one request every five minutes"
+        #expect(policy.delay(afterFailures: 50) == .seconds(300), msg)
 
         // Every delay is longer than the last, or the backoff isn't one.
         for (previous, next) in zip(policy.delays, policy.delays.dropFirst()) {

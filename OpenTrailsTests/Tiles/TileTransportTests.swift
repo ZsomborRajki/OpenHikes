@@ -20,14 +20,18 @@
 
 import Foundation
 import MapKit
-import Testing
 @testable import OpenTrails
+import Testing
 
 @Suite("Tile transport", .serialized)
 struct TileTransportTests {
     private let key = "osm/14/2638/6357@2.0"
+
     private func url(_ suffix: String = "14/2638/6357.png") -> URL {
-        URL(string: "https://tiles.example.invalid/\(suffix)")!
+        guard let url = URL(string: "https://tiles.example.invalid/\(suffix)") else {
+            preconditionFailure("Invalid test URL suffix: \(suffix)")
+        }
+        return url
     }
 
     // MARK: What comes back off the wire
@@ -36,7 +40,7 @@ struct TileTransportTests {
     /// one request, an image returned, and the bytes filed in the browsing
     /// tier — not the durable one, because nobody asked to keep this.
     @Test("a tile that loads is returned and cached in the browsing tier")
-    func successfulFetchIsCachedEphemerally() async throws {
+    func successfulFetchIsCachedEphemerally() async {
         let stub = StubbedTileCache()
         defer { stub.tearDown() }
         StubTileProtocol.alwaysRespond(with: .tile())
@@ -54,7 +58,7 @@ struct TileTransportTests {
     /// `TileRetryTests` schedules a retry for — here it's the half that says
     /// there is something to retry.
     @Test("a server error yields no tile and caches nothing", arguments: [404, 429, 500, 503])
-    func serverErrorsAreRefused(status: Int) async throws {
+    func serverErrorsAreRefused(status: Int) async {
         let stub = StubbedTileCache()
         defer { stub.tearDown() }
         StubTileProtocol.alwaysRespond(with: .status(status))
@@ -71,7 +75,7 @@ struct TileTransportTests {
     /// HTML rate-limit notice, a truncated download. Caching it would put a
     /// permanently undecodable file under a key that then looks populated.
     @Test("a 200 that isn't an image is refused")
-    func undecodableBodyIsRefused() async throws {
+    func undecodableBodyIsRefused() async {
         let stub = StubbedTileCache()
         defer { stub.tearDown() }
         StubTileProtocol.alwaysRespond(with: .undecodable())
@@ -86,7 +90,7 @@ struct TileTransportTests {
     /// `fetchTile` refuses a response it can't read a status code from before
     /// it looks at anything else.
     @Test("a response that isn't HTTP is refused")
-    func nonHTTPResponseIsRefused() async throws {
+    func nonHTTPResponseIsRefused() async {
         let stub = StubbedTileCache()
         defer { stub.tearDown() }
         StubTileProtocol.alwaysRespond(with: Response.nonHTTPTile)
@@ -98,7 +102,7 @@ struct TileTransportTests {
     /// A transport-level failure — no route, DNS, TLS, timeout — is a miss,
     /// not a crash and not an empty tile.
     @Test("a transport failure is a miss")
-    func transportFailureIsAMiss() async throws {
+    func transportFailureIsAMiss() async {
         let stub = StubbedTileCache()
         defer { stub.tearDown() }
         StubTileProtocol.alwaysRespond(with: Response(failure: URLError(.timedOut)))
@@ -112,7 +116,7 @@ struct TileTransportTests {
     /// Pinned on the request URLSession actually produced, not on the string
     /// the configuration was handed.
     @Test("every tile request identifies the app, as OSM's policy requires")
-    func requestsCarryTheIdentifyingUserAgent() async throws {
+    func requestsCarryTheIdentifyingUserAgent() async {
         let stub = StubbedTileCache()
         defer { stub.tearDown() }
         StubTileProtocol.alwaysRespond(with: .tile())
@@ -131,7 +135,7 @@ struct TileTransportTests {
     /// Memory first. A tile already decoded is never re-read, let alone
     /// re-fetched — this is the check that runs on the draw path.
     @Test("a tile in memory is served without touching the network")
-    func memoryHitMakesNoRequest() async throws {
+    func memoryHitMakesNoRequest() async {
         let stub = StubbedTileCache()
         defer { stub.tearDown() }
         StubTileProtocol.alwaysRespond(with: .tile())
@@ -194,7 +198,7 @@ struct TileTransportTests {
     /// first thing the OS purges under storage pressure, and coverage the user
     /// explicitly asked for cannot live there.
     @Test("a download writes to durable storage, not the browsing cache")
-    func downloadWritesDurably() async throws {
+    func downloadWritesDurably() async {
         let stub = StubbedTileCache()
         defer { stub.tearDown() }
         StubTileProtocol.alwaysRespond(with: .tile())
@@ -209,7 +213,7 @@ struct TileTransportTests {
     /// A download reports honestly when the tile never arrived, so the
     /// manifest only ever claims tiles that are really on disk.
     @Test("a download that fails saves nothing and says so")
-    func failedDownloadReportsFailure() async throws {
+    func failedDownloadReportsFailure() async {
         let stub = StubbedTileCache()
         defer { stub.tearDown() }
         StubTileProtocol.alwaysRespond(with: .status(500))
@@ -236,7 +240,7 @@ struct TileTransportTests {
     /// Offline, a tile that isn't cached fails without a request at all —
     /// otherwise every visible tile fires a doomed load on every draw pass.
     @Test("offline, an uncached tile fails without a request")
-    func offlineShortCircuits() async throws {
+    func offlineShortCircuits() async {
         let stub = StubbedTileCache(reachable: false)
         defer { stub.tearDown() }
 
@@ -267,8 +271,10 @@ struct TileTransportTests {
 
         final class Listener: TileCacheObserver, @unchecked Sendable {
             var reconnects = 0
+
             func tileCacheDidReconnect() { reconnects += 1 }
         }
+
         let listener = Listener()
         stub.cache.addObserver(listener)
 
@@ -286,7 +292,7 @@ struct TileTransportTests {
     /// And the requests really do resume, rather than the flag flipping while
     /// the short-circuit stays in place.
     @Test("reconnecting lets requests through again")
-    func reconnectResumesRequests() async throws {
+    func reconnectResumesRequests() async {
         let stub = StubbedTileCache(reachable: false)
         defer { stub.tearDown() }
         StubTileProtocol.alwaysRespond(with: .tile())
@@ -309,7 +315,7 @@ struct TileTransportTests {
     /// providers whose usage policies are the reason this app has an auto-save
     /// mechanism at all.
     @Test("the map and a download don't ask for the same tile twice")
-    func concurrentFetchesAreDeduplicated() async throws {
+    func concurrentFetchesAreDeduplicated() async {
         let stub = StubbedTileCache()
         defer { stub.tearDown() }
         StubTileProtocol.alwaysRespond(with: .tile())
@@ -332,7 +338,7 @@ struct TileTransportTests {
     /// tier. The two writes are ordered only by chance, so this is checked from
     /// the outcome rather than by reasoning about which landed first.
     @Test("a shared fetch still leaves exactly one file, in the durable tier")
-    func deduplicatedFetchStillFilesDurably() async throws {
+    func deduplicatedFetchStillFilesDurably() async {
         let stub = StubbedTileCache()
         defer { stub.tearDown() }
         StubTileProtocol.alwaysRespond(with: .tile())
@@ -354,7 +360,7 @@ struct TileTransportTests {
     /// The second request here is the correct count: the point is that the
     /// cache goes back to the network at all once the first round is over.
     @Test("a key is fetchable again once its in-flight fetch is done")
-    func inFlightEntriesAreReleased() async throws {
+    func inFlightEntriesAreReleased() async {
         let stub = StubbedTileCache()
         defer { stub.tearDown() }
         // The first attempt fails, so nothing is cached to answer the second.
@@ -371,7 +377,7 @@ struct TileTransportTests {
     }
 
     @Test("removing a key invalidates its in-flight fetch")
-    func removalWinsAgainstInFlightFetch() async throws {
+    func removalWinsAgainstInFlightFetch() async {
         let stub = StubbedTileCache()
         defer { stub.tearDown() }
         StubTileProtocol.alwaysRespond(with: .tile())
@@ -398,7 +404,7 @@ struct TileTransportTests {
     }
 
     @Test("same-key callers share the first in-flight URL")
-    func sameKeyDifferentURLUsesFirstRequest() async throws {
+    func sameKeyDifferentURLUsesFirstRequest() async {
         let stub = StubbedTileCache()
         defer { stub.tearDown() }
         StubTileProtocol.alwaysRespond(with: .tile())
@@ -432,7 +438,7 @@ struct TileTransportTests {
     /// These two pin that return value against real responses, which is the
     /// join `TileRetryTests` takes on trust.
     @Test("the overlay reports a loaded tile to the renderer")
-    func overlayReportsSuccess() async throws {
+    func overlayReportsSuccess() async {
         let stub = StubbedTileCache()
         defer { stub.tearDown() }
         StubTileProtocol.alwaysRespond(with: .tile())
@@ -443,7 +449,7 @@ struct TileTransportTests {
             cache: stub.cache,
             autoSaveStore: stub.store
         )
-        let path = MKTileOverlayPath(x: 9_500, y: 14_600, z: 15, contentScaleFactor: 2)
+        let path = MKTileOverlayPath(x: 9500, y: 14_600, z: 15, contentScaleFactor: 2)
 
         let loaded = await offMain { await overlay.cacheTile(at: path) }
         #expect(loaded, "a loaded tile clears the renderer's backoff for that key")
@@ -451,7 +457,7 @@ struct TileTransportTests {
     }
 
     @Test("the overlay reports a failed tile to the renderer")
-    func overlayReportsFailure() async throws {
+    func overlayReportsFailure() async {
         let stub = StubbedTileCache()
         defer { stub.tearDown() }
         StubTileProtocol.alwaysRespond(with: .status(500))
@@ -462,7 +468,7 @@ struct TileTransportTests {
             cache: stub.cache,
             autoSaveStore: stub.store
         )
-        let path = MKTileOverlayPath(x: 9_500, y: 14_600, z: 15, contentScaleFactor: 2)
+        let path = MKTileOverlayPath(x: 9500, y: 14_600, z: 15, contentScaleFactor: 2)
 
         let loaded = await offMain { await overlay.cacheTile(at: path) }
         #expect(!loaded, "a 500 is what makes the renderer record a failure and schedule a retry")

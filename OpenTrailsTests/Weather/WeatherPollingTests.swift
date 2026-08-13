@@ -4,8 +4,8 @@
 //
 
 import Foundation
-import Testing
 @testable import OpenTrails
+import Testing
 
 @Suite("Weather polling")
 struct WeatherPollingTests {

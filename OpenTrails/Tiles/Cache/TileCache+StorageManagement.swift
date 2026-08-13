@@ -6,8 +6,7 @@
 import Foundation
 import os
 
-extension TileCache {
-    }
+nonisolated extension TileCache {
 
     // MARK: - Storage management
 

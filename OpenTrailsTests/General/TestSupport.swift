@@ -9,10 +9,10 @@
 
 import CoreLocation
 import Foundation
+@testable import OpenTrails
 import OpenTrailsShared
 import SwiftData
 import Testing
-@testable import OpenTrails
 
 #if canImport(UIKit)
 import UIKit
@@ -21,25 +21,68 @@ import AppKit
 #endif
 
 enum Fixture {
+    private enum RidgeRoute {
+        static let startTimestamp: TimeInterval = 1_750_000_000
+        static let longitude: Double = -122.0300
+        static let lat1: Double = 37.3300
+        static let lat2: Double = 37.3320
+        static let lat3: Double = 37.3340
+        static let lat4: Double = 37.3360
+        static let lat5: Double = 37.3380
+        static let lat6: Double = 37.3400
+        static let ele1: Double = 100
+        static let ele2: Double = 150
+        static let ele3: Double = 220
+        static let ele4: Double = 180
+        static let ele5: Double = 260
+        static let ele6: Double = 240
+        static let secondsPerStep: Double = 60
+    }
+
+    private enum LoopRoute {
+        static let centerLatitude: Double = 47.6300
+        static let centerLongitude: Double = 12.8600
+        static let radius: Double = 0.0045 // ~500 m
+        static let stepCount: Int = 36
+        static let baseElevation: Double = 600
+        static let elevationAmplitude: Double = 40
+    }
+
+    private enum OutAndBackRoute {
+        static let startLatitude: Double = 47.6300
+        static let startLongitude: Double = 12.8600
+        static let stepCount: Int = 20
+        static let latStepSize: Double = 0.0005 // ~56 m per step
+        static let eleStepSize: Double = 8
+        static let baseElevation: Double = 600
+    }
+
+    private enum AntimeridianRoute {
+        static let latitude1: Double = -17.70
+        static let longitude1: Double = 179.95
+        static let latitude2: Double = -17.71
+        static let longitude2: Double = -179.95
+    }
+
     /// A short out-and-back near Cupertino: ~1.4 km, climbs then descends,
     /// one point per minute. Small enough to reason about by hand, real
     /// enough that distances/gradients aren't degenerate.
     nonisolated static let ridgeRoute: [RouteCoordinate] = {
-        let start = Date(timeIntervalSince1970: 1_750_000_000)
+        let start = Date(timeIntervalSince1970: RidgeRoute.startTimestamp)
         let points: [(Double, Double, Double)] = [
-            (37.3300, -122.0300, 100),
-            (37.3320, -122.0300, 150),
-            (37.3340, -122.0300, 220),
-            (37.3360, -122.0300, 180),
-            (37.3380, -122.0300, 260),
-            (37.3400, -122.0300, 240)
+            (RidgeRoute.lat1, RidgeRoute.longitude, RidgeRoute.ele1),
+            (RidgeRoute.lat2, RidgeRoute.longitude, RidgeRoute.ele2),
+            (RidgeRoute.lat3, RidgeRoute.longitude, RidgeRoute.ele3),
+            (RidgeRoute.lat4, RidgeRoute.longitude, RidgeRoute.ele4),
+            (RidgeRoute.lat5, RidgeRoute.longitude, RidgeRoute.ele5),
+            (RidgeRoute.lat6, RidgeRoute.longitude, RidgeRoute.ele6),
         ]
         return points.enumerated().map { index, point in
             RouteCoordinate(
                 latitude: point.0,
                 longitude: point.1,
                 elevation: point.2,
-                timestamp: start.addingTimeInterval(Double(index) * 60)
+                timestamp: start.addingTimeInterval(Double(index) * RidgeRoute.secondsPerStep)
             )
         }
     }()
@@ -48,14 +91,14 @@ enum Fixture {
     /// start — the geometry that makes route-matching ambiguous, and the
     /// reason `RouteProfile.nearestPoint` takes a continuity reference.
     nonisolated static let loopRoute: [RouteCoordinate] = {
-        let center = CLLocationCoordinate2D(latitude: 47.6300, longitude: 12.8600)
-        let radius = 0.0045 // ~500 m
-        var points = (0..<36).map { step -> RouteCoordinate in
-            let angle = Double(step) / 36 * 2 * .pi
+        let center = CLLocationCoordinate2D(latitude: LoopRoute.centerLatitude, longitude: LoopRoute.centerLongitude)
+        let radius = LoopRoute.radius
+        var points = (0..<LoopRoute.stepCount).map { step -> RouteCoordinate in
+            let angle = Double(step) / Double(LoopRoute.stepCount) * 2 * .pi
             return RouteCoordinate(
                 latitude: center.latitude + radius * cos(angle),
                 longitude: center.longitude + radius * sin(angle) / cos(center.latitude * .pi / 180),
-                elevation: 600 + 40 * sin(angle * 2)
+                elevation: LoopRoute.baseElevation + LoopRoute.elevationAmplitude * sin(angle * 2)
             )
         }
         points.append(points[0]) // close the loop
@@ -76,11 +119,11 @@ enum Fixture {
     nonisolated static let outAndBackRoute: [RouteCoordinate] = {
         // ~0.75 m east at this latitude.
         let returnLegOffset = 1e-5
-        let outbound = (0..<20).map { step in
+        let outbound = (0..<OutAndBackRoute.stepCount).map { step in
             RouteCoordinate(
-                latitude: 47.6300 + Double(step) * 0.0005, // ~56 m per step
-                longitude: 12.8600,
-                elevation: 600 + Double(step) * 8
+                latitude: OutAndBackRoute.startLatitude + Double(step) * OutAndBackRoute.latStepSize, // ~56 m per step
+                longitude: OutAndBackRoute.startLongitude,
+                elevation: OutAndBackRoute.baseElevation + Double(step) * OutAndBackRoute.eleStepSize
             )
         }
         // Back down the same path. The turning point isn't repeated.
@@ -100,8 +143,8 @@ enum Fixture {
     /// auto-save corridor have to avoid, so they're both tested against this
     /// same trail.
     nonisolated static let antimeridianRoute: [CLLocationCoordinate2D] = [
-        CLLocationCoordinate2D(latitude: -17.70, longitude: 179.95),
-        CLLocationCoordinate2D(latitude: -17.71, longitude: -179.95)
+        CLLocationCoordinate2D(latitude: AntimeridianRoute.latitude1, longitude: AntimeridianRoute.longitude1),
+        CLLocationCoordinate2D(latitude: AntimeridianRoute.latitude2, longitude: AntimeridianRoute.longitude2),
     ]
 
     /// The route as the map/downloader see it.
@@ -112,10 +155,10 @@ enum Fixture {
     /// A hike backed by an in-memory store, so `@Model` bookkeeping
     /// (`autoSavedTileKeys`, `offlineDownloads`) behaves as it does in the app.
     static func hike(
+        in context: ModelContext,
         title: String = "Ridge Loop",
         route: [RouteCoordinate] = ridgeRoute,
-        in context: ModelContext,
-        configure: (Hike) -> Void = { _ in }
+        configure: (Hike) -> Void = { _ in /* no-op */ }
     ) -> Hike {
         let profile = RouteProfile(route: route)
         let hike = Hike(
@@ -139,13 +182,19 @@ enum Fixture {
         ModelContext(try modelContainer())
     }
 
+    private enum TileImageConstants {
+        static let tilePoints: Double = 256.0
+        static let bitsPerSample: Int = 8
+        static let samplesPerPixel: Int = 4
+    }
+
     /// A 1×1 tile image that really encodes — what the tile pipeline is
     /// handed in production, minus the 256×256.
     /// A tile at the size providers actually serve, for the questions where
     /// 1×1 gives the wrong answer — chiefly what a decoded tile costs in
     /// memory, where the whole point is that it dwarfs the compressed file.
     static func fullSizeTileImage(scale: CGFloat = 2) -> TileImage? {
-        let points = 256.0
+        let points = TileImageConstants.tilePoints
         #if canImport(UIKit)
         let format = UIGraphicsImageRendererFormat()
         format.scale = scale
@@ -156,9 +205,16 @@ enum Fixture {
         #elseif canImport(AppKit)
         let pixels = Int(points * scale)
         guard let rep = NSBitmapImageRep(
-            bitmapDataPlanes: nil, pixelsWide: pixels, pixelsHigh: pixels,
-            bitsPerSample: 8, samplesPerPixel: 4, hasAlpha: true, isPlanar: false,
-            colorSpaceName: .deviceRGB, bytesPerRow: 0, bitsPerPixel: 0
+            bitmapDataPlanes: nil,
+            pixelsWide: pixels,
+            pixelsHigh: pixels,
+            bitsPerSample: TileImageConstants.bitsPerSample,
+            samplesPerPixel: TileImageConstants.samplesPerPixel,
+            hasAlpha: true,
+            isPlanar: false,
+            colorSpaceName: .deviceRGB,
+            bytesPerRow: 0,
+            bitsPerPixel: 0
         ) else { return nil }
         let image = NSImage(size: CGSize(width: points, height: points))
         image.addRepresentation(rep)
@@ -227,6 +283,10 @@ nonisolated enum TileStore {
 /// `TileCache` keeps the directory names and the key→filename mapping private,
 /// so they're restated here; a change to either belongs in this type too.
 nonisolated final class TileSandbox: Sendable {
+    private enum Constants {
+        static let secondsPerDay: Double = 86_400
+    }
+
     let root: URL
     let cache: TileCache
     let store: AutoSaveTileStore
@@ -296,7 +356,7 @@ nonisolated final class TileSandbox: Sendable {
         try TileStore.tileData.write(to: file, options: .atomic)
         if days > 0 {
             try FileManager.default.setAttributes(
-                [.modificationDate: Date(timeIntervalSinceNow: -days * 86_400)],
+                [.modificationDate: Date(timeIntervalSinceNow: -days * Constants.secondsPerDay)],
                 ofItemAtPath: file.path
             )
         }
@@ -308,7 +368,7 @@ nonisolated final class TileSandbox: Sendable {
         for file in [browsedFile(for: key), savedFile(for: key)]
         where FileManager.default.fileExists(atPath: file.path) {
             try FileManager.default.setAttributes(
-                [.modificationDate: Date(timeIntervalSinceNow: -days * 86_400)],
+                [.modificationDate: Date(timeIntervalSinceNow: -days * Constants.secondsPerDay)],
                 ofItemAtPath: file.path
             )
         }
@@ -407,10 +467,16 @@ func offMain<T: Sendable>(_ work: @Sendable @escaping () -> T) async -> T {
 /// every run and still only *probably* clears it, which is the definition of a
 /// flaky test that is also a slow one.
 nonisolated final class TestClock: @unchecked Sendable {
+    private enum Constants {
+        // swiftlint:disable no_magic_numbers
+        static let defaultStartTimestamp: TimeInterval = 1_750_000_000
+        // swiftlint:enable no_magic_numbers
+    }
+
     private let lock = NSLock()
     private var instant: Date
 
-    init(_ start: Date = Date(timeIntervalSince1970: 1_750_000_000)) {
+    init(_ start: Date = Date(timeIntervalSince1970: Constants.defaultStartTimestamp)) {
         instant = start
     }
 
@@ -437,7 +503,16 @@ nonisolated final class TestClock: @unchecked Sendable {
 /// it. Override the seed with `OPENTRAILS_TEST_SEED` in the environment; the
 /// tests that use it quote the seed in their failure messages.
 struct SeededGenerator: RandomNumberGenerator {
+    private enum SplitMix64 {
+        // swiftlint:disable no_magic_numbers
+        static let shift1: UInt64 = 30
+        static let shift2: UInt64 = 27
+        static let shift3: UInt64 = 31
+        // swiftlint:enable no_magic_numbers
+    }
+
     static let defaultSeed: UInt64 = ProcessInfo.processInfo.environment["OPENTRAILS_TEST_SEED"]
+        // swiftlint:disable:next no_magic_numbers
         .flatMap(UInt64.init) ?? 0x4F70_656E_5472_6169
 
     let seed: UInt64
@@ -449,10 +524,12 @@ struct SeededGenerator: RandomNumberGenerator {
     }
 
     mutating func next() -> UInt64 {
+        // swiftlint:disable no_magic_numbers
         state &+= 0x9E37_79B9_7F4A_7C15
         var z = state
-        z = (z ^ (z >> 30)) &* 0xBF58_476D_1CE4_E5B9
-        z = (z ^ (z >> 27)) &* 0x94D0_49BB_1331_11EB
-        return z ^ (z >> 31)
+        z = (z ^ (z >> SplitMix64.shift1)) &* 0xBF58_476D_1CE4_E5B9
+        z = (z ^ (z >> SplitMix64.shift2)) &* 0x94D0_49BB_1331_11EB
+        // swiftlint:enable no_magic_numbers
+        return z ^ (z >> SplitMix64.shift3)
     }
 }

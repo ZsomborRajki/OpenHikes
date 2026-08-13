@@ -5,8 +5,8 @@
 //  Created by Zsombor Rajki on 2026. 08. 10..
 //
 
-import WidgetKit
 import SwiftUI
+import WidgetKit
 
 @main
 struct OpenWidgetBundle: WidgetBundle {

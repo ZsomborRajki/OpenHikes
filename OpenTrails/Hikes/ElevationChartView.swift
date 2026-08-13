@@ -10,8 +10,8 @@
 //  needing an equality check.
 //
 
-import SwiftUI
 import Charts
+import SwiftUI
 
 struct ElevationChartView: View, Equatable {
     let profile: RouteProfile
@@ -21,7 +21,7 @@ struct ElevationChartView: View, Equatable {
     var onScrub: (Double) -> Void
     /// Reports drag start/end so the parent can pause auto-follow's own
     /// updates to `tracker.trackerDistance` while a finger is on the chart.
-    var onScrubbingChanged: (Bool) -> Void = { _ in }
+    var onScrubbingChanged: (Bool) -> Void = { _ in /* no-op default */ }
 
     /// Live chart selection under the finger (transient); owned here so scrubbing
     /// doesn't touch the parent until it resolves a distance.
@@ -43,6 +43,19 @@ struct ElevationChartView: View, Equatable {
     /// pushes the axis down into implausible (even negative) elevations.
     private static let maxSpanMultiplier: Double = 4
 
+    /// Opacity for the area-fill gradient: top (opaque-ish) and bottom (near-clear).
+    private static let areaGradientTopOpacity: Double = 0.45
+    private static let areaGradientBottomOpacity: Double = 0.05
+    /// Opacity for the scrub rule line.
+    private static let ruleOpacity: Double = 0.4
+    /// Symbol sizes for the "my location" live-dot: outer white halo and inner blue fill.
+    private static let liveHaloSymbolSize: CGFloat = 170
+    private static let liveFillSymbolSize: CGFloat = 110
+    /// Opacity for the callout shadow.
+    private static let shadowOpacity: Double = 0.15
+    /// Padding fraction applied to elevation domain so data never hugs the axis edges.
+    private static let domainPaddingFraction: Double = 0.15
+
     // `tracker` is always the same instance (owned by the parent's `@State`),
     // so it's deliberately excluded here — its mutations reach this view via
     // Observation, not via this equality check. This only needs to catch the
@@ -55,7 +68,7 @@ struct ElevationChartView: View, Equatable {
     // two different trails of the same size pass as equal and froze the graph
     // on the old one. It's bounded work by construction: `RouteProfile` caps
     // the plotted samples at `plottedSampleBudget`.
-    static func == (lhs: ElevationChartView, rhs: ElevationChartView) -> Bool {
+    static func == (lhs: Self, rhs: Self) -> Bool {
         lhs.tint == rhs.tint && lhs.profile.samples == rhs.profile.samples
     }
 
@@ -64,65 +77,9 @@ struct ElevationChartView: View, Equatable {
         let trackerSample = profile.sample(atDistance: tracker.trackerDistance)
         let liveSample = tracker.liveTrackerDistance.flatMap { profile.sample(atDistance: $0) }
         Chart {
-            ForEach(profile.samples) { sample in
-                AreaMark(
-                    x: .value("Distance", sample.distanceMeters),
-                    yStart: .value("Base", domain.lowerBound),
-                    yEnd: .value("Elevation", sample.elevation)
-                )
-                .interpolationMethod(.catmullRom)
-                .foregroundStyle(
-                    LinearGradient(
-                        colors: [tint.opacity(0.45), tint.opacity(0.05)],
-                        startPoint: .top,
-                        endPoint: .bottom
-                    )
-                )
-
-                LineMark(
-                    x: .value("Distance", sample.distanceMeters),
-                    y: .value("Elevation", sample.elevation)
-                )
-                .interpolationMethod(.catmullRom)
-                .foregroundStyle(tint)
-                .lineStyle(StrokeStyle(lineWidth: 2))
-            }
-
-            if let trackerSample {
-                RuleMark(x: .value("Distance", trackerSample.distanceMeters))
-                    .foregroundStyle(.secondary.opacity(0.4))
-                    .lineStyle(StrokeStyle(lineWidth: 1, dash: [4]))
-
-                PointMark(
-                    x: .value("Distance", trackerSample.distanceMeters),
-                    y: .value("Elevation", trackerSample.elevation)
-                )
-                .foregroundStyle(tint)
-                .symbolSize(90)
-                .annotation(position: .top, spacing: 4,
-                            overflowResolution: .init(x: .fit(to: .chart), y: .disabled)) {
-                    calloutLabel(trackerSample)
-                }
-            }
-
-            // The live GPS position, mirroring the map's "my location" dot
-            // (white halo + blue center). Declared last so it draws over the
-            // tracker pin when the two land close together.
-            if let liveSample {
-                PointMark(
-                    x: .value("Distance", liveSample.distanceMeters),
-                    y: .value("Elevation", liveSample.elevation)
-                )
-                .foregroundStyle(.white)
-                .symbolSize(170)
-
-                PointMark(
-                    x: .value("Distance", liveSample.distanceMeters),
-                    y: .value("Elevation", liveSample.elevation)
-                )
-                .foregroundStyle(.blue)
-                .symbolSize(110)
-            }
+            routeMarks(domain: domain)
+            trackerMarks(sample: trackerSample)
+            liveMarks(sample: liveSample)
         }
         .chartXSelection(value: $selectedDistance)
         .chartXScale(domain: 0...(profile.samples.last?.distanceMeters ?? 1))
@@ -161,6 +118,75 @@ struct ElevationChartView: View, Equatable {
         }
     }
 
+    @ChartContentBuilder
+    private func routeMarks(domain: ClosedRange<Double>) -> some ChartContent {
+        ForEach(profile.samples) { sample in
+            AreaMark(
+                x: .value("Distance", sample.distanceMeters),
+                yStart: .value("Base", domain.lowerBound),
+                yEnd: .value("Elevation", sample.elevation)
+            )
+            .interpolationMethod(.catmullRom)
+            .foregroundStyle(
+                LinearGradient(
+                    colors: [tint.opacity(Self.areaGradientTopOpacity), tint.opacity(Self.areaGradientBottomOpacity)],
+                    startPoint: .top,
+                    endPoint: .bottom
+                )
+            )
+            LineMark(
+                x: .value("Distance", sample.distanceMeters),
+                y: .value("Elevation", sample.elevation)
+            )
+            .interpolationMethod(.catmullRom)
+            .foregroundStyle(tint)
+            .lineStyle(StrokeStyle(lineWidth: 2))
+        }
+    }
+
+    @ChartContentBuilder
+    private func trackerMarks(sample: ElevationSample?) -> some ChartContent {
+        if let sample {
+            RuleMark(x: .value("Distance", sample.distanceMeters))
+                .foregroundStyle(.secondary.opacity(Self.ruleOpacity))
+                .lineStyle(StrokeStyle(lineWidth: 1, dash: [4]))
+            PointMark(
+                x: .value("Distance", sample.distanceMeters),
+                y: .value("Elevation", sample.elevation)
+            )
+            .foregroundStyle(tint)
+            .symbolSize(90)
+            .annotation(
+                position: .top,
+                spacing: 4,
+                overflowResolution: .init(x: .fit(to: .chart), y: .disabled)
+            ) {
+                calloutLabel(sample)
+            }
+        }
+    }
+
+    @ChartContentBuilder
+    private func liveMarks(sample: ElevationSample?) -> some ChartContent {
+        // The live GPS position, mirroring the map's "my location" dot
+        // (white halo + blue center). Declared last so it draws over the
+        // tracker pin when the two land close together.
+        if let sample {
+            PointMark(
+                x: .value("Distance", sample.distanceMeters),
+                y: .value("Elevation", sample.elevation)
+            )
+            .foregroundStyle(.white)
+            .symbolSize(Self.liveHaloSymbolSize)
+            PointMark(
+                x: .value("Distance", sample.distanceMeters),
+                y: .value("Elevation", sample.elevation)
+            )
+            .foregroundStyle(.blue)
+            .symbolSize(Self.liveFillSymbolSize)
+        }
+    }
+
     private func calloutLabel(_ sample: ElevationSample) -> some View {
         VStack(spacing: 1) {
             Text(HikeFormat.length(Measurement(value: sample.elevation, unit: .meters)))
@@ -175,7 +201,7 @@ struct ElevationChartView: View, Equatable {
         .padding(.vertical, 4)
         // Opaque (not a material) so it never picks up the graph colours behind it.
         .background(Self.calloutBackground, in: RoundedRectangle(cornerRadius: 8))
-        .shadow(color: .black.opacity(0.15), radius: 3, y: 1)
+        .shadow(color: .black.opacity(Self.shadowOpacity), radius: 3, y: 1)
     }
 
     /// Solid, mode-adaptive callout background.
@@ -209,7 +235,7 @@ struct ElevationChartView: View, Equatable {
         // Before the first layout pass reports a real width, fall back to a
         // plain data-fitted range rather than guessing.
         guard plotWidth > 0 else {
-            let padding = dataSpan * 0.15
+            let padding = dataSpan * Self.domainPaddingFraction
             return (low - padding)...(high + padding)
         }
 
@@ -219,7 +245,7 @@ struct ElevationChartView: View, Equatable {
         let exaggeratedSpan = min(Double(Self.chartHeight) * metersPerPointY, dataSpan * Self.maxSpanMultiplier)
 
         let span = max(exaggeratedSpan, dataSpan)
-        let padding = span * 0.15
+        let padding = span * Self.domainPaddingFraction
         let mid = (low + high) / 2
         return (mid - span / 2 - padding)...(mid + span / 2 + padding)
     }

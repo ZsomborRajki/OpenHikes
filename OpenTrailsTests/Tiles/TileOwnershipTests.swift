@@ -14,9 +14,9 @@
 
 import CoreLocation
 import Foundation
+@testable import OpenTrails
 import SwiftData
 import Testing
-@testable import OpenTrails
 
 @Suite("Tile ownership")
 struct TileOwnershipTests {
@@ -120,8 +120,8 @@ struct TileOwnershipTests {
             title: "Neighbour",
             // A few hundred metres north of the ridge fixture: different
             // close-in tiles, same overview tile.
-            route: Fixture.ridgeRoute.map {
-                RouteCoordinate(latitude: $0.latitude + 0.02, longitude: $0.longitude, elevation: $0.elevation)
+            route: Fixture.ridgeRoute.map { coord in
+                RouteCoordinate(latitude: coord.latitude + 0.02, longitude: coord.longitude, elevation: coord.elevation)
             },
             in: context
         )

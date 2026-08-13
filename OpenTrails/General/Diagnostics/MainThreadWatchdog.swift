@@ -19,7 +19,11 @@ import os
 /// runs, instead of a silent hitch that only shows up as a dropped frame.
 /// No-ops in release builds, same as `assert`.
 @inline(__always)
-nonisolated func assertOffMainThread(_ message: @autoclosure () -> String, file: StaticString = #fileID, line: UInt = #line) {
+nonisolated func assertOffMainThread(
+    _ message: @autoclosure () -> String,
+    file: StaticString = #fileID,
+    line: UInt = #line
+) {
     assert(!Thread.isMainThread, message(), file: file, line: line)
 }
 
@@ -33,6 +37,8 @@ enum MainThreadWatchdog {
     /// O(thousands) work slipping onto the main thread) get logged.
     private static let warnThreshold: TimeInterval = 0.15
     private static let pingInterval: TimeInterval = 0.2
+    private static let retryInterval: TimeInterval = 0.05
+    private static let nanosPerSecond: Double = 1_000_000_000
 
     private static let started = OSAllocatedUnfairLock(initialState: false)
 
@@ -60,11 +66,16 @@ enum MainThreadWatchdog {
                     // Keep waiting so the logged duration is the real stall
                     // length, not just "at least warnThreshold".
                     while !(responded.withLock({ $0 })) {
-                        Thread.sleep(forTimeInterval: 0.05)
+                        Thread.sleep(forTimeInterval: retryInterval)
                     }
                     let elapsedNanos = DispatchTime.now().uptimeNanoseconds - sentAt.uptimeNanoseconds
-                    let elapsedSeconds = Double(elapsedNanos) / 1_000_000_000
-                    logger.warning("Main thread unresponsive for \(elapsedSeconds, format: .fixed(precision: 2))s — something synchronous (disk I/O, a big collection op, SwiftData work) is running on it. Pause in the debugger or profile with Instruments to find what.")
+                    let elapsedSeconds = Double(elapsedNanos) / nanosPerSecond
+                    let stallMsg = "Main thread unresponsive for"
+                        + " \(String(format: "%.2f", elapsedSeconds))s"
+                        + " — something synchronous (disk I/O, a big collection op,"
+                        + " SwiftData work) is running on it."
+                        + " Pause in the debugger or profile with Instruments to find what."
+                    logger.warning("\(stallMsg, privacy: .public)")
                 }
 
                 Thread.sleep(forTimeInterval: pingInterval)

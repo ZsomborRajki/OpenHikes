@@ -8,8 +8,8 @@
 //
 
 import Foundation
-import Testing
 @testable import OpenTrailsShared
+import Testing
 
 @Suite("Trail snapshot")
 struct SharedTrailSnapshotTests {
@@ -27,12 +27,12 @@ struct SharedTrailSnapshotTests {
             elevationHighMeters: 900,
             polyline: [
                 .init(latitude: 47.63, longitude: 12.86),
-                .init(latitude: 47.64, longitude: 12.87)
+                .init(latitude: 47.64, longitude: 12.87),
             ],
-            liveFix: along.map {
+            liveFix: along.map { distance in
                 .init(
                     coordinate: .init(latitude: 47.635, longitude: 12.865),
-                    distanceAlongRouteMeters: $0,
+                    distanceAlongRouteMeters: distance,
                     offRouteMeters: offRoute,
                     timestamp: .now
                 )
@@ -44,9 +44,9 @@ struct SharedTrailSnapshotTests {
 
     @Test("progress and remaining distance are read off the live fix")
     func progress() throws {
-        let snapshot = Self.snapshot(total: 10_000, along: 2_500)
+        let snapshot = Self.snapshot(total: 10_000, along: 2500)
         #expect(try #require(snapshot.fractionComplete) == 0.25)
-        #expect(try #require(snapshot.remainingDistanceMeters) == 7_500)
+        #expect(try #require(snapshot.remainingDistanceMeters) == 7500)
     }
 
     @Test("without a fix there is no progress to report")
@@ -85,7 +85,7 @@ struct SharedTrailSnapshotTests {
 
     @Test("with a fix, the status line is progress and distance left")
     func statusWithFix() {
-        let status = Self.snapshot(total: 10_000, along: 6_200).statusText
+        let status = Self.snapshot(total: 10_000, along: 6200).statusText
         #expect(status.contains("62%"))
         #expect(status.contains("left"))
     }
@@ -102,7 +102,7 @@ struct SharedTrailSnapshotTests {
 
     @Test("a snapshot survives the round trip through the App Group")
     func codableRoundTrip() throws {
-        let snapshot = Self.snapshot(total: 8_000, along: 1_234)
+        let snapshot = Self.snapshot(total: 8000, along: 1234)
         let decoded = try JSONDecoder().decode(
             SharedTrailSnapshot.self,
             from: JSONEncoder().encode(snapshot)
@@ -162,7 +162,7 @@ struct DecimateTests {
     /// trail.
     @Test("the first and last points are always kept")
     func endpointsPreserved() throws {
-        let input = line(5_000)
+        let input = line(5000)
         let result = decimate(input, maxPoints: 180)
         let first = try #require(result.first)
         let last = try #require(result.last)
@@ -173,7 +173,7 @@ struct DecimateTests {
     /// Order is the shape: a reordered polyline draws a different trail.
     @Test("the drawn order is preserved")
     func orderPreserved() {
-        let result = decimate(line(5_000), maxPoints: 180)
+        let result = decimate(line(5000), maxPoints: 180)
         for (previous, next) in zip(result, result.dropFirst()) {
             #expect(next.latitude > previous.latitude)
         }
@@ -185,11 +185,11 @@ struct DecimateTests {
     @Test("points are sampled evenly along the track")
     func evenlySpaced() {
         let sourceStep = 1e-4
-        let result = decimate(line(3_600), maxPoints: 180)
+        let result = decimate(line(3600), maxPoints: 180)
         let gaps = zip(result, result.dropFirst()).map { $1.latitude - $0.latitude }
         let smallest = gaps.min() ?? 0
         let largest = gaps.max() ?? 0
-        #expect(largest - smallest <= sourceStep * 1.000_001)
+        #expect(largest - smallest <= sourceStep * 1.000001)
         #expect(smallest > 0)
     }
 

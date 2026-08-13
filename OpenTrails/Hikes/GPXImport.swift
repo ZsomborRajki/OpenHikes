@@ -8,9 +8,9 @@
 //
 
 import Algorithms
-import Foundation
-import CoreLocation
 import CoreGPX
+import CoreLocation
+import Foundation
 import OpenTrailsShared
 
 nonisolated enum GPXImport {
@@ -33,7 +33,7 @@ nonisolated enum GPXImport {
         /// Total length in meters, computed once while preparing the import.
         let distanceMeters: Double
 
-        fileprivate init(
+        init(
             name: String?,
             trackDescription: String?,
             author: String?,
@@ -47,24 +47,24 @@ nonisolated enum GPXImport {
             self.keywords = keywords
             self.startTime = startTime
             self.points = points
-            self.coordinates = points.map(\.coordinate)
-            self.route = points.map {
+            coordinates = points.map(\.coordinate)
+            route = points.map { point in
                 RouteCoordinate(
-                    latitude: $0.coordinate.latitude,
-                    longitude: $0.coordinate.longitude,
-                    elevation: $0.elevation,
-                    timestamp: $0.time
+                    latitude: point.coordinate.latitude,
+                    longitude: point.coordinate.longitude,
+                    elevation: point.elevation,
+                    timestamp: point.time
                 )
             }
 
-            var distanceMeters = 0.0
+            var cumulativeDistance = 0.0
             for (start, end) in points.adjacentPairs() {
-                distanceMeters += RouteGeometry.distanceMeters(
+                cumulativeDistance += RouteGeometry.distanceMeters(
                     from: start.coordinate,
                     to: end.coordinate
                 )
             }
-            self.distanceMeters = distanceMeters
+            distanceMeters = cumulativeDistance
         }
     }
 
@@ -76,11 +76,6 @@ nonisolated enum GPXImport {
     /// at all — a picked file that produced no hike looked exactly like a
     /// picked file that was ignored.
     enum ImportFailure: LocalizedError, Equatable, Sendable {
-        /// Not there, or not well-formed XML — the parser had nothing to work
-        /// with. Note that well-formed XML that simply *isn't* GPX (an HTML
-        /// page, say) parses happily into an empty document, so it arrives as
-        /// ``noUsablePoints`` instead; the copy for that case allows for it.
-        case unreadable
         /// Parsed, but nothing in it carried a coordinate this app can project
         /// — no points at all, points missing `lat`/`lon`, or points outside
         /// Web Mercator's range.
@@ -90,22 +85,27 @@ nonisolated enum GPXImport {
         /// parse failure, so ``load(from:)`` still returns such a track and the
         /// import is what refuses it.
         case tooShort
+        /// Not there, or not well-formed XML — the parser had nothing to work
+        /// with. Note that well-formed XML that simply *isn't* GPX (an HTML
+        /// page, say) parses happily into an empty document, so it arrives as
+        /// ``noUsablePoints`` instead; the copy for that case allows for it.
+        case unreadable
 
         var errorDescription: String? {
             switch self {
-            case .unreadable: "This file couldn’t be read."
             case .noUsablePoints: "No track points were found in this file."
             case .tooShort: "This GPX file has only one track point."
+            case .unreadable: "This file couldn't be read."
             }
         }
 
         var recoverySuggestion: String? {
             switch self {
-            case .unreadable: "Check that it’s a .gpx file and isn’t damaged."
             // Deliberately covers "it isn't GPX at all" as well — see the case's
             // own note for why that lands here.
             case .noUsablePoints: "It may not be a GPX file, or its points are missing coordinates or out of range."
             case .tooShort: "A hike needs at least two points to have a route."
+            case .unreadable: "Check that it's a .gpx file and isn't damaged."
             }
         }
     }
@@ -138,11 +138,7 @@ nonisolated enum GPXImport {
     ) async throws(ImportFailure) -> Value {
         let result = await Task.detached(priority: .userInitiated) { () -> Result<Value, ImportFailure> in
             assertOffMainThread("GPX parsing and route preparation must stay off the main thread")
-            do throws(ImportFailure) {
-                return .success(try work())
-            } catch {
-                return .failure(error)
-            }
+            do throws(ImportFailure) { return .success(try work()) } catch { return .failure(error) }
         }.value
         return try result.get()
     }
@@ -179,7 +175,7 @@ nonisolated enum GPXImport {
             trackDescription: nonEmpty(firstTrack?.desc ?? firstTrack?.comment ?? metadata?.desc),
             author: nonEmpty(metadata?.author?.name),
             keywords: nonEmpty(metadata?.keywords),
-            startTime: metadata?.time ?? points.first(where: { $0.time != nil })?.time,
+            startTime: metadata?.time ?? points.first { $0.time != nil }?.time,
             points: points
         )
     }

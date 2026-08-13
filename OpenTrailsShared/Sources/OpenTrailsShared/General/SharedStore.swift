@@ -67,9 +67,7 @@ public enum SharedStore {
     public static func loadRecording() -> SharedRecordingSnapshot? {
         guard let recordingFileURL,
               let data = try? Data(contentsOf: recordingFileURL)
-        else {
-            return nil
-        }
+        else { return nil }
         return try? JSONDecoder().decode(
             SharedRecordingSnapshot.self,
             from: data
@@ -93,13 +91,12 @@ public enum SharedStore {
             throw SharedRecordingStoreError.containerUnavailable
         }
         try pendingRecordingFixStore.clearRecordingState(
-            sessionID: sessionID,
-            recordingURL: recordingFileURL
+            recordingURL: recordingFileURL,
+            sessionID: sessionID
         )
     }
 
-    @discardableResult
-    public static func appendPendingRecordingFix(
+    @discardableResult public static func appendPendingRecordingFix(
         _ fix: SharedRecordingFix
     ) throws -> Bool {
         guard let pendingRecordingFixStore, let recordingFileURL else {
@@ -130,8 +127,8 @@ public enum SharedStore {
 
     public static func claimRecordingWidgetSample(
         sessionID: UUID,
-        at date: Date = .now,
-        minimumInterval: TimeInterval
+        minimumInterval: TimeInterval,
+        at date: Date = .now
     ) throws -> Bool {
         guard let pendingRecordingFixStore else {
             throw SharedRecordingStoreError.containerUnavailable
@@ -197,24 +194,21 @@ public enum SharedStore {
     /// being trusted forever.
     public static func hasAllBasemapImages(in set: TrailBasemapSet) -> Bool {
         guard let directory = basemapDirectoryURL, !set.images.isEmpty else { return false }
-        return set.images.allSatisfy {
-            FileManager.default.fileExists(atPath: directory.appendingPathComponent($0.fileName).path)
+        return set.images.allSatisfy { image in
+            FileManager.default.fileExists(atPath: directory.appendingPathComponent(image.fileName).path)
         }
     }
 
     /// Writes one rendered image, creating the basemap directory on first use.
     /// Returns whether it landed, so a partial render doesn't get advertised
     /// in the set.
-    @discardableResult
-    public static func writeBasemapImage(_ data: Data, named fileName: String) -> Bool {
+    @discardableResult public static func writeBasemapImage(_ data: Data, named fileName: String) -> Bool {
         guard let directory = basemapDirectoryURL else { return false }
         try? FileManager.default.createDirectory(at: directory, withIntermediateDirectories: true)
         do {
             try data.write(to: directory.appendingPathComponent(fileName), options: .atomic)
             return true
-        } catch {
-            return false
-        }
+        } catch { return false }
     }
 
     /// Deletes every basemap image except `fileNames`. Called after a render
@@ -222,7 +216,8 @@ public enum SharedStore {
     /// accumulate in the container.
     public static func pruneBasemapImages(keeping fileNames: Set<String>) {
         guard let directory = basemapDirectoryURL,
-              let contents = try? FileManager.default.contentsOfDirectory(at: directory, includingPropertiesForKeys: nil)
+              let contents = try? FileManager.default
+                  .contentsOfDirectory(at: directory, includingPropertiesForKeys: nil)
         else { return }
         for url in contents where !fileNames.contains(url.lastPathComponent) {
             try? FileManager.default.removeItem(at: url)
@@ -235,13 +230,13 @@ public enum SharedStore {
     /// call while another render may be writing files of its own.
     public static func removeBasemapImages(named fileNames: Set<String>) {
         guard let directory = basemapDirectoryURL else { return }
-        for fileName in fileNames {
-            try? FileManager.default.removeItem(at: directory.appendingPathComponent(fileName))
+        for imageName in fileNames {
+            try? FileManager.default.removeItem(at: directory.appendingPathComponent(imageName))
         }
     }
 
     public static func clearBasemaps() {
-        if let basemapSetURL { try? FileManager.default.removeItem(at: basemapSetURL) }
-        if let basemapDirectoryURL { try? FileManager.default.removeItem(at: basemapDirectoryURL) }
+        if let url = basemapSetURL { try? FileManager.default.removeItem(at: url) }
+        if let dir = basemapDirectoryURL { try? FileManager.default.removeItem(at: dir) }
     }
 }

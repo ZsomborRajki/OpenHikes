@@ -1,0 +1,424 @@
+##
+## OpenHikes SwiftLint Configuration
+## Strict mode — all rules enabled except conflicting or impractical ones.
+##
+
+# --- Targets to lint ----------------------------------------------------------
+included:
+  - OpenTrails
+  - OpenTrailsTests
+  - OpenTrailsShared/Sources
+  - OpenTrailsShared/Tests
+  - OpenWidget
+  - OpenWidgetTests
+  - "OpenWatch Watch App"
+  - OpenWatchWidget
+
+excluded:
+  - .build
+  - build
+  - DerivedData
+  - "OpenTrailsShared/.build"
+
+# --- Rule sets ----------------------------------------------------------------
+# Enable every opt-in rule …
+opt_in_rules:
+  - accessibility_label_for_image
+  - accessibility_trait_for_button
+  - anonymous_argument_in_multiline_closure
+  - array_init
+  - async_without_await
+  - attributes
+  - balanced_xctest_lifecycle
+  - blanket_disable_command
+  - closure_body_length
+  - closure_end_indentation
+  - closure_spacing
+  - collection_alignment
+  - comma_inheritance
+  - conditional_returns_on_newline
+  - contains_over_filter_count
+  - contains_over_filter_is_empty
+  - contains_over_first_not_nil
+  - contains_over_range_nil_comparison
+  - convenience_type
+  - direct_return
+  - discarded_notification_center_observer
+  - discouraged_assert
+  - discouraged_none_name
+  - discouraged_object_literal
+  - discouraged_optional_boolean
+  - discouraged_optional_collection
+  - empty_collection_literal
+  - empty_string
+  - empty_xctest_method
+  - enum_case_associated_values_count
+  - expiring_todo
+  - explicit_enum_raw_value
+  - explicit_init
+  - extension_access_modifier
+  - fallthrough
+  - fatal_error_message
+  - file_name_no_space
+  - file_types_order
+  - final_test_case
+  - first_where
+  - flatmap_over_map_reduce
+  - for_where
+  - force_unwrapping
+  - function_default_parameter_at_end
+  - ibinspectable_in_extension
+  - identical_operands
+  - implicit_optional_initialization
+  - implicit_return
+  - implicitly_unwrapped_optional
+  - inclusive_language
+  - incompatible_concurrency_annotation
+  - indentation_width
+  - is_disjoint
+  - joined_default_parameter
+  - last_where
+  - legacy_multiple
+  - legacy_objc_type
+  - let_var_whitespace
+  - literal_expression_end_indentation
+  - local_doc_comment
+  - lower_acl_than_parent
+  - modifier_order
+  - multiline_arguments
+  - multiline_arguments_brackets
+  - multiline_call_arguments
+  - multiline_function_chains
+  - multiline_literal_brackets
+  - multiline_parameters
+  - multiline_parameters_brackets
+  - nimble_operator
+  - no_empty_block
+  - no_fallthrough_only
+  - no_magic_numbers
+  - non_optional_string_data_conversion
+  - non_overridable_class_declaration
+  - notification_center_detachment
+  - ns_number_init_as_function_reference
+  - nslocalizedstring_key
+  - nslocalizedstring_require_bundle
+  - nsobject_prefer_isequal
+  - number_separator
+  - object_literal
+  - operator_usage_whitespace
+  - optional_data_string_conversion
+  - optional_enum_case_matching
+  - orphaned_doc_comment
+  - overridden_super_call
+  - override_in_extension
+  - pattern_matching_keywords
+  - period_spacing
+  - prefer_asset_symbols
+  - prefer_condition_list
+  - prefer_key_path
+  - prefer_self_in_static_references
+  - prefer_self_type_over_type_of_self
+  - prefer_type_checking
+  - prefer_zero_over_explicit_init
+  - private_action
+  - private_outlet
+  - private_subject
+  - private_swiftui_state
+  - private_unit_test
+  - prohibited_interface_builder
+  - prohibited_super_call
+  - quick_discouraged_call
+  - quick_discouraged_focused_test
+  - quick_discouraged_pending_test
+  - raw_value_for_camel_cased_codable_enum
+  - reduce_boolean
+  - reduce_into
+  - redundant_nil_coalescing
+  - redundant_self
+  - redundant_sendable
+  - redundant_type_annotation
+  - required_deinit
+  - return_value_from_void_function
+  - self_binding
+  - self_in_property_initialization
+  - shorthand_argument
+  - shorthand_optional_binding
+  - single_test_class
+  - sorted_enum_cases
+  - sorted_first_last
+  - sorted_imports
+  - static_over_final_class
+  - strict_fileprivate
+  - strong_iboutlet
+  - superfluous_else
+  - switch_case_on_newline
+  - test_case_accessibility
+  - toggle_bool
+  - trailing_closure
+  - unavailable_function
+  - unhandled_throwing_task
+  - unneeded_escaping
+  - unneeded_override
+  - unneeded_throws_rethrows
+  - unowned_variable_capture
+  - untyped_error_in_catch
+  - variable_shadowing
+  - vertical_whitespace_between_cases
+  - void_function_in_ternary
+  - weak_delegate
+  - xct_specific_matcher
+  - xctfail_message
+  - yoda_condition
+
+# … and disable the conflicting / impractical ones.
+disabled_rules:
+  # Conflicts: contrasted_opening_brace wants brace on next line, but
+  # opening_brace (enabled below) enforces K&R same-line style as per
+  # Swift API Design Guidelines and Xcode defaults.
+  - contrasted_opening_brace
+  # Conflicts with explicit_enum_raw_value (which is opted in): when
+  # a String enum's raw value equals its case name, both rules fire.
+  # explicit_enum_raw_value wins because it was explicitly opted in.
+  - redundant_string_enum_value
+
+  # Conflicts: extension_access_modifier and no_extension_access_modifier
+  # are direct opposites; we keep extension_access_modifier (enabled above)
+  # and disable the negation.
+  - no_extension_access_modifier
+
+  # Impractical: requires every property / var to have an explicit type
+  # annotation even when Swift inference is unambiguous.  This generates
+  # thousands of redundant annotations and harms readability.
+  - explicit_type_interface
+
+  # Impractical: 'internal' is Swift's default; requiring explicit 'internal'
+  # everywhere is purely noise.
+  - explicit_acl
+  - explicit_top_level_acl
+
+  # Impractical: requires a deinit in every class; most classes don't need one
+  # and adding empty ones just to satisfy lint is itself a lint violation
+  # (no_empty_block).
+  - required_deinit
+
+  # Impractical: in a Swift codebase every file typically contains related
+  # extensions and conformances in the same file.  Forcing one declaration
+  # per file conflicts with standard Swift practice (e.g. conformances).
+  - one_declaration_per_file
+
+  # Impractical: grouping protocol conformances into extensions is
+  # recommended practice; forbidding grouping extensions contradicts that.
+  - no_grouping_extension
+
+  # Impractical: file_header requires a template that is project-specific;
+  # there is no header template in this project.
+  - file_header
+
+  # Impractical: forces k-prefix on constants, which is an ObjC convention
+  # and not recommended for Swift.
+  - prefixed_toplevel_constant
+
+  # Impractical: missing_docs would require doc comments on all public API
+  # including trivial computed properties and enums.
+  - missing_docs
+
+  # Impractical: discouraged_default_parameter would ban almost every
+  # convenience init and View modifier that uses defaults.
+  - discouraged_default_parameter
+
+  # Impractical: type_contents_order enforces a rigid member ordering that
+  # conflicts with the deliberate domain-grouped organisation of this project.
+  - type_contents_order
+
+  # Impractical: file_types_order requires a rigid file structure pattern.
+  - file_types_order
+
+  # Impractical: superfluous_disable_command would itself conflict once we
+  # need any inline disable comment.
+  - superfluous_disable_command
+
+  # Disabled per project preference: single-line `if condition { return x }`
+  # is acceptable for simple guard-like returns and is widely used in this
+  # codebase for readability.
+  - conditional_returns_on_newline
+
+  # Disabled per project preference: compact `case .foo: value` is preferred
+  # for single-expression cases, which pairs naturally with implicit_return.
+  - switch_case_on_newline
+
+  # Disabled per project preference: empty lines between switch cases hurt
+  # readability of compact switches.
+  - vertical_whitespace_between_cases
+
+# --- Analyzer rules -----------------------------------------------------------
+analyzer_rules:
+  - capture_variable
+  - explicit_self
+  - typesafe_array_init
+  - unused_declaration
+  - unused_import
+
+# --- Rule configuration -------------------------------------------------------
+line_length:
+  warning: 120
+  error: 160
+  ignores_comments: true
+  ignores_urls: true
+
+file_length:
+  warning: 500
+  error: 900
+  ignore_comment_only_lines: true
+
+function_body_length:
+  warning: 60
+  error: 90
+
+type_body_length:
+  warning: 300
+  error: 450
+  excluded_types: [extension, protocol]
+
+cyclomatic_complexity:
+  warning: 12
+  error: 18
+
+closure_body_length:
+  warning: 40
+  error: 80
+
+identifier_name:
+  min_length:
+    warning: 2
+    error: 2
+  max_length:
+    warning: 50
+    error: 70
+  excluded:
+    - id
+    - x
+    - y
+    - z
+    - i
+    - j
+    - k
+    - n
+    - m
+    - ok
+    - dx
+    - dy
+    - pi
+    # Single-letter math / color-component variables are standard in their
+    # respective domains (r g b a for RGBA, a b for sort comparators, etc.)
+    - a
+    - b
+    - c
+    - d
+    - e
+    - f
+    - g
+    - h
+    - r
+    - s
+    - t
+    - u
+    - v
+    - w
+
+nesting:
+  type_level:
+    warning: 2
+  function_level:
+    warning: 2
+
+number_separator:
+  minimum_length: 5
+
+no_magic_numbers:
+  # Allow numbers that are universally understood in their context:
+  # 0-10 are trivially obvious; 255/0xFF is the max byte for color channels;
+  # 8/16/24 are standard RGBA bit-shift positions; 60/3600 are time units;
+  # 180/360 are degree-circle constants.
+  allowed_numbers: [
+    -2, -1, 0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10,
+    11, 12, 13, 14, 15, 16, 20, 24, 25, 30, 32, 36, 40, 44, 45, 48, 50, 64,
+    60, 90, 100, 120, 180, 255, 360, 500, 900, 1000, 1024, 3600,
+    0.0, 0.5, 1.0, 2.0, 100.0, 0.25, 0.75
+  ]
+
+indentation_width:
+  indentation_width: 4
+  include_comments: true
+
+redundant_self:
+  keep_in_initializers: false
+  only_in_closures: false
+
+modifier_order:
+  preferred_modifier_order:
+    - override
+    - isolation
+    - acl
+    - setterACL
+    - dynamic
+    - mutators
+    - lazy
+    - final
+    - required
+    - convenience
+    - typeMethods
+    - owned
+
+attributes:
+  always_on_same_line:
+    - "@discardableResult"
+    - "@IBAction"
+    - "@NSManaged"
+    - "@objc"
+  always_on_line_above:
+    - "@MainActor"
+    - "@Observable"
+    - "@Model"
+
+vertical_whitespace:
+  max_empty_lines: 1
+
+trailing_comma:
+  mandatory_comma: true
+
+implicit_return:
+  included: [closure, getter, function, initializer, subscript]
+
+function_parameter_count:
+  warning: 6
+  error: 9
+  ignores_default_parameters: true
+
+large_tuple:
+  warning: 3
+  error: 4
+
+sorted_imports:
+  grouping: names
+
+multiline_arguments:
+  first_argument_location: next_line
+  only_enforce_after_first_closure_on_first_line: true
+
+multiline_parameters:
+  allows_single_line: true
+
+multiline_call_arguments:
+  allows_single_line: true
+
+unneeded_override:
+  affect_initializers: false
+
+collection_alignment:
+  align_colons: false
+
+variable_shadowing:
+  ignore_parameters: true
+
+explicit_init:
+  include_bare_init: false

@@ -77,7 +77,7 @@ nonisolated struct StoredTileDeletionPlan: Sendable {
         doomed = TileOwnership(hike)
         survivors = hikes
             .filter { $0.id != hike.id && $0.hasStoredTiles }
-            .map(TileOwnership.init)
+            .map(TileOwnership.init) // swiftlint:disable:this prefer_self_in_static_references
     }
 
     func exclusiveTileKeys() -> Set<String> {

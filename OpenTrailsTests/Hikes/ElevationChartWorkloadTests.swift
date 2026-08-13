@@ -13,9 +13,9 @@
 //  Rendering it through `ImageRenderer` at 390×200 pt, on this machine's
 //  Simulator (subtract ~0.2 ms of renderer overhead):
 //
-//      200 samples ......   19 ms
-//      1,000 samples ....   74 ms
-//      5,000 samples ....  349 ms
+//      200 samples ...... 19 ms
+//      1,000 samples .... 74 ms
+//      5,000 samples .... 349 ms
 //      20,000 samples .. 1,369 ms
 //
 //  A frame is 16 ms. So the tests here fix a budget on how much the chart is
@@ -26,9 +26,9 @@
 //
 
 import Foundation
+@testable import OpenTrails
 import SwiftUI
 import Testing
-@testable import OpenTrails
 
 @Suite("Elevation chart workload")
 struct ElevationChartWorkloadTests {
@@ -39,7 +39,7 @@ struct ElevationChartWorkloadTests {
         return RouteCoordinate(
             latitude: 47.63 + t * 1e-5,
             longitude: 12.86 + t * 5e-6,
-            elevation: 600 + 300 * sin(t / 2_000) + 20 * sin(t / 37),
+            elevation: 600 + 300 * sin(t / 2000) + 20 * sin(t / 37),
             timestamp: Date(timeIntervalSince1970: 1_750_000_000 + t)
         )
     }
@@ -159,11 +159,23 @@ struct ElevationChartWorkloadTests {
     @Test("equality distinguishes two different trails of the same length")
     func equalityCatchesADifferentProfile() {
         let tracker = TrackerState()
-        let alpine = Fixture.ridgeRoute.map {
-            RouteCoordinate(latitude: $0.latitude + 10, longitude: $0.longitude + 10, elevation: ($0.elevation ?? 0) + 500)
+        let alpine = Fixture.ridgeRoute.map { coord in
+            RouteCoordinate(
+                latitude: coord.latitude + 10,
+                longitude: coord.longitude + 10,
+                elevation: (coord.elevation ?? 0) + 500
+            )
         }
-        let a = ElevationChartView(profile: RouteProfile(route: Fixture.ridgeRoute), tint: .green, tracker: tracker, onScrub: { _ in })
-        let b = ElevationChartView(profile: RouteProfile(route: alpine), tint: .green, tracker: tracker, onScrub: { _ in })
+        let a = ElevationChartView(
+            profile: RouteProfile(route: Fixture.ridgeRoute),
+            tint: .green,
+            tracker: tracker
+        ) { _ in /* no-op */ }
+        let b = ElevationChartView(
+            profile: RouteProfile(route: alpine),
+            tint: .green,
+            tracker: tracker
+        ) { _ in /* no-op */ }
         #expect(a != b, "same number of points, entirely different trail")
     }
 
@@ -174,18 +186,17 @@ struct ElevationChartWorkloadTests {
     func equalityIgnoresTheTracker() {
         let tracker = TrackerState()
         let profile = RouteProfile(route: Fixture.ridgeRoute)
-        let base = ElevationChartView(profile: profile, tint: .green, tracker: tracker, onScrub: { _ in })
+        let base = ElevationChartView(profile: profile, tint: .green, tracker: tracker) { _ in /* no-op */ }
 
         tracker.trackerDistance = 500
         tracker.liveTrackerDistance = 250
-        #expect(base == ElevationChartView(profile: profile, tint: .green, tracker: tracker, onScrub: { _ in }))
+        #expect(base == ElevationChartView(profile: profile, tint: .green, tracker: tracker) { _ in /* no-op */ })
 
-        #expect(base != ElevationChartView(profile: profile, tint: .red, tracker: tracker, onScrub: { _ in }))
+        #expect(base != ElevationChartView(profile: profile, tint: .red, tracker: tracker) { _ in /* no-op */ })
         #expect(base != ElevationChartView(
             profile: RouteProfile(route: Array(Fixture.ridgeRoute.dropLast())),
             tint: .green,
-            tracker: tracker,
-            onScrub: { _ in }
-        ))
+            tracker: tracker
+        ) { _ in /* no-op */ })
     }
 }

@@ -15,8 +15,8 @@
 //
 
 import Foundation
-import Testing
 @testable import OpenTrails
+import Testing
 
 @Suite("Slippy tile math")
 struct SlippyTileMathTests {

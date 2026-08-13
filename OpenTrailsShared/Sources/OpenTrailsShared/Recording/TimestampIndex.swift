@@ -18,12 +18,12 @@ public struct TimestampIndex: Sendable {
         _ timestamp: Date,
         within tolerance: TimeInterval
     ) -> Bool {
-        let tolerance = max(0, tolerance)
-        let earliest = timestamp.addingTimeInterval(-tolerance)
+        let clamped = max(0, tolerance)
+        let earliest = timestamp.addingTimeInterval(-clamped)
         let candidate = lowerBound(for: earliest)
         guard candidate < timestamps.count else { return false }
         return timestamps[candidate]
-            <= timestamp.addingTimeInterval(tolerance)
+            <= timestamp.addingTimeInterval(clamped)
     }
 
     private func lowerBound(for timestamp: Date) -> Int {

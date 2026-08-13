@@ -14,9 +14,9 @@
 
 import CoreLocation
 import Foundation
+@testable import OpenTrails
 import SwiftData
 import Testing
-@testable import OpenTrails
 
 @Suite("Import workload", .serialized)
 struct ImportWorkloadTests {
@@ -53,8 +53,8 @@ struct ImportWorkloadTests {
 
     /// The headline. Measured on the Simulator, a 18,000-point file:
     ///
-    ///     GPXImport.load ..........  60 ms
-    ///     Track.distanceMeters ....   5 ms
+    ///     GPXImport.load .......... 60 ms
+    ///     Track.distanceMeters .... 5 ms
     ///
     /// Both on the main thread, both while the document picker is dismissing,
     /// which is when SwiftUI is already busy. 60 ms is four dropped frames at
@@ -103,12 +103,12 @@ struct ImportWorkloadTests {
     /// the assertion the workload tests above are only worth having alongside.
     @Test("a long import still produces a usable route")
     func longImportIsCorrect() async throws {
-        let url = try writeGPX(pointCount: 5_000)
+        let url = try writeGPX(pointCount: 5000)
         defer { try? FileManager.default.removeItem(at: url) }
         let track = try await GPXImport.loadOffMain(from: url)
 
         let profile = RouteProfile(route: track.route)
-        #expect(profile.coordinates.count == 5_000)
+        #expect(profile.coordinates.count == 5000)
         #expect(try #require(profile.distances.last) > 0)
         #expect(profile.samples.count <= RouteProfile.plottedSampleBudget)
         #expect(abs(try #require(profile.distances.last) - track.distanceMeters) < 1)

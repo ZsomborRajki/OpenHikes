@@ -20,6 +20,8 @@ struct Stat: Identifiable {
 }
 
 struct StatTile: View {
+    private static let minimumScale: CGFloat = 0.7
+
     let label: String
     let value: String
 
@@ -32,7 +34,7 @@ struct StatTile: View {
                 .font(.headline)
                 .foregroundStyle(.primary)
                 .lineLimit(1)
-                .minimumScaleFactor(0.7)
+                .minimumScaleFactor(Self.minimumScale)
         }
         .frame(maxWidth: .infinity, alignment: .leading)
         .padding(12)

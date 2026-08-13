@@ -13,8 +13,8 @@
 
 import CoreLocation
 import Foundation
-import Testing
 @testable import OpenTrails
+import Testing
 
 @Suite("Auto-follow anchor")
 struct FollowAnchorTests {

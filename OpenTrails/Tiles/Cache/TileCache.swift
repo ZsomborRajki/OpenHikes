@@ -31,7 +31,30 @@ nonisolated final class TileCache: @unchecked Sendable {
 
     static let logger = Logger(subsystem: "OpenTrails", category: "TileRequests")
 
-    private final class MemoryTile: @unchecked Sendable {
+    private static let maintenanceQueue = DispatchQueue(
+        label: "com.opentrails.tile-cache-maintenance",
+        qos: .utility
+    )
+
+    /// Runs synchronous cache maintenance serially away from the main thread.
+    static func scheduleMaintenance(
+        _ operation: @escaping @Sendable () -> Void
+    ) {
+        Task.detached(executorPreference: maintenanceQueue) {
+            operation()
+        }
+    }
+
+    /// Runs synchronous cache maintenance off-main and returns its result.
+    static func performMaintenance<Value: Sendable>(
+        _ operation: @escaping @Sendable () -> Value
+    ) async -> Value {
+        await Task.detached(executorPreference: maintenanceQueue) {
+            operation()
+        }.value
+    }
+
+    final class MemoryTile: @unchecked Sendable {
         let image: TileImage
         let storedAt: Date
         /// What this entry costs the memory tier — see
@@ -126,7 +149,7 @@ nonisolated final class TileCache: @unchecked Sendable {
         let key: UInt64
     }
 
-    private struct MutationVersions {
+    struct MutationVersions {
         var global: UInt64 = 0
         var keys: [String: UInt64] = [:]
     }
@@ -207,7 +230,7 @@ nonisolated final class TileCache: @unchecked Sendable {
     }
 }
 
-extension TileCache {
+nonisolated extension TileCache {
 
     /// Tracks reachability and, on each offline→online transition, notifies
     /// renderers so they clear failed tiles and try again.
@@ -636,8 +659,8 @@ extension TileCache {
                 }
                 #if DEBUG
                 Self.logger.debug(
-                    "No cached tile to save for \(key, privacy: .public): "
-                        + "\(error.localizedDescription, privacy: .public)"
+                    // swiftlint:disable:next line_length
+                    "No cached tile to save for \(key, privacy: .public): \(error.localizedDescription, privacy: .public)"
                 )
                 #endif
                 return false
@@ -771,4 +794,5 @@ extension TileCache {
             cached: directory.appendingPathComponent(name),
             durable: durableDirectory.appendingPathComponent(name)
         )
+    }
 }

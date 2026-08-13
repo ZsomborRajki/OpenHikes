@@ -16,10 +16,10 @@
 
 import CoreLocation
 import Foundation
+@testable import OpenTrails
 import OpenTrailsShared
 import SwiftData
 import Testing
-@testable import OpenTrails
 
 extension WidgetFeedSuites {
 @Suite("Feed budget", .serialized)
@@ -47,7 +47,7 @@ final class WidgetFeedBudgetTests {
         return RouteCoordinate(
             latitude: 47.63 + t * 1e-5,
             longitude: 12.86 + t * 5e-6,
-            elevation: 600 + 300 * sin(t / 2_000),
+            elevation: 600 + 300 * sin(t / 2000),
             timestamp: Date(timeIntervalSince1970: 1_750_000_000 + t)
         )
     }
@@ -161,7 +161,7 @@ final class WidgetFeedBudgetTests {
     /// visible. Only the SwiftData value snapshot belongs on the main actor;
     /// route profiling, decimation, encoding, and the App Group write do not.
     @Test("selecting a long trail doesn't spend a frame on the main actor")
-    func selectionStaysInsideAFrame() async throws {
+    func selectionStaysInsideAFrame() async {
         let hike = Fixture.hike(title: "Five hours", route: Self.longRoute, in: context)
 
         let elapsed = milliseconds { tracker.hikeSelectionChanged(to: hike) }
@@ -175,17 +175,17 @@ final class WidgetFeedBudgetTests {
     @Test("publishing a fix doesn't rebuild a route profile the caller already has")
     func publishDoesNotRebuildTheProfile() async throws {
         let hike = Fixture.hike(title: "Five hours", route: Self.longRoute, in: context)
-        let suppliedRoute = Self.longRoute.map {
+        let suppliedRoute = Self.longRoute.map { coordinate in
             RouteCoordinate(
-                latitude: $0.latitude,
-                longitude: $0.longitude,
-                elevation: $0.elevation.map { $0 + 10_000 },
-                timestamp: $0.timestamp
+                latitude: coordinate.latitude,
+                longitude: coordinate.longitude,
+                elevation: coordinate.elevation.map { $0 + 10_000 },
+                timestamp: coordinate.timestamp
             )
         }
         let profile = RouteProfile(route: suppliedRoute)
         #expect(profile.elevationRange != RouteProfile(route: hike.route).elevationRange)
-        let match = try #require(profile.nearestPoint(to: profile.coordinates[9_000]))
+        let match = try #require(profile.nearestPoint(to: profile.coordinates[9000]))
 
         tracker.hikeSelectionChanged(to: hike)
         await tracker.waitForSelectionPublish()

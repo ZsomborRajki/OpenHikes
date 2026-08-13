@@ -10,9 +10,9 @@
 //  form.
 //
 
+@testable import OpenTrails
 import SwiftUI
 import Testing
-@testable import OpenTrails
 
 @Suite("Route appearance")
 struct RouteAppearanceTests {

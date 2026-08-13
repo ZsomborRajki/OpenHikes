@@ -22,7 +22,12 @@ enum HikeFormat {
 
     static func speed(_ measurement: Measurement<UnitSpeed>) -> String {
         measurement.converted(to: .kilometersPerHour)
-            .formatted(.measurement(width: .abbreviated, usage: .asProvided,
-                                    numberFormatStyle: .number.precision(.fractionLength(1))))
+            .formatted(
+                .measurement(
+                    width: .abbreviated,
+                    usage: .asProvided,
+                    numberFormatStyle: .number.precision(.fractionLength(1))
+                )
+            )
     }
 }

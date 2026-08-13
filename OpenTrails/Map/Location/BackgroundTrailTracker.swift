@@ -21,12 +21,12 @@
 //  and free of the persistent background-location indicator.
 //
 
-import Foundation
 import CoreLocation
-import SwiftData
-import WidgetKit
+import Foundation
 import Observation
 import OpenTrailsShared
+import SwiftData
+import WidgetKit
 
 /// The slice of `CLLocationManager` this tracker uses: authorization, and
 /// significant-location-change delivery.
@@ -50,7 +50,9 @@ protocol SignificantLocationMonitor: AnyObject {
     /// Whether asking for it could still change that — i.e. the user has
     /// neither granted nor refused it yet.
     var canRequestAlwaysAccess: Bool { get }
+
     var monitorDelegate: CLLocationManagerDelegate? { get set }
+
     func requestAlwaysAccess()
     func startSignificantLocationUpdates()
     func stopSignificantLocationUpdates()
@@ -163,7 +165,8 @@ final class BackgroundTrailTracker: NSObject {
     /// a status change at all. Coming *back* still uses the plain threshold, so
     /// regaining the trail is as prompt as it ever was; only leaving it is
     /// grudging, and only by the width of this band.
-    private static let offRouteExitMeters = RouteProfile.followMatchThresholdMeters * 1.5
+    private static let offRouteExitHysteresisMultiplier: Double = 1.5
+    private static let offRouteExitMeters = RouteProfile.followMatchThresholdMeters * offRouteExitHysteresisMultiplier
 
     enum Keys {
         static let lastMatchedDistance = "trailTracking.lastMatchedDistance"
@@ -182,13 +185,13 @@ final class BackgroundTrailTracker: NSObject {
         defaults: UserDefaults = .standard,
         clock: @escaping @Sendable () -> Date = { Date() }
     ) {
-        let selectionGeneration = SelectionGeneration()
+        let initialGeneration = SelectionGeneration()
         self.container = container
         self.monitor = monitor ?? CLLocationManager()
         self.defaults = defaults
         self.clock = clock
-        self.selectionGeneration = selectionGeneration
-        self.selectionWriter = SelectionSnapshotWriter(generation: selectionGeneration)
+        selectionGeneration = initialGeneration
+        selectionWriter = SelectionSnapshotWriter(generation: initialGeneration)
         super.init()
         self.monitor.monitorDelegate = self
         trackedHikeID = UUID(uuidString: defaults.string(forKey: SettingsKey.lastSelectedHikeID) ?? "")
@@ -240,14 +243,14 @@ final class BackgroundTrailTracker: NSObject {
         guard let hike, hike.pointCount > 1 else {
             selectionPublishTask = Task { [weak self] in
                 guard let self,
-                      await self.selectionWriter.clear(ifCurrent: revision),
-                      self.selectionRevision == revision,
-                      self.trackedHikeID == nil
+                      await selectionWriter.clear(ifCurrent: revision),
+                      selectionRevision == revision,
+                      trackedHikeID == nil
                 else { return }
                 await TrailBasemapRenderer.shared.invalidate()
-                guard self.selectionRevision == revision else { return }
+                guard selectionRevision == revision else { return }
                 WidgetCenter.shared.reloadTimelines(ofKind: TrailWidgetKind.id)
-                self.selectionPublishTask = nil
+                selectionPublishTask = nil
             }
             return
         }
@@ -266,15 +269,15 @@ final class BackgroundTrailTracker: NSObject {
             guard let snapshot,
                   let self,
                   !Task.isCancelled,
-                  self.selectionRevision == revision,
-                  self.trackedHikeID == input.hikeID,
-                  await self.selectionWriter.save(snapshot, ifCurrent: revision),
-                  self.selectionRevision == revision,
-                  self.trackedHikeID == input.hikeID
+                  selectionRevision == revision,
+                  trackedHikeID == input.hikeID,
+                  await selectionWriter.save(snapshot, ifCurrent: revision),
+                  selectionRevision == revision,
+                  trackedHikeID == input.hikeID
             else { return }
             WidgetCenter.shared.reloadTimelines(ofKind: TrailWidgetKind.id)
-            self.refreshBasemaps(for: snapshot)
-            self.selectionPublishTask = nil
+            refreshBasemaps(for: snapshot)
+            selectionPublishTask = nil
         }
     }
 
@@ -313,7 +316,11 @@ final class BackgroundTrailTracker: NSObject {
 
     /// Called from `HikeDetailView`'s existing once-a-second auto-follow
     /// poll. Throttled internally — does not write on every call.
-    func publishLiveFix(hike: Hike, profile: RouteProfile, match: (distanceAlongRoute: Double, offRouteMeters: Double)?) {
+    func publishLiveFix(
+        hike: Hike,
+        profile: RouteProfile,
+        match: (distanceAlongRoute: Double, offRouteMeters: Double)?
+    ) {
         // The first poll waits for selection publication in HikeDetailView.
         // Keep this guard as a backstop for any other caller; the next poll
         // retries rather than racing the initial snapshot.
@@ -358,7 +365,7 @@ final class BackgroundTrailTracker: NSObject {
 
     // MARK: Background feed
 
-    fileprivate func handleBackgroundFix(_ location: CLLocation) {
+    private func handleBackgroundFix(_ location: CLLocation) {
         // Significant-location-change delivery can include stale cached fixes
         // on relaunch. Matching also requires uncertainty no wider than the
         // same route tolerance used by foreground tracking.
@@ -432,7 +439,7 @@ final class BackgroundTrailTracker: NSObject {
         if isNewTrail { refreshBasemaps(for: snapshot) }
     }
 
-    private nonisolated struct SnapshotInput: Sendable {
+    nonisolated private struct SnapshotInput: Sendable {
         let hikeID: UUID
         let title: String
         let tintHex: String
@@ -448,7 +455,7 @@ final class BackgroundTrailTracker: NSObject {
         }
     }
 
-    private nonisolated final class SelectionGeneration: @unchecked Sendable {
+    nonisolated private final class SelectionGeneration: @unchecked Sendable {
         private let lock = NSLock()
         private var value: UInt64 = 0
 
@@ -490,7 +497,7 @@ final class BackgroundTrailTracker: NSObject {
         }
     }
 
-    private static nonisolated func buildSnapshot(
+    nonisolated private static func buildSnapshot(
         from input: SnapshotInput,
         liveFix: SharedTrailSnapshot.LiveFix?
     ) -> SharedTrailSnapshot? {
@@ -504,7 +511,7 @@ final class BackgroundTrailTracker: NSObject {
         )
     }
 
-    private static nonisolated func buildSnapshot(
+    nonisolated private static func buildSnapshot(
         from input: SnapshotInput,
         elevationRange: ClosedRange<Double>?,
         liveFix: SharedTrailSnapshot.LiveFix?
@@ -515,11 +522,11 @@ final class BackgroundTrailTracker: NSObject {
             title: input.title,
             tintHex: input.tintHex,
             totalDistanceMeters: input.totalDistanceMeters,
+            polyline: decimate(input.route) { coordinate in
+                SharedTrailSnapshot.CodableCoordinate(latitude: coordinate.latitude, longitude: coordinate.longitude)
+            },
             elevationLowMeters: elevationRange?.lowerBound,
             elevationHighMeters: elevationRange?.upperBound,
-            polyline: decimate(input.route) {
-                SharedTrailSnapshot.CodableCoordinate(latitude: $0.latitude, longitude: $0.longitude)
-            },
             liveFix: liveFix
         )
     }

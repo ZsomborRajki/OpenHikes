@@ -7,109 +7,8 @@
 //
 
 import AsyncAlgorithms
-import CoreLocation
-import SwiftUI
 import SwiftData
-
-/// The elevation graph's tracker positions, held in a reference type so the
-/// once-a-second auto-follow poll moves the chart without re-rendering the
-/// rest of `HikeDetailView` (header, stats grid, buttons) — the same
-/// technique `RouteHighlight`/`SheetMetrics` use for the map. `HikeDetailView`
-/// only ever passes this object down; it never reads its properties directly,
-/// so mutating them invalidates `ElevationChartView` (which does read them)
-/// and nothing above it.
-@Observable
-final class TrackerState {
-    /// Persistent tracker position along the route (metres from start). Starts
-    /// at the GPX start, follows the finger while scrubbing, and stays where
-    /// it's left.
-    var trackerDistance: Double = 0
-    /// The user's live GPS fix projected onto the route (metres from start), or
-    /// `nil` when auto-follow is off, there's no fix, or the fix is too far
-    /// from the trail to match.
-    var liveTrackerDistance: Double?
-}
-
-/// The tie-break anchor auto-follow carries from one fix to the next: where
-/// the last fix matched along the route, and whether that match was settled
-/// by a real direction of travel or merely assumed.
-///
-/// A value type rather than two `@State` properties so the rule it encodes —
-/// when a match may be re-decided from scratch — is one testable thing
-/// instead of a condition spread across a SwiftUI view's body.
-struct FollowAnchor: Equatable {
-    /// Distance along the route of the last match, in metres.
-    var distance: Double
-    /// Whether that match was settled by a usable course.
-    ///
-    /// `false` while it rests on nothing better than
-    /// ``RouteProfile/nearestPoint(to:near:heading:)``'s assumption that a
-    /// hike starts at its start — which is what a walker gets if they open
-    /// the app *standing still* halfway round an out-and-back. They'd be
-    /// placed on the outbound leg, and continuity would then hold them there
-    /// for the rest of the walk however far they went.
-    var isCourseConfirmed: Bool
-
-    /// The distance a fix carrying `course` should be matched against, or
-    /// `nil` to work the leg out from scratch.
-    ///
-    /// An unconfirmed anchor yields to the first fix that actually carries a
-    /// course: direction of travel is evidence, and the anchor it would be
-    /// replacing is only an assumption. Giving up continuity for that one fix
-    /// is the price of getting the leg right, and it's paid at most once —
-    /// ``matched(at:course:from:)`` confirms the anchor from then on.
-    static func tieBreak(_ anchor: FollowAnchor?, course: CLLocationDirection?) -> Double? {
-        guard let anchor else { return nil }
-        if !anchor.isCourseConfirmed, course != nil { return nil }
-        return anchor.distance
-    }
-
-    /// The anchor left behind by a fix that matched at `distance`.
-    ///
-    /// Confirmation is sticky: once a course has settled which leg the walker
-    /// is on, later fixes without one — they stopped for a photo — can't
-    /// unsettle it and start the re-seeding over.
-    static func matched(
-        at distance: Double,
-        course: CLLocationDirection?,
-        from previous: FollowAnchor?
-    ) -> FollowAnchor {
-        FollowAnchor(
-            distance: distance,
-            isCourseConfirmed: previous?.isCourseConfirmed == true || course != nil
-        )
-    }
-}
-
-enum FollowHighlightUpdate {
-    case unchanged
-    case clear
-    case move(CLLocationCoordinate2D)
-}
-
-enum FollowInteractionPolicy {
-    static func highlightUpdate(
-        autoFollowEnabled: Bool,
-        isScrubbing: Bool,
-        profile: RouteProfile?,
-        trackerDistance: Double
-    ) -> FollowHighlightUpdate {
-        guard !isScrubbing else { return .unchanged }
-        if autoFollowEnabled { return .clear }
-        guard let coordinate = profile?.coordinate(
-            atDistance: trackerDistance
-        ) else {
-            return .unchanged
-        }
-        return .move(coordinate)
-    }
-
-    static func appliesMatchToPersistentTracker(
-        isScrubbing: Bool
-    ) -> Bool {
-        !isScrubbing
-    }
-}
+import SwiftUI
 
 struct HikeDetailView: View {
     let hike: Hike
@@ -125,26 +24,29 @@ struct HikeDetailView: View {
     /// widget stays reasonably fresh while this hike is being viewed.
     let backgroundTracker: BackgroundTrailTracker
     /// Collapses the sheet so the map is visible when zooming to the route.
-    var onZoomToRoute: () -> Void = {}
+    var onZoomToRoute: () -> Void = { /* no-op default */ }
 
     /// The active tile source, mirrored from Settings so offline downloads use the
     /// same provider (and API key) the map is currently drawing.
-    @AppStorage(SettingsKey.tileProviderID) private var tileProviderID = TileProvider.default.id
-    @Environment(\.displayScale) private var displayScale
-    @Environment(\.modelContext) private var modelContext
-    @State private var downloader = OfflineTileDownloader()
+    @AppStorage(SettingsKey.tileProviderID)
+    private var tileProviderID = TileProvider.default.id
+    @Environment(\.displayScale)
+    private var displayScale
+    @Environment(\.modelContext)
+    var modelContext
+    @State var downloader = OfflineTileDownloader()
     /// Disk space used by this hike's saved tiles; `nil` until measured.
-    @State private var storedBytes: Int64?
+    @State var storedBytes: Int64?
     /// Auto-save drain notifications, coalesced by ``storedBytesRefreshDebounce``.
     /// Each carries the measurement generation current when it was requested,
     /// which is what lets a refresh that has already happened for another
     /// reason retire the trailing one instead of paying for it twice.
-    @State private var storedBytesRefreshes = AsyncStream<Int>.makeStream(
+    @State var storedBytesRefreshes = AsyncStream<Int>.makeStream(
         bufferingPolicy: .bufferingNewest(1)
     )
-    @State private var storedBytesMeasurementTask: Task<Void, Never>?
-    @State private var storedBytesMeasurementGeneration = 0
-    @State private var storageDeletionFailed = false
+    @State var storedBytesMeasurementTask: Task<Void, Never>?
+    @State var storedBytesMeasurementGeneration = 0
+    @State var storageDeletionFailed = false
     /// Whether the title is currently being edited inline.
     @State private var isEditingTitle = false
     /// Draft text while the inline title field is open.
@@ -230,12 +132,9 @@ struct HikeDetailView: View {
                 profile: profile,
                 trackerDistance: tracker.trackerDistance
             ) {
-            case .unchanged:
-                break
-            case .clear:
-                highlight.move(to: nil)
-            case .move(let coordinate):
-                highlight.move(to: coordinate)
+            case .unchanged: break
+            case .clear: highlight.move(to: nil)
+            case .move(let coordinate): highlight.move(to: coordinate)
             }
         }
         // Record verified coverage from complete and partial downloads so
@@ -265,114 +164,16 @@ struct HikeDetailView: View {
             invalidateStoredBytesMeasurement()
         }
         .alert("Couldn’t Delete Offline Tiles", isPresented: $storageDeletionFailed) {
-            Button("OK", role: .cancel) {}
+            Button("OK", role: .cancel) { /* dismiss */ }
         } message: {
             Text("OpenTrails couldn’t read the other hikes’ offline coverage. No tiles were deleted.")
         }
     }
+}
 
-    // MARK: Offline storage
+// MARK: - HikeDetailView + UI Helpers
 
-    /// Measures this hike's saved tiles off the main thread. Deliberately reads
-    /// only plain, cheap properties here (array references, not `.coordinates`,
-    /// which remaps the whole route) — everything expensive (tile-grid
-    /// enumeration across every download record, the keys `Set` union, and the
-    /// disk stat calls) happens inside the detached task. Auto-save manifest
-    /// changes reach this through ``scheduleStoredBytesRefresh()`` so repeated
-    /// two-second drains collapse into one trailing measurement.
-    private func refreshStoredBytes() {
-        invalidateStoredBytesMeasurement()
-        let route = hike.route
-        let offlineDownloads = hike.offlineDownloads
-        let autoSavedTileKeys = hike.autoSavedTileKeys
-        guard !offlineDownloads.isEmpty || !autoSavedTileKeys.isEmpty else { storedBytes = 0; return }
-        let generation = storedBytesMeasurementGeneration
-        storedBytesMeasurementTask = Task {
-            let bytes = await Task.detached {
-                let coordinates = route.map(\.clCoordinate)
-                let keys = Array(
-                    Set(OfflineTileDownloader.storedTileKeys(route: coordinates, offlineDownloads: offlineDownloads))
-                        .union(autoSavedTileKeys)
-                )
-                return TileCache.shared.bytes(forKeys: keys)
-            }.value
-            guard !Task.isCancelled,
-                  generation == storedBytesMeasurementGeneration else { return }
-            storedBytes = bytes
-        }
-    }
-
-    private func scheduleStoredBytesRefresh() {
-        guard !hike.offlineDownloads.isEmpty || !hike.autoSavedTileKeys.isEmpty else {
-            invalidateStoredBytesMeasurement()
-            storedBytes = 0
-            return
-        }
-        storedBytesRefreshes.continuation.yield(storedBytesMeasurementGeneration)
-    }
-
-    private func invalidateStoredBytesMeasurement() {
-        storedBytesMeasurementTask?.cancel()
-        storedBytesMeasurementTask = nil
-        storedBytesMeasurementGeneration &+= 1
-    }
-
-    /// Forgets this hike's downloads and auto-saved tiles, and deletes them from
-    /// disk. The key computation (tile-grid enumeration per download record) is
-    /// real CPU work, so it's done inside the detached task, mirroring
-    /// ``refreshStoredBytes()``.
-    private func deleteStoredTiles() {
-        // First, and before the manifest is read: switching auto-save off folds
-        // in the tiles saved since the last drain. Reading the manifest ahead of
-        // that would delete a snapshot taken up to two seconds ago and strand
-        // everything saved since — durably, where nothing would reclaim it.
-        let hikes: [Hike]
-        do {
-            hikes = try modelContext.fetch(FetchDescriptor<Hike>())
-        } catch {
-            storageDeletionFailed = true
-            return
-        }
-        autoSave.setEnabled(false, for: hike)
-        let deletionPlan = StoredTileDeletionPlan(removing: hike, among: hikes)
-        hike.offlineDownloads.removeAll()
-        hike.autoSavedTileKeys.removeAll()
-        invalidateStoredBytesMeasurement()
-        storedBytes = 0
-        downloader.reset()
-        Task.detached {
-            let keys = deletionPlan.exclusiveTileKeys()
-            guard !keys.isEmpty else { return }
-            TileCache.shared.removeTiles(forKeys: Array(keys))
-        }
-    }
-
-    @ViewBuilder
-    private var storedTilesRow: some View {
-        if !hike.offlineDownloads.isEmpty || !hike.autoSavedTileKeys.isEmpty {
-            HStack {
-                Label(
-                    storedBytes.map { "Offline tiles · \(Self.byteText($0))" } ?? "Offline tiles",
-                    systemImage: "internaldrive"
-                )
-                .font(.caption)
-                .foregroundStyle(.secondary)
-
-                Spacer()
-
-                Button(role: .destructive, action: deleteStoredTiles) {
-                    Text("Delete").font(.caption.weight(.medium))
-                }
-                .buttonStyle(.bordered)
-                .controlSize(.small)
-            }
-        }
-    }
-
-    private static func byteText(_ bytes: Int64) -> String {
-        ByteCountFormatter.string(fromByteCount: bytes, countStyle: .file)
-    }
-
+private extension HikeDetailView {
     // MARK: Actions
 
     /// Trailing row of actions: zoom the map to the route, save it for offline use,
@@ -384,15 +185,14 @@ struct HikeDetailView: View {
                 if activeProvider.supportsBulkDownload {
                     OfflineDownloadButton(
                         downloader: downloader,
-                        canDownload: canDownload,
-                        start: {
-                            downloader.start(
-                                route: hike.coordinates,
-                                source: activeTileSource,
-                                scale: displayScale
-                            )
-                        }
-                    )
+                        canDownload: canDownload
+                    ) {
+                        downloader.start(
+                            route: hike.coordinates,
+                            source: activeTileSource,
+                            scale: displayScale
+                        )
+                    }
                 }
                 colorControl
             }
@@ -507,7 +307,9 @@ struct HikeDetailView: View {
 
     private func actionTile(icon: String, title: String, tint: Color = .accentColor) -> some View {
         tile {
-            Image(systemName: icon).font(.title3)
+            Image(systemName: icon)
+                .font(.title3)
+                .accessibilityHidden(true)
             Text(title).font(.caption2.weight(.medium))
         }
         .foregroundStyle(tint)
@@ -526,6 +328,11 @@ struct HikeDetailView: View {
 
     private var activeTileSource: ActiveTileSource { ActiveTileSource(activeProvider) }
 
+    private enum HeaderLayout {
+        static let symbolSize: CGFloat = 56
+        static let symbolCornerRadius: CGFloat = 14
+    }
+
     // MARK: Header
 
     private var header: some View {
@@ -533,8 +340,9 @@ struct HikeDetailView: View {
             Image(systemName: hike.symbol)
                 .font(.system(size: 24, weight: .semibold))
                 .foregroundStyle(.white)
-                .frame(width: 56, height: 56)
-                .background(hike.tintOpaque, in: RoundedRectangle(cornerRadius: 14))
+                .frame(width: HeaderLayout.symbolSize, height: HeaderLayout.symbolSize)
+                .background(hike.tintOpaque, in: RoundedRectangle(cornerRadius: HeaderLayout.symbolCornerRadius))
+                .accessibilityHidden(true)
 
             VStack(alignment: .leading, spacing: 4) {
                 if isEditingTitle {
@@ -629,8 +437,7 @@ struct HikeDetailView: View {
 
     // MARK: Elevation
 
-    @ViewBuilder
-    private var elevationSection: some View {
+    @ViewBuilder private var elevationSection: some View {
         if let profile, profile.samples.count > 1 {
             // `tracker` is passed down as a reference, never read here — that's
             // what keeps this body from re-running on every auto-follow tick.
@@ -648,7 +455,7 @@ struct HikeDetailView: View {
                     // Auto-follow owns the map pin: once the finger lifts, hand
                     // it back so the pin doesn't sit at a stale scrub position
                     // fighting the live location puck.
-                    if !scrubbing && hike.autoFollowEnabled {
+                    if !scrubbing, hike.autoFollowEnabled {
                         highlight.move(to: nil)
                     }
                 }
@@ -664,8 +471,7 @@ struct HikeDetailView: View {
     /// How far along the trail the tracked position is. Like the chart, this
     /// is handed `tracker` as a reference and never reads it here, so the
     /// once-a-second auto-follow tick redraws the bar and nothing above it.
-    @ViewBuilder
-    private var progressSection: some View {
+    @ViewBuilder private var progressSection: some View {
         if let profile, profile.totalDistanceMeters > 0 {
             TrailProgressView(profile: profile, tint: hike.tintOpaque, tracker: tracker)
         }
@@ -744,155 +550,22 @@ struct HikeDetailView: View {
         backgroundTracker.publishLiveFix(hike: hike, profile: profile, match: match)
     }
 
+    private static let placeholderTintOpacity = 0.12
+
     private var elevationPlaceholder: some View {
         ZStack {
             RoundedRectangle(cornerRadius: 16)
-                .fill(hike.tintOpaque.opacity(0.12))
+                .fill(hike.tintOpaque.opacity(Self.placeholderTintOpacity))
             VStack(spacing: 8) {
                 Image(systemName: "chart.xyaxis.line")
                     .font(.largeTitle)
                     .foregroundStyle(hike.tintOpaque)
+                    .accessibilityHidden(true)
                 Text("No elevation data in this file")
                     .font(.subheadline)
                     .foregroundStyle(.secondary)
             }
         }
         .frame(height: 180)
-    }
-}
-
-/// How far along the trail the tracked position is, as a percentage and a
-/// bar.
-///
-/// Isolated for the same reason `ElevationChartView` is: it reads
-/// `TrackerState` directly, so an auto-follow tick invalidates this row alone
-/// rather than `HikeDetailView.body`. It also makes a bad route match legible
-/// — "97%" while standing at the trailhead is the symptom that a fix was
-/// matched to the wrong leg of an out-and-back, which a marker on a graph
-/// hides far better than a number does.
-private struct TrailProgressView: View {
-    let profile: RouteProfile
-    let tint: Color
-    /// Tracker/live-follow positions — see ``TrackerState``.
-    let tracker: TrackerState
-
-    var body: some View {
-        // The live match when auto-follow has one, otherwise wherever the
-        // tracker was last left: a scrub, or the start of the trail.
-        let live = tracker.liveTrackerDistance
-        let distance = live ?? tracker.trackerDistance
-        let fraction = profile.fractionComplete(atDistance: distance) ?? 0
-        let remaining = profile.remainingDistanceMeters(atDistance: distance)
-
-        VStack(alignment: .leading, spacing: 6) {
-            HStack(spacing: 6) {
-                Label(
-                    live == nil ? "Trail Progress" : "Live Progress",
-                    systemImage: live == nil ? "point.topleft.down.to.point.bottomright.curvepath" : "location.fill"
-                )
-                .font(.caption.weight(.medium))
-                .foregroundStyle(live == nil ? AnyShapeStyle(.secondary) : AnyShapeStyle(Color.blue))
-
-                Spacer()
-
-                Text("\(Int((fraction * 100).rounded()))% · \(Self.length(remaining)) left")
-                    .font(.caption)
-                    .foregroundStyle(.secondary)
-                    .monospacedDigit()
-                    .lineLimit(1)
-            }
-            ProgressView(value: fraction)
-                .progressViewStyle(.linear)
-                .tint(tint)
-        }
-        .accessibilityElement(children: .ignore)
-        .accessibilityLabel(live == nil ? "Trail progress" : "Live trail progress")
-        .accessibilityValue("\(Int((fraction * 100).rounded())) percent, \(Self.length(remaining)) remaining")
-    }
-
-    private static func length(_ meters: Double) -> String {
-        Measurement(value: meters, unit: UnitLength.meters)
-            .formatted(.measurement(width: .abbreviated, usage: .road))
-    }
-}
-
-/// Owns the high-frequency download observations so per-tile progress only
-/// rebuilds this tile rather than the entire hike detail hierarchy.
-private struct OfflineDownloadButton: View {
-    let downloader: OfflineTileDownloader
-    let canDownload: Bool
-    let start: () -> Void
-
-    var body: some View {
-        Button {
-            if downloader.phase == .downloading {
-                downloader.cancel()
-            } else {
-                start()
-            }
-        } label: {
-            tile
-        }
-        .buttonStyle(.plain)
-        .disabled(!canDownload && downloader.phase != .downloading)
-    }
-
-    @ViewBuilder
-    private var tile: some View {
-        switch downloader.phase {
-        case .downloading:
-            actionTile {
-                ProgressView().controlSize(.small)
-                Text("\(Int(downloader.progress * 100))%")
-                    .font(.caption2.weight(.medium))
-                    .foregroundStyle(.secondary)
-            }
-        case .finished:
-            actionTile(tint: .green) {
-                Image(systemName: "checkmark.circle.fill").font(.title3)
-                Text("Saved").font(.caption2.weight(.medium))
-            }
-        default:
-            actionTile(tint: canDownload ? .accentColor : .secondary) {
-                Image(systemName: "arrow.down.circle").font(.title3)
-                Text("Offline").font(.caption2.weight(.medium))
-            }
-        }
-    }
-
-    private func actionTile<Content: View>(
-        tint: Color = .accentColor,
-        @ViewBuilder content: () -> Content
-    ) -> some View {
-        VStack(spacing: 5) { content() }
-            .frame(maxWidth: .infinity)
-            .padding(.vertical, 8)
-            .background(.quaternary, in: RoundedRectangle(cornerRadius: 12))
-            .foregroundStyle(tint)
-    }
-}
-
-/// Keeps the per-tile `total` observation out of `HikeDetailView.body`.
-private struct OfflineDownloadStatus: View {
-    let downloader: OfflineTileDownloader
-    let idleNote: String?
-
-    private var note: String? {
-        switch downloader.phase {
-        case .failed(let message): message
-        case .finished: "Saved for offline use."
-        case .downloading: "Saving \(downloader.total) tiles…"
-        case .idle: idleNote
-        }
-    }
-
-    var body: some View {
-        if let note {
-            Text(note)
-                .font(.caption2)
-                .foregroundStyle(downloader.isFailed ? AnyShapeStyle(.red) : AnyShapeStyle(.secondary))
-                .frame(maxWidth: .infinity, alignment: .center)
-                .multilineTextAlignment(.center)
-        }
     }
 }

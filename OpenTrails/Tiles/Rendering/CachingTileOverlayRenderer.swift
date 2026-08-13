@@ -59,11 +59,13 @@ nonisolated final class CachingTileOverlayRenderer: MKOverlayRenderer, TileCache
         var task: Task<Void, Never>?
         var dueAt: ContinuousClock.Instant?
     }
+
     private let retryWake = OSAllocatedUnfairLock(initialState: RetryWake())
 
-    private var tileOverlay: TileOverlay { overlay as! TileOverlay }
+    private let tileOverlay: TileOverlay
 
     init(overlay: TileOverlay) {
+        tileOverlay = overlay
         super.init(overlay: overlay)
         // Retry tiles once the network is back (delivered on the main queue).
         TileCache.shared.addObserver(self)
@@ -118,7 +120,7 @@ nonisolated final class CachingTileOverlayRenderer: MKOverlayRenderer, TileCache
             wake.task = Task { [weak self] in
                 try? await Task.sleep(until: due, clock: ContinuousClock())
                 guard !Task.isCancelled, let self else { return }
-                self.retryWake.withLock { $0.task = nil; $0.dueAt = nil }
+                retryWake.withLock { $0.task = nil; $0.dueAt = nil }
                 await MainActor.run { self.setNeedsDisplay() }
             }
         }
@@ -173,9 +175,9 @@ nonisolated final class CachingTileOverlayRenderer: MKOverlayRenderer, TileCache
                     if let fallback = fallback(for: path, in: overlay) {
                         drawImage(
                             fallback.image,
-                            sourceRect: fallback.sourceRect,
                             in: drawRect,
-                            context: context
+                            context: context,
+                            sourceRect: fallback.sourceRect
                         )
                     }
                     loadTileIfNeeded(for: path, in: tileRect, overlay: overlay)
@@ -211,12 +213,12 @@ nonisolated final class CachingTileOverlayRenderer: MKOverlayRenderer, TileCache
             let loaded = await overlay.cacheTile(at: fetchPath)
             await TileLoadGate.shared.release(.interactive)
             guard let self else { return }
-            self.inFlight.withLock { _ = $0.remove(key) }
+            inFlight.withLock { _ = $0.remove(key) }
             if loaded {
                 // A tile that loads clears its own failure history, so a later
                 // failure starts its backoff fresh rather than inheriting the
                 // last run of bad luck.
-                self.failures.withLock { $0.recordSuccess(key) }
+                failures.withLock { $0.recordSuccess(key) }
                 // Redraw only the tile that arrived. `setNeedsDisplay` must run
                 // on the main thread (MapKit/UIKit requirement that isn't
                 // statically enforced), hence the explicit hop here.
@@ -225,11 +227,13 @@ nonisolated final class CachingTileOverlayRenderer: MKOverlayRenderer, TileCache
                 // Deliberately no redraw here: redrawing *on* failure is what
                 // spun the request loop. The retry instead rides a wake-up
                 // scheduled for when the backoff expires.
-                let retryAt = self.failures.withLock { $0.recordFailure(key, at: .now) }
-                self.scheduleRetryWake()
+                let retryAt = failures.withLock { $0.recordFailure(key, at: .now) }
+                scheduleRetryWake()
                 #if DEBUG
                 let seconds = ContinuousClock.now.duration(to: retryAt).components.seconds
-                Self.logger.debug("Tile \(key, privacy: .public) failed — retrying in \(seconds, privacy: .public)s (see TileRequests log for the reason)")
+                Self.logger.debug(
+                    "Tile \(key, privacy: .public) failed — retry in \(seconds, privacy: .public)s (TileRequests log)"
+                )
                 #endif
             }
         }
@@ -255,9 +259,9 @@ nonisolated final class CachingTileOverlayRenderer: MKOverlayRenderer, TileCache
 
     private func drawImage(
         _ image: TileImage,
-        sourceRect: CGRect? = nil,
         in rect: CGRect,
-        context: CGContext
+        context: CGContext,
+        sourceRect: CGRect? = nil
     ) {
         let imageRect: CGRect
         if let sourceRect {

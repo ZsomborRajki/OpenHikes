@@ -12,8 +12,8 @@
 
 import CoreGraphics
 import Foundation
-import Testing
 @testable import OpenTrailsShared
+import Testing
 
 @Suite("Trail basemaps")
 struct TrailBasemapTests {
@@ -23,10 +23,12 @@ struct TrailBasemapTests {
         .init(latitude: 37.3372, longitude: -122.0098),
         .init(latitude: 37.3358, longitude: -122.0050),
         .init(latitude: 37.3400, longitude: -122.0020),
-        .init(latitude: 37.3440, longitude: -122.0060)
+        .init(latitude: 37.3440, longitude: -122.0060),
     ]
 
-    static var coverage: UnitMercatorRect { UnitMercatorRect(bounding: trail)! }
+    static var coverage: UnitMercatorRect {
+        UnitMercatorRect(bounding: trail) ?? UnitMercatorRect(originX: 0, originY: 0, width: 0, height: 0)
+    }
 
     /// Real widget point sizes, so variant selection is exercised against
     /// what the system actually hands the view.
@@ -34,16 +36,16 @@ struct TrailBasemapTests {
         ("small", CGSize(width: 158, height: 158)),
         ("medium", CGSize(width: 338, height: 158)),
         ("large", CGSize(width: 338, height: 354)),
-        ("extraLarge", CGSize(width: 715, height: 354))
+        ("extraLarge", CGSize(width: 715, height: 354)),
     ]
 
     // MARK: Bounding
 
     @Test("bounding box contains every point")
     func boundingContainsTrail() throws {
-        let coverage = try #require(UnitMercatorRect(bounding: Self.trail))
+        let trailCoverage = try #require(UnitMercatorRect(bounding: Self.trail))
         for point in Self.trail {
-            let normalized = coverage.normalizedPoint(latitude: point.latitude, longitude: point.longitude)
+            let normalized = trailCoverage.normalizedPoint(latitude: point.latitude, longitude: point.longitude)
             #expect((-1e-9...(1 + 1e-9)).contains(normalized.x))
             #expect((-1e-9...(1 + 1e-9)).contains(normalized.y))
         }
@@ -64,12 +66,12 @@ struct TrailBasemapTests {
 
     @Test("framing never crops the trail", arguments: TrailBasemapVariant.allCases)
     func framedContainsTrail(variant: TrailBasemapVariant) {
-        let coverage = Self.coverage
-        let framed = coverage.framed(toAspectRatio: variant.aspectRatio)
-        #expect(framed.originX <= coverage.originX)
-        #expect(framed.originY <= coverage.originY)
-        #expect(framed.originX + framed.width >= coverage.originX + coverage.width)
-        #expect(framed.originY + framed.height >= coverage.originY + coverage.height)
+        let trailCoverage = Self.coverage
+        let framed = trailCoverage.framed(toAspectRatio: variant.aspectRatio)
+        #expect(framed.originX <= trailCoverage.originX)
+        #expect(framed.originY <= trailCoverage.originY)
+        #expect(framed.originX + framed.width >= trailCoverage.originX + trailCoverage.width)
+        #expect(framed.originY + framed.height >= trailCoverage.originY + trailCoverage.height)
     }
 
     @Test("a single point still gets a legible region", arguments: TrailBasemapVariant.allCases)
@@ -80,14 +82,14 @@ struct TrailBasemapTests {
         let framed = point.framed(toAspectRatio: variant.aspectRatio)
         let heightMeters = framed.height * Mercator.metersPerUnit(atLatitude: framed.centerLatitude)
         #expect(heightMeters > 300)
-        #expect(heightMeters < 5_000)
+        #expect(heightMeters < 5000)
     }
 
     @Test("a trail at the top of the world gets a shifted window, not one off the edge")
     func framedNearPole() throws {
         let arctic = try #require(UnitMercatorRect(bounding: [
             .init(latitude: 84.9, longitude: 10.0),
-            .init(latitude: 85.0, longitude: 10.1)
+            .init(latitude: 85.0, longitude: 10.1),
         ]))
         let framed = arctic.framed(toAspectRatio: 1)
         #expect(framed.originY >= 0)
@@ -96,9 +98,9 @@ struct TrailBasemapTests {
 
     @Test("a degenerate aspect ratio is refused rather than propagated")
     func framedInvalidAspect() {
-        let coverage = Self.coverage
-        #expect(coverage.framed(toAspectRatio: .nan) == coverage)
-        #expect(coverage.framed(toAspectRatio: 0) == coverage)
+        let trailCoverage = Self.coverage
+        #expect(trailCoverage.framed(toAspectRatio: .nan) == trailCoverage)
+        #expect(trailCoverage.framed(toAspectRatio: 0) == trailCoverage)
     }
 
     // MARK: Registration
@@ -125,7 +127,9 @@ struct TrailBasemapTests {
     /// way its y axis points.
     @Test(
         "registration recovers the rendered region",
-        arguments: [(0.0, false), (0.07, false), (-0.05, false), (0.0, true), (0.07, true)]
+        arguments: [
+            (0.0, false), (0.07, false), (-0.05, false), (0.0, true), (0.07, true),
+        ]
     )
     func registration(drift: Double, flipped: Bool) throws {
         let size = TrailBasemapVariant.square.pointSize
@@ -138,18 +142,32 @@ struct TrailBasemapTests {
         )
         let pointFor = projector(actual: actual, size: size, flipped: flipped)
 
-        let northWest = (latitude: Mercator.latitude(unitY: requested.originY),
-                         longitude: Mercator.longitude(unitX: requested.originX))
-        let southEast = (latitude: Mercator.latitude(unitY: requested.originY + requested.height),
-                         longitude: Mercator.longitude(unitX: requested.originX + requested.width))
+        let northWest = (
+            latitude: Mercator.latitude(unitY: requested.originY),
+            longitude: Mercator.longitude(unitX: requested.originX)
+        )
+        let southEast = (
+            latitude: Mercator.latitude(unitY: requested.originY + requested.height),
+            longitude: Mercator.longitude(unitX: requested.originX + requested.width)
+        )
         let pointNW = pointFor(northWest.latitude, northWest.longitude)
         let pointSE = pointFor(southEast.latitude, southEast.longitude)
 
         let measured = try #require(UnitMercatorRect(
             imageWidth: Double(size.width),
             imageHeight: Double(size.height),
-            .init(latitude: northWest.latitude, longitude: northWest.longitude, x: Double(pointNW.x), y: Double(pointNW.y)),
-            .init(latitude: southEast.latitude, longitude: southEast.longitude, x: Double(pointSE.x), y: Double(pointSE.y))
+            .init(
+                latitude: northWest.latitude,
+                longitude: northWest.longitude,
+                x: Double(pointNW.x),
+                y: Double(pointNW.y)
+            ),
+            .init(
+                latitude: southEast.latitude,
+                longitude: southEast.longitude,
+                x: Double(pointSE.x),
+                y: Double(pointSE.y)
+            )
         ))
 
         // Always top-left-origin with a positive extent, whatever came in.
@@ -170,7 +188,8 @@ struct TrailBasemapTests {
     @Test("two references too close together are refused")
     func registrationDegenerate() {
         #expect(UnitMercatorRect(
-            imageWidth: 320, imageHeight: 320,
+            imageWidth: 320,
+            imageHeight: 320,
             .init(latitude: 37.33, longitude: -122.01, x: 10, y: 10),
             .init(latitude: 37.34, longitude: -122.02, x: 10.5, y: 300)
         ) == nil)
@@ -179,7 +198,8 @@ struct TrailBasemapTests {
     @Test("a zero-sized image is refused")
     func registrationEmptyImage() {
         #expect(UnitMercatorRect(
-            imageWidth: 0, imageHeight: 0,
+            imageWidth: 0,
+            imageHeight: 0,
             .init(latitude: 37.34, longitude: -122.02, x: 0, y: 0),
             .init(latitude: 37.33, longitude: -122.01, x: 320, y: 320)
         ) == nil)
@@ -228,31 +248,35 @@ struct TrailBasemapTests {
 
     @Test("only a real move triggers a re-render")
     func staleness() throws {
-        let coverage = Self.coverage
-        #expect(coverage.isEquivalent(to: coverage))
+        let trailCoverage = Self.coverage
+        #expect(trailCoverage.isEquivalent(to: trailCoverage))
 
         let nudged = UnitMercatorRect(
-            originX: coverage.originX + coverage.width * 0.005,
-            originY: coverage.originY,
-            width: coverage.width,
-            height: coverage.height
+            originX: trailCoverage.originX + trailCoverage.width * 0.005,
+            originY: trailCoverage.originY,
+            width: trailCoverage.width,
+            height: trailCoverage.height
         )
-        #expect(coverage.isEquivalent(to: nudged))
+        #expect(trailCoverage.isEquivalent(to: nudged))
 
         let moved = UnitMercatorRect(
-            originX: coverage.originX + coverage.width * 0.5,
-            originY: coverage.originY,
-            width: coverage.width,
-            height: coverage.height
+            originX: trailCoverage.originX + trailCoverage.width * 0.5,
+            originY: trailCoverage.originY,
+            width: trailCoverage.width,
+            height: trailCoverage.height
         )
-        #expect(!coverage.isEquivalent(to: moved))
+        #expect(!trailCoverage.isEquivalent(to: moved))
 
-        let elsewhere = try #require(UnitMercatorRect(bounding: [.init(latitude: 47.6, longitude: -122.3)]))
-        #expect(!coverage.isEquivalent(to: elsewhere))
+        let elsewhere = try #require(UnitMercatorRect(bounding: [
+            .init(latitude: 47.6, longitude: -122.3),
+        ]))
+        #expect(!trailCoverage.isEquivalent(to: elsewhere))
 
         // A trail extended by a mile is a different region to render.
-        let extended = try #require(UnitMercatorRect(bounding: Self.trail + [.init(latitude: 37.36, longitude: -121.99)]))
-        #expect(!coverage.isEquivalent(to: extended))
+        let extended = try #require(UnitMercatorRect(bounding: Self.trail + [
+            .init(latitude: 37.36, longitude: -121.99),
+        ]))
+        #expect(!trailCoverage.isEquivalent(to: extended))
     }
 
     // MARK: Image selection
@@ -282,20 +306,41 @@ struct TrailBasemapTests {
         #expect(complete.image(forAspectRatio: 2.1, appearance: .light)?.fileName == "wide-light.jpg")
 
         // Only light rendered (a dark pass failed): still draws.
-        let lightOnly = TrailBasemapSet(hikeID: UUID(), coverage: rect, images: [basemap(.square, .light)])
+        let lightOnly = TrailBasemapSet(
+            hikeID: UUID(),
+            coverage: rect,
+            images: [basemap(.square, .light)]
+        )
         #expect(lightOnly.image(forAspectRatio: 1, appearance: .dark)?.fileName == "square-light.jpg")
         #expect(lightOnly.image(forAspectRatio: 2.1, appearance: .dark)?.fileName == "square-light.jpg")
 
-        #expect(TrailBasemapSet(hikeID: UUID(), coverage: rect, images: []).image(forAspectRatio: 1, appearance: .light) == nil)
+        #expect(
+            TrailBasemapSet(hikeID: UUID(), coverage: rect, images: [])
+                .image(forAspectRatio: 1, appearance: .light) == nil
+        )
     }
 
     @Test("aspect ratio comes from pixels, and survives a nonsense one")
     func basemapAspect() {
         let rect = Self.coverage
-        let wide = TrailBasemap(fileName: "w", variant: .wide, appearance: .light, pixelWidth: 760, pixelHeight: 360, visibleRect: rect)
+        let wide = TrailBasemap(
+            fileName: "w",
+            variant: .wide,
+            appearance: .light,
+            pixelWidth: 760,
+            pixelHeight: 360,
+            visibleRect: rect
+        )
         #expect(abs(wide.aspectRatio - 760.0 / 360) < 1e-12)
 
-        let broken = TrailBasemap(fileName: "b", variant: .wide, appearance: .light, pixelWidth: 760, pixelHeight: 0, visibleRect: rect)
+        let broken = TrailBasemap(
+            fileName: "b",
+            variant: .wide,
+            appearance: .light,
+            pixelWidth: 760,
+            pixelHeight: 0,
+            visibleRect: rect
+        )
         #expect(broken.aspectRatio == 1)
     }
 
@@ -306,10 +351,16 @@ struct TrailBasemapTests {
         let set = TrailBasemapSet(
             hikeID: UUID(),
             coverage: Self.coverage,
-            images: [TrailBasemap(
-                fileName: "a.jpg", variant: .wide, appearance: .dark,
-                pixelWidth: 760, pixelHeight: 360, visibleRect: Self.coverage
-            )]
+            images: [
+                TrailBasemap(
+                    fileName: "a.jpg",
+                    variant: .wide,
+                    appearance: .dark,
+                    pixelWidth: 760,
+                    pixelHeight: 360,
+                    visibleRect: Self.coverage
+                ),
+            ]
         )
         let decoded = try JSONDecoder().decode(TrailBasemapSet.self, from: JSONEncoder().encode(set))
         #expect(decoded == set)

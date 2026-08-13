@@ -8,8 +8,8 @@
 //  of SwiftUI entirely.
 //
 
-import SwiftUI
 import CoreLocation
+import SwiftUI
 
 struct DisplayedRoute: Equatable {
     let id: UUID
@@ -22,7 +22,7 @@ struct DisplayedRoute: Equatable {
     /// Tint and width are excluded because they aren't here: they live in
     /// ``RouteStyle``, so a colour or width drag never reaches this value —
     /// and therefore never reaches the view that builds it.
-    static func == (lhs: DisplayedRoute, rhs: DisplayedRoute) -> Bool {
+    static func == (lhs: Self, rhs: Self) -> Bool {
         lhs.id == rhs.id
     }
 
@@ -36,13 +36,11 @@ struct DisplayedRoute: Equatable {
     /// one named place is what lets a test observe exactly that set.
     static func forSelection(
         _ hike: Hike?,
-        recordingPresented: Bool = false,
-        cache: DisplayedRouteCoordinateCache
-    ) -> DisplayedRoute? {
-        guard !recordingPresented, let hike, !hike.isRecording else {
-            return nil
-        }
-        return DisplayedRoute(id: hike.id, coordinates: cache.coordinates(for: hike))
+        cache: DisplayedRouteCoordinateCache,
+        recordingPresented: Bool = false
+    ) -> Self? {
+        guard !recordingPresented, let hike, !hike.isRecording else { return nil }
+        return Self(id: hike.id, coordinates: cache.coordinates(for: hike))
     }
 }
 
@@ -84,7 +82,7 @@ final class RouteStyle {
     /// without this, dropping a `RouteStyle` off the main actor (e.g. a
     /// main-actor-isolated test suite instance deallocated on Swift Testing's
     /// cooperative pool) traps in `MainActor.assumeIsolated`.
-    nonisolated deinit {}
+    nonisolated deinit { /* intentionally empty */ }
 
     /// `Hike.tint`'s own fallback and `Hike`'s own initial width, so an
     /// unfollowed style is the one a freshly imported trail would have rather
@@ -105,7 +103,7 @@ final class RouteStyle {
     /// was registered under and is dropped rather than allowed to reinstate
     /// that hike's colour over the newly selected one's.
     @ObservationIgnored private var generation = 0
-    
+
     /// The hike currently being tracked for style changes.
     @ObservationIgnored private var trackedHike: Hike?
 
@@ -135,11 +133,11 @@ final class RouteStyle {
             _ = hike.tint
             _ = hike.routeWidth
         } onChange: { [weak self] in
-            guard let style = self else { return }
+            guard let self else { return }
             Task { @MainActor in
-                guard generation == style.generation, let followed = style.trackedHike else { return }
-                style.apply(tint: followed.tint, width: followed.routeWidth)
-                style.track(generation: generation)
+                guard generation == self.generation, let followed = self.trackedHike else { return }
+                self.apply(tint: followed.tint, width: followed.routeWidth)
+                self.track(generation: generation)
             }
         }
     }

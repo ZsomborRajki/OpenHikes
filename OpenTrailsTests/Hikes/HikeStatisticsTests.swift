@@ -12,9 +12,9 @@
 
 import CoreLocation
 import Foundation
+@testable import OpenTrails
 import SwiftData
 import Testing
-@testable import OpenTrails
 
 @Suite("Hike statistics")
 struct HikeStatisticsTests {
@@ -43,7 +43,7 @@ struct HikeStatisticsTests {
     func elevationAbsent() {
         let route = [
             RouteCoordinate(latitude: 47.63, longitude: 12.86),
-            RouteCoordinate(latitude: 47.64, longitude: 12.86)
+            RouteCoordinate(latitude: 47.64, longitude: 12.86),
         ]
         let hike = Fixture.hike(route: route, in: context)
         #expect(hike.elevationGain == nil)
@@ -58,7 +58,7 @@ struct HikeStatisticsTests {
     func elevationSinglePoint() {
         let route = [
             RouteCoordinate(latitude: 47.63, longitude: 12.86, elevation: 600),
-            RouteCoordinate(latitude: 47.64, longitude: 12.86)
+            RouteCoordinate(latitude: 47.64, longitude: 12.86),
         ]
         let hike = Fixture.hike(route: route, in: context)
         #expect(hike.elevationGain == nil)
@@ -70,8 +70,8 @@ struct HikeStatisticsTests {
     /// must not land in either total.
     @Test("flat sections count as neither climb nor descent")
     func flatSections() throws {
-        let route = (0..<4).map {
-            RouteCoordinate(latitude: 47.63 + Double($0) * 0.001, longitude: 12.86, elevation: 600)
+        let route = (0..<4).map { idx in
+            RouteCoordinate(latitude: 47.63 + Double(idx) * 0.001, longitude: 12.86, elevation: 600)
         }
         let hike = Fixture.hike(route: route, in: context)
         #expect(try #require(hike.elevationGain).value == 0)
@@ -92,7 +92,7 @@ struct HikeStatisticsTests {
     func durationAbsent() {
         let route = [
             RouteCoordinate(latitude: 47.63, longitude: 12.86, elevation: 600),
-            RouteCoordinate(latitude: 47.64, longitude: 12.86, elevation: 610)
+            RouteCoordinate(latitude: 47.64, longitude: 12.86, elevation: 610),
         ]
         let hike = Fixture.hike(route: route, in: context)
         #expect(hike.duration == nil)
@@ -106,8 +106,8 @@ struct HikeStatisticsTests {
     @Test("identical timestamps yield no duration rather than a division by zero")
     func durationZeroSpan() {
         let stamp = Date(timeIntervalSince1970: 1_750_000_000)
-        let route = (0..<3).map {
-            RouteCoordinate(latitude: 47.63 + Double($0) * 0.001, longitude: 12.86, elevation: 600, timestamp: stamp)
+        let route = (0..<3).map { idx in
+            RouteCoordinate(latitude: 47.63 + Double(idx) * 0.001, longitude: 12.86, elevation: 600, timestamp: stamp)
         }
         let hike = Fixture.hike(route: route, in: context)
         #expect(hike.duration == nil)
@@ -134,7 +134,7 @@ struct HikeStatisticsTests {
         let route = [
             RouteCoordinate(latitude: 47.630, longitude: 12.86, timestamp: start),
             RouteCoordinate(latitude: 47.631, longitude: 12.86, timestamp: start.addingTimeInterval(10)),
-            RouteCoordinate(latitude: 47.632, longitude: 12.86, timestamp: start.addingTimeInterval(110))
+            RouteCoordinate(latitude: 47.632, longitude: 12.86, timestamp: start.addingTimeInterval(110)),
         ]
         let hike = Fixture.hike(route: route, in: context)
         let fastest = try #require(hike.maxSpeed).converted(to: .metersPerSecond).value
@@ -152,7 +152,7 @@ struct HikeStatisticsTests {
             RouteCoordinate(latitude: 47.630, longitude: 12.86, timestamp: start),
             RouteCoordinate(latitude: 47.631, longitude: 12.86),                                    // no stamp
             RouteCoordinate(latitude: 47.632, longitude: 12.86, timestamp: start),                  // no elapsed time
-            RouteCoordinate(latitude: 47.633, longitude: 12.86, timestamp: start.addingTimeInterval(100))
+            RouteCoordinate(latitude: 47.633, longitude: 12.86, timestamp: start.addingTimeInterval(100)),
         ]
         let hike = Fixture.hike(route: route, in: context)
         let fastest = try #require(hike.maxSpeed).converted(to: .metersPerSecond).value
@@ -165,8 +165,8 @@ struct HikeStatisticsTests {
     @Test("standing still reports no max speed at all")
     func maxSpeedStationary() {
         let start = Date(timeIntervalSince1970: 1_750_000_000)
-        let route = (0..<3).map {
-            RouteCoordinate(latitude: 47.63, longitude: 12.86, timestamp: start.addingTimeInterval(Double($0) * 60))
+        let route = (0..<3).map { idx in
+            RouteCoordinate(latitude: 47.63, longitude: 12.86, timestamp: start.addingTimeInterval(Double(idx) * 60))
         }
         #expect(Fixture.hike(route: route, in: context).maxSpeed == nil)
     }
@@ -201,7 +201,7 @@ struct HikeFormatTests {
         #expect(short.contains("1"))
         #expect(!short.lowercased().contains("h"))
 
-        let long = HikeFormat.duration(3_600 + 25 * 60)
+        let long = HikeFormat.duration(3600 + 25 * 60)
         #expect(long.lowercased().contains("h"))
         #expect(long.contains("25"))
     }

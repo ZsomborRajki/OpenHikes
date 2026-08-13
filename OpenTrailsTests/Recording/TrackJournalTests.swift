@@ -4,8 +4,8 @@
 //
 
 import Foundation
-import Testing
 @testable import OpenTrails
+import Testing
 
 @Suite("Track journal")
 struct TrackJournalTests {
@@ -67,9 +67,9 @@ struct TrackJournalTests {
 
         let size = try FileManager.default.attributesOfItem(
             atPath: journal.journalURL.path
-        )[.size] as? NSNumber
+        )[.size] as? Int
         #expect(
-            size?.intValue
+            size
                 == TrackJournal.headerByteCount
                     + 12 * TrackJournal.recordByteCount
         )

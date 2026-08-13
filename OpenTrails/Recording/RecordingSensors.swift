@@ -75,10 +75,10 @@ final class SystemRecordingElevationSource: RecordingElevationSource {
 }
 
 nonisolated enum RecordingMotionState: Equatable, Sendable {
-    case unknown
-    case stationary
-    case pedestrian
     case nonPedestrian
+    case pedestrian
+    case stationary
+    case unknown
 }
 
 protocol RecordingMotionSource: AnyObject {
@@ -137,19 +137,13 @@ final class SystemRecordingMotionSource: RecordingMotionSource {
     }
 
     #if os(iOS) && canImport(CoreMotion)
-    private nonisolated static func state(
+    nonisolated private static func state(
         for activity: CMMotionActivity
     ) -> RecordingMotionState {
         guard activity.confidence != .low else { return .unknown }
-        if activity.automotive || activity.cycling {
-            return .nonPedestrian
-        }
-        if activity.walking || activity.running {
-            return .pedestrian
-        }
-        if activity.stationary {
-            return .stationary
-        }
+        if activity.automotive || activity.cycling { return .nonPedestrian }
+        if activity.walking || activity.running { return .pedestrian }
+        if activity.stationary { return .stationary }
         return .unknown
     }
     #endif
@@ -191,12 +185,10 @@ nonisolated struct RecordingElevationFilter: Sendable {
             gpsAltitude = nil
         }
 
-        guard let relativeAltitude = latestRelativeAltitude else {
-            return gpsAltitude
-        }
+        guard let relativeAltitude = latestRelativeAltitude else { return gpsAltitude }
 
         guard let relativeAnchor else {
-            self.relativeAnchor = relativeAltitude
+            relativeAnchor = relativeAltitude
             if let elevationAnchor {
                 guard let gpsAltitude else { return elevationAnchor }
                 let corrected = elevationAnchor

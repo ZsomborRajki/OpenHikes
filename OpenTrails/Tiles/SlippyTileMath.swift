@@ -61,6 +61,7 @@ nonisolated struct TileBoundingBox: Sendable {
     /// the latitude, in one degree of longitude. Rough (the earth isn't a
     /// sphere), but this only ever sizes a padding buffer.
     private static let metersPerDegreeLatitude: Double = 111_320
+    private static let minimumCosineLatitude: Double = 0.01
 
     let southLat: Double
     let northLat: Double
@@ -164,12 +165,13 @@ nonisolated struct TileBoundingBox: Sendable {
     /// Longitude degrees shrink toward the poles, so the east–west padding is
     /// scaled by the box's mid-latitude. Padding a cyclic span can only ever
     /// reach the whole way round, never overshoot into a second lap.
-    func padded(byMeters meters: CLLocationDistance) -> TileBoundingBox {
+    func padded(byMeters meters: CLLocationDistance) -> Self {
         let latitudePadding = meters / Self.metersPerDegreeLatitude
         let midLatitudeRadians = (southLat + northLat) / 2 * .pi / 180
-        let longitudePadding = meters / (max(cos(midLatitudeRadians), 0.01) * Self.metersPerDegreeLatitude)
+        let cosClamped = max(cos(midLatitudeRadians), Self.minimumCosineLatitude)
+        let longitudePadding = meters / (cosClamped * Self.metersPerDegreeLatitude)
 
-        return TileBoundingBox(
+        return Self(
             // Clamped to the projection's own domain rather than to ±90: a box
             // padded past the Mercator limit has no more world to include.
             southLat: max(southLat - latitudePadding, -Mercator.latitudeLimit),

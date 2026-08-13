@@ -51,13 +51,13 @@ nonisolated struct TrailGraph: Codable, Equatable, Sendable {
     let nodes: [TrailGraphNode]
     let edges: [TrailGraphEdge]
 
-    static let empty = TrailGraph(nodes: [], edges: [])
+    static let empty = Self(nodes: [], edges: [])
 
     var isEmpty: Bool {
         nodes.isEmpty || edges.isEmpty
     }
 
-    func merging(_ other: TrailGraph) -> TrailGraph {
+    func merging(_ other: Self) -> Self {
         var nodesByID = Dictionary(uniqueKeysWithValues: nodes.map { ($0.id, $0) })
         for node in other.nodes {
             nodesByID[node.id] = node
@@ -68,13 +68,11 @@ nonisolated struct TrailGraph: Codable, Equatable, Sendable {
             edgesByID[edge.id] = edge
         }
 
-        return TrailGraph(
-            nodes: nodesByID.values.sorted { $0.id < $1.id },
-            edges: edgesByID.values.sorted {
-                if $0.id.wayID == $1.id.wayID {
-                    return $0.id.segmentIndex < $1.id.segmentIndex
-                }
-                return $0.id.wayID < $1.id.wayID
+        return Self(
+            nodes: nodesByID.values.sorted { lhs, rhs in lhs.id < rhs.id },
+            edges: edgesByID.values.sorted { lhs, rhs in
+                if lhs.id.wayID == rhs.id.wayID { return lhs.id.segmentIndex < rhs.id.segmentIndex }
+                return lhs.id.wayID < rhs.id.wayID
             }
         )
     }

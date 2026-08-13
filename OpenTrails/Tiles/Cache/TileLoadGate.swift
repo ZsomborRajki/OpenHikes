@@ -112,15 +112,22 @@ actor TileLoadGate {
 
     var budgets: (total: Int, background: Int) { (totalBudget, backgroundBudget) }
 
+    struct TestState {
+        let total: Int
+        let background: Int
+        let interactiveWaiters: Int
+        let backgroundWaiters: Int
+    }
+
     /// Atomic test snapshot used to wait until spawned acquire tasks have
     /// either entered or queued, without guessing at actor scheduling delays.
-    var testState: (
-        total: Int,
-        background: Int,
-        interactiveWaiters: Int,
-        backgroundWaiters: Int
-    ) {
-        (active, activeBackground, interactiveWaiters.count, backgroundWaiters.count)
+    var testState: TestState {
+        TestState(
+            total: active,
+            background: activeBackground,
+            interactiveWaiters: interactiveWaiters.count,
+            backgroundWaiters: backgroundWaiters.count
+        )
     }
     #endif
 }

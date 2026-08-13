@@ -14,8 +14,8 @@
 //
 
 import Foundation
-import Testing
 @testable import OpenTrails
+import Testing
 
 @Suite("Tile load gate")
 struct TileLoadGateTests {
@@ -35,12 +35,7 @@ struct TileLoadGateTests {
     /// Waits until every spawned acquire has reached the actor and either
     /// entered or queued. Unlike a fixed sleep, this remains deterministic on
     /// a busy simulator.
-    private func waitForAcquireAttempts(_ expected: Int) async -> (
-        total: Int,
-        background: Int,
-        interactiveWaiters: Int,
-        backgroundWaiters: Int
-    ) {
+    private func waitForAcquireAttempts(_ expected: Int) async -> TileLoadGate.TestState {
         while true {
             let state = await gate.testState
             let attempts = state.total + state.interactiveWaiters + state.backgroundWaiters
@@ -61,7 +56,7 @@ struct TileLoadGateTests {
         #expect(inFlight.total == total, "the gate fills")
 
         // Nothing more may enter, from either side, until something leaves.
-        let blocked = Task { await self.gate.acquire(.interactive) }
+        let blocked = Task { await gate.acquire(.interactive) }
         let blockedState = await waitForAcquireAttempts(total + 1)
         #expect(blockedState.total == total, "an extra request waits rather than squeezing in")
         #expect(blockedState.interactiveWaiters == 1)
@@ -83,7 +78,7 @@ struct TileLoadGateTests {
 
         // Far more background work than the gate will admit at once.
         let waiting = (0..<(total + 4)).map { _ in
-            Task { await self.gate.acquire(.background) }
+            Task { await gate.acquire(.background) }
         }
 
         let inFlight = await waitForAcquireAttempts(total + 4)
@@ -115,10 +110,10 @@ struct TileLoadGateTests {
         await holdSlots(background, .background)
 
         // A background waiter queues first, an interactive one second.
-        let backgroundWaiter = Task { await self.gate.acquire(.background) }
+        let backgroundWaiter = Task { await gate.acquire(.background) }
         let backgroundQueued = await waitForAcquireAttempts(total + 1)
         #expect(backgroundQueued.backgroundWaiters == 1)
-        let interactiveWaiter = Task { await self.gate.acquire(.interactive) }
+        let interactiveWaiter = Task { await gate.acquire(.interactive) }
         let bothQueued = await waitForAcquireAttempts(total + 2)
         #expect(bothQueued.interactiveWaiters == 1)
         #expect(bothQueued.backgroundWaiters == 1)

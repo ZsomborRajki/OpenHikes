@@ -10,10 +10,10 @@
 
 import SwiftUI
 
-extension Color {
+public extension Color {
     /// Parses "#RRGGBB" or "#RRGGBBAA" (with or without the leading `#`).
     /// Mirrors the app target's own `Color.init?(hex:)` exactly.
-    public init?(hex: String) {
+    init?(hex: String) {
         var s = hex.trimmingCharacters(in: .whitespacesAndNewlines)
         if s.hasPrefix("#") { s.removeFirst() }
         guard let value = UInt32(s, radix: 16) else { return nil }
@@ -26,6 +26,7 @@ extension Color {
                 blue: Double(value & 0xFF) / 255,
                 opacity: 1
             )
+
         case 8:
             self.init(
                 .sRGB,
@@ -34,6 +35,7 @@ extension Color {
                 blue: Double((value >> 8) & 0xFF) / 255,
                 opacity: Double(value & 0xFF) / 255
             )
+
         default:
             return nil
         }

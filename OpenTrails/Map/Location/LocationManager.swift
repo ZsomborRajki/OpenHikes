@@ -12,8 +12,8 @@
 //  while this stayed frozen.
 //
 
-import Foundation
 import CoreLocation
+import Foundation
 import Observation
 
 /// A fix accepted for route matching: where the walker is, and — when they're
@@ -69,9 +69,7 @@ nonisolated enum LocationFixPolicy {
         guard age >= -futureTimestampTolerance, age <= maximumAge else { return false }
 
         if let maximumHorizontalAccuracy,
-           location.horizontalAccuracy > maximumHorizontalAccuracy {
-            return false
-        }
+           location.horizontalAccuracy > maximumHorizontalAccuracy { return false }
         return true
     }
 }
@@ -83,7 +81,7 @@ final class LocationManager: NSObject {
     /// without this, dropping a `LocationManager` off the main actor (e.g. a
     /// main-actor-isolated test suite instance deallocated on Swift Testing's
     /// cooperative pool) traps in `MainActor.assumeIsolated`.
-    nonisolated deinit {}
+    nonisolated deinit { /* intentionally empty */ }
 
     private(set) var coordinate: CLLocationCoordinate2D?
     @ObservationIgnored private var latestLocation: CLLocation?
@@ -113,7 +111,7 @@ final class LocationManager: NSObject {
     /// Requests "when in use" authorization on first use (if needed) and starts
     /// updating. Location delivery itself is ongoing via the delegate for as
     /// long as this object lives.
-    func start() async {
+    func start() {
         updatesRequested = true
         let status = manager.authorizationStatus
         if status == .notDetermined {
@@ -133,7 +131,7 @@ final class LocationManager: NSObject {
         #endif
     }
 
-    fileprivate func publish(_ location: CLLocation) {
+    private func publish(_ location: CLLocation) {
         guard LocationFixPolicy.accepts(
             location,
             maximumAge: LocationFixPolicy.foregroundMaximumAge
@@ -148,15 +146,11 @@ final class LocationManager: NSObject {
         // downstream wants that heartbeat: auto-follow and the weather poll
         // read `coordinate` on their own timers, and the map only uses it to
         // centre on the very first fix.
-        if let coordinate, coordinate.latitude == next.latitude, coordinate.longitude == next.longitude {
-            return
-        }
+        if let coordinate, coordinate.latitude == next.latitude, coordinate.longitude == next.longitude { return }
         // Only an actual publish restarts the throttle window, so the first
         // step after standing still reaches the map straight away.
         let now = clock()
-        if let lastPublished, now.timeIntervalSince(lastPublished) < Self.minimumPublishInterval {
-            return
-        }
+        if let lastPublished, now.timeIntervalSince(lastPublished) < Self.minimumPublishInterval { return }
         lastPublished = now
         coordinate = next
     }

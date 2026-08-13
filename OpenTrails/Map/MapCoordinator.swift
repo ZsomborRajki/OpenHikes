@@ -7,8 +7,8 @@
 //  imperatively, keeping continuous updates entirely off SwiftUI's render path.
 //
 
-import SwiftUI
 import MapKit
+import SwiftUI
 
 extension MapView {
     final class Coordinator: NSObject, MKMapViewDelegate {
@@ -40,11 +40,32 @@ extension MapView {
         /// puck are considered overlapping (roughly the size of either dot).
         static let overlapThresholdPoints: CGFloat = 20
 
+        private static let routeInsetStandard: CGFloat = 60
+        private static let routeInsetTop: CGFloat = 80
+        private static let initialCenterMeters: CLLocationDistance = 2000
+        private static let sheetFallbackOffset: CGFloat = 92
+        private static let annotationDiameter: CGFloat = 18
+        private static let annotationBorderWidth: CGFloat = 3
+        private static let annotationShadowOpacity: Float = 0.3
+        private static let annotationShadowRadius: CGFloat = 2
+        private static let recordingAlpha: CGFloat = 0.9
+        private static let overlapFadedAlpha: CGFloat = 0.25
+
         /// Edge padding used whenever the map is fitted to the route.
         #if os(macOS)
-        static let routeInsets = NSEdgeInsets(top: 60, left: 60, bottom: 60, right: 60)
+        static let routeInsets = NSEdgeInsets(
+            top: routeInsetStandard,
+            left: routeInsetStandard,
+            bottom: routeInsetStandard,
+            right: routeInsetStandard
+        )
         #else
-        static let routeInsets = UIEdgeInsets(top: 80, left: 60, bottom: 80, right: 60)
+        static let routeInsets = UIEdgeInsets(
+            top: routeInsetTop,
+            left: routeInsetStandard,
+            bottom: routeInsetTop,
+            right: routeInsetStandard
+        )
         #endif
 
         /// Applies the current tint (with its alpha) and width to the route line.
@@ -156,8 +177,8 @@ extension MapView {
             RenderSignpost.mark("MapCentered")
             let region = MKCoordinateRegion(
                 center: coordinate,
-                latitudinalMeters: 2_000,
-                longitudinalMeters: 2_000
+                latitudinalMeters: Self.initialCenterMeters,
+                longitudinalMeters: Self.initialCenterMeters
             )
             mapView.setRegion(region, animated: true)
         }
@@ -213,7 +234,7 @@ extension MapView {
             let spacing: CGFloat = 16
             let reportedTop = sheetMetrics?.topY ?? 0
             // Fall back to a sensible estimate until the sheet reports its position.
-            let sheetTop = reportedTop > 0 ? reportedTop : height - 92
+            let sheetTop = reportedTop > 0 ? reportedTop : height - Self.sheetFallbackOffset
             constraint.constant = max(sheetTop, height * 0.5) - spacing
         }
 
@@ -351,150 +372,158 @@ extension MapView {
                 mapView.addOverlay(review, level: .aboveLabels)
             }
         }
+    }
+}
 
-        /// Adds/moves/removes the single highlight annotation. O(1).
-        private func applyHighlight(_ coordinate: CLLocationCoordinate2D?, on mapView: MKMapView) {
-            guard let coordinate else {
-                if let annotation = highlightAnnotation {
-                    mapView.removeAnnotation(annotation)
-                    highlightAnnotation = nil
-                }
-                return
-            }
+// MARK: - Highlight annotation
+
+private extension MapView.Coordinator {
+    /// Adds/moves/removes the single highlight annotation. O(1).
+    func applyHighlight(_ coordinate: CLLocationCoordinate2D?, on mapView: MKMapView) {
+        guard let coordinate else {
             if let annotation = highlightAnnotation {
-                if annotation.coordinate.latitude != coordinate.latitude
-                    || annotation.coordinate.longitude != coordinate.longitude {
-                    annotation.coordinate = coordinate
-                }
-            } else {
-                let annotation = MKPointAnnotation()
+                mapView.removeAnnotation(annotation)
+                highlightAnnotation = nil
+            }
+            return
+        }
+        if let annotation = highlightAnnotation {
+            if annotation.coordinate.latitude != coordinate.latitude
+                || annotation.coordinate.longitude != coordinate.longitude {
                 annotation.coordinate = coordinate
-                highlightAnnotation = annotation
-                mapView.addAnnotation(annotation)
             }
-            updateHighlightOpacity(on: mapView)
+        } else {
+            let annotation = MKPointAnnotation()
+            annotation.coordinate = coordinate
+            highlightAnnotation = annotation
+            mapView.addAnnotation(annotation)
         }
+        updateHighlightOpacity(on: mapView)
+    }
 
-        /// Fades the selection dot when it visually coincides with the "my location"
-        /// puck, so the two don't blend into an ambiguous blob and the user's real
-        /// position stays the one that reads clearly. zPriority doesn't help here —
-        /// MKUserLocationView isn't ordered against custom annotations the normal way.
-        private func updateHighlightOpacity(on mapView: MKMapView) {
-            guard let annotation = highlightAnnotation,
-                  let view = mapView.view(for: annotation) else { return }
-            guard let userCoordinate = mapView.userLocation.location?.coordinate else {
-                setAlpha(1, on: view)
-                return
-            }
-            let selectionPoint = mapView.convert(annotation.coordinate, toPointTo: mapView)
-            let userPoint = mapView.convert(userCoordinate, toPointTo: mapView)
-            let distance = hypot(selectionPoint.x - userPoint.x, selectionPoint.y - userPoint.y)
-            setAlpha(distance < Self.overlapThresholdPoints ? 0.25 : 1, on: view)
+    /// Fades the selection dot when it visually coincides with the "my location"
+    /// puck, so the two don't blend into an ambiguous blob and the user's real
+    /// position stays the one that reads clearly. zPriority doesn't help here —
+    /// MKUserLocationView isn't ordered against custom annotations the normal way.
+    func updateHighlightOpacity(on mapView: MKMapView) {
+        guard let annotation = highlightAnnotation,
+              let view = mapView.view(for: annotation) else { return }
+        guard let userCoordinate = mapView.userLocation.location?.coordinate else {
+            setAlpha(1, on: view)
+            return
         }
+        let selectionPoint = mapView.convert(annotation.coordinate, toPointTo: mapView)
+        let userPoint = mapView.convert(userCoordinate, toPointTo: mapView)
+        let distance = hypot(selectionPoint.x - userPoint.x, selectionPoint.y - userPoint.y)
+        setAlpha(distance < Self.overlapThresholdPoints ? Self.overlapFadedAlpha : 1, on: view)
+    }
 
-        private func setAlpha(_ alpha: CGFloat, on view: MKAnnotationView) {
-            #if os(macOS)
-            view.alphaValue = alpha
-            #else
-            view.alpha = alpha
-            #endif
+    func setAlpha(_ alpha: CGFloat, on view: MKAnnotationView) {
+        #if os(macOS)
+        view.alphaValue = alpha
+        #else
+        view.alpha = alpha
+        #endif
+    }
+}
+
+// MARK: - MKMapViewDelegate
+
+extension MapView.Coordinator {
+    func mapView(_ mapView: MKMapView, viewFor annotation: MKAnnotation) -> MKAnnotationView? {
+        guard !(annotation is MKUserLocation) else { return nil }
+
+        let identifier = "routeHighlight"
+        let view = mapView.dequeueReusableAnnotationView(withIdentifier: identifier)
+            ?? MKAnnotationView(annotation: annotation, reuseIdentifier: identifier)
+        view.annotation = annotation
+        view.canShowCallout = false
+
+        // A small filled dot in the route tint with a white ring.
+        let diameter: CGFloat = Self.annotationDiameter
+        view.bounds = CGRect(x: 0, y: 0, width: diameter, height: diameter)
+        #if os(macOS)
+        view.wantsLayer = true
+        let layer = view.layer ?? CALayer()
+        view.layer = layer
+        layer.backgroundColor = NSColor(routeTint).withAlphaComponent(1).cgColor
+        layer.borderColor = NSColor.white.cgColor
+        #else
+        let layer = view.layer
+        layer.backgroundColor = UIColor(routeTint).withAlphaComponent(1).cgColor
+        layer.borderColor = UIColor.white.cgColor
+        #endif
+        layer.cornerRadius = diameter / 2
+        layer.borderWidth = Self.annotationBorderWidth
+        layer.shadowColor = CGColor(gray: 0, alpha: 1)
+        layer.shadowOpacity = Self.annotationShadowOpacity
+        layer.shadowRadius = Self.annotationShadowRadius
+        layer.shadowOffset = .zero
+        return view
+    }
+
+    func mapView(_ mapView: MKMapView, didUpdate userLocation: MKUserLocation) {
+        // Belt-and-suspenders alongside `didSelect` below — MapKit
+        // resets this on its own internal user-location view, so it
+        // alone doesn't reliably suppress the callout.
+        mapView.view(for: userLocation)?.canShowCallout = false
+        updateHighlightOpacity(on: mapView)
+    }
+
+    func mapView(_ mapView: MKMapView, didSelect view: MKAnnotationView) {
+        // MapKit's default callout for the blue dot pulls in the "Me"
+        // contact's photo (or a placeholder silhouette) from Contacts;
+        // `canShowCallout = false` alone doesn't reliably suppress it,
+        // so deselect immediately to dismiss the callout before it shows.
+        guard view.annotation is MKUserLocation else { return }
+        mapView.deselectAnnotation(view.annotation, animated: false)
+    }
+
+    func mapView(_ mapView: MKMapView, regionDidChangeAnimated animated: Bool) {
+        // Zooming changes the on-screen distance between two fixed coordinates,
+        // so the overlap fade needs to be re-checked, not just on move/relocate.
+        updateHighlightOpacity(on: mapView)
+    }
+
+    func mapView(_ mapView: MKMapView, rendererFor overlay: MKOverlay) -> MKOverlayRenderer {
+        if let matchedTileOverlay = overlay as? TileOverlay {
+            return CachingTileOverlayRenderer(overlay: matchedTileOverlay)
         }
-
-        func mapView(_ mapView: MKMapView, viewFor annotation: MKAnnotation) -> MKAnnotationView? {
-            guard !(annotation is MKUserLocation) else { return nil }
-
-            let identifier = "routeHighlight"
-            let view = mapView.dequeueReusableAnnotationView(withIdentifier: identifier)
-                ?? MKAnnotationView(annotation: annotation, reuseIdentifier: identifier)
-            view.annotation = annotation
-            view.canShowCallout = false
-
-            // A small filled dot in the route tint with a white ring.
-            let diameter: CGFloat = 18
-            view.bounds = CGRect(x: 0, y: 0, width: diameter, height: diameter)
-            #if os(macOS)
-            view.wantsLayer = true
-            let layer = view.layer ?? CALayer()
-            view.layer = layer
-            layer.backgroundColor = NSColor(routeTint).withAlphaComponent(1).cgColor
-            layer.borderColor = NSColor.white.cgColor
-            #else
-            let layer = view.layer
-            layer.backgroundColor = UIColor(routeTint).withAlphaComponent(1).cgColor
-            layer.borderColor = UIColor.white.cgColor
-            #endif
-            layer.cornerRadius = diameter / 2
-            layer.borderWidth = 3
-            layer.shadowColor = CGColor(gray: 0, alpha: 1)
-            layer.shadowOpacity = 0.3
-            layer.shadowRadius = 2
-            layer.shadowOffset = .zero
-            return view
-        }
-
-        func mapView(_ mapView: MKMapView, didUpdate userLocation: MKUserLocation) {
-            // Belt-and-suspenders alongside `didSelect` below — MapKit
-            // resets this on its own internal user-location view, so it
-            // alone doesn't reliably suppress the callout.
-            mapView.view(for: userLocation)?.canShowCallout = false
-            updateHighlightOpacity(on: mapView)
-        }
-
-        func mapView(_ mapView: MKMapView, didSelect view: MKAnnotationView) {
-            // MapKit's default callout for the blue dot pulls in the "Me"
-            // contact's photo (or a placeholder silhouette) from Contacts;
-            // `canShowCallout = false` alone doesn't reliably suppress it,
-            // so deselect immediately to dismiss the callout before it shows.
-            guard view.annotation is MKUserLocation else { return }
-            mapView.deselectAnnotation(view.annotation, animated: false)
-        }
-
-        func mapView(_ mapView: MKMapView, regionDidChangeAnimated animated: Bool) {
-            // Zooming changes the on-screen distance between two fixed coordinates,
-            // so the overlap fade needs to be re-checked, not just on move/relocate.
-            updateHighlightOpacity(on: mapView)
-        }
-
-        func mapView(_ mapView: MKMapView, rendererFor overlay: MKOverlay) -> MKOverlayRenderer {
-            if let tileOverlay = overlay as? TileOverlay {
-                return CachingTileOverlayRenderer(overlay: tileOverlay)
-            }
-            if let polyline = overlay as? MKPolyline {
-                if recordingReviewOverlay === polyline {
-                    let renderer = MKPolylineRenderer(polyline: polyline)
-                    #if os(macOS)
-                    renderer.strokeColor = NSColor.systemOrange
-                    #else
-                    renderer.strokeColor = UIColor.systemOrange
-                    #endif
-                    renderer.lineWidth = 7
-                    renderer.lineDashPattern = [3, 5]
-                    renderer.lineJoin = .round
-                    renderer.lineCap = .round
-                    return renderer
-                }
-                if recordingTailOverlay === polyline
-                    || recordingChunkOverlays.contains(where: { $0 === polyline }) {
-                    let renderer = MKPolylineRenderer(polyline: polyline)
-                    #if os(macOS)
-                    renderer.strokeColor = NSColor.systemRed.withAlphaComponent(0.9)
-                    #else
-                    renderer.strokeColor = UIColor.systemRed.withAlphaComponent(0.9)
-                    #endif
-                    renderer.lineWidth = 4
-                    renderer.lineDashPattern = [10, 6]
-                    renderer.lineJoin = .round
-                    renderer.lineCap = .round
-                    return renderer
-                }
-                let renderer = DirectionalPolylineRenderer(polyline: polyline)
-                applyStyle(to: renderer)
+        if let polyline = overlay as? MKPolyline {
+            if recordingReviewOverlay === polyline {
+                let renderer = MKPolylineRenderer(polyline: polyline)
+                #if os(macOS)
+                renderer.strokeColor = NSColor.systemOrange
+                #else
+                renderer.strokeColor = UIColor.systemOrange
+                #endif
+                renderer.lineWidth = 7
+                renderer.lineDashPattern = [3, 5]
                 renderer.lineJoin = .round
                 renderer.lineCap = .round
-                routeRenderer = renderer
                 return renderer
             }
-            return MKOverlayRenderer(overlay: overlay)
+            if recordingTailOverlay === polyline
+                || recordingChunkOverlays.contains(where: { $0 === polyline }) {
+                let renderer = MKPolylineRenderer(polyline: polyline)
+                #if os(macOS)
+                renderer.strokeColor = NSColor.systemRed.withAlphaComponent(Self.recordingAlpha)
+                #else
+                renderer.strokeColor = UIColor.systemRed.withAlphaComponent(Self.recordingAlpha)
+                #endif
+                renderer.lineWidth = 4
+                renderer.lineDashPattern = [10, 6]
+                renderer.lineJoin = .round
+                renderer.lineCap = .round
+                return renderer
+            }
+            let renderer = DirectionalPolylineRenderer(polyline: polyline)
+            applyStyle(to: renderer)
+            renderer.lineJoin = .round
+            renderer.lineCap = .round
+            routeRenderer = renderer
+            return renderer
         }
+        return MKOverlayRenderer(overlay: overlay)
     }
 }

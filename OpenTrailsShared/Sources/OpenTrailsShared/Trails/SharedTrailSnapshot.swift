@@ -34,9 +34,9 @@ public struct SharedTrailSnapshot: Codable, Sendable, Equatable {
         title: String,
         tintHex: String,
         totalDistanceMeters: Double,
+        polyline: [CodableCoordinate],
         elevationLowMeters: Double? = nil,
         elevationHighMeters: Double? = nil,
-        polyline: [CodableCoordinate],
         liveFix: LiveFix? = nil,
         updatedAt: Date = .now
     ) {
@@ -57,7 +57,12 @@ public struct SharedTrailSnapshot: Codable, Sendable, Equatable {
         public var offRouteMeters: Double
         public var timestamp: Date
 
-        public init(coordinate: CodableCoordinate, distanceAlongRouteMeters: Double, offRouteMeters: Double, timestamp: Date) {
+        public init(
+            coordinate: CodableCoordinate,
+            distanceAlongRouteMeters: Double,
+            offRouteMeters: Double,
+            timestamp: Date
+        ) {
             self.coordinate = coordinate
             self.distanceAlongRouteMeters = distanceAlongRouteMeters
             self.offRouteMeters = offRouteMeters
@@ -113,8 +118,8 @@ public func decimate(
     _ coordinates: [(latitude: Double, longitude: Double)],
     maxPoints: Int = 180
 ) -> [SharedTrailSnapshot.CodableCoordinate] {
-    decimate(coordinates, maxPoints: maxPoints) {
-        SharedTrailSnapshot.CodableCoordinate(latitude: $0.latitude, longitude: $0.longitude)
+    decimate(coordinates, maxPoints: maxPoints) { coord in
+        SharedTrailSnapshot.CodableCoordinate(latitude: coord.latitude, longitude: coord.longitude)
     }
 }
 
@@ -126,9 +131,7 @@ public func decimate<Element>(
     maxPoints: Int = 180,
     transform: (Element) -> SharedTrailSnapshot.CodableCoordinate
 ) -> [SharedTrailSnapshot.CodableCoordinate] {
-    guard elements.count > maxPoints, maxPoints > 1 else {
-        return elements.map(transform)
-    }
+    guard elements.count > maxPoints, maxPoints > 1 else { return elements.map(transform) }
     let lastIndex = elements.count - 1
     let stride = Double(lastIndex) / Double(maxPoints - 1)
     var result: [SharedTrailSnapshot.CodableCoordinate] = []

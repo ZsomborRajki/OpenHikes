@@ -14,14 +14,16 @@
 //
 
 import Foundation
-import os
 @testable import OpenTrails
+import os
 
 nonisolated final class StubTileProtocol: URLProtocol, @unchecked Sendable {
+    private static let httpOK = 200
+
     /// What the tile server says back.
     struct Response: Sendable {
         var statusCode: Int = 200
-        var data: Data = Data()
+        var data = Data()
         var headers: [String: String] = [:]
         /// Answer with a `URLResponse` that isn't an `HTTPURLResponse` — the
         /// case `fetchTile` refuses before it looks at any status code.
@@ -30,18 +32,18 @@ nonisolated final class StubTileProtocol: URLProtocol, @unchecked Sendable {
         var failure: URLError?
 
         /// A real, decodable PNG — what a tile server actually sends.
-        static func tile(statusCode: Int = 200, headers: [String: String] = [:]) -> Response {
-            Response(statusCode: statusCode, data: TileStore.tileData, headers: headers)
+        static func tile(statusCode: Int = 200, headers: [String: String] = [:]) -> Self {
+            Self(statusCode: statusCode, data: TileStore.tileData, headers: headers)
         }
 
         /// A 200 carrying something that isn't an image: a captive-portal
         /// login page, an HTML error body, a truncated download.
-        static func undecodable(_ body: String = "<html>Rate limited</html>") -> Response {
-            Response(statusCode: 200, data: Data(body.utf8))
+        static func undecodable(_ body: String = "<html>Rate limited</html>") -> Self {
+            Self(statusCode: httpOK, data: Data(body.utf8))
         }
 
-        static func status(_ code: Int) -> Response {
-            Response(statusCode: code, data: Data("error".utf8))
+        static func status(_ code: Int) -> Self {
+            Self(statusCode: code, data: Data("error".utf8))
         }
     }
 
@@ -92,12 +94,12 @@ nonisolated final class StubTileProtocol: URLProtocol, @unchecked Sendable {
 
     // MARK: URLProtocol
 
-    override class func canInit(with request: URLRequest) -> Bool { true }
+    override static func canInit(with request: URLRequest) -> Bool { true }
 
-    override class func canonicalRequest(for request: URLRequest) -> URLRequest { request }
+    override static func canonicalRequest(for request: URLRequest) -> URLRequest { request }
 
     override func startLoading() {
-        let request = self.request
+        let request = request
         let (response, delay) = Self.state.withLock { state -> (Response?, Duration?) in
             state.requests.append(request)
             return (state.responder.map { $0(request.url ?? URL(string: "https://example.invalid")!) }, state.delay)
@@ -120,7 +122,7 @@ nonisolated final class StubTileProtocol: URLProtocol, @unchecked Sendable {
         }
     }
 
-    override func stopLoading() {}
+    override func stopLoading() { /* no-op: responses are delivered asynchronously */ }
 
     private func deliver(_ response: Response, for url: URL) {
         if let failure = response.failure {

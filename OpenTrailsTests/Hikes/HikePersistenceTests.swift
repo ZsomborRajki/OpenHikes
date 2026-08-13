@@ -17,9 +17,9 @@
 //
 
 import Foundation
+@testable import OpenTrails
 import SwiftData
 import Testing
-@testable import OpenTrails
 
 /// `Hike` as it was before auto-save, auto-follow, and recording drafts
 /// existed. The same entity name with those later attributes absent makes a
@@ -30,10 +30,10 @@ enum HikeSchemaBeforeAutoSave: VersionedSchema {
 
     @Model
     final class Hike {
-        var id: UUID = UUID()
+        var id = UUID()
         var title: String = ""
         var distanceMeters: Double = 0
-        var date: Date = Date.now
+        var date = Date.now
         var tintHex: String = "#34C759"
         var routeWidth: Double = 3
         var symbol: String = "figure.hiking"
@@ -44,9 +44,9 @@ enum HikeSchemaBeforeAutoSave: VersionedSchema {
         var keywords: String?
 
         init(
-            id: UUID = UUID(),
             title: String,
             distanceMeters: Double,
+            id: UUID = UUID(),
             date: Date = .now,
             route: [RouteCoordinate] = []
         ) {
@@ -110,7 +110,7 @@ struct HikePersistenceTests {
             let hike = Hike(
                 id: id,
                 title: "Ridge Loop",
-                distanceMeters: 1_234.5,
+                distanceMeters: 1234.5,
                 date: date,
                 tintHex: "#FF9500FF",
                 routeWidth: 7,
@@ -142,7 +142,7 @@ struct HikePersistenceTests {
         #expect(reopened.title == "Ridge Loop")
         #expect(reopened.customName == "My Ridge")
         #expect(reopened.displayTitle == "My Ridge")
-        #expect(reopened.distanceMeters == 1_234.5)
+        #expect(reopened.distanceMeters == 1234.5)
         #expect(reopened.date == date)
         #expect(reopened.tintHex == "#FF9500FF")
         #expect(reopened.routeWidth == 7)
@@ -221,7 +221,7 @@ struct HikePersistenceTests {
             let legacy = HikeSchemaBeforeAutoSave.Hike(
                 id: id,
                 title: "Imported last year",
-                distanceMeters: 4_200,
+                distanceMeters: 4200,
                 date: date,
                 route: Fixture.ridgeRoute
             )
@@ -246,7 +246,7 @@ struct HikePersistenceTests {
 
         // What it had to keep.
         #expect(migrated.title == "Imported last year")
-        #expect(migrated.distanceMeters == 4_200)
+        #expect(migrated.distanceMeters == 4200)
         #expect(migrated.date == date)
         #expect(migrated.tintHex == "#34C759FF")
         #expect(migrated.route == Fixture.ridgeRoute)

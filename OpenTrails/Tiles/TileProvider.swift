@@ -45,13 +45,17 @@ struct TileProvider: Identifiable, Hashable {
 // Provider constants are `nonisolated` so the tile-loading code (which runs off
 // the main actor) can reference them alongside the main-actor settings UI.
 extension TileProvider {
+    private static let osmMaximumZ = 19
+    private static let thunderforestMaximumZ = 22
+
     /// The current default: OpenStreetMap's standard raster tiles.
     nonisolated static let openStreetMap = TileProvider(
         id: "osm",
         name: "OpenStreetMap",
-        summary: "Standard street map. Its tile policy disallows bulk downloads, so viewed tiles are auto-saved for offline use instead.",
+        summary: "Standard street map. Its tile policy disallows bulk downloads, " +
+            "so viewed tiles are auto-saved for offline use instead.",
         urlTemplate: "https://tile.openstreetmap.org/{z}/{x}/{y}.png",
-        maximumZ: 19,
+        maximumZ: osmMaximumZ,
         attribution: "© OpenStreetMap contributors",
         supportsBulkDownload: false,
         apiKeyPlistKey: nil
@@ -75,7 +79,7 @@ extension TileProvider {
         name: "Thunderforest Outdoors",
         summary: "Topographic map with deep zoom for sharp close-up detail. Permits offline downloads.",
         urlTemplate: "https://tile.thunderforest.com/outdoors/{z}/{x}/{y}.png?apikey={key}",
-        maximumZ: 22,
+        maximumZ: thunderforestMaximumZ,
         attribution: "Maps © Thunderforest, Data © OpenStreetMap contributors",
         supportsBulkDownload: true,
         apiKeyPlistKey: "ThunderforestAPIKey"

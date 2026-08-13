@@ -4,8 +4,8 @@
 //
 
 import Foundation
-import Testing
 @testable import OpenTrails
+import Testing
 
 @Suite("Serial async queue")
 struct SerialAsyncQueueTests {

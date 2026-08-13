@@ -31,7 +31,7 @@ final class Hike {
     ///
     /// The inline `= nil` default is required for SwiftData lightweight
     /// migration so existing stores can backfill the new optional column.
-    var customName: String? = nil
+    var customName: String?
 
     /// The unmatched GPS trace when trail matching moved a recorded route.
     /// Imported hikes and recordings that stayed raw leave this empty.
@@ -70,9 +70,9 @@ final class Hike {
     var keywords: String?
 
     init(
-        id: UUID = UUID(),
         title: String,
         distanceMeters: Double,
+        id: UUID = UUID(),
         date: Date = .now,
         tintHex: String = "#34C759",
         routeWidth: Double = 3,
@@ -121,26 +121,24 @@ extension Hike {
     /// Adds complete or partial bulk coverage without accumulating redundant
     /// records for repeated attempts at the same provider/scale/depth.
     func mergeOfflineDownload(_ record: OfflineDownloadRecord) {
-        let matches: (OfflineDownloadRecord) -> Bool = {
-            $0.providerID == record.providerID
-                && $0.scale == record.scale
-                && $0.maxZoom == record.maxZoom
+        let matches: (OfflineDownloadRecord) -> Bool = { existing in
+            existing.providerID == record.providerID
+                && existing.scale == record.scale
+                && existing.maxZoom == record.maxZoom
         }
 
-        if record.savedTileKeys == nil {
+        if record.savedTileKeys.isEmpty {
             offlineDownloads.removeAll(where: matches)
             offlineDownloads.append(record)
             return
         }
 
-        if offlineDownloads.contains(where: { matches($0) && $0.savedTileKeys == nil }) {
-            return
-        }
+        if offlineDownloads.contains(where: { matches($0) && $0.savedTileKeys.isEmpty }) { return }
 
-        var mergedKeys = Set(record.savedTileKeys ?? [])
+        var mergedKeys = Set(record.savedTileKeys)
         offlineDownloads.removeAll { existing in
-            guard matches(existing), let keys = existing.savedTileKeys else { return false }
-            mergedKeys.formUnion(keys)
+            guard matches(existing), !existing.savedTileKeys.isEmpty else { return false }
+            mergedKeys.formUnion(existing.savedTileKeys)
             return true
         }
         guard !mergedKeys.isEmpty else { return }

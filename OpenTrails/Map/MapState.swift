@@ -16,7 +16,7 @@ import MapKit
 final class RouteHighlight {
     /// Non-isolated so releasing the last reference never requires proving
     /// we're on the main actor — see ``LocationManager``'s deinit for why.
-    nonisolated deinit {}
+    nonisolated deinit { /* intentionally empty */ }
 
     /// Written only through ``move(to:)``, which is what keeps a repeat position
     /// from waking the map — see there.
@@ -39,13 +39,10 @@ final class RouteHighlight {
     /// a drag.
     func move(to coordinate: CLLocationCoordinate2D?) {
         switch (self.coordinate, coordinate) {
-        case (nil, nil):
-            return
+        case (nil, nil): return
         case let (current?, next?)
-            where current.latitude == next.latitude && current.longitude == next.longitude:
-            return
-        default:
-            self.coordinate = coordinate
+            where current.latitude == next.latitude && current.longitude == next.longitude: return
+        default: self.coordinate = coordinate
         }
     }
 }
@@ -57,7 +54,7 @@ final class RouteHighlight {
 final class SheetMetrics {
     /// Non-isolated so releasing the last reference never requires proving
     /// we're on the main actor — see ``LocationManager``'s deinit for why.
-    nonisolated deinit {}
+    nonisolated deinit { /* intentionally empty */ }
 
     var topY: CGFloat = 0
 }
@@ -70,7 +67,7 @@ final class SheetMetrics {
 final class MapController {
     /// Non-isolated so releasing the last reference never requires proving
     /// we're on the main actor — see ``LocationManager``'s deinit for why.
-    nonisolated deinit {}
+    nonisolated deinit { /* intentionally empty */ }
 
     private(set) var fitRouteRequest: Int = 0
     private(set) var showRegionRequest: Int = 0

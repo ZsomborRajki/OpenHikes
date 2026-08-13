@@ -5,8 +5,8 @@
 
 import CoreLocation
 import Foundation
-import Testing
 @testable import OpenTrails
+import Testing
 
 private actor OverpassRequestRecorder {
     private(set) var requests: [URLRequest] = []
@@ -16,6 +16,11 @@ private actor OverpassRequestRecorder {
     }
 }
 
+private enum RateLimitFixture {
+    static let statusCode = 429
+    static let responseCount = 2
+}
+
 private actor ConsecutiveRateLimitTransport {
     private(set) var requestCount = 0
 
@@ -23,19 +28,19 @@ private actor ConsecutiveRateLimitTransport {
         requestCount += 1
         let requestIndex = requestCount
         if requestIndex == 1 {
-            while requestCount < 2 {
+            while requestCount < RateLimitFixture.responseCount {
                 await Task.yield()
             }
             return OverpassHTTPResponse(
                 data: Data(),
-                statusCode: 429,
+                statusCode: RateLimitFixture.statusCode,
                 headers: ["retry-after": "120"]
             )
         }
         try? await Task.sleep(for: .milliseconds(25))
         return OverpassHTTPResponse(
             data: Data(),
-            statusCode: 429,
+            statusCode: RateLimitFixture.statusCode,
             headers: ["retry-after": "10"]
         )
     }
@@ -61,7 +66,7 @@ struct OverpassTrailGraphProviderTests {
             provider.region(
                 containing: CLLocationCoordinate2D(
                     latitude: coordinate.latitude,
-                    longitude: eastBoundary + 0.000_001
+                    longitude: eastBoundary + 0.000001
                 )
             )
         )
@@ -94,19 +99,18 @@ struct OverpassTrailGraphProviderTests {
             )
         defer { try? FileManager.default.removeItem(at: directory) }
         let recorder = OverpassRequestRecorder()
-            let clock = TestClock()
-            let provider = OverpassTrailGraphProvider(
-                directory: directory,
-                clock: clock.read,
-                transport: { request in
-                await recorder.record(request)
-                return OverpassHTTPResponse(
-                    data: Data(Self.fixture.utf8),
-                    statusCode: 200,
-                    headers: [:]
-                )
-            }
-        )
+        let clock = TestClock()
+        let provider = OverpassTrailGraphProvider(
+            directory: directory,
+            clock: clock.read
+        ) { request in
+            await recorder.record(request)
+            return OverpassHTTPResponse(
+                data: Data(Self.fixture.utf8),
+                statusCode: 200,
+                headers: [:]
+            )
+        }
         let coordinate = CLLocationCoordinate2D(
             latitude: 47.63,
             longitude: 12.86
@@ -118,39 +122,22 @@ struct OverpassTrailGraphProviderTests {
         let requests = await recorder.requests
         #expect(requests.count == 1)
         let request = try #require(requests.first)
-        #expect(request.httpMethod == "POST")
-        #expect(
-            request.value(forHTTPHeaderField: "User-Agent")
-                == TileCache.userAgent
-        )
-        let body = try #require(
-            request.httpBody.flatMap { String(data: $0, encoding: .utf8) }
-        )
-        #expect(body.contains("highway"))
-        #expect(body.contains("route%22%3D%22hiking"))
-        let form = URLComponents(string: "?\(body)")
-        let query = try #require(
-            form?.queryItems?.first { $0.name == "data" }?.value
-        )
-        #expect(query.contains("rel(bw.trails)"))
-        #expect(query.contains("node(w.trails)"))
-        #expect(!query.contains(">>"))
+        try assertOverpassQueryShape(request)
 
         clock.advance(by: 31 * 24 * 60 * 60)
         let reloaded = OverpassTrailGraphProvider(
             directory: directory,
-            clock: clock.read,
-            transport: { _ in
-                Issue.record(
-                    "offline matching should still use an expired durable graph"
-                )
-                return OverpassHTTPResponse(
-                    data: Data(),
-                    statusCode: 500,
-                    headers: [:]
-                )
-            }
-        )
+            clock: clock.read
+        ) { _ in
+            Issue.record(
+                "offline matching should still use an expired durable graph"
+            )
+            return OverpassHTTPResponse(
+                data: Data(),
+                statusCode: 500,
+                headers: [:]
+            )
+        }
         let graph = try await reloaded.cachedGraph(covering: [coordinate])
         #expect(graph?.edges.count == 1)
     }
@@ -165,17 +152,16 @@ struct OverpassTrailGraphProviderTests {
         defer { try? FileManager.default.removeItem(at: directory) }
         let recorder = OverpassRequestRecorder()
         let provider = OverpassTrailGraphProvider(
-            directory: directory,
-            transport: { request in
-                await recorder.record(request)
-                try await Task.sleep(for: .milliseconds(50))
-                return OverpassHTTPResponse(
-                    data: Data(Self.fixture.utf8),
-                    statusCode: 200,
-                    headers: [:]
-                )
-            }
-        )
+            directory: directory
+        ) { request in
+            await recorder.record(request)
+            try await Task.sleep(for: .milliseconds(50))
+            return OverpassHTTPResponse(
+                data: Data(Self.fixture.utf8),
+                statusCode: 200,
+                headers: [:]
+            )
+        }
         let coordinate = CLLocationCoordinate2D(
             latitude: 47.63,
             longitude: 12.86
@@ -210,24 +196,23 @@ struct OverpassTrailGraphProviderTests {
         let clock = TestClock()
         let provider = OverpassTrailGraphProvider(
             directory: directory,
-            clock: clock.read,
-            transport: { request in
-                await recorder.record(request)
-                if (await recorder.requests).count > 1 {
-                    try await Task.sleep(for: .milliseconds(50))
-                    return OverpassHTTPResponse(
-                        data: Data(#"{"elements":[]}"#.utf8),
-                        statusCode: 200,
-                        headers: [:]
-                    )
-                }
+            clock: clock.read
+        ) { request in
+            await recorder.record(request)
+            if (await recorder.requests).count > 1 {
+                try await Task.sleep(for: .milliseconds(50))
                 return OverpassHTTPResponse(
-                    data: Data(Self.fixture.utf8),
+                    data: Data(#"{"elements":[]}"#.utf8),
                     statusCode: 200,
                     headers: [:]
                 )
             }
-        )
+            return OverpassHTTPResponse(
+                data: Data(Self.fixture.utf8),
+                statusCode: 200,
+                headers: [:]
+            )
+        }
         let coordinate = CLLocationCoordinate2D(
             latitude: 47.63,
             longitude: 12.86
@@ -257,11 +242,10 @@ struct OverpassTrailGraphProviderTests {
         let transport = ConsecutiveRateLimitTransport()
         let clock = TestClock()
         let provider = OverpassTrailGraphProvider(
-            clock: clock.read,
-            transport: { _ in
-                await transport.response()
-            }
-        )
+            clock: clock.read
+        ) { _ in
+            await transport.response()
+        }
         let first = CLLocationCoordinate2D(
             latitude: 47.63,
             longitude: 12.86
@@ -272,14 +256,14 @@ struct OverpassTrailGraphProviderTests {
             longitude: SlippyTileMath.lon(
                 x: region.x + 1,
                 z: region.zoom
-            ) + 0.000_001
+            ) + 0.000001
         )
         let third = CLLocationCoordinate2D(
             latitude: first.latitude,
             longitude: SlippyTileMath.lon(
                 x: region.x + 2,
                 z: region.zoom
-            ) + 0.000_001
+            ) + 0.000001
         )
 
         let firstRequest = Task {
@@ -313,38 +297,58 @@ struct OverpassTrailGraphProviderTests {
         #expect(await transport.requestCount == 2)
     }
 
-    private nonisolated static let fixture = """
-    {
-      "elements": [
-        {"type":"node","id":1,"lat":47.6300,"lon":12.8600},
-        {"type":"node","id":2,"lat":47.6310,"lon":12.8600},
-        {"type":"node","id":3,"lat":47.6320,"lon":12.8600},
-        {
-          "type":"way",
-          "id":10,
-          "nodes":[1,2],
-          "tags":{
-            "highway":"path",
-            "name":"Local Path",
-            "surface":"gravel"
-          }
-        },
-        {
-          "type":"way",
-          "id":11,
-          "nodes":[2,3],
-          "tags":{
-            "highway":"path",
-            "access":"private"
-          }
-        },
-        {
-          "type":"relation",
-          "id":100,
-          "members":[{"type":"way","ref":10,"role":""}],
-          "tags":{"route":"hiking","name":"Alpine Route"}
-        }
-      ]
+    private func assertOverpassQueryShape(_ request: URLRequest) throws {
+        #expect(request.httpMethod == "POST")
+        #expect(
+            request.value(forHTTPHeaderField: "User-Agent")
+                == TileCache.userAgent
+        )
+        let body = try #require(
+            request.httpBody.flatMap { String(data: $0, encoding: .utf8) }
+        )
+        #expect(body.contains("highway"))
+        #expect(body.contains("route%22%3D%22hiking"))
+        let form = URLComponents(string: "?\(body)")
+        let query = try #require(
+            form?.queryItems?.first { $0.name == "data" }?.value
+        )
+        #expect(query.contains("rel(bw.trails)"))
+        #expect(query.contains("node(w.trails)"))
+        #expect(!query.contains(">>"))
     }
-    """
+
+    nonisolated private static let fixture = """
+        {
+            "elements": [
+                {"type":"node","id":1,"lat":47.6300,"lon":12.8600},
+                {"type":"node","id":2,"lat":47.6310,"lon":12.8600},
+                {"type":"node","id":3,"lat":47.6320,"lon":12.8600},
+                {
+                    "type":"way",
+                    "id":10,
+                    "nodes":[1,2],
+                    "tags":{
+                        "highway":"path",
+                        "name":"Local Path",
+                        "surface":"gravel"
+                    }
+                },
+                {
+                    "type":"way",
+                    "id":11,
+                    "nodes":[2,3],
+                    "tags":{
+                        "highway":"path",
+                        "access":"private"
+                    }
+                },
+                {
+                    "type":"relation",
+                    "id":100,
+                    "members":[{"type":"way","ref":10,"role":""}],
+                    "tags":{"route":"hiking","name":"Alpine Route"}
+                }
+            ]
+        }
+        """
 }

@@ -6,15 +6,17 @@
 //  Hosts a (future) Apple sign-in and the map tile-provider selector.
 //
 
-import SwiftUI
 import SwiftData
+import SwiftUI
 #if os(iOS)
 import UIKit
 #endif
 
 struct SettingsView: View {
-    @Environment(\.dismiss) private var dismiss
-    @Environment(\.modelContext) private var modelContext
+    @Environment(\.dismiss)
+    private var dismiss
+    @Environment(\.modelContext)
+    private var modelContext
     @Query private var hikes: [Hike]
 
     /// Needed to fold in tiles auto-saved since the last drain before anything
@@ -22,8 +24,13 @@ struct SettingsView: View {
     let autoSave: AutoSaveController
     let backgroundTracker: BackgroundTrailTracker
 
-    @AppStorage(SettingsKey.tileProviderID) private var tileProviderID = TileProvider.default.id
-    @AppStorage(SettingsKey.backgroundTrackingEnabled) private var backgroundTrackingEnabled = false
+    @AppStorage(SettingsKey.tileProviderID)
+    private var tileProviderID = TileProvider.default.id
+    @AppStorage(SettingsKey.backgroundTrackingEnabled)
+    private var backgroundTrackingEnabled = false
+
+    private static let accountIconSize: CGFloat = 44
+    private static let disabledOpacity: Double = 0.55
 
     /// Tile bytes on disk, split into offline coverage and browsing residue;
     /// `nil` until measured.
@@ -65,8 +72,9 @@ struct SettingsView: View {
         Section {
             HStack(spacing: 14) {
                 Image(systemName: "person.crop.circle.fill")
-                    .font(.system(size: 44))
+                    .font(.system(size: Self.accountIconSize))
                     .foregroundStyle(.secondary)
+                    .accessibilityHidden(true)
                 VStack(alignment: .leading, spacing: 2) {
                     Text("Not signed in")
                         .font(.headline)
@@ -97,7 +105,7 @@ struct SettingsView: View {
                 .background(.quaternary, in: Capsule())
         }
         .foregroundStyle(.primary)
-        .opacity(0.55)
+        .opacity(Self.disabledOpacity)
         .allowsHitTesting(false)
     }
 
@@ -114,7 +122,10 @@ struct SettingsView: View {
             VStack(alignment: .leading, spacing: 6) {
                 Text(selectedProvider.attribution)
                 if TileProvider.all.contains(where: { !Secrets.canLoadTiles($0) }) {
-                    Text("Sources marked “Needs API key” aren’t available in this build. Adding one is a build-time step — see Secrets.example.plist in the project.")
+                    Text(
+                        "Sources marked \u{201C}Needs API key\u{201D} aren't available in this build."
+                        + " Adding one is a build-time step — see Secrets.example.plist in the project."
+                    )
                 }
             }
         }
@@ -125,12 +136,11 @@ struct SettingsView: View {
     /// iOS-only: this is what feeds the Home Screen widget while OpenTrails
     /// isn't open. Off by default — turning it
     /// on is what first triggers the system's Always-location prompt.
-    @ViewBuilder
-    private var backgroundTrackingSection: some View {
+    @ViewBuilder private var backgroundTrackingSection: some View {
         #if os(iOS)
         Section {
             Toggle("Background Trail Tracking", isOn: backgroundTrackingBinding)
-            if backgroundTrackingEnabled && UIApplication.shared.backgroundRefreshStatus != .available {
+            if backgroundTrackingEnabled, UIApplication.shared.backgroundRefreshStatus != .available {
                 Label(
                     "Background App Refresh is off, so this may not update while OpenTrails is closed.",
                     systemImage: "exclamationmark.triangle"
@@ -141,7 +151,10 @@ struct SettingsView: View {
         } header: {
             Text("Background Tracking")
         } footer: {
-            Text("Keeps your Home Screen widget showing your progress along the selected trail even when OpenTrails isn't open, using occasional, low-power location updates.")
+            Text(
+                "Keeps your Home Screen widget showing your progress along the selected trail"
+                + " even when OpenTrails isn't open, using occasional, low-power location updates."
+            )
         }
         #endif
     }
@@ -191,14 +204,22 @@ struct SettingsView: View {
                 titleVisibility: .visible
             ) {
                 Button("Delete All", role: .destructive) { deleteAllTiles() }
-                Button("Cancel", role: .cancel) {}
+                Button("Cancel", role: .cancel) { /* intentionally empty */ }
             } message: {
-                Text("Your hikes lose their offline maps, and the map cache is cleared too. Tiles re-download when you view maps online again.")
+                Text(
+                    "Your hikes lose their offline maps, and the map cache is cleared too."
+                    + " Tiles re-download when you view maps online again."
+                )
             }
         } header: {
             Text("Offline Storage")
         } footer: {
-            Text("Saved tiles keep your hikes usable without a signal, and are never removed automatically. The map cache is just what you’ve recently looked at — it’s kept under \(Self.byteText(TileCache.cacheByteLimit)), oldest first, and clearing it costs you nothing offline.")
+            Text(
+                "Saved tiles keep your hikes usable without a signal, and are never removed automatically."
+                + " The map cache is just what you've recently looked at — it's kept under"
+                + " \(Self.byteText(TileCache.cacheByteLimit)), oldest first,"
+                + " and clearing it costs you nothing offline."
+            )
         }
     }
 
@@ -278,14 +299,14 @@ struct SettingsView: View {
 
     /// `nonisolated`: the union is O(tile budget) trig per download record, so
     /// it belongs inside the detached tasks above rather than on the way in.
-    private static nonisolated func keys(of claims: [TileOwnership]) -> Set<String> {
+    nonisolated private static func keys(of claims: [TileOwnership]) -> Set<String> {
         claims.reduce(into: Set<String>()) { $0.formUnion($1.tileKeys()) }
     }
 
     /// `nonisolated`: passed as a bare function reference to `Optional.map`,
     /// which (unlike a closure literal) doesn't inherit the view's actor
     /// isolation. Doesn't touch any actor-isolated state, so this is safe.
-    private static nonisolated func byteText(_ bytes: Int64) -> String {
+    nonisolated private static func byteText(_ bytes: Int64) -> String {
         ByteCountFormatter.string(fromByteCount: bytes, countStyle: .file)
     }
 
@@ -305,6 +326,7 @@ struct SettingsView: View {
                 Image(systemName: isSelected ? "checkmark.circle.fill" : "circle")
                     .font(.title3)
                     .foregroundStyle(isSelected ? AnyShapeStyle(Color.accentColor) : AnyShapeStyle(.secondary))
+                    .accessibilityHidden(true)
 
                 VStack(alignment: .leading, spacing: 3) {
                     HStack(spacing: 8) {
@@ -331,14 +353,19 @@ struct SettingsView: View {
         }
         .buttonStyle(.plain)
         .foregroundStyle(.primary)
-        .opacity(isUsable ? 1 : 0.55)
+        .opacity(isUsable ? 1 : Self.disabledOpacity)
         .disabled(!isUsable)
     }
 }
 
 #Preview {
-    let container = try! ModelContainer(for: Hike.self, configurations: .init(isStoredInMemoryOnly: true))
-    SettingsView(
+    let container: ModelContainer
+    do {
+        container = try ModelContainer(for: Hike.self, configurations: .init(isStoredInMemoryOnly: true))
+    } catch {
+        preconditionFailure("Failed to create preview container: \(error)")
+    }
+    return SettingsView(
         autoSave: AutoSaveController(),
         backgroundTracker: BackgroundTrailTracker(container: container)
     )

@@ -43,22 +43,22 @@ final class HikeSearch {
     ]
 
     func rankedHikes(matching searchText: String, in hikes: [Hike]) -> [Hike] {
-        let query = searchText.trimmingCharacters(in: .whitespacesAndNewlines)
+        let trimmedQuery = searchText.trimmingCharacters(in: .whitespacesAndNewlines)
         // No query, no results — and no reason to keep holding the last set of
         // hikes, which clearing the search field is the user's way of saying
         // they're done with. Retaining them here would keep a deleted trail's
         // model alive for as long as the sheet is on screen.
-        guard !query.isEmpty else {
+        guard !trimmedQuery.isEmpty else {
             reset()
             return []
         }
 
-        if query == self.query, isCacheValid(for: hikes) { return results }
+        if trimmedQuery == query, isCacheValid(for: hikes) { return results }
 
         rankingPasses += 1
-        self.query = query
+        query = trimmedQuery
         inputs = hikes.map { (id: $0.id, title: $0.title) }
-        results = Self.rank(inputs, matching: query)
+        results = Self.rank(inputs, matching: trimmedQuery)
             .map { hikes[$0] }
         return results
     }

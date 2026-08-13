@@ -5,9 +5,9 @@
 //  A full-screen MKMapView that renders OpenStreetMap tiles and follows the user.
 //
 
-import SwiftUI
 import MapKit
 import os
+import SwiftUI
 
 #if os(macOS)
 typealias MapViewRepresentable = NSViewRepresentable
@@ -16,7 +16,9 @@ typealias MapViewRepresentable = UIViewRepresentable
 #endif
 
 struct MapView: MapViewRepresentable, Equatable {
-    fileprivate static let logger = Logger(subsystem: "OpenTrails", category: "MapView")
+    private static let initialTrackingButtonY: CGFloat = 400
+
+    private static let logger = Logger(subsystem: "OpenTrails", category: "MapView")
 
     /// Source of the user's live location. Observed directly by the map (not
     /// via SwiftUI), the same technique `highlight`/`sheetMetrics` use, so the
@@ -64,7 +66,7 @@ struct MapView: MapViewRepresentable, Equatable {
     /// parent always hands down as the same instance, so identity comparison is
     /// correct: their *contents* changing on their own is not a reason to
     /// re-run `updateUIView`.
-    static func == (lhs: MapView, rhs: MapView) -> Bool {
+    static func == (lhs: Self, rhs: Self) -> Bool {
         lhs.route == rhs.route
             && lhs.routeStyle === rhs.routeStyle
             && lhs.highlight === rhs.highlight
@@ -145,7 +147,7 @@ struct MapView: MapViewRepresentable, Equatable {
 
         // The bottom is pinned to the map's top (full-screen space) so its constant
         // is a global Y that the sheet observation drives as the sheet is dragged.
-        let bottom = tracking.bottomAnchor.constraint(equalTo: mapView.topAnchor, constant: 400)
+        let bottom = tracking.bottomAnchor.constraint(equalTo: mapView.topAnchor, constant: Self.initialTrackingButtonY)
         coordinator.trackingBottomConstraint = bottom
 
         let guide = mapView.safeAreaLayoutGuide

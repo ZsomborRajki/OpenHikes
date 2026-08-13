@@ -4,8 +4,8 @@
 //
 
 import Foundation
-import Testing
 @testable import OpenTrails
+import Testing
 
 @Suite("Sheet route")
 struct SheetRouteTests {
@@ -35,8 +35,8 @@ struct SheetRouteTests {
     func recordingSelectsItsHike() throws {
         let context = try Fixture.modelContext()
         let previous = Fixture.hike(title: "Imported", in: context)
-        let recording = Fixture.hike(title: "Morning Hike", route: [], in: context) {
-            $0.isRecording = true
+        let recording = Fixture.hike(title: "Morning Hike", route: [], in: context) { hike in
+            hike.isRecording = true
         }
         var selectedHike: Hike? = previous
         var path: [SheetRoute] = [.hike(previous)]

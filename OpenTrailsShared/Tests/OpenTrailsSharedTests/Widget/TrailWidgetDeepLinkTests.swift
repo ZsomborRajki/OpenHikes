@@ -8,8 +8,8 @@
 //
 
 import Foundation
-import Testing
 @testable import OpenTrailsShared
+import Testing
 
 @Suite("Widget deep links")
 struct TrailWidgetDeepLinkTests {
@@ -58,7 +58,7 @@ struct TrailWidgetDeepLinkTests {
         "opentrails://settings/\(UUID().uuidString)",
         "https://example.com/hike/\(UUID().uuidString)",
         "othertrails://hike/\(UUID().uuidString)",
-        "opentrails:/\(UUID().uuidString)"
+        "opentrails:/\(UUID().uuidString)",
     ])
     func refusesUnknownLinks(string: String) throws {
         let url = try #require(URL(string: string))

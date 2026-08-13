@@ -18,9 +18,9 @@
 import CoreLocation
 import Foundation
 import MapKit
+@testable import OpenTrails
 import SwiftUI
 import Testing
-@testable import OpenTrails
 
 @Suite("Map coordinator")
 struct MapCoordinatorTests {
@@ -66,7 +66,10 @@ struct MapCoordinatorTests {
         )
     }
 
-    private static func route(_ id: UUID = UUID(), coordinates: [RouteCoordinate] = Fixture.ridgeRoute) -> DisplayedRoute {
+    private static func route(
+        _ id: UUID = UUID(),
+        coordinates: [RouteCoordinate] = Fixture.ridgeRoute
+    ) -> DisplayedRoute {
         DisplayedRoute(id: id, coordinates: Fixture.coordinates(coordinates))
     }
 
@@ -107,6 +110,9 @@ struct MapCoordinatorTests {
 
     /// Everything `makeMapView` is responsible for wiring, checked on the map
     /// itself rather than on the code that was supposed to wire it.
+}
+
+extension MapCoordinatorTests {
     @Test("building the map registers the coordinator and installs the tiles")
     func buildingRegistersEverything() throws {
         let coordinator = MapView.Coordinator()
@@ -220,7 +226,8 @@ struct MapCoordinatorTests {
         let map = makeMap(mapView(), coordinator)
         defer { detach(map) }
 
-        let single = DisplayedRoute(id: UUID(), coordinates: [CLLocationCoordinate2D(latitude: 47.63, longitude: 12.86)])
+        let singleCoord = CLLocationCoordinate2D(latitude: 47.63, longitude: 12.86)
+        let single = DisplayedRoute(id: UUID(), coordinates: [singleCoord])
         mapView(route: single).update(map, coordinator)
 
         #expect(coordinator.routeOverlay == nil)
@@ -293,7 +300,7 @@ struct MapCoordinatorTests {
         let route = [
             CLLocationCoordinate2D(latitude: 47.63, longitude: 12.86),
             CLLocationCoordinate2D(latitude: 47.631, longitude: 12.861),
-            CLLocationCoordinate2D(latitude: 47.632, longitude: 12.862)
+            CLLocationCoordinate2D(latitude: 47.632, longitude: 12.862),
         ]
         recordingTrace.showReview(
             route: route,
@@ -329,9 +336,9 @@ struct MapCoordinatorTests {
         let renderer = try #require(coordinator.mapView(map, rendererFor: line) as? DirectionalPolylineRenderer)
 
         let context = try Fixture.modelContext()
-        let hike = Fixture.hike(in: context) {
-            $0.tintHex = "#FF0000FF"
-            $0.routeWidth = 9
+        let hike = Fixture.hike(in: context) { hike in
+            hike.tintHex = "#FF0000FF"
+            hike.routeWidth = 9
         }
         routeStyle.follow(hike)
         await settle()
@@ -417,7 +424,7 @@ struct MapCoordinatorTests {
     /// The "my location" button rides just above the sheet's top edge as it is
     /// dragged, at touch frequency, without a SwiftUI pass in between.
     @Test("the tracking button follows the sheet's top edge")
-    func trackingButtonFollowsTheSheet() async throws {
+    func trackingButtonFollowsTheSheet() throws {
         #if os(iOS)
         let coordinator = MapView.Coordinator()
         let map = makeMap(mapView(), coordinator)

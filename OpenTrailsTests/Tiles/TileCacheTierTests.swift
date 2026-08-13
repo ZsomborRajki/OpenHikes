@@ -18,8 +18,8 @@
 //
 
 import Foundation
-import Testing
 @testable import OpenTrails
+import Testing
 
 #if canImport(UIKit)
 import UIKit
@@ -190,7 +190,7 @@ struct TileCacheTierTests {
         #expect(!sandbox.isBrowsed(key))
     }
 
-    /// `OpenTrailsApp.init` kicks off `removeExpiredTiles()` on a detached task
+    /// `OpenTrailsApp.init` kicks off `removeExpiredTiles()` on the maintenance queue
     /// at every launch. It used to empty the memory cache before it looked at a
     /// single date — including tiles the map populated in the milliseconds
     /// since launch, which are by definition the ones on screen — and every one
@@ -216,6 +216,15 @@ struct TileCacheTierTests {
             sandbox.cache.memoryImage(forKey: key) != nil,
             "a fresh tile shouldn't have to be read back off disk because an unrelated one expired"
         )
+    }
+
+    @Test("cache maintenance stays off the physical main thread")
+    @MainActor
+    func maintenanceRunsOffMain() async {
+        let ranOffMain = await TileCache.performMaintenance {
+            !Thread.isMainThread
+        }
+        #expect(ranOffMain)
     }
 
     /// The other launch-time sweep, with the same reasoning: `trimCache` runs
@@ -281,7 +290,7 @@ struct TileCacheTierTests {
     /// unmeasurable image must still be charged something or it would be exempt
     /// from the limit entirely.
     @Test("an image with no bitmap to measure still costs something")
-    func unmeasurableImagesAreStillCharged() throws {
+    func unmeasurableImagesAreStillCharged() {
         #if canImport(UIKit)
         let blank = UIImage()
         #elseif canImport(AppKit)

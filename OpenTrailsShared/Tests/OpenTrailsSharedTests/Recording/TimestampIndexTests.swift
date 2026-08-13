@@ -4,8 +4,8 @@
 //
 
 import Foundation
-import Testing
 @testable import OpenTrailsShared
+import Testing
 
 @Suite("Timestamp index")
 struct TimestampIndexTests {
@@ -39,7 +39,7 @@ struct TimestampIndexTests {
     func inputIsSorted() {
         let index = TimestampIndex([
             start.addingTimeInterval(20),
-            start
+            start,
         ])
 
         #expect(index.contains(start.addingTimeInterval(4), within: 5))

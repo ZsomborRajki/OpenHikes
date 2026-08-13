@@ -44,13 +44,13 @@ public enum TrailWidgetDeepLink {
         guard url.scheme == scheme else { return nil }
         switch url.host {
         case hikeHost:
-            guard let id = UUID(uuidString: url.lastPathComponent) else {
-                return nil
-            }
+            guard let id = UUID(uuidString: url.lastPathComponent) else { return nil }
             return .hike(id)
+
         case recordingHost:
             guard url.path.isEmpty else { return nil }
             return .recording
+
         default:
             return nil
         }

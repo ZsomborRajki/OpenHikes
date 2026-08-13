@@ -22,8 +22,8 @@
 import CoreLocation
 import Foundation
 import MapKit
-import Testing
 @testable import OpenTrails
+import Testing
 
 /// Counts `withObservationTracking` notifications, re-registering after each
 /// one exactly the way `MapView.Coordinator` does.
@@ -109,7 +109,7 @@ struct RecordingIsolationTests {
                 CLLocationCoordinate2D(
                     latitude: 47.63,
                     longitude: 12.8599
-                )
+                ),
             ],
             provisional: [
                 CLLocationCoordinate2D(
@@ -119,13 +119,13 @@ struct RecordingIsolationTests {
                 CLLocationCoordinate2D(
                     latitude: 47.6302,
                     longitude: 12.8599
-                )
+                ),
             ],
             expectedGeneration: generation
         ))
         #expect(trace.tail.count == 2)
-        #expect(trace.tail.allSatisfy {
-            abs($0.longitude - 12.8599) < 0.000_001
+        #expect(trace.tail.allSatisfy { coord in
+            abs(coord.longitude - 12.8599) < 0.000001
         })
 
         trace.replace(with: [])
@@ -135,7 +135,7 @@ struct RecordingIsolationTests {
                 CLLocationCoordinate2D(
                     latitude: 47.64,
                     longitude: 12.85
-                )
+                ),
             ],
             expectedGeneration: generation
         ))
@@ -210,10 +210,10 @@ private final class IsolationRecordingSource: RecordingLocationSource {
         set { delegateObject = newValue }
     }
 
-    func requestWhenInUseAuthorization() {}
-    func requestTemporaryFullAccuracy() async {}
-    func startRecordingUpdates() {}
-    func stopRecordingUpdates() {}
+    func requestWhenInUseAuthorization() { /* no-op */ }
+    func requestTemporaryFullAccuracy() { /* no-op */ }
+    func startRecordingUpdates() { /* no-op */ }
+    func stopRecordingUpdates() { /* no-op */ }
 
     func deliver(_ location: CLLocation) {
         sourceDelegate?.locationManager?(
@@ -267,7 +267,8 @@ struct ObservationCostTests {
 
         publisher.coordinate = CLLocationCoordinate2D(latitude: 47.63, longitude: 12.86)
         await counter.settle()
-        #expect(counter.count == 1, "same place, still a notification — the coordinate publishers must compare for themselves")
+        let sameMsg = "same place, still a notification — the coordinate publishers must compare for themselves"
+        #expect(counter.count == 1, sameMsg)
     }
 
     /// The other half of the same idea: the guard genuinely costs nothing when
@@ -320,8 +321,8 @@ struct ObservationCostTests {
 
         controller.show(MKCoordinateRegion(
             center: CLLocationCoordinate2D(latitude: 47.63, longitude: 12.86),
-            latitudinalMeters: 1_000,
-            longitudinalMeters: 1_000
+            latitudinalMeters: 1000,
+            longitudinalMeters: 1000
         ))
         await regionCounter.settle()
         #expect(regionCounter.count == 1)
@@ -441,9 +442,9 @@ struct RouteHighlightTests {
 @Suite("Location publishing")
 struct LocationPublishingTests {
     private func location(
+        horizontalAccuracy: CLLocationAccuracy,
         latitude: Double = 47.63,
         longitude: Double = 12.86,
-        horizontalAccuracy: CLLocationAccuracy,
         timestamp: Date = .now
     ) -> CLLocation {
         CLLocation(
@@ -460,7 +461,7 @@ struct LocationPublishingTests {
     @Test("reduced-accuracy fixes remain available for coarse features")
     func reducedAccuracyIsPublishedButNotRouteMatched() async {
         let manager = LocationManager()
-        let approximate = location(horizontalAccuracy: 1_500)
+        let approximate = location(horizontalAccuracy: 1500)
 
         manager.locationManager(CLLocationManager(), didUpdateLocations: [approximate])
         await Task.yield()
@@ -499,7 +500,11 @@ struct LocationPublishingTests {
     /// ask this one question, so they can't drift apart.
     @Test("only a fix from someone actually moving carries a usable course")
     func courseNeedsMovement() {
-        func fix(course: CLLocationDirection, courseAccuracy: CLLocationDirectionAccuracy, speed: CLLocationSpeed) -> CLLocation {
+        func fix(
+            course: CLLocationDirection,
+            courseAccuracy: CLLocationDirectionAccuracy,
+            speed: CLLocationSpeed
+        ) -> CLLocation {
             CLLocation(
                 coordinate: .init(latitude: 47.63, longitude: 12.86),
                 altitude: 0,
@@ -513,8 +518,10 @@ struct LocationPublishingTests {
             )
         }
 
-        #expect(LocationFixPolicy.course(of: fix(course: 180, courseAccuracy: 10, speed: 1.4)) == 180,
-                "walking, and the receiver is sure which way")
+        #expect(
+            LocationFixPolicy.course(of: fix(course: 180, courseAccuracy: 10, speed: 1.4)) == 180,
+            "walking, and the receiver is sure which way"
+        )
 
         // Standing at a viewpoint: the reported course wanders and means nothing.
         #expect(LocationFixPolicy.course(of: fix(course: 180, courseAccuracy: 10, speed: 0)) == nil)
@@ -584,7 +591,7 @@ struct LocationPublishingTests {
     /// uses it to center on the very first fix. So an unchanged fix has
     /// nobody to tell.
     @Test("an unchanged fix isn't republished")
-    func unchangedFixIsNotRepublished() async throws {
+    func unchangedFixIsNotRepublished() async {
         let clock = TestClock()
         let manager = LocationManager(clock: clock.read)
         let counter = ObservationCounter { _ = manager.coordinate }
@@ -600,7 +607,9 @@ struct LocationPublishingTests {
         clock.advance(by: 1.1)
         manager.locationManager(
             CLLocationManager(),
-            didUpdateLocations: [CLLocation(latitude: stationary.coordinate.latitude, longitude: stationary.coordinate.longitude)]
+            didUpdateLocations: [
+                CLLocation(latitude: stationary.coordinate.latitude, longitude: stationary.coordinate.longitude)
+            ]
         )
         await counter.settle()
         #expect(counter.count == 1, "standing still should not wake the map's observation every second")
@@ -608,16 +617,22 @@ struct LocationPublishingTests {
 
     /// …while actually moving must still publish, or auto-follow stops.
     @Test("a fix that moved is published")
-    func movedFixIsPublished() async throws {
+    func movedFixIsPublished() async {
         let clock = TestClock()
         let manager = LocationManager(clock: clock.read)
         let counter = ObservationCounter { _ = manager.coordinate }
         await counter.settle()
 
-        manager.locationManager(CLLocationManager(), didUpdateLocations: [CLLocation(latitude: 47.6300, longitude: 12.8600)])
+        manager.locationManager(
+            CLLocationManager(),
+            didUpdateLocations: [CLLocation(latitude: 47.6300, longitude: 12.8600)]
+        )
         await counter.settle()
         clock.advance(by: 1.1)
-        manager.locationManager(CLLocationManager(), didUpdateLocations: [CLLocation(latitude: 47.6305, longitude: 12.8600)])
+        manager.locationManager(
+            CLLocationManager(),
+            didUpdateLocations: [CLLocation(latitude: 47.6305, longitude: 12.8600)]
+        )
         await counter.settle()
 
         #expect(counter.count == 2)
@@ -635,7 +650,7 @@ struct DownloadProgressTests {
     /// tiles *saved*, so a download where every tile fails now correctly
     /// publishes no progress at all, and there'd be nothing here to observe.
     @Test("progress notifies once per tile")
-    func progressNotifiesPerTile() async throws {
+    func progressNotifiesPerTile() async {
         let downloader = OfflineTileDownloader(
             isOnline: { true },
             // Suspends before answering, so completions land in separate

@@ -23,10 +23,10 @@
 
 import CoreLocation
 import Foundation
+@testable import OpenTrails
 import SwiftData
 import SwiftUI
 import Testing
-@testable import OpenTrails
 
 @Suite("Route appearance isolation")
 struct RouteAppearanceIsolationTests {

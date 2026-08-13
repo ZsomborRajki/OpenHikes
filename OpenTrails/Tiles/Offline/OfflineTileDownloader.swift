@@ -8,15 +8,15 @@
 //  up (`providerID/z/x/y@scale`), so a warmed cache is served transparently.
 //
 
-import Foundation
 import CoreLocation
+import Foundation
 import os
 
 @Observable
 final class OfflineTileDownloader {
     /// `nonisolated`: logged from within `group.addTask`, which runs off the
     /// main actor.
-    private nonisolated static let logger = Logger(subsystem: "OpenTrails", category: "OfflineDownload")
+    nonisolated private static let logger = Logger(subsystem: "OpenTrails", category: "OfflineDownload")
 
     enum Phase: Equatable { case idle, downloading, finished, failed(String) }
 
@@ -36,7 +36,10 @@ final class OfflineTileDownloader {
     /// 0…1 fraction of tiles saved, for a progress indicator.
     var progress: Double { total == 0 ? 0 : min(1, Double(completed) / Double(total)) }
 
-    var isFailed: Bool { if case .failed = phase { return true } else { return false } }
+    var isFailed: Bool {
+        if case .failed = phase { return true }
+        return false
+    }
 
     private var task: Task<Void, Never>?
     /// The most recently started run, kept past a `cancel()` that clears
@@ -56,7 +59,7 @@ final class OfflineTileDownloader {
     nonisolated static let minZoom = 10
     /// Soft cap on tiles — deeper zoom levels are dropped once exceeded, so a huge
     /// route doesn't try to fetch hundreds of thousands of tiles.
-    nonisolated static let tileBudget = 4_000
+    nonisolated static let tileBudget = 4000
     /// How many tiles are kept in flight in the task group at once — a
     /// pipelining window, not a concurrency cap. What actually limits
     /// simultaneous blocking work is ``TileLoadGate``, shared with the map's
@@ -67,8 +70,8 @@ final class OfflineTileDownloader {
 
     init(
         isOnline: @escaping @Sendable () -> Bool = { TileCache.shared.isOnline },
-        saveTile: @escaping @Sendable (String, URL) async -> Bool = {
-            await TileCache.shared.saveTileDurably(forKey: $0, url: $1)
+        saveTile: @escaping @Sendable (String, URL) async -> Bool = { key, url in
+            await TileCache.shared.saveTileDurably(forKey: key, url: url)
         }
     ) {
         self.isOnline = isOnline
@@ -80,8 +83,14 @@ final class OfflineTileDownloader {
     /// display scale so cache keys match what the renderer requests on-device.
     func start(route: [CLLocationCoordinate2D], source: ActiveTileSource, scale: CGFloat) {
         guard phase != .downloading else { return }
-        guard route.count > 1 else { phase = .failed("No route to save."); return }
-        guard isOnline() else { phase = .failed("You're offline — connect to save tiles."); return }
+        guard route.count > 1 else {
+            phase = .failed("No route to save.")
+            return
+        }
+        guard isOnline() else {
+            phase = .failed("You're offline — connect to save tiles.")
+            return
+        }
 
         let tiles = Self.tiles(
             covering: route,
@@ -89,7 +98,10 @@ final class OfflineTileDownloader {
             maxZoom: max(source.maximumZ, Self.minZoom),
             budget: Self.tileBudget
         )
-        guard !tiles.isEmpty else { phase = .failed("Nothing to save."); return }
+        guard !tiles.isEmpty else {
+            phase = .failed("Nothing to save.")
+            return
+        }
 
         generation += 1
         let currentGeneration = generation
@@ -128,7 +140,7 @@ final class OfflineTileDownloader {
             let saved: Bool
         }
 
-        let saveTile = self.saveTile
+        let saveTileCallback = saveTile
         var index = 0
         var savedKeys = Set<String>()
 
@@ -152,7 +164,7 @@ final class OfflineTileDownloader {
                     // Durably, not through `loadTile`: the point of a download is
                     // that the tiles are still there when the user is out of
                     // signal, which rules out the OS-reclaimable cache.
-                    let saved = await saveTile(key, url)
+                    let saved = await saveTileCallback(key, url)
                     await TileLoadGate.shared.release(.background)
                     #if DEBUG
                     if saved {
@@ -187,6 +199,16 @@ final class OfflineTileDownloader {
             }
         }
 
+        finalize(savedKeys: savedKeys, tiles: tiles, source: source, scale: scale, generation: generation)
+    }
+
+    private func finalize(
+        savedKeys: Set<String>,
+        tiles: [Tile],
+        source: ActiveTileSource,
+        scale: CGFloat,
+        generation: Int
+    ) {
         guard generation == self.generation else { return }
         guard !Task.isCancelled else {
             phase = .idle
@@ -212,7 +234,7 @@ final class OfflineTileDownloader {
             }
             phase = .failed(
                 sortedKeys.isEmpty
-                    ? "Couldn’t save any tiles. Check your connection and try again."
+                    ? "Couldn't save any tiles. Check your connection and try again."
                     : "Saved \(sortedKeys.count) of \(tiles.count) tiles. Try again to finish the download."
             )
         }
@@ -229,7 +251,13 @@ final class OfflineTileDownloader {
     /// The cache keys for every tile a download of `route` would produce for the
     /// given provider/scale/depth — so stored tiles can be measured and removed
     /// after the fact. Deterministic: recomputing yields exactly the saved set.
-    nonisolated static func tileKeys(for route: [CLLocationCoordinate2D], providerID: String, providerMaxZoom: Int, maxZoom: Int, scale: CGFloat) -> [String] {
+    nonisolated static func tileKeys(
+        for route: [CLLocationCoordinate2D],
+        providerID: String,
+        providerMaxZoom: Int,
+        maxZoom: Int,
+        scale: CGFloat
+    ) -> [String] {
         let clamped = min(max(maxZoom, minZoom), providerMaxZoom)
         return tiles(covering: route, minZoom: minZoom, maxZoom: clamped, budget: tileBudget)
             .map { $0.cacheKey(providerID: providerID, scale: scale) }
@@ -241,13 +269,19 @@ final class OfflineTileDownloader {
     /// tiles each), so callers that do this repeatedly (e.g. re-measuring
     /// storage as auto-save drains in new keys) must not run it on the main
     /// thread — see ``HikeDetailView/refreshStoredBytes()``.
-    nonisolated static func storedTileKeys(route: [CLLocationCoordinate2D], offlineDownloads: [OfflineDownloadRecord]) -> [String] {
-        assertOffMainThread("storedTileKeys(route:offlineDownloads:) does O(tileBudget) trig work per download record — call it off the main thread")
+    nonisolated static func storedTileKeys(
+        route: [CLLocationCoordinate2D],
+        offlineDownloads: [OfflineDownloadRecord]
+    ) -> [String] {
+        assertOffMainThread(
+            "storedTileKeys(route:offlineDownloads:) does O(tileBudget) trig work " +
+            "per download record — call it off the main thread"
+        )
         guard !offlineDownloads.isEmpty else { return [] }
         var keys = Set<String>()
         for record in offlineDownloads {
-            if let savedTileKeys = record.savedTileKeys {
-                keys.formUnion(savedTileKeys)
+            if !record.savedTileKeys.isEmpty {
+                keys.formUnion(record.savedTileKeys)
                 continue
             }
             let provider = TileProvider.provider(id: record.providerID)
@@ -290,7 +324,12 @@ final class OfflineTileDownloader {
 
     /// Enumerates the tiles covering the route's bounding box from the overview
     /// zoom up, stopping before a zoom level that would blow the tile budget.
-    private nonisolated static func tiles(covering route: [CLLocationCoordinate2D], minZoom: Int, maxZoom: Int, budget: Int) -> [Tile] {
+    nonisolated private static func tiles(
+        covering route: [CLLocationCoordinate2D],
+        minZoom: Int,
+        maxZoom: Int,
+        budget: Int
+    ) -> [Tile] {
         guard maxZoom >= minZoom, let box = TileBoundingBox(route: route) else { return [] }
 
         // A route too sprawling for even the overview zoom to fit the budget

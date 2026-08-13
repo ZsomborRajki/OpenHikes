@@ -5,18 +5,20 @@
 //  Single full-screen OpenStreetMap view that zooms to the user on launch.
 //
 
-import SwiftUI
-import SwiftData
-import WeatherKit
 import OpenTrailsShared
+import SwiftData
+import SwiftUI
+import WeatherKit
 
 struct OpenTrailsView: View {
-    @Environment(OpenTrailsModel.self) private var appModel
-    @Environment(\.modelContext) private var modelContext
+    @Environment(OpenTrailsModel.self)
+    private var appModel
+    @Environment(\.modelContext)
+    private var modelContext
 
     @State private var showSheet = true
     @State private var searchText = ""
-    @State private var sheetDetent: PresentationDetent = .height(80)
+    @State private var sheetDetent: PresentationDetent = .height(Self.compactDetentHeight)
     @State private var selectedHike: Hike?
     /// The sheet's navigation stack, held here rather than inside `MapSheet`
     /// so a widget tap can push a hike's detail view (see `openHike(from:)`).
@@ -47,7 +49,13 @@ struct OpenTrailsView: View {
     @State private var sheetMetrics = SheetMetrics()
 
     /// The selected tile provider, persisted by the settings sheet.
-    @AppStorage(SettingsKey.tileProviderID) private var tileProviderID = TileProvider.default.id
+    @AppStorage(SettingsKey.tileProviderID)
+    private var tileProviderID = TileProvider.default.id
+
+    /// Height of the compact (search-only) sheet detent.
+    private static let compactDetentHeight: CGFloat = 80
+    /// Top padding for the weather badge, sitting below the Dynamic Island/notch.
+    private static let weatherBadgeTopPadding: CGFloat = 96
 
     /// The route drawn on the map — always the currently selected hike, if any.
     /// Geometry only: its appearance reaches the map through ``routeStyle``,
@@ -55,20 +63,20 @@ struct OpenTrailsView: View {
     private var displayedRoute: DisplayedRoute? {
         DisplayedRoute.forSelection(
             selectedHike,
+            cache: displayedRouteCoordinateCache,
             recordingPresented: navigationPath.last == .recording
                 || selectedHike?.belongsToActiveRecording(
                     currentHikeID: currentRecordingHikeID
-                ) == true,
-            cache: displayedRouteCoordinateCache
+                ) == true
         )
     }
 
     private var selectedHikeState: SelectedHikeState? {
-        selectedHike.map {
+        selectedHike.map { hike in
             SelectedHikeState(
-                id: $0.id,
-                isRecording: $0.isRecording,
-                isRecorderOwned: $0.id == currentRecordingHikeID
+                id: hike.id,
+                isRecording: hike.isRecording,
+                isRecorderOwned: hike.id == currentRecordingHikeID
             )
         }
     }
@@ -122,7 +130,7 @@ struct OpenTrailsView: View {
                 if let current = appModel.weatherManager.current {
                     WeatherBadge(weather: current)
                         .padding(.leading)
-                        .padding(.top, 96)
+                        .padding(.top, Self.weatherBadgeTopPadding)
                 }
             }
             .task { await appModel.locationManager.start() }
@@ -141,7 +149,7 @@ struct OpenTrailsView: View {
                     onImportFailed: { importFailure = .unreadable },
                     onSheetTopChange: { sheetMetrics.topY = $0 }
                 )
-                    .presentationDetents([.height(80), .medium, .large], selection: $sheetDetent)
+                    .presentationDetents([.height(Self.compactDetentHeight), .medium, .large], selection: $sheetDetent)
                     .presentationBackgroundInteraction(.enabled(upThrough: .medium))
                     .presentationBackground {
                         #if os(visionOS)
@@ -165,16 +173,18 @@ struct OpenTrailsView: View {
             // owned by a view that's being rebuilt at that moment doesn't
             // reliably appear.
             .alert(isPresented: showingImportFailure, error: importFailure) {
-                Button("OK", role: .cancel) {}
+                Button("OK", role: .cancel) { /* dismiss */ }
             }
             .alert(
                 "Saved Hikes Unavailable",
                 isPresented: showingStorageStartupIssue
             ) {
-                Button("OK", role: .cancel) {}
+                Button("OK", role: .cancel) { /* dismiss */ }
             } message: {
                 Text(
-                    "OpenTrails couldn’t open its saved hikes. This launch is using temporary storage, so changes won’t survive a relaunch. Existing data was left untouched."
+                    "OpenTrails couldn't open its saved hikes. " +
+                    "This launch is using temporary storage, so changes won't survive a relaunch. " +
+                    "Existing data was left untouched."
                 )
             }
             .onOpenURL { url in openWidgetLink(url) }
@@ -200,9 +210,7 @@ struct OpenTrailsView: View {
                 importSelectionGate.invalidate()
                 guard let id,
                       let hike = appModel.hikeRecorder.currentHike,
-                      hike.id == id else {
-                    return
-                }
+                      hike.id == id else { return }
                 selectedHike = hike
                 highlight.move(to: nil)
             }
@@ -216,10 +224,7 @@ struct OpenTrailsView: View {
     /// pushed, replacing rather than stacking onto whatever was open, since
     /// the widget is a jump to one trail and not a step in a journey.
     private func openWidgetLink(_ url: URL) {
-        guard let destination = TrailWidgetDeepLink.destination(from: url)
-        else {
-            return
-        }
+        guard let destination = TrailWidgetDeepLink.destination(from: url) else { return }
         switch destination {
         case .recording:
             guard appModel.hikeRecorder.isActive else { return }
@@ -237,9 +242,7 @@ struct OpenTrailsView: View {
     }
 
     private func openHike(id: UUID) {
-        if case let .hike(current)? = navigationPath.last, current.id == id {
-            return
-        }
+        if case let .hike(current)? = navigationPath.last, current.id == id { return }
 
         let descriptor = FetchDescriptor<Hike>(predicate: #Predicate { $0.id == id })
         // A hike deleted while the widget still showed it: open the app and
@@ -319,9 +322,7 @@ struct OpenTrailsView: View {
                 path: navigationPath,
                 currentRecordingHikeID: currentRecordingHikeID,
                 recordingPresented: navigationPath.last == .recording
-            ) else {
-                return
-            }
+            ) else { return }
             selectedHike = importedHike
             // The selection draws the imported route; expanding reveals it.
             withAnimation { sheetDetent = .medium }
@@ -337,12 +338,12 @@ private struct SelectedHikeState: Equatable {
 
 struct ImportSelectionGate {
     struct Token: Equatable {
-        fileprivate let revision: UInt64
-        fileprivate let selectedHikeID: UUID?
-        fileprivate let destination: Destination
+        let revision: UInt64
+        let selectedHikeID: UUID?
+        let destination: Destination
     }
 
-    fileprivate enum Destination: Equatable {
+    enum Destination: Equatable {
         case root
         case recording
         case hike(UUID)
@@ -383,12 +384,9 @@ struct ImportSelectionGate {
         for path: [SheetRoute]
     ) -> Destination {
         switch path.last {
-        case nil:
-            .root
-        case .some(.recording):
-            .recording
-        case .some(.hike(let hike)):
-            .hike(hike.id)
+        case nil: .root
+        case .some(.recording): .recording
+        case .some(.hike(let hike)): .hike(hike.id)
         }
     }
 }
@@ -401,6 +399,7 @@ private struct WeatherBadge: View {
             Image(systemName: weather.symbolName)
                 .symbolRenderingMode(.multicolor)
                 .font(.title3)
+                .accessibilityLabel(weather.condition.description)
             Text("\(Int(weather.temperature.value.rounded()))°")
                 .font(.headline)
         }
@@ -411,7 +410,12 @@ private struct WeatherBadge: View {
 }
 
 #Preview {
-    let container = try! ModelContainer(for: Hike.self, configurations: .init(isStoredInMemoryOnly: true))
+    let container: ModelContainer
+    do {
+        container = try ModelContainer(for: Hike.self, configurations: .init(isStoredInMemoryOnly: true))
+    } catch {
+        preconditionFailure("Failed to create preview container: \(error)")
+    }
     let model = OpenTrailsModel(
         container: container,
         backgroundTracker: BackgroundTrailTracker(container: container),
@@ -425,7 +429,7 @@ private struct WeatherBadge: View {
         locationManager: LocationManager(),
         weatherManager: WeatherManager()
     )
-    OpenTrailsView()
+    return OpenTrailsView()
         .environment(model)
         .modelContainer(container)
 }

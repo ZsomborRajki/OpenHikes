@@ -11,8 +11,8 @@ import OpenTrailsShared
 
 nonisolated enum TrackJournalError: Error, Equatable, Sendable {
     case invalidHeader
-    case unsupportedVersion(UInt16)
     case io(String)
+    case unsupportedVersion(UInt16)
 }
 
 nonisolated struct RecordingPauseInterval: Codable, Equatable, Sendable {
@@ -46,10 +46,21 @@ actor TrackJournal {
     nonisolated let journalURL: URL
     nonisolated let metadataURL: URL
 
-    private static let magic = Data([0x4F, 0x54, 0x52, 0x4B]) // OTRK
+    private static let magicByte0: UInt8 = 0x4F // O
+    private static let magicByte1: UInt8 = 0x54 // T
+    private static let magicByte2: UInt8 = 0x52 // R
+    private static let magicByte3: UInt8 = 0x4B // K
+    private static let magic = Data([magicByte0, magicByte1, magicByte2, magicByte3])
     private static let version: UInt16 = 1
     private static let batchSize = 10
     private static let maximumFlushInterval: TimeInterval = 5
+    private static let timestampMatchTolerance: TimeInterval = 0.001
+    // Byte offsets within a record (latitude=0, longitude=8, timestamp=16 implicit)
+    private static let recordElevationOffset = 24
+    private static let recordAccuracyOffset = 28
+    private static let recordCourseOffset = 32
+    private static let recordSpeedOffset = 36
+    private static let recordFlagsOffset = 40
 
     private let clock: @Sendable () -> Date
     private var fileHandle: FileHandle?
@@ -62,8 +73,8 @@ actor TrackJournal {
         clock: @escaping @Sendable () -> Date = { Date() }
     ) {
         self.directory = directory
-        self.journalURL = directory.appendingPathComponent("recording.otrk")
-        self.metadataURL = directory.appendingPathComponent("recording.json")
+        journalURL = directory.appendingPathComponent("recording.otrk")
+        metadataURL = directory.appendingPathComponent("recording.json")
         self.clock = clock
     }
 
@@ -93,7 +104,7 @@ actor TrackJournal {
                 .write(to: journalURL, options: .atomic)
             fileHandle = try FileHandle(forWritingTo: journalURL)
             try fileHandle?.seekToEnd()
-            let metadata = TrackJournalMetadata(
+            let newMetadata = TrackJournalMetadata(
                 sessionID: sessionID,
                 startedAt: startedAt,
                 endedAt: nil,
@@ -102,10 +113,10 @@ actor TrackJournal {
                 title: title,
                 recordingOptions: recordingOptions
             )
-            self.metadata = metadata
+            metadata = newMetadata
             pending = []
             lastFlushAt = clock()
-            try writeMetadata(metadata)
+            try writeMetadata(newMetadata)
         } catch let error as TrackJournalError {
             throw error
         } catch {
@@ -122,8 +133,7 @@ actor TrackJournal {
         }
     }
 
-    @discardableResult
-    func mergeWidgetFixes(
+    @discardableResult func mergeWidgetFixes(
         _ points: [RecordingPoint],
         duplicateInterval: TimeInterval = 5
     ) throws -> Int {
@@ -149,8 +159,8 @@ actor TrackJournal {
         let tolerance = max(0, duplicateInterval)
         var lastAcceptedTimestamp: Date?
         for point in points.sorted(by: { $0.timestamp < $1.timestamp }) {
-            let duplicatesAccepted = lastAcceptedTimestamp.map {
-                point.timestamp.timeIntervalSince($0) <= tolerance
+            let duplicatesAccepted = lastAcceptedTimestamp.map { lastTimestamp in
+                point.timestamp.timeIntervalSince(lastTimestamp) <= tolerance
             } ?? false
             guard !timestamps.contains(
                 point.timestamp,
@@ -231,10 +241,10 @@ actor TrackJournal {
             try fileHandle.synchronize()
             pending.removeAll(keepingCapacity: true)
             lastFlushAt = clock()
-            if var metadata {
-                metadata.lastUpdatedAt = lastFlushAt ?? clock()
-                self.metadata = metadata
-                try writeMetadata(metadata)
+            if var updatedMetadata = metadata {
+                updatedMetadata.lastUpdatedAt = lastFlushAt ?? clock()
+                metadata = updatedMetadata
+                try writeMetadata(updatedMetadata)
             }
         } catch let error as TrackJournalError {
             throw error
@@ -250,29 +260,27 @@ actor TrackJournal {
         }
         guard FileManager.default.fileExists(atPath: journalURL.path),
               FileManager.default.fileExists(atPath: metadataURL.path)
-        else {
-            return nil
-        }
+        else { return nil }
 
         do {
             let metadataData = try Data(contentsOf: metadataURL)
-            let metadata = try JSONDecoder().decode(
+            let loadedMetadata = try JSONDecoder().decode(
                 TrackJournalMetadata.self,
                 from: metadataData
             )
             let data = try Data(contentsOf: journalURL)
             let header = try Self.decodeHeader(data)
-            guard header.sessionID == metadata.sessionID,
+            guard header.sessionID == loadedMetadata.sessionID,
                   abs(
                     header.startedAt.timeIntervalSince(
-                        metadata.startedAt
+                        loadedMetadata.startedAt
                     )
-                  ) < 0.001
+                  ) < Self.timestampMatchTolerance
             else {
                 throw TrackJournalError.invalidHeader
             }
             return TrackJournalSession(
-                metadata: metadata,
+                metadata: loadedMetadata,
                 points: Self.decodeRecords(data)
             )
         } catch let error as TrackJournalError {
@@ -287,33 +295,33 @@ actor TrackJournal {
         guard fileHandle == nil else { return }
         do {
             let metadataData = try Data(contentsOf: metadataURL)
-            let metadata = try JSONDecoder().decode(
+            let reopenedMetadata = try JSONDecoder().decode(
                 TrackJournalMetadata.self,
                 from: metadataData
             )
             let data = try Data(contentsOf: journalURL)
             let header = try Self.decodeHeader(data)
-            guard header.sessionID == metadata.sessionID,
+            guard header.sessionID == reopenedMetadata.sessionID,
                   abs(
-                    header.startedAt.timeIntervalSince(metadata.startedAt)
-                  ) < 0.001
+                    header.startedAt.timeIntervalSince(reopenedMetadata.startedAt)
+                  ) < Self.timestampMatchTolerance
             else {
                 throw TrackJournalError.invalidHeader
             }
 
-            let fileHandle = try FileHandle(forWritingTo: journalURL)
-            self.fileHandle = fileHandle
-            let size = try fileHandle.seekToEnd()
+            let newHandle = try FileHandle(forWritingTo: journalURL)
+            fileHandle = newHandle
+            let size = try newHandle.seekToEnd()
             let completeSize = UInt64(
                 Self.headerByteCount
                     + Self.pointCount(fileSize: Int64(size))
                         * Self.recordByteCount
             )
             if size != completeSize {
-                try fileHandle.truncate(atOffset: completeSize)
+                try newHandle.truncate(atOffset: completeSize)
             }
-            try fileHandle.seekToEnd()
-            self.metadata = metadata
+            try newHandle.seekToEnd()
+            metadata = reopenedMetadata
             lastFlushAt = clock()
         } catch let error as TrackJournalError {
             try? fileHandle?.close()
@@ -351,13 +359,19 @@ actor TrackJournal {
         try flush()
         try closeHandle()
     }
+}
 
+extension TrackJournal {
     nonisolated static func pointCount(fileSize: Int64) -> Int {
         guard fileSize >= Int64(headerByteCount) else { return 0 }
         return Int((fileSize - Int64(headerByteCount)) / Int64(recordByteCount))
     }
+}
 
-    private func closeHandle() throws {
+// MARK: - Private instance helpers
+
+private extension TrackJournal {
+    func closeHandle() throws {
         do {
             try fileHandle?.close()
             fileHandle = nil
@@ -366,7 +380,7 @@ actor TrackJournal {
         }
     }
 
-    private func writeMetadata(_ metadata: TrackJournalMetadata) throws {
+    func writeMetadata(_ metadata: TrackJournalMetadata) throws {
         do {
             let data = try JSONEncoder().encode(metadata)
             try data.write(to: metadataURL, options: .atomic)
@@ -374,8 +388,12 @@ actor TrackJournal {
             throw TrackJournalError.io(error.localizedDescription)
         }
     }
+}
 
-    private nonisolated static func header(
+// MARK: - Private static helpers
+
+private extension TrackJournal {
+    nonisolated static func header(
         sessionID: UUID,
         startedAt: Date
     ) -> Data {
@@ -392,7 +410,7 @@ actor TrackJournal {
         return data
     }
 
-    private nonisolated static func decodeHeader(
+    nonisolated static func decodeHeader(
         _ data: Data
     ) throws(TrackJournalError) -> (sessionID: UUID, startedAt: Date) {
         guard data.count >= headerByteCount,
@@ -417,7 +435,7 @@ actor TrackJournal {
         )
     }
 
-    private nonisolated static func encode(_ point: RecordingPoint) -> Data {
+    nonisolated static func encode(_ point: RecordingPoint) -> Data {
         var data = Data()
         data.reserveCapacity(recordByteCount)
         data.appendLittleEndian(point.latitude.bitPattern)
@@ -431,7 +449,7 @@ actor TrackJournal {
         return data
     }
 
-    private nonisolated static func decodeRecords(_ data: Data) -> [RecordingPoint] {
+    nonisolated static func decodeRecords(_ data: Data) -> [RecordingPoint] {
         let count = pointCount(fileSize: Int64(data.count))
         var points: [RecordingPoint] = []
         points.reserveCapacity(count)
@@ -448,26 +466,26 @@ actor TrackJournal {
                 bitPattern: data.littleEndianValue(at: offset + 16)
             )
             let elevation = Float(
-                bitPattern: data.littleEndianValue(at: offset + 24)
+                bitPattern: data.littleEndianValue(at: offset + recordElevationOffset)
             )
             let accuracy = Float(
-                bitPattern: data.littleEndianValue(at: offset + 28)
+                bitPattern: data.littleEndianValue(at: offset + recordAccuracyOffset)
             )
             let course = Float(
-                bitPattern: data.littleEndianValue(at: offset + 32)
+                bitPattern: data.littleEndianValue(at: offset + recordCourseOffset)
             )
             let speed = Float(
-                bitPattern: data.littleEndianValue(at: offset + 36)
+                bitPattern: data.littleEndianValue(at: offset + recordSpeedOffset)
             )
-            let flags: UInt32 = data.littleEndianValue(at: offset + 40)
+            let flags: UInt32 = data.littleEndianValue(at: offset + recordFlagsOffset)
 
             points.append(
                 RecordingPoint(
                     latitude: latitude,
                     longitude: longitude,
                     timestamp: Date(timeIntervalSince1970: timestamp),
-                    elevation: elevation.isNaN ? nil : Double(elevation),
                     horizontalAccuracy: Double(accuracy),
+                    elevation: elevation.isNaN ? nil : Double(elevation),
                     course: course.isNaN ? nil : Double(course),
                     speed: speed.isNaN ? nil : Double(speed),
                     flags: RecordingPointFlags(rawValue: flags)
@@ -478,7 +496,7 @@ actor TrackJournal {
     }
 }
 
-private nonisolated extension Data {
+nonisolated private extension Data {
     mutating func appendLittleEndian<Value: FixedWidthInteger>(_ value: Value) {
         var littleEndian = value.littleEndian
         Swift.withUnsafeBytes(of: &littleEndian) { append(contentsOf: $0) }

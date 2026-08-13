@@ -50,8 +50,8 @@ actor AppGroupRecordingSharedStateStore: RecordingSharedStateStoring {
         assertOffMainThread(
             "Widget fix reads must stay off the main thread"
         )
-        return try SharedStore.loadPendingRecordingFixes().filter {
-            $0.sessionID == sessionID
+        return try SharedStore.loadPendingRecordingFixes().filter { fix in
+            fix.sessionID == sessionID
         }
     }
 

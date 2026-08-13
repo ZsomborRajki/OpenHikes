@@ -14,14 +14,21 @@ import AppKit
 
 extension Color {
     /// The resolved sRGB components (0…1) of this color.
-    private var rgba: (r: CGFloat, g: CGFloat, b: CGFloat, a: CGFloat) {
+    private struct RGBA {
+        let r: CGFloat
+        let g: CGFloat
+        let b: CGFloat
+        let a: CGFloat
+    }
+
+    private var rgba: RGBA {
         #if canImport(UIKit)
         var r: CGFloat = 0, g: CGFloat = 0, b: CGFloat = 0, a: CGFloat = 0
         UIColor(self).getRed(&r, green: &g, blue: &b, alpha: &a)
-        return (r, g, b, a)
+        return RGBA(r: r, g: g, b: b, a: a)
         #else
         let c = NSColor(self).usingColorSpace(.sRGB) ?? .black
-        return (c.redComponent, c.greenComponent, c.blueComponent, c.alphaComponent)
+        return RGBA(r: c.redComponent, g: c.greenComponent, b: c.blueComponent, a: c.alphaComponent)
         #endif
     }
 
@@ -31,8 +38,10 @@ extension Color {
         let c = rgba
         return String(
             format: "#%02X%02X%02X%02X",
-            Int((c.r * 255).rounded()), Int((c.g * 255).rounded()),
-            Int((c.b * 255).rounded()), Int((c.a * 255).rounded())
+            Int((c.r * 255).rounded()),
+            Int((c.g * 255).rounded()),
+            Int((c.b * 255).rounded()),
+            Int((c.a * 255).rounded())
         )
     }
 

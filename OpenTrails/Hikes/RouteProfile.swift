@@ -8,8 +8,8 @@
 //
 
 import Algorithms
-import Foundation
 import CoreLocation
+import Foundation
 
 nonisolated struct RouteProfile {
     /// How far off the route (in meters) a GPS fix can be and still count as
@@ -48,11 +48,11 @@ nonisolated struct RouteProfile {
     private let sampleDistances: [Double]
 
     init(route: [RouteCoordinate]) {
-        var coordinates: [CLLocationCoordinate2D] = []
-        var distances: [Double] = []
-        var samples: [ElevationSample] = []
-        coordinates.reserveCapacity(route.count)
-        distances.reserveCapacity(route.count)
+        var routeCoordinates: [CLLocationCoordinate2D] = []
+        var routeDistances: [Double] = []
+        var routeSamples: [ElevationSample] = []
+        routeCoordinates.reserveCapacity(route.count)
+        routeDistances.reserveCapacity(route.count)
 
         var cumulative = 0.0
         var previous: CLLocationCoordinate2D?
@@ -62,18 +62,18 @@ nonisolated struct RouteProfile {
                 cumulative += RouteGeometry.distanceMeters(from: previous, to: coordinate)
             }
             previous = coordinate
-            coordinates.append(coordinate)
-            distances.append(cumulative)
+            routeCoordinates.append(coordinate)
+            routeDistances.append(cumulative)
             if let elevation = point.elevation {
-                samples.append(ElevationSample(distanceMeters: cumulative, elevation: elevation))
+                routeSamples.append(ElevationSample(distanceMeters: cumulative, elevation: elevation))
             }
         }
 
-        let plotted = Self.downsampledForDrawing(samples)
-        self.coordinates = coordinates
-        self.distances = distances
-        self.samples = plotted
-        self.sampleDistances = plotted.map(\.distanceMeters)
+        let plotted = Self.downsampledForDrawing(routeSamples)
+        coordinates = routeCoordinates
+        distances = routeDistances
+        samples = plotted
+        sampleDistances = plotted.map(\.distanceMeters)
     }
 
     /// Thins the elevation samples down to ``plottedSampleBudget`` for drawing,
@@ -113,8 +113,12 @@ nonisolated struct RouteProfile {
             var lowest = start
             var highest = start
             for index in start..<end {
-                if samples[index].elevation < samples[lowest].elevation { lowest = index }
-                if samples[index].elevation > samples[highest].elevation { highest = index }
+                if samples[index].elevation < samples[lowest].elevation {
+                    lowest = index
+                }
+                if samples[index].elevation > samples[highest].elevation {
+                    highest = index
+                }
             }
             if lowest == highest {
                 picked.append(lowest)
@@ -248,28 +252,13 @@ nonisolated struct RouteProfile {
             return (0, offset)
         }
 
-        struct Candidate {
-            let distanceAlongRoute: Double
-            let offRouteMeters: Double
-            /// The segment's local east/north components, pointing the way
-            /// distance-along-route increases. Kept as components rather than
-            /// a bearing so the `atan2` is paid only for the few candidates
-            /// that reach the heading test, not for every segment of a
-            /// five-hour track twice a second.
-            let dx: Double
-            let dy: Double
-
-            /// Direction the route runs here, degrees clockwise from north.
-            var bearingDegrees: Double { atan2(dx, dy) * 180 / .pi }
-        }
-
-        func candidate(at index: Int) -> Candidate {
+        func candidate(at index: Int) -> NearestCandidate {
             let projection = RouteGeometry.project(
                 coordinate,
                 onSegmentFrom: coordinates[index],
                 to: coordinates[index + 1]
             )
-            return Candidate(
+            return NearestCandidate(
                 distanceAlongRoute: distances[index]
                     + projection.fraction
                         * (distances[index + 1] - distances[index]),
@@ -279,23 +268,18 @@ nonisolated struct RouteProfile {
             )
         }
 
-        var best = Candidate(distanceAlongRoute: 0, offRouteMeters: .greatestFiniteMagnitude, dx: 0, dy: 0)
+        var best = NearestCandidate(distanceAlongRoute: 0, offRouteMeters: .greatestFiniteMagnitude, dx: 0, dy: 0)
         for index in 0..<(coordinates.count - 1) {
-            let candidate = candidate(at: index)
-            if candidate.offRouteMeters < best.offRouteMeters { best = candidate }
+            let result = candidate(at: index)
+            if result.offRouteMeters < best.offRouteMeters {
+                best = result
+            }
         }
 
-        // Ties are resolved against the previous match when there is one, and
-        // against the start of the route when there isn't — never left to the
-        // raw closest segment, which overlapping legs decide by sampling noise.
         let anchor = referenceDistance ?? 0
-        // Direction of travel only gets a say while seeding; see above.
         let course = referenceDistance == nil ? heading : nil
 
-        /// Whether this leg of the trail runs *with* the walker rather than
-        /// against them. Always `false` without a course, which collapses the
-        /// ranking below back to the anchor alone.
-        func runsWithTheWalker(_ candidate: Candidate) -> Bool {
+        func runsWithTheWalker(_ candidate: NearestCandidate) -> Bool {
             guard let course else { return false }
             return Self.bearingDifference(course, candidate.bearingDegrees) < Self.courseAgreementDegrees
         }
@@ -304,29 +288,46 @@ nonisolated struct RouteProfile {
         // the closest one, prefer whichever the walker is actually heading
         // along; failing that (or between two that both qualify), whichever
         // is nearest the anchor.
+        return breakTie(
+            among: (0..<(coordinates.count - 1)).map { candidate(at: $0) },
+            best: best,
+            anchor: anchor,
+            runsWithTheWalker: runsWithTheWalker
+        )
+    }
+
+    private struct NearestCandidate {
+        let distanceAlongRoute: Double
+        let offRouteMeters: Double
+        let dx: Double
+        let dy: Double
+        var bearingDegrees: Double { atan2(dx, dy) * 180 / .pi }
+    }
+
+    private func breakTie(
+        among candidates: [NearestCandidate],
+        best: NearestCandidate,
+        anchor: Double,
+        runsWithTheWalker: (NearestCandidate) -> Bool
+    ) -> (distanceAlongRoute: Double, offRouteMeters: Double) {
         let tieBreakToleranceMeters = 20.0
         var tied = best
         var tiedRunsWith = runsWithTheWalker(best)
         var bestContinuity = abs(best.distanceAlongRoute - anchor)
-        for index in 0..<(coordinates.count - 1) {
-            let candidate = candidate(at: index)
-            guard candidate.offRouteMeters <= best.offRouteMeters + tieBreakToleranceMeters else { continue }
-            let candidateRunsWith = runsWithTheWalker(candidate)
-            // Direction of travel is evidence about which leg the walker is
-            // on; proximity to the anchor is only an assumption. So a
-            // candidate they're heading along beats one they aren't, however
-            // the two sit relative to the anchor.
-            if candidateRunsWith != tiedRunsWith {
-                guard candidateRunsWith else { continue }
-                tied = candidate
+        for contender in candidates {
+            guard contender.offRouteMeters <= best.offRouteMeters + tieBreakToleranceMeters else { continue }
+            let contenderRunsWith = runsWithTheWalker(contender)
+            if contenderRunsWith != tiedRunsWith {
+                guard contenderRunsWith else { continue }
+                tied = contender
                 tiedRunsWith = true
-                bestContinuity = abs(candidate.distanceAlongRoute - anchor)
+                bestContinuity = abs(contender.distanceAlongRoute - anchor)
                 continue
             }
-            let continuity = abs(candidate.distanceAlongRoute - anchor)
+            let continuity = abs(contender.distanceAlongRoute - anchor)
             if continuity < bestContinuity {
                 bestContinuity = continuity
-                tied = candidate
+                tied = contender
             }
         }
         return (tied.distanceAlongRoute, tied.offRouteMeters)

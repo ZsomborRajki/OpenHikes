@@ -14,10 +14,10 @@
 
 import CoreLocation
 import Foundation
+@testable import OpenTrails
 import OpenTrailsShared
 import SwiftData
 import Testing
-@testable import OpenTrails
 
 /// Both child suites share one App Group file, so they must not run beside
 /// each other even when they are selected together.
@@ -54,7 +54,7 @@ final class WidgetFeedTests {
     /// empty) until the user next moved.
     @Test("selecting a hike publishes everything the widget draws")
     func selectionPublishesSnapshot() async throws {
-        let hike = self.hike()
+        let hike = hike()
         tracker.hikeSelectionChanged(to: hike)
         await tracker.waitForSelectionPublish()
 
@@ -102,7 +102,7 @@ final class WidgetFeedTests {
 
     @Test("an on-route fix is published as progress along the trail")
     func liveFixPublished() async throws {
-        let hike = self.hike()
+        let hike = hike()
         let profile = RouteProfile(route: hike.route)
         tracker.hikeSelectionChanged(to: hike)
         await tracker.waitForSelectionPublish()
@@ -126,12 +126,14 @@ final class WidgetFeedTests {
     /// trail's length instead of a made-up position.
     @Test("a fix off the trail publishes no position")
     func offRouteFixPublishesNothing() async throws {
-        let hike = self.hike()
+        let hike = hike()
         let profile = RouteProfile(route: hike.route)
         tracker.hikeSelectionChanged(to: hike)
         await tracker.waitForSelectionPublish()
 
-        let far = try #require(profile.nearestPoint(to: CLLocationCoordinate2D(latitude: 37.3350, longitude: -122.0200)))
+        let far = try #require(
+            profile.nearestPoint(to: CLLocationCoordinate2D(latitude: 37.3350, longitude: -122.0200))
+        )
         #expect(far.offRouteMeters > RouteProfile.followMatchThresholdMeters, "precondition: this fix is off the trail")
         tracker.publishLiveFix(hike: hike, profile: profile, match: far)
 
@@ -143,7 +145,7 @@ final class WidgetFeedTests {
     /// The poll runs once a second; the feed must not.
     @Test("a second fix moments later doesn't republish")
     func publishesAreThrottled() async throws {
-        let hike = self.hike()
+        let hike = hike()
         let profile = RouteProfile(route: hike.route)
         tracker.hikeSelectionChanged(to: hike)
         await tracker.waitForSelectionPublish()
@@ -162,7 +164,7 @@ final class WidgetFeedTests {
     /// the one update worth spending a reload on immediately.
     @Test("losing the trail is published immediately, throttle or not")
     func statusFlipBypassesTheThrottle() async throws {
-        let hike = self.hike()
+        let hike = hike()
         let profile = RouteProfile(route: hike.route)
         tracker.hikeSelectionChanged(to: hike)
         await tracker.waitForSelectionPublish()

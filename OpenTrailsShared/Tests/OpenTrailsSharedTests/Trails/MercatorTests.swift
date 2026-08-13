@@ -10,8 +10,8 @@
 //
 
 import Foundation
-import Testing
 @testable import OpenTrailsShared
+import Testing
 
 // The formulas `SlippyTileMath` used before `Mercator` existed. Kept exactly
 // as they were — if these ever disagree with the shared implementation, tiles
@@ -48,11 +48,13 @@ struct MercatorTests {
             let latitude = Double.random(in: -Mercator.latitudeLimit...Mercator.latitudeLimit, using: &generator)
             let longitude = Double.random(in: -180...180, using: &generator)
             #expect(
-                Int(floor(Mercator.unitX(longitude: longitude) * Double(1 << z))) == LegacyTileMath.tileX(longitude, z: z),
+                Int(floor(Mercator.unitX(longitude: longitude) * Double(1 << z)))
+                    == LegacyTileMath.tileX(longitude, z: z),
                 "longitude \(longitude) at z\(z) (seed \(seed))"
             )
             #expect(
-                Int(floor(Mercator.unitY(latitude: latitude) * Double(1 << z))) == LegacyTileMath.tileY(latitude, z: z),
+                Int(floor(Mercator.unitY(latitude: latitude) * Double(1 << z)))
+                    == LegacyTileMath.tileY(latitude, z: z),
                 "latitude \(latitude) at z\(z) (seed \(seed))"
             )
         }
@@ -62,8 +64,12 @@ struct MercatorTests {
     func tileEdgesUnchanged(z: Int) {
         let n = 1 << z
         for index in stride(from: 0, to: n, by: max(1, n / 512)) {
-            #expect(abs(Mercator.longitude(unitX: Double(index) / Double(n)) - LegacyTileMath.lon(x: index, z: z)) < 1e-9)
-            #expect(abs(Mercator.latitude(unitY: Double(index) / Double(n)) - LegacyTileMath.lat(y: index, z: z)) < 1e-9)
+            #expect(
+                abs(Mercator.longitude(unitX: Double(index) / Double(n)) - LegacyTileMath.lon(x: index, z: z)) < 1e-9
+            )
+            #expect(
+                abs(Mercator.latitude(unitY: Double(index) / Double(n)) - LegacyTileMath.lat(y: index, z: z)) < 1e-9
+            )
         }
     }
 

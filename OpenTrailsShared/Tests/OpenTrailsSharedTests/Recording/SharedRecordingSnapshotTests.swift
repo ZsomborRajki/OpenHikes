@@ -4,8 +4,8 @@
 //
 
 import Foundation
-import Testing
 @testable import OpenTrailsShared
+import Testing
 
 @Suite("Recording snapshot")
 struct SharedRecordingSnapshotTests {
@@ -14,11 +14,11 @@ struct SharedRecordingSnapshotTests {
         let snapshot = SharedRecordingSnapshot(
             sessionID: UUID(),
             startedAt: Date(timeIntervalSince1970: 1_750_000_000),
-            distanceMeters: 4_200,
-            pointCount: 1_284,
+            distanceMeters: 4200,
+            pointCount: 1284,
             polyline: [
                 .init(latitude: 47.63, longitude: 12.86),
-                .init(latitude: 47.64, longitude: 12.87)
+                .init(latitude: 47.64, longitude: 12.87),
             ],
             isCapturingFixes: false
         )
@@ -178,8 +178,8 @@ struct PendingRecordingFixStoreTests {
         #expect(try store.load() == [fix])
 
         try store.clearRecordingState(
-            sessionID: sessionID,
-            recordingURL: recordingURL
+            recordingURL: recordingURL,
+            sessionID: sessionID
         )
 
         #expect(try store.load().isEmpty)

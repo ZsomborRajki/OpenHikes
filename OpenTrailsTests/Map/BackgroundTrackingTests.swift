@@ -15,10 +15,10 @@
 
 import CoreLocation
 import Foundation
+@testable import OpenTrails
 import OpenTrailsShared
 import SwiftData
 import Testing
-@testable import OpenTrails
 
 /// Stands in for the app's second `CLLocationManager` — the significant-change
 /// one. Records what the tracker asked it to do, and answers the two
@@ -95,18 +95,17 @@ final class BackgroundTrackingAuthorizationTests {
     private let monitor = StubLocationMonitor()
     /// Held for the length of the test: the monitor references its delegate
     /// weakly, exactly as CoreLocation does.
-    private var tracker: BackgroundTrailTracker?
+    private var retainedTracker: BackgroundTrailTracker?
 
     init() throws {
         container = try Fixture.modelContainer()
         defaults = try makeScratchDefaults()
     }
 
-    @discardableResult
-    private func makeTracker() -> BackgroundTrailTracker {
-        let tracker = BackgroundTrailTracker(container: container, monitor: monitor, defaults: defaults)
-        self.tracker = tracker
-        return tracker
+    @discardableResult private func makeTracker() -> BackgroundTrailTracker {
+        let newTracker = BackgroundTrailTracker(container: container, monitor: monitor, defaults: defaults)
+        retainedTracker = newTracker
+        return newTracker
     }
 
     @Test("turning tracking on with Always already granted starts monitoring")
@@ -125,15 +124,15 @@ final class BackgroundTrackingAuthorizationTests {
     @Test("turning tracking on without Always asks for it rather than starting")
     func enablingWithoutAlwaysAsks() {
         for authorization in [StubLocationMonitor.Authorization.notDetermined, .whenInUse] {
-            let monitor = StubLocationMonitor()
-            monitor.authorization = authorization
-            let tracker = BackgroundTrailTracker(container: container, monitor: monitor, defaults: defaults)
-            self.tracker = tracker
+            let localMonitor = StubLocationMonitor()
+            localMonitor.authorization = authorization
+            let localTracker = BackgroundTrailTracker(container: container, monitor: localMonitor, defaults: defaults)
+            retainedTracker = localTracker
 
-            tracker.setEnabled(true)
+            localTracker.setEnabled(true)
 
-            #expect(monitor.alwaysAccessRequests == 1, "\(authorization)")
-            #expect(!monitor.isMonitoring, "monitoring without Always would never deliver anything")
+            #expect(localMonitor.alwaysAccessRequests == 1, "\(authorization)")
+            #expect(!localMonitor.isMonitoring, "monitoring without Always would never deliver anything")
         }
     }
 
@@ -225,7 +224,7 @@ final class BackgroundDeliveryTests {
     private let monitor = StubLocationMonitor()
     /// Held for the length of the test: the monitor references its delegate
     /// weakly, exactly as CoreLocation does.
-    private var tracker: BackgroundTrailTracker?
+    private var retainedTracker: BackgroundTrailTracker?
 
     init() throws {
         container = try Fixture.modelContainer()
@@ -249,14 +248,17 @@ final class BackgroundDeliveryTests {
 
     /// A tracker built the way a background relaunch builds one: no selection
     /// call, no published snapshot, nothing but what's on disk.
-    @discardableResult
-    private func relaunchedTracker() -> BackgroundTrailTracker {
-        let tracker = BackgroundTrailTracker(container: container, monitor: monitor, defaults: defaults)
-        self.tracker = tracker
-        return tracker
+    @discardableResult private func relaunchedTracker() -> BackgroundTrailTracker {
+        let newTracker = BackgroundTrailTracker(container: container, monitor: monitor, defaults: defaults)
+        retainedTracker = newTracker
+        return newTracker
     }
 
-    private func fix(at coordinate: CLLocationCoordinate2D, accuracy: CLLocationAccuracy = 10, age: TimeInterval = 0) -> CLLocation {
+    private func fix(
+        at coordinate: CLLocationCoordinate2D,
+        accuracy: CLLocationAccuracy = 10,
+        age: TimeInterval = 0
+    ) -> CLLocation {
         CLLocation(
             coordinate: coordinate,
             altitude: 0,
@@ -310,7 +312,7 @@ final class BackgroundDeliveryTests {
     /// Significant-change delivery hands over cached fixes on relaunch, and a
     /// fix from half an hour ago is a position the walker has left.
     @Test("a stale fix is refused")
-    func staleFixIsRefused() async throws {
+    func staleFixIsRefused() async {
         let hike = selectedHike()
         let profile = RouteProfile(route: hike.route)
         relaunchedTracker()
@@ -324,7 +326,7 @@ final class BackgroundDeliveryTests {
     /// A fix whose uncertainty is wider than the matching tolerance can't say
     /// which part of a trail someone is on — including whether they're on it.
     @Test("a fix too imprecise to match is refused")
-    func impreciseFixIsRefused() async throws {
+    func impreciseFixIsRefused() async {
         let hike = selectedHike()
         let profile = RouteProfile(route: hike.route)
         relaunchedTracker()
@@ -357,7 +359,7 @@ final class BackgroundDeliveryTests {
     /// which is what a wake-up before the user has ever picked a trail looks
     /// like.
     @Test("a fix with no persisted selection publishes nothing")
-    func noSelectionPublishesNothing() async throws {
+    func noSelectionPublishesNothing() async {
         _ = Fixture.hike(in: context)
         relaunchedTracker()
 

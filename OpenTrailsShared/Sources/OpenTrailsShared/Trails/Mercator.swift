@@ -26,7 +26,7 @@ public enum Mercator {
     /// Mercator can't represent the poles at all — `tan`/`log` blow up as
     /// latitude approaches ±90° — so every implementation clips here. Well
     /// outside anywhere a trail is walked.
-    public static let latitudeLimit = 85.051_128_779_806_6
+    public static let latitudeLimit = 85.0511287798066
 
     /// Ground meters spanned by one full unit of Mercator space at the
     /// equator, i.e. the earth's equatorial circumference.
@@ -47,8 +47,8 @@ public enum Mercator {
     /// domain boundary rather than a wrap point — beyond it the projection
     /// has no answer to give.
     public static func unitY(latitude: Double) -> Double {
-        let latitude = min(max(latitude, -latitudeLimit), latitudeLimit)
-        let sinLatitude = sin(latitude * .pi / 180)
+        let clampedLatitude = min(max(latitude, -latitudeLimit), latitudeLimit)
+        let sinLatitude = sin(clampedLatitude * .pi / 180)
         // Equivalent to the textbook `(1 - ln(tan φ + sec φ) / π) / 2`, via
         // ln(tan φ + sec φ) == ½·ln((1 + sin φ)/(1 - sin φ)) — the sine form
         // has no pole to step on partway through.
@@ -80,8 +80,8 @@ public enum Mercator {
     /// for both axes — which is what lets a minimum span be expressed in
     /// meters and then applied to a unit rect on either axis.
     public static func metersPerUnit(atLatitude latitude: Double) -> Double {
-        let latitude = min(max(latitude, -latitudeLimit), latitudeLimit)
-        return equatorialCircumferenceMeters * cos(latitude * .pi / 180)
+        let clampedLatitude = min(max(latitude, -latitudeLimit), latitudeLimit)
+        return equatorialCircumferenceMeters * cos(clampedLatitude * .pi / 180)
     }
 
     /// Whether a coordinate is representable without clamping — the check to

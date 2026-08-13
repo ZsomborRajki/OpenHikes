@@ -14,9 +14,9 @@
 import CoreLocation
 import Foundation
 import MapKit
+@testable import OpenTrails
 import SwiftData
 import Testing
-@testable import OpenTrails
 
 @Suite("Offline tile enumeration")
 struct OfflineTileEnumerationTests {
@@ -43,7 +43,9 @@ struct OfflineTileEnumerationTests {
     /// set yields exactly what was saved.
     @Test("enumeration is reproducible")
     func deterministic() {
-        #expect(keys() == keys())
+        let first = keys()
+        let second = keys()
+        #expect(first == second)
         #expect(Set(keys()).count == keys().count, "a tile should not be enumerated twice")
     }
 
@@ -68,7 +70,7 @@ struct OfflineTileEnumerationTests {
     /// and gets fetched again.
     @Test("download keys are exactly the keys the renderer asks for")
     func keyFormatMatchesRenderer() {
-        let path = MKTileOverlayPath(x: 8_723, y: 5_685, z: 14, contentScaleFactor: scale)
+        let path = MKTileOverlayPath(x: 8723, y: 5685, z: 14, contentScaleFactor: scale)
         let rendererKey = "\(TileProvider.openStreetMap.id)/\(path.cacheKey)"
         let downloaderKey = OfflineTileDownloader.Tile(z: path.z, x: path.x, y: path.y)
             .cacheKey(providerID: TileProvider.openStreetMap.id, scale: path.contentScaleFactor)
@@ -90,16 +92,24 @@ struct OfflineTileEnumerationTests {
     /// tiles as present on a 3× one.
     @Test("scale is part of the identity of a tile")
     func scaleNamespacesKeys() {
-        let at2x = OfflineTileDownloader.tileKeys(for: route, providerID: "osm", providerMaxZoom: 19, maxZoom: 12, scale: 2)
-        let at3x = OfflineTileDownloader.tileKeys(for: route, providerID: "osm", providerMaxZoom: 19, maxZoom: 12, scale: 3)
+        let at2x = OfflineTileDownloader.tileKeys(
+            for: route, providerID: "osm", providerMaxZoom: 19, maxZoom: 12, scale: 2
+        )
+        let at3x = OfflineTileDownloader.tileKeys(
+            for: route, providerID: "osm", providerMaxZoom: 19, maxZoom: 12, scale: 3
+        )
         #expect(at2x.count == at3x.count)
         #expect(Set(at2x).isDisjoint(with: Set(at3x)))
     }
 
     @Test("provider is part of the identity of a tile")
     func providerNamespacesKeys() {
-        let osm = OfflineTileDownloader.tileKeys(for: route, providerID: "osm", providerMaxZoom: 19, maxZoom: 12, scale: 2)
-        let other = OfflineTileDownloader.tileKeys(for: route, providerID: "stadia_outdoors", providerMaxZoom: 20, maxZoom: 12, scale: 2)
+        let osm = OfflineTileDownloader.tileKeys(
+            for: route, providerID: "osm", providerMaxZoom: 19, maxZoom: 12, scale: 2
+        )
+        let other = OfflineTileDownloader.tileKeys(
+            for: route, providerID: "stadia_outdoors", providerMaxZoom: 20, maxZoom: 12, scale: 2
+        )
         #expect(Set(osm).isDisjoint(with: Set(other)))
     }
 
@@ -125,7 +135,9 @@ struct OfflineTileEnumerationTests {
     func contiguousZoomLevels() {
         let levels = zoomLevels(in: keys()).sorted()
         #expect(levels.first == OfflineTileDownloader.minZoom)
-        #expect(levels == Array(levels.first!...levels.last!))
+        if let firstLevel = levels.first, let lastLevel = levels.last {
+            #expect(levels == Array(firstLevel...lastLevel))
+        }
     }
 
     @Test("the requested depth is honoured, up to the provider's own maximum")
@@ -160,7 +172,7 @@ struct OfflineTileEnumerationTests {
     func hugeRouteRespectsBudget() {
         let sprawling = [
             CLLocationCoordinate2D(latitude: 40.0, longitude: 0.0),
-            CLLocationCoordinate2D(latitude: 55.0, longitude: 40.0)
+            CLLocationCoordinate2D(latitude: 55.0, longitude: 40.0),
         ]
         let keys = OfflineTileDownloader.tileKeys(
             for: sprawling,
@@ -219,7 +231,7 @@ struct OfflineTileEnumerationTests {
     func hugeRouteFallsBackToAShallowerOverview() {
         let sprawling = [
             CLLocationCoordinate2D(latitude: 40.0, longitude: 0.0),
-            CLLocationCoordinate2D(latitude: 55.0, longitude: 40.0)
+            CLLocationCoordinate2D(latitude: 55.0, longitude: 40.0),
         ]
         let keys = OfflineTileDownloader.tileKeys(
             for: sprawling, providerID: "osm", providerMaxZoom: 19, maxZoom: 19, scale: 2
@@ -227,8 +239,10 @@ struct OfflineTileEnumerationTests {
         #expect(!keys.isEmpty, "a route this size still has an overview worth saving")
 
         let levels = zoomLevels(in: keys).sorted()
-        #expect(levels.last! < OfflineTileDownloader.minZoom, "the usual overview zoom didn't fit")
-        #expect(levels == Array(levels.first!...levels.last!), "and the levels it did take are contiguous")
+        if let firstLevel = levels.first, let lastLevel = levels.last {
+            #expect(lastLevel < OfflineTileDownloader.minZoom, "the usual overview zoom didn't fit")
+            #expect(levels == Array(firstLevel...lastLevel), "and the levels it did take are contiguous")
+        }
     }
 }
 
@@ -306,7 +320,7 @@ struct OfflineDownloadStateTests {
     /// until the test lets them go, and `waitForCurrentRun()` then returns
     /// once the abandoned run has actually finished unwinding.
     @Test("a cancelled download stays cancelled while its tail unwinds")
-    func cancelIsFinal() async throws {
+    func cancelIsFinal() async {
         let held = HeldSaves()
         let downloader = OfflineTileDownloader(
             isOnline: { true },
@@ -329,7 +343,7 @@ struct OfflineDownloadStateTests {
     /// Cancel-then-restart is one tap away in the UI (the same button), so the
     /// second download's state must survive the first one's tail.
     @Test("restarting after a cancel isn't clobbered by the abandoned run")
-    func restartAfterCancel() async throws {
+    func restartAfterCancel() async {
         let held = HeldSaves()
         let downloader = OfflineTileDownloader(
             isOnline: { true },

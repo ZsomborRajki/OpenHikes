@@ -6,8 +6,8 @@
 //  elevation-profile sample type derived from a route.
 //
 
-import Foundation
 import CoreLocation
+import Foundation
 
 /// A record of one offline tile download for a hike. Stored inline by SwiftData
 /// as part of ``Hike/offlineDownloads``. Complete downloads stay compact by
@@ -20,11 +20,11 @@ struct OfflineDownloadRecord: Codable, Hashable {
     var scale: Double
     /// Deepest zoom level saved.
     var maxZoom: Int
-    /// Exact durable keys for a partial download, or `nil` when every tile in
-    /// the deterministic grid was saved.
-    var savedTileKeys: [String]? = nil
+    /// Exact durable keys for a partial download. An empty array indicates
+    /// that every tile in the deterministic grid was saved (complete download).
+    var savedTileKeys: [String]
 
-    init(providerID: String, scale: Double, maxZoom: Int, savedTileKeys: [String]? = nil) {
+    init(providerID: String, scale: Double, maxZoom: Int, savedTileKeys: [String] = []) {
         self.providerID = providerID
         self.scale = scale
         self.maxZoom = maxZoom
@@ -47,7 +47,7 @@ struct ElevationSample: Identifiable, Equatable {
 }
 
 nonisolated enum RouteMotion: String, Codable, Hashable, Sendable {
-    case nonPedestrian
+    case nonPedestrian = "nonPedestrian"
 }
 
 /// A single Codable track point. Stored inline by SwiftData as part of ``Hike/route``.
@@ -73,9 +73,9 @@ nonisolated struct RouteCoordinate: Codable, Hashable, Sendable {
     }
 
     init(_ coordinate: CLLocationCoordinate2D) {
-        self.latitude = coordinate.latitude
-        self.longitude = coordinate.longitude
-        self.motion = nil
+        latitude = coordinate.latitude
+        longitude = coordinate.longitude
+        motion = nil
     }
 
     var clCoordinate: CLLocationCoordinate2D {

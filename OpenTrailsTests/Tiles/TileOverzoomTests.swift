@@ -11,18 +11,18 @@
 
 import Foundation
 import MapKit
-import Testing
 @testable import OpenTrails
+import Testing
 
 @Suite("Tile pyramid")
 struct TileOverzoomTests {
     @Test("a tile's parent is the one containing it, one zoom out")
     func parent() {
-        let path = MKTileOverlayPath(x: 8_723, y: 5_685, z: 14, contentScaleFactor: 2)
+        let path = MKTileOverlayPath(x: 8723, y: 5685, z: 14, contentScaleFactor: 2)
         let parent = path.parent
         #expect(parent.z == 13)
-        #expect(parent.x == 4_361)
-        #expect(parent.y == 2_842)
+        #expect(parent.x == 4361)
+        #expect(parent.y == 2842)
         #expect(parent.contentScaleFactor == 2)
     }
 
@@ -30,7 +30,7 @@ struct TileOverzoomTests {
     /// tile — that's what makes the crop quadrant well defined.
     @Test("all four children share a parent")
     func childrenShareParent() {
-        let parent = MKTileOverlayPath(x: 4_361, y: 2_842, z: 13, contentScaleFactor: 2)
+        let parent = MKTileOverlayPath(x: 4361, y: 2842, z: 13, contentScaleFactor: 2)
         for dx in 0...1 {
             for dy in 0...1 {
                 let child = MKTileOverlayPath(
@@ -64,7 +64,7 @@ struct TileOverzoomTests {
     /// is past the provider's maximum, and must not walk when it isn't.
     @Test("a tile is its own ancestor at its own zoom or deeper")
     func ancestorNotDeeperThanSelf() {
-        let path = MKTileOverlayPath(x: 8_723, y: 5_685, z: 14, contentScaleFactor: 2)
+        let path = MKTileOverlayPath(x: 8723, y: 5685, z: 14, contentScaleFactor: 2)
         for zoom in [14, 15, 19] {
             let ancestor = path.ancestor(atZoom: zoom)
             #expect(ancestor.z == path.z)
