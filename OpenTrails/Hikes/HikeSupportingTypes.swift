@@ -122,6 +122,59 @@ nonisolated enum RouteGeometry {
         )
     }
 
+    /// Where a fix falls on one segment, measured in the fix's own tangent
+    /// plane so the projection is exact at the point that matters.
+    struct SegmentProjection {
+        /// How far along the segment the closest point sits, clamped to
+        /// `0...1` so a fix beyond either end projects onto that end rather
+        /// than onto the segment's infinite extension.
+        let fraction: Double
+        /// Distance from the fix to that closest point, in metres.
+        let offRouteMeters: Double
+        /// The segment's local east/north components, pointing the way the
+        /// segment runs. Kept as components rather than a bearing so the
+        /// `atan2` is paid only by the callers that need a direction, not by
+        /// every segment of a five-hour track twice a second.
+        let dx: Double
+        let dy: Double
+    }
+
+    /// Projects `coordinate` onto the segment between `start` and `end`.
+    ///
+    /// Route scrubbing, live auto-follow, and trail matching all need the same
+    /// answer, and all three used to carry their own copy of this arithmetic.
+    /// One implementation means a fix can't be judged on-route by the chart
+    /// and off-route by the matcher.
+    static func project(
+        _ coordinate: CLLocationCoordinate2D,
+        onSegmentFrom start: CLLocationCoordinate2D,
+        to end: CLLocationCoordinate2D
+    ) -> SegmentProjection {
+        let startOffset = localOffset(from: coordinate, to: start)
+        let endOffset = localOffset(from: coordinate, to: end)
+        let dx = endOffset.x - startOffset.x
+        let dy = endOffset.y - startOffset.y
+        let lengthSquared = dx * dx + dy * dy
+        let fraction = lengthSquared > 0
+            ? min(
+                max(
+                    -(startOffset.x * dx + startOffset.y * dy) / lengthSquared,
+                    0
+                ),
+                1
+            )
+            : 0
+        return SegmentProjection(
+            fraction: fraction,
+            offRouteMeters: hypot(
+                startOffset.x + fraction * dx,
+                startOffset.y + fraction * dy
+            ),
+            dx: dx,
+            dy: dy
+        )
+    }
+
     static func interpolate(
         from start: CLLocationCoordinate2D,
         to end: CLLocationCoordinate2D,

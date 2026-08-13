@@ -6,6 +6,7 @@
 //  legs remain GPS geometry; matching is allowed to abstain.
 //
 
+import Algorithms
 import CoreLocation
 import Foundation
 import HeapModule
@@ -304,21 +305,16 @@ nonisolated enum TrailMatcher {
         }
 
         var usesMatchedAnchor = [Bool](repeating: false, count: points.count)
-        for indexInLegs in legs.indices where legs[indexInLegs].isConfident {
+        for (indexInLegs, leg) in legs.enumerated() where leg.isConfident {
             usesMatchedAnchor[indexInLegs] = true
             usesMatchedAnchor[indexInLegs + 1] = true
         }
 
-        let anchors = points.indices.map { pointIndex -> RecordingPoint in
-            guard usesMatchedAnchor[pointIndex],
-                  let candidate = selected[pointIndex]
-            else {
-                return points[pointIndex]
-            }
-            return point(
-                points[pointIndex],
-                movedTo: candidate.projectedCoordinate
-            )
+        let anchors = zip(points, zip(usesMatchedAnchor, selected)).map {
+            rawPoint, anchorState -> RecordingPoint in
+            let (isAnchored, candidate) = anchorState
+            guard isAnchored, let candidate else { return rawPoint }
+            return point(rawPoint, movedTo: candidate.projectedCoordinate)
         }
 
         var output: [RecordingPoint] = []
@@ -551,15 +547,12 @@ nonisolated enum TrailMatcher {
             coordinates = [start.coordinate, end.coordinate]
         }
 
-        var distances = [0.0]
-        for index in 1..<coordinates.count {
-            distances.append(
-                distances[index - 1]
-                    + RouteGeometry.distanceMeters(
-                        from: coordinates[index - 1],
-                        to: coordinates[index]
-                    )
-            )
+        // Running total along the route, one entry per coordinate: the walk
+        // starts at zero and each step adds the leg that reached it, so
+        // `distances[i]` is how far along the route `coordinates[i]` sits.
+        let distances = coordinates.adjacentPairs().reductions(0.0) {
+            travelled, leg in
+            travelled + RouteGeometry.distanceMeters(from: leg.0, to: leg.1)
         }
         let total = distances.last ?? 0
         let duration = end.timestamp.timeIntervalSince(start.timestamp)
@@ -666,28 +659,49 @@ nonisolated enum TrailMatcher {
 
         /// A path Yen's algorithm has found but not yet accepted, ordered by
         /// length so the priority queue hands back the next-shortest detour.
-        /// The signature breaks ties, so two equal-length detours are always
+        /// The edge list breaks ties, so two equal-length detours are always
         /// accepted in the same order.
         private struct RankedPath: Comparable {
-            let signature: String
             let path: NodePath
 
             static func < (lhs: Self, rhs: Self) -> Bool {
                 lhs.path.distance == rhs.path.distance
-                    ? lhs.signature < rhs.signature
+                    ? lhs.path.edgeIndices.lexicographicallyPrecedes(
+                        rhs.path.edgeIndices
+                    )
                     : lhs.path.distance < rhs.path.distance
             }
 
             static func == (lhs: Self, rhs: Self) -> Bool {
                 lhs.path.distance == rhs.path.distance
-                    && lhs.signature == rhs.signature
+                    && lhs.path.edgeIndices == rhs.path.edgeIndices
+            }
+        }
+
+        /// One direction of travel along one edge. A transition is identified
+        /// by the sequence of these it walks, so this is what makes two
+        /// routings between the same pair of candidates comparable.
+        private struct Traversal: Hashable {
+            let edgeIndex: Int
+            let isForward: Bool
+        }
+
+        /// The two endpoints of a shortest-path query, normalised so that a
+        /// route and its reverse share one cache entry.
+        private struct NodePair: Hashable {
+            let lower: Int64
+            let upper: Int64
+
+            init(_ first: Int64, _ second: Int64) {
+                lower = min(first, second)
+                upper = max(first, second)
             }
         }
 
         private struct PathOption {
             let distance: Double
             let coordinates: [CLLocationCoordinate2D]
-            let signature: String
+            let signature: [Traversal]
             let trailNames: [String]
         }
 
@@ -711,21 +725,182 @@ nonisolated enum TrailMatcher {
             }
         }
 
+        private struct EdgeEndpoints {
+            let start: CLLocationCoordinate2D
+            let end: CLLocationCoordinate2D
+        }
+
+        /// A uniform grid over the graph's edges, so a fix is projected
+        /// against the segments near it rather than against every segment in
+        /// the region.
+        ///
+        /// An alpine zoom-12 region holds tens of thousands of segments, and
+        /// matching asks for candidates once per fix, so the exhaustive scan
+        /// this replaces cost the product of the two: a long hike spent tens
+        /// of millions of projections while the walker waited on Stop.
+        ///
+        /// Cells sit in one equirectangular frame shared by the whole graph.
+        /// That frame's scale error grows with the distance being *measured*,
+        /// not with the distance from its origin, so across a search radius of
+        /// a few hundred metres it stays far below ``marginMeters``.
+        private struct EdgeGrid {
+            /// Ways are split at every OSM node, so segments run to tens of
+            /// metres: this keeps a cell's occupancy low while a typical
+            /// query still touches only a handful of cells.
+            private static let cellSizeMeters = 200.0
+            /// Slack on every query box, absorbing the shared frame's scale
+            /// error so the grid can never hide an edge the exhaustive scan
+            /// would have found.
+            private static let marginMeters = 2.0
+            /// Half-lengths above this go on ``alwaysScanned`` instead of
+            /// widening every query. A single freakishly long segment would
+            /// otherwise decide the search box for the whole graph.
+            private static let maximumEdgeReachMeters = 400.0
+
+            private struct Cell: Hashable {
+                let x: Int32
+                let y: Int32
+            }
+
+            private let origin: CLLocationCoordinate2D
+            /// Each edge is filed under the one cell holding its midpoint, so
+            /// a query visits an edge at most once and the caller never sees
+            /// the same candidate twice.
+            private let cells: [Cell: [Int]]
+            /// How far a bucketed edge can reach from its own midpoint. Every
+            /// query box grows by this, which is what lets one cell per edge
+            /// still be exhaustive.
+            private let reachMeters: Double
+            /// Edges too long, or too degenerate, to place — offered to every
+            /// query so the exact projection still decides them.
+            private let alwaysScanned: [Int]
+
+            init(endpoints: [EdgeEndpoints]) {
+                guard let first = endpoints.first else {
+                    origin = CLLocationCoordinate2D(latitude: 0, longitude: 0)
+                    cells = [:]
+                    reachMeters = 0
+                    alwaysScanned = []
+                    return
+                }
+
+                let origin = first.start
+                var cells: [Cell: [Int]] = [:]
+                var alwaysScanned: [Int] = []
+                var reach = 0.0
+
+                for (index, endpoint) in endpoints.enumerated() {
+                    let start = RouteGeometry.localOffset(
+                        from: origin,
+                        to: endpoint.start
+                    )
+                    let end = RouteGeometry.localOffset(
+                        from: origin,
+                        to: endpoint.end
+                    )
+                    let midpointX = (start.x + end.x) / 2
+                    let midpointY = (start.y + end.y) / 2
+                    let halfLength = hypot(end.x - start.x, end.y - start.y) / 2
+                    guard halfLength <= Self.maximumEdgeReachMeters,
+                          let cell = Self.cell(x: midpointX, y: midpointY)
+                    else {
+                        alwaysScanned.append(index)
+                        continue
+                    }
+                    reach = max(reach, halfLength)
+                    cells[cell, default: []].append(index)
+                }
+
+                self.origin = origin
+                self.cells = cells
+                self.alwaysScanned = alwaysScanned
+                reachMeters = reach
+            }
+
+            /// The cell holding a point in the shared frame, or `nil` when the
+            /// point isn't finite — a malformed node must not trap here, and
+            /// the exhaustive projection rejects it anyway.
+            private static func cell(x: Double, y: Double) -> Cell? {
+                let cellX = (x / cellSizeMeters).rounded(.down)
+                let cellY = (y / cellSizeMeters).rounded(.down)
+                guard cellX.isFinite, cellY.isFinite,
+                      cellX.magnitude < Double(Int32.max),
+                      cellY.magnitude < Double(Int32.max)
+                else {
+                    return nil
+                }
+                return Cell(x: Int32(cellX), y: Int32(cellY))
+            }
+
+            /// Calls `body` once for every edge that could lie within `radius`
+            /// of `coordinate`. Never misses one; may offer a few that turn
+            /// out to be beyond it, which the caller's exact projection then
+            /// rejects.
+            func forEachEdge(
+                near coordinate: CLLocationCoordinate2D,
+                within radius: Double,
+                _ body: (Int) -> Void
+            ) {
+                for index in alwaysScanned { body(index) }
+                guard !cells.isEmpty else { return }
+
+                let centre = RouteGeometry.localOffset(
+                    from: origin,
+                    to: coordinate
+                )
+                let expanded = radius + reachMeters + Self.marginMeters
+                guard let minimum = Self.cell(
+                    x: centre.x - expanded,
+                    y: centre.y - expanded
+                ), let maximum = Self.cell(
+                    x: centre.x + expanded,
+                    y: centre.y + expanded
+                ) else {
+                    return
+                }
+
+                for x in minimum.x...maximum.x {
+                    for y in minimum.y...maximum.y {
+                        guard let bucket = cells[Cell(x: x, y: y)] else {
+                            continue
+                        }
+                        for index in bucket { body(index) }
+                    }
+                }
+            }
+        }
+
         private let nodes: [Int64: TrailGraphNode]
         private let edges: [TrailGraphEdge]
+        /// Every valid edge's endpoint coordinates, resolved once. Reading
+        /// them back out of `nodes` per edge per fix put two dictionary probes
+        /// on the hottest path in matching.
+        private let edgeEndpoints: [EdgeEndpoints]
         private let adjacency: [Int64: [Adjacency]]
-        private var shortestPathCache: [String: NodePath] = [:]
+        private let grid: EdgeGrid
+        private var shortestPathCache: [NodePair: NodePath] = [:]
 
         init(graph: TrailGraph) {
             let nodeMap = Dictionary(
                 uniqueKeysWithValues: graph.nodes.map { ($0.id, $0) }
             )
-            let validEdges = graph.edges.filter {
-                nodeMap[$0.fromNodeID] != nil
-                    && nodeMap[$0.toNodeID] != nil
+            var validEdges: [TrailGraphEdge] = []
+            var endpoints: [EdgeEndpoints] = []
+            validEdges.reserveCapacity(graph.edges.count)
+            endpoints.reserveCapacity(graph.edges.count)
+            for edge in graph.edges {
+                guard let start = nodeMap[edge.fromNodeID]?.coordinate,
+                      let end = nodeMap[edge.toNodeID]?.coordinate
+                else {
+                    continue
+                }
+                validEdges.append(edge)
+                endpoints.append(EdgeEndpoints(start: start, end: end))
             }
             nodes = nodeMap
             edges = validEdges
+            edgeEndpoints = endpoints
+            grid = EdgeGrid(endpoints: endpoints)
             var adjacency: [Int64: [Adjacency]] = [:]
             for (edgeIndex, edge) in validEdges.enumerated() {
                 adjacency[edge.fromNodeID, default: []].append(
@@ -748,56 +923,35 @@ nonisolated enum TrailMatcher {
 
         /// The few graph edges close enough to `point` to be worth scoring.
         ///
-        /// Every edge in the loaded graph is projected against, but only the
-        /// closest ``maximumCandidatesPerFix`` survive — so the shortlist is
-        /// kept in a bounded min-max heap and the furthest is dropped as soon
-        /// as a nearer one turns up. Sorting all of them first would order a
-        /// few thousand edges per fix to throw away all but eight.
+        /// The grid narrows the field to the segments whose cells the search
+        /// radius reaches; each of those is projected against exactly, and
+        /// only the closest ``maximumCandidatesPerFix`` survive — so the
+        /// shortlist is kept in a bounded min-max heap and the furthest is
+        /// dropped as soon as a nearer one turns up. Sorting even the narrowed
+        /// field would order edges only to throw all but eight away.
         func candidates(for point: RecordingPoint) -> [Candidate] {
             let radius = max(50, point.horizontalAccuracy * 3)
             var closest = Heap<Candidate>()
 
-            for (edgeIndex, edge) in edges.enumerated() {
-                guard let start = nodes[edge.fromNodeID]?.coordinate,
-                      let end = nodes[edge.toNodeID]?.coordinate
-                else {
-                    continue
-                }
-                let startOffset = RouteGeometry.localOffset(
-                    from: point.coordinate,
-                    to: start
+            grid.forEachEdge(near: point.coordinate, within: radius) { edgeIndex in
+                let endpoints = edgeEndpoints[edgeIndex]
+                let projection = RouteGeometry.project(
+                    point.coordinate,
+                    onSegmentFrom: endpoints.start,
+                    to: endpoints.end
                 )
-                let endOffset = RouteGeometry.localOffset(
-                    from: point.coordinate,
-                    to: end
-                )
-                let dx = endOffset.x - startOffset.x
-                let dy = endOffset.y - startOffset.y
-                let lengthSquared = dx * dx + dy * dy
-                let fraction = lengthSquared > 0
-                    ? min(
-                        max(
-                            -(startOffset.x * dx + startOffset.y * dy)
-                                / lengthSquared,
-                            0
-                        ),
-                        1
-                    )
-                    : 0
-                let projectedX = startOffset.x + fraction * dx
-                let projectedY = startOffset.y + fraction * dy
-                let offRoute = hypot(projectedX, projectedY)
-                guard offRoute <= radius else { continue }
+                guard projection.offRouteMeters <= radius else { return }
                 closest.insert(
                     Candidate(
                         edgeIndex: edgeIndex,
                         projectedCoordinate: RouteGeometry.interpolate(
-                            from: start,
-                            to: end,
-                            fraction: fraction
+                            from: endpoints.start,
+                            to: endpoints.end,
+                            fraction: projection.fraction
                         ),
-                        offsetMeters: edge.lengthMeters * fraction,
-                        offRouteMeters: offRoute
+                        offsetMeters: edges[edgeIndex].lengthMeters
+                            * projection.fraction,
+                        offRouteMeters: projection.offRouteMeters
                     )
                 )
                 if closest.count > maximumCandidatesPerFix {
@@ -831,11 +985,13 @@ nonisolated enum TrailMatcher {
                             end.offsetMeters - start.offsetMeters
                         ),
                         coordinates: coordinates,
-                        signature: traversalToken(
-                            edgeIndex: start.edgeIndex,
-                            forward: end.offsetMeters
-                                >= start.offsetMeters
-                        ),
+                        signature: [
+                            Traversal(
+                                edgeIndex: start.edgeIndex,
+                                isForward: end.offsetMeters
+                                    >= start.offsetMeters
+                            )
+                        ],
                         trailNames: startEdge.displayName.map { [$0] } ?? []
                     )
                 )
@@ -919,7 +1075,7 @@ nonisolated enum TrailMatcher {
             // `Dictionary` iterates in an order that depends on the process's
             // hash seed, which would let the same recording match one way on
             // one launch and another way on the next.
-            var unique: OrderedDictionary<String, PathOption> = [:]
+            var unique: OrderedDictionary<[Traversal], PathOption> = [:]
             for option in options where option.distance
                 <= parameters.maximumDistance {
                 if let existing = unique[option.signature] {
@@ -1003,10 +1159,10 @@ nonisolated enum TrailMatcher {
             var accepted = [first]
             var candidates = Heap<RankedPath>()
             // Doubles as the "already accepted" check — an accepted path's
-            // signature is never removed, so a spur that rediscovers it is
+            // edge list is never removed, so a spur that rediscovers it is
             // rejected without comparing edge lists against every accepted
             // path in turn.
-            var seenSignatures: Set<String> = [signature(of: first.edgeIndices)]
+            var seenSignatures: Set<[Int]> = [first.edgeIndices]
             while accepted.count < limit {
                 let previous = accepted[accepted.count - 1]
                 for spurIndex in 0..<(previous.nodes.count - 1) {
@@ -1038,13 +1194,11 @@ nonisolated enum TrailMatcher {
                     let nodes = Array(rootNodes.dropLast()) + spur.nodes
                     guard Set(nodes).count == nodes.count else { continue }
                     let edgeIndices = rootEdges + spur.edgeIndices
-                    let signature = signature(of: edgeIndices)
-                    guard seenSignatures.insert(signature).inserted else {
+                    guard seenSignatures.insert(edgeIndices).inserted else {
                         continue
                     }
                     candidates.insert(
                         RankedPath(
-                            signature: signature,
                             path: NodePath(
                                 nodes: nodes,
                                 edgeIndices: edgeIndices,
@@ -1078,9 +1232,7 @@ nonisolated enum TrailMatcher {
             }
 
             let mayUseCache = bannedNodes.isEmpty && bannedEdges.isEmpty
-            let cacheKey = start < end
-                ? "\(start)/\(end)"
-                : "\(end)/\(start)"
+            let cacheKey = NodePair(start, end)
             if mayUseCache, let cached = shortestPathCache[cacheKey] {
                 guard cached.distance <= maximumDistance else { return nil }
                 if cached.nodes.first == start { return cached }
@@ -1176,52 +1328,38 @@ nonisolated enum TrailMatcher {
             end: Candidate,
             endEndpoint: Endpoint,
             parameters: TransitionParameters
-        ) -> String {
-            var traversals: [String] = []
+        ) -> [Traversal] {
+            var traversals: [Traversal] = []
+            traversals.reserveCapacity(path.edgeIndices.count + 2)
             if startEndpoint.cost > parameters.startEndpointTolerance {
                 traversals.append(
-                    traversalToken(
+                    Traversal(
                         edgeIndex: start.edgeIndex,
-                        forward: startEndpoint.nodeID
+                        isForward: startEndpoint.nodeID
                             == edges[start.edgeIndex].toNodeID
                     )
                 )
             }
-            for index in path.edgeIndices.indices {
-                let edgeIndex = path.edgeIndices[index]
+            for (edgeIndex, node) in zip(path.edgeIndices, path.nodes) {
                 traversals.append(
-                    traversalToken(
+                    Traversal(
                         edgeIndex: edgeIndex,
-                        forward: path.nodes[index]
-                            == edges[edgeIndex].fromNodeID
+                        isForward: node == edges[edgeIndex].fromNodeID
                     )
                 )
             }
             if endEndpoint.cost > parameters.endEndpointTolerance {
                 traversals.append(
-                    traversalToken(
+                    Traversal(
                         edgeIndex: end.edgeIndex,
-                        forward: endEndpoint.nodeID
+                        isForward: endEndpoint.nodeID
                             == edges[end.edgeIndex].fromNodeID
                     )
                 )
             }
-            return traversals.isEmpty
-                ? "stationary"
-                : traversals.joined(separator: ",")
-        }
-
-        private func traversalToken(
-            edgeIndex: Int,
-            forward: Bool
-        ) -> String {
-            "\(forward ? "+" : "-")\(edgeIndex)"
-        }
-
-        /// Identifies a path by the edges it uses, for deduplicating the spur
-        /// paths Yen's algorithm generates.
-        private func signature(of edgeIndices: [Int]) -> String {
-            edgeIndices.map(String.init).joined(separator: ",")
+            // An empty list is the stationary case: the pair of candidates is
+            // close enough that no edge is walked between them.
+            return traversals
         }
     }
 }

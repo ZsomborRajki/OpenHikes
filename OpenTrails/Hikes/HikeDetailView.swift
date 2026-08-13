@@ -6,6 +6,7 @@
 //  GPX file, with an interactive elevation graph at the top.
 //
 
+import AsyncAlgorithms
 import CoreLocation
 import SwiftUI
 import SwiftData
@@ -105,7 +106,13 @@ struct HikeDetailView: View {
     @State private var downloader = OfflineTileDownloader()
     /// Disk space used by this hike's saved tiles; `nil` until measured.
     @State private var storedBytes: Int64?
-    @State private var scheduledStoredBytesRefresh: Task<Void, Never>?
+    /// Auto-save drain notifications, coalesced by ``storedBytesRefreshDebounce``.
+    /// Each carries the measurement generation current when it was requested,
+    /// which is what lets a refresh that has already happened for another
+    /// reason retire the trailing one instead of paying for it twice.
+    @State private var storedBytesRefreshes = AsyncStream<Int>.makeStream(
+        bufferingPolicy: .bufferingNewest(1)
+    )
     @State private var storedBytesMeasurementTask: Task<Void, Never>?
     @State private var storedBytesMeasurementGeneration = 0
     @State private var storageDeletionFailed = false
@@ -204,8 +211,20 @@ struct HikeDetailView: View {
         // Watches `.count`, not the array itself — comparing two multi-thousand-
         // element `[String]`s on every drain cycle is itself main-thread work.
         .onChange(of: hike.autoSavedTileKeys.count) { _, _ in scheduleStoredBytesRefresh() }
+        .task {
+            // A trailing measurement, once the auto-save drain settles. The
+            // task's own lifetime retires it when the view goes away, so
+            // there's no timer to cancel by hand.
+            for await generation in storedBytesRefreshes.stream
+                .debounce(for: Self.storedBytesRefreshDebounce) {
+                guard generation == storedBytesMeasurementGeneration else {
+                    continue
+                }
+                refreshStoredBytes()
+            }
+        }
         .onDisappear {
-            invalidateStoredBytesWork()
+            invalidateStoredBytesMeasurement()
         }
         .alert("Couldn’t Delete Offline Tiles", isPresented: $storageDeletionFailed) {
             Button("OK", role: .cancel) {}
@@ -224,7 +243,6 @@ struct HikeDetailView: View {
     /// changes reach this through ``scheduleStoredBytesRefresh()`` so repeated
     /// two-second drains collapse into one trailing measurement.
     private func refreshStoredBytes() {
-        cancelScheduledStoredBytesRefresh()
         invalidateStoredBytesMeasurement()
         let route = hike.route
         let offlineDownloads = hike.offlineDownloads
@@ -247,38 +265,18 @@ struct HikeDetailView: View {
     }
 
     private func scheduleStoredBytesRefresh() {
-        cancelScheduledStoredBytesRefresh()
         guard !hike.offlineDownloads.isEmpty || !hike.autoSavedTileKeys.isEmpty else {
             invalidateStoredBytesMeasurement()
             storedBytes = 0
             return
         }
-        scheduledStoredBytesRefresh = Task {
-            do {
-                try await Task.sleep(for: Self.storedBytesRefreshDebounce)
-            } catch {
-                return
-            }
-            guard !Task.isCancelled else { return }
-            scheduledStoredBytesRefresh = nil
-            refreshStoredBytes()
-        }
-    }
-
-    private func cancelScheduledStoredBytesRefresh() {
-        scheduledStoredBytesRefresh?.cancel()
-        scheduledStoredBytesRefresh = nil
+        storedBytesRefreshes.continuation.yield(storedBytesMeasurementGeneration)
     }
 
     private func invalidateStoredBytesMeasurement() {
         storedBytesMeasurementTask?.cancel()
         storedBytesMeasurementTask = nil
         storedBytesMeasurementGeneration &+= 1
-    }
-
-    private func invalidateStoredBytesWork() {
-        cancelScheduledStoredBytesRefresh()
-        invalidateStoredBytesMeasurement()
     }
 
     /// Forgets this hike's downloads and auto-saved tiles, and deletes them from
@@ -301,7 +299,7 @@ struct HikeDetailView: View {
         let deletionPlan = StoredTileDeletionPlan(removing: hike, among: hikes)
         hike.offlineDownloads.removeAll()
         hike.autoSavedTileKeys.removeAll()
-        invalidateStoredBytesWork()
+        invalidateStoredBytesMeasurement()
         storedBytes = 0
         downloader.reset()
         Task.detached {

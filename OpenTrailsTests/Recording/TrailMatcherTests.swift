@@ -179,6 +179,121 @@ struct TrailMatcherTests {
         #expect(result.points.allSatisfy { abs($0.longitude) > 170 })
     }
 
+    // MARK: Candidate search
+
+    // The candidate search narrows the graph with a uniform grid before
+    // projecting. A grid's failure mode is silent: it hides an edge the
+    // exhaustive scan would have found, and matching quietly falls back to the
+    // raw trace. These cover the cases where its bookkeeping could do that.
+
+    @Test("a poor fix searches beyond one grid cell")
+    func wideSearchRadiusSpansCells() throws {
+        // Accuracy 100 gives a 300 m search radius, so the fix and the trail
+        // sit in different cells: the query has to widen with the radius
+        // rather than trusting the cell the fix landed in.
+        let graph = graph(
+            nodes: [
+                (1, 47.6300, 12.8600),
+                (2, 47.6320, 12.8600)
+            ],
+            ways: [(10, [1, 2], "Wide Trail")]
+        )
+        let points = [
+            point(47.6302, 12.8620, at: 0, accuracy: 100),
+            point(47.6307, 12.8620, at: 60, accuracy: 100),
+            point(47.6312, 12.8620, at: 120, accuracy: 100)
+        ]
+
+        let result = TrailMatcher.match(points: points, graph: graph)
+
+        #expect(result.matchedTrailName == "Wide Trail")
+        #expect(result.didMoveRoute)
+    }
+
+    @Test("a segment longer than the grid's reach is still found")
+    func edgeLongerThanGridReachStillMatches() throws {
+        // One kilometre between OSM nodes puts this edge past the half-length
+        // the grid will bucket, so it can only be found on the always-scanned
+        // path.
+        let graph = graph(
+            nodes: [
+                (1, 47.6300, 12.8600),
+                (2, 47.6390, 12.8600)
+            ],
+            ways: [(10, [1, 2], "Long Straight")]
+        )
+        let points = [
+            point(47.6320, 12.86012, at: 0),
+            point(47.6325, 12.86012, at: 60),
+            point(47.6330, 12.86012, at: 120)
+        ]
+
+        let result = TrailMatcher.match(points: points, graph: graph)
+
+        #expect(result.matchedTrailName == "Long Straight")
+        #expect(result.didMoveRoute)
+    }
+
+    @Test("a walk far from the graph's first edge still matches")
+    func matchesFarFromGridOrigin() throws {
+        // Grid cells are laid out around the first edge's start. A walk twenty
+        // kilometres away exercises the shared frame at the range where its
+        // scale error would show up.
+        let graph = graph(
+            nodes: [
+                (1, 47.6300, 12.8600),
+                (2, 47.6320, 12.8600),
+                (3, 47.6300, 13.1265),
+                (4, 47.6320, 13.1265)
+            ],
+            ways: [
+                (10, [1, 2], "Near Trail"),
+                (11, [3, 4], "Far Trail")
+            ]
+        )
+        let points = [
+            point(47.6302, 13.12652, at: 0),
+            point(47.6307, 13.12652, at: 60),
+            point(47.6312, 13.12652, at: 120)
+        ]
+
+        let result = TrailMatcher.match(points: points, graph: graph)
+
+        #expect(result.matchedTrailName == "Far Trail")
+        #expect(result.didMoveRoute)
+    }
+
+    @Test("the nearest of many parallel trails wins the shortlist")
+    func nearestOfManyParallelTrailsWins() throws {
+        // The shortlist keeps only the closest few candidates, so an edge
+        // offered twice would evict a genuine one. Eleven parallel trails
+        // around the walker is more than that shortlist holds.
+        var nodes: [(Int64, Double, Double)] = []
+        var ways: [(Int64, [Int64], String?)] = []
+        for offset in -5...5 {
+            let longitude = 12.8600 + Double(offset) * 0.0004
+            let first = Int64(offset + 5) * 2 + 1
+            nodes.append((first, 47.6300, longitude))
+            nodes.append((first + 1, 47.6320, longitude))
+            ways.append((Int64(offset + 5) + 10, [first, first + 1], "Trail \(offset)"))
+        }
+        let points = [
+            point(47.6302, 12.86005, at: 0, accuracy: 30),
+            point(47.6307, 12.86005, at: 60, accuracy: 30),
+            point(47.6312, 12.86005, at: 120, accuracy: 30)
+        ]
+
+        let result = TrailMatcher.match(
+            points: points,
+            graph: graph(nodes: nodes, ways: ways)
+        )
+
+        #expect(result.matchedTrailName == "Trail 0")
+        #expect(result.points.allSatisfy {
+            abs($0.longitude - 12.8600) < 0.00001
+        })
+    }
+
     private func point(
         _ latitude: Double,
         _ longitude: Double,

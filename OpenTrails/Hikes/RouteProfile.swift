@@ -264,27 +264,18 @@ nonisolated struct RouteProfile {
         }
 
         func candidate(at index: Int) -> Candidate {
-            let start = RouteGeometry.localOffset(
-                from: coordinate,
-                to: coordinates[index]
-            )
-            let end = RouteGeometry.localOffset(
-                from: coordinate,
+            let projection = RouteGeometry.project(
+                coordinate,
+                onSegmentFrom: coordinates[index],
                 to: coordinates[index + 1]
             )
-            let dx = end.x - start.x
-            let dy = end.y - start.y
-            let lengthSquared = dx * dx + dy * dy
-            let fraction = lengthSquared > 0
-                ? min(max(-(start.x * dx + start.y * dy) / lengthSquared, 0), 1)
-                : 0
-            let projectedX = start.x + fraction * dx
-            let projectedY = start.y + fraction * dy
             return Candidate(
-                distanceAlongRoute: distances[index] + fraction * (distances[index + 1] - distances[index]),
-                offRouteMeters: hypot(projectedX, projectedY),
-                dx: dx,
-                dy: dy
+                distanceAlongRoute: distances[index]
+                    + projection.fraction
+                        * (distances[index + 1] - distances[index]),
+                offRouteMeters: projection.offRouteMeters,
+                dx: projection.dx,
+                dy: projection.dy
             )
         }
 

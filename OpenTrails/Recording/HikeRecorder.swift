@@ -280,10 +280,10 @@ final class HikeRecorder: NSObject {
     @ObservationIgnored private var liveMatchNeedsRun = false
     @ObservationIgnored private var pendingAmbiguitySave:
         PendingAmbiguitySave?
-    @ObservationIgnored private var journalTail: Task<Void, Never>?
+    @ObservationIgnored private let journalQueue = SerialAsyncQueue()
     @ObservationIgnored private var journalFlushTask: Task<Void, Never>?
     @ObservationIgnored private var pendingFixMergeTask: Task<Void, Never>?
-    @ObservationIgnored private var sharedStateTail: Task<Void, Never>?
+    @ObservationIgnored private let sharedStateQueue = SerialAsyncQueue()
     @ObservationIgnored private var lastSharedSnapshotAt: Date?
     @ObservationIgnored private var lastSharedSnapshotPointCount = 0
 
@@ -426,16 +426,12 @@ final class HikeRecorder: NSObject {
             fail(.storageUnavailable)
             return
         }
-        let previous = journalTail
-        journalTail = Task { [weak self] in
-            await previous?.value
+        journalQueue.enqueue { [weak self] in
             do {
                 try await journal.pause(at: pausedAt)
-                self?.source.stopRecordingUpdates()
-                self?.elevationSource?.stop()
-                self?.motionSource?.stop()
+                await self?.stopLocationSensors()
             } catch {
-                self?.fail(.storage(error.localizedDescription))
+                await self?.fail(.storage(error.localizedDescription))
             }
         }
     }
@@ -456,7 +452,7 @@ final class HikeRecorder: NSObject {
 
         do {
             guard let journal else { throw RecordingFailure.storageUnavailable }
-            await journalTail?.value
+            await journalQueue.drain()
             try await journal.reopenForAppending()
             try await journal.resume(at: clock())
         } catch let failure as RecordingFailure {
@@ -505,7 +501,7 @@ final class HikeRecorder: NSObject {
         if let sessionID {
             await mergePendingWidgetFixes(for: sessionID)
         }
-        await journalTail?.value
+        await journalQueue.drain()
 
         let endedAt = clock()
         let session: TrackJournalSession
@@ -515,9 +511,7 @@ final class HikeRecorder: NSObject {
                 throw RecordingFailure.storageUnavailable
             }
             session = loaded
-            source.stopRecordingUpdates()
-            elevationSource?.stop()
-            motionSource?.stop()
+            stopLocationSensors()
         } catch let failure as RecordingFailure {
             fail(failure)
             throw failure
@@ -540,14 +534,12 @@ final class HikeRecorder: NSObject {
 
     func discard() async {
         cancelLiveMatching(clearWindow: true)
-        source.stopRecordingUpdates()
-        elevationSource?.stop()
-        motionSource?.stop()
+        stopLocationSensors()
         journalFlushTask?.cancel()
         journalFlushTask = nil
         await pendingFixMergeTask?.value
         pendingFixMergeTask = nil
-        await journalTail?.value
+        await journalQueue.drain()
         guard let journal else {
             fail(.storageUnavailable, endLocationUpdates: false)
             return
@@ -1041,6 +1033,15 @@ final class HikeRecorder: NSObject {
         return distances
     }
 
+    /// Releases the sensors a session holds. Shared because the journal
+    /// queue also does this once a pause is durably written, so the walker
+    /// can't lose a pause boundary to a crash between the two.
+    private func stopLocationSensors() {
+        source.stopRecordingUpdates()
+        elevationSource?.stop()
+        motionSource?.stop()
+    }
+
     private func enqueueJournalOperation(
         _ operation: @escaping @Sendable (TrackJournal) async throws -> Void
     ) {
@@ -1048,13 +1049,11 @@ final class HikeRecorder: NSObject {
             fail(.storageUnavailable)
             return
         }
-        let previous = journalTail
-        journalTail = Task { [weak self] in
-            await previous?.value
+        journalQueue.enqueue { [weak self] in
             do {
                 try await operation(journal)
             } catch {
-                self?.fail(.storage(error.localizedDescription))
+                await self?.fail(.storage(error.localizedDescription))
             }
         }
     }
@@ -1116,18 +1115,14 @@ final class HikeRecorder: NSObject {
         }
         guard !fixes.isEmpty else { return }
 
-        let mergeRevision: UInt64
-        while true {
-            let revision = acceptedFixRevision
-            let tail = journalTail
-            await tail?.value
-            guard sessionID == expectedSessionID else { return }
-            if case .failed = phase { return }
-            if acceptedFixRevision == revision {
-                mergeRevision = revision
-                break
-            }
-        }
+        // Every fix accepted before now is on disk once the queue drains, so
+        // the merge sees a settled journal. A fix arriving after this point is
+        // genuinely later than the widget's, and `mergeWidgetFixes`
+        // deduplicates by timestamp, so it needs no ordering of its own.
+        let mergeRevision = acceptedFixRevision
+        await journalQueue.drain()
+        guard sessionID == expectedSessionID else { return }
+        if case .failed = phase { return }
         let mergedCount: Int
         do {
             mergedCount = try await journal.mergeWidgetFixes(
@@ -1166,8 +1161,7 @@ final class HikeRecorder: NSObject {
         while sessionID == expectedSessionID,
               acceptedFixRevision >= minimumRevision {
             let revision = acceptedFixRevision
-            let tail = journalTail
-            await tail?.value
+            await journalQueue.drain()
             guard sessionID == expectedSessionID else { return }
             if case .failed = phase { return }
 
@@ -1234,9 +1228,7 @@ final class HikeRecorder: NSObject {
         ) async throws -> Void
     ) {
         guard let sharedStateStore else { return }
-        let previous = sharedStateTail
-        sharedStateTail = Task {
-            await previous?.value
+        sharedStateQueue.enqueue {
             do {
                 try await operation(sharedStateStore)
             } catch {
@@ -1249,7 +1241,7 @@ final class HikeRecorder: NSObject {
 
     private func clearSharedRecordingState(sessionID: UUID?) async {
         guard let sharedStateStore else { return }
-        await sharedStateTail?.value
+        await sharedStateQueue.drain()
         do {
             try await sharedStateStore.clear(sessionID: sessionID)
         } catch {
@@ -1257,7 +1249,6 @@ final class HikeRecorder: NSObject {
                 "Recording widget state could not be cleared: \(error.localizedDescription, privacy: .public)"
             )
         }
-        sharedStateTail = nil
         lastSharedSnapshotAt = nil
         lastSharedSnapshotPointCount = 0
     }
@@ -1561,9 +1552,7 @@ final class HikeRecorder: NSObject {
     ) {
         cancelLiveMatching(clearWindow: false)
         if endLocationUpdates {
-            source.stopRecordingUpdates()
-            elevationSource?.stop()
-            motionSource?.stop()
+            stopLocationSensors()
         }
         journalFlushTask?.cancel()
         journalFlushTask = nil
@@ -1597,12 +1586,10 @@ final class HikeRecorder: NSObject {
         liveMatchingTask = nil
         liveMatchingTaskID = nil
         liveMatchNeedsRun = false
-        journalTail = nil
         journalFlushTask?.cancel()
         journalFlushTask = nil
         pendingFixMergeTask?.cancel()
         pendingFixMergeTask = nil
-        sharedStateTail = nil
         lastSharedSnapshotAt = nil
         lastSharedSnapshotPointCount = 0
         stats.reset()
