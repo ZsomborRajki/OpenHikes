@@ -8,13 +8,17 @@ enum SheetRoute: Hashable {
     case recording
 
     static func reopenRecording(in path: inout [SheetRoute]) {
-        if let recordingIndex = path.lastIndex(of: .recording) {
-            let following = path.index(after: recordingIndex)
-            if following < path.endIndex {
-                path.removeSubrange(following..<path.endIndex)
-            }
-        } else {
-            path.append(.recording)
+        path = [.recording]
+    }
+
+    static func openRecording(
+        hike: Hike?,
+        selectedHike: inout Hike?,
+        in path: inout [SheetRoute]
+    ) {
+        if let hike {
+            selectedHike = hike
         }
+        reopenRecording(in: &path)
     }
 }

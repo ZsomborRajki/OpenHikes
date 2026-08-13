@@ -32,6 +32,9 @@ final class Hike {
     /// The inline default is required for lightweight migration of existing
     /// stores, just like the defaults on the auto-save fields below.
     var rawRoute: [RouteCoordinate] = []
+    /// True while this row is the durable draft owned by an active recording.
+    /// The route stays empty until Stop finalizes the draft in place.
+    var isRecording = false
 
     /// Records of offline tile downloads for this hike, enough to recompute (and
     /// so measure and remove) exactly the tiles each one saved.
@@ -69,6 +72,7 @@ final class Hike {
         symbol: String = "figure.hiking",
         route: [RouteCoordinate] = [],
         rawRoute: [RouteCoordinate] = [],
+        isRecording: Bool = false,
         offlineDownloads: [OfflineDownloadRecord] = [],
         autoSavedTileKeys: [String] = [],
         autoSaveTilesEnabled: Bool = true,
@@ -86,6 +90,7 @@ final class Hike {
         self.symbol = symbol
         self.route = route
         self.rawRoute = rawRoute
+        self.isRecording = isRecording
         self.offlineDownloads = offlineDownloads
         self.autoSavedTileKeys = autoSavedTileKeys
         self.autoSaveTilesEnabled = autoSaveTilesEnabled
@@ -93,6 +98,15 @@ final class Hike {
         self.trackDescription = trackDescription
         self.author = author
         self.keywords = keywords
+    }
+}
+
+extension Hike {
+    /// The persisted flag covers normal recording and recovery. The recorder's
+    /// current ID bridges the short window after the finished route is saved
+    /// but before shared-state and journal cleanup release ownership.
+    func belongsToActiveRecording(currentHikeID: UUID?) -> Bool {
+        isRecording || id == currentHikeID
     }
 }
 

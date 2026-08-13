@@ -26,7 +26,7 @@ struct DisplayedRoute: Equatable {
         lhs.id == rhs.id
     }
 
-    /// The route to draw for the current selection.
+    /// The finished route to draw for the current selection.
     ///
     /// This is the *whole* read `OpenTrailsView.body` performs against the
     /// selected `Hike`, which is why it lives here rather than inline in the
@@ -35,15 +35,22 @@ struct DisplayedRoute: Equatable {
     /// and with it the sheet closure inside it — is invalidated. Keeping it in
     /// one named place is what lets a test observe exactly that set.
     @MainActor
-    static func forSelection(_ hike: Hike?, cache: DisplayedRouteCoordinateCache) -> DisplayedRoute? {
-        guard let hike else { return nil }
+    static func forSelection(
+        _ hike: Hike?,
+        recordingPresented: Bool = false,
+        cache: DisplayedRouteCoordinateCache
+    ) -> DisplayedRoute? {
+        guard !recordingPresented, let hike, !hike.isRecording else {
+            return nil
+        }
         return DisplayedRoute(id: hike.id, coordinates: cache.coordinates(for: hike))
     }
 }
 
-/// Route points are immutable after import and change only when the hike ID
-/// changes, so their Core Location projection is kept across unrelated body
-/// passes rather than remapped on each one.
+/// Finished route points are immutable after import or recording finalization,
+/// so their Core Location projection is kept across unrelated body passes
+/// rather than remapped on each one. Active recording drafts never enter this
+/// cache.
 @MainActor
 final class DisplayedRouteCoordinateCache {
     private var hikeID: UUID?

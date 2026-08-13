@@ -29,4 +29,45 @@ struct DisplayedRouteCoordinateCacheTests {
         #expect(refreshed.count == 1)
         #expect(refreshed[0].latitude == 48)
     }
+
+    @Test("the recording screen never draws the previously selected finished route")
+    func recordingPresentationSuppressesFinishedRoute() {
+        let hike = Hike(
+            title: "Imported Track",
+            distanceMeters: 1_000,
+            route: Fixture.ridgeRoute
+        )
+        let cache = DisplayedRouteCoordinateCache()
+
+        #expect(
+            DisplayedRoute.forSelection(
+                hike,
+                recordingPresented: true,
+                cache: cache
+            ) == nil
+        )
+        #expect(
+            DisplayedRoute.forSelection(hike, cache: cache)?.coordinates.count
+                == Fixture.ridgeRoute.count
+        )
+    }
+
+    @Test("an active recording draft is not treated as a finished route")
+    func recordingDraftIsSuppressedUntilFinalized() {
+        let hike = Hike(
+            title: "Morning Hike",
+            distanceMeters: 0,
+            route: Fixture.ridgeRoute,
+            isRecording: true
+        )
+        let cache = DisplayedRouteCoordinateCache()
+
+        #expect(DisplayedRoute.forSelection(hike, cache: cache) == nil)
+
+        hike.isRecording = false
+        #expect(
+            DisplayedRoute.forSelection(hike, cache: cache)?.coordinates.count
+                == Fixture.ridgeRoute.count
+        )
+    }
 }

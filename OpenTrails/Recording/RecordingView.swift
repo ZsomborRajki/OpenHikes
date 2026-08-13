@@ -13,7 +13,7 @@ struct RecordingView: View {
     let recorder: HikeRecorder
     var mapController: MapController
     var onSaved: (Hike) -> Void
-    var onDiscarded: () -> Void
+    var onDiscarded: (UUID?) -> Void
 
     private var recordingFailure: RecordingFailure? {
         if case let .failed(failure) = recorder.phase {
@@ -289,7 +289,7 @@ private struct RecordingStatsGrid: View {
 private struct RecordingControls: View {
     let recorder: HikeRecorder
     var onSaved: (Hike) -> Void
-    var onDiscarded: () -> Void
+    var onDiscarded: (UUID?) -> Void
 
     @State private var showDiscardConfirmation = false
 
@@ -361,9 +361,10 @@ private struct RecordingControls: View {
         ) {
             Button("Discard Recording", role: .destructive) {
                 Task {
+                    let hikeID = recorder.currentHike?.id
                     await recorder.discard()
                     if recorder.phase == .idle {
-                        onDiscarded()
+                        onDiscarded(hikeID)
                     }
                 }
             }

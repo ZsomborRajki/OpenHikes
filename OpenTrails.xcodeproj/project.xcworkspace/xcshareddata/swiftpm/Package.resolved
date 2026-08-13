@@ -6,8 +6,8 @@
       "kind" : "remoteSourceControl",
       "location" : "https://github.com/vincentneo/CoreGPX",
       "state" : {
-        "revision" : "42662cc9235d385bdd0356c8f4cb7b581da24e39",
-        "version" : "0.9.3"
+        "revision" : "58d9a7f7a374ec5be9913c0fe76c8fd6739749a6",
+        "version" : "0.9.4"
       }
     },
     {

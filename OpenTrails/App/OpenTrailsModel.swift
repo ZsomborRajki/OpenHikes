@@ -76,10 +76,19 @@ final class OpenTrailsModel {
     }
 
     func selectedHikeDidChange(to hike: Hike?) {
-        autoSaveController.hikeSelectionChanged(to: hike)
-        backgroundTracker.hikeSelectionChanged(to: hike)
+        // An active recording is selected in the list, but it is not a
+        // finished route to browse, auto-save for, or match background fixes
+        // against. The recorder owns its live trace and widget state.
+        let currentRecordingHikeID = hikeRecorder.currentHike?.id
+        let finishedHike = hike.flatMap {
+            $0.belongsToActiveRecording(
+                currentHikeID: currentRecordingHikeID
+            ) ? nil : $0
+        }
+        autoSaveController.hikeSelectionChanged(to: finishedHike)
+        backgroundTracker.hikeSelectionChanged(to: finishedHike)
         defaults.set(
-            hike?.id.uuidString,
+            finishedHike?.id.uuidString,
             forKey: SettingsKey.lastSelectedHikeID
         )
     }

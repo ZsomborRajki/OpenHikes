@@ -27,6 +27,9 @@ struct OpenTrailsView: View {
     /// Set when a picked file couldn't become a hike; drives the alert that
     /// says so. `nil` the rest of the time.
     @State private var importFailure: GPXImport.ImportFailure?
+    /// Invalidates an import's permission to replace the current selection
+    /// when recording or navigation moves on while GPX parsing is off-main.
+    @State private var importSelectionGate = ImportSelectionGate()
     /// Lets the hike detail view drive one-shot map commands (e.g. the Zoom button).
     @State private var mapController = MapController()
     /// Keeps the selected route's Core Location projection across unrelated
@@ -50,7 +53,28 @@ struct OpenTrailsView: View {
     /// Geometry only: its appearance reaches the map through ``routeStyle``,
     /// which is what keeps a colour or width drag out of this body.
     private var displayedRoute: DisplayedRoute? {
-        DisplayedRoute.forSelection(selectedHike, cache: displayedRouteCoordinateCache)
+        DisplayedRoute.forSelection(
+            selectedHike,
+            recordingPresented: navigationPath.last == .recording
+                || selectedHike?.belongsToActiveRecording(
+                    currentHikeID: currentRecordingHikeID
+                ) == true,
+            cache: displayedRouteCoordinateCache
+        )
+    }
+
+    private var selectedHikeState: SelectedHikeState? {
+        selectedHike.map {
+            SelectedHikeState(
+                id: $0.id,
+                isRecording: $0.isRecording,
+                isRecorderOwned: $0.id == currentRecordingHikeID
+            )
+        }
+    }
+
+    private var currentRecordingHikeID: UUID? {
+        appModel.hikeRecorder.currentHike?.id
     }
 
     /// Resolves the selected provider (with API key substituted) for the map.
@@ -137,17 +161,33 @@ struct OpenTrailsView: View {
                 Button("OK", role: .cancel) {}
             }
             .onOpenURL { url in openWidgetLink(url) }
-            // Follows the selected hike so auto-save always tracks what's on screen.
-            .onChange(of: selectedHike) { _, hike in
-                if hike == nil {
+            // Follows finished selections for map styling, auto-save, and
+            // background route matching. A recording draft remains selected
+            // in the list but is filtered by `OpenTrailsModel`.
+            .onChange(of: selectedHikeState) { _, _ in
+                importSelectionGate.invalidate()
+                if selectedHike == nil {
                     displayedRouteCoordinateCache.clear()
                 }
                 // Hands the map the new route's appearance, and re-points the
                 // tracking that keeps it current, without this body ever
                 // reading either value — a change handler is not a body pass,
                 // so nothing here becomes a dependency of this view.
-                routeStyle.follow(hike)
-                appModel.selectedHikeDidChange(to: hike)
+                routeStyle.follow(selectedHike)
+                appModel.selectedHikeDidChange(to: selectedHike)
+            }
+            .onChange(of: navigationPath) { _, _ in
+                importSelectionGate.invalidate()
+            }
+            .onChange(of: currentRecordingHikeID) { _, id in
+                importSelectionGate.invalidate()
+                guard let id,
+                      let hike = appModel.hikeRecorder.currentHike,
+                      hike.id == id else {
+                    return
+                }
+                selectedHike = hike
+                highlight.move(to: nil)
             }
     }
 
@@ -167,7 +207,12 @@ struct OpenTrailsView: View {
         case .recording:
             guard appModel.hikeRecorder.isActive else { return }
             searchText = ""
-            SheetRoute.reopenRecording(in: &navigationPath)
+            SheetRoute.openRecording(
+                hike: appModel.hikeRecorder.currentHike,
+                selectedHike: &selectedHike,
+                in: &navigationPath
+            )
+            highlight.move(to: nil)
             withAnimation { sheetDetent = .medium }
         case .hike(let id):
             openHike(id: id)
@@ -184,23 +229,32 @@ struct OpenTrailsView: View {
         // leave the user on the search page rather than acting on a ghost.
         guard let hike = try? modelContext.fetch(descriptor).first else { return }
 
+        if hike.belongsToActiveRecording(
+            currentHikeID: currentRecordingHikeID
+        ), appModel.hikeRecorder.isActive {
+            searchText = ""
+            SheetRoute.openRecording(
+                hike: hike,
+                selectedHike: &selectedHike,
+                in: &navigationPath
+            )
+            highlight.move(to: nil)
+            withAnimation { sheetDetent = .medium }
+            return
+        }
+
         // Clearing the query drops the search results the sheet would
         // otherwise still be showing over the detail view.
         searchText = ""
         selectedHike = hike
-        if navigationPath.contains(.recording) {
-            navigationPath.append(.hike(hike))
-        } else {
-            navigationPath = [.hike(hike)]
-        }
+        navigationPath = [.hike(hike)]
         // The compact detent is only tall enough for the search field, so a
         // push there would arrive off-screen.
         withAnimation { sheetDetent = .medium }
     }
 
-    /// Restores the last-selected hike across launches — today `selectedHike`
-    /// starts every launch as `nil`, so without this the widget would
-    /// stay empty until the user reselects a trail by hand.
+    /// Restores an active recording draft when recovery has already found it;
+    /// otherwise restores the last selected finished hike across launches.
     ///
     /// Skipped while hosting tests: restoring a selection publishes a widget
     /// payload into the App Group and reloads the widget's timelines,
@@ -208,6 +262,11 @@ struct OpenTrailsView: View {
     /// test can win, and it made a widget-feed assertion fail with whatever
     /// trail this simulator was last left on. See ``AppLaunchEnvironment``.
     private func restoreLastSelectedHike() {
+        if let recordingHike = appModel.hikeRecorder.currentHike {
+            selectedHike = recordingHike
+            highlight.move(to: nil)
+            return
+        }
         guard selectedHike == nil else { return }
         selectedHike = appModel.restoreLastSelectedHike(in: modelContext)
     }
@@ -216,11 +275,16 @@ struct OpenTrailsView: View {
     /// A file that can't become a hike raises ``importFailure`` rather than
     /// leaving the user looking at an unchanged screen.
     private func importGPX(from url: URL) {
+        let selectionToken = importSelectionGate.token(
+            selectedHikeID: selectedHike?.id,
+            path: navigationPath
+        )
         Task {
+            let importedHike: Hike
             // Typed, so the catch below can't quietly widen to `any Error` and
             // start swallowing something this screen has no message for.
             do throws(GPXImport.ImportFailure) {
-                selectedHike = try await appModel.importHike(
+                importedHike = try await appModel.importHike(
                     from: url,
                     into: modelContext
                 )
@@ -229,8 +293,85 @@ struct OpenTrailsView: View {
                 return
             }
 
+            // The imported row remains persisted when another action won the
+            // selection race; only its stale attempt to take over the map and
+            // sheet is dropped.
+            guard importSelectionGate.permits(
+                token: selectionToken,
+                selectedHikeID: selectedHike?.id,
+                path: navigationPath,
+                currentRecordingHikeID: currentRecordingHikeID,
+                recordingPresented: navigationPath.last == .recording
+            ) else {
+                return
+            }
+            selectedHike = importedHike
             // The selection draws the imported route; expanding reveals it.
             withAnimation { sheetDetent = .medium }
+        }
+    }
+}
+
+private struct SelectedHikeState: Equatable {
+    let id: UUID
+    let isRecording: Bool
+    let isRecorderOwned: Bool
+}
+
+struct ImportSelectionGate {
+    struct Token: Equatable {
+        fileprivate let revision: UInt64
+        fileprivate let selectedHikeID: UUID?
+        fileprivate let destination: Destination
+    }
+
+    fileprivate enum Destination: Equatable {
+        case root
+        case recording
+        case hike(UUID)
+    }
+
+    private(set) var revision: UInt64 = 0
+
+    func token(
+        selectedHikeID: UUID?,
+        path: [SheetRoute]
+    ) -> Token {
+        Token(
+            revision: revision,
+            selectedHikeID: selectedHikeID,
+            destination: destination(for: path)
+        )
+    }
+
+    mutating func invalidate() {
+        revision &+= 1
+    }
+
+    func permits(
+        token: Token,
+        selectedHikeID: UUID?,
+        path: [SheetRoute],
+        currentRecordingHikeID: UUID?,
+        recordingPresented: Bool
+    ) -> Bool {
+        token.revision == revision
+            && token.selectedHikeID == selectedHikeID
+            && token.destination == destination(for: path)
+            && currentRecordingHikeID == nil
+            && !recordingPresented
+    }
+
+    private func destination(
+        for path: [SheetRoute]
+    ) -> Destination {
+        switch path.last {
+        case nil:
+            .root
+        case .some(.recording):
+            .recording
+        case .some(.hike(let hike)):
+            .hike(hike.id)
         }
     }
 }

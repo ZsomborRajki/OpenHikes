@@ -98,7 +98,7 @@ struct MapSheet: View {
                         recorder: appModel.hikeRecorder,
                         mapController: mapController,
                         onSaved: showSavedRecording,
-                        onDiscarded: closeRecording
+                        onDiscarded: closeDiscardedRecording
                     )
                 }
             }
@@ -208,9 +208,6 @@ struct MapSheet: View {
                     .font(.title2.bold())
                     .foregroundStyle(.primary)
                 Spacer()
-                if hikeRecorder.isActive {
-                    RecordingListStatusPill(recorder: hikeRecorder)
-                }
                 hikeActions
             }
             .padding(.horizontal)
@@ -271,10 +268,13 @@ struct MapSheet: View {
         List {
             ForEach(hikes) { hike in
                 Button {
-                    selectedHike = hike
-                    path.append(.hike(hike))
+                    open(hike)
                 } label: {
-                    HikeRow(hike: hike, isSelected: hike.id == selectedHike?.id)
+                    HikeRow(
+                        hike: hike,
+                        isSelected: hike.id == selectedHike?.id,
+                        status: recordingStatus(for: hike)
+                    )
                         .contentShape(.rect)
                 }
                 .buttonStyle(.plain)
@@ -282,10 +282,12 @@ struct MapSheet: View {
                     hike.id == selectedHike?.id ? hike.tintOpaque.opacity(0.15) : Color.clear
                 )
                 .swipeActions(edge: .trailing) {
-                    Button(role: .destructive) {
-                        delete(hike)
-                    } label: {
-                        Label("Delete", systemImage: "trash")
+                    if !belongsToActiveRecording(hike) {
+                        Button(role: .destructive) {
+                            delete(hike)
+                        } label: {
+                            Label("Delete", systemImage: "trash")
+                        }
                     }
                 }
             }
@@ -295,6 +297,11 @@ struct MapSheet: View {
     }
 
     private func delete(_ hike: Hike) {
+        guard !belongsToActiveRecording(hike) else {
+            openRecording()
+            return
+        }
+
         // Before anything else: tiles auto-saved in the last couple of seconds
         // live only in AutoSaveTileStore's pending set. Folding them into the
         // manifest first is what stops them outliving the hike with nothing
@@ -359,7 +366,11 @@ struct MapSheet: View {
                         Button {
                             select(hike)
                         } label: {
-                            HikeRow(hike: hike, isSelected: hike.id == selectedHike?.id)
+                            HikeRow(
+                                hike: hike,
+                                isSelected: hike.id == selectedHike?.id,
+                                status: recordingStatus(for: hike)
+                            )
                                 .contentShape(.rect)
                         }
                         .buttonStyle(.plain)
@@ -409,8 +420,7 @@ struct MapSheet: View {
         searchText = ""
         searchFocused = false
         completer.clear()
-        selectedHike = hike
-        path.append(.hike(hike))
+        open(hike)
     }
 
     /// Resolves a tapped suggestion to a place and zooms the map to it.
@@ -486,7 +496,12 @@ struct MapSheet: View {
     }
 
     private func openRecording() {
-        SheetRoute.reopenRecording(in: &path)
+        SheetRoute.openRecording(
+            hike: hikeRecorder.currentHike,
+            selectedHike: &selectedHike,
+            in: &path
+        )
+        highlight.move(to: nil)
         withAnimation { detent = .medium }
     }
 
@@ -494,71 +509,58 @@ struct MapSheet: View {
         path.removeAll { $0 == .recording }
     }
 
+    private func closeDiscardedRecording(_ hikeID: UUID?) {
+        closeRecording()
+        if let hikeID, selectedHike?.id == hikeID {
+            selectedHike = nil
+            highlight.move(to: nil)
+        }
+    }
+
     private func showSavedRecording(_ hike: Hike) {
         selectedHike = hike
-        closeRecording()
-        path.append(.hike(hike))
+        path = [.hike(hike)]
         withAnimation { detent = .medium }
     }
-}
 
-private struct RecordingListStatusPill: View {
-    let recorder: HikeRecorder
-
-    var body: some View {
-        Group {
-            if recorder.isCapturingFixes {
-                // Only a live session gets a running clock. A paused one is
-                // shown standing still, because that is what it is doing.
-                TimelineView(.periodic(from: .now, by: 1)) { _ in
-                    pill(
-                        "\(HikeFormat.duration(recorder.elapsedSeconds())) · \(distance)",
-                        tint: .red
-                    )
-                }
-            } else {
-                pill("\(idleLabel) · \(distance)", tint: .secondary)
-            }
+    private func open(_ hike: Hike) {
+        selectedHike = hike
+        if belongsToActiveRecording(hike) {
+            openRecording()
+        } else {
+            path = [.hike(hike)]
         }
-        .accessibilityLabel(
-            recorder.isCapturingFixes
-                ? "Recording in progress, \(distance)"
-                : "Recording \(idleLabel.lowercased()), \(distance)"
-        )
     }
 
-    private func pill(_ text: String, tint: Color) -> some View {
-        Text(text)
-            .font(.caption.weight(.semibold).monospacedDigit())
-            .foregroundStyle(tint)
-            .padding(.horizontal, 10)
-            .padding(.vertical, 6)
-            .background(tint.opacity(0.12), in: Capsule())
-    }
-
-    private var idleLabel: String {
-        switch recorder.phase {
+    private func recordingStatus(for hike: Hike) -> HikeRow.Status? {
+        guard belongsToActiveRecording(hike) else { return nil }
+        guard hike.id == hikeRecorder.currentHike?.id else {
+            return HikeRow.Status(title: "Recording", tint: .red)
+        }
+        return switch hikeRecorder.phase {
+        case .idle:
+            HikeRow.Status(title: "Recording", tint: .red)
         case .recovering:
-            "Recovering"
+            HikeRow.Status(title: "Recovering", tint: .orange)
+        case .waitingForFix:
+            HikeRow.Status(title: "Finding GPS", tint: .orange)
+        case .recording:
+            HikeRow.Status(title: "Recording", tint: .red)
         case .paused:
-            "Paused"
+            HikeRow.Status(title: "Paused", tint: .secondary)
         case .saving:
-            "Saving"
+            HikeRow.Status(title: "Saving", tint: .orange)
         case .reviewing:
-            "Review Route"
+            HikeRow.Status(title: "Review Route", tint: .orange)
         case .failed:
-            "Needs Attention"
-        case .idle, .waitingForFix, .recording:
-            "Paused"
+            HikeRow.Status(title: "Needs Attention", tint: .red)
         }
     }
 
-    private var distance: String {
-        Measurement(
-            value: recorder.stats.distanceMeters,
-            unit: UnitLength.meters
+    private func belongsToActiveRecording(_ hike: Hike) -> Bool {
+        hike.belongsToActiveRecording(
+            currentHikeID: hikeRecorder.currentHike?.id
         )
-        .formatted(.measurement(width: .abbreviated, usage: .road))
     }
 }
 

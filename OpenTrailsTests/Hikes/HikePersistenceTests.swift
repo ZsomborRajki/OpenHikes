@@ -21,8 +21,8 @@ import SwiftData
 import Testing
 @testable import OpenTrails
 
-/// `Hike` as it was before auto-save and auto-follow existed. Same entity name
-/// and same attributes minus the three that were added — which is what makes a
+/// `Hike` as it was before auto-save, auto-follow, and recording drafts
+/// existed. The same entity name with those later attributes absent makes a
 /// store written by it a genuine "existing install" for the current model.
 enum HikeSchemaBeforeAutoSave: VersionedSchema {
     static var versionIdentifier: Schema.Version { Schema.Version(1, 0, 0) }
@@ -118,6 +118,7 @@ struct HikePersistenceTests {
                 symbol: "mountain.2",
                 route: Fixture.ridgeRoute,
                 rawRoute: Array(Fixture.ridgeRoute.reversed()),
+                isRecording: true,
                 offlineDownloads: [
                     OfflineDownloadRecord(providerID: "osm", scale: 2, maxZoom: 14, savedTileKeys: ["osm/14/1/1@2.0"])
                 ],
@@ -145,6 +146,7 @@ struct HikePersistenceTests {
         #expect(reopened.routeWidth == 7)
         #expect(reopened.symbol == "mountain.2")
         #expect(reopened.rawRoute == Array(Fixture.ridgeRoute.reversed()))
+        #expect(reopened.isRecording)
         #expect(reopened.trackDescription == "A ridge")
         #expect(reopened.author == "Someone")
         #expect(reopened.keywords == "ridge, loop")
@@ -235,6 +237,7 @@ struct HikePersistenceTests {
 
         // What the migration had to invent.
         #expect(migrated.rawRoute.isEmpty, "an imported legacy hike has no recorded GPS trace")
+        #expect(!migrated.isRecording, "an imported legacy hike is already finished")
         #expect(migrated.autoSavedTileKeys.isEmpty, "an old hike has auto-saved nothing yet")
         #expect(migrated.autoSaveTilesEnabled, "and gets the same default a new hike does")
         #expect(migrated.autoFollowEnabled)
@@ -281,6 +284,7 @@ struct HikePersistenceTests {
         )
         #expect(reopened.autoSavedTileKeys == ["osm/16/1/1@2.0"])
         #expect(reopened.autoSaveTilesEnabled)
+        #expect(!reopened.isRecording)
     }
 
     /// Deleting is the other half of owning a file: the row has to actually go,

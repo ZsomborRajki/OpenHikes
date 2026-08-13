@@ -211,6 +211,43 @@ private actor StubRecordingSharedStateStore:
     }
 }
 
+private actor BlockingClearRecordingSharedStateStore:
+    RecordingSharedStateStoring {
+    private var clearStarted = false
+    private var clearContinuation: CheckedContinuation<Void, Never>?
+
+    func save(
+        _ snapshot: SharedRecordingSnapshot,
+        reloadWidget: Bool
+    ) {}
+
+    func clear(sessionID: UUID?) async {
+        clearStarted = true
+        await withCheckedContinuation { continuation in
+            clearContinuation = continuation
+        }
+    }
+
+    func pendingFixes(
+        for sessionID: UUID
+    ) -> [SharedRecordingFix] {
+        []
+    }
+
+    func removePendingFixes(ids: Set<UUID>) {}
+
+    func waitForClearToStart() async {
+        while !clearStarted {
+            await Task.yield()
+        }
+    }
+
+    func releaseClear() {
+        clearContinuation?.resume()
+        clearContinuation = nil
+    }
+}
+
 @MainActor
 @Suite("Hike recorder")
 final class HikeRecorderTests {
@@ -565,8 +602,8 @@ final class HikeRecorderTests {
         await recorder.discard()
     }
 
-    @Test("ambiguous gaps wait for review before writing a hike")
-    func ambiguityReviewDefersPersistence() async throws {
+    @Test("ambiguous gaps keep the recording draft until review finishes")
+    func ambiguityReviewKeepsDraft() async throws {
         let sharedStore = StubRecordingSharedStateStore()
         let recorder = makeRecorder(
             trailGraphProvider: StubTrailGraphProvider(
@@ -575,6 +612,7 @@ final class HikeRecorderTests {
             sharedStateStore: sharedStore
         )
         await recorder.start()
+        let draft = try #require(recorder.currentHike)
         source.deliver(fix(latitude: 47.63, longitude: 12.86))
         await settleDelegateHop()
         clock.advance(by: 720)
@@ -588,7 +626,9 @@ final class HikeRecorderTests {
         }
 
         #expect(recorder.phase == .reviewing)
-        #expect(try context.fetch(FetchDescriptor<Hike>()).isEmpty)
+        #expect(try context.fetch(FetchDescriptor<Hike>()).count == 1)
+        #expect(draft.isRecording)
+        #expect(draft.route.isEmpty)
         let review = try #require(recorder.ambiguityReview)
         let ambiguity = try #require(review.current)
         #expect(ambiguity.alternatives.count >= 2)
@@ -624,6 +664,8 @@ final class HikeRecorderTests {
 
         #expect(hike.route.count > 2)
         #expect(hike.rawRoute.count == 2)
+        #expect(hike.id == draft.id)
+        #expect(!hike.isRecording)
         #expect(try context.fetch(FetchDescriptor<Hike>()).count == 1)
         #expect(recorder.phase == .idle)
         #expect(
@@ -850,11 +892,15 @@ final class HikeRecorderTests {
         }
     }
 
-    @Test("a hike is written once at Stop and keeps its raw trace")
-    func savesAtStop() async throws {
+    @Test("Start creates one draft and Stop finalizes that same hike")
+    func startCreatesDraftAndStopFinalizesIt() async throws {
         let recorder = makeRecorder()
         await recorder.start()
         #expect(source.startCount == 1)
+        let draft = try #require(recorder.currentHike)
+        #expect(draft.isRecording)
+        #expect(draft.route.isEmpty)
+        #expect(try context.fetch(FetchDescriptor<Hike>()).count == 1)
 
         source.deliver(fix(latitude: 47.63))
         await settleDelegateHop()
@@ -863,14 +909,16 @@ final class HikeRecorderTests {
         await settleDelegateHop()
 
         #expect(
-            try context.fetch(FetchDescriptor<Hike>()).isEmpty,
-            "recording must not rewrite a SwiftData route per fix"
+            draft.route.isEmpty,
+            "the durable row exists, but the live trace must not rewrite SwiftData per fix"
         )
         #expect(recorder.stats.pointCount == 2)
 
         let hike = try savedHike(from: await recorder.stop())
 
         #expect(try context.fetch(FetchDescriptor<Hike>()).count == 1)
+        #expect(hike.id == draft.id)
+        #expect(!hike.isRecording)
         #expect(hike.route.count == 2)
         #expect(
             hike.rawRoute.isEmpty,
@@ -878,6 +926,95 @@ final class HikeRecorderTests {
         )
         #expect(hike.distanceMeters > 20)
         #expect(recorder.phase == .idle)
+    }
+
+    @Test("the finalized hike stays recorder-owned until cleanup finishes")
+    func finalizedHikeRemainsOwnedDuringCleanup() async throws {
+        let sharedStore = BlockingClearRecordingSharedStateStore()
+        let recorder = makeRecorder(sharedStateStore: sharedStore)
+        await recorder.start()
+        source.deliver(fix(latitude: 47.63))
+        await settleDelegateHop()
+        clock.advance(by: 10)
+        source.deliver(fix(latitude: 47.6302))
+        await settleDelegateHop()
+
+        let stop = Task { try await recorder.stop() }
+        await sharedStore.waitForClearToStart()
+
+        let hike = try #require(recorder.currentHike)
+        #expect(recorder.phase == .saving)
+        #expect(!hike.isRecording)
+        #expect(
+            hike.belongsToActiveRecording(
+                currentHikeID: recorder.currentHike?.id
+            )
+        )
+
+        await sharedStore.releaseClear()
+        _ = try savedHike(from: try await stop.value)
+
+        #expect(recorder.currentHike == nil)
+        #expect(!hike.belongsToActiveRecording(currentHikeID: nil))
+    }
+
+    @Test("discard removes the active recording entry")
+    func discardRemovesDraft() async throws {
+        let recorder = makeRecorder()
+        await recorder.start()
+        let draftID = try #require(recorder.currentHike?.id)
+
+        #expect(try context.fetch(FetchDescriptor<Hike>()).count == 1)
+
+        await recorder.discard()
+
+        #expect(recorder.phase == .idle)
+        #expect(recorder.currentHike == nil)
+        #expect(
+            try context.fetch(
+                FetchDescriptor<Hike>(
+                    predicate: #Predicate { $0.id == draftID }
+                )
+            ).isEmpty
+        )
+    }
+
+    @Test("Start replaces an orphaned recording draft")
+    func startRemovesOrphanedDraft() async throws {
+        let orphan = Hike(
+            title: "Interrupted Hike",
+            distanceMeters: 0,
+            isRecording: true
+        )
+        context.insert(orphan)
+        try context.save()
+
+        let recorder = makeRecorder()
+        await recorder.start()
+
+        let current = try #require(recorder.currentHike)
+        let hikes = try context.fetch(FetchDescriptor<Hike>())
+        #expect(hikes.count == 1)
+        #expect(current.id != orphan.id)
+        #expect(hikes.first?.id == current.id)
+    }
+
+    @Test("recovery removes a recording draft that has no journal")
+    func recoveryRemovesOrphanedDraft() async throws {
+        context.insert(
+            Hike(
+                title: "Interrupted Hike",
+                distanceMeters: 0,
+                isRecording: true
+            )
+        )
+        try context.save()
+
+        let recorder = makeRecorder()
+        await recorder.recoverOpenSession()
+
+        #expect(recorder.phase == .idle)
+        #expect(try context.fetch(FetchDescriptor<Hike>()).isEmpty)
     }
 
     @Test("the bundled Thumsee simulator route records and saves end to end")
@@ -1111,6 +1248,7 @@ final class HikeRecorderTests {
         let hikes = try context.fetch(FetchDescriptor<Hike>())
         #expect(hikes.count == 1)
         #expect(hikes.first?.id == sessionID)
+        #expect(hikes.first?.isRecording == false)
         #expect(recorder.phase == .idle)
         #expect(!FileManager.default.fileExists(atPath: journal.journalURL.path))
     }
@@ -1152,9 +1290,12 @@ final class HikeRecorderTests {
 
         #expect(recorder.phase == .reviewing)
         #expect(recorder.ambiguityReview?.ambiguities.count == 1)
-        #expect(try context.fetch(FetchDescriptor<Hike>()).isEmpty)
+        #expect(recorder.currentHike?.id == sessionID)
+        #expect(recorder.currentHike?.isRecording == true)
+        #expect(try context.fetch(FetchDescriptor<Hike>()).count == 1)
         #expect(FileManager.default.fileExists(atPath: journal.journalURL.path))
         await recorder.discard()
+        #expect(try context.fetch(FetchDescriptor<Hike>()).isEmpty)
     }
 
     @Test("an explicitly paused session stays paused after relaunch")
@@ -1176,6 +1317,7 @@ final class HikeRecorderTests {
         await recorder.recoverOpenSession()
 
         #expect(recorder.phase == .paused)
+        #expect(recorder.currentHike?.isRecording == true)
         #expect(source.startCount == 0)
         guard case .needsDecision = recorder.recoveryState else {
             Issue.record("the recovered pause should be explained to the user")
@@ -1202,6 +1344,7 @@ final class HikeRecorderTests {
 
         #expect(recorder.phase == .recording)
         #expect(recorder.recoveryState == .resumed)
+        #expect(recorder.currentHike?.isRecording == true)
         #expect(source.startCount == 1)
         #expect(recorder.stats.pointCount == 1)
     }
@@ -1241,6 +1384,7 @@ final class HikeRecorderTests {
         await recorder.recoverOpenSession()
 
         #expect(recorder.phase == .paused)
+        #expect(recorder.currentHike?.id == sessionID)
         #expect(source.startCount == 0)
         #expect(recorder.stats.pointCount == 2)
         guard case .needsDecision(let summary) = recorder.recoveryState else {
@@ -1276,6 +1420,7 @@ final class HikeRecorderTests {
 
         #expect(recorder.phase == .recording)
         #expect(recorder.stats.pointCount == 1)
+        #expect(recorder.currentHike?.id == sessionID)
         let recovered = try #require(try await journal.loadSession())
         #expect(recovered.metadata.sessionID == sessionID)
         #expect(recovered.points.count == 1)

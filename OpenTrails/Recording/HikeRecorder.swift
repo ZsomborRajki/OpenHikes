@@ -3,7 +3,8 @@
 //  OpenTrails
 //
 //  App-scoped live recording coordinator. The view may come and go; this
-//  object owns Core Location delivery and the crash-safe journal until Stop.
+//  object owns Core Location delivery, the crash-safe journal, and the
+//  persisted draft Hike that is finalized in place at Stop.
 //
 
 import CoreLocation
@@ -237,6 +238,7 @@ final class HikeRecorder: NSObject {
     private(set) var phase: Phase = .idle
     private(set) var recoveryState: RecoveryState = .none
     private(set) var sessionStartedAt: Date?
+    private(set) var currentHike: Hike?
     private(set) var ambiguityReview: RecordingAmbiguityReview?
 
     let stats = RecordingStats()
@@ -303,10 +305,9 @@ final class HikeRecorder: NSObject {
     }
 
     /// Whether fixes are actually being taken right now, as opposed to a
-    /// session that merely exists. The hikes-list pill reads this: a paused or
-    /// failed session is still `isActive` — that's how the user gets back to
-    /// it — but describing it as "recording" while its timer ticks upward is a
-    /// lie the walker only discovers afterwards.
+    /// session that merely exists. A paused or failed session is still
+    /// `isActive` — that's how the user gets back to it — but it must not be
+    /// described as actively capturing fixes.
     var isCapturingFixes: Bool {
         switch phase {
         case .waitingForFix, .recording:
@@ -546,8 +547,11 @@ final class HikeRecorder: NSObject {
         }
         do {
             try await journal.discard()
+            try deleteRecordingHike(sessionID: sessionID)
             await clearSharedRecordingState(sessionID: sessionID)
             resetSession()
+        } catch let failure as RecordingFailure {
+            fail(failure, endLocationUpdates: false)
         } catch {
             fail(.storage(error.localizedDescription), endLocationUpdates: false)
         }
@@ -594,24 +598,50 @@ final class HikeRecorder: NSObject {
         }
         phase = .recovering
 
-        var session: TrackJournalSession
+        let loadedSession: TrackJournalSession?
         do {
-            guard let loaded = try await journal.loadSession() else {
-                await clearSharedRecordingState(sessionID: nil)
-                phase = .idle
-                return
-            }
-            session = loaded
+            loadedSession = try await journal.loadSession()
         } catch {
             fail(.storage(error.localizedDescription), endLocationUpdates: false)
             return
         }
+        guard let loadedSession else {
+            do {
+                try deleteOrphanedRecordingHikes()
+            } catch let failure {
+                fail(failure, endLocationUpdates: false)
+                return
+            }
+            await clearSharedRecordingState(sessionID: nil)
+            phase = .idle
+            return
+        }
+        var session = loadedSession
 
         sessionID = session.metadata.sessionID
         sessionStartedAt = session.metadata.startedAt
         sessionOptions = session.metadata.recordingOptions ?? .defaults
         let recoveryLastUpdatedAt = session.metadata.lastUpdatedAt
         startRequested = true
+        let recoveredHike: Hike
+        do {
+            try deleteOrphanedRecordingHikes(
+                except: session.metadata.sessionID
+            )
+            recoveredHike = try ensureRecordingHike(
+                sessionID: session.metadata.sessionID,
+                startedAt: session.metadata.startedAt,
+                title: session.metadata.title
+            )
+        } catch let failure {
+            fail(failure, endLocationUpdates: false)
+            return
+        }
+        if !recoveredHike.isRecording {
+            phase = .saving
+            await finishSavedSession(session, journal: journal)
+            return
+        }
         do {
             try await journal.reopenForAppending()
         } catch {
@@ -709,6 +739,12 @@ final class HikeRecorder: NSObject {
             fail(.storageUnavailable, endLocationUpdates: false)
             return
         }
+        do {
+            try deleteOrphanedRecordingHikes()
+        } catch let failure {
+            fail(failure, endLocationUpdates: false)
+            return
+        }
 
         let id = UUID()
         let startedAt = clock()
@@ -721,6 +757,23 @@ final class HikeRecorder: NSObject {
             )
         } catch {
             fail(.storage(error.localizedDescription), endLocationUpdates: false)
+            return
+        }
+        do {
+            _ = try ensureRecordingHike(
+                sessionID: id,
+                startedAt: startedAt,
+                title: nil
+            )
+        } catch let failure {
+            do {
+                try await journal.discard()
+            } catch {
+                Self.logger.error(
+                    "Could not remove a journal after its recording draft failed: \(error.localizedDescription, privacy: .public)"
+                )
+            }
+            fail(failure, endLocationUpdates: false)
             return
         }
 
@@ -1359,14 +1412,34 @@ final class HikeRecorder: NSObject {
         _ session: TrackJournalSession,
         prepared: PreparedRecording
     ) throws(RecordingFailure) -> Hike {
-        if let existing = try existingHike(
-            sessionID: session.metadata.sessionID
-        ) {
-            return existing
-        }
-
         let sessionID = session.metadata.sessionID
         stats.matchedTrailName = prepared.matchedTrailName
+        if let existing = try existingHike(sessionID: sessionID) {
+            guard existing.isRecording else { return existing }
+
+            let previousDistance = existing.distanceMeters
+            let previousDate = existing.date
+            let previousRoute = existing.route
+            let previousRawRoute = existing.rawRoute
+
+            existing.distanceMeters = prepared.distanceMeters
+            existing.date = prepared.startedAt
+            existing.route = prepared.route
+            existing.rawRoute = prepared.rawRoute
+            existing.isRecording = false
+            do {
+                try container.mainContext.save()
+                return existing
+            } catch {
+                existing.distanceMeters = previousDistance
+                existing.date = previousDate
+                existing.route = previousRoute
+                existing.rawRoute = previousRawRoute
+                existing.isRecording = true
+                throw .save(error.localizedDescription)
+            }
+        }
+
         let hike = Hike(
             id: sessionID,
             title: session.metadata.title ?? Self.defaultTitle(for: prepared.startedAt),
@@ -1374,7 +1447,8 @@ final class HikeRecorder: NSObject {
             date: prepared.startedAt,
             tintHex: Hike.randomTintHex(),
             route: prepared.route,
-            rawRoute: prepared.rawRoute
+            rawRoute: prepared.rawRoute,
+            isRecording: false
         )
         container.mainContext.insert(hike)
         do {
@@ -1386,13 +1460,90 @@ final class HikeRecorder: NSObject {
         }
     }
 
+    private func ensureRecordingHike(
+        sessionID: UUID,
+        startedAt: Date,
+        title: String?
+    ) throws(RecordingFailure) -> Hike {
+        if let existing = try existingHike(sessionID: sessionID) {
+            if existing.isRecording {
+                currentHike = existing
+            }
+            return existing
+        }
+
+        let hike = Hike(
+            id: sessionID,
+            title: title ?? Self.defaultTitle(for: startedAt),
+            distanceMeters: 0,
+            date: startedAt,
+            tintHex: Hike.randomTintHex(),
+            route: [],
+            isRecording: true
+        )
+        container.mainContext.insert(hike)
+        do {
+            try container.mainContext.save()
+            currentHike = hike
+            return hike
+        } catch {
+            container.mainContext.delete(hike)
+            throw .save(error.localizedDescription)
+        }
+    }
+
+    private func deleteRecordingHike(
+        sessionID: UUID?
+    ) throws(RecordingFailure) {
+        guard let sessionID,
+              let hike = try existingHike(sessionID: sessionID),
+              hike.isRecording else {
+            return
+        }
+        container.mainContext.delete(hike)
+        do {
+            try container.mainContext.save()
+        } catch {
+            throw .save(error.localizedDescription)
+        }
+    }
+
+    private func deleteOrphanedRecordingHikes(
+        except sessionID: UUID? = nil
+    ) throws(RecordingFailure) {
+        let descriptor = FetchDescriptor<Hike>(
+            predicate: #Predicate { $0.isRecording }
+        )
+        let drafts: [Hike]
+        do {
+            drafts = try container.mainContext.fetch(descriptor)
+        } catch {
+            throw .save(error.localizedDescription)
+        }
+        let orphans = drafts.filter { $0.id != sessionID }
+        guard !orphans.isEmpty else { return }
+
+        if let currentHike,
+           orphans.contains(where: { $0.id == currentHike.id }) {
+            self.currentHike = nil
+        }
+        for hike in orphans {
+            container.mainContext.delete(hike)
+        }
+        do {
+            try container.mainContext.save()
+        } catch {
+            throw .save(error.localizedDescription)
+        }
+    }
+
     private func finishPreparedSession(
         _ session: TrackJournalSession,
         journal: TrackJournal
     ) async throws(RecordingFailure) -> RecordingStopOutcome {
         if let existing = try existingHike(
             sessionID: session.metadata.sessionID
-        ) {
+        ), !existing.isRecording {
             await finishSavedSession(session, journal: journal)
             return .saved(existing)
         }
@@ -1567,6 +1718,7 @@ final class HikeRecorder: NSObject {
         phase = .idle
         recoveryState = .none
         sessionStartedAt = nil
+        currentHike = nil
         ambiguityReview = nil
         pendingAmbiguitySave = nil
         sessionID = nil

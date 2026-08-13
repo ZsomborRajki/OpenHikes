@@ -8,8 +8,14 @@
 import SwiftUI
 
 struct HikeRow: View {
+    struct Status {
+        let title: String
+        let tint: Color
+    }
+
     let hike: Hike
     var isSelected: Bool = false
+    var status: Status? = nil
 
     var body: some View {
         HStack(spacing: 12) {
@@ -23,9 +29,20 @@ struct HikeRow: View {
                 Text(hike.title)
                     .font(.body.weight(.medium))
                     .foregroundStyle(.primary)
-                Text(hike.subtitle)
-                    .font(.subheadline)
-                    .foregroundStyle(.secondary)
+                HStack(spacing: 6) {
+                    if let status {
+                        Text(status.title)
+                            .font(.caption.weight(.semibold))
+                            .foregroundStyle(status.tint)
+                            .padding(.horizontal, 6)
+                            .padding(.vertical, 2)
+                            .background(status.tint.opacity(0.12), in: Capsule())
+                    }
+                    Text(hike.subtitle)
+                        .font(.subheadline)
+                        .foregroundStyle(.secondary)
+                }
+                .lineLimit(1)
             }
 
             Spacer()
