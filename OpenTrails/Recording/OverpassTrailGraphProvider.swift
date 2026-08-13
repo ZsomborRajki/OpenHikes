@@ -6,6 +6,7 @@
 //  sent to Overpass; the recorded trace never leaves the device.
 //
 
+import Algorithms
 import CoreLocation
 import Foundation
 import OpenTrailsShared
@@ -280,13 +281,13 @@ actor OverpassTrailGraphProvider: TrailGraphProviding {
         ), files.count > Self.maximumCacheFiles else {
             return
         }
-        let dated = files.map { url in
+        let doomed = files.map { url in
             let date = (try? url.resourceValues(
                 forKeys: [.contentModificationDateKey]
             ).contentModificationDate) ?? .distantPast
             return (url, date)
-        }.sorted { $0.1 < $1.1 }
-        for (url, _) in dated.prefix(files.count - Self.maximumCacheFiles) {
+        }.min(count: files.count - Self.maximumCacheFiles) { $0.1 < $1.1 }
+        for (url, _) in doomed {
             try? FileManager.default.removeItem(at: url)
         }
     }

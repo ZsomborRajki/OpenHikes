@@ -22,8 +22,8 @@
 //  a map, or a draw pass — the renderer keeps only the MapKit glue.
 //
 
+import Algorithms
 import Foundation
-import HeapModule
 
 /// How long to wait before re-requesting a tile that failed, by how many
 /// times in a row it has now failed.
@@ -125,35 +125,21 @@ nonisolated struct TileFailureLog: Sendable {
     /// forgetting a tile still deep in its backoff would restart it at five
     /// seconds and undo the whole point of backing off.
     ///
-    /// Only the handful over the cap need finding, so this heapifies in linear
-    /// time and pops that handful rather than ordering all thousand-odd
-    /// entries — this runs on every recorded failure once the cap is reached,
-    /// which is exactly when a provider is misbehaving and failures are
-    /// arriving fastest.
+    /// Only the handful over the cap need finding, so this is a partial
+    /// selection rather than an ordering of all thousand-odd entries — this
+    /// runs on every recorded failure once the cap is reached, which is
+    /// exactly when a provider is misbehaving and failures arrive fastest.
     private mutating func evictIfNeeded() {
         let excess = entries.count - policy.maximumTrackedFailures
         guard excess > 0 else { return }
-        var soonest = Heap(
-            entries.lazy.map { Eviction(key: $0.key, retryAt: $0.value.retryAt) }
-        )
-        for _ in 0..<excess {
-            guard let doomed = soonest.popMin() else { break }
-            entries.removeValue(forKey: doomed.key)
+        // Sorted on the key as well as the instant: entries recorded in the
+        // same instant share a retry time, and `Dictionary` would otherwise
+        // offer them up in a hash-seeded order.
+        let doomed = entries.min(count: excess) {
+            $0.value.retryAt == $1.value.retryAt
+                ? $0.key < $1.key
+                : $0.value.retryAt < $1.value.retryAt
         }
-    }
-
-    /// A candidate for eviction, ordered by when it would next be retried.
-    /// The key breaks ties so entries sharing a retry instant — the norm,
-    /// since failures recorded in the same instant get the same backoff — are
-    /// dropped in a fixed order rather than a hash-seeded one.
-    private struct Eviction: Comparable {
-        let key: String
-        let retryAt: ContinuousClock.Instant
-
-        static func < (lhs: Self, rhs: Self) -> Bool {
-            lhs.retryAt == rhs.retryAt
-                ? lhs.key < rhs.key
-                : lhs.retryAt < rhs.retryAt
-        }
+        for entry in doomed { entries.removeValue(forKey: entry.key) }
     }
 }

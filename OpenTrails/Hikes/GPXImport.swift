@@ -7,6 +7,7 @@
 //  pulls whatever metadata a well-formed file provides.
 //
 
+import Algorithms
 import Foundation
 import CoreLocation
 import CoreGPX
@@ -57,7 +58,7 @@ nonisolated enum GPXImport {
             }
 
             var distanceMeters = 0.0
-            for (start, end) in zip(points, points.dropFirst()) {
+            for (start, end) in points.adjacentPairs() {
                 distanceMeters += RouteGeometry.distanceMeters(
                     from: start.coordinate,
                     to: end.coordinate

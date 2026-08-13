@@ -7,6 +7,7 @@
 //  search — no per-drag recomputation.
 //
 
+import Algorithms
 import Foundation
 import CoreLocation
 
@@ -180,7 +181,7 @@ nonisolated struct RouteProfile {
         if target <= firstDistance { return firstCoordinate }
         if target >= lastDistance { return lastCoordinate }
 
-        let upper = lowerBound(in: distances, for: target)
+        let upper = distances.partitioningIndex { $0 >= target }
         let lower = upper - 1
         let segmentLength = distances[upper] - distances[lower]
         guard segmentLength > 0 else { return coordinates[upper] }
@@ -352,27 +353,10 @@ nonisolated struct RouteProfile {
         if target <= first { return 0 }
         if target >= last { return sorted.count - 1 }
 
-        var low = 0
-        var high = sorted.count - 1
-        while low < high {
-            let mid = (low + high) / 2
-            if sorted[mid] < target { low = mid + 1 } else { high = mid }
-        }
-        let lower = low - 1
-        return abs(sorted[low] - target) < abs(sorted[lower] - target) ? low : lower
-    }
-
-    private func lowerBound(in sorted: [Double], for target: Double) -> Int {
-        var low = 0
-        var high = sorted.count
-        while low < high {
-            let mid = (low + high) / 2
-            if sorted[mid] < target {
-                low = mid + 1
-            } else {
-                high = mid
-            }
-        }
-        return low
+        // First index at or past `target`; the endpoints are handled above, so
+        // it is always strictly interior and `upper - 1` is always valid.
+        let upper = sorted.partitioningIndex { $0 >= target }
+        let lower = upper - 1
+        return abs(sorted[upper] - target) < abs(sorted[lower] - target) ? upper : lower
     }
 }

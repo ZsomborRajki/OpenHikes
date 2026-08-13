@@ -6,6 +6,7 @@
 //  and map coordinator.
 //
 
+import Algorithms
 import CoreLocation
 import DequeModule
 import Foundation
@@ -492,19 +493,10 @@ nonisolated enum RecordingPreparation {
         in orderedTimestamps: [Date],
         tolerance: TimeInterval
     ) -> Bool {
-        var lowerBound = 0
-        var upperBound = orderedTimestamps.count
         let earliest = timestamp.addingTimeInterval(-tolerance)
-        while lowerBound < upperBound {
-            let midpoint = (lowerBound + upperBound) / 2
-            if orderedTimestamps[midpoint] < earliest {
-                lowerBound = midpoint + 1
-            } else {
-                upperBound = midpoint
-            }
-        }
-        guard lowerBound < orderedTimestamps.count else { return false }
-        return orderedTimestamps[lowerBound]
+        let candidate = orderedTimestamps.partitioningIndex { $0 >= earliest }
+        guard candidate < orderedTimestamps.count else { return false }
+        return orderedTimestamps[candidate]
             <= timestamp.addingTimeInterval(tolerance)
     }
 

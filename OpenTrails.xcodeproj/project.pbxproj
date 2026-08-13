@@ -15,6 +15,7 @@
 		AA0000000000000000000003 /* CoreGPX in Frameworks */ = {isa = PBXBuildFile; productRef = AA0000000000000000000002 /* CoreGPX */; };
 		AB000000000000000000000D /* OpenTrailsShared in Frameworks */ = {isa = PBXBuildFile; productRef = AB000000000000000000000C /* OpenTrailsShared */; };
 		AC000000000000000000000D /* OpenTrailsShared in Frameworks */ = {isa = PBXBuildFile; productRef = AC000000000000000000000C /* OpenTrailsShared */; };
+		F9B04212302D981D00E03D91 /* Algorithms in Frameworks */ = {isa = PBXBuildFile; productRef = F9B04211302D981D00E03D91 /* Algorithms */; };
 		F9B04201302D981D00E03D91 /* DequeModule in Frameworks */ = {isa = PBXBuildFile; productRef = F9B04200302D981D00E03D91 /* DequeModule */; };
 		F9B04203302D981D00E03D91 /* HeapModule in Frameworks */ = {isa = PBXBuildFile; productRef = F9B04202302D981D00E03D91 /* HeapModule */; };
 		F9B04205302D981D00E03D91 /* OrderedCollections in Frameworks */ = {isa = PBXBuildFile; productRef = F9B04204302D981D00E03D91 /* OrderedCollections */; };
@@ -128,6 +129,7 @@
 			isa = PBXFrameworksBuildPhase;
 			buildActionMask = 2147483647;
 			files = (
+				F9B04212302D981D00E03D91 /* Algorithms in Frameworks */,
 				F9B04201302D981D00E03D91 /* DequeModule in Frameworks */,
 				F9B04203302D981D00E03D91 /* HeapModule in Frameworks */,
 				F9B04205302D981D00E03D91 /* OrderedCollections in Frameworks */,
@@ -222,6 +224,7 @@
 			packageProductDependencies = (
 				AA0000000000000000000002 /* CoreGPX */,
 				A8838B91302A302500FAEEEE /* OpenTrailsShared */,
+				F9B04211302D981D00E03D91 /* Algorithms */,
 				F9B04200302D981D00E03D91 /* DequeModule */,
 				F9B04202302D981D00E03D91 /* HeapModule */,
 				F9B04204302D981D00E03D91 /* OrderedCollections */,
@@ -341,6 +344,7 @@
 				AA0000000000000000000001 /* XCRemoteSwiftPackageReference "CoreGPX" */,
 				A8838B90302A302500FAEEEE /* XCLocalSwiftPackageReference "OpenTrailsShared" */,
 				F9B04193302D981D00E03D91 /* XCRemoteSwiftPackageReference "swift-collections" */,
+				F9B04210302D981D00E03D91 /* XCRemoteSwiftPackageReference "swift-algorithms" */,
 			);
 			preferredProjectObjectVersion = 77;
 			productRefGroup = A85E854E2FE3EBF500558639 /* Products */;
@@ -910,6 +914,14 @@
 				minimumVersion = 0.9.1;
 			};
 		};
+		F9B04210302D981D00E03D91 /* XCRemoteSwiftPackageReference "swift-algorithms" */ = {
+			isa = XCRemoteSwiftPackageReference;
+			repositoryURL = "https://github.com/apple/swift-algorithms/";
+			requirement = {
+				kind = upToNextMajorVersion;
+				minimumVersion = 1.2.1;
+			};
+		};
 		F9B04193302D981D00E03D91 /* XCRemoteSwiftPackageReference "swift-collections" */ = {
 			isa = XCRemoteSwiftPackageReference;
 			repositoryURL = "https://github.com/apple/swift-collections/";
@@ -944,6 +956,11 @@
 			isa = XCSwiftPackageProductDependency;
 			package = A8838B90302A302500FAEEEE /* XCLocalSwiftPackageReference "OpenTrailsShared" */;
 			productName = OpenTrailsShared;
+		};
+		F9B04211302D981D00E03D91 /* Algorithms */ = {
+			isa = XCSwiftPackageProductDependency;
+			package = F9B04210302D981D00E03D91 /* XCRemoteSwiftPackageReference "swift-algorithms" */;
+			productName = Algorithms;
 		};
 		F9B04200302D981D00E03D91 /* DequeModule */ = {
 			isa = XCSwiftPackageProductDependency;
