@@ -100,11 +100,15 @@ struct TrailWidgetProvider: TimelineProvider {
         Self.placeholderEntry()
     }
 
-    func getSnapshot(in context: Context, completion: (TrailWidgetEntry) -> Void) {
+    func getSnapshot(in context: Context, completion: @Sendable (TrailWidgetEntry) -> Void) {
         completion(context.isPreview ? Self.placeholderEntry() : Self.currentEntry())
     }
 
-    func getTimeline(in context: Context, completion: @escaping (Timeline<TrailWidgetEntry>) -> Void) {
+    // `@Sendable` on the completion matches WidgetKit's own declaration. The
+    // requirement is `@preconcurrency`, so dropping it compiled — and then the
+    // recording branch below, which hands the closure to a `@MainActor` task,
+    // was sending a non-`Sendable` closure across an isolation boundary.
+    func getTimeline(in context: Context, completion: @escaping @Sendable (Timeline<TrailWidgetEntry>) -> Void) {
         let entry = Self.currentEntry()
         guard let recording = entry.recordingSnapshot,
               recording.isCapturingFixes else {

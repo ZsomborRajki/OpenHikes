@@ -25,6 +25,7 @@ import CoreLocation
 import Foundation
 import Observation
 import OpenTrailsShared
+import os
 import SwiftData
 import WidgetKit
 
@@ -455,21 +456,23 @@ final class BackgroundTrailTracker: NSObject {
         }
     }
 
-    nonisolated private final class SelectionGeneration: @unchecked Sendable {
-        private let lock = NSLock()
-        private var value: UInt64 = 0
+    /// The revision of the current selection, shared between the main-actor
+    /// tracker that bumps it and the detached snapshot work that has to ask
+    /// whether its result is still wanted.
+    ///
+    /// A box rather than a plain `UInt64` because those two hold the same
+    /// counter, and `OSAllocatedUnfairLock` — the guard the tile layer already
+    /// uses for exactly this shape of shared scalar — makes it `Sendable`
+    /// outright instead of by assertion.
+    nonisolated private final class SelectionGeneration: Sendable {
+        private let value = OSAllocatedUnfairLock<UInt64>(initialState: 0)
 
         func update(to newValue: UInt64) {
-            lock.lock()
-            value = newValue
-            lock.unlock()
+            value.withLock { $0 = newValue }
         }
 
         func matches(_ candidate: UInt64) -> Bool {
-            lock.lock()
-            let matches = value == candidate
-            lock.unlock()
-            return matches
+            value.withLock { $0 == candidate }
         }
     }
 

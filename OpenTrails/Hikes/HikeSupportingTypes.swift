@@ -13,7 +13,7 @@ import Foundation
 /// as part of ``Hike/offlineDownloads``. Complete downloads stay compact by
 /// recomputing their tile grid; partial downloads record only the keys that
 /// actually reached durable storage.
-struct OfflineDownloadRecord: Codable, Hashable {
+nonisolated struct OfflineDownloadRecord: Codable, Hashable, Sendable {
     /// Tile provider the download used (namespaces the cache keys).
     var providerID: String
     /// Display scale the tiles were saved at (part of the cache key).

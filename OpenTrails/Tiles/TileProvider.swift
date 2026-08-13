@@ -9,7 +9,11 @@
 import Foundation
 
 /// A raster tile source the map can render. Add new sources to ``all``.
-struct TileProvider: Identifiable, Hashable {
+///
+/// `nonisolated` as a whole: the tile-loading code that reads a provider's
+/// template and zoom ceiling runs off the main actor, and a pure value type
+/// has nothing for an actor to protect.
+nonisolated struct TileProvider: Identifiable, Hashable, Sendable {
     let id: String
     let name: String
     /// One-line description shown under the name in Settings.
@@ -26,7 +30,7 @@ struct TileProvider: Identifiable, Hashable {
     let apiKeyPlistKey: String?
 
     /// The template with `{key}` replaced by `apiKey`. Keyless providers ignore it.
-    nonisolated func resolvedTemplate(apiKey: String) -> String {
+    func resolvedTemplate(apiKey: String) -> String {
         urlTemplate.replacingOccurrences(of: "{key}", with: apiKey)
     }
 
@@ -37,19 +41,17 @@ struct TileProvider: Identifiable, Hashable {
     /// Pure, and takes the key rather than looking it up, so the rule is
     /// testable without a bundle to read it from — see ``Secrets/canLoadTiles(_:)``
     /// for the lookup that feeds it.
-    nonisolated func isUsable(withKey apiKey: String?) -> Bool {
+    func isUsable(withKey apiKey: String?) -> Bool {
         apiKeyPlistKey == nil || apiKey?.isEmpty == false
     }
 }
 
-// Provider constants are `nonisolated` so the tile-loading code (which runs off
-// the main actor) can reference them alongside the main-actor settings UI.
-extension TileProvider {
+nonisolated extension TileProvider {
     private static let osmMaximumZ = 19
     private static let thunderforestMaximumZ = 22
 
     /// The current default: OpenStreetMap's standard raster tiles.
-    nonisolated static let openStreetMap = TileProvider(
+    static let openStreetMap = TileProvider(
         id: "osm",
         name: "OpenStreetMap",
         summary: "Standard street map. Its tile policy disallows bulk downloads, " +
@@ -62,7 +64,7 @@ extension TileProvider {
     )
 
     /// A topographic source tuned for hiking that permits offline downloads.
-    nonisolated static let stadiaOutdoors = TileProvider(
+    static let stadiaOutdoors = TileProvider(
         id: "stadia_outdoors",
         name: "Stadia Outdoors",
         summary: "Topographic map tuned for hiking. Permits offline downloads.",
@@ -74,7 +76,7 @@ extension TileProvider {
     )
 
     /// A hiking-focused source with deep native zoom, so close-in views stay sharp.
-    nonisolated static let thunderforestOutdoors = TileProvider(
+    static let thunderforestOutdoors = TileProvider(
         id: "thunderforest_outdoors",
         name: "Thunderforest Outdoors",
         summary: "Topographic map with deep zoom for sharp close-up detail. Permits offline downloads.",
@@ -86,12 +88,12 @@ extension TileProvider {
     )
 
     /// All selectable providers, in display order.
-    nonisolated static let all: [TileProvider] = [openStreetMap, stadiaOutdoors, thunderforestOutdoors]
+    static let all: [TileProvider] = [openStreetMap, stadiaOutdoors, thunderforestOutdoors]
 
-    nonisolated static let `default` = openStreetMap
+    static let `default` = openStreetMap
 
     /// The provider with `id`, or the default if none matches (e.g. a removed provider).
-    nonisolated static func provider(id: String?) -> TileProvider {
+    static func provider(id: String?) -> TileProvider {
         all.first { $0.id == id } ?? .default
     }
 }
@@ -118,7 +120,7 @@ extension ActiveTileSource {
     }
 }
 
-extension TileProvider {
+nonisolated extension TileProvider {
     /// The provider to actually render with for a stored `id`: the stored one,
     /// unless it's key-gated and no key resolves on this build, in which case
     /// the (keyless) default.
@@ -130,7 +132,7 @@ extension TileProvider {
     /// provider (the tiles, the attribution shown for them, whether a bulk
     /// download is even offered), so the fallback lives here rather than at
     /// each call site.
-    nonisolated static func renderable(id: String?) -> TileProvider {
+    static func renderable(id: String?) -> TileProvider {
         let stored = provider(id: id)
         return Secrets.canLoadTiles(stored) ? stored : .default
     }

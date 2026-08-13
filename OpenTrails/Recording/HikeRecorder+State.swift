@@ -68,6 +68,14 @@ final class SystemRecordingLocationSource: RecordingLocationSource {
 
     private let manager = CLLocationManager()
 
+    #if os(iOS)
+    /// The outstanding background activity session, held so it can be
+    /// invalidated when recording stops. See ``startBackgroundActivitySession()``.
+    private var backgroundSession: CLBackgroundActivitySession?
+    /// Drains that session's diagnostics for as long as it is held.
+    private var sessionDiagnostics: Task<Void, Never>?
+    #endif
+
     var authorization: RecordingLocationAuthorization {
         switch manager.authorizationStatus {
         case .notDetermined: .notDetermined
@@ -117,6 +125,7 @@ final class SystemRecordingLocationSource: RecordingLocationSource {
         #if os(iOS)
         manager.allowsBackgroundLocationUpdates = true
         manager.showsBackgroundLocationIndicator = true
+        startBackgroundActivitySession()
         #endif
         manager.desiredAccuracy = kCLLocationAccuracyBest
         manager.distanceFilter = 10
@@ -126,10 +135,84 @@ final class SystemRecordingLocationSource: RecordingLocationSource {
     func stopRecordingUpdates() {
         manager.stopUpdatingLocation()
         #if os(iOS)
+        sessionDiagnostics?.cancel()
+        sessionDiagnostics = nil
+        backgroundSession?.invalidate()
+        backgroundSession = nil
         manager.allowsBackgroundLocationUpdates = false
         manager.showsBackgroundLocationIndicator = false
         #endif
     }
+
+    #if os(iOS)
+    /// Starts — or, after a relaunch, reclaims — the session that keeps this
+    /// app in use for as long as it is recording.
+    ///
+    /// Additive to `allowsBackgroundLocationUpdates` above, not a replacement
+    /// for it. That flag is still the thing that permits delivery at all, and
+    /// dropping it in favour of this would stop background recording
+    /// *silently* — the one failure a hike recorder cannot afford, and one no
+    /// simulator run would catch.
+    ///
+    /// What the session adds is standing. While it is active the app counts as
+    /// in direct use, so the When-In-Use authorization this source asks for
+    /// keeps applying once the screen locks, instead of the recording becoming
+    /// eligible for the `insufficientlyInUse` suspension CoreLocation reports
+    /// below. It also makes the status indicator *tappable*: the walker who
+    /// notices the blue pill can get back to the recording from it, rather
+    /// than only being told the recording exists.
+    ///
+    /// Creating one is also how an existing session is reclaimed. CoreLocation
+    /// keeps an active session outstanding across a relaunch, but only for an
+    /// app that claims it immediately on the next run — otherwise it ends.
+    /// `HikeRecorder.init` starts journal recovery straight away and the
+    /// resume path there calls `startRecordingUpdates()`, so the claim lands
+    /// on the same launch that recovers the track rather than one interaction
+    /// later.
+    private func startBackgroundActivitySession() {
+        // A second session would be a second claim on the same activity, and
+        // only one can be held here to invalidate when recording stops.
+        guard backgroundSession == nil else { return }
+        let session = CLBackgroundActivitySession()
+        backgroundSession = session
+        sessionDiagnostics = Task { await Self.logDiagnostics(of: session) }
+    }
+
+    /// Logs the reasons CoreLocation gives for a session that has stopped
+    /// counting as in use.
+    ///
+    /// Nothing reads these but Console, and that is the point: "my hike
+    /// stopped recording" otherwise has no answer at all, and by the time it
+    /// is asked the walker is off the mountain and the state that would have
+    /// explained it is gone. Deliberately not `#if DEBUG` — a debug build is
+    /// exactly where this never happens.
+    private static func logDiagnostics(of session: CLBackgroundActivitySession) async {
+        do {
+            for try await diagnostic in session.diagnostics {
+                guard diagnostic.authorizationDenied
+                    || diagnostic.authorizationDeniedGlobally
+                    || diagnostic.authorizationRestricted
+                    || diagnostic.insufficientlyInUse
+                    || diagnostic.serviceSessionRequired
+                else { continue }
+                logger.error(
+                    """
+                    Background recording session suspended — \
+                    denied: \(diagnostic.authorizationDenied, privacy: .public), \
+                    deniedGlobally: \(diagnostic.authorizationDeniedGlobally, privacy: .public), \
+                    restricted: \(diagnostic.authorizationRestricted, privacy: .public), \
+                    insufficientlyInUse: \(diagnostic.insufficientlyInUse, privacy: .public), \
+                    serviceSessionRequired: \(diagnostic.serviceSessionRequired, privacy: .public)
+                    """
+                )
+            }
+        } catch {
+            logger.error(
+                "Background session diagnostics ended: \(error.localizedDescription, privacy: .public)"
+            )
+        }
+    }
+    #endif
 }
 
 nonisolated struct RecordingRecoverySummary: Equatable, Sendable {

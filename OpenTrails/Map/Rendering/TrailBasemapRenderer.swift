@@ -219,10 +219,7 @@ actor TrailBasemapRenderer {
         options.preferredConfiguration = configuration
 
         #if canImport(UIKit)
-        options.traitCollection = UITraitCollection { traits in
-            traits.userInterfaceStyle = appearance == .dark ? .dark : .light
-            traits.displayScale = renderScale
-        }
+        options.traitCollection = await snapshotTraits(for: appearance)
         #elseif canImport(AppKit)
         // No scale knob here — AppKit renders at the screen's backing scale
         // and `encode` reports whatever pixel size that produced, so the
@@ -253,6 +250,22 @@ actor TrailBasemapRenderer {
             )
         }
     }
+
+    /// Built on the main actor because UIKit's mutable traits are main-actor
+    /// isolated, while this renderer is an actor of its own — the trait
+    /// collection itself is `Sendable`, so one hop per snapshot buys the
+    /// whole render pass its appearance without the pass leaving its actor.
+    #if canImport(UIKit)
+    @MainActor
+    private static func snapshotTraits(
+        for appearance: TrailBasemapAppearance
+    ) -> UITraitCollection {
+        UITraitCollection { traits in
+            traits.userInterfaceStyle = appearance == .dark ? .dark : .light
+            traits.displayScale = renderScale
+        }
+    }
+    #endif
 
     /// Works out what the snapshot *actually* covers, rather than trusting it
     /// to have rendered the requested rect: the snapshotter is free to adjust

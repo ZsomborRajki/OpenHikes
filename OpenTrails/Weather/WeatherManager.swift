@@ -96,6 +96,25 @@ nonisolated struct WeatherPollState: Sendable {
         }
     }
 
+    /// When ``shouldRequest(key:at:policy:)`` will next say yes for `key`, or
+    /// `nil` if it already does.
+    ///
+    /// The poll wakes on a new position; this is what tells it when to wake
+    /// *without* one, so a reading that expires — or a failure whose backoff
+    /// runs out — while the walker stands still is still refreshed on time.
+    /// Deliberately non-mutating: asking when a bucket comes due is not the
+    /// same as polling it, and must not reorder the recency list that decides
+    /// which bucket is forgotten first.
+    func nextEligibleDate(
+        key: String,
+        policy: WeatherPollingPolicy = .standard
+    ) -> Date? {
+        guard let state = buckets[key] else { return nil }
+        if let nextAttempt = state.nextAttempt { return nextAttempt }
+        guard let lastSuccess = state.lastSuccess else { return nil }
+        return lastSuccess.addingTimeInterval(policy.freshnessInterval)
+    }
+
     private mutating func touch(_ key: String) {
         update(key) { _ in /* no-op: just moves key to most-recently-used position */ }
     }

@@ -189,7 +189,7 @@ struct HikeDetailView: View {
 
     var body: some View {
         // Fires on every re-evaluation of this view's body. Auto-follow's
-        // once-a-second tracker updates should NOT show up here — they live in
+        // per-fix tracker updates should NOT show up here — they live in
         // `tracker` (a `TrackerState`), which this body never reads, so those
         // updates invalidate only `ElevationChartView` below. If this mark
         // starts firing at that cadence again, something re-introduced a read
@@ -241,9 +241,9 @@ struct HikeDetailView: View {
             await followLocation(profile: built)
         }
         // Toggling off should clear the live dot immediately, not wait for the
-        // next throttled poll. Toggling on should hand the map pin back to
-        // auto-follow right away, rather than leaving a stale manual pin up
-        // to a second until the next poll clears it.
+        // next fix. Toggling on should hand the map pin back to auto-follow
+        // right away, rather than leaving a stale manual pin up until the
+        // walker's next step publishes one.
         .onChange(of: hike.autoFollowEnabled) { _, enabled in
             if !enabled {
                 tracker.liveTrackerDistance = nil
@@ -258,6 +258,18 @@ struct HikeDetailView: View {
             case .clear: highlight.move(to: nil)
             case .move(let coordinate): highlight.move(to: coordinate)
             }
+            if enabled, let profile {
+                updateLiveFollow(profile: profile)
+            }
+        }
+        // A scrub ends with the persistent tracker parked under the finger,
+        // and auto-follow used to take it back on its next tick. Now that it
+        // only wakes on a published fix, hand it back here — someone who has
+        // stopped to drag the chart is, by definition, not producing new
+        // fixes, so waiting for one could park the tracker there indefinitely.
+        .onChange(of: isScrubbing) { _, scrubbing in
+            guard !scrubbing, let profile else { return }
+            updateLiveFollow(profile: profile)
         }
         // Record verified coverage from complete and partial downloads so
         // storage accounting never claims tiles that failed to reach disk.
@@ -358,7 +370,7 @@ private extension HikeDetailView {
     }
 
     /// Auto-scrolls the elevation graph to the user's live position along this
-    /// trail. On by default; the throttled poll in `followLocation` does the work.
+    /// trail. On by default; the fix-driven loop in `followLocation` does the work.
     private var autoFollowToggle: some View {
         Toggle(isOn: autoFollowBinding) {
             Label("Auto-Follow Trail", systemImage: "location.fill.viewfinder")
@@ -509,7 +521,7 @@ private extension HikeDetailView {
 
     /// How far along the trail the tracked position is. Like the chart, this
     /// is handed `tracker` as a reference and never reads it here, so the
-    /// once-a-second auto-follow tick redraws the bar and nothing above it.
+    /// per-fix auto-follow update redraws the bar and nothing above it.
     @ViewBuilder private var progressSection: some View {
         if let profile, profile.totalDistanceMeters > 0 {
             HikeTrailProgress(
@@ -522,14 +534,20 @@ private extension HikeDetailView {
 
     // MARK: Auto-follow
 
-    /// Polls the user's location once a second (throttled — GPS fixes can arrive
-    /// far more often than that) and, while auto-follow is on, projects it onto
-    /// the route to drive both the live chart marker and the persistent tracker.
-    /// Runs for as long as this hike stays selected; cancelled when it changes.
+    /// Projects each published fix onto the route to drive both the live chart
+    /// marker and the persistent tracker, while auto-follow is on. Runs for as
+    /// long as this hike stays selected; cancelled when it changes.
+    ///
+    /// Driven by ``LocationManager/fixes`` rather than by a 1 Hz timer: the
+    /// source already throttles to one publish a second and already drops a
+    /// repeat of the last coordinate, so this now stops entirely while the
+    /// walker is standing still instead of re-deriving the same match once a
+    /// second through every rest stop. The two moments that used to depend on
+    /// the next tick — a scrub ending, and auto-follow being switched on —
+    /// are handled by the `onChange` handlers in `body`.
     private func followLocation(profile: RouteProfile) async {
-        while !Task.isCancelled {
+        for await _ in locationManager.fixes {
             updateLiveFollow(profile: profile)
-            try? await Task.sleep(for: .seconds(1))
         }
     }
 

@@ -161,4 +161,79 @@ struct WeatherPollingTests {
         let kilometreAway = state.shouldRequest(key: "4800,1300", at: start.addingTimeInterval(60), policy: policy)
         #expect(kilometreAway)
     }
+
+    /// The poll no longer ticks once a second, so it has to be told when to
+    /// come back: it wakes on a published fix, and otherwise on this deadline.
+    /// A walker standing still with an expiring reading depends entirely on
+    /// it — without it, "refresh every fifteen minutes" quietly becomes
+    /// "refresh whenever they next move".
+    @Test("a fresh reading comes due when its freshness runs out")
+    func nextEligibleFollowsFreshness() {
+        var state = WeatherPollState()
+        state.recordSuccess(key: "4763,1286", at: start)
+
+        #expect(
+            state.nextEligibleDate(key: "4763,1286", policy: policy)
+                == start.addingTimeInterval(900)
+        )
+    }
+
+    /// And a failed bucket comes due on its backoff, not on its freshness —
+    /// the same order `shouldRequest` checks them in, so the poll can't sleep
+    /// past a retry it was about to allow.
+    @Test("a failed reading comes due on its backoff")
+    func nextEligibleFollowsBackoff() {
+        var state = WeatherPollState()
+        state.recordFailure(key: "4763,1286", at: start, policy: policy)
+
+        #expect(
+            state.nextEligibleDate(key: "4763,1286", policy: policy)
+                == start.addingTimeInterval(5),
+            "the first retry delay"
+        )
+
+        state.recordFailure(key: "4763,1286", at: start.addingTimeInterval(5), policy: policy)
+        #expect(
+            state.nextEligibleDate(key: "4763,1286", policy: policy)
+                == start.addingTimeInterval(35),
+            "then the second"
+        )
+    }
+
+    /// Ground never polled has no deadline to wait for, which is what tells
+    /// the loop to request as soon as a fix puts the walker there.
+    @Test("an unpolled bucket has no deadline")
+    func nextEligibleIsNilForNewGround() {
+        let state = WeatherPollState()
+        #expect(state.nextEligibleDate(key: "4763,1286", policy: policy) == nil)
+    }
+
+    /// Asking when a bucket comes due must not count as polling it. The
+    /// memory evicts by recency, so a mutating peek would let the loop's own
+    /// bookkeeping decide which bucket is forgotten — and forget the one the
+    /// walker is standing in.
+    @Test("checking a deadline doesn't disturb the recency order")
+    func nextEligibleDoesNotTouchRecency() {
+        var state = WeatherPollState()
+        let limit = WeatherPollState.trackedBucketLimit
+
+        state.recordSuccess(key: "oldest", at: start)
+        for step in 1..<limit {
+            state.recordSuccess(key: "filler\(step)", at: start.addingTimeInterval(Double(step)))
+        }
+
+        // A peek at the oldest bucket, repeated: were it a touch, this alone
+        // would promote it to most-recent and evict a filler instead.
+        for _ in 0..<3 {
+            _ = state.nextEligibleDate(key: "oldest", policy: policy)
+        }
+        state.recordSuccess(key: "newcomer", at: start.addingTimeInterval(Double(limit)))
+
+        let revisitsOldest = state.shouldRequest(
+            key: "oldest",
+            at: start.addingTimeInterval(Double(limit) + 1),
+            policy: policy
+        )
+        #expect(revisitsOldest, "the oldest bucket was still the one evicted")
+    }
 }

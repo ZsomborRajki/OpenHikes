@@ -28,7 +28,12 @@ nonisolated func assertOffMainThread(
 }
 
 #if DEBUG
-enum MainThreadWatchdog {
+/// `nonisolated` because the watchdog's whole point is a background thread
+/// that outlives any actor: the ping loop below reads these constants and the
+/// logger from a `Thread`, and inheriting main-actor isolation from the
+/// target's default would make every one of those reads a hop back onto the
+/// thread being measured.
+nonisolated enum MainThreadWatchdog {
     private static let logger = Logger(subsystem: "OpenTrails", category: "MainThreadWatchdog")
 
     /// Longer than this and a stall is worth knowing about — a dropped frame

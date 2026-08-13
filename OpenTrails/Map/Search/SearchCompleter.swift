@@ -10,7 +10,7 @@ import MapKit
 import Observation
 
 @Observable
-final class SearchCompleter: NSObject, MKLocalSearchCompleterDelegate {
+final class SearchCompleter: NSObject, @preconcurrency MKLocalSearchCompleterDelegate {
     /// Live autocomplete suggestions for the current query fragment.
     var suggestions: [MKLocalSearchCompletion] = []
 
@@ -36,12 +36,18 @@ final class SearchCompleter: NSObject, MKLocalSearchCompleterDelegate {
         suggestions = []
     }
 
-    // MapKit calls these on the main thread.
-    nonisolated func completerDidUpdateResults(_ completer: MKLocalSearchCompleter) {
-        MainActor.assumeIsolated { suggestions = completer.results }
+    // MapKit calls these on the main thread, which is what the `@preconcurrency`
+    // conformance above asserts: the requirements are declared `nonisolated`,
+    // so satisfying them with main-actor methods installs a runtime check
+    // instead of the hand-written `MainActor.assumeIsolated` this used to
+    // carry. That matters beyond tidiness — sending a non-`Sendable`
+    // `MKLocalSearchCompleter` (and its results) across the closure boundary
+    // was itself a data-race diagnostic under strict concurrency.
+    func completerDidUpdateResults(_ completer: MKLocalSearchCompleter) {
+        suggestions = completer.results
     }
 
-    nonisolated func completer(_ completer: MKLocalSearchCompleter, didFailWithError error: Error) {
-        MainActor.assumeIsolated { suggestions = [] }
+    func completer(_ completer: MKLocalSearchCompleter, didFailWithError error: Error) {
+        suggestions = []
     }
 }

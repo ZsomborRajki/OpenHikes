@@ -12,7 +12,13 @@ import UIKit
 import AppKit
 #endif
 
-extension Color {
+// `nonisolated` because the callers are: `Hike`, whose SwiftData-generated
+// members are nonisolated, and the widget snapshot builder, which resolves a
+// stored tint off the main actor. `Color`, `UIColor` and `NSColor` are all
+// `Sendable`, and nothing here touches a trait environment, so none of this
+// needs the main actor — it only inherited it from the target's default
+// isolation.
+nonisolated extension Color {
     /// The resolved sRGB components (0…1) of this color.
     private struct RGBA {
         let r: CGFloat

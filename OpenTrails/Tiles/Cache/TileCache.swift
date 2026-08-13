@@ -20,7 +20,11 @@ typealias TileImage = NSImage
 
 /// Receives connectivity callbacks from ``TileCache``, always on the main queue.
 /// Renderers adopt this to retry tiles once the network is back.
-protocol TileCacheObserver: AnyObject {
+/// A reconnect listener. `Sendable` because ``TileCache`` holds these across
+/// the network monitor's queue and the main thread: the notification is raised
+/// off-main and delivered on-main, so the reference itself crosses an
+/// isolation boundary even though every call to it lands on the main thread.
+protocol TileCacheObserver: AnyObject, Sendable {
     func tileCacheDidReconnect()
 }
 
@@ -163,7 +167,7 @@ nonisolated final class TileCache: @unchecked Sendable {
 
     /// Weakly-held reconnect listeners. A boxed array keeps the reference weak so
     /// a deallocated renderer drops out without needing to unregister.
-    private struct WeakObserver { weak var value: TileCacheObserver? }
+    private struct WeakObserver: Sendable { weak var value: TileCacheObserver? }
 
     private let observers = OSAllocatedUnfairLock(initialState: [WeakObserver]())
 

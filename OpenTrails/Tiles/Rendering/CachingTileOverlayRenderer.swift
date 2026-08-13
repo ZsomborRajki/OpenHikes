@@ -31,7 +31,14 @@ import os
 // The gate is shared with the bulk downloader, and these loads take it at
 // `.interactive` — see `TileLoadGate` for what that guarantees.
 
-nonisolated final class CachingTileOverlayRenderer: MKOverlayRenderer, TileCacheObserver {
+/// `@unchecked Sendable` for the same reason ``TileOverlay`` is: it is an
+/// `MKOverlayRenderer` (which the MapKit SDK does not declare `Sendable`)
+/// whose own mutable state — the in-flight set, the failure log and the
+/// pending retry wake-up — lives behind `OSAllocatedUnfairLock`s, and whose
+/// tile loads run as unstructured tasks off the main thread. The one member
+/// that genuinely requires the main thread, `setNeedsDisplay`, is called
+/// through an explicit hop at every one of those sites.
+nonisolated final class CachingTileOverlayRenderer: MKOverlayRenderer, TileCacheObserver, @unchecked Sendable {
     private struct Fallback {
         let image: TileImage
         let sourceRect: CGRect

@@ -200,16 +200,21 @@ extension HikeRecorder {
         if accumulator.isStationary {
             point.flags.insert(.stationary)
         }
-        lastAcceptedPoint = point
+        // Frozen here on purpose: the journal append below is an escaping
+        // closure that runs on the serial queue, and capturing the mutable
+        // binding would let a later edit to `point` reach the write that has
+        // already been handed off.
+        let accepted = point
+        lastAcceptedPoint = accepted
         acceptedFixRevision &+= 1
         let liveMatchingEnabled = trailGraphProvider != nil
         if liveMatchingEnabled {
-            liveMatchWindow.append(point)
+            liveMatchWindow.append(accepted)
         }
-        trace.append(point.coordinate, provisional: liveMatchingEnabled)
+        trace.append(accepted.coordinate, provisional: liveMatchingEnabled)
         stats.distanceMeters = distance
         stats.pointCount += 1
-        stats.horizontalAccuracy = point.horizontalAccuracy
+        stats.horizontalAccuracy = accepted.horizontalAccuracy
         stats.averageSpeedMetersPerSecond = accumulator.averageSpeedMetersPerSecond
         // Explicitly conditional, not `phase = .recording`. `@Observable`'s
         // expansion happens to skip a write that compares equal, so the
@@ -222,10 +227,10 @@ extension HikeRecorder {
             phase = .recording
         }
         RenderSignpost.mark("LiveFixAccepted")
-        prefetchTrailGraphIfNeeded(around: point.coordinate)
+        prefetchTrailGraphIfNeeded(around: accepted.coordinate)
         scheduleLiveMatching()
         enqueueJournalOperation { journal in
-            try await journal.append(point)
+            try await journal.append(accepted)
         }
         scheduleJournalFlush()
         schedulePendingWidgetFixMerge()

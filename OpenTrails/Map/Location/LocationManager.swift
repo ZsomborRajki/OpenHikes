@@ -174,6 +174,24 @@ final class LocationManager: NSObject {
             course: LocationFixPolicy.course(of: latestLocation)
         )
     }
+
+    /// ``coordinate`` as an async sequence: the fix current when iteration
+    /// starts, then one element per accepted publish.
+    ///
+    /// What matters here is what it *doesn't* emit. `publish(_:)` above
+    /// already throttles to one update a second and already drops a fix that
+    /// repeats the last coordinate, so a walker standing at a viewpoint — or a
+    /// phone in a pocket with the screen off — produces no elements at all.
+    /// The weather poll and the hike detail's auto-follow each used to run
+    /// their own 1 Hz `Task.sleep` loop to discover that for themselves, and
+    /// so kept waking through every rest stop to decide they had nothing to
+    /// do. Both now wake only when a fix really arrives.
+    ///
+    /// Consumers stay on the main actor: the sequence inherits the isolation
+    /// of whoever asks for it, and this is main-actor state.
+    var fixes: Observations<CLLocationCoordinate2D?, Never> {
+        Observations { self.coordinate }
+    }
 }
 
 extension LocationManager: CLLocationManagerDelegate {
@@ -186,7 +204,11 @@ extension LocationManager: CLLocationManagerDelegate {
         let status = manager.authorizationStatus
         Task { @MainActor in
             guard updatesRequested, Self.isAuthorized(status) else { return }
-            manager.startUpdatingLocation()
+            // `self.manager`, not the callback's parameter: they are the same
+            // object, but the parameter would have to cross an isolation
+            // boundary as a non-`Sendable` value to get here, while the
+            // stored one is already main-actor state.
+            self.manager.startUpdatingLocation()
         }
     }
 }
