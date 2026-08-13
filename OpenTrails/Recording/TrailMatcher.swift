@@ -8,6 +8,8 @@
 
 import CoreLocation
 import Foundation
+import HeapModule
+import OrderedCollections
 
 nonisolated struct TrailMatchAlternative: Equatable, Sendable {
     let id: Int
@@ -613,11 +615,26 @@ nonisolated enum TrailMatcher {
         }
     }
 
-    private struct Candidate {
+    /// Ordered by how far the fix is off this edge, with the edge index
+    /// breaking ties so a point equidistant from two edges always picks the
+    /// same one. ``GraphIndex/candidates(for:)`` keeps only the closest few,
+    /// which is what makes the ordering worth defining.
+    private struct Candidate: Comparable {
         let edgeIndex: Int
         let projectedCoordinate: CLLocationCoordinate2D
         let offsetMeters: Double
         let offRouteMeters: Double
+
+        static func < (lhs: Self, rhs: Self) -> Bool {
+            lhs.offRouteMeters == rhs.offRouteMeters
+                ? lhs.edgeIndex < rhs.edgeIndex
+                : lhs.offRouteMeters < rhs.offRouteMeters
+        }
+
+        static func == (lhs: Self, rhs: Self) -> Bool {
+            lhs.offRouteMeters == rhs.offRouteMeters
+                && lhs.edgeIndex == rhs.edgeIndex
+        }
     }
 
     private struct Transition {
@@ -647,6 +664,26 @@ nonisolated enum TrailMatcher {
             let distance: Double
         }
 
+        /// A path Yen's algorithm has found but not yet accepted, ordered by
+        /// length so the priority queue hands back the next-shortest detour.
+        /// The signature breaks ties, so two equal-length detours are always
+        /// accepted in the same order.
+        private struct RankedPath: Comparable {
+            let signature: String
+            let path: NodePath
+
+            static func < (lhs: Self, rhs: Self) -> Bool {
+                lhs.path.distance == rhs.path.distance
+                    ? lhs.signature < rhs.signature
+                    : lhs.path.distance < rhs.path.distance
+            }
+
+            static func == (lhs: Self, rhs: Self) -> Bool {
+                lhs.path.distance == rhs.path.distance
+                    && lhs.signature == rhs.signature
+            }
+        }
+
         private struct PathOption {
             let distance: Double
             let coordinates: [CLLocationCoordinate2D]
@@ -659,53 +696,18 @@ nonisolated enum TrailMatcher {
             let cost: Double
         }
 
-        private struct HeapEntry {
+        /// Dijkstra's frontier entry. `Comparable` on distance alone is what
+        /// lets ``Heap`` order it; the node ID breaks ties so equal-distance
+        /// entries pop in a fixed order rather than one that depends on how
+        /// the heap happened to be laid out.
+        private struct HeapEntry: Comparable {
             let distance: Double
             let nodeID: Int64
-        }
 
-        private struct MinHeap {
-            private var values: [HeapEntry] = []
-
-            var isEmpty: Bool { values.isEmpty }
-
-            mutating func push(_ entry: HeapEntry) {
-                values.append(entry)
-                var index = values.count - 1
-                while index > 0 {
-                    let parent = (index - 1) / 2
-                    guard values[index].distance < values[parent].distance
-                    else {
-                        break
-                    }
-                    values.swapAt(index, parent)
-                    index = parent
-                }
-            }
-
-            mutating func pop() -> HeapEntry? {
-                guard !values.isEmpty else { return nil }
-                if values.count == 1 { return values.removeLast() }
-                let result = values[0]
-                values[0] = values.removeLast()
-                var index = 0
-                while true {
-                    let left = index * 2 + 1
-                    let right = left + 1
-                    var smallest = index
-                    if left < values.count,
-                       values[left].distance < values[smallest].distance {
-                        smallest = left
-                    }
-                    if right < values.count,
-                       values[right].distance < values[smallest].distance {
-                        smallest = right
-                    }
-                    guard smallest != index else { break }
-                    values.swapAt(index, smallest)
-                    index = smallest
-                }
-                return result
+            static func < (lhs: Self, rhs: Self) -> Bool {
+                lhs.distance == rhs.distance
+                    ? lhs.nodeID < rhs.nodeID
+                    : lhs.distance < rhs.distance
             }
         }
 
@@ -744,10 +746,16 @@ nonisolated enum TrailMatcher {
             self.adjacency = adjacency
         }
 
+        /// The few graph edges close enough to `point` to be worth scoring.
+        ///
+        /// Every edge in the loaded graph is projected against, but only the
+        /// closest ``maximumCandidatesPerFix`` survive — so the shortlist is
+        /// kept in a bounded min-max heap and the furthest is dropped as soon
+        /// as a nearer one turns up. Sorting all of them first would order a
+        /// few thousand edges per fix to throw away all but eight.
         func candidates(for point: RecordingPoint) -> [Candidate] {
             let radius = max(50, point.horizontalAccuracy * 3)
-            var candidates: [Candidate] = []
-            candidates.reserveCapacity(maximumCandidatesPerFix)
+            var closest = Heap<Candidate>()
 
             for (edgeIndex, edge) in edges.enumerated() {
                 guard let start = nodes[edge.fromNodeID]?.coordinate,
@@ -780,7 +788,7 @@ nonisolated enum TrailMatcher {
                 let projectedY = startOffset.y + fraction * dy
                 let offRoute = hypot(projectedX, projectedY)
                 guard offRoute <= radius else { continue }
-                candidates.append(
+                closest.insert(
                     Candidate(
                         edgeIndex: edgeIndex,
                         projectedCoordinate: RouteGeometry.interpolate(
@@ -792,12 +800,15 @@ nonisolated enum TrailMatcher {
                         offRouteMeters: offRoute
                     )
                 )
+                if closest.count > maximumCandidatesPerFix {
+                    closest.removeMax()
+                }
             }
 
-            return candidates
-                .sorted { $0.offRouteMeters < $1.offRouteMeters }
-                .prefix(maximumCandidatesPerFix)
-                .map { $0 }
+            var result: [Candidate] = []
+            result.reserveCapacity(closest.count)
+            while let next = closest.popMin() { result.append(next) }
+            return result
         }
 
         mutating func transition(
@@ -891,14 +902,24 @@ nonisolated enum TrailMatcher {
                                     endEndpoint: endEndpoint,
                                     parameters: parameters
                                 ),
-                                trailNames: Array(Set(names))
+                                // First-seen order: start edge, then the path's
+                                // edges in traversal order, then the end edge.
+                                // `Set` would deduplicate just as well but
+                                // hand back a hash-seeded order, and this
+                                // list is what names the trail to the user.
+                                trailNames: OrderedSet(names).elements
                             )
                         )
                     }
                 }
             }
 
-            var unique: [String: PathOption] = [:]
+            // Insertion-ordered so that two paths tying on both error and
+            // distance rank in the order they were generated. A plain
+            // `Dictionary` iterates in an order that depends on the process's
+            // hash seed, which would let the same recording match one way on
+            // one launch and another way on the next.
+            var unique: OrderedDictionary<String, PathOption> = [:]
             for option in options where option.distance
                 <= parameters.maximumDistance {
                 if let existing = unique[option.signature] {
@@ -976,8 +997,16 @@ nonisolated enum TrailMatcher {
             }
             guard limit > 1, first.nodes.count > 1 else { return [first] }
 
+            // Yen's algorithm: keep the accepted paths in order, and every
+            // spur path found so far in a priority queue so the next-shortest
+            // is a pop rather than a scan of everything still outstanding.
             var accepted = [first]
-            var candidates: [String: NodePath] = [:]
+            var candidates = Heap<RankedPath>()
+            // Doubles as the "already accepted" check — an accepted path's
+            // signature is never removed, so a spur that rediscovers it is
+            // rejected without comparing edge lists against every accepted
+            // path in turn.
+            var seenSignatures: Set<String> = [signature(of: first.edgeIndices)]
             while accepted.count < limit {
                 let previous = accepted[accepted.count - 1]
                 for spurIndex in 0..<(previous.nodes.count - 1) {
@@ -1009,29 +1038,24 @@ nonisolated enum TrailMatcher {
                     let nodes = Array(rootNodes.dropLast()) + spur.nodes
                     guard Set(nodes).count == nodes.count else { continue }
                     let edgeIndices = rootEdges + spur.edgeIndices
-                    let path = NodePath(
-                        nodes: nodes,
-                        edgeIndices: edgeIndices,
-                        distance: rootDistance + spur.distance
-                    )
-                    let signature = edgeIndices.map(String.init)
-                        .joined(separator: ",")
-                    if !accepted.contains(where: {
-                        $0.edgeIndices == path.edgeIndices
-                    }) {
-                        candidates[signature] = path
+                    let signature = signature(of: edgeIndices)
+                    guard seenSignatures.insert(signature).inserted else {
+                        continue
                     }
+                    candidates.insert(
+                        RankedPath(
+                            signature: signature,
+                            path: NodePath(
+                                nodes: nodes,
+                                edgeIndices: edgeIndices,
+                                distance: rootDistance + spur.distance
+                            )
+                        )
+                    )
                 }
 
-                guard let next = candidates.values.min(by: {
-                    $0.distance < $1.distance
-                }) else {
-                    break
-                }
-                let signature = next.edgeIndices.map(String.init)
-                    .joined(separator: ",")
-                candidates[signature] = nil
-                accepted.append(next)
+                guard let next = candidates.popMin() else { break }
+                accepted.append(next.path)
             }
             return accepted
         }
@@ -1069,10 +1093,10 @@ nonisolated enum TrailMatcher {
 
             var distances: [Int64: Double] = [start: 0]
             var previous: [Int64: (nodeID: Int64, edgeIndex: Int)] = [:]
-            var heap = MinHeap()
-            heap.push(HeapEntry(distance: 0, nodeID: start))
+            var frontier = Heap<HeapEntry>()
+            frontier.insert(HeapEntry(distance: 0, nodeID: start))
 
-            while !heap.isEmpty, let current = heap.pop() {
+            while let current = frontier.popMin() {
                 guard current.distance == distances[current.nodeID],
                       current.distance <= maximumDistance
                 else {
@@ -1094,7 +1118,7 @@ nonisolated enum TrailMatcher {
                         current.nodeID,
                         neighbor.edgeIndex
                     )
-                    heap.push(
+                    frontier.insert(
                         HeapEntry(
                             distance: distance,
                             nodeID: neighbor.nodeID
@@ -1192,6 +1216,12 @@ nonisolated enum TrailMatcher {
             forward: Bool
         ) -> String {
             "\(forward ? "+" : "-")\(edgeIndex)"
+        }
+
+        /// Identifies a path by the edges it uses, for deduplicating the spur
+        /// paths Yen's algorithm generates.
+        private func signature(of edgeIndices: [Int]) -> String {
+            edgeIndices.map(String.init).joined(separator: ",")
         }
     }
 }

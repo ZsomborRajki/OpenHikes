@@ -12,6 +12,7 @@
 //  is the exact jam the renderer's cap was written to prevent.
 //
 
+import DequeModule
 import Foundation
 
 /// Bounds how many tile pipelines (network fetch, disk reads and writes, and —
@@ -54,8 +55,12 @@ actor TileLoadGate {
 
     private var active = 0
     private var activeBackground = 0
-    private var interactiveWaiters: [CheckedContinuation<Void, Never>] = []
-    private var backgroundWaiters: [CheckedContinuation<Void, Never>] = []
+    /// FIFO, and served from the front — a `Deque` so handing a freed slot to
+    /// the longest-waiting tile is a constant-time pop rather than shuffling
+    /// every remaining waiter down by one. A stalled provider can leave a
+    /// screenful of tiles queued here at once.
+    private var interactiveWaiters: Deque<CheckedContinuation<Void, Never>> = []
+    private var backgroundWaiters: Deque<CheckedContinuation<Void, Never>> = []
 
     /// Waits for a slot. Every caller must ``release(_:)`` the same priority
     /// once its work is done.

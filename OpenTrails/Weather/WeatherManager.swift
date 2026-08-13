@@ -7,6 +7,7 @@
 
 import Foundation
 import CoreLocation
+import OrderedCollections
 import WeatherKit
 import Observation
 
@@ -52,11 +53,13 @@ nonisolated struct WeatherPollState: Sendable {
         var lastSuccess: Date?
         var failureCount = 0
         var nextAttempt: Date?
-        /// Last time this bucket was polled, for eviction only.
-        var touchedAt: Date
     }
 
-    private var buckets: [String: BucketState] = [:]
+    /// Ordered least- to most-recently polled, which is the whole eviction
+    /// policy: touching a bucket re-inserts it at the end, so the one to drop
+    /// is always the first. An unordered `Dictionary` needed a `touchedAt` on
+    /// every entry and a sort of all of them to find the same bucket.
+    private var buckets: OrderedDictionary<String, BucketState> = [:]
 
     mutating func shouldRequest(
         key: String,
@@ -64,7 +67,7 @@ nonisolated struct WeatherPollState: Sendable {
         policy: WeatherPollingPolicy = .standard
     ) -> Bool {
         let existing = buckets[key]
-        touch(key, at: now)
+        touch(key)
 
         // Never polled here: genuinely new ground, so ask.
         guard let existing else { return true }
@@ -74,7 +77,7 @@ nonisolated struct WeatherPollState: Sendable {
     }
 
     mutating func recordSuccess(key: String, at now: Date) {
-        update(key, at: now) { state in
+        update(key) { state in
             state.lastSuccess = now
             state.failureCount = 0
             state.nextAttempt = nil
@@ -86,34 +89,30 @@ nonisolated struct WeatherPollState: Sendable {
         at now: Date,
         policy: WeatherPollingPolicy = .standard
     ) {
-        update(key, at: now) { state in
+        update(key) { state in
             state.lastSuccess = nil
             state.failureCount += 1
             state.nextAttempt = now.addingTimeInterval(policy.retryDelay(after: state.failureCount))
         }
     }
 
-    private mutating func touch(_ key: String, at now: Date) {
-        update(key, at: now) { _ in }
+    private mutating func touch(_ key: String) {
+        update(key) { _ in }
     }
 
-    private mutating func update(_ key: String, at now: Date, _ change: (inout BucketState) -> Void) {
-        var state = buckets[key] ?? BucketState(touchedAt: now)
-        state.touchedAt = now
+    /// Applies `change` to `key`'s state and marks it the most recently
+    /// polled bucket, evicting the least recent one if that puts the memory
+    /// over its limit.
+    private mutating func update(_ key: String, _ change: (inout BucketState) -> Void) {
+        // Removed and re-inserted rather than mutated in place, so the key
+        // moves to the end of the recency order instead of staying where it
+        // first appeared.
+        var state = buckets.removeValue(forKey: key) ?? BucketState()
         change(&state)
         buckets[key] = state
-        evictOldestIfNeeded()
-    }
-
-    /// Keeps the most recently polled buckets. A walk in a straight line visits
-    /// a new bucket every kilometre or so, and nothing about a bucket left
-    /// behind is worth carrying for the rest of the hike.
-    private mutating func evictOldestIfNeeded() {
-        guard buckets.count > Self.trackedBucketLimit else { return }
-        let survivors = buckets
-            .sorted { $0.value.touchedAt > $1.value.touchedAt }
-            .prefix(Self.trackedBucketLimit)
-        buckets = Dictionary(uniqueKeysWithValues: survivors.map { ($0.key, $0.value) })
+        if buckets.count > Self.trackedBucketLimit {
+            buckets.removeFirst()
+        }
     }
 }
 

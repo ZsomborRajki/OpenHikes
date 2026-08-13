@@ -7,6 +7,7 @@
 //
 
 import CoreLocation
+import DequeModule
 import Foundation
 import Observation
 import OpenTrailsShared
@@ -568,7 +569,11 @@ final class RecordingTrace {
     @ObservationIgnored private(set) var reviewSegment:
         [CLLocationCoordinate2D] = []
     @ObservationIgnored private(set) var generation = 0
-    @ObservationIgnored private var stableTail: [CLLocationCoordinate2D] = []
+    /// Drained from the front every time a chunk is sealed, so it's a `Deque`
+    /// rather than an `Array`: `removeFirst(_:)` on an array shifts every
+    /// surviving element down, and this runs on the main actor once per 255
+    /// fixes for the whole life of a recording.
+    @ObservationIgnored private var stableTail: Deque<CLLocationCoordinate2D> = []
     @ObservationIgnored private var provisionalTail: [CLLocationCoordinate2D] = []
     private(set) var revision = 0
 
@@ -667,16 +672,17 @@ final class RecordingTrace {
     }
 
     private func rebuildTail() {
-        tail = stableTail
+        tail = Array(stableTail)
         for coordinate in provisionalTail {
             Self.appendDistinct(coordinate, to: &tail)
         }
     }
 
-    private static func appendDistinct(
+    private static func appendDistinct<C>(
         _ coordinate: CLLocationCoordinate2D,
-        to coordinates: inout [CLLocationCoordinate2D]
-    ) {
+        to coordinates: inout C
+    ) where C: RangeReplaceableCollection & BidirectionalCollection,
+            C.Element == CLLocationCoordinate2D {
         if let previous = coordinates.last,
            RouteGeometry.distanceMeters(
                from: previous,
