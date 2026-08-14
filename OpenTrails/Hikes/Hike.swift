@@ -90,6 +90,15 @@ final class Hike {
     /// lightweight migration, as for the auto-save fields above.
     var surfaceMetersByCategory: [String: Double] = [:]
 
+    /// Metres of this route attributed to each ``TrailDifficulty``, keyed by
+    /// the grade's raw value.
+    ///
+    /// Persisted for the same reason as ``surfaceMetersByCategory``: producing
+    /// it requires the OSM graph for every region the route crosses. Empty
+    /// means "never analyzed". The inline default is required for SwiftData
+    /// lightweight migration.
+    var difficultyMetersByGrade: [String: Double] = [:]
+
     init(
         title: String,
         distanceMeters: Double,
@@ -109,7 +118,8 @@ final class Hike {
         trackDescription: String? = nil,
         author: String? = nil,
         keywords: String? = nil,
-        surfaceMetersByCategory: [String: Double] = [:]
+        surfaceMetersByCategory: [String: Double] = [:],
+        difficultyMetersByGrade: [String: Double] = [:]
     ) {
         self.id = id
         self.title = title
@@ -130,6 +140,7 @@ final class Hike {
         self.author = author
         self.keywords = keywords
         self.surfaceMetersByCategory = surfaceMetersByCategory
+        self.difficultyMetersByGrade = difficultyMetersByGrade
     }
 }
 

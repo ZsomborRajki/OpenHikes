@@ -24,9 +24,6 @@
   },
   "testTargets" : [
     {
-      "selectedTags" : {
-        "includeXCTests" : true
-      },
       "target" : {
         "containerPath" : "container:OpenTrails.xcodeproj",
         "identifier" : "AB0000000000000000000001",
@@ -34,9 +31,6 @@
       }
     },
     {
-      "selectedTags" : {
-        "includeXCTests" : true
-      },
       "target" : {
         "containerPath" : "container:OpenTrails.xcodeproj",
         "identifier" : "AC0000000000000000000001",
@@ -44,9 +38,6 @@
       }
     },
     {
-      "selectedTags" : {
-        "includeXCTests" : true
-      },
       "target" : {
         "containerPath" : "container:OpenTrails.xcodeproj",
         "identifier" : "AE0000000000000000000001",

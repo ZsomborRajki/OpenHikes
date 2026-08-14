@@ -55,6 +55,8 @@ nonisolated final class StubTileProtocol: URLProtocol, @unchecked Sendable {
         /// Held open until the test releases them, so two overlapping
         /// requests for the same tile can be observed as overlapping.
         var delay: Duration?
+        /// Continuations waiting for the request count to reach a threshold.
+        var requestWaiters: [(threshold: Int, continuation: CheckedContinuation<Void, Never>)] = []
     }
 
     private static let state = Mutex(State())
@@ -67,7 +69,13 @@ nonisolated final class StubTileProtocol: URLProtocol, @unchecked Sendable {
     }
 
     static func reset() {
-        state.withLock { $0 = State() }
+        let staleWaiters = state.withLock { s -> [CheckedContinuation<Void, Never>] in
+            let waiters = s.requestWaiters.map(\.continuation)
+            s = State()
+            return waiters
+        }
+        // Resume any leftover waiters so they don't leak after a tearDown.
+        for continuation in staleWaiters { continuation.resume() }
     }
 
     /// Answers every request the same way.
@@ -94,6 +102,25 @@ nonisolated final class StubTileProtocol: URLProtocol, @unchecked Sendable {
         state.withLock { $0.requests.filter { $0.url?.path.hasSuffix(suffix) ?? false }.count }
     }
 
+    /// Suspends until at least `count` requests have been received by the stub.
+    ///
+    /// Use this instead of a `Task.yield()` spin loop when a test needs to
+    /// know that a fetch is genuinely in flight before taking an action. The
+    /// continuation is resumed inside the `Mutex` lock, so there is no window
+    /// between "count reached" and "waiter woken".
+    static func waitForRequest(count: Int = 1) async {
+        await withCheckedContinuation { continuation in
+            let alreadyMet = state.withLock { s -> Bool in
+                if s.requests.count >= count {
+                    return true
+                }
+                s.requestWaiters.append((threshold: count, continuation: continuation))
+                return false
+            }
+            if alreadyMet { continuation.resume() }
+        }
+    }
+
     // MARK: URLProtocol
 
     override static func canInit(with request: URLRequest) -> Bool { true }
@@ -104,6 +131,12 @@ nonisolated final class StubTileProtocol: URLProtocol, @unchecked Sendable {
         let request = request
         let (response, delay) = Self.state.withLock { state -> (Response?, Duration?) in
             state.requests.append(request)
+            let count = state.requests.count
+            state.requestWaiters.removeAll { waiter in
+                guard waiter.threshold <= count else { return false }
+                waiter.continuation.resume()
+                return true
+            }
             return (state.responder.map { $0(request.url ?? URL(string: "https://example.invalid")!) }, state.delay)
         }
 

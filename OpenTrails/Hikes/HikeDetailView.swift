@@ -199,6 +199,7 @@ struct HikeDetailView: View {
                 header
                 statsGrid
                 surfaceSection
+                difficultySection
                 if hasMetadata { metadataSection }
                 actionBar
             }
@@ -474,6 +475,13 @@ private extension HikeDetailView {
     /// the result back to the hike redraws the section rather than this view.
     private var surfaceSection: some View {
         HikeSurfaceSection(hike: hike, provider: trailGraphProvider)
+    }
+
+    // MARK: Difficulty
+
+    /// Owns its own analysis state, mirroring ``surfaceSection``.
+    private var difficultySection: some View {
+        HikeDifficultySection(hike: hike, provider: trailGraphProvider)
     }
 
     // MARK: Metadata
