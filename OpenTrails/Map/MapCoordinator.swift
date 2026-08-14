@@ -33,6 +33,7 @@ extension MapView {
         /// when MapKit asks for a renderer.
         var routeTint: Color = RouteStyle.defaultTint
         var routeWidth: Double = RouteStyle.defaultWidth
+        var routePattern: RouteLinePattern = RouteStyle.defaultPattern
         var highlightAnnotation: MKPointAnnotation?
         var trackingBottomConstraint: NSLayoutConstraint?
         private weak var sheetMetrics: SheetMetrics?
@@ -68,7 +69,9 @@ extension MapView {
         )
         #endif
 
-        /// Applies the current tint (with its alpha) and width to the route line.
+        /// Applies the current tint (with its alpha), width and line pattern to
+        /// the route line. Everything the pattern decides is an ordinary stroke
+        /// property except the chevrons, which the renderer draws itself.
         func applyStyle(to renderer: MKPolylineRenderer) {
             #if os(macOS)
             renderer.strokeColor = NSColor(routeTint)
@@ -76,6 +79,14 @@ extension MapView {
             renderer.strokeColor = UIColor(routeTint)
             #endif
             renderer.lineWidth = CGFloat(routeWidth)
+            renderer.lineJoin = .round
+            renderer.lineCap = routePattern.lineCap
+            let dashes = routePattern.dashLengths(forWidth: routeWidth)
+            // `lineDashPattern` is an `[NSNumber]?`; an empty array is not a
+            // documented way to say "unbroken", so a solid line clears it.
+            // swiftlint:disable:next legacy_objc_type
+            renderer.lineDashPattern = dashes.isEmpty ? nil : dashes.map { NSNumber(value: $0) }
+            (renderer as? DirectionalPolylineRenderer)?.pattern = routePattern
         }
 
         /// Fits the currently drawn route into view. Shared by the initial draw and
@@ -238,16 +249,17 @@ extension MapView {
             constraint.constant = max(sheetTop, height * 0.5) - spacing
         }
 
-        /// Observes the drawn route's tint and width and restyles the line
-        /// imperatively, then re-registers — the same technique as
+        /// Observes the drawn route's tint, width and line pattern and restyles
+        /// the line imperatively, then re-registers — the same technique as
         /// `observeHighlight`, and for the same reason: both a colour well and a
         /// width slider are dragged, so their writes arrive at touch frequency
         /// and must not travel through SwiftUI to reach the map.
         func observeRouteStyle(_ style: RouteStyle, on mapView: MKMapView) {
-            applyRouteStyle(tint: style.tint, width: style.width, on: mapView)
+            applyRouteStyle(tint: style.tint, width: style.width, pattern: style.pattern, on: mapView)
             withObservationTracking {
                 _ = style.tint
                 _ = style.width
+                _ = style.pattern
             } onChange: { [weak self, weak mapView, weak style] in
                 let coordinator = self
                 let map = mapView
@@ -265,12 +277,19 @@ extension MapView {
         /// Safe to call before there is a line to restyle: with no renderer yet,
         /// recording the values is enough, because `rendererFor` styles the
         /// polyline from them when MapKit does ask for one.
-        private func applyRouteStyle(tint: Color, width: Double, on mapView: MKMapView) {
+        private func applyRouteStyle(
+            tint: Color,
+            width: Double,
+            pattern: RouteLinePattern,
+            on mapView: MKMapView
+        ) {
             let tintChanged = routeTint != tint
             let widthChanged = routeWidth != width
-            guard tintChanged || widthChanged else { return }
+            let patternChanged = routePattern != pattern
+            guard tintChanged || widthChanged || patternChanged else { return }
             routeTint = tint
             routeWidth = width
+            routePattern = pattern
             RenderSignpost.mark("MapRouteRestyled")
             if let renderer = routeRenderer {
                 applyStyle(to: renderer)
@@ -519,8 +538,6 @@ extension MapView.Coordinator {
             }
             let renderer = DirectionalPolylineRenderer(polyline: polyline)
             applyStyle(to: renderer)
-            renderer.lineJoin = .round
-            renderer.lineCap = .round
             routeRenderer = renderer
             return renderer
         }

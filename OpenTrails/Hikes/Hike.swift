@@ -22,6 +22,13 @@ final class Hike {
     var tintHex: String
     /// Map polyline width, in points.
     var routeWidth: Double
+    /// How the map draws this route's line — see ``RouteLinePattern``. Stored
+    /// as its stable string id (like ``tintHex``) rather than as an enum, so an
+    /// unrecognised value degrades to the default instead of failing to decode.
+    ///
+    /// The inline default is required for SwiftData lightweight migration: a
+    /// store written before this column existed has to backfill it.
+    var routeLinePatternID: String = RouteLinePattern.default.rawValue
     /// SF Symbol shown in the row's colored circle.
     var symbol: String
     /// Ordered track points making up the route.
@@ -76,6 +83,7 @@ final class Hike {
         date: Date = .now,
         tintHex: String = "#34C759",
         routeWidth: Double = 3,
+        routeLinePatternID: String = RouteLinePattern.default.rawValue,
         symbol: String = "figure.hiking",
         route: [RouteCoordinate] = [],
         rawRoute: [RouteCoordinate] = [],
@@ -94,6 +102,7 @@ final class Hike {
         self.date = date
         self.tintHex = tintHex
         self.routeWidth = routeWidth
+        self.routeLinePatternID = routeLinePatternID
         self.symbol = symbol
         self.route = route
         self.rawRoute = rawRoute

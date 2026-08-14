@@ -114,6 +114,7 @@ struct HikePersistenceTests {
                 date: date,
                 tintHex: "#FF9500FF",
                 routeWidth: 7,
+                routeLinePatternID: RouteLinePattern.dotted.rawValue,
                 symbol: "mountain.2",
                 route: Fixture.ridgeRoute,
                 rawRoute: Array(Fixture.ridgeRoute.reversed()),
@@ -146,6 +147,7 @@ struct HikePersistenceTests {
         #expect(reopened.date == date)
         #expect(reopened.tintHex == "#FF9500FF")
         #expect(reopened.routeWidth == 7)
+        #expect(reopened.routeLinePattern == .dotted)
         #expect(reopened.symbol == "mountain.2")
         #expect(reopened.rawRoute == Array(Fixture.ridgeRoute.reversed()))
         #expect(reopened.isRecording)
@@ -243,6 +245,10 @@ struct HikePersistenceTests {
         #expect(migrated.autoSavedTileKeys.isEmpty, "an old hike has auto-saved nothing yet")
         #expect(migrated.autoSaveTilesEnabled, "and gets the same default a new hike does")
         #expect(migrated.autoFollowEnabled)
+        #expect(
+            migrated.routeLinePattern == .default,
+            "a hike saved before line patterns existed keeps the line it was drawn with"
+        )
 
         // What it had to keep.
         #expect(migrated.title == "Imported last year")

@@ -108,6 +108,32 @@ struct RouteAppearanceIsolationTests {
         #expect(a == DisplayedRoute.forSelection(first, cache: cache))
         #expect(DisplayedRoute.forSelection(nil, cache: cache) == nil)
     }
+
+    /// The line pattern travels the same road as the colour and the width, and
+    /// for the same reason: the map restyles its existing renderer from
+    /// `RouteStyle`, so picking a pattern must not rebuild the sheet that the
+    /// picker is sitting in.
+    @Test("picking a line pattern doesn't invalidate the root view")
+    func patternChangeIsIsolatedFromTheRootView() async throws {
+        let context = try Fixture.modelContext()
+        let hike = Fixture.hike(in: context)
+        let cache = DisplayedRouteCoordinateCache()
+        let style = RouteStyle()
+        style.follow(hike)
+
+        let rootView = contentViewCounter(for: hike, cache: cache)
+        let map = ObservationCounter { _ = style.pattern }
+        await rootView.settle()
+
+        for pattern in [RouteLinePattern.solid, .dashed, .dotted, .arrowheads] {
+            hike.routeLinePattern = pattern
+            await rootView.settle()
+        }
+
+        #expect(rootView.count == 0, "the map restyles itself; the sheet has no part in it")
+        #expect(map.count == 4, "…but every choice must still reach the map")
+        #expect(style.pattern == .arrowheads)
+    }
 }
 
 @Suite("Route style")
@@ -121,12 +147,14 @@ struct RouteStyleTests {
         let hike = Fixture.hike(in: context) { hike in
             hike.tintHex = "#FF0000FF"
             hike.routeWidth = 9
+            hike.routeLinePattern = .dotted
         }
         let style = RouteStyle()
 
         style.follow(hike)
         #expect(style.tint == hike.tint)
         #expect(style.width == 9)
+        #expect(style.pattern == .dotted)
     }
 
     /// Deselecting leaves no trace of the last trail: the next route to be
@@ -134,13 +162,17 @@ struct RouteStyleTests {
     @Test("clearing the selection returns to the defaults")
     func clearingResetsToDefaults() async throws {
         let context = try Fixture.modelContext()
-        let hike = Fixture.hike(in: context) { $0.tintHex = "#FF0000FF" }
+        let hike = Fixture.hike(in: context) { hike in
+            hike.tintHex = "#FF0000FF"
+            hike.routeLinePattern = .arrowheads
+        }
         let style = RouteStyle()
         style.follow(hike)
 
         style.follow(nil)
         #expect(style.tint == RouteStyle.defaultTint)
         #expect(style.width == RouteStyle.defaultWidth)
+        #expect(style.pattern == RouteStyle.defaultPattern)
 
         // And the hike it used to follow can no longer reach it.
         hike.tintHex = "#0000FFFF"

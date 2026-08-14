@@ -8,6 +8,10 @@
 //  timers, no per-frame animation — so they add no idle cost and stay glued to
 //  the path under zoom and rotation.
 //
+//  Which of the two halves runs — the stroke, the chevrons, or both — is the
+//  hike's ``RouteLinePattern``. Dashing is left to `MKPolylineRenderer`'s own
+//  stroke properties; only the chevrons are drawn here.
+//
 
 import MapKit
 #if canImport(UIKit)
@@ -17,25 +21,20 @@ import AppKit
 #endif
 
 nonisolated final class DirectionalPolylineRenderer: MKPolylineRenderer {
-    private static let chevronReachMultiplier: Double = 1.1
-    private static let chevronSpreadMultiplier: Double = 1.0
-    private static let chevronStrokeMultiplier: Double = 0.55
-    private static let luminanceRedWeight: Double = 0.299
-    private static let luminanceGreenWeight: Double = 0.587
-    private static let luminanceBlueWeight: Double = 0.114
-    private static let luminanceDarkThreshold: CGFloat = 0.6
-    private static let chevronDarkShade: CGFloat = 0.15
-    private static let chevronLightShade: CGFloat = 1.0
-    private static let chevronAlpha: CGFloat = 0.95
-    private static let chevronMinSize: Double = 3
-    private static let chevronMinStroke: Double = 1.5
-
-    /// Gap between chevrons, in screen points (kept constant across zoom levels).
-    var arrowSpacing: Double = 55
+    /// The hike's chosen line pattern. Set by the map coordinator alongside the
+    /// stroke colour and width, so a pattern change restyles the live renderer
+    /// rather than rebuilding the overlay.
+    var pattern: RouteLinePattern = .default
 
     override func draw(_ mapRect: MKMapRect, zoomScale: MKZoomScale, in context: CGContext) {
-        super.draw(mapRect, zoomScale: zoomScale, in: context)
+        // The dash pattern (and the cap that makes a dotted line round) are
+        // ordinary stroke properties, so the inherited draw already honours
+        // them; only `arrowheads`, which has no line at all, opts out.
+        if pattern.drawsLine {
+            super.draw(mapRect, zoomScale: zoomScale, in: context)
+        }
 
+        guard let metrics = pattern.chevronMetrics(forWidth: Double(lineWidth)) else { return }
         guard let polyline = overlay as? MKPolyline, polyline.pointCount > 1 else { return }
         let count = polyline.pointCount
         let points = polyline.points()
@@ -43,19 +42,21 @@ nonisolated final class DirectionalPolylineRenderer: MKPolylineRenderer {
         // Convert screen-point sizes into map-point space for this zoom level.
         let z = Double(zoomScale)
         guard z > 0 else { return }
-        let spacing = arrowSpacing / z
+        let spacing = metrics.spacing / z
         guard spacing > 0 else { return }
-        let lineW = Double(lineWidth)
         // chevron reach along the path
-        let halfLen = max(Self.chevronMinSize, lineW * Self.chevronReachMultiplier) / z
+        let halfLen = metrics.halfLength / z
         // chevron spread across the path
-        let halfWidth = max(Self.chevronMinSize, lineW * Self.chevronSpreadMultiplier) / z
-        let strokeW = max(Self.chevronMinStroke, lineW * Self.chevronStrokeMultiplier) / z
+        let halfWidth = metrics.halfWidth / z
+        let strokeW = metrics.strokeWidth / z
         let pad = (halfLen + halfWidth) * 2
 
         context.setLineWidth(CGFloat(strokeW))
         context.setLineCap(.round)
         context.setLineJoin(.round)
+        // The stroke above may have left a dash pattern on the context; a
+        // chevron is a solid glyph whatever the line it rides is drawn as.
+        context.setLineDash(phase: 0, lengths: [])
         context.setStrokeColor(arrowColor())
 
         // Distance carried across segment boundaries so spacing is uniform along
@@ -144,16 +145,24 @@ nonisolated final class DirectionalPolylineRenderer: MKPolylineRenderer {
     /// A grey shade that contrasts with the line color (near-white on dark lines,
     /// near-black on light ones), kept opaque so chevrons read even on a
     /// translucent route.
+    ///
+    /// With no line to contrast against — ``RouteLinePattern/arrowheads`` — the
+    /// chevrons take the route's own colour instead: they are the route, and
+    /// drawing them grey would discard the colour the user picked.
     private func arrowColor() -> CGColor {
+        let stroke = strokeColor ?? .white
+        if pattern.chevronsUseRouteTint { return stroke.cgColor }
         #if canImport(UIKit)
         var r: CGFloat = 1, g: CGFloat = 1, b: CGFloat = 1, a: CGFloat = 1
-        (strokeColor ?? .white).getRed(&r, green: &g, blue: &b, alpha: &a)
+        stroke.getRed(&r, green: &g, blue: &b, alpha: &a)
         #else
-        let c = (strokeColor ?? .white).usingColorSpace(.sRGB) ?? .white
+        let c = stroke.usingColorSpace(.sRGB) ?? .white
         let r = c.redComponent, g = c.greenComponent, b = c.blueComponent
         #endif
-        let luminance = Self.luminanceRedWeight * r + Self.luminanceGreenWeight * g + Self.luminanceBlueWeight * b
-        let shade: CGFloat = luminance > Self.luminanceDarkThreshold ? Self.chevronDarkShade : Self.chevronLightShade
-        return CGColor(gray: shade, alpha: Self.chevronAlpha)
+        let luminance = RouteChevronShade.luminance(red: r, green: g, blue: b)
+        return CGColor(
+            gray: CGFloat(RouteChevronShade.gray(forLuminance: luminance)),
+            alpha: CGFloat(RouteChevronShade.alpha)
+        )
     }
 }

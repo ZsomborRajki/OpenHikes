@@ -152,9 +152,46 @@ final class OpenTrailsUITests: XCTestCase {
         )
     }
 
+    /// A hike's line pattern is picked from five swatches that carry no text,
+    /// so their accessibility identifiers are the only thing that tells them
+    /// apart — and SwiftUI pushes a container's identifier down onto every
+    /// descendant, which would leave all five answering to one name.
     @MainActor
-    func testLaunchPerformance() {
-        let options = XCTMeasureOptions()
+    func testPicksARouteLinePattern() {
+        let app = makeApp(
+            arguments: [
+                "--ui-test-expanded-sheet",
+                "--ui-test-import-gpx=ThumseeLoopFast",
+            ]
+        )
+        app.launch()
+
+        let hikeTitle = app.staticTexts[Self.importedHikeTitle]
+        XCTAssertTrue(hikeTitle.waitForExistence(timeout: 15))
+        hikeTitle.tap()
+        XCTAssertTrue(
+            app.navigationBars[Self.importedHikeTitle]
+                .waitForExistence(timeout: 5)
+        )
+
+        let directional = element("route-pattern-directional", in: app)
+        let dotted = element("route-pattern-dotted", in: app)
+        XCTAssertTrue(directional.waitForExistence(timeout: 10))
+        XCTAssertTrue(
+            directional.isSelected,
+            "a hike starts on the line-with-arrows it has always been drawn as"
+        )
+
+        tap(dotted, in: app)
+        XCTAssertTrue(
+            waitUntilSelected(dotted),
+            "tapping a swatch should move the selection to it"
+        )
+        XCTAssertFalse(directional.isSelected)
+    }
+
+    @MainActor
+    func testLaunchPerformance() {        let options = XCTMeasureOptions()
         options.iterationCount = 3
 
         measure(

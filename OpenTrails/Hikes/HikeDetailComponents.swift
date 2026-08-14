@@ -174,6 +174,7 @@ struct RouteAppearanceControls<
             }
             middleControls
             widthSlider
+            RouteLinePatternPicker(hike: hike)
         }
     }
 

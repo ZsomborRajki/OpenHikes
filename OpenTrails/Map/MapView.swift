@@ -32,9 +32,10 @@ struct MapView: MapViewRepresentable, Equatable {
     /// Geometry only — how it is drawn comes from `routeStyle` below.
     var route: DisplayedRoute?
 
-    /// The drawn route's tint and width. Observed directly by the map (not via
-    /// SwiftUI) so a colour or width drag restyles the existing polyline
-    /// renderer without re-rendering any view — see ``RouteStyle``.
+    /// The drawn route's tint, width and line pattern. Observed directly by the
+    /// map (not via SwiftUI) so a colour, width or pattern change restyles the
+    /// existing polyline renderer without re-rendering any view — see
+    /// ``RouteStyle``.
     var routeStyle: RouteStyle
 
     /// Observed directly by the map (not via SwiftUI) so scrubbing the elevation

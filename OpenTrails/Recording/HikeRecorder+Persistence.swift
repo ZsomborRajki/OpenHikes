@@ -392,19 +392,19 @@ extension HikeRecorder {
         for date: Date,
         calendar: Calendar = .current
     ) -> String {
+        let timeOfDay: String
         switch calendar.component(.hour, from: date) {
-        case 5..<12:
-            "Morning Hike"
-
-        case 12..<Self.afternoonEndHour:
-            "Afternoon Hike"
-
-        case Self.afternoonEndHour..<Self.eveningEndHour:
-            "Evening Hike"
-
-        default:
-            "Hike"
+        case 5..<12: timeOfDay = "Morning Hike"
+        case 12..<Self.afternoonEndHour: timeOfDay = "Afternoon Hike"
+        case Self.afternoonEndHour..<Self.eveningEndHour: timeOfDay = "Evening Hike"
+        default: timeOfDay = "Hike"
         }
+
+        let formatter = DateFormatter()
+        formatter.dateStyle = .medium
+        formatter.timeStyle = .none
+        formatter.calendar = calendar
+        return "\(timeOfDay) – \(formatter.string(from: date))"
     }
 
     // MARK: Session lifecycle helpers

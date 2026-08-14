@@ -348,6 +348,119 @@ extension MapCoordinatorTests {
         #expect(coordinator.routeOverlay === line, "restyling must not rebuild the line")
     }
 
+    /// The pattern reaches the line the same way the colour does — through the
+    /// live renderer. Dashing is an ordinary stroke property, so it has to be
+    /// on the renderer itself; the chevrons are the renderer's own business, so
+    /// it has to know which pattern it is drawing.
+    @Test("a line pattern reaches the live renderer as stroke properties")
+    func patternChangeRestylesTheLine() async throws {
+        let coordinator = MapView.Coordinator()
+        let view = mapView(route: Self.route())
+        let map = makeMap(view, coordinator)
+        defer { detach(map) }
+        view.update(map, coordinator)
+
+        let line = try #require(coordinator.routeOverlay)
+        let renderer = try #require(coordinator.mapView(map, rendererFor: line) as? DirectionalPolylineRenderer)
+        #expect(renderer.lineDashPattern == nil, "the default line is unbroken")
+        #expect(renderer.pattern == .directional)
+
+        let context = try Fixture.modelContext()
+        let hike = Fixture.hike(in: context) { hike in
+            hike.routeWidth = 6
+            hike.routeLinePattern = .dashed
+        }
+        routeStyle.follow(hike)
+        await settle()
+
+        #expect(coordinator.routePattern == .dashed)
+        #expect(renderer.pattern == .dashed)
+        #expect(renderer.lineCap == .butt, "round caps would grow each dash into its own gap")
+        let dash = try #require(renderer.lineDashPattern).map(\.doubleValue)
+        #expect(dash == RouteLinePattern.dashed.dashLengths(forWidth: 6))
+        #expect(coordinator.routeOverlay === line, "restyling must not rebuild the line")
+
+        // …and back to an unbroken line: a stale dash pattern left on the
+        // renderer would keep drawing gaps the pattern no longer asks for.
+        hike.routeLinePattern = .solid
+        await settle()
+        #expect(renderer.lineDashPattern == nil)
+        #expect(renderer.pattern == .solid)
+    }
+
+    /// The one pattern that draws no line at all. `MKPolylineRenderer` can't
+    /// express that, so it's the subclass that has to skip its own stroke.
+    @Test("the arrowheads pattern tells the renderer to skip the line")
+    func arrowheadsPatternSkipsTheLine() async throws {
+        let coordinator = MapView.Coordinator()
+        let view = mapView(route: Self.route())
+        let map = makeMap(view, coordinator)
+        defer { detach(map) }
+        view.update(map, coordinator)
+
+        let line = try #require(coordinator.routeOverlay)
+        let renderer = try #require(coordinator.mapView(map, rendererFor: line) as? DirectionalPolylineRenderer)
+
+        let context = try Fixture.modelContext()
+        let hike = Fixture.hike(in: context) { $0.routeLinePattern = .arrowheads }
+        routeStyle.follow(hike)
+        await settle()
+
+        #expect(renderer.pattern.drawsLine == false)
+        #expect(renderer.pattern.drawsChevrons)
+    }
+
+    /// A renderer asked for *after* the style changed must be built in it —
+    /// selecting a hike and drawing its line are two separate events, and the
+    /// pattern arrives with the first.
+    @Test("a line drawn after the style changed is drawn in it")
+    func rendererAdoptsTheCurrentPattern() async throws {
+        let coordinator = MapView.Coordinator()
+        let view = mapView(route: Self.route())
+        let map = makeMap(view, coordinator)
+        defer { detach(map) }
+
+        let context = try Fixture.modelContext()
+        let hike = Fixture.hike(in: context) { hike in
+            hike.routeWidth = 5
+            hike.routeLinePattern = .dotted
+        }
+        routeStyle.follow(hike)
+        view.update(map, coordinator)
+        await settle()
+
+        let line = try #require(coordinator.routeOverlay)
+        let renderer = try #require(coordinator.mapView(map, rendererFor: line) as? DirectionalPolylineRenderer)
+        #expect(renderer.pattern == .dotted)
+        #expect(renderer.lineCap == .round, "a dot is a near-zero dash rounded off by its cap")
+        let dash = try #require(renderer.lineDashPattern).map(\.doubleValue)
+        #expect(dash == RouteLinePattern.dotted.dashLengths(forWidth: 5))
+    }
+
+    /// A recording is always the same red dashed trace: what is being recorded
+    /// right now must not depend on a per-hike appearance choice.
+    @Test("a per-hike pattern doesn't reach the recording trace")
+    func recordingTraceIgnoresThePattern() async throws {
+        let coordinator = MapView.Coordinator()
+        let map = makeMap(mapView(), coordinator)
+        defer { detach(map) }
+
+        let context = try Fixture.modelContext()
+        let hike = Fixture.hike(in: context) { $0.routeLinePattern = .arrowheads }
+        routeStyle.follow(hike)
+        await settle()
+
+        recordingTrace.append(CLLocationCoordinate2D(latitude: 47.63, longitude: 12.86))
+        recordingTrace.append(CLLocationCoordinate2D(latitude: 47.64, longitude: 12.86))
+        await settle()
+
+        let tail = try #require(coordinator.recordingTailOverlay)
+        let renderer = try #require(coordinator.mapView(map, rendererFor: tail) as? MKPolylineRenderer)
+        #expect(!(renderer is DirectionalPolylineRenderer))
+        #expect(renderer.lineWidth == 4)
+        #expect(renderer.lineDashPattern == [10, 6])
+    }
+
     // MARK: Recentering
 
     /// The map centres on the user's first fix — once. A second fix a second

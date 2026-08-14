@@ -57,6 +57,13 @@ nonisolated extension Color {
         return Color(.sRGB, red: c.r, green: c.g, blue: c.b, opacity: 1)
     }
 
+    /// Perceived brightness, 0…1 — how the route line's own colour decides what
+    /// reads on top of it. See ``RouteChevronShade``.
+    var luminance: Double {
+        let c = rgba
+        return RouteChevronShade.luminance(red: c.r, green: c.g, blue: c.b)
+    }
+
     /// Parses "#RRGGBB" or "#RRGGBBAA" (with or without the leading `#`).
     init?(hex: String) {
         var s = hex.trimmingCharacters(in: .whitespacesAndNewlines)

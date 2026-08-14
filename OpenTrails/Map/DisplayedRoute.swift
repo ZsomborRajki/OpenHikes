@@ -20,8 +20,8 @@ struct DisplayedRoute: Equatable {
     /// and avoids an O(n) array diff on every SwiftUI update.
     ///
     /// Tint and width are excluded because they aren't here: they live in
-    /// ``RouteStyle``, so a colour or width drag never reaches this value —
-    /// and therefore never reaches the view that builds it.
+    /// ``RouteStyle``, so a colour, width or pattern drag never reaches this
+    /// value — and therefore never reaches the view that builds it.
     static func == (lhs: Self, rhs: Self) -> Bool {
         lhs.id == rhs.id
     }
@@ -65,11 +65,12 @@ final class DisplayedRouteCoordinateCache {
     }
 }
 
-/// The drawn route's tint and width, held in a reference type so the two
-/// controls that write them — a `ColorPicker` drag and a `Slider` drag, both
-/// continuous — never re-render a SwiftUI view above the map. The map observes
-/// this directly and restyles its existing polyline renderer in place; the same
-/// technique ``RouteHighlight`` and ``SheetMetrics`` use.
+/// The drawn route's tint, width and line pattern, held in a reference type so
+/// the controls that write them — a `ColorPicker` drag, a `Slider` drag, both
+/// continuous, and the pattern picker — never re-render a SwiftUI view above
+/// the map. The map observes this directly and restyles its existing polyline
+/// renderer in place; the same technique ``RouteHighlight`` and ``SheetMetrics``
+/// use.
 ///
 /// The hike remains the source of truth (it is what persists, and what the
 /// detail view's controls write). This follows it rather than being written
@@ -89,13 +90,15 @@ final class RouteStyle {
     /// than a third set of values to reason about.
     static let defaultTint: Color = .green
     static let defaultWidth: Double = 3
+    static let defaultPattern: RouteLinePattern = .default
 
-    /// Written only through ``apply(tint:width:)``, which filters a write that
-    /// changes nothing — the map's observer is one `Task` hop and a renderer
-    /// invalidation away, and a drag that returns a colour to where it already
-    /// was shouldn't pay for either.
+    /// Written only through ``apply(tint:width:pattern:)``, which filters a
+    /// write that changes nothing — the map's observer is one `Task` hop and a
+    /// renderer invalidation away, and a drag that returns a colour to where it
+    /// already was shouldn't pay for either.
     private(set) var tint: Color = defaultTint
     private(set) var width: Double = defaultWidth
+    private(set) var pattern: RouteLinePattern = defaultPattern
 
     /// Identifies the current registration. A `withObservationTracking`
     /// callback can only be cancelled by ignoring it, so a notification still
@@ -107,17 +110,18 @@ final class RouteStyle {
     /// The hike currently being tracked for style changes.
     @ObservationIgnored private var trackedHike: Hike?
 
-    /// Tracks `hike`'s tint and width, or resets to the defaults with `nil`.
+    /// Tracks `hike`'s tint, width and line pattern, or resets to the defaults
+    /// with `nil`.
     ///
     /// Called from `OpenTrailsView`'s selection change handler — deliberately not
     /// from its `body`, which is the entire point of this type.
     func follow(_ hike: Hike?) {
         generation &+= 1
         guard let hike else {
-            apply(tint: Self.defaultTint, width: Self.defaultWidth)
+            apply(tint: Self.defaultTint, width: Self.defaultWidth, pattern: Self.defaultPattern)
             return
         }
-        apply(tint: hike.tint, width: hike.routeWidth)
+        apply(tint: hike.tint, width: hike.routeWidth, pattern: hike.routeLinePattern)
         trackedHike = hike
         track(generation: generation)
     }
@@ -132,18 +136,24 @@ final class RouteStyle {
         withObservationTracking {
             _ = hike.tint
             _ = hike.routeWidth
+            _ = hike.routeLinePatternID
         } onChange: { [weak self] in
             guard let self else { return }
             Task { @MainActor in
                 guard generation == self.generation, let followed = self.trackedHike else { return }
-                self.apply(tint: followed.tint, width: followed.routeWidth)
+                self.apply(
+                    tint: followed.tint,
+                    width: followed.routeWidth,
+                    pattern: followed.routeLinePattern
+                )
                 self.track(generation: generation)
             }
         }
     }
 
-    private func apply(tint: Color, width: Double) {
+    private func apply(tint: Color, width: Double, pattern: RouteLinePattern) {
         if self.tint != tint { self.tint = tint }
         if self.width != width { self.width = width }
+        if self.pattern != pattern { self.pattern = pattern }
     }
 }
