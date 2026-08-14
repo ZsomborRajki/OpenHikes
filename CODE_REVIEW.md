@@ -1,112 +1,10 @@
 # OpenTrails code review
 
-Originally reviewed at `fd12790` on 2026-08-14 with Xcode 26.6 and an
-iOS 26.5 iPhone 17 Pro simulator. P1 and P2 remediation was verified on
-2026-08-14.
-
-All P1 and P2 findings have been resolved and removed from this open-issues
-document. The remaining P3 findings retain their original numbers so references
-to the initial review remain stable.
-
-The current tree contains 160 Swift files and 38,207 lines, plus project and
+The current tree contains 165 Swift files and 39,533 lines, plus project and
 package configuration, scripts, entitlements, tests, and documentation. The
 review focuses on correctness, concurrency, maintainability, current API use,
 and especially battery, radio, CPU, and disk activity during a hike.
 
-Priority meanings:
-
-- **P1:** high user impact, sustained energy drain, or data-loss/error-recovery risk.
-- **P2:** important correctness, concurrency, performance, or build reliability issue.
-- **P3:** bounded issue, refactor, test gap, or measurement-driven optimization.
-
-There are no outstanding P0, P1, or P2 findings. The recording pipeline is
-generally disciplined: location and sensor lifetimes are explicit, matching
-work is bounded and off-main, weather polling is backoff-driven, widget
-sampling is sparse, and the tile pipeline has useful concurrency limits.
-
-## P3 findings and refactors
-
-### 15. `MapSheet` likely observes more SwiftData changes than it renders
-
-**Evidence:** `OpenTrails/Map/MapSheet.swift:42-43`.
-
-Its broad `@Query` returns full `Hike` models. Route-style writes and tile-key
-updates can therefore invalidate the sheet even though rows do not render those
-fields. This is plausible from SwiftData's observation model but should be
-measured before redesigning.
-
-**Action:** add the sheet-isolation test already proposed by the repository,
-then narrow the observed projection only if the test confirms invalidation.
-
-### 16. Per-key tile mutation versions grow for the process lifetime
-
-**Evidence:** `OpenTrails/Tiles/Cache/TileCache+StorageManagement.swift:217-232`,
-`OpenTrails/Tiles/Cache/TileCache.swift:167-174`.
-
-Every deleted key increments an entry that is never removed. A deletion-heavy
-session can add thousands of entries per hike.
-
-**Action:** use a global epoch for broad deletion or implement safe compaction.
-Do not simply clear entries, because that can make an old token valid again.
-
-### 17. Rapid map commands can fall into an observation re-arm gap
-
-**Evidence:** `OpenTrails/Map/MapCoordinator.swift:108-134` and sibling
-observers.
-
-`withObservationTracking` fires once. Re-arming happens after a dispatched
-main-actor task, so two changes in one run-loop turn can lose the second
-notification. Current commands are mostly idempotent, limiting impact.
-
-**Action:** re-arm before the async hop or re-check the latest request counter
-after re-arming. Add a two-mutations-in-one-turn test.
-
-### 18. Hike detail preparation performs two full route walks
-
-**Evidence:** `OpenTrails/Hikes/HikeDetailView.swift:31-36`.
-
-Statistics and `RouteProfile` independently calculate per-segment distances.
-This is already off-main and cancellable, so it is a latency/CPU refactor rather
-than UI correctness work.
-
-**Action:** produce both outputs in one pass and share cumulative distances.
-
-### 19. Convenience statistics recompute the route on every property read
-
-**Evidence:** `OpenTrails/Hikes/Hike+Statistics.swift:180-205`.
-
-Each convenience property rebuilds `HikeRouteStatistics`. Production currently
-uses the prepared off-main statistics instead, making this mostly unused and a
-future footgun.
-
-**Action:** remove the unused properties or cache a versioned statistics value.
-
-### 20. Two foreground location managers duplicate software work
-
-`LocationManager` and `SystemRecordingLocationSource` both receive updates
-during an active recording. iOS coalesces same-process location demand, so this
-does not imply twice the GPS hardware power, but it does duplicate delegates,
-authorization handling, and actor hops.
-
-**Action:** keep the separation unless profiling shows meaningful CPU overhead;
-its lifecycle isolation is valuable. If consolidated later, preserve the
-recording manager's independent background semantics.
-
-### 21. The auto-save controller wakes every two seconds while foregrounded
-
-**Evidence:** `OpenTrails/Tiles/AutoSave/AutoSaveController.swift:45-56`.
-
-The early-return work is small, so this is not a confirmed battery bug.
-Nevertheless, the task wakes for the app's foreground lifetime even when no
-hike is selected.
-
-The interval is now injectable, and `nil` disables the timer — the tests take
-that option, because a suspension-rollback assertion otherwise raced a
-two-second production timer under a parallel run. That removes the test
-dependency on wall-clock time; it does not address the foreground wakeups.
-
-**Action:** measure wakeups in Energy Log. If visible, replace polling with an
-event-driven drain plus a scheduled retry only while pending work exists.
 
 ## Test and project hygiene
 
@@ -126,16 +24,6 @@ runtimes; normal debug and release builds are warning-free.
 
 ## API and dependency assessment
 
-- Current iOS debug, iOS release, and macOS builds produce no deprecated-API
-  diagnostics.
-- No mandatory migration from the current MapKit, Core Location, WeatherKit,
-  WidgetKit, SwiftData, or observation APIs was found.
-- `swift-collections`, `swift-algorithms`, and `swift-async-algorithms` are used
-  for appropriate problems and should remain.
-- GPX import now uses the local Foundation XML parser. CoreGPX and its unsafe
-  C-variadic date parser are no longer dependencies.
-- No new third-party package is recommended. The important lifecycle,
-  cancellation, retry, and ownership fixes are implemented locally.
 - For battery telemetry, prefer native Instruments, signposts, and current
   MetricKit reporting rather than an analytics SDK that adds its own network
   and background cost.
@@ -164,7 +52,7 @@ using a universal percentage-per-hour target.
 |---|---|
 | Strict SwiftLint | Passed |
 | Shared package tests | 51 tests in 8 suites passed with warnings treated as errors |
-| App and widget unit tests | Passed with strict suite preconditions enabled |
+| App and widget unit tests | 584 tests in 68 suites plus 19 widget tests in 3 suites passed with strict suite preconditions enabled |
 | iOS debug build | Passed with first-party Swift warnings treated as errors |
 | iOS release build | Passed with first-party Swift warnings treated as errors |
 | macOS compile | Passed with code signing disabled |
@@ -185,3 +73,17 @@ These remain product choices rather than correctness findings:
    matching in places the user has never visited.
 3. **Widget takeover:** a live recording currently replaces the selected hike
    rather than appearing as a badge or secondary state.
+4. **Two foreground location managers** (originally finding 20): `LocationManager`
+   and `SystemRecordingLocationSource` each own a `CLLocationManager`, and both
+   receive updates during an active recording. This was verified rather than
+   assumed — the foreground manager never stops once started, and the recording
+   source asks for `kCLLocationAccuracyBest` with a 10 m filter against the
+   foreground manager's ten-meter/25 m baseline. iOS coalesces same-process
+   location demand to the most demanding request, so this does not imply twice
+   the GPS hardware power; what it duplicates is delegate dispatch,
+   authorization handling, and actor hops. The separation is kept deliberately:
+   the recording source owns background semantics (`allowsBackgroundLocationUpdates`,
+   a `CLBackgroundActivitySession`, and no automatic pausing) that must not
+   leak into ordinary map browsing. Revisit only if a device energy trace shows
+   meaningful CPU overhead, and preserve those background semantics if the two
+   are ever consolidated.

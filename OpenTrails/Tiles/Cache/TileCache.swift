@@ -163,15 +163,10 @@ nonisolated final class TileCache: @unchecked Sendable {
         let key: UInt64
     }
 
-    struct MutationVersions {
-        var global: UInt64 = 0
-        var keys: [String: UInt64] = [:]
-    }
-
     /// Orders disk/memory writes against explicit deletion. A fetch captures
     /// a token before awaiting the network; deleting that key invalidates the
     /// token so the late response cannot put the tile back.
-    let mutationVersions = Mutex(MutationVersions())
+    let mutationVersions: Mutex<MutationVersions>
 
     /// Weakly-held reconnect listeners. A boxed array keeps the reference weak so
     /// a deallocated renderer drops out without needing to unregister.
@@ -206,11 +201,16 @@ nonisolated final class TileCache: @unchecked Sendable {
     ///   - monitorsNetwork: `false` leaves reachability wherever
     ///     `setReachable(_:)` puts it, so a test isn't at the mercy of the
     ///     machine's own connection.
+    ///   - mutationKeyLimit: how many per-key deletion versions are held
+    ///     before the table is compacted. A test lowers it to reach
+    ///     compaction in a handful of deletions.
     init(
         storageRoot: URL? = nil,
         sessionConfiguration: URLSessionConfiguration? = nil,
-        monitorsNetwork: Bool = true
+        monitorsNetwork: Bool = true,
+        mutationKeyLimit: Int = TileCache.mutationKeyVersionLimit
     ) {
+        mutationVersions = Mutex(MutationVersions(keyLimit: mutationKeyLimit))
         let cacheRoot = storageRoot ?? FileManager.default.urls(for: .cachesDirectory, in: .userDomainMask)[0]
         let appSupportURLs = FileManager.default.urls(
             for: .applicationSupportDirectory, in: .userDomainMask

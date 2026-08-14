@@ -5,6 +5,7 @@
 //  Derived statistics computed from a Hike's route points.
 //
 
+import CoreLocation
 import Foundation
 
 nonisolated struct HikeRouteStatistics: Sendable {
@@ -29,10 +30,18 @@ nonisolated struct HikeRouteStatistics: Sendable {
             return lastTimestamp.timeIntervalSince(firstTimestamp)
         }
 
-        mutating func consume(_ point: RouteCoordinate) {
+        /// - Parameter segmentMeters: distance from the previous point, or 0
+        ///   for the first. A closure because the caller that already has the
+        ///   number — ``RouteProfile``'s walk — should hand it over for free,
+        ///   while the caller that doesn't shouldn't pay for the trigonometry
+        ///   on the segments speed can't use anyway.
+        mutating func consume(
+            _ point: RouteCoordinate,
+            segmentMeters: () -> Double
+        ) {
             record(timestamp: point.timestamp)
             record(elevation: point.elevation)
-            recordSpeed(to: point)
+            recordSpeed(to: point, segmentMeters: segmentMeters)
             previousPoint = point
         }
 
@@ -64,7 +73,10 @@ nonisolated struct HikeRouteStatistics: Sendable {
             previousElevation = elevation
         }
 
-        private mutating func recordSpeed(to point: RouteCoordinate) {
+        private mutating func recordSpeed(
+            to point: RouteCoordinate,
+            segmentMeters: () -> Double
+        ) {
             guard let previousPoint,
                   let previousTimestamp = previousPoint.timestamp,
                   let timestamp = point.timestamp else {
@@ -74,13 +86,9 @@ nonisolated struct HikeRouteStatistics: Sendable {
             guard elapsed > 0 else {
                 return
             }
-            let segmentMeters = RouteGeometry.distanceMeters(
-                from: previousPoint.clCoordinate,
-                to: point.clCoordinate
-            )
             fastestMetersPerSecond = max(
                 fastestMetersPerSecond,
-                segmentMeters / elapsed
+                segmentMeters() / elapsed
             )
         }
     }
@@ -96,39 +104,63 @@ nonisolated struct HikeRouteStatistics: Sendable {
     let averageSpeed: Measurement<UnitSpeed>?
     let maxSpeed: Measurement<UnitSpeed>?
 
-    init(distanceMeters: Double, route: [RouteCoordinate]) {
-        var accumulator = Accumulator()
-        for point in route {
-            accumulator.consume(point)
+    /// Feeds the accumulator one point at a time, so a caller that is already
+    /// walking the route can produce these statistics from that same pass.
+    ///
+    /// Opening a hike used to walk its route twice — once here and once in
+    /// ``RouteProfile`` — and each walk computed its own per-segment
+    /// distances, which is the expensive part. ``RouteProfile`` computes them
+    /// unconditionally (they are its cumulative index), so it now drives this
+    /// builder as it goes and the second walk is gone.
+    struct Builder {
+        private let distanceMeters: Double
+        private var accumulator = Accumulator()
+        private var pointCount = 0
+
+        init(distanceMeters: Double) {
+            self.distanceMeters = distanceMeters
         }
-        self.init(
-            distanceMeters: distanceMeters,
-            pointCount: route.count,
-            accumulator: accumulator
-        )
+
+        /// - Parameter segmentMeters: distance from the previously consumed
+        ///   point, or 0 for the first. Evaluated only for the segments that
+        ///   can carry a speed — see ``Accumulator/consume(_:segmentMeters:)``.
+        mutating func consume(
+            _ point: RouteCoordinate,
+            segmentMeters: @autoclosure () -> Double
+        ) {
+            pointCount += 1
+            accumulator.consume(point, segmentMeters: segmentMeters)
+        }
+
+        consuming func finish() -> HikeRouteStatistics {
+            HikeRouteStatistics(
+                distanceMeters: distanceMeters,
+                pointCount: pointCount,
+                accumulator: accumulator
+            )
+        }
     }
 
-    static func cancellable(
-        distanceMeters: Double,
-        route: [RouteCoordinate]
-    ) throws(CancellationError) -> Self {
-        var accumulator = Accumulator()
-        for (index, point) in route.enumerated() {
-            if index.isMultiple(of: 255) {
-                guard !Task.isCancelled else {
-                    throw CancellationError()
-                }
-            }
-            accumulator.consume(point)
+    /// Walks `route` on its own, computing the per-segment distances it needs.
+    ///
+    /// The hike detail path goes through ``Builder`` instead, driven by the
+    /// walk ``RouteProfile`` performs anyway; this is for callers with nothing
+    /// else to walk for.
+    init(distanceMeters: Double, route: [RouteCoordinate]) {
+        var builder = Builder(distanceMeters: distanceMeters)
+        var previous: CLLocationCoordinate2D?
+        for point in route {
+            let coordinate = point.clCoordinate
+            let origin = previous
+            previous = coordinate
+            builder.consume(
+                point,
+                segmentMeters: origin.map { start in
+                    RouteGeometry.distanceMeters(from: start, to: coordinate)
+                } ?? 0
+            )
         }
-        guard !Task.isCancelled else {
-            throw CancellationError()
-        }
-        return Self(
-            distanceMeters: distanceMeters,
-            pointCount: route.count,
-            accumulator: accumulator
-        )
+        self = builder.finish()
     }
 
     private init(
@@ -177,29 +209,17 @@ nonisolated struct HikeRouteStatistics: Sendable {
 extension Hike {
     var pointCount: Int { route.count }
 
-    private var routeStatistics: HikeRouteStatistics {
+    /// Every derived statistic — duration, gain and loss, the two speeds —
+    /// comes from ``HikeRouteStatistics``, built once off the main thread by
+    /// ``HikeDetailPreparation``.
+    ///
+    /// There were convenience properties here that wrapped it, one per stat.
+    /// Each one rebuilt the whole thing, so reading four of them walked the
+    /// route four times, on whatever thread happened to ask — which for a
+    /// SwiftUI body is the main one. Nothing in the app read them; they were a
+    /// trap laid for the next person who needed a number in a view. Build the
+    /// statistics once and read the fields off it instead.
+    var routeStatistics: HikeRouteStatistics {
         HikeRouteStatistics(distanceMeters: distanceMeters, route: route)
     }
-
-    var startDate: Date? { routeStatistics.startDate }
-    var endDate: Date? { routeStatistics.endDate }
-
-    /// Elapsed time between the first and last timestamped points.
-    var duration: TimeInterval? { routeStatistics.duration }
-
-    var maxElevation: Measurement<UnitLength>? { routeStatistics.maxElevation }
-
-    var minElevation: Measurement<UnitLength>? { routeStatistics.minElevation }
-
-    /// Cumulative climb over all points (sum of positive elevation deltas).
-    var elevationGain: Measurement<UnitLength>? { routeStatistics.elevationGain }
-
-    /// Cumulative descent over all points (sum of negative elevation deltas).
-    var elevationLoss: Measurement<UnitLength>? { routeStatistics.elevationLoss }
-
-    /// Distance ÷ moving time.
-    var averageSpeed: Measurement<UnitSpeed>? { routeStatistics.averageSpeed }
-
-    /// Fastest instantaneous pace between two consecutive timestamped points.
-    var maxSpeed: Measurement<UnitSpeed>? { routeStatistics.maxSpeed }
 }

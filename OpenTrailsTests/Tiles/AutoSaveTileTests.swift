@@ -558,12 +558,12 @@ struct AutoSaveLifecycleTests {
     /// `sceneWillResignActive` appends the pending snapshot to the manifest
     /// and rolls it back if the save throws. The rollback removes by *count*
     /// (`removeSubrange(previousCount...)`), which is only correct while
-    /// nothing else has appended in between — and `flushPendingKeys` runs on a
-    /// two-second timer that is not stopped for the duration.
+    /// nothing else has appended in between — and `flushPendingKeys` also runs
+    /// from the controller's drain task, which is not stopped for the duration.
     ///
-    /// Pinned rather than fixed: the window is small and the timer is
+    /// Pinned rather than fixed: the window is small and the drain is
     /// main-actor bound, so today the two can't interleave. It becomes a real
-    /// corruption the moment any flush moves off that timer.
+    /// corruption the moment any flush moves off the main actor.
     @Test("a failed suspension save leaves the manifest exactly as it found it")
     func failedSuspensionSaveRestoresTheManifest() async throws {
         let context = try Fixture.modelContext()

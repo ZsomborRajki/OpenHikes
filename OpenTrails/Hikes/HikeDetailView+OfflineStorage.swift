@@ -53,8 +53,8 @@ extension HikeDetailView {
     /// which remaps the whole route) — everything expensive (tile-grid
     /// enumeration across every download record, the keys `Set` union, and the
     /// disk stat calls) happens inside the detached task. Auto-save manifest
-    /// changes reach this through ``scheduleStoredBytesRefresh()`` so repeated
-    /// two-second drains collapse into one trailing measurement.
+    /// changes reach this through ``scheduleStoredBytesRefresh()`` so a run of
+    /// drains collapses into one trailing measurement.
     func refreshStoredBytes() {
         invalidateStoredBytesMeasurement()
         let route = hike.route

@@ -50,6 +50,10 @@ nonisolated final class AutoSaveTileStore: Sendable {
 
     private let state = Mutex<ActiveHike?>(nil)
 
+    /// Consumers waiting to hear that a tile has been claimed, keyed so a
+    /// finished one drops out of its own accord.
+    private let pendingObservers = Mutex([UUID: AsyncStream<Void>.Continuation]())
+
     /// Where claimed tiles are promoted from browsing storage to durable
     /// storage. Injectable for the same reason ``TileCache/init(storageRoot:sessionConfiguration:monitorsNetwork:)``
     /// takes a root: a test gets a store with its own directories and its own
@@ -152,9 +156,48 @@ nonisolated final class AutoSaveTileStore: Sendable {
             }
             return
         }
+        if claim.isNewKey {
+            signalPendingKeys()
+        }
         #if DEBUG
         Self.logger.debug("Auto-saved tile \(key, privacy: .public)")
         #endif
+    }
+
+    /// A signal each time a tile is newly claimed for the active hike and its
+    /// bytes are durably on disk — that is, each time there is something for
+    /// ``AutoSaveController`` to fold into the hike's manifest.
+    ///
+    /// The controller used to poll for this every two seconds for the app's
+    /// whole foreground lifetime, whether or not a hike was even selected.
+    /// Waiting on this instead means it wakes when tiles are actually being
+    /// saved and not otherwise.
+    ///
+    /// `bufferingNewest(1)`: the payload is "there is work", not "here is a
+    /// key", so a screenful of tiles arriving in one draw pass has to collapse
+    /// into one wake-up rather than one per tile.
+    func pendingKeySignals() -> AsyncStream<Void> {
+        let id = UUID()
+        let (stream, continuation) = AsyncStream<Void>.makeStream(
+            bufferingPolicy: .bufferingNewest(1)
+        )
+        continuation.onTermination = { [weak self] _ in
+            self?.pendingObservers.withLock { observers in observers[id] = nil }
+        }
+        pendingObservers.withLock { observers in observers[id] = continuation }
+        return stream
+    }
+
+    /// Deliberately outside the state lock: this is called from the tile
+    /// thread, and nothing a consumer does in response belongs inside the lock
+    /// that the tile thread needs to claim the next tile.
+    private func signalPendingKeys() {
+        let observers = pendingObservers.withLock { observers in
+            Array(observers.values)
+        }
+        for continuation in observers {
+            continuation.yield()
+        }
     }
 
     /// Gives back a claim taken by `considerPersisting` whose tile never made it

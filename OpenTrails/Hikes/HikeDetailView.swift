@@ -20,6 +20,14 @@ nonisolated enum HikeDetailPreparation {
     /// caller's task, so `.task(id:)` tearing down the view cancels the
     /// profile build without a hand-written cancellation handler, and the
     /// route-sized work still runs on the concurrent executor.
+    ///
+    /// One walk, not two. The profile's cumulative index and the statistics'
+    /// max speed both need the distance between consecutive points, and that
+    /// trigonometry is what a long route costs; the profile hands each segment
+    /// to the statistics builder as it computes it. Cancellation is the
+    /// profile's, so a torn-down view never builds statistics from a partial
+    /// route — the walk throws before ``HikeRouteStatistics/Builder/finish()``
+    /// is reached.
     @concurrent
     static func prepare(
         route: [RouteCoordinate],
@@ -28,15 +36,15 @@ nonisolated enum HikeDetailPreparation {
         assertOffMainThread(
             "Hike detail route preparation must stay off the main thread"
         )
-        let statistics = try HikeRouteStatistics.cancellable(
-            distanceMeters: distanceMeters,
-            route: route
-        )
+        var statistics = HikeRouteStatistics.Builder(distanceMeters: distanceMeters)
+        let profile = try RouteProfile.cancellable(route: route) { point, segmentMeters in
+            statistics.consume(point, segmentMeters: segmentMeters)
+        }
         return HikeDetailPreparedContent(
-            profile: try RouteProfile.cancellable(route: route),
+            profile: profile,
             stats: makeStats(
                 distanceMeters: distanceMeters,
-                statistics: statistics
+                statistics: statistics.finish()
             )
         )
     }

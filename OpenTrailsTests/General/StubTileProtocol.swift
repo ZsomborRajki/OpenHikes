@@ -169,11 +169,12 @@ struct StubbedTileCache {
     var store: AutoSaveTileStore { sandbox.store }
     var root: URL { sandbox.root }
 
-    init(reachable: Bool = true) {
+    init(reachable: Bool = true, mutationKeyLimit: Int = TileCache.mutationKeyVersionLimit) {
         StubTileProtocol.reset()
         sandbox = TileSandbox(
             reachable: reachable,
-            sessionConfiguration: StubTileProtocol.sessionConfiguration()
+            sessionConfiguration: StubTileProtocol.sessionConfiguration(),
+            mutationKeyLimit: mutationKeyLimit
         )
     }
 

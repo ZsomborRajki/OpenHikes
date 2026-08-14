@@ -25,9 +25,9 @@ import Testing
 
 @Suite("Tile transport", .serialized)
 struct TileTransportTests {
-    private let key = "osm/14/2638/6357@2.0"
+    let key = "osm/14/2638/6357@2.0"
 
-    private func url(_ suffix: String = "14/2638/6357.png") -> URL {
+    func url(_ suffix: String = "14/2638/6357.png") -> URL {
         guard let url = URL(string: "https://tiles.example.invalid/\(suffix)") else {
             preconditionFailure("Invalid test URL suffix: \(suffix)")
         }

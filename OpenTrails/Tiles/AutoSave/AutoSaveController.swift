@@ -34,19 +34,28 @@ final class AutoSaveController {
     /// process-wide singleton the app uses.
     @ObservationIgnored private let store: AutoSaveTileStore
 
-    /// How often pending keys are folded into the active hike's manifest.
+    /// How long a burst of newly-saved tiles is allowed to gather before it is
+    /// folded into the active hike's manifest.
     ///
-    /// Injectable, and `nil` disables the timer entirely, because a suite that
+    /// This is a coalescing window, not a poll: the task waits on
+    /// ``AutoSaveTileStore/pendingKeySignals()`` and only sleeps once it has
+    /// been told there is something to fold. Drawing a screenful of tiles
+    /// therefore costs one wake-up rather than one per tile, and an app
+    /// sitting in the foreground with nothing being saved — no hike selected,
+    /// auto-save off, the map not moving — costs none at all. It used to wake
+    /// every two seconds regardless, for as long as the app was frontmost.
+    ///
+    /// Injectable, and `nil` disables the drain entirely, because a suite that
     /// asserts on *when* a key moves from the store to the manifest — the
-    /// suspension-rollback tests — otherwise races this. Under a parallel run
-    /// those tests can sit behind the main actor for longer than the interval,
-    /// at which point the timer drains the very keys the test is about to
+    /// suspension-rollback tests — otherwise races it. Under a parallel run
+    /// those tests can sit behind the main actor for longer than the window,
+    /// at which point the drain folds the very keys the test is about to
     /// inspect. Tests that want the fold call ``flushPendingKeys()`` directly.
     init(store: AutoSaveTileStore = .shared, drainInterval: Duration? = .seconds(2)) {
         self.store = store
         guard let drainInterval else { return }
-        drainTask = Task { [weak self] in
-            while true {
+        drainTask = Task { [weak self, store] in
+            for await _ in store.pendingKeySignals() {
                 try? await Task.sleep(for: drainInterval)
                 guard let self, !Task.isCancelled else { break }
                 flushPendingKeys()
@@ -129,10 +138,13 @@ final class AutoSaveController {
             deferredHike = nil
             hasDeferredSelectionChange = false
             applySelection(hike)
-            return
+        } else if let hike = activeHike {
+            store.resumePersisting(for: hike.id)
         }
-        guard let hike = activeHike else { return }
-        store.resumePersisting(for: hike.id)
+        // The drain is signal-driven, and nothing signals while the scene is
+        // inactive — so anything `sceneWillResignActive` couldn't acknowledge
+        // is folded in here rather than waiting for the next tile to be drawn.
+        flushPendingKeys()
     }
 
     /// Called just before `hike` is deleted, so the delete that follows sees a
@@ -249,11 +261,11 @@ final class AutoSaveController {
     }
 
     /// Folds tiles persisted since the last pass into the active hike's
-    /// manifest. Runs on a timer, and must also be called directly before any
-    /// code that reads manifests to decide which tiles are still spoken for:
-    /// until this runs, the newest tiles exist on disk with nothing in
-    /// SwiftData pointing at them, and `deactivate()` discards the in-memory
-    /// record that would have found them.
+    /// manifest. Runs from the controller's signal-driven drain, and must also
+    /// be called directly before any code that reads manifests to decide which
+    /// tiles are still spoken for: until this runs, the newest tiles exist on
+    /// disk with nothing in SwiftData pointing at them, and `deactivate()`
+    /// discards the in-memory record that would have found them.
     func flushPendingKeys() {
         guard !isSuspended else { return }
         flushPendingKeysIgnoringSuspension()

@@ -72,13 +72,27 @@ nonisolated struct RouteProfile: Sendable {
     private let sampleDistances: [Double]
 
     init(route: [RouteCoordinate]) {
-        self = Self.build(route: route) { true }
+        self = Self.build(
+            route: route,
+            onPoint: { _, _ in /* nothing else needs the walk */ },
+            shouldContinue: { true }
+        )
     }
 
+    /// - Parameter onPoint: called once per route point, in order, with the
+    ///   distance from the previous point (0 for the first). The walk below
+    ///   computes those distances to build ``distances``, so a caller that
+    ///   needs them for something else — ``HikeDetailPreparation`` building
+    ///   ``HikeRouteStatistics`` — can take them from here rather than walking
+    ///   the route a second time to recompute the same trigonometry.
+    ///
+    ///   Not called for the points after a cancellation, since this throws
+    ///   rather than returning a partial profile.
     static func cancellable(
-        route: [RouteCoordinate]
+        route: [RouteCoordinate],
+        onPoint: (RouteCoordinate, Double) -> Void = { _, _ in /* no-op default */ }
     ) throws(CancellationError) -> Self {
-        let profile = Self.build(route: route) {
+        let profile = Self.build(route: route, onPoint: onPoint) {
             !Task.isCancelled
         }
         guard !Task.isCancelled else {
@@ -100,6 +114,7 @@ nonisolated struct RouteProfile: Sendable {
 
     private static func build(
         route: [RouteCoordinate],
+        onPoint: (RouteCoordinate, Double) -> Void,
         shouldContinue: () -> Bool
     ) -> Self {
         var routeCoordinates: [CLLocationCoordinate2D] = []
@@ -115,8 +130,10 @@ nonisolated struct RouteProfile: Sendable {
                 break
             }
             let coordinate = point.clCoordinate
+            var segment = 0.0
             if let previous {
-                cumulative += RouteGeometry.distanceMeters(from: previous, to: coordinate)
+                segment = RouteGeometry.distanceMeters(from: previous, to: coordinate)
+                cumulative += segment
             }
             previous = coordinate
             routeCoordinates.append(coordinate)
@@ -124,6 +141,7 @@ nonisolated struct RouteProfile: Sendable {
             if let elevation = point.elevation {
                 routeSamples.append(ElevationSample(distanceMeters: cumulative, elevation: elevation))
             }
+            onPoint(point, segment)
         }
 
         let plotted = Self.downsampledForDrawing(routeSamples)

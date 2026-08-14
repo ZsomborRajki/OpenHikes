@@ -2,9 +2,9 @@
 //  HikeStatisticsTests.swift
 //  OpenTrailsTests
 //
-//  Every tile in the hike detail view's stats grid comes from these derived
-//  properties. They're computed from the raw track points, which — coming
-//  from arbitrary GPX files — are routinely missing elevation, missing
+//  Every tile in the hike detail view's stats grid comes from
+//  ``HikeRouteStatistics``. It's computed from the raw track points, which —
+//  coming from arbitrary GPX files — are routinely missing elevation, missing
 //  timestamps, or carrying timestamps that don't advance. Each stat has to
 //  either produce a defensible number or decline to appear at all; there is
 //  no third option, because a wrong number looks exactly like a right one.
@@ -32,11 +32,11 @@ struct HikeStatisticsTests {
     /// extremes (which would report 160 of climb and none of the descent).
     @Test("gain and loss accumulate every step, not just the extremes")
     func elevationGainAndLoss() throws {
-        let hike = Fixture.hike(in: context)
-        #expect(try #require(hike.elevationGain).converted(to: .meters).value == 200)
-        #expect(try #require(hike.elevationLoss).converted(to: .meters).value == 60)
-        #expect(try #require(hike.maxElevation).converted(to: .meters).value == 260)
-        #expect(try #require(hike.minElevation).converted(to: .meters).value == 100)
+        let stats = Fixture.hike(in: context).routeStatistics
+        #expect(try #require(stats.elevationGain).converted(to: .meters).value == 200)
+        #expect(try #require(stats.elevationLoss).converted(to: .meters).value == 60)
+        #expect(try #require(stats.maxElevation).converted(to: .meters).value == 260)
+        #expect(try #require(stats.minElevation).converted(to: .meters).value == 100)
     }
 
     @Test("a route without elevation reports no elevation stats")
@@ -45,11 +45,11 @@ struct HikeStatisticsTests {
             RouteCoordinate(latitude: 47.63, longitude: 12.86),
             RouteCoordinate(latitude: 47.64, longitude: 12.86),
         ]
-        let hike = Fixture.hike(in: context, route: route)
-        #expect(hike.elevationGain == nil)
-        #expect(hike.elevationLoss == nil)
-        #expect(hike.maxElevation == nil)
-        #expect(hike.minElevation == nil)
+        let stats = Fixture.hike(in: context, route: route).routeStatistics
+        #expect(stats.elevationGain == nil)
+        #expect(stats.elevationLoss == nil)
+        #expect(stats.maxElevation == nil)
+        #expect(stats.minElevation == nil)
     }
 
     /// One elevation reading is a measurement, not a profile — there's no
@@ -60,10 +60,10 @@ struct HikeStatisticsTests {
             RouteCoordinate(latitude: 47.63, longitude: 12.86, elevation: 600),
             RouteCoordinate(latitude: 47.64, longitude: 12.86),
         ]
-        let hike = Fixture.hike(in: context, route: route)
-        #expect(hike.elevationGain == nil)
-        #expect(hike.elevationLoss == nil)
-        #expect(hike.maxElevation?.value == 600)
+        let stats = Fixture.hike(in: context, route: route).routeStatistics
+        #expect(stats.elevationGain == nil)
+        #expect(stats.elevationLoss == nil)
+        #expect(stats.maxElevation?.value == 600)
     }
 
     /// A flat stretch is neither climb nor descent — deltas of exactly zero
@@ -73,19 +73,19 @@ struct HikeStatisticsTests {
         let route = (0..<4).map { idx in
             RouteCoordinate(latitude: 47.63 + Double(idx) * 0.001, longitude: 12.86, elevation: 600)
         }
-        let hike = Fixture.hike(in: context, route: route)
-        #expect(try #require(hike.elevationGain).value == 0)
-        #expect(try #require(hike.elevationLoss).value == 0)
+        let stats = Fixture.hike(in: context, route: route).routeStatistics
+        #expect(try #require(stats.elevationGain).value == 0)
+        #expect(try #require(stats.elevationLoss).value == 0)
     }
 
     // MARK: Time
 
     @Test("duration spans the first and last timestamped points")
     func duration() throws {
-        let hike = Fixture.hike(in: context)
-        #expect(try #require(hike.duration) == 5 * 60)
-        #expect(hike.startDate == Fixture.ridgeRoute.first?.timestamp)
-        #expect(hike.endDate == Fixture.ridgeRoute.last?.timestamp)
+        let stats = Fixture.hike(in: context).routeStatistics
+        #expect(try #require(stats.duration) == 5 * 60)
+        #expect(stats.startDate == Fixture.ridgeRoute.first?.timestamp)
+        #expect(stats.endDate == Fixture.ridgeRoute.last?.timestamp)
     }
 
     @Test("an untimed route has no duration and no speeds")
@@ -94,10 +94,10 @@ struct HikeStatisticsTests {
             RouteCoordinate(latitude: 47.63, longitude: 12.86, elevation: 600),
             RouteCoordinate(latitude: 47.64, longitude: 12.86, elevation: 610),
         ]
-        let hike = Fixture.hike(in: context, route: route)
-        #expect(hike.duration == nil)
-        #expect(hike.averageSpeed == nil)
-        #expect(hike.maxSpeed == nil)
+        let stats = Fixture.hike(in: context, route: route).routeStatistics
+        #expect(stats.duration == nil)
+        #expect(stats.averageSpeed == nil)
+        #expect(stats.maxSpeed == nil)
     }
 
     /// Some exporters stamp every point with the same instant. That's not a
@@ -109,10 +109,10 @@ struct HikeStatisticsTests {
         let route = (0..<3).map { idx in
             RouteCoordinate(latitude: 47.63 + Double(idx) * 0.001, longitude: 12.86, elevation: 600, timestamp: stamp)
         }
-        let hike = Fixture.hike(in: context, route: route)
-        #expect(hike.duration == nil)
-        #expect(hike.averageSpeed == nil)
-        #expect(hike.maxSpeed == nil)
+        let stats = Fixture.hike(in: context, route: route).routeStatistics
+        #expect(stats.duration == nil)
+        #expect(stats.averageSpeed == nil)
+        #expect(stats.maxSpeed == nil)
     }
 
     // MARK: Speed
@@ -120,8 +120,9 @@ struct HikeStatisticsTests {
     @Test("average speed is the stored length over the elapsed time")
     func averageSpeed() throws {
         let hike = Fixture.hike(in: context)
-        let speed = try #require(hike.averageSpeed).converted(to: .metersPerSecond).value
-        let expected = hike.distanceMeters / (try #require(hike.duration))
+        let stats = hike.routeStatistics
+        let speed = try #require(stats.averageSpeed).converted(to: .metersPerSecond).value
+        let expected = hike.distanceMeters / (try #require(stats.duration))
         #expect(abs(speed - expected) < 1e-9)
     }
 
@@ -136,9 +137,9 @@ struct HikeStatisticsTests {
             RouteCoordinate(latitude: 47.631, longitude: 12.86, timestamp: start.addingTimeInterval(10)),
             RouteCoordinate(latitude: 47.632, longitude: 12.86, timestamp: start.addingTimeInterval(110)),
         ]
-        let hike = Fixture.hike(in: context, route: route)
-        let fastest = try #require(hike.maxSpeed).converted(to: .metersPerSecond).value
-        let average = try #require(hike.averageSpeed).converted(to: .metersPerSecond).value
+        let stats = Fixture.hike(in: context, route: route).routeStatistics
+        let fastest = try #require(stats.maxSpeed).converted(to: .metersPerSecond).value
+        let average = try #require(stats.averageSpeed).converted(to: .metersPerSecond).value
         #expect(abs(fastest - 11.1) < 0.5)
         #expect(fastest > average)
     }
@@ -154,8 +155,8 @@ struct HikeStatisticsTests {
             RouteCoordinate(latitude: 47.632, longitude: 12.86, timestamp: start),                  // no elapsed time
             RouteCoordinate(latitude: 47.633, longitude: 12.86, timestamp: start.addingTimeInterval(100)),
         ]
-        let hike = Fixture.hike(in: context, route: route)
-        let fastest = try #require(hike.maxSpeed).converted(to: .metersPerSecond).value
+        let stats = Fixture.hike(in: context, route: route).routeStatistics
+        let fastest = try #require(stats.maxSpeed).converted(to: .metersPerSecond).value
         #expect(fastest.isFinite)
         #expect(abs(fastest - 1.11) < 0.1)
     }
@@ -168,7 +169,7 @@ struct HikeStatisticsTests {
         let route = (0..<3).map { idx in
             RouteCoordinate(latitude: 47.63, longitude: 12.86, timestamp: start.addingTimeInterval(Double(idx) * 60))
         }
-        #expect(Fixture.hike(in: context, route: route).maxSpeed == nil)
+        #expect(Fixture.hike(in: context, route: route).routeStatistics.maxSpeed == nil)
     }
 
     // MARK: Presentation

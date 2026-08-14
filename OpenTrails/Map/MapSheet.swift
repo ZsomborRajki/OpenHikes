@@ -39,15 +39,11 @@ struct MapSheet: View {
     private var appModel
     @Environment(\.modelContext)
     private var modelContext
-    @Query(sort: \Hike.date, order: .reverse)
-    private var hikes: [Hike]
     @FocusState private var searchFocused: Bool
     @State private var showImporter = false
     @State private var showSettings = false
     @State private var completer = SearchCompleter()
     @State private var searchTask: Task<Void, Never>?
-    /// Keeps the matching-hike ranking across body passes — see ``HikeSearch``.
-    @State private var hikeSearch = HikeSearch()
 
     private var autoSave: AutoSaveController {
         appModel.autoSaveController
@@ -61,15 +57,13 @@ struct MapSheet: View {
     private var isCompact: Bool { detent == .height(Self.compactDetentHeight) }
 
     var body: some View {
-        // This body runs on every detent change a sheet drag produces, and the
-        // ranking below is the only real work in it. Two things keep it off
-        // that path: the results can only be shown while the field is focused,
-        // so an unfocused pass doesn't rank at all — and a focused pass reuses
-        // the last ranking unless the query or the hikes themselves changed.
-        let matchingHikes = searchFocused ? hikeSearch.rankedHikes(matching: searchText, in: hikes) : []
-        let isSearching = searchFocused && (!completer.suggestions.isEmpty || !matchingHikes.isEmpty)
-
-        return NavigationStack(path: $path) {
+        // Deliberately reads no `Hike`. This body runs on every detent change
+        // a sheet drag produces, and it is also the `NavigationStack` the hike
+        // detail view — with its touch-frequency tint and width sliders — is
+        // pushed into. `MapSheetHikes` holds the `@Query`, which has no
+        // per-property granularity, so keeping it out of here is what stops a
+        // slider drag re-evaluating the search field and the navigation stack.
+        NavigationStack(path: $path) {
             VStack(spacing: 0) {
                 HStack(spacing: 10) {
                     searchField
@@ -78,15 +72,20 @@ struct MapSheet: View {
                     .padding(.horizontal)
                     .padding(.top, Self.topPadding)
 
-                if isSearching {
-                    suggestionsList(matchingHikes: matchingHikes)
-                        .padding(.top, 12)
-                } else if isCompact {
-                    Spacer()
-                } else {
-                    hikesSection
-                        .padding(.top, 24)
-                }
+                MapSheetHikes(
+                    searchText: searchText,
+                    isSearchFocused: searchFocused,
+                    isCompact: isCompact,
+                    completer: completer,
+                    recorder: hikeRecorder,
+                    selectedHikeID: selectedHike?.id,
+                    onOpen: open,
+                    onSelectResult: select,
+                    onSelectCompletion: select,
+                    onDelete: delete,
+                    onRecord: openRecording,
+                    onImport: presentImporter
+                )
             }
             .navigationDestination(for: SheetRoute.self, destination: navigationDestinationView)
             #if os(iOS)
@@ -119,11 +118,6 @@ struct MapSheet: View {
         .onChange(of: searchFocused) { _, focused in
             if focused {
                 withAnimation { detent = .large }
-            } else {
-                // Nothing ranks while the field is unfocused, so there is no
-                // cached ranking worth keeping — and holding one would keep
-                // every matched hike alive behind a search nobody is running.
-                hikeSearch.clear()
             }
         }
         // Collapsing below full height (e.g. dragging to medium) drops focus.
@@ -215,109 +209,12 @@ struct MapSheet: View {
         }
     }
 
-    private var hikesSection: some View {
-        VStack(alignment: .leading, spacing: 12) {
-            HStack(spacing: 12) {
-                Text("Hikes")
-                    .font(.title2.bold())
-                    .foregroundStyle(.primary)
-                Spacer()
-                hikeActions
-            }
-            .padding(.horizontal)
-
-            if hikes.isEmpty {
-                emptyState
-                    .padding(.horizontal)
-                Spacer()
-            } else {
-                hikesList
-            }
-        }
-    }
-
-    /// Always-visible recording and GPX import actions.
-    private var hikeActions: some View {
-        HStack(spacing: 8) {
-            #if os(iOS)
-            Button {
-                Task {
-                    if !hikeRecorder.isActive {
-                        await hikeRecorder.start()
-                    }
-                    openRecording()
-                }
-            } label: {
-                Image(
-                    systemName: hikeRecorder.isActive
-                        ? "stop.circle.fill"
-                        : "record.circle"
-                )
-                    .foregroundStyle(.red)
-                    .frame(width: 40, height: 40)
-                    .sheetGlassBackground(in: Circle())
-            }
-            .accessibilityLabel(
-                hikeRecorder.isActive
-                    ? "Open hike recording"
-                    : "Record a hike"
-            )
-            .accessibilityIdentifier("record-hike-button")
-            #endif
-
-            Button {
-                showImporter = true
-            } label: {
-                Image(systemName: "square.and.arrow.down")
-                    .foregroundStyle(.tint)
-                    .frame(width: 40, height: 40)
-                    .sheetGlassBackground(in: Circle())
-            }
-            .accessibilityLabel("Import GPX file")
-            .accessibilityIdentifier("import-gpx-button")
-        }
-        .font(.title3)
-        .buttonStyle(.plain)
-    }
-
-    private var hikesList: some View {
-        List {
-            ForEach(hikes) { hike in
-                Button {
-                    open(hike)
-                } label: {
-                    HikeRow(
-                        hike: hike,
-                        isSelected: hike.id == selectedHike?.id,
-                        status: recordingStatus(for: hike)
-                    )
-                        .contentShape(.rect)
-                }
-                .buttonStyle(.plain)
-                .listRowBackground(
-                    hike.id == selectedHike?.id ? hike.tintOpaque.opacity(Self.selectedHikeHighlightOpacity) : Color.clear
-                )
-                .swipeActions(edge: .trailing) {
-                    if !belongsToActiveRecording(hike) {
-                        Button(role: .destructive) {
-                            delete(hike)
-                        } label: {
-                            Label("Delete", systemImage: "trash")
-                        }
-                    }
-                }
-            }
-        }
-        .listStyle(.plain)
-        .scrollContentBackground(.hidden)
-    }
-
 }
 
 // MARK: - Actions
 
 private extension MapSheet {
-private func delete(_ hike: Hike) {
+private func delete(_ hike: Hike, among hikes: [Hike]) {
     guard !belongsToActiveRecording(hike) else {
         openRecording()
         return
@@ -374,72 +271,6 @@ private func delete(_ hike: Hike) {
     modelContext.delete(hike)
 }
 
-/// Autocomplete suggestions shown under the search field while typing.
-/// Matching hikes (imported or recorded) are listed first, ahead of
-/// MapKit's place suggestions.
-private func suggestionsList(matchingHikes: [Hike]) -> some View {
-    List {
-        hikeSuggestionsSection(matchingHikes: matchingHikes)
-        mapSuggestionsSection(matchingHikes: matchingHikes)
-    }
-    .listStyle(.plain)
-    .scrollContentBackground(.hidden)
-}
-
-@ViewBuilder
-private func hikeSuggestionsSection(matchingHikes: [Hike]) -> some View {
-    if !matchingHikes.isEmpty {
-        Section("Your Hikes") {
-            ForEach(matchingHikes) { hike in
-                Button { select(hike) } label: {
-                    HikeRow(
-                        hike: hike,
-                        isSelected: hike.id == selectedHike?.id,
-                        status: recordingStatus(for: hike)
-                    )
-                    .contentShape(.rect)
-                }
-                .buttonStyle(.plain)
-            }
-        }
-    }
-}
-
-@ViewBuilder
-private func mapSuggestionsSection(matchingHikes: [Hike]) -> some View {
-    if !completer.suggestions.isEmpty {
-        Section {
-            ForEach(completer.suggestions, id: \.self) { suggestion in
-                Button { select(suggestion) } label: {
-                    suggestionRow(for: suggestion)
-                }
-                .buttonStyle(.plain)
-            }
-        } header: {
-            if !matchingHikes.isEmpty { Text("Maps") }
-        }
-    }
-}
-
-private func suggestionRow(for suggestion: MKLocalSearchCompletion) -> some View {
-    HStack(spacing: 12) {
-        Image(systemName: "mappin.circle.fill")
-            .font(.title3)
-            .foregroundStyle(.secondary)
-            .accessibilityHidden(true)
-        VStack(alignment: .leading, spacing: 2) {
-            Text(suggestion.title).foregroundStyle(.primary)
-            if !suggestion.subtitle.isEmpty {
-                Text(suggestion.subtitle)
-                    .font(.caption)
-                    .foregroundStyle(.secondary)
-            }
-        }
-        Spacer(minLength: 0)
-    }
-    .contentShape(.rect)
-}
-
 /// Opens a tapped hike suggestion straight to its detail view.
 private func select(_ hike: Hike) {
     searchTask?.cancel()
@@ -491,36 +322,10 @@ private static var gpxContentTypes: [UTType] {
     return types
 }
 
-private var emptyState: some View {
-    VStack(spacing: 8) {
-        Image(systemName: "map")
-            .font(.largeTitle)
-            .foregroundStyle(.secondary)
-            .accessibilityHidden(true)
-        Text("No hikes yet")
-            .font(.headline)
-        Text("Tap \(importIcon) to import a GPX file.")
-            .font(.subheadline)
-            .foregroundStyle(.secondary)
-        #if os(iOS)
-        Text("Or tap \(recordIcon) to record one as you walk.")
-            .font(.subheadline)
-            .foregroundStyle(.secondary)
-        #endif
-    }
-    .multilineTextAlignment(.center)
-    .frame(maxWidth: .infinity)
-    .padding(.top, 8)
-}
-
-// Interpolated into `emptyState`'s Text as a `Text` value (not a plain
-// string), so the icon keeps its own color inside the sentence.
-private var importIcon: Text {
-    Text(Image(systemName: "square.and.arrow.down")).foregroundStyle(.tint)
-}
-
-private var recordIcon: Text {
-    Text(Image(systemName: "record.circle")).foregroundStyle(.red)
+/// A method rather than a closure at the call site, so the sheet's content
+/// view is constructed from named actions throughout.
+private func presentImporter() {
+    showImporter = true
 }
 
 private func openRecording() {
@@ -560,23 +365,6 @@ private func open(_ hike: Hike) {
     }
 }
 
-private func recordingStatus(for hike: Hike) -> HikeRow.Status? {
-    guard belongsToActiveRecording(hike) else { return nil }
-    guard hike.id == hikeRecorder.currentHike?.id else {
-        return HikeRow.Status(title: "Recording", tint: .red)
-    }
-    return switch hikeRecorder.phase {
-    case .idle: HikeRow.Status(title: "Recording", tint: .red)
-    case .recovering: HikeRow.Status(title: "Recovering", tint: .orange)
-    case .waitingForFix: HikeRow.Status(title: "Finding GPS", tint: .orange)
-    case .recording: HikeRow.Status(title: "Recording", tint: .red)
-    case .paused: HikeRow.Status(title: "Paused", tint: .secondary)
-    case .saving: HikeRow.Status(title: "Saving", tint: .orange)
-    case .reviewing: HikeRow.Status(title: "Review Route", tint: .orange)
-    case .failed: HikeRow.Status(title: "Needs Attention", tint: .red)
-    }
-}
-
 private func belongsToActiveRecording(_ hike: Hike) -> Bool {
     hike.belongsToActiveRecording(
         currentHikeID: hikeRecorder.currentHike?.id
@@ -584,7 +372,9 @@ private func belongsToActiveRecording(_ hike: Hike) -> Bool {
 }
 }
 
-private extension View {
+/// Shared by the sheet's own chrome and by ``MapSheetHikes``, which is why it
+/// is not fileprivate.
+extension View {
     @ViewBuilder
     func sheetGlassBackground<S: Shape>(in shape: S) -> some View {
         #if os(visionOS)

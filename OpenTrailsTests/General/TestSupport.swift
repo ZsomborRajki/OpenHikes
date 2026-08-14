@@ -303,13 +303,21 @@ nonisolated final class TileSandbox: Sendable {
     ///   - sessionConfiguration: `nil` leaves the standard transport, which is
     ///     enough for the suites that place files by hand; pass
     ///     `StubTileProtocol.sessionConfiguration()` to script the responses.
-    init(reachable: Bool = true, sessionConfiguration: URLSessionConfiguration? = nil) {
+    ///   - mutationKeyLimit: how many per-key deletion versions the cache
+    ///     holds before compacting them into its epoch. Lower it to reach
+    ///     compaction without sixteen thousand deletions.
+    init(
+        reachable: Bool = true,
+        sessionConfiguration: URLSessionConfiguration? = nil,
+        mutationKeyLimit: Int = TileCache.mutationKeyVersionLimit
+    ) {
         root = FileManager.default.temporaryDirectory
             .appendingPathComponent("tilesandbox-\(UUID().uuidString)", isDirectory: true)
         cache = TileCache(
             storageRoot: root,
             sessionConfiguration: sessionConfiguration,
-            monitorsNetwork: false
+            monitorsNetwork: false,
+            mutationKeyLimit: mutationKeyLimit
         )
         store = AutoSaveTileStore(tileCache: cache)
         if !reachable { cache.setReachable(false) }

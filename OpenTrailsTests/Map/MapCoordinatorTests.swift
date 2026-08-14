@@ -27,7 +27,9 @@ struct MapCoordinatorTests {
     private let highlight = RouteHighlight()
     private let recordingTrace = RecordingTrace()
     private let sheetMetrics = SheetMetrics()
-    private let mapController = MapController()
+    /// Internal, like the four helpers below it, so the command observers get
+    /// their own file — see `MapCoordinatorTests+Commands.swift`.
+    let mapController = MapController()
     private let routeStyle = RouteStyle()
     /// Driven by a clock the test owns: `LocationManager` publishes at most
     /// once a second, so whether a second fix reaches the map would otherwise
@@ -39,7 +41,7 @@ struct MapCoordinatorTests {
         locationManager = LocationManager(clock: clock.read)
     }
 
-    private static let osm = ActiveTileSource(
+    static let osm = ActiveTileSource(
         providerID: "osm_test",
         urlTemplate: "https://tiles.example.invalid/{z}/{x}/{y}.png",
         maximumZ: 19
@@ -50,7 +52,7 @@ struct MapCoordinatorTests {
         maximumZ: 17
     )
 
-    private func mapView(
+    func mapView(
         route: DisplayedRoute? = nil,
         tileSource: ActiveTileSource = osm
     ) -> MapView {
@@ -66,7 +68,7 @@ struct MapCoordinatorTests {
         )
     }
 
-    private static func route(
+    static func route(
         _ id: UUID = UUID(),
         coordinates: [RouteCoordinate] = Fixture.ridgeRoute
     ) -> DisplayedRoute {
@@ -75,7 +77,7 @@ struct MapCoordinatorTests {
 
     /// A map with a size, so the constraint maths and the visible rect mean
     /// something. Views under test are never in a window.
-    private func makeMap(_ view: MapView, _ coordinator: MapView.Coordinator) -> MKMapView {
+    func makeMap(_ view: MapView, _ coordinator: MapView.Coordinator) -> MKMapView {
         let map = view.makeMapView(coordinator)
         map.frame = CGRect(x: 0, y: 0, width: 390, height: 844)
         map.layoutIfNeeded()
@@ -93,7 +95,7 @@ struct MapCoordinatorTests {
     /// Called from a `defer` in each test rather than from a suite `deinit`:
     /// a suite instance is not guaranteed to be released on the main actor,
     /// and every property here is main-actor isolated.
-    private func detach(_ map: MKMapView) {
+    func detach(_ map: MKMapView) {
         map.delegate = nil
         map.showsUserLocation = false
         map.removeOverlays(map.overlays)
@@ -102,7 +104,7 @@ struct MapCoordinatorTests {
 
     /// Lets the `Task { @MainActor in … }` hop each observation re-registers
     /// through actually run — the same hop the app pays for a scrub or a drag.
-    private func settle() async {
+    func settle() async {
         for _ in 0..<8 { await Task.yield() }
     }
 

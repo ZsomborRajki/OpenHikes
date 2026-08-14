@@ -85,7 +85,7 @@ nonisolated extension TileCache {
             "removeAllTiles() deletes every cached tile file synchronously — call it off the main thread"
         )
         mutationVersions.withLock { versions in
-            versions.global &+= 1
+            versions.invalidateAll()
             memory.removeAllObjects()
             for file in allTileFiles(in: directory)
                 + allTileFiles(in: durableDirectory) {
@@ -108,7 +108,7 @@ nonisolated extension TileCache {
         )
         let claimedNames = Set(keys.map(diskName(for:)))
         mutationVersions.withLock { versions in
-            versions.global &+= 1
+            versions.invalidateAll()
             memory.removeAllObjects()
             for file in allTileFiles(in: directory)
                 + allTileFiles(in: durableDirectory)
@@ -216,7 +216,7 @@ nonisolated extension TileCache {
         )
         for key in keys {
             mutationVersions.withLock { versions in
-                versions.keys[key, default: 0] &+= 1
+                versions.invalidate(key)
                 // swiftlint:disable:next legacy_objc_type
                 memory.removeObject(forKey: key as NSString)
                 let paths = filePaths(forKey: key)
