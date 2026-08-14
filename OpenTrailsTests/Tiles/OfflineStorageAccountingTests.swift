@@ -38,7 +38,7 @@ struct StorageAccountingTests {
 
     /// A controller wired to this suite's store rather than the app's.
     func makeController() -> AutoSaveController {
-        AutoSaveController(store: sandbox.store)
+        AutoSaveController(store: sandbox.store, drainInterval: nil)
     }
 
     // MARK: - Harness
@@ -63,16 +63,20 @@ struct StorageAccountingTests {
         await offMain { autoSaveStore.considerPersisting(key: key, z: tile.z, x: tile.x, y: tile.y) }
     }
 
-    func bytes(_ keys: [String]) async -> Int64 {
+    func bytes(_ keys: [String]) async throws -> Int64 {
         let cache = sandbox.cache
-        return await offMain { cache.bytes(forKeys: keys) }
+        return try await offMain { try cache.bytes(forKeys: keys) }
     }
 
     /// What the hike sheets add up to: the tiles every hike's manifest claims.
-    func claimedKeys(of hikes: Hike...) async -> Set<String> {
+    func claimedKeys(of hikes: Hike...) async throws -> Set<String> {
         let ownerships = hikes.map(TileOwnership.init)
-        return await offMain {
-            ownerships.reduce(into: Set<String>()) { $0.formUnion($1.tileKeys()) }
+        return try await offMain {
+            var keys = Set<String>()
+            for ownership in ownerships {
+                keys.formUnion(try ownership.tileKeys())
+            }
+            return keys
         }
     }
 
@@ -139,9 +143,9 @@ struct StorageAccountingTests {
             savedTileKeys: [overlap, extra]
         )
 
-        let stored = await offMain {
+        let stored = try await offMain {
             Set(
-                OfflineTileDownloader.storedTileKeys(
+                try OfflineTileDownloader.storedTileKeys(
                     route: route,
                     offlineDownloads: [partialRecord, fullRecord]
                 )
@@ -155,10 +159,7 @@ struct StorageAccountingTests {
     func deleteHike(_ hike: Hike, using controller: AutoSaveController, survivors: [Hike] = []) async {
         controller.hikeWillBeDeleted(hike)
         let deletionPlan = StoredTileDeletionPlan(removing: hike, among: [hike] + survivors)
-        let cache = sandbox.cache
-        await offMain {
-            cache.removeTiles(forKeys: Array(deletionPlan.exclusiveTileKeys()))
-        }
+        await deletionPlan.removeExclusiveTiles(from: sandbox.cache)
         context.delete(hike)
     }
 
@@ -172,10 +173,7 @@ struct StorageAccountingTests {
         let deletionPlan = StoredTileDeletionPlan(removing: hike, among: hikes)
         hike.offlineDownloads.removeAll()
         hike.autoSavedTileKeys.removeAll()
-        let cache = sandbox.cache
-        await offMain {
-            cache.removeTiles(forKeys: Array(deletionPlan.exclusiveTileKeys()))
-        }
+        await deletionPlan.removeExclusiveTiles(from: sandbox.cache)
     }
 
     // MARK: - Coverage versus cache
@@ -188,15 +186,16 @@ struct StorageAccountingTests {
         let controller = makeController()
         let hike = Fixture.hike(in: context)
         controller.hikeSelectionChanged(to: hike)
+        await controller.waitForActivation()
 
         let saved = key(16, 1, 1)
         try await persist(key: saved, tile: tile())
         controller.flushPendingKeys()
 
-        let claimed = await claimedKeys(of: hike)
+        let claimed = try await claimedKeys(of: hike)
         #expect(claimed.contains(saved))
 
-        let hikeBytes = await bytes(Array(claimed))
+        let hikeBytes = try await bytes(Array(claimed))
         #expect(hikeBytes > 0, "the hike sheet should report the tile it just saved")
 
         let usage = await diskUsage(claimedBy: claimed)
@@ -215,6 +214,7 @@ struct StorageAccountingTests {
         let controller = makeController()
         let hike = Fixture.hike(in: context)
         controller.hikeSelectionChanged(to: hike)
+        await controller.waitForActivation()
 
         let saved = key(16, 2, 2)
         try await persist(key: saved, tile: tile())
@@ -224,10 +224,10 @@ struct StorageAccountingTests {
         let browsed = key(16, 92, 92)
         try sandbox.browse(key: browsed)
 
-        let claimed = await claimedKeys(of: hike)
+        let claimed = try await claimedKeys(of: hike)
         #expect(!claimed.contains(browsed), "auto-save rightly declines a tile this far off the trail")
 
-        let claimedBytes = await bytes(Array(claimed))
+        let claimedBytes = try await bytes(Array(claimed))
         #expect(claimedBytes > 0, "precondition: the hike did save something")
 
         let usage = await diskUsage(claimedBy: claimed)
@@ -251,7 +251,7 @@ struct StorageAccountingTests {
             ]
         }
 
-        let claimed = await claimedKeys(of: hike)
+        let claimed = try await claimedKeys(of: hike)
         let downloaded = try #require(claimed.first)
         // A bulk download writes through `loadTile`, i.e. into the same place
         // browsing does.
@@ -261,7 +261,7 @@ struct StorageAccountingTests {
         #expect(usage.claimed >= TileStore.tileByteCount, "the tile is coverage wherever it sits")
 
         await clearMapCache(claimedBy: claimed)
-        #expect(await bytes([downloaded]) > 0, "and a cache clear must not touch it")
+        #expect(try await bytes([downloaded]) > 0, "and a cache clear must not touch it")
     }
 
     // MARK: - Where each route puts its tiles
@@ -281,7 +281,7 @@ struct StorageAccountingTests {
         #expect(await sandbox.cache.saveTileDurably(forKey: downloaded, url: url))
 
         #expect(!sandbox.isBrowsed(downloaded), "the reclaimable copy is gone")
-        #expect(await bytes([downloaded]) > 0, "and the tile is still saved")
+        #expect(try await bytes([downloaded]) > 0, "and the tile is still saved")
     }
 
     /// Downloading an area auto-save already covered — or re-running a download
@@ -292,6 +292,7 @@ struct StorageAccountingTests {
         let controller = makeController()
         let hike = Fixture.hike(in: context)
         controller.hikeSelectionChanged(to: hike)
+        await controller.waitForActivation()
 
         // Auto-save put this one in durable storage while the map was browsed.
         let saved = key(16, 14, 14)
@@ -315,11 +316,12 @@ struct StorageAccountingTests {
         let controller = makeController()
         let hike = Fixture.hike(in: context)
         controller.hikeSelectionChanged(to: hike)
+        await controller.waitForActivation()
 
         // Drawn first — which is the only way auto-save ever sees a tile.
         let saved = key(16, 3, 3)
         try sandbox.browse(key: saved)
-        #expect(await bytes([saved]) == TileStore.tileByteCount, "precondition: drawing it cached it")
+        #expect(try await bytes([saved]) == TileStore.tileByteCount, "precondition: drawing it cached it")
 
         try await persist(key: saved, tile: tile())
         controller.flushPendingKeys()
@@ -327,7 +329,7 @@ struct StorageAccountingTests {
         #expect(!sandbox.isBrowsed(saved), "the cached copy is gone, not duplicated")
         #expect(sandbox.isSaved(saved), "and it is what's now kept for offline use")
         #expect(
-            await bytes([saved]) == TileStore.tileByteCount,
+            try await bytes([saved]) == TileStore.tileByteCount,
             "the same bytes, moved — no re-encode, so no size or quality change"
         )
         #expect(
@@ -344,6 +346,7 @@ struct StorageAccountingTests {
         let controller = makeController()
         let hike = Fixture.hike(in: context)
         controller.hikeSelectionChanged(to: hike)
+        await controller.waitForActivation()
 
         let saved = key(16, 11, 11)
         try await persist(key: saved, tile: tile())
@@ -361,14 +364,15 @@ struct StorageAccountingTests {
         let controller = makeController()
         let hike = Fixture.hike(in: context)
         controller.hikeSelectionChanged(to: hike)
+        await controller.waitForActivation()
 
         let saved = key(16, 4, 4)
         try await persist(key: saved, tile: tile())
         controller.flushPendingKeys()
-        #expect(await bytes([saved]) > 0, "precondition: the tile is on disk")
+        #expect(try await bytes([saved]) > 0, "precondition: the tile is on disk")
 
         await deleteHike(hike, using: controller)
-        #expect(await bytes([saved]) == 0)
+        #expect(try await bytes([saved]) == 0)
     }
 
     /// Issue 2: the hike was the only one in the app, and Settings still showed
@@ -381,6 +385,7 @@ struct StorageAccountingTests {
         let controller = makeController()
         let hike = Fixture.hike(in: context)
         controller.hikeSelectionChanged(to: hike)
+        await controller.waitForActivation()
 
         let saved = key(16, 5, 5)
         try await persist(key: saved, tile: tile())
@@ -394,8 +399,8 @@ struct StorageAccountingTests {
         // What Settings computes with no hikes left to claim anything.
         let usage = await diskUsage(claimedBy: [])
         #expect(usage.claimed == 0, "nothing is being kept for offline use any more")
-        #expect(await bytes([saved]) == 0, "the hike's own tiles went with it")
-        #expect(await bytes([browsed]) == TileStore.tileByteCount, "its browsing residue is cache now")
+        #expect(try await bytes([saved]) == 0, "the hike's own tiles went with it")
+        #expect(try await bytes([browsed]) == TileStore.tileByteCount, "its browsing residue is cache now")
     }
 
     /// The other half of issue 2's fix: the residue is reclaimable on its own,
@@ -406,6 +411,7 @@ struct StorageAccountingTests {
         let controller = makeController()
         let hike = Fixture.hike(in: context)
         controller.hikeSelectionChanged(to: hike)
+        await controller.waitForActivation()
 
         let saved = key(16, 12, 12)
         try await persist(key: saved, tile: tile())
@@ -414,16 +420,16 @@ struct StorageAccountingTests {
         let browsed = key(16, 94, 94)
         try sandbox.browse(key: browsed)
 
-        let claimed = await claimedKeys(of: hike)
+        let claimed = try await claimedKeys(of: hike)
         await clearMapCache(claimedBy: claimed)
 
-        #expect(await bytes([saved]) > 0, "the hike's offline map survives")
+        #expect(try await bytes([saved]) > 0, "the hike's offline map survives")
         #expect(sandbox.isSaved(saved))
-        #expect(await bytes([browsed]) == 0, "the browsing residue does not")
+        #expect(try await bytes([browsed]) == 0, "the browsing residue does not")
         #expect(!sandbox.isBrowsed(browsed))
 
         let usage = await diskUsage(claimedBy: claimed)
-        #expect(usage.claimed == (await bytes(Array(claimed))), "and its coverage is still counted as coverage")
+        #expect(usage.claimed == (try await bytes(Array(claimed))), "and its coverage is still counted as coverage")
     }
 
 }

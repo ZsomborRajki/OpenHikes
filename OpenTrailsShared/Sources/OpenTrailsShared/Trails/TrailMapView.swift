@@ -126,7 +126,10 @@ public struct TrailMapView: View {
     /// The rect an image of `aspectRatio` occupies when scaled to cover
     /// `size` and centered — i.e. `.scaledToFill()`, computed rather than
     /// applied so the projection above can use the same numbers.
-    static func aspectFillRect(aspectRatio: Double, in size: CGSize) -> CGRect {
+    nonisolated static func aspectFillRect(
+        aspectRatio: Double,
+        in size: CGSize
+    ) -> CGRect {
         guard aspectRatio.isFinite, aspectRatio > 0, size.height > 0 else { return CGRect(origin: .zero, size: size) }
         let viewAspect = size.width / size.height
         let filled = aspectRatio > viewAspect

@@ -75,6 +75,26 @@ struct GPXImportTests {
         #expect(track.keywords == "hiking, bavaria")
     }
 
+    @Test("CDATA metadata is preserved")
+    func cdataMetadata() throws {
+        let xml = """
+        <?xml version="1.0" encoding="UTF-8"?>
+        <gpx version="1.1" xmlns="http://www.topografix.com/GPX/1/1">
+            <trk>
+            <name><![CDATA[Trail & Ridge]]></name>
+            <desc><![CDATA[Rock <ridge> route]]></desc>
+            <trkseg>
+            <trkpt lat="47.6300" lon="12.8600"/>
+            <trkpt lat="47.6310" lon="12.8600"/>
+            </trkseg>
+            </trk>
+        </gpx>
+        """
+        let track = try GPXImport.load(from: try gpxFile(xml))
+        #expect(track.name == "Trail & Ridge")
+        #expect(track.trackDescription == "Rock <ridge> route")
+    }
+
     @Test("the activity date comes from the file's metadata when it has one")
     func startTimeFromMetadata() throws {
         let track = try GPXImport.load(from: try gpxFile(Self.fullTrack))
@@ -258,7 +278,7 @@ struct GPXImportTests {
             <trk><trkseg><trkpt><ele>600</ele></trkpt></trkseg></trk>
         </gpx>
         """,
-        // Well-formed XML that simply isn't GPX. CoreGPX parses it happily
+        // Well-formed XML that simply isn't GPX. XMLParser accepts it
         // into a document with no tracks, so it can't be told apart from an
         // empty GPX file — which is why `.noUsablePoints` is worded to cover
         // "this may not be a GPX file" too.

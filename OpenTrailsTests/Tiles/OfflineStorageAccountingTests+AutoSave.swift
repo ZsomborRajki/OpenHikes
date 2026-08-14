@@ -23,13 +23,14 @@ extension StorageAccountingTests {
         let controller = makeController()
         let hike = Fixture.hike(in: context)
         controller.hikeSelectionChanged(to: hike)
+        await controller.waitForActivation()
 
         let saved = key(17, 6, 6)
         try await persist(key: saved, tile: tile(z: 17))
         // No flush: the drain timer hasn't come round yet.
         controller.hikeSelectionChanged(to: nil)
 
-        #expect(await bytes([saved]) > 0, "precondition: the tile is durably on disk")
+        #expect(try await bytes([saved]) > 0, "precondition: the tile is durably on disk")
         #expect(hike.autoSavedTileKeys.contains(saved), "otherwise nothing will ever free it")
     }
 
@@ -39,6 +40,7 @@ extension StorageAccountingTests {
         let first = Fixture.hike(in: context)
         let second = Fixture.hike(in: context, title: "Second", route: Fixture.loopRoute)
         controller.hikeSelectionChanged(to: first)
+        await controller.waitForActivation()
 
         let saved = key(17, 7, 7)
         try await persist(key: saved, tile: tile(z: 17))
@@ -53,6 +55,7 @@ extension StorageAccountingTests {
         let controller = makeController()
         let hike = Fixture.hike(in: context)
         controller.hikeSelectionChanged(to: hike)
+        await controller.waitForActivation()
 
         let saved = key(17, 8, 8)
         try await persist(key: saved, tile: tile(z: 17))
@@ -69,14 +72,15 @@ extension StorageAccountingTests {
         let controller = makeController()
         let hike = Fixture.hike(in: context)
         controller.hikeSelectionChanged(to: hike)
+        await controller.waitForActivation()
 
         let saved = key(17, 9, 9)
         try await persist(key: saved, tile: tile(z: 17))
-        #expect(await bytes([saved]) > 0, "precondition: the tile is durably on disk")
+        #expect(try await bytes([saved]) > 0, "precondition: the tile is durably on disk")
 
         // No flush first: the delete path is responsible for that itself.
         await deleteHike(hike, using: controller)
-        #expect(await bytes([saved]) == 0)
+        #expect(try await bytes([saved]) == 0)
     }
 
     /// The flush a delete performs must not hand one trail's tiles to
@@ -88,6 +92,7 @@ extension StorageAccountingTests {
         let doomed = Fixture.hike(in: context)
         let survivor = Fixture.hike(in: context, title: "Survivor")
         controller.hikeSelectionChanged(to: doomed)
+        await controller.waitForActivation()
 
         let shared = key(17, 10, 10)
         try await persist(key: shared, tile: tile(z: 17))
@@ -95,7 +100,7 @@ extension StorageAccountingTests {
         survivor.autoSavedTileKeys = [shared]
 
         await deleteHike(doomed, using: controller, survivors: [survivor])
-        #expect(await bytes([shared]) > 0, "the surviving hike still lists this tile")
+        #expect(try await bytes([shared]) > 0, "the surviving hike still lists this tile")
     }
 
     @Test("clearing one hike's offline tiles keeps another hike's shared coverage")
@@ -104,6 +109,7 @@ extension StorageAccountingTests {
         let cleared = Fixture.hike(in: context, title: "Cleared")
         let survivor = Fixture.hike(in: context, title: "Survivor")
         controller.hikeSelectionChanged(to: cleared)
+        await controller.waitForActivation()
 
         let shared = key(17, 11, 11)
         try await persist(key: shared, tile: tile(z: 17))
@@ -115,6 +121,6 @@ extension StorageAccountingTests {
         #expect(cleared.autoSavedTileKeys.isEmpty)
         #expect(cleared.offlineDownloads.isEmpty)
         #expect(survivor.autoSavedTileKeys == [shared])
-        #expect(await bytes([shared]) > 0, "the surviving hike still owns this tile")
+        #expect(try await bytes([shared]) > 0, "the surviving hike still owns this tile")
     }
 }

@@ -7,6 +7,7 @@
 //  ``AutoSaveTileStore`` into that hike's SwiftData-backed manifest.
 //
 
+import CoreLocation
 import Foundation
 import os
 
@@ -23,19 +24,30 @@ final class AutoSaveController {
     /// thread-safe, so this is safe to touch from `deinit` (which, on a
     /// main-actor-isolated class, runs nonisolated).
     @ObservationIgnored nonisolated(unsafe) private var drainTask: Task<Void, Never>?
+    @ObservationIgnored nonisolated(unsafe) private var activationTask: Task<Void, Never>?
     @ObservationIgnored private var isSuspended = false
     @ObservationIgnored private var hasDeferredSelectionChange = false
+    @ObservationIgnored private var activationRevision: UInt64 = 0
     private weak var deferredHike: Hike?
     /// The tile store this controller drives. Injectable so a test drives one
     /// with its own active hike and its own tile directories rather than the
     /// process-wide singleton the app uses.
     @ObservationIgnored private let store: AutoSaveTileStore
 
-    init(store: AutoSaveTileStore = .shared) {
+    /// How often pending keys are folded into the active hike's manifest.
+    ///
+    /// Injectable, and `nil` disables the timer entirely, because a suite that
+    /// asserts on *when* a key moves from the store to the manifest — the
+    /// suspension-rollback tests — otherwise races this. Under a parallel run
+    /// those tests can sit behind the main actor for longer than the interval,
+    /// at which point the timer drains the very keys the test is about to
+    /// inspect. Tests that want the fold call ``flushPendingKeys()`` directly.
+    init(store: AutoSaveTileStore = .shared, drainInterval: Duration? = .seconds(2)) {
         self.store = store
+        guard let drainInterval else { return }
         drainTask = Task { [weak self] in
             while true {
-                try? await Task.sleep(for: .seconds(2))
+                try? await Task.sleep(for: drainInterval)
                 guard let self, !Task.isCancelled else { break }
                 flushPendingKeys()
             }
@@ -44,6 +56,7 @@ final class AutoSaveController {
 
     deinit {
         drainTask?.cancel()
+        activationTask?.cancel()
     }
 
     /// Called whenever the map's selected hike changes, so auto-save follows
@@ -141,16 +154,72 @@ final class AutoSaveController {
     }
 
     private func activate(_ hike: Hike) {
-        // Hand the outgoing hike its tiles back first: `setActiveHike` replaces
-        // the store's state wholesale, pending set included, and those tiles are
-        // already on disk.
+        // Re-selecting the hike that is already active must not rebuild its
+        // corridor — `beginActiveHike` installs an empty one, which would stop
+        // claims until the rebuild lands. It does still have to put the store
+        // back into an accepting state: a selection deferred while the scene
+        // was inactive resolves through here, and `sceneWillResignActive` left
+        // the store suspended.
+        guard activeHike?.id != hike.id else {
+            if !isSuspended {
+                store.resumePersisting(for: hike.id)
+            }
+            return
+        }
+        // Hand the outgoing hike its tiles back first: `beginActiveHike`
+        // replaces the store's state wholesale, pending set included, and those
+        // tiles are already on disk.
         flushPendingKeys()
+        cancelPendingActivation()
         activeHike = hike
-        store.setActiveHike(
+        let hikeID = hike.id
+        let route = hike.route
+        store.beginActiveHike(
             id: hike.id,
-            route: hike.coordinates,
             knownKeys: Set(hike.autoSavedTileKeys),
             acceptsNewClaims: !isSuspended
+        )
+        activationRevision &+= 1
+        let revision = activationRevision
+        activationTask = Task(priority: .utility) { [weak self] in
+            guard let corridor = try? await Self.preparedCorridor(for: route) else {
+                return
+            }
+            guard let self,
+                  !Task.isCancelled,
+                  activationRevision == revision,
+                  activeHike?.id == hikeID else {
+                return
+            }
+            store.updateCorridor(corridor, for: hikeID)
+            activationTask = nil
+        }
+    }
+
+    /// Converts the persisted route and builds its corridor on the concurrent
+    /// executor. `@concurrent` keeps this inside `activationTask`, so
+    /// ``cancelPendingActivation()`` stops it without a detached worker.
+    @concurrent nonisolated
+    private static func preparedCorridor(
+        for route: [RouteCoordinate]
+    ) async throws(CancellationError) -> TileCorridor {
+        assertOffMainThread(
+            "Auto-save route preparation must stay off the main thread"
+        )
+        var coordinates: [CLLocationCoordinate2D] = []
+        coordinates.reserveCapacity(route.count)
+        for (index, point) in route.enumerated() {
+            if index.isMultiple(of: 255), Task.isCancelled {
+                throw CancellationError()
+            }
+            coordinates.append(point.clCoordinate)
+        }
+        guard !Task.isCancelled else {
+            throw CancellationError()
+        }
+        return TileCorridor(
+            route: coordinates,
+            bufferMeters: AutoSaveTileStore.corridorBufferMeters
         )
     }
 
@@ -162,8 +231,21 @@ final class AutoSaveController {
         } else {
             flushPendingKeys()
         }
+        cancelPendingActivation()
         activeHike = nil
         store.clearActiveHike()
+    }
+
+    private func cancelPendingActivation() {
+        activationRevision &+= 1
+        activationTask?.cancel()
+        activationTask = nil
+    }
+
+    /// Test/support hook that waits for the selected hike's corridor to finish
+    /// preparing without polling or sleeping.
+    func waitForActivation() async {
+        await activationTask?.value
     }
 
     /// Folds tiles persisted since the last pass into the active hike's

@@ -258,15 +258,7 @@ final class BackgroundTrailTracker: NSObject {
         let input = SnapshotInput(hike: hike)
         selectionPublishTask = Task { [weak self] in
             guard !Task.isCancelled else { return }
-            let buildTask = Task.detached(priority: .userInitiated) {
-                assertOffMainThread("Widget snapshot preparation must stay off the main thread")
-                return Self.buildSnapshot(from: input, liveFix: nil)
-            }
-            let snapshot = await withTaskCancellationHandler {
-                await buildTask.value
-            } onCancel: {
-                buildTask.cancel()
-            }
+            let snapshot = await Self.buildSnapshotOffMain(from: input, liveFix: nil)
             guard let snapshot,
                   let self,
                   !Task.isCancelled,
@@ -498,6 +490,22 @@ final class BackgroundTrailTracker: NSObject {
             SharedStore.clear()
             return generation.matches(revision)
         }
+    }
+
+    /// `@concurrent` rather than a detached task: the build stays inside
+    /// `selectionPublishTask`, so cancelling that task reaches the
+    /// `Task.isCancelled` guards below directly. Detached, those guards read
+    /// the *worker's* cancellation state and so could never fire — the
+    /// cancellation had to be forwarded by hand through a
+    /// `withTaskCancellationHandler`, and even then only landed between the
+    /// two stages rather than inside the route-sized work.
+    @concurrent
+    nonisolated private static func buildSnapshotOffMain(
+        from input: SnapshotInput,
+        liveFix: SharedTrailSnapshot.LiveFix?
+    ) async -> SharedTrailSnapshot? {
+        assertOffMainThread("Widget snapshot preparation must stay off the main thread")
+        return buildSnapshot(from: input, liveFix: liveFix)
     }
 
     nonisolated private static func buildSnapshot(

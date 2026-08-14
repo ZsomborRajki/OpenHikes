@@ -40,7 +40,11 @@ extension HikeRecorder {
         let retainedStart = Self.liveWindowRetainedStart(in: points)
         let taskID = UUID()
         liveMatchingTaskID = taskID
-        liveMatchingTask = Task { [weak self] in
+        // `.utility` on the whole task rather than pinned to the match alone:
+        // matching is now `@concurrent`, so it takes its priority from here.
+        // Graph loading is the same background work by the same deadline, so
+        // it belongs at the same priority rather than at the main actor's.
+        liveMatchingTask = Task(priority: .utility) { [weak self] in
             await self?.performLiveMatchTask(
                 points: points,
                 retainedStart: retainedStart,
@@ -64,9 +68,7 @@ extension HikeRecorder {
         guard !Task.isCancelled else {
             return
         }
-        let match = await Task.detached(priority: .utility) {
-            TrailMatcher.match(points: points, graph: graph)
-        }.value
+        let match = await TrailMatcher.matchOffMain(points: points, graph: graph)
 
         guard isMatchStillValid(
             expectedSessionID: expectedSessionID,
@@ -390,9 +392,8 @@ extension HikeRecorder {
                     return
                 }
                 let points = mergedSession.points
-                let normalized = await Task.detached {
-                    RecordingPreparation.normalizedPoints(points)
-                }.value
+                let normalized = await RecordingPreparation
+                    .normalizedPointsOffMain(points)
                 guard acceptedFixRevision == revision,
                       sessionID == expectedSessionID else {
                     continue

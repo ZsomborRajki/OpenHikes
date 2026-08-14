@@ -32,7 +32,7 @@ nonisolated final class AutoSaveTileStore: Sendable {
 
     private struct ActiveHike {
         let id: UUID
-        let corridor: TileCorridor
+        var corridor: TileCorridor
         var acceptsNewClaims: Bool
         /// Every key already known to belong to this hike (loaded from its saved
         /// manifest, plus anything persisted so far this session) — the dedupe +
@@ -69,14 +69,39 @@ nonisolated final class AutoSaveTileStore: Sendable {
         acceptsNewClaims: Bool = true
     ) {
         let corridor = TileCorridor(route: route, bufferMeters: Self.corridorBufferMeters)
+        beginActiveHike(
+            id: id,
+            knownKeys: knownKeys,
+            acceptsNewClaims: acceptsNewClaims
+        )
+        updateCorridor(corridor, for: id)
+    }
+
+    /// Installs the inexpensive ownership state immediately while the route
+    /// corridor is prepared off-main. The empty corridor rejects every tile,
+    /// so no claim can be attached to the hike before its real bounds arrive.
+    func beginActiveHike(
+        id: UUID,
+        knownKeys: Set<String>,
+        acceptsNewClaims: Bool = true
+    ) {
         state.withLock { activeLock in
             activeLock = ActiveHike(
                 id: id,
-                corridor: corridor,
+                corridor: TileCorridor(route: [], bufferMeters: 0),
                 acceptsNewClaims: acceptsNewClaims,
                 knownKeys: knownKeys,
                 pendingKeys: []
             )
+        }
+    }
+
+    /// Applies a prepared corridor only if the same hike is still active.
+    func updateCorridor(_ corridor: TileCorridor, for hikeID: UUID) {
+        state.withLock { state in
+            guard var hike = state, hike.id == hikeID else { return }
+            hike.corridor = corridor
+            state = hike
         }
     }
 

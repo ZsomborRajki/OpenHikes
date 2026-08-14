@@ -54,9 +54,8 @@ extension HikeRecorder {
         }
         guard await mergeWidgetFixesAndReloadSession(&session, journal: journal) else { return }
         let recoveredPoints = session.points
-        session.points = await Task.detached {
-            RecordingPreparation.normalizedPoints(recoveredPoints)
-        }.value
+        session.points = await RecordingPreparation
+            .normalizedPointsOffMain(recoveredPoints)
         lastAcceptedPoint = session.points.last
         rebuildLiveState(from: session.points)
         await finishRecovery(
@@ -280,37 +279,89 @@ extension HikeRecorder {
         trailGraphPrefetchStates[region] = .fetching(
             previousFailures: previousFailures
         )
+        startTrailGraphPrefetch(
+            trailGraphProvider,
+            around: coordinate,
+            region: region,
+            previousFailures: previousFailures
+        )
+    }
+
+    private func startTrailGraphPrefetch(
+        _ provider: any TrailGraphProviding,
+        around coordinate: CLLocationCoordinate2D,
+        region: TrailGraphRegion,
+        previousFailures: Int
+    ) {
         let expectedSessionID = sessionID
-        Task { [weak self] in
-            do {
-                try await trailGraphProvider.prefetch(around: coordinate)
-                guard let self, sessionID == expectedSessionID else { return }
-                trailGraphPrefetchStates[region] = .loaded
-            } catch {
-                guard let self, sessionID == expectedSessionID else { return }
-                let failures = previousFailures + 1
-                var delay = trailGraphRetryPolicy.delay(
-                    afterFailures: failures,
-                    jitter: trailGraphRetryJitter()
-                )
-                if let providerError = error as? TrailGraphProviderError,
-                   case .rateLimited(let retryAfter) = providerError {
-                    delay = max(delay, retryAfter)
+        let taskID = UUID()
+        let task = Task { [weak self] in
+            defer {
+                if let self,
+                   trailGraphPrefetchTasks[region]?.id == taskID {
+                    trailGraphPrefetchTasks[region] = nil
                 }
-                let retryAt = clock().addingTimeInterval(delay)
-                trailGraphPrefetchStates[region] = .waiting(
-                    failures: failures,
-                    retryAt: retryAt
-                )
-                Self.logger.error(
-                    """
-                    Trail graph prefetch failed; retrying after \
-                    \(retryAt, privacy: .public): \
-                    \(error.localizedDescription, privacy: .public)
-                    """
+            }
+            do {
+                try await provider.prefetch(around: coordinate)
+                guard let self,
+                      !Task.isCancelled,
+                      sessionID == expectedSessionID else {
+                    return
+                }
+                trailGraphPrefetchStates[region] = .loaded
+            } catch is CancellationError {
+                return
+            } catch {
+                guard let self,
+                      !Task.isCancelled,
+                      sessionID == expectedSessionID else {
+                    return
+                }
+                recordTrailGraphPrefetchFailure(
+                    error,
+                    region: region,
+                    previousFailures: previousFailures
                 )
             }
         }
+        trailGraphPrefetchTasks[region] = (id: taskID, task: task)
+    }
+
+    private func recordTrailGraphPrefetchFailure(
+        _ error: any Error,
+        region: TrailGraphRegion,
+        previousFailures: Int
+    ) {
+        let failures = previousFailures + 1
+        var delay = trailGraphRetryPolicy.delay(
+            afterFailures: failures,
+            jitter: trailGraphRetryJitter()
+        )
+        if let providerError = error as? TrailGraphProviderError,
+           case .rateLimited(let retryAfter) = providerError {
+            delay = max(delay, retryAfter)
+        }
+        let retryAt = clock().addingTimeInterval(delay)
+        trailGraphPrefetchStates[region] = .waiting(
+            failures: failures,
+            retryAt: retryAt
+        )
+        Self.logger.error(
+            """
+            Trail graph prefetch failed; retrying after \
+            \(retryAt, privacy: .public): \
+            \(error.localizedDescription, privacy: .public)
+            """
+        )
+    }
+
+    func cancelTrailGraphPrefetches() {
+        for entry in trailGraphPrefetchTasks.values {
+            entry.task.cancel()
+        }
+        trailGraphPrefetchTasks.removeAll()
+        trailGraphPrefetchStates.removeAll()
     }
 
     // MARK: - Recovery helpers

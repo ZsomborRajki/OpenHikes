@@ -221,11 +221,7 @@ nonisolated final class TileCache: @unchecked Sendable {
         Self.createDirectoryIfNeeded(at: directory)
         Self.createDirectoryIfNeeded(at: durableDirectory)
 
-        let config = sessionConfiguration ?? URLSessionConfiguration.default
-        config.httpAdditionalHeaders = ["User-Agent": Self.userAgent]
-        // Don't sit in a retry queue when offline — fail fast so the caller can
-        // record the miss and stop asking until we're back online.
-        config.waitsForConnectivity = false
+        let config = Self.tileSessionConfiguration(from: sessionConfiguration)
         session = URLSession(configuration: config)
 
         memory.totalCostLimit = Self.memoryByteLimit
@@ -235,6 +231,17 @@ nonisolated final class TileCache: @unchecked Sendable {
 
         self.monitorsNetwork = monitorsNetwork
         if monitorsNetwork { startMonitoringNetwork() }
+    }
+
+    static func tileSessionConfiguration(
+        from configuration: URLSessionConfiguration? = nil
+    ) -> URLSessionConfiguration {
+        let config = configuration ?? URLSessionConfiguration.ephemeral
+        config.httpAdditionalHeaders = ["User-Agent": Self.userAgent]
+        config.waitsForConnectivity = false
+        config.urlCache = nil
+        config.requestCachePolicy = .reloadIgnoringLocalCacheData
+        return config
     }
 
     deinit {

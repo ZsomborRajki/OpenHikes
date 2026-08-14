@@ -12,7 +12,6 @@
 		A8838AF6302A232400FAEEEE /* OpenWidgetExtension.appex in Embed Foundation Extensions */ = {isa = PBXBuildFile; fileRef = A8838AE4302A232300FAEEEE /* OpenWidgetExtension.appex */; platformFilter = ios; settings = {ATTRIBUTES = (RemoveHeadersOnCopy, ); }; };
 		A8838B92302A302500FAEEEE /* OpenTrailsShared in Frameworks */ = {isa = PBXBuildFile; productRef = A8838B91302A302500FAEEEE /* OpenTrailsShared */; };
 		A8838B94302A305800FAEEEE /* OpenTrailsShared in Frameworks */ = {isa = PBXBuildFile; productRef = A8838B93302A305800FAEEEE /* OpenTrailsShared */; };
-		AA0000000000000000000003 /* CoreGPX in Frameworks */ = {isa = PBXBuildFile; productRef = AA0000000000000000000002 /* CoreGPX */; };
 		AB000000000000000000000D /* OpenTrailsShared in Frameworks */ = {isa = PBXBuildFile; productRef = AB000000000000000000000C /* OpenTrailsShared */; };
 		AC000000000000000000000D /* OpenTrailsShared in Frameworks */ = {isa = PBXBuildFile; productRef = AC000000000000000000000C /* OpenTrailsShared */; };
 		F9B04201302D981D00E03D91 /* DequeModule in Frameworks */ = {isa = PBXBuildFile; productRef = F9B04200302D981D00E03D91 /* DequeModule */; };
@@ -150,7 +149,6 @@
 				F9B04203302D981D00E03D91 /* HeapModule in Frameworks */,
 				F9B04205302D981D00E03D91 /* OrderedCollections in Frameworks */,
 				A8838B92302A302500FAEEEE /* OpenTrailsShared in Frameworks */,
-				AA0000000000000000000003 /* CoreGPX in Frameworks */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
@@ -249,7 +247,6 @@
 			);
 			name = OpenTrails;
 			packageProductDependencies = (
-				AA0000000000000000000002 /* CoreGPX */,
 				A8838B91302A302500FAEEEE /* OpenTrailsShared */,
 				F9B04211302D981D00E03D91 /* Algorithms */,
 				F9B04221302D981D00E03D91 /* AsyncAlgorithms */,
@@ -399,7 +396,6 @@
 			mainGroup = A85E85442FE3EBF500558639;
 			minimizedProjectReferenceProxies = 1;
 			packageReferences = (
-				AA0000000000000000000001 /* XCRemoteSwiftPackageReference "CoreGPX" */,
 				A8838B90302A302500FAEEEE /* XCLocalSwiftPackageReference "OpenTrailsShared" */,
 				F9B04193302D981D00E03D91 /* XCRemoteSwiftPackageReference "swift-collections" */,
 				F9B04210302D981D00E03D91 /* XCRemoteSwiftPackageReference "swift-algorithms" */,
@@ -700,6 +696,7 @@
 				SWIFT_DEFAULT_ACTOR_ISOLATION = MainActor;
 				SWIFT_EMIT_LOC_STRINGS = YES;
 				SWIFT_STRICT_CONCURRENCY = complete;
+				SWIFT_TREAT_WARNINGS_AS_ERRORS = YES;
 				SWIFT_UPCOMING_FEATURE_MEMBER_IMPORT_VISIBILITY = YES;
 				SWIFT_VERSION = 6.0;
 				TARGETED_DEVICE_FAMILY = "1,2,7";
@@ -750,6 +747,7 @@
 				SWIFT_DEFAULT_ACTOR_ISOLATION = MainActor;
 				SWIFT_EMIT_LOC_STRINGS = YES;
 				SWIFT_STRICT_CONCURRENCY = complete;
+				SWIFT_TREAT_WARNINGS_AS_ERRORS = YES;
 				SWIFT_UPCOMING_FEATURE_MEMBER_IMPORT_VISIBILITY = YES;
 				SWIFT_VERSION = 6.0;
 				TARGETED_DEVICE_FAMILY = "1,2,7";
@@ -783,8 +781,10 @@
 				SKIP_INSTALL = YES;
 				STRING_CATALOG_GENERATE_SYMBOLS = YES;
 				SWIFT_APPROACHABLE_CONCURRENCY = YES;
+				SWIFT_DEFAULT_ACTOR_ISOLATION = MainActor;
 				SWIFT_EMIT_LOC_STRINGS = YES;
 				SWIFT_STRICT_CONCURRENCY = complete;
+				SWIFT_TREAT_WARNINGS_AS_ERRORS = YES;
 				SWIFT_UPCOMING_FEATURE_MEMBER_IMPORT_VISIBILITY = YES;
 				SWIFT_VERSION = 6.0;
 				TARGETED_DEVICE_FAMILY = "1,2";
@@ -817,8 +817,10 @@
 				SKIP_INSTALL = YES;
 				STRING_CATALOG_GENERATE_SYMBOLS = YES;
 				SWIFT_APPROACHABLE_CONCURRENCY = YES;
+				SWIFT_DEFAULT_ACTOR_ISOLATION = MainActor;
 				SWIFT_EMIT_LOC_STRINGS = YES;
 				SWIFT_STRICT_CONCURRENCY = complete;
+				SWIFT_TREAT_WARNINGS_AS_ERRORS = YES;
 				SWIFT_UPCOMING_FEATURE_MEMBER_IMPORT_VISIBILITY = YES;
 				SWIFT_VERSION = 6.0;
 				TARGETED_DEVICE_FAMILY = "1,2";
@@ -850,6 +852,7 @@
 				SWIFT_DEFAULT_ACTOR_ISOLATION = MainActor;
 				SWIFT_EMIT_LOC_STRINGS = NO;
 				SWIFT_STRICT_CONCURRENCY = complete;
+				SWIFT_TREAT_WARNINGS_AS_ERRORS = YES;
 				SWIFT_UPCOMING_FEATURE_MEMBER_IMPORT_VISIBILITY = YES;
 				SWIFT_VERSION = 6.0;
 				TARGETED_DEVICE_FAMILY = "1,2,7";
@@ -883,6 +886,7 @@
 				SWIFT_DEFAULT_ACTOR_ISOLATION = MainActor;
 				SWIFT_EMIT_LOC_STRINGS = NO;
 				SWIFT_STRICT_CONCURRENCY = complete;
+				SWIFT_TREAT_WARNINGS_AS_ERRORS = YES;
 				SWIFT_UPCOMING_FEATURE_MEMBER_IMPORT_VISIBILITY = YES;
 				SWIFT_VERSION = 6.0;
 				TARGETED_DEVICE_FAMILY = "1,2,7";
@@ -912,8 +916,10 @@
 				SDKROOT = iphoneos;
 				SUPPORTED_PLATFORMS = "iphoneos iphonesimulator";
 				SWIFT_APPROACHABLE_CONCURRENCY = YES;
+				SWIFT_DEFAULT_ACTOR_ISOLATION = MainActor;
 				SWIFT_EMIT_LOC_STRINGS = NO;
 				SWIFT_STRICT_CONCURRENCY = complete;
+				SWIFT_TREAT_WARNINGS_AS_ERRORS = YES;
 				SWIFT_UPCOMING_FEATURE_MEMBER_IMPORT_VISIBILITY = YES;
 				SWIFT_VERSION = 6.0;
 				TARGETED_DEVICE_FAMILY = "1,2";
@@ -942,8 +948,10 @@
 				SDKROOT = iphoneos;
 				SUPPORTED_PLATFORMS = "iphoneos iphonesimulator";
 				SWIFT_APPROACHABLE_CONCURRENCY = YES;
+				SWIFT_DEFAULT_ACTOR_ISOLATION = MainActor;
 				SWIFT_EMIT_LOC_STRINGS = NO;
 				SWIFT_STRICT_CONCURRENCY = complete;
+				SWIFT_TREAT_WARNINGS_AS_ERRORS = YES;
 				SWIFT_UPCOMING_FEATURE_MEMBER_IMPORT_VISIBILITY = YES;
 				SWIFT_VERSION = 6.0;
 				TARGETED_DEVICE_FAMILY = "1,2";
@@ -971,8 +979,10 @@
 				SDKROOT = iphoneos;
 				SUPPORTED_PLATFORMS = "iphoneos iphonesimulator";
 				SWIFT_APPROACHABLE_CONCURRENCY = YES;
+				SWIFT_DEFAULT_ACTOR_ISOLATION = MainActor;
 				SWIFT_EMIT_LOC_STRINGS = NO;
 				SWIFT_STRICT_CONCURRENCY = complete;
+				SWIFT_TREAT_WARNINGS_AS_ERRORS = YES;
 				SWIFT_UPCOMING_FEATURE_MEMBER_IMPORT_VISIBILITY = YES;
 				SWIFT_VERSION = 6.0;
 				TARGETED_DEVICE_FAMILY = "1,2";
@@ -999,8 +1009,10 @@
 				SDKROOT = iphoneos;
 				SUPPORTED_PLATFORMS = "iphoneos iphonesimulator";
 				SWIFT_APPROACHABLE_CONCURRENCY = YES;
+				SWIFT_DEFAULT_ACTOR_ISOLATION = MainActor;
 				SWIFT_EMIT_LOC_STRINGS = NO;
 				SWIFT_STRICT_CONCURRENCY = complete;
+				SWIFT_TREAT_WARNINGS_AS_ERRORS = YES;
 				SWIFT_UPCOMING_FEATURE_MEMBER_IMPORT_VISIBILITY = YES;
 				SWIFT_VERSION = 6.0;
 				TARGETED_DEVICE_FAMILY = "1,2";
@@ -1083,14 +1095,6 @@
 				minimumVersion = 0.65.0;
 			};
 		};
-		AA0000000000000000000001 /* XCRemoteSwiftPackageReference "CoreGPX" */ = {
-			isa = XCRemoteSwiftPackageReference;
-			repositoryURL = "https://github.com/vincentneo/CoreGPX";
-			requirement = {
-				kind = upToNextMajorVersion;
-				minimumVersion = 0.9.1;
-			};
-		};
 		F9B04193302D981D00E03D91 /* XCRemoteSwiftPackageReference "swift-collections" */ = {
 			isa = XCRemoteSwiftPackageReference;
 			repositoryURL = "https://github.com/apple/swift-collections/";
@@ -1131,11 +1135,6 @@
 			isa = XCSwiftPackageProductDependency;
 			package = A8838B90302A302500FAEEEE /* XCLocalSwiftPackageReference "OpenTrailsShared" */;
 			productName = OpenTrailsShared;
-		};
-		AA0000000000000000000002 /* CoreGPX */ = {
-			isa = XCSwiftPackageProductDependency;
-			package = AA0000000000000000000001 /* XCRemoteSwiftPackageReference "CoreGPX" */;
-			productName = CoreGPX;
 		};
 		AB000000000000000000000C /* OpenTrailsShared */ = {
 			isa = XCSwiftPackageProductDependency;

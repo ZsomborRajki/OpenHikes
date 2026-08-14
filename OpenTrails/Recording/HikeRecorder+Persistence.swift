@@ -31,25 +31,16 @@ extension HikeRecorder {
         }
 
         let (normalized, graph, gapEvidence) = await normalizeSession(session)
-        let prepared: PreparedRecording
-        do {
-            prepared = try await Task.detached(priority: .userInitiated) {
-                assertOffMainThread(
-                    "Recording preparation must stay off the main thread"
-                )
-                return try RecordingPreparation.prepare(
-                    points: normalized,
-                    startedAt: session.metadata.startedAt,
-                    endedAt: endedAt,
-                    graph: graph,
-                    gapDistances: gapEvidence
-                )
-            }.value
-        } catch let failure as RecordingFailure {
-            throw failure
-        } catch {
-            throw .save(error.localizedDescription)
-        }
+        // `prepareOffMain` is typed `throws(RecordingFailure)` and `@concurrent`
+        // preserves that, so the failure propagates as itself — no re-catch,
+        // no `localizedDescription` round-trip through `any Error`.
+        let prepared = try await RecordingPreparation.prepareOffMain(
+            points: normalized,
+            startedAt: session.metadata.startedAt,
+            endedAt: endedAt,
+            graph: graph,
+            gapDistances: gapEvidence
+        )
 
         let sections = await groupedSections(in: prepared.matchResult)
         Self.logger.debug(
@@ -84,12 +75,7 @@ extension HikeRecorder {
         in matchResult: TrailMatchResult?
     ) async -> [RouteReviewSection] {
         guard let matchResult else { return [] }
-        return await Task.detached(priority: .userInitiated) {
-            assertOffMainThread(
-                "Route review grouping must stay off the main thread"
-            )
-            return RouteReviewSection.sections(in: matchResult)
-        }.value
+        return await RouteReviewSection.sectionsOffMain(in: matchResult)
     }
 
     func normalizeSession(
@@ -98,14 +84,8 @@ extension HikeRecorder {
         graph: TrailGraph?,
         gapEvidence: [Int: Double]
     ) {
-        let normalized = await Task.detached(
-            priority: .userInitiated
-        ) {
-            assertOffMainThread(
-                "Recording normalization must stay off the main thread"
-            )
-            return RecordingPreparation.normalizedPoints(session.points)
-        }.value
+        let normalized = await RecordingPreparation
+            .normalizedPointsOffMain(session.points)
 
         let graph: TrailGraph?
         if let trailGraphProvider {
@@ -361,6 +341,7 @@ extension HikeRecorder {
         endLocationUpdates: Bool = true
     ) {
         cancelLiveMatching(clearWindow: false)
+        cancelTrailGraphPrefetches()
         if endLocationUpdates {
             stopLocationSensors()
         }
@@ -374,6 +355,7 @@ extension HikeRecorder {
     }
 
     func resetSession() {
+        cancelTrailGraphPrefetches()
         phase = .idle
         recoveryState = .absent
         sessionStartedAt = nil
@@ -387,7 +369,6 @@ extension HikeRecorder {
         accumulator = RecordingDistanceAccumulator()
         elevationFilter.reset()
         latestMotionState = .unknown
-        trailGraphPrefetchStates = [:]
         startRequested = false
         isActivating = false
         pendingResumeFlag = false
@@ -445,6 +426,7 @@ extension HikeRecorder {
     }
 
     func initializeSessionState(id: UUID, startedAt: Date) {
+        cancelTrailGraphPrefetches()
         sessionID = id
         sessionStartedAt = startedAt
         sessionUptimeBase = uptime()
@@ -455,7 +437,6 @@ extension HikeRecorder {
         elevationFilter.reset()
         latestMotionState = .unknown
         lastAcceptedPoint = nil
-        trailGraphPrefetchStates = [:]
         pendingReviewSave = nil
         pendingPreparedSave = nil
         pendingResumeFlag = false

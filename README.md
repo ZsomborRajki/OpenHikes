@@ -77,6 +77,8 @@ Scripts/run-ui-tests.sh --test testReviewsSnappedRouteAfterStopping
 Scripts/run-ui-tests.sh --all
 
 swift test --package-path OpenTrailsShared
+
+swiftlint lint --strict
 ```
 
 Unit and integration tests use Swift Testing. `OpenTrailsUITests` uses
@@ -85,7 +87,9 @@ are not available through Swift Testing. UI-test launches use an in-memory
 SwiftData store and isolated preferences; coverage includes app/settings smoke
 navigation, bundled GPX import, programmatic simulator location, recording
 startup, the record → review → save round trip, and
-`XCTApplicationLaunchMetric`. There is no separate lint or formatting command.
+`XCTApplicationLaunchMetric`. CI runs these checks, strict SwiftLint, the shared
+package suite, warning-free debug/release builds, and the concurrent GPX parser
+under Thread Sanitizer.
 
 ## Project layout
 
@@ -119,4 +123,3 @@ See [`.github/copilot-instructions.md`](.github/copilot-instructions.md) for arc
 - Offline trail matching is limited to Overpass graph regions that were cached previously; prebuilt regional graph bundles are not shipped.
 - Sign in with Apple is a disabled placeholder, and hikes do not sync between devices.
 - Third-party tile keys can only be supplied at build time.
-- There is no CI, so the test suites are only as protected as the person running them; details are tracked in `CODE_REVIEW.md`.

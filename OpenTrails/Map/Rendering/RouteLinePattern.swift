@@ -43,7 +43,7 @@ nonisolated enum RouteLinePattern: String, CaseIterable, Identifiable, Sendable 
     /// The order the picker shows them in: plainest first, then the two ways
     /// of breaking the line, then the one that drops it. `allCases` is sorted
     /// alphabetically, which is not an order anyone would choose to read.
-    static let displayOrder: [RouteLinePattern] = [
+    static let displayOrder: [Self] = [
         .solid, .directional, .dashed, .dotted, .arrowheads,
     ]
 

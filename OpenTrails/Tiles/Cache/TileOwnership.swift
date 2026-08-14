@@ -44,21 +44,30 @@ nonisolated struct TileOwnership: Sendable {
     ///
     /// Recomputed from the route rather than stored, matching how the
     /// downloader enumerates them in the first place.
-    func tileKeys() -> Set<String> {
+    func tileKeys() throws(CancellationError) -> Set<String> {
         guard hasStoredTiles else { return [] }
         let coordinates = route.map(\.clCoordinate)
-        return Set(
-            OfflineTileDownloader.storedTileKeys(route: coordinates, offlineDownloads: offlineDownloads)
+        return try Set(
+            OfflineTileDownloader.storedTileKeys(
+                route: coordinates,
+                offlineDownloads: offlineDownloads
+            )
         ).union(autoSavedTileKeys)
     }
 
     /// The keys `self` claims that none of `others` do — i.e. exactly what can
     /// be deleted along with this hike without quietly stripping offline
     /// coverage from a hike that's still around and still lists it.
-    func exclusiveTileKeys(against others: [Self]) -> Set<String> {
-        var keys = tileKeys()
+    ///
+    /// Cancellation propagates rather than degrading: a half-enumerated
+    /// survivor would under-report its claims, and the caller would delete
+    /// tiles that hike still needs. Throwing means nothing is deleted instead.
+    func exclusiveTileKeys(
+        against others: [Self]
+    ) throws(CancellationError) -> Set<String> {
+        var keys = try tileKeys()
         for other in others where other.hasStoredTiles {
-            keys.subtract(other.tileKeys())
+            keys.subtract(try other.tileKeys())
             // Overlapping trails can account for everything; stop paying for
             // the remaining route enumerations once nothing is left to delete.
             if keys.isEmpty { break }
@@ -80,8 +89,27 @@ nonisolated struct StoredTileDeletionPlan: Sendable {
             .map(TileOwnership.init) // swiftlint:disable:this prefer_self_in_static_references
     }
 
-    func exclusiveTileKeys() -> Set<String> {
-        doomed.exclusiveTileKeys(against: survivors)
+    func exclusiveTileKeys() throws(CancellationError) -> Set<String> {
+        try doomed.exclusiveTileKeys(against: survivors)
+    }
+
+    /// Enumerates and frees this plan's exclusive tiles on the concurrent
+    /// executor. `@concurrent` rather than a detached task: a `Task` started
+    /// from the main actor inherits its isolation, and both the enumeration
+    /// and the file removal assert they are off the main thread.
+    @concurrent
+    func removeExclusiveTiles(from cache: TileCache) async {
+        let keys: Set<String>
+        do throws(CancellationError) {
+            keys = try exclusiveTileKeys()
+        } catch {
+            // Cancelled mid-enumeration: a partial survivor set under-reports
+            // what is still claimed, so delete nothing rather than strip a
+            // surviving hike's offline coverage.
+            return
+        }
+        guard !keys.isEmpty else { return }
+        cache.removeTiles(forKeys: Array(keys))
     }
 }
 

@@ -82,6 +82,54 @@ struct FollowAnchor: Equatable {
     }
 }
 
+/// Decides how much of the route each live-follow fix is searched against.
+///
+/// Bounding the search to a window around the last match is what keeps a fix
+/// from costing a full-route scan — but a fix with nothing on-route inside the
+/// window falls back to scanning the rest of the route, and a walker who has
+/// simply stepped off the trail produces one of those every second. Left
+/// alone, being off-route costs exactly what the window was introduced to
+/// avoid, for as long as it lasts.
+///
+/// So the fallback is latched off once it has already come up empty, and
+/// re-armed every ``rearmIntervalFixes`` fixes: a walker who really did rejoin
+/// somewhere else — driven round to the far trailhead — is found within half a
+/// minute instead of within a second, and the intervening fixes cost a window.
+struct OffRouteSearchPolicy: Equatable {
+    /// Fixes to spend inside the window before the whole route is searched
+    /// again. At the one-a-second publish rate this is about half a minute.
+    static let rearmIntervalFixes = 30
+
+    /// Fixes searched against the window since the last whole-route scan came
+    /// up empty, or `nil` when the next fix should search the whole route.
+    private var fixesSinceEmptyWholeRouteSearch: Int?
+
+    /// The scope the next fix should be searched with.
+    var scope: RouteProfile.SearchScope {
+        fixesSinceEmptyWholeRouteSearch == nil ? .wholeRoute : .continuityWindow
+    }
+
+    init() {
+        // The memberwise initialiser is private, since the counter is.
+    }
+
+    /// Folds in the outcome of a fix that was searched with `scope`.
+    mutating func record(matched: Bool, scope: RouteProfile.SearchScope) {
+        guard !matched else {
+            fixesSinceEmptyWholeRouteSearch = nil
+            return
+        }
+        switch scope {
+        case .wholeRoute:
+            fixesSinceEmptyWholeRouteSearch = 0
+        case .continuityWindow:
+            let elapsed = (fixesSinceEmptyWholeRouteSearch ?? 0) + 1
+            fixesSinceEmptyWholeRouteSearch =
+                elapsed < Self.rearmIntervalFixes ? elapsed : nil
+        }
+    }
+}
+
 enum FollowHighlightUpdate {
     case clear
     case move(CLLocationCoordinate2D)

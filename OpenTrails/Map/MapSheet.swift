@@ -366,10 +366,8 @@ private func delete(_ hike: Hike) {
         // Enumerating a route's tile grid is real CPU work, per download
         // record, for every hike involved — all of it belongs off the
         // main thread.
-        Task.detached {
-            let keys = deletionPlan.exclusiveTileKeys()
-            guard !keys.isEmpty else { return }
-            TileCache.shared.removeTiles(forKeys: Array(keys))
+        Task(priority: .utility) {
+            await deletionPlan.removeExclusiveTiles(from: .shared)
         }
     }
 

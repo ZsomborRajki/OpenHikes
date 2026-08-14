@@ -20,11 +20,6 @@ import Testing
 
 @Suite("Import workload", .serialized)
 struct ImportWorkloadTests {
-    private struct ObservedParse: Sendable {
-        let track: GPXImport.Track
-        let ranOnMainThread: Bool
-    }
-
     /// Writes a real GPX file with `pointCount` track points, so the parser
     /// does the work it would do on a picked file rather than on a fixture
     /// that was never serialized.
@@ -63,22 +58,17 @@ struct ImportWorkloadTests {
     /// magnitude of it.
     ///
     /// The fix is structural rather than clever: `GPXImport` is already
-    /// `nonisolated` and takes a `URL`, so the parse can happen in a detached
-    /// task and only the `Hike` construction and insert need the main actor.
+    /// `nonisolated` and takes a `URL`, so the parse can happen on the
+    /// concurrent executor (`@concurrent`) and only the `Hike` construction
+    /// and insert need the main actor.
     @Test("importing a long recording doesn't block the main thread")
     func longImportStaysOffTheMainThread() async throws {
         let url = try writeGPX(pointCount: 18_000)
         defer { try? FileManager.default.removeItem(at: url) }
 
-        let observed = try await GPXImport.runOffMain { () throws(GPXImport.ImportFailure) -> ObservedParse in
-            ObservedParse(
-                track: try GPXImport.load(from: url),
-                ranOnMainThread: Thread.isMainThread
-            )
-        }
+        let observed = try await GPXImport.loadOffMain(from: url)
 
-        #expect(observed.track.points.count == 18_000, "precondition: the whole file was read")
-        #expect(!observed.ranOnMainThread, "the picked file must be parsed on the detached import executor")
+        #expect(observed.points.count == 18_000, "precondition: the whole file was read")
     }
 
     /// Derived route data is prepared once during parsing. Repeated reads must

@@ -300,7 +300,10 @@ struct OfflineDownloadStatus: View {
         switch downloader.phase {
         case .failed(let message): message
         case .finished: "Saved for offline use."
-        case .downloading:  "Saving \(downloader.total) tiles…"
+        case .downloading:
+            downloader.total == 0
+                ? "Preparing offline tiles…"
+                : "Saving \(downloader.total) tiles…"
         case .idle: idleNote
         }
     }

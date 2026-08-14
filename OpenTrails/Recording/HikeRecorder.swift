@@ -72,6 +72,8 @@ final class HikeRecorder: NSObject {
     @ObservationIgnored var latestMotionState: RecordingMotionState = .unknown
     @ObservationIgnored var trailGraphPrefetchStates:
         [TrailGraphRegion: TrailGraphPrefetchState] = [:]
+    @ObservationIgnored var trailGraphPrefetchTasks:
+        [TrailGraphRegion: (id: UUID, task: Task<Void, Never>)] = [:]
     @ObservationIgnored var startRequested = false
     @ObservationIgnored var isActivating = false
     @ObservationIgnored var pendingResumeFlag = false
@@ -304,6 +306,7 @@ extension HikeRecorder {
         }
         phase = .saving
         cancelLiveMatching(clearWindow: false)
+        cancelTrailGraphPrefetches()
         journalFlushTask?.cancel()
         journalFlushTask = nil
         publishSharedRecordingSnapshot(force: true)
@@ -344,6 +347,7 @@ extension HikeRecorder {
 
     func discard() async {
         cancelLiveMatching(clearWindow: true)
+        cancelTrailGraphPrefetches()
         stopLocationSensors()
         journalFlushTask?.cancel()
         journalFlushTask = nil
@@ -471,16 +475,13 @@ extension HikeRecorder {
                 }
                 return endedAt
             }()
-            let prepared = try await Task.detached(priority: .userInitiated) {
-                assertOffMainThread("Route review resolution must stay off the main thread")
-                return try RecordingPreparation.prepareResolved(
-                    points: points,
-                    startedAt: startedAt,
-                    endedAt: endedAt,
-                    matchResult: pendingReviewSave.matchResult,
-                    choices: choices
-                )
-            }.value
+            let prepared = try await RecordingPreparation.prepareResolvedOffMain(
+                points: points,
+                startedAt: startedAt,
+                endedAt: endedAt,
+                matchResult: pendingReviewSave.matchResult,
+                choices: choices
+            )
             pendingPreparedSave = PendingPreparedSave(
                 session: pendingReviewSave.session,
                 prepared: prepared,

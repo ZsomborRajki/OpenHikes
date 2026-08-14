@@ -58,15 +58,25 @@ nonisolated extension TileCache {
     /// One tier per key — the durable copy if there is one, otherwise the
     /// browsing one. Summing both tiers billed a hike twice for any tile that
     /// had a copy in each.
-    func bytes(forKeys keys: [String]) -> Int64 {
+    ///
+    /// Cancellable: a hike with a full offline download stats thousands of
+    /// files, and leaving the screen mid-scan should stop the scan rather than
+    /// discard its result. Outside a task `Task.isCancelled` is always `false`,
+    /// so a synchronous caller simply never sees the throw.
+    func bytes(forKeys keys: [String]) throws(CancellationError) -> Int64 {
         assertOffMainThread(
             "bytes(forKeys:) stats up to two files per key — call it off the main thread"
         )
-        return keys.reduce(0) { total, key in
+        var total: Int64 = 0
+        for (index, key) in keys.enumerated() {
+            if index.isMultiple(of: 32), Task.isCancelled {
+                throw CancellationError()
+            }
             let (cached, durable) = filePaths(forKey: key)
             let durableSize = fileSize(durable)
-            return total + (durableSize > 0 ? durableSize : fileSize(cached))
+            total += durableSize > 0 ? durableSize : fileSize(cached)
         }
+        return total
     }
 
     /// Removes every cached tile (memory + ephemeral disk + durable disk).

@@ -28,6 +28,30 @@ nonisolated struct RouteProfile: Sendable {
     /// point, since a trail's own bearing wanders segment to segment while the
     /// leg it belongs to does not.
     static let courseAgreementDegrees: Double = 90
+    /// How much farther off-route a segment may project and still be treated
+    /// as tied with the closest one, and therefore be eligible for the
+    /// course/continuity tie-break. Wide enough to cover the two legs of an
+    /// out-and-back sampled a few metres apart, narrow enough that a genuinely
+    /// different trail is not a contender.
+    static let tieBreakToleranceMeters = 20.0
+    /// How far along the route, either side of the last match, a fix is
+    /// searched before the whole route is considered. A walker covers a couple
+    /// of metres between fixes, so this is orders of magnitude more slack than
+    /// continuous walking needs; it is sized to absorb a run of rejected fixes
+    /// or a backgrounded app, not ordinary movement.
+    static let continuitySearchRadiusMeters = 1000.0
+
+    /// How much of the route a fix may be searched against when the continuity
+    /// window holds nothing on-route.
+    enum SearchScope: Sendable {
+        /// Fall back to the rest of the route. The walker may have reopened
+        /// the app somewhere else entirely.
+        case wholeRoute
+        /// Stay inside the window around the last match. Live follow latches
+        /// on to this once a widened scan has already come up empty — see
+        /// ``OffRouteSearchPolicy``.
+        case continuityWindow
+    }
 
     /// Upper bound on how many points the elevation chart is asked to draw.
     /// One plotted point per two device pixels is already past what a 390 pt
@@ -236,6 +260,14 @@ nonisolated struct RouteProfile: Sendable {
         nearestIndex(in: sampleDistances, to: target).map { samples[$0] }
     }
 
+}
+
+// MARK: - Matching a live fix onto the route
+
+/// Split out of the main declaration: this is the GPS-matching half of the
+/// profile, used only by the live-follow and background-tracking paths, and it
+/// reads independently of the distance/elevation index above.
+nonisolated extension RouteProfile {
     /// Projects an arbitrary coordinate (e.g. a live GPS fix) onto the route,
     /// used to auto-follow the elevation graph. Returns the distance-along-route
     /// of the nearest point on any route segment and how far off the route
@@ -277,7 +309,8 @@ nonisolated struct RouteProfile: Sendable {
     func nearestPoint(
         to coordinate: CLLocationCoordinate2D,
         near referenceDistance: Double? = nil,
-        heading: CLLocationDirection? = nil
+        heading: CLLocationDirection? = nil,
+        scope: SearchScope = .wholeRoute
     ) -> (distanceAlongRoute: Double, offRouteMeters: Double)? {
         guard !coordinates.isEmpty else { return nil }
         guard coordinates.count > 1 else {
@@ -286,29 +319,51 @@ nonisolated struct RouteProfile: Sendable {
             return (0, offset)
         }
 
-        func candidate(at index: Int) -> NearestCandidate {
-            let projection = RouteGeometry.project(
-                coordinate,
-                onSegmentFrom: coordinates[index],
-                to: coordinates[index + 1]
-            )
-            return NearestCandidate(
-                distanceAlongRoute: distances[index]
-                    + projection.fraction
-                        * (distances[index + 1] - distances[index]),
-                offRouteMeters: projection.offRouteMeters,
-                dx: projection.dx,
-                dy: projection.dy
-            )
-        }
+        let fullRange = 0..<(coordinates.count - 1)
+        let initialRange = referenceDistance.map { reference in
+            candidateSegmentRange(near: reference)
+        } ?? fullRange
+        var candidates: [NearestCandidate] = []
+        candidates.reserveCapacity(initialRange.count)
+        var best: NearestCandidate?
+        appendCandidates(
+            to: coordinate,
+            in: initialRange,
+            candidates: &candidates,
+            best: &best
+        )
 
-        var best = NearestCandidate(distanceAlongRoute: 0, offRouteMeters: .greatestFiniteMagnitude, dx: 0, dy: 0)
-        for index in 0..<(coordinates.count - 1) {
-            let result = candidate(at: index)
-            if result.offRouteMeters < best.offRouteMeters {
-                best = result
+        // An established match normally needs only the nearby route-distance
+        // window. If that window no longer contains an on-route candidate, the
+        // user may have reopened the app or moved farther than the continuity
+        // window, so fall back to the rest of the route once.
+        //
+        // `scope` is how the caller stops paying for that fallback on every
+        // fix: a walker who has simply stepped off the trail produces an
+        // unmatched fix a second, and each one would otherwise re-scan the
+        // whole route.
+        if scope == .wholeRoute,
+           referenceDistance != nil,
+           initialRange != fullRange,
+           (best?.offRouteMeters ?? .greatestFiniteMagnitude)
+               > Self.followMatchThresholdMeters {
+            appendCandidates(
+                to: coordinate,
+                in: fullRange.lowerBound..<initialRange.lowerBound,
+                candidates: &candidates,
+                best: &best
+            )
+            appendCandidates(
+                to: coordinate,
+                in: initialRange.upperBound..<fullRange.upperBound,
+                candidates: &candidates,
+                best: &best
+            )
+            candidates.sort { left, right in
+                left.distanceAlongRoute < right.distanceAlongRoute
             }
         }
+        guard let best else { return nil }
 
         let anchor = referenceDistance ?? 0
         let course = referenceDistance == nil ? heading : nil
@@ -323,11 +378,46 @@ nonisolated struct RouteProfile: Sendable {
         // along; failing that (or between two that both qualify), whichever
         // is nearest the anchor.
         return breakTie(
-            among: (0..<(coordinates.count - 1)).map { candidate(at: $0) },
+            among: candidates,
             best: best,
             anchor: anchor,
             runsWithTheWalker: runsWithTheWalker
         )
+    }
+
+    /// The segments within ``continuitySearchRadiusMeters`` of
+    /// `referenceDistance`, as a half-open segment index range.
+    ///
+    /// The reference is clamped to the route first: a stale or corrupt anchor
+    /// past either end would otherwise produce an empty range, and an empty
+    /// range has no candidates to match against at all.
+    func candidateSegmentRange(
+        near referenceDistance: Double
+    ) -> Range<Int> {
+        let segmentCount = max(0, coordinates.count - 1)
+        guard segmentCount > 0 else { return 0..<0 }
+
+        let reference = min(max(referenceDistance, 0), totalDistanceMeters)
+        let lowerDistance = max(
+            0,
+            reference - Self.continuitySearchRadiusMeters
+        )
+        let upperDistance = min(
+            totalDistanceMeters,
+            reference + Self.continuitySearchRadiusMeters
+        )
+        let firstPointAtOrAfterLower = distances.partitioningIndex { distance in
+            distance >= lowerDistance
+        }
+        let firstPointAfterUpper = distances.partitioningIndex { distance in
+            distance > upperDistance
+        }
+        let lowerSegment = max(0, firstPointAtOrAfterLower - 1)
+        let upperSegment = min(
+            segmentCount,
+            max(lowerSegment + 1, firstPointAfterUpper)
+        )
+        return lowerSegment..<upperSegment
     }
 
     private struct NearestCandidate {
@@ -338,18 +428,48 @@ nonisolated struct RouteProfile: Sendable {
         var bearingDegrees: Double { atan2(dx, dy) * 180 / .pi }
     }
 
+    private func appendCandidates(
+        to coordinate: CLLocationCoordinate2D,
+        in range: Range<Int>,
+        candidates: inout [NearestCandidate],
+        best: inout NearestCandidate?
+    ) {
+        for index in range {
+            let projection = RouteGeometry.project(
+                coordinate,
+                onSegmentFrom: coordinates[index],
+                to: coordinates[index + 1]
+            )
+            let candidate = NearestCandidate(
+                distanceAlongRoute: distances[index]
+                    + projection.fraction
+                        * (distances[index + 1] - distances[index]),
+                offRouteMeters: projection.offRouteMeters,
+                dx: projection.dx,
+                dy: projection.dy
+            )
+            candidates.append(candidate)
+            if candidate.offRouteMeters
+                < (best?.offRouteMeters ?? .greatestFiniteMagnitude) {
+                best = candidate
+            }
+        }
+    }
+
     private func breakTie(
         among candidates: [NearestCandidate],
         best: NearestCandidate,
         anchor: Double,
         runsWithTheWalker: (NearestCandidate) -> Bool
     ) -> (distanceAlongRoute: Double, offRouteMeters: Double) {
-        let tieBreakToleranceMeters = 20.0
         var tied = best
         var tiedRunsWith = runsWithTheWalker(best)
         var bestContinuity = abs(best.distanceAlongRoute - anchor)
         for contender in candidates {
-            guard contender.offRouteMeters <= best.offRouteMeters + tieBreakToleranceMeters else { continue }
+            guard contender.offRouteMeters
+                <= best.offRouteMeters + Self.tieBreakToleranceMeters else {
+                continue
+            }
             let contenderRunsWith = runsWithTheWalker(contender)
             if contenderRunsWith != tiedRunsWith {
                 guard contenderRunsWith else { continue }

@@ -263,6 +263,29 @@ extension HikeRecorderTests {
         #expect(Set(regions).count == 2)
     }
 
+    @Test("trail graph prefetch is cancelled when the recording is discarded")
+    func trailGraphPrefetchStopsWithRecording() async {
+        let provider = BlockingTrailGraphProvider()
+        let recorder = makeRecorder(trailGraphProvider: provider)
+        await recorder.start()
+
+        source.deliver(fix(latitude: 47.63, longitude: 12.86))
+        await settleDelegateHop()
+        for _ in 0..<100 where !(await provider.didStart()) {
+            await Task.yield()
+        }
+        #expect(await provider.didStart())
+
+        await recorder.discard()
+        for _ in 0..<100 where !(await provider.wasCancelled()) {
+            await Task.yield()
+        }
+
+        #expect(await provider.wasCancelled())
+        #expect(recorder.trailGraphPrefetchTasks.isEmpty)
+        #expect(recorder.trailGraphPrefetchStates.isEmpty)
+    }
+
     @Test("trail graph retry delay exponentiates with jitter and a ceiling")
     func trailGraphRetryPolicyBacksOff() {
         let policy = TrailGraphPrefetchRetryPolicy(
@@ -366,6 +389,43 @@ extension HikeRecorderTests {
         for _ in 0..<100
         where recorder.trailGraphPrefetchStates[region] != expected {
             await Task.yield()
+        }
+    }
+
+    private actor BlockingTrailGraphProvider: TrailGraphProviding {
+        private var started = false
+        private var cancelled = false
+
+        nonisolated func region(
+            containing coordinate: CLLocationCoordinate2D
+        ) -> TrailGraphRegion? {
+            TrailGraphRegion(zoom: 12, x: 1, y: 1)
+        }
+
+        func prefetch(
+            around coordinate: CLLocationCoordinate2D
+        ) async throws {
+            started = true
+            do {
+                try await Task.sleep(for: .seconds(60))
+            } catch is CancellationError {
+                cancelled = true
+                throw CancellationError()
+            }
+        }
+
+        func cachedGraph(
+            covering coordinates: [CLLocationCoordinate2D]
+        ) -> TrailGraph? {
+            .empty
+        }
+
+        func didStart() -> Bool {
+            started
+        }
+
+        func wasCancelled() -> Bool {
+            cancelled
         }
     }
 

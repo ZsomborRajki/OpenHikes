@@ -27,6 +27,7 @@ extension StorageAccountingTests {
         }
         let optedOut = Fixture.hike(in: context, title: "Opted out") { $0.autoSaveTilesEnabled = false }
         controller.hikeSelectionChanged(to: selected)
+        await controller.waitForActivation()
 
         let saved = key(16, 30, 30)
         try await persist(key: saved, tile: tile())
@@ -39,6 +40,7 @@ extension StorageAccountingTests {
             hike.autoSavedTileKeys.removeAll()
         }
         controller.hikeSelectionChanged(to: resumed)
+        await controller.waitForActivation()
         await removeAllTiles()
 
         #expect(selected.autoSaveTilesEnabled, "the setting is the user's, not the delete button's")
@@ -54,6 +56,7 @@ extension StorageAccountingTests {
         let controller = makeController()
         let selected = Fixture.hike(in: context) { $0.autoSaveTilesEnabled = true }
         controller.hikeSelectionChanged(to: selected)
+        await controller.waitForActivation()
 
         let before = key(16, 31, 31)
         try await persist(key: before, tile: tile())
@@ -63,6 +66,7 @@ extension StorageAccountingTests {
         selected.offlineDownloads.removeAll()
         selected.autoSavedTileKeys.removeAll()
         controller.hikeSelectionChanged(to: resumed)
+        await controller.waitForActivation()
         await removeAllTiles()
 
         // A tile browsed after the delete is saved against the hike again,
@@ -90,7 +94,7 @@ extension StorageAccountingTests {
         let freed = await trim(claimedBy: [], limit: limit)
         #expect(freed > 0)
 
-        let remaining = await bytes(browsed)
+        let remaining = try await bytes(browsed)
         #expect(remaining <= limit, "the cache is back inside its bound")
     }
 
@@ -102,6 +106,7 @@ extension StorageAccountingTests {
         let controller = makeController()
         let hike = Fixture.hike(in: context)
         controller.hikeSelectionChanged(to: hike)
+        await controller.waitForActivation()
 
         let saved = key(16, 21, 0)
         try await persist(key: saved, tile: tile())
@@ -112,10 +117,10 @@ extension StorageAccountingTests {
         let browsed = (1..<6).map { key(16, 21, $0) }
         for key in browsed { try sandbox.browse(key: key) }
 
-        let claimed = await claimedKeys(of: hike)
+        let claimed = try await claimedKeys(of: hike)
         let freed = await trim(claimedBy: claimed, limit: TileStore.tileByteCount)
         #expect(freed > 0, "precondition: the trim did something")
-        #expect(await bytes([saved]) > 0, "the hike's offline map is not the cache's to reclaim")
+        #expect(try await bytes([saved]) > 0, "the hike's offline map is not the cache's to reclaim")
         #expect(sandbox.isSaved(saved))
     }
 

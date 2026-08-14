@@ -39,25 +39,25 @@ struct TileOwnershipTests {
     }
 
     @Test("a hike that never saved anything claims nothing")
-    func nothingStored() async {
+    func nothingStored() async throws {
         let hike = Fixture.hike(in: context)
         #expect(!hike.hasStoredTiles)
         let ownership = TileOwnership(hike)
         #expect(!ownership.hasStoredTiles)
-        #expect(await offMain { ownership.tileKeys() }.isEmpty)
+        #expect(try await offMain { try ownership.tileKeys() }.isEmpty)
     }
 
     /// The claim is recomputed from the route the same way the download
     /// enumerated it — that's what makes the manifest a few numbers instead
     /// of a list of thousands of keys.
     @Test("a bulk download's claim is recomputed from the route")
-    func bulkDownloadClaim() async {
+    func bulkDownloadClaim() async throws {
         let hike = Fixture.hike(in: context)
         download(hike)
         let ownership = TileOwnership(hike)
         #expect(ownership.hasStoredTiles)
 
-        let claimed = await offMain { ownership.tileKeys() }
+        let claimed = try await offMain { try ownership.tileKeys() }
         let expected = Set(OfflineTileDownloader.tileKeys(
             for: Fixture.coordinates(Fixture.ridgeRoute),
             providerID: TileProvider.openStreetMap.id,
@@ -71,34 +71,34 @@ struct TileOwnershipTests {
     /// Auto-saved tiles can't be recomputed — organic coverage isn't a
     /// bounding box — so they're recorded exactly and simply added in.
     @Test("auto-saved keys are claimed alongside the recomputed ones")
-    func autoSavedClaim() async {
+    func autoSavedClaim() async throws {
         let hike = Fixture.hike(in: context)
         download(hike)
         hike.autoSavedTileKeys = ["osm/18/1/1@2.0", "osm/18/1/2@2.0"]
         let ownership = TileOwnership(hike)
 
-        let claimed = await offMain { ownership.tileKeys() }
+        let claimed = try await offMain { try ownership.tileKeys() }
         #expect(claimed.isSuperset(of: ["osm/18/1/1@2.0", "osm/18/1/2@2.0"]))
         #expect(claimed.count > 2)
     }
 
     /// The case the whole type exists for.
     @Test("tiles two hikes share are not freed when one is deleted")
-    func sharedTilesSurvive() async {
+    func sharedTilesSurvive() async throws {
         let doomed = Fixture.hike(in: context, title: "Doomed")
         let survivor = Fixture.hike(in: context, title: "Survivor")
         download(doomed)
         download(survivor)
 
         let deletionPlan = StoredTileDeletionPlan(removing: doomed, among: [doomed, survivor])
-        let exclusive = await offMain { deletionPlan.exclusiveTileKeys() }
+        let exclusive = try await offMain { try deletionPlan.exclusiveTileKeys() }
         #expect(exclusive.isEmpty, "two hikes on the same route claim the same tiles")
     }
 
     /// …and the converse: a hike elsewhere must actually reclaim its space,
     /// or "Delete" quietly frees nothing.
     @Test("a hike somewhere else reclaims all of its own tiles")
-    func unsharedTilesAreFreed() async {
+    func unsharedTilesAreFreed() async throws {
         let doomed = Fixture.hike(in: context, title: "Doomed")
         let elsewhere = Fixture.hike(in: context, title: "Elsewhere", route: alpineRoute)
         download(doomed)
@@ -106,15 +106,15 @@ struct TileOwnershipTests {
 
         let doomedOwnership = TileOwnership(doomed)
         let deletionPlan = StoredTileDeletionPlan(removing: doomed, among: [doomed, elsewhere])
-        let claimed = await offMain { doomedOwnership.tileKeys() }
-        let exclusive = await offMain { deletionPlan.exclusiveTileKeys() }
+        let claimed = try await offMain { try doomedOwnership.tileKeys() }
+        let exclusive = try await offMain { try deletionPlan.exclusiveTileKeys() }
         #expect(exclusive == claimed)
     }
 
     /// Partial overlap is the normal case: two trails in the same region
     /// share the overview tiles and nothing else.
     @Test("only the genuinely shared tiles are held back")
-    func partialOverlap() async {
+    func partialOverlap() async throws {
         let doomed = Fixture.hike(in: context, title: "Doomed")
         let neighbour = Fixture.hike(
             in: context,
@@ -130,27 +130,27 @@ struct TileOwnershipTests {
 
         let doomedOwnership = TileOwnership(doomed)
         let neighbourOwnership = TileOwnership(neighbour)
-        let claimed = await offMain { doomedOwnership.tileKeys() }
-        let exclusive = await offMain { doomedOwnership.exclusiveTileKeys(against: [neighbourOwnership]) }
+        let claimed = try await offMain { try doomedOwnership.tileKeys() }
+        let exclusive = try await offMain { try doomedOwnership.exclusiveTileKeys(against: [neighbourOwnership]) }
 
         #expect(!exclusive.isEmpty, "the close-in tiles are this hike's alone")
         #expect(exclusive.count < claimed.count, "the overview tiles are shared")
-        let shared = await offMain { neighbourOwnership.tileKeys() }
+        let shared = try await offMain { try neighbourOwnership.tileKeys() }
         #expect(exclusive.isDisjoint(with: shared))
     }
 
     /// Hikes that never saved anything are skipped by the delete path
     /// (`hasStoredTiles`), and must not affect the answer either way.
     @Test("hikes with no stored tiles don't hold anything back")
-    func emptySurvivorsDontBlock() async {
+    func emptySurvivorsDontBlock() async throws {
         let doomed = Fixture.hike(in: context, title: "Doomed")
         download(doomed)
         let bystander = Fixture.hike(in: context, title: "Bystander")
 
         let doomedOwnership = TileOwnership(doomed)
         let bystanderOwnership = TileOwnership(bystander)
-        let claimed = await offMain { doomedOwnership.tileKeys() }
-        let exclusive = await offMain { doomedOwnership.exclusiveTileKeys(against: [bystanderOwnership]) }
+        let claimed = try await offMain { try doomedOwnership.tileKeys() }
+        let exclusive = try await offMain { try doomedOwnership.exclusiveTileKeys(against: [bystanderOwnership]) }
         #expect(exclusive == claimed)
     }
 
@@ -158,7 +158,7 @@ struct TileOwnershipTests {
     /// keep answering from its own copy, not from a live model that may have
     /// changed (or been deleted) since.
     @Test("a snapshot answers from the state it captured")
-    func snapshotIsIndependent() async {
+    func snapshotIsIndependent() async throws {
         let hike = Fixture.hike(in: context)
         hike.autoSavedTileKeys = ["osm/18/1/1@2.0"]
         let ownership = TileOwnership(hike)
@@ -166,7 +166,7 @@ struct TileOwnershipTests {
         hike.autoSavedTileKeys = []
         hike.route = []
 
-        let claimed = await offMain { ownership.tileKeys() }
+        let claimed = try await offMain { try ownership.tileKeys() }
         #expect(claimed == ["osm/18/1/1@2.0"])
     }
 }

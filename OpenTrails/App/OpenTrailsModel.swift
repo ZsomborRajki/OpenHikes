@@ -268,8 +268,13 @@ final class OpenTrailsModel {
             .map(TileOwnership.init) ?? []
 
         TileCache.scheduleMaintenance {
-            let keys = claims.reduce(into: Set<String>()) { result, ownership in
-                result.formUnion(ownership.tileKeys())
+            // A cancelled enumeration trims nothing rather than a partial
+            // claim set: an under-reported claim is indistinguishable from an
+            // unclaimed tile, and would evict a hike's saved map.
+            var keys = Set<String>()
+            for ownership in claims {
+                guard let claimed = try? ownership.tileKeys() else { return }
+                keys.formUnion(claimed)
             }
             TileCache.shared.trimCache(claimedBy: keys)
         }

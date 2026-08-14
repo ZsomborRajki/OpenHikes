@@ -16,10 +16,18 @@ nonisolated struct HikeDetailPreparedContent: Sendable {
 }
 
 nonisolated enum HikeDetailPreparation {
+    /// `@concurrent` rather than a detached task: this stays part of the
+    /// caller's task, so `.task(id:)` tearing down the view cancels the
+    /// profile build without a hand-written cancellation handler, and the
+    /// route-sized work still runs on the concurrent executor.
+    @concurrent
     static func prepare(
         route: [RouteCoordinate],
         distanceMeters: Double
-    ) throws(CancellationError) -> HikeDetailPreparedContent {
+    ) async throws(CancellationError) -> HikeDetailPreparedContent {
+        assertOffMainThread(
+            "Hike detail route preparation must stay off the main thread"
+        )
         let statistics = try HikeRouteStatistics.cancellable(
             distanceMeters: distanceMeters,
             route: route
@@ -31,30 +39,6 @@ nonisolated enum HikeDetailPreparation {
                 statistics: statistics
             )
         )
-    }
-
-    static func runOffMain<Value: Sendable>(
-        _ work: @Sendable @escaping () throws(CancellationError) -> Value
-    ) async throws(CancellationError) -> Value {
-        let task = Task.detached(priority: .userInitiated) { () -> Result<Value, CancellationError> in
-            assertOffMainThread(
-                "Hike detail route preparation must stay off the main thread"
-            )
-            guard !Task.isCancelled else {
-                return .failure(CancellationError())
-            }
-            do throws(CancellationError) {
-                return .success(try work())
-            } catch {
-                return .failure(error)
-            }
-        }
-        let result = await withTaskCancellationHandler {
-            await task.value
-        } onCancel: {
-            task.cancel()
-        }
-        return try result.get()
     }
 
     private static func makeStats(
@@ -186,6 +170,7 @@ struct HikeDetailView: View {
     /// ``RouteProfile/nearestPoint(to:near:heading:)`` to work out the leg
     /// from scratch rather than continue from a position.
     @State private var followAnchor: FollowAnchor?
+    @State private var offRouteSearch = OffRouteSearchPolicy()
 
     var body: some View {
         // Fires on every re-evaluation of this view's body. Auto-follow's
@@ -216,13 +201,10 @@ struct HikeDetailView: View {
             let distanceMeters = hike.distanceMeters
             let prepared: HikeDetailPreparedContent
             do throws(CancellationError) {
-                prepared = try await HikeDetailPreparation.runOffMain {
-                    () throws(CancellationError) -> HikeDetailPreparedContent in
-                    try HikeDetailPreparation.prepare(
-                        route: route,
-                        distanceMeters: distanceMeters
-                    )
-                }
+                prepared = try await HikeDetailPreparation.prepare(
+                    route: route,
+                    distanceMeters: distanceMeters
+                )
             } catch {
                 return
             }
@@ -233,6 +215,7 @@ struct HikeDetailView: View {
             tracker.trackerDistance = 0
             tracker.liveTrackerDistance = nil
             followAnchor = nil
+            offRouteSearch = OffRouteSearchPolicy()
             highlight.move(to: built.coordinate(atDistance: 0))
             refreshStoredBytes()
             autoSave.hikeSelectionChanged(to: hike)
@@ -318,7 +301,7 @@ private extension HikeDetailView {
                         canDownload: canDownload
                     ) {
                         downloader.start(
-                            route: hike.coordinates,
+                            route: hike.route,
                             source: activeTileSource,
                             scale: displayScale
                         )
@@ -551,31 +534,50 @@ private extension HikeDetailView {
         }
     }
 
+    /// The no-match half of ``updateLiveFollow(profile:)``: clears the live dot
+    /// and tells the widget there is nothing to show.
+    private func clearLiveFollow(profile: RouteProfile, reason: String) {
+        // Guarded so a stationary/off-route poll (nil already) doesn't
+        // write `tracker` every second for nothing.
+        if tracker.liveTrackerDistance != nil {
+            tracker.liveTrackerDistance = nil
+            RenderSignpost.mark("LiveFollowUpdate", "cleared")
+        } else {
+            RenderSignpost.mark("LiveFollowUpdate", reason)
+        }
+        // Only worth telling the widget "no fix" while auto-follow is
+        // actually trying to track this hike — if the user turned
+        // auto-follow off, leave whatever it last showed alone.
+        if hike.autoFollowEnabled {
+            backgroundTracker.publishLiveFix(hike: hike, profile: profile, match: nil)
+        }
+    }
+
     private func updateLiveFollow(profile: RouteProfile) {
+        // Split from the match below so only a fix that actually reached the
+        // matcher feeds the search policy: a poll with no usable fix says
+        // nothing about where the walker is relative to the route, and must
+        // neither re-arm the whole-route search nor spend one of the fixes
+        // that delays it.
         guard hike.autoFollowEnabled,
               let fix = locationManager.routeFix(
                 maximumHorizontalAccuracy: RouteProfile.followMatchThresholdMeters
-              ),
-              let match = profile.nearestPoint(
-                to: fix.coordinate,
-                near: FollowAnchor.tieBreak(followAnchor, course: fix.course),
-                heading: fix.course
-              ),
-              match.offRouteMeters <= RouteProfile.followMatchThresholdMeters else {
-            // Guarded so a stationary/off-route poll (nil already) doesn't
-            // write `tracker` every second for nothing.
-            if tracker.liveTrackerDistance != nil {
-                tracker.liveTrackerDistance = nil
-                RenderSignpost.mark("LiveFollowUpdate", "cleared")
-            } else {
-                RenderSignpost.mark("LiveFollowUpdate", "no-fix-or-off-route")
-            }
-            // Only worth telling the widget "no fix" while auto-follow is
-            // actually trying to track this hike — if the user turned
-            // auto-follow off, leave whatever it last showed alone.
-            if hike.autoFollowEnabled {
-                backgroundTracker.publishLiveFix(hike: hike, profile: profile, match: nil)
-            }
+              ) else {
+            clearLiveFollow(profile: profile, reason: "no-fix")
+            return
+        }
+        let searchScope = offRouteSearch.scope
+        let match = profile.nearestPoint(
+            to: fix.coordinate,
+            near: FollowAnchor.tieBreak(followAnchor, course: fix.course),
+            heading: fix.course,
+            scope: searchScope
+        )
+        let onRoute = (match?.offRouteMeters ?? .greatestFiniteMagnitude)
+            <= RouteProfile.followMatchThresholdMeters
+        offRouteSearch.record(matched: onRoute, scope: searchScope)
+        guard onRoute, let match else {
+            clearLiveFollow(profile: profile, reason: "off-route")
             return
         }
         followAnchor = .matched(at: match.distanceAlongRoute, course: fix.course, from: followAnchor)

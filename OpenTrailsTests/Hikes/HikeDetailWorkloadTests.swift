@@ -11,51 +11,69 @@ import Testing
 
 @Suite("Hike detail workload")
 struct HikeDetailWorkloadTests {
-    private struct ObservedPreparation: Sendable {
-        let content: HikeDetailPreparedContent
-        let ranOnMainThread: Bool
-    }
-
     @Test("opening a long hike prepares its detail off the main thread")
     func longHikePreparationStaysOffTheMainThread() async throws {
         let pointCount = 18_000
         let route = longRoute(pointCount: pointCount)
         let distanceMeters = 24_000.0
 
-        let observed = try await HikeDetailPreparation.runOffMain {
-            () throws(CancellationError) -> ObservedPreparation in
-            ObservedPreparation(
-                content: try HikeDetailPreparation.prepare(
-                    route: route,
-                    distanceMeters: distanceMeters
-                ),
-                ranOnMainThread: Thread.isMainThread
-            )
-        }
+        // `prepare` is `@concurrent` and asserts it is off the main thread, so
+        // awaiting it from this main-actor-isolated suite is the check: a hop
+        // back onto main would trap inside the call.
+        let content = try await HikeDetailPreparation.prepare(
+            route: route,
+            distanceMeters: distanceMeters
+        )
 
-        #expect(!observed.ranOnMainThread)
-        #expect(observed.content.profile.coordinates.count == pointCount)
+        #expect(content.profile.coordinates.count == pointCount)
         #expect(
-            observed.content.profile.samples.count
+            content.profile.samples.count
                 <= RouteProfile.plottedSampleBudget
         )
 
         let trackPoints = try #require(
-            observed.content.stats.first { stat in
+            content.stats.first { stat in
                 stat.label == "Track Points"
             }
         )
         #expect(trackPoints.value == pointCount.formatted())
         #expect(
-            observed.content.stats.contains { stat in
+            content.stats.contains { stat in
                 stat.label == "Elevation Gain"
             }
         )
         #expect(
-            observed.content.stats.contains { stat in
+            content.stats.contains { stat in
                 stat.label == "Max Speed"
             }
         )
+    }
+
+    @Test("cancelling an offline-storage measurement cancels its worker")
+    func storageMeasurementCancellationPropagates() async {
+        let sandbox = TileSandbox()
+        let route = longRoute(pointCount: 50_000)
+        let keys = (0..<50_000).map { "missing/\($0)" }
+        let measurement = Task {
+            try await OfflineStorageMeasurement.measure(
+                route: route,
+                offlineDownloads: [],
+                autoSavedTileKeys: keys,
+                cache: sandbox.cache
+            )
+        }
+
+        await Task.yield()
+        measurement.cancel()
+
+        do {
+            _ = try await measurement.value
+            Issue.record("The cancelled storage worker ran to completion.")
+        } catch is CancellationError {
+            // Expected.
+        } catch {
+            Issue.record("Unexpected cancellation error: \(error)")
+        }
     }
 
     private func longRoute(pointCount: Int) -> [RouteCoordinate] {

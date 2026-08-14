@@ -47,6 +47,9 @@ final class OfflineTileDownloader {
     /// is exactly what the cancellation tests are about, and without a handle
     /// on it the only way to wait for one is to sleep and hope.
     private var lastRun: Task<Void, Never>?
+    /// Continuations parked in ``waitForPlanning()``, resumed by
+    /// ``finishPlanning()``.
+    private var planningWaiters: [CheckedContinuation<Void, Never>] = []
     /// Bumped on every `start()`/`cancel()` so a stale `run()` from a prior,
     /// cancelled download can tell it's no longer current and skip mutating
     /// state that now belongs to a newer download.
@@ -78,10 +81,10 @@ final class OfflineTileDownloader {
         self.saveTile = saveTile
     }
 
-    /// Begins downloading the tiles covering `route` from `source`, saving detail
-    /// down to the provider's deepest real zoom level. `scale` must be the
-    /// display scale so cache keys match what the renderer requests on-device.
-    func start(route: [CLLocationCoordinate2D], source: ActiveTileSource, scale: CGFloat) {
+    /// Begins preparing and downloading the tiles covering `route` from
+    /// `source`, saving detail down to the provider's deepest real zoom level.
+    /// Route conversion and tile enumeration stay off the main actor.
+    func start(route: [RouteCoordinate], source: ActiveTileSource, scale: CGFloat) {
         guard phase != .downloading else { return }
         guard route.count > 1 else {
             phase = .failed("No route to save.")
@@ -92,25 +95,21 @@ final class OfflineTileDownloader {
             return
         }
 
-        let tiles = Self.tiles(
-            covering: route,
-            minZoom: Self.minZoom,
-            maxZoom: max(source.maximumZ, Self.minZoom),
-            budget: Self.tileBudget
-        )
-        guard !tiles.isEmpty else {
-            phase = .failed("Nothing to save.")
-            return
-        }
-
         generation += 1
         let currentGeneration = generation
         completed = 0
-        total = tiles.count
+        total = 0
         completedRecord = nil
         phase = .downloading
+        let maxZoom = max(source.maximumZ, Self.minZoom)
         task = Task { [weak self] in
-            await self?.run(tiles: tiles, source: source, scale: scale, generation: currentGeneration)
+            await self?.prepareAndRun(
+                route: route,
+                source: source,
+                maxZoom: maxZoom,
+                scale: scale,
+                generation: currentGeneration
+            )
         }
         lastRun = task
     }
@@ -123,6 +122,7 @@ final class OfflineTileDownloader {
         completed = 0
         total = 0
         completedRecord = nil
+        finishPlanning()
     }
 
     /// Returns to idle after a finished/failed download (e.g. its tiles were deleted).
@@ -132,6 +132,53 @@ final class OfflineTileDownloader {
         completed = 0
         total = 0
         completedRecord = nil
+    }
+
+    private func prepareAndRun(
+        route: [RouteCoordinate],
+        source: ActiveTileSource,
+        maxZoom: Int,
+        scale: CGFloat,
+        generation: Int
+    ) async {
+        let tiles: [Tile]
+        do throws(CancellationError) {
+            tiles = try await Self.plannedTiles(for: route, maxZoom: maxZoom)
+        } catch {
+            // Planning was cancelled. `cancel()` already moved the phase to
+            // `.idle`; anything else that cancelled the task would otherwise
+            // strand the UI on "Preparing offline tiles…" forever.
+            resetPhaseIfPreparing(generation: generation)
+            finishPlanning()
+            return
+        }
+        guard generation == self.generation, !Task.isCancelled else {
+            resetPhaseIfPreparing(generation: generation)
+            finishPlanning()
+            return
+        }
+        guard !tiles.isEmpty else {
+            phase = .failed("Nothing to save.")
+            finishPlanning()
+            return
+        }
+        total = tiles.count
+        finishPlanning()
+        await run(
+            tiles: tiles,
+            source: source,
+            scale: scale,
+            generation: generation
+        )
+    }
+
+    /// Leaves a stale generation alone — a newer `start()` owns the phase — but
+    /// never leaves the current run advertising a download that will not begin.
+    private func resetPhaseIfPreparing(generation: Int) {
+        guard generation == self.generation, phase == .downloading, total == 0 else {
+            return
+        }
+        phase = .idle
     }
 
     private func run(tiles: [Tile], source: ActiveTileSource, scale: CGFloat, generation: Int) async {
@@ -246,123 +293,24 @@ final class OfflineTileDownloader {
         await lastRun?.value
     }
 
-    // MARK: - Stored-tile bookkeeping
-
-    /// The cache keys for every tile a download of `route` would produce for the
-    /// given provider/scale/depth — so stored tiles can be measured and removed
-    /// after the fact. Deterministic: recomputing yields exactly the saved set.
-    nonisolated static func tileKeys(
-        for route: [CLLocationCoordinate2D],
-        providerID: String,
-        providerMaxZoom: Int,
-        maxZoom: Int,
-        scale: CGFloat
-    ) -> [String] {
-        let clamped = min(max(maxZoom, minZoom), providerMaxZoom)
-        return tiles(covering: route, minZoom: minZoom, maxZoom: clamped, budget: tileBudget)
-            .map { $0.cacheKey(providerID: providerID, scale: scale) }
-    }
-
-    /// Pure, `nonisolated` core, taking plain values instead of a `Hike` so it
-    /// can run off the main actor. Enumerating tiles across every
-    /// recorded download is real CPU work (trig per tile, up to `tileBudget`
-    /// tiles each), so callers that do this repeatedly (e.g. re-measuring
-    /// storage as auto-save drains in new keys) must not run it on the main
-    /// thread — see ``HikeDetailView/refreshStoredBytes()``.
-    nonisolated static func storedTileKeys(
-        route: [CLLocationCoordinate2D],
-        offlineDownloads: [OfflineDownloadRecord]
-    ) -> [String] {
-        assertOffMainThread(
-            "storedTileKeys(route:offlineDownloads:) does O(tileBudget) trig work " +
-            "per download record — call it off the main thread"
-        )
-        guard !offlineDownloads.isEmpty else { return [] }
-        var keys = Set<String>()
-        for record in offlineDownloads {
-            if !record.savedTileKeys.isEmpty {
-                keys.formUnion(record.savedTileKeys)
-                continue
-            }
-            let provider = TileProvider.provider(id: record.providerID)
-            keys.formUnion(tileKeys(
-                for: route,
-                providerID: record.providerID,
-                providerMaxZoom: provider.maximumZ,
-                maxZoom: record.maxZoom,
-                scale: CGFloat(record.scale)
-            ))
-        }
-        return Array(keys)
-    }
-
-    // MARK: - Tile enumeration
-
-    struct Tile {
-        let z: Int
-        let x: Int
-        let y: Int
-
-        nonisolated func url(from template: String) -> URL? {
-            let filled = template
-                .replacingOccurrences(of: "{z}", with: String(z))
-                .replacingOccurrences(of: "{x}", with: String(x))
-                .replacingOccurrences(of: "{y}", with: String(y))
-            return URL(string: filled)
-        }
-
-        nonisolated func cacheKey(providerID: String, scale: CGFloat) -> String {
-            TileCacheKey.namespaced(
-                providerID: providerID,
-                z: z,
-                x: x,
-                y: y,
-                scale: scale
-            )
+    /// Test/support hook that waits until planning has published its tile count
+    /// or given up. Continuation-based rather than a `Task.yield()` spin: this
+    /// is awaited from the main actor, which is exactly where a spin would
+    /// compete with the work it is waiting for.
+    func waitForPlanning() async {
+        guard phase == .downloading, total == 0 else { return }
+        await withCheckedContinuation { continuation in
+            planningWaiters.append(continuation)
         }
     }
 
-    /// Enumerates the tiles covering the route's bounding box from the overview
-    /// zoom up, stopping before a zoom level that would blow the tile budget.
-    nonisolated private static func tiles(
-        covering route: [CLLocationCoordinate2D],
-        minZoom: Int,
-        maxZoom: Int,
-        budget: Int
-    ) -> [Tile] {
-        guard maxZoom >= minZoom, let box = TileBoundingBox(route: route) else { return [] }
-
-        // A route too sprawling for even the overview zoom to fit the budget
-        // gets a shallower overview rather than nothing at all: the budget has
-        // to bind here too (this is where a continental route used to blow
-        // straight through it), but returning empty would surface as "Nothing to
-        // save." for a route that has plenty worth saving. Each level down is a
-        // quarter of the tiles, so this bottoms out within a level or two — and
-        // at zoom 0 the whole world is one tile.
-        var overviewZoom = minZoom
-        while overviewZoom > 0, box.tileCount(at: overviewZoom) > budget {
-            overviewZoom -= 1
+    /// Releases `waitForPlanning()` waiters. Called on every path that leaves
+    /// the planning stage, successfully or not, so a waiter is never stranded.
+    private func finishPlanning() {
+        let waiters = planningWaiters
+        planningWaiters.removeAll()
+        for waiter in waiters {
+            waiter.resume()
         }
-
-        var tiles: [Tile] = []
-        var running = 0
-        for z in overviewZoom...maxZoom {
-            let count = box.tileCount(at: z)
-            guard running + count <= budget else { break }
-
-            let n = 1 << z
-            let (firstColumn, columnCount) = box.columns(at: z)
-            let (firstRow, rowCount) = box.rows(at: z)
-            for column in 0..<columnCount {
-                // Columns wrap: a route across the antimeridian runs off the east
-                // edge of the grid and continues at column zero.
-                let x = SlippyTileMath.wrap(firstColumn + column, to: n)
-                for row in 0..<rowCount {
-                    tiles.append(Tile(z: z, x: x, y: firstRow + row))
-                }
-            }
-            running += count
-        }
-        return tiles
     }
 }

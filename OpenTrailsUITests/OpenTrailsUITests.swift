@@ -6,7 +6,7 @@
 import CoreLocation
 import XCTest
 
-final class OpenTrailsUITests: XCTestCase {
+nonisolated final class OpenTrailsUITests: XCTestCase {
     private static let importedHikeTitle =
         "Thumsee Loop (fast, simulated)"
 
@@ -314,14 +314,10 @@ final class OpenTrailsUITests: XCTestCase {
         XCTAssertTrue(field.waitForExistence(timeout: 5))
         field.tap()
         if let draft = field.value as? String, !draft.isEmpty {
-            field.typeText(
-                String(
-                    repeating: XCUIKeyboardKey.delete.rawValue,
-                    count: draft.count
-                )
-            )
+            field.tap(withNumberOfTaps: 3, numberOfTouches: 1)
         }
         field.typeText(Self.reviewedHikeName)
+        XCTAssertEqual(field.value as? String, Self.reviewedHikeName)
         namePrompt.buttons["Save"].tap()
     }
 

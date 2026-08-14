@@ -43,6 +43,23 @@ nonisolated enum TrailMatcher {
             ) > sparseDisplacement
     }
 
+    /// Matches without occupying the main actor.
+    ///
+    /// `@concurrent` rather than a detached task: the match stays in the
+    /// caller's task, so cancelling it — which live matching does on every
+    /// reschedule — actually stops the work. A detached match ran to
+    /// completion regardless, burning Viterbi passes on a window whose result
+    /// the caller had already decided to discard.
+    @concurrent
+    static func matchOffMain(
+        points: [RecordingPoint],
+        graph: TrailGraph,
+        gapDistances: [Int: Double] = [:]
+    ) async -> TrailMatchResult {
+        assertOffMainThread("Trail matching must stay off the main thread")
+        return match(points: points, graph: graph, gapDistances: gapDistances)
+    }
+
     static func match(
         points: [RecordingPoint],
         graph: TrailGraph,

@@ -668,10 +668,11 @@ struct DownloadProgressTests {
         await counter.settle()
 
         downloader.start(
-            route: Fixture.coordinates(Fixture.ridgeRoute),
+            route: Fixture.ridgeRoute,
             source: ActiveTileSource(providerID: "test_stub", urlTemplate: "https://tiles.invalid/{z}/{x}/{y}.png", maximumZ: 14),
             scale: 2
         )
+        await downloader.waitForPlanning()
         let total = downloader.total
         #expect(total > 1, "precondition: there is more than one tile to fetch")
 

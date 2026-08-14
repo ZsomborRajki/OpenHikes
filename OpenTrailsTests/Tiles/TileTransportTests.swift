@@ -392,9 +392,9 @@ struct TileTransportTests {
             await Task.yield()
         }
 
-        await Task.detached {
+        await offMain {
             cache.removeTiles(forKeys: [key])
-        }.value
+        }
         let image = await load.value
 
         #expect(image == nil)
@@ -487,6 +487,11 @@ private extension StubTileProtocol.Response {
 /// Runs an async body off the main thread. The tile pipeline asserts it isn't
 /// on main; `offMain` in `TestSupport` takes a synchronous closure, and
 /// `cacheTile` is `async`.
-private func offMain<T: Sendable>(_ work: @Sendable @escaping () async -> T) async -> T {
-    await Task.detached(priority: .userInitiated) { await work() }.value
+///
+/// `@concurrent` rather than `Task.detached`, matching its `TestSupport` twin:
+/// the body stays inside the test's own task, so a cancelled test cancels the
+/// work it is waiting on.
+@concurrent
+private func offMain<T: Sendable>(_ work: @Sendable () async -> T) async -> T {
+    await work()
 }

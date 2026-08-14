@@ -54,9 +54,9 @@ struct TileCacheTierTests {
         return await offMain { cache.promoteCachedTile(forKey: key) }
     }
 
-    private func bytes(forKeys keys: [String]) async -> Int64 {
+    private func bytes(forKeys keys: [String]) async throws -> Int64 {
         let cache = sandbox.cache
-        return await offMain { cache.bytes(forKeys: keys) }
+        return try await offMain { try cache.bytes(forKeys: keys) }
     }
 
     private func diskUsage(claimedBy keys: Set<String>) async -> TileCache.DiskUsage {
@@ -72,6 +72,20 @@ struct TileCacheTierTests {
     private func trimCache(claimedBy keys: Set<String>, limit: Int64) async -> Int64 {
         let cache = sandbox.cache
         return await offMain { cache.trimCache(claimedBy: keys, limit: limit) }
+    }
+
+    @Test("tile requests bypass Foundation's URL cache")
+    func tileSessionDisablesURLCache() {
+        let injected = URLSessionConfiguration.default
+        injected.urlCache = .shared
+
+        let configured = TileCache.tileSessionConfiguration(from: injected)
+
+        #expect(configured.urlCache == nil)
+        #expect(
+            configured.requestCachePolicy
+                == .reloadIgnoringLocalCacheData
+        )
     }
 
     /// How a tile ends up in both tiers at once: the map's renderer and the
@@ -107,7 +121,7 @@ struct TileCacheTierTests {
         let key = makeKey()
         try writeBothTiers(key)
 
-        let measured = await bytes(forKeys: [key])
+        let measured = try await bytes(forKeys: [key])
         #expect(measured == TileStore.tileByteCount)
     }
 
@@ -150,7 +164,7 @@ struct TileCacheTierTests {
 
         #expect(sandbox.isSaved(key))
         #expect(!sandbox.isBrowsed(key), "the browsing-tier copy is gone, not duplicated")
-        #expect(await bytes(forKeys: [key]) == TileStore.tileByteCount)
+        #expect(try await bytes(forKeys: [key]) == TileStore.tileByteCount)
     }
 
     /// An expired tile is deleted where it lies and refetched. If the refetch

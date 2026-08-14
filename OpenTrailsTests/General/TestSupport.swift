@@ -462,8 +462,13 @@ struct SuitePreconditionTests {
 /// main (see `assertOffMainThread`), and Swift Testing runs these suites
 /// main-actor-isolated by default, so anything touching that pipeline has to
 /// hop first.
-func offMain<T: Sendable>(_ work: @Sendable @escaping () -> T) async -> T {
-    await Task.detached(priority: .userInitiated) { work() }.value
+///
+/// `@concurrent` rather than `Task.detached`: this stays inside the test's own
+/// task, so a cancelled test cancels the work it is waiting on, and the
+/// closure's typed throws propagate instead of needing a `Result` box.
+@concurrent
+func offMain<T: Sendable>(_ work: @Sendable () throws -> T) async rethrows -> T {
+    try work()
 }
 
 /// A clock a test moves by hand.

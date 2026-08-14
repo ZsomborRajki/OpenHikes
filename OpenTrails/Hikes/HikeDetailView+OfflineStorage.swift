@@ -5,8 +5,45 @@
 //  Offline tile storage helpers for HikeDetailView.
 //
 
+import CoreLocation
 import SwiftData
 import SwiftUI
+
+nonisolated enum OfflineStorageMeasurement {
+    /// `@concurrent` keeps this in the caller's task, so cancelling the
+    /// measurement task in ``HikeDetailView/invalidateStoredBytesMeasurement()``
+    /// propagates straight into the loops below — no detached worker, no
+    /// hand-written cancellation handler — while the scan still runs on the
+    /// concurrent executor.
+    @concurrent
+    static func measure(
+        route: [RouteCoordinate],
+        offlineDownloads: [OfflineDownloadRecord],
+        autoSavedTileKeys: [String],
+        cache: TileCache
+    ) async throws(CancellationError) -> Int64 {
+        assertOffMainThread(
+            "Offline-storage measurement must stay off the main thread"
+        )
+        var coordinates: [CLLocationCoordinate2D] = []
+        coordinates.reserveCapacity(route.count)
+        for (index, point) in route.enumerated() {
+            if index.isMultiple(of: 255), Task.isCancelled {
+                throw CancellationError()
+            }
+            coordinates.append(point.clCoordinate)
+        }
+        let downloadedKeys = try OfflineTileDownloader.storedTileKeys(
+            route: coordinates,
+            offlineDownloads: offlineDownloads
+        )
+        guard !Task.isCancelled else {
+            throw CancellationError()
+        }
+        let keys = Array(Set(downloadedKeys).union(autoSavedTileKeys))
+        return try cache.bytes(forKeys: keys)
+    }
+}
 
 extension HikeDetailView {
     // MARK: Offline storage
@@ -28,18 +65,18 @@ extension HikeDetailView {
             return
         }
         let generation = storedBytesMeasurementGeneration
-        storedBytesMeasurementTask = Task {
-            let bytes = await Task.detached {
-                let coordinates = route.map(\.clCoordinate)
-                let keys = Array(
-                    Set(OfflineTileDownloader.storedTileKeys(
-                        route: coordinates,
-                        offlineDownloads: offlineDownloads
-                    ))
-                    .union(autoSavedTileKeys)
+        storedBytesMeasurementTask = Task(priority: .utility) {
+            let bytes: Int64
+            do throws(CancellationError) {
+                bytes = try await OfflineStorageMeasurement.measure(
+                    route: route,
+                    offlineDownloads: offlineDownloads,
+                    autoSavedTileKeys: autoSavedTileKeys,
+                    cache: .shared
                 )
-                return TileCache.shared.bytes(forKeys: keys)
-            }.value
+            } catch {
+                return
+            }
             guard !Task.isCancelled,
                   generation == storedBytesMeasurementGeneration else {
                 return
@@ -86,12 +123,8 @@ extension HikeDetailView {
         invalidateStoredBytesMeasurement()
         storedBytes = 0
         downloader.reset()
-        Task.detached {
-            let keys = deletionPlan.exclusiveTileKeys()
-            guard !keys.isEmpty else {
-                return
-            }
-            TileCache.shared.removeTiles(forKeys: Array(keys))
+        Task(priority: .utility) {
+            await deletionPlan.removeExclusiveTiles(from: .shared)
         }
     }
 

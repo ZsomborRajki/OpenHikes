@@ -19,6 +19,36 @@ nonisolated struct PreparedRecording: Sendable {
 }
 
 nonisolated enum RecordingPreparation {
+    /// Prepares without occupying the main actor.
+    ///
+    /// `@concurrent` rather than a detached task: the matching and distance
+    /// work stays in the caller's task, so the caller's priority carries
+    /// through, and — because the typed `throws(RecordingFailure)` survives —
+    /// the failure propagates as itself. A detached task erases it to
+    /// `any Error`, which forced the caller to re-catch and re-wrap a value
+    /// it had already typed.
+    @concurrent
+    static func prepareOffMain(
+        points: [RecordingPoint],
+        startedAt: Date,
+        endedAt: Date,
+        graph: TrailGraph? = nil,
+        gapDistances: [Int: Double] = [:],
+        routeChoices: [Int: TrailRouteChoice] = [:]
+    ) async throws(RecordingFailure) -> PreparedRecording {
+        assertOffMainThread(
+            "Recording preparation must stay off the main thread"
+        )
+        return try prepare(
+            points: points,
+            startedAt: startedAt,
+            endedAt: endedAt,
+            graph: graph,
+            gapDistances: gapDistances,
+            routeChoices: routeChoices
+        )
+    }
+
     /// Turns journalled fixes into the values a `Hike` is built from.
     static func prepare(
         points: [RecordingPoint],
@@ -44,6 +74,28 @@ nonisolated enum RecordingPreparation {
             endedAt: endedAt,
             match: match,
             routeChoices: routeChoices
+        )
+    }
+
+    /// Resolves review choices without occupying the main actor. `@concurrent`
+    /// for the same reasons as ``prepareOffMain(points:startedAt:endedAt:graph:gapDistances:routeChoices:)``.
+    @concurrent
+    static func prepareResolvedOffMain(
+        points: [RecordingPoint],
+        startedAt: Date,
+        endedAt: Date,
+        matchResult: TrailMatchResult,
+        choices: [Int: TrailRouteChoice]
+    ) async throws(RecordingFailure) -> PreparedRecording {
+        assertOffMainThread(
+            "Route review resolution must stay off the main thread"
+        )
+        return try prepareResolved(
+            points: points,
+            startedAt: startedAt,
+            endedAt: endedAt,
+            matchResult: matchResult,
+            choices: choices
         )
     }
 
@@ -110,6 +162,21 @@ nonisolated enum RecordingPreparation {
                 : 0,
             matchResult: match
         )
+    }
+
+    /// Normalizes without occupying the main actor.
+    ///
+    /// `@concurrent` rather than a detached task: the sort and dedup stay in
+    /// the caller's task, so abandoning a recovery or a resync cancels them
+    /// and the caller's priority carries through instead of being pinned here.
+    @concurrent
+    static func normalizedPointsOffMain(
+        _ points: [RecordingPoint]
+    ) async -> [RecordingPoint] {
+        assertOffMainThread(
+            "Recording normalization must stay off the main thread"
+        )
+        return normalizedPoints(points)
     }
 
     static func normalizedPoints(

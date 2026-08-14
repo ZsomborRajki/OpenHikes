@@ -255,6 +255,56 @@ extension RouteProfileTests {
         #expect(match.distanceAlongRoute < total / 2, "still on the way out")
     }
 
+    @Test("an anchored match searches only a bounded route-distance window")
+    func anchoredMatchUsesBoundedWindow() throws {
+        let route = (0..<18_000).map { index in
+            RouteCoordinate(
+                latitude: 47.63 + Double(index) * 0.00001,
+                longitude: 12.86
+            )
+        }
+        let profile = RouteProfile(route: route)
+        let targetIndex = 9000
+        let reference = profile.distances[targetIndex]
+        let candidateRange = profile.candidateSegmentRange(near: reference)
+
+        #expect(candidateRange.count < route.count / 4)
+        #expect(candidateRange.contains(targetIndex))
+
+        let match = try #require(
+            profile.nearestPoint(
+                to: profile.coordinates[targetIndex],
+                near: reference
+            )
+        )
+        #expect(abs(match.distanceAlongRoute - reference) < 1)
+    }
+
+    @Test("an anchored match falls back globally after a large relocation")
+    func anchoredMatchFallsBackAfterRelocation() throws {
+        let route = (0..<4000).map { index in
+            RouteCoordinate(
+                latitude: 47.63 + Double(index) * 0.00001,
+                longitude: 12.86
+            )
+        }
+        let profile = RouteProfile(route: route)
+        let targetIndex = 3800
+
+        let match = try #require(
+            profile.nearestPoint(
+                to: profile.coordinates[targetIndex],
+                near: 0
+            )
+        )
+        #expect(
+            abs(
+                match.distanceAlongRoute
+                    - profile.distances[targetIndex]
+            ) < RouteProfile.tieBreakToleranceMeters + 1
+        )
+    }
+
     /// …and once a match exists, continuity carries it around the turning
     /// point onto the return leg, where progress counts up rather than back
     /// down the outbound one.

@@ -26,7 +26,7 @@ import WidgetKit
 /// test target's probe: absent capability skips rather than fails for the
 /// wrong reason, and the precondition test below is what makes the skip
 /// visible.
-enum WidgetStoreProbe {
+nonisolated enum WidgetStoreProbe {
     static var isAvailable: Bool {
         FileManager.default.containerURL(forSecurityApplicationGroupIdentifier: SharedStore.appGroupID) != nil
     }

@@ -2,13 +2,12 @@
 //  GPXImport.swift
 //  OpenTrails
 //
-//  Reads a .gpx file into an ordered list of points using CoreGPX.
+//  Reads a .gpx file into an ordered list of points using Foundation XML.
 //  Prefers track points, falling back to route points, then waypoints, and
 //  pulls whatever metadata a well-formed file provides.
 //
 
 import Algorithms
-import CoreGPX
 import CoreLocation
 import Foundation
 import OpenTrailsShared
@@ -116,71 +115,63 @@ nonisolated enum GPXImport {
     /// call, not the parser's, and the distinction is what lets the caller say
     /// which of the two happened. See ``ImportFailure``.
     static func load(from url: URL) throws(ImportFailure) -> Track {
-        guard let parser = GPXParser(withURL: url), let root = parser.parsedData() else {
+        guard let data = try? Data(contentsOf: url), !data.isEmpty else {
             throw .unreadable
         }
-        guard let track = track(from: root) else { throw .noUsablePoints }
+        let documentParser = DocumentParser()
+        let parser = XMLParser(data: data)
+        parser.delegate = documentParser
+        parser.shouldProcessNamespaces = true
+        parser.shouldReportNamespacePrefixes = false
+        parser.shouldResolveExternalEntities = false
+        guard parser.parse() else {
+            throw .unreadable
+        }
+        guard let track = track(from: documentParser.document) else {
+            throw .noUsablePoints
+        }
         return track
     }
 
     /// Parses and prepares a picked file without occupying the main actor.
+    ///
+    /// `@concurrent` rather than a detached task: the parse stays part of the
+    /// importing task, so abandoning the import cancels it, and the caller's
+    /// priority carries through instead of being pinned here.
+    @concurrent
     static func loadOffMain(from url: URL) async throws(ImportFailure) -> Track {
-        try await runOffMain { () throws(ImportFailure) -> Track in
-            try load(from: url)
-        }
+        assertOffMainThread(
+            "GPX parsing and route preparation must stay off the main thread"
+        )
+        return try load(from: url)
     }
 
-    /// Runs import preparation on a detached executor. Internal so workload
-    /// tests can verify the executor directly without relying on wall-clock
-    /// scheduling while unrelated suites run in parallel.
-    static func runOffMain<Value: Sendable>(
-        _ work: @Sendable @escaping () throws(ImportFailure) -> Value
-    ) async throws(ImportFailure) -> Value {
-        let result = await Task.detached(priority: .userInitiated) { () -> Result<Value, ImportFailure> in
-            assertOffMainThread("GPX parsing and route preparation must stay off the main thread")
-            do throws(ImportFailure) { return .success(try work()) } catch { return .failure(error) }
-        }.value
-        return try result.get()
-    }
-
-    private static func track(from root: GPXRoot) -> Track? {
-        var points: [Point] = []
-
-        // Tracks → segments → points.
-        // This app targets single-track, single-segment GPX files (e.g. Komoot exports).
-        // Multi-segment files are flattened: cross-segment edges are treated as
-        // continuous route legs. That's intentional — we don't need to support
-        // paused recordings or disconnected trail sections.
-        for track in root.tracks {
-            for segment in track.segments {
-                points.append(contentsOf: segment.points.compactMap(point))
-            }
+    private static func track(from document: ParsedDocument) -> Track? {
+        let source = if !document.trackPoints.isEmpty {
+            document.trackPoints
+        } else if !document.routePoints.isEmpty {
+            document.routePoints
+        } else {
+            document.waypoints
         }
-        // Fall back to routes, then loose waypoints.
-        if points.isEmpty {
-            for route in root.routes {
-                points.append(contentsOf: route.points.compactMap(point))
-            }
-        }
-        if points.isEmpty {
-            points = root.waypoints.compactMap(point)
-        }
-
+        let points = source.compactMap(point)
         guard !points.isEmpty else { return nil }
 
-        let metadata = root.metadata
-        let firstTrack = root.tracks.first
         return Track(
-            name: nonEmpty(firstTrack?.name ?? metadata?.name),
-            trackDescription: nonEmpty(firstTrack?.desc ?? firstTrack?.comment ?? metadata?.desc),
-            author: nonEmpty(metadata?.author?.name),
-            keywords: nonEmpty(metadata?.keywords),
-            startTime: metadata?.time ?? points.first { $0.time != nil }?.time,
+            name: nonEmpty(document.firstTrackName)
+                ?? nonEmpty(document.metadataName),
+            trackDescription: nonEmpty(document.firstTrackDescription)
+                ?? nonEmpty(document.firstTrackComment)
+                ?? nonEmpty(document.metadataDescription),
+            author: nonEmpty(document.metadataAuthor),
+            keywords: nonEmpty(document.metadataKeywords),
+            startTime: document.metadataTime
+                ?? points.first { $0.time != nil }?.time,
             points: points
         )
     }
 
-    private static func point(_ waypoint: GPXWaypoint) -> Point? {
+    private static func point(_ waypoint: ParsedPoint) -> Point? {
         // Points outside Web Mercator's representable range are rejected at
         // the door rather than clamped: `Mercator` clamps to keep drawing
         // code safe, but a track claiming to pass within 5° of a pole is bad
@@ -200,5 +191,231 @@ nonisolated enum GPXImport {
         guard let trimmed = string?.trimmingCharacters(in: .whitespacesAndNewlines),
               !trimmed.isEmpty else { return nil }
         return trimmed
+    }
+}
+
+nonisolated private extension GPXImport {
+    private struct ParsedPoint {
+        var latitude: Double?
+        var longitude: Double?
+        var elevation: Double?
+        var time: Date?
+    }
+
+    private struct ParsedDocument {
+        var metadataName: String?
+        var metadataDescription: String?
+        var metadataAuthor: String?
+        var metadataKeywords: String?
+        var metadataTime: Date?
+        var firstTrackName: String?
+        var firstTrackDescription: String?
+        var firstTrackComment: String?
+        var trackPoints: [ParsedPoint] = []
+        var routePoints: [ParsedPoint] = []
+        var waypoints: [ParsedPoint] = []
+    }
+
+    private final class DocumentParser: NSObject, XMLParserDelegate {
+        /// GPX element names, which the schema defines in lower case. XML is
+        /// case-sensitive and `XMLParser` reports the local name verbatim, so
+        /// these are compared as-is — the same way the previous parser matched
+        /// them.
+        private enum Element {
+            static let track = "trk"
+            static let trackPoint = "trkpt"
+            static let routePoint = "rtept"
+            static let waypoint = "wpt"
+            static let metadata = "metadata"
+            static let author = "author"
+            static let name = "name"
+            static let description = "desc"
+            static let comment = "cmt"
+            static let keywords = "keywords"
+            static let elevation = "ele"
+            static let time = "time"
+        }
+
+        private enum PointKind {
+            case track
+            case route
+            case waypoint
+        }
+
+        private struct PendingPoint {
+            let kind: PointKind
+            let element: String
+            var value: ParsedPoint
+        }
+
+        private let fractionalDateStrategy = Date.ISO8601FormatStyle(
+            includingFractionalSeconds: true
+        )
+        private let dateStrategy = Date.ISO8601FormatStyle()
+        private var path: [String] = []
+        private var text = ""
+        private var currentTrackIndex = -1
+        private var pendingPoint: PendingPoint?
+
+        var document = ParsedDocument()
+
+        func parser(
+            _ parser: XMLParser,
+            didStartElement elementName: String,
+            namespaceURI: String?,
+            qualifiedName qName: String?,
+            attributes attributeDict: [String: String]
+        ) {
+            // GPX defines its element names in lower case and `XMLParser` is
+            // handing back the local name already, so this is a straight
+            // append: `lowercased()` here allocated a fresh `String` for every
+            // start *and* end tag, which on a 100,000-point export is hundreds
+            // of thousands of allocations to normalise names that were already
+            // normal.
+            path.append(elementName)
+            text = ""
+
+            switch elementName {
+            case Element.track:
+                currentTrackIndex += 1
+            case Element.trackPoint:
+                pendingPoint = PendingPoint(
+                    kind: .track,
+                    element: elementName,
+                    value: point(from: attributeDict)
+                )
+            case Element.routePoint:
+                pendingPoint = PendingPoint(
+                    kind: .route,
+                    element: elementName,
+                    value: point(from: attributeDict)
+                )
+            case Element.waypoint:
+                pendingPoint = PendingPoint(
+                    kind: .waypoint,
+                    element: elementName,
+                    value: point(from: attributeDict)
+                )
+            default:
+                break
+            }
+        }
+
+        func parser(
+            _ parser: XMLParser,
+            foundCharacters string: String
+        ) {
+            text.append(string)
+        }
+
+        func parser(_ parser: XMLParser, foundCDATA CDATABlock: Data) {
+            guard let string = String(bytes: CDATABlock, encoding: .utf8) else {
+                return
+            }
+            text.append(string)
+        }
+
+        func parser(
+            _ parser: XMLParser,
+            didEndElement elementName: String,
+            namespaceURI: String?,
+            qualifiedName qName: String?
+        ) {
+            let value = text.trimmingCharacters(in: .whitespacesAndNewlines)
+            updatePendingPoint(element: elementName, value: value)
+            apply(value: value, for: elementName)
+            path.removeLast()
+            text = ""
+        }
+
+        private func updatePendingPoint(
+            element: String,
+            value: String
+        ) {
+            guard var point = pendingPoint,
+                  path.dropLast().last == point.element else {
+                return
+            }
+            switch element {
+            case Element.elevation:
+                point.value.elevation = Double(value)
+            case Element.time:
+                point.value.time = date(from: value)
+            default:
+                return
+            }
+            pendingPoint = point
+        }
+
+        private func apply(value: String, for element: String) {
+            switch element {
+            case Element.name where isDirectChild(of: Element.metadata):
+                document.metadataName = value
+            case Element.description where isDirectChild(of: Element.metadata):
+                document.metadataDescription = value
+            case Element.name where isMetadataAuthorChild:
+                document.metadataAuthor = value
+            case Element.keywords where isDirectChild(of: Element.metadata):
+                document.metadataKeywords = value
+            case Element.time where isDirectChild(of: Element.metadata):
+                document.metadataTime = date(from: value)
+            case Element.name where isFirstTrackChild:
+                document.firstTrackName = value
+            case Element.description where isFirstTrackChild:
+                document.firstTrackDescription = value
+            case Element.comment where isFirstTrackChild:
+                document.firstTrackComment = value
+            case Element.trackPoint, Element.routePoint, Element.waypoint:
+                finishPoint(element)
+            default:
+                break
+            }
+        }
+
+        /// The element being closed sits directly inside `parent`. Compares the
+        /// one enclosing name rather than building an array literal per call —
+        /// `</time>` closes once per track point, so this is a hot path.
+        private func isDirectChild(of parent: String) -> Bool {
+            path.dropLast().last == parent
+        }
+
+        private var isFirstTrackChild: Bool {
+            currentTrackIndex == 0 && isDirectChild(of: Element.track)
+        }
+
+        private var isMetadataAuthorChild: Bool {
+            isDirectChild(of: Element.author)
+                && path.dropLast(2).last == Element.metadata
+        }
+
+        private func point(
+            from attributes: [String: String]
+        ) -> ParsedPoint {
+            ParsedPoint(
+                latitude: attributes["lat"].flatMap(Double.init),
+                longitude: attributes["lon"].flatMap(Double.init)
+            )
+        }
+
+        private func finishPoint(_ element: String) {
+            guard let point = pendingPoint, point.element == element else {
+                return
+            }
+            switch point.kind {
+            case .track:
+                document.trackPoints.append(point.value)
+            case .route:
+                document.routePoints.append(point.value)
+            case .waypoint:
+                document.waypoints.append(point.value)
+            }
+            pendingPoint = nil
+        }
+
+        private func date(from value: String) -> Date? {
+            guard !value.isEmpty else { return nil }
+            return (try? fractionalDateStrategy.parse(value))
+                ?? (try? dateStrategy.parse(value))
+        }
     }
 }

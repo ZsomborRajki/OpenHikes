@@ -246,10 +246,7 @@ struct SettingsView: View {
     }
 
     private func refreshUsage() async {
-        let claims = claimSnapshots()
-        usage = await Task.detached {
-            TileCache.shared.diskUsage(claimedBy: Self.keys(of: claims))
-        }.value
+        usage = await Self.diskUsage(claimedBy: claimSnapshots())
     }
 
     /// Both storage actions below report by re-measuring, never by assuming.
@@ -260,17 +257,17 @@ struct SettingsView: View {
     /// until the sheet was reopened. `nil` in the meantime is the "…" the rows
     /// already show before the first measurement, which also disables the
     /// buttons while the work is in flight.
-    private func reportingUsage(_ work: @escaping @Sendable () -> Void) {
+    private func reportingUsage(_ work: @escaping @Sendable () async -> Void) {
         usage = nil
-        Task {
-            await Task.detached(operation: work).value
+        Task(priority: .utility) {
+            await work()
             await refreshUsage()
         }
     }
 
     private func clearMapCache() {
         let claims = claimSnapshots()
-        reportingUsage { TileCache.shared.removeTiles(unclaimedBy: Self.keys(of: claims)) }
+        reportingUsage { await Self.removeTiles(unclaimedBy: claims) }
     }
 
     private func deleteAllTiles() {
@@ -295,13 +292,47 @@ struct SettingsView: View {
         // selected before.
         autoSave.hikeSelectionChanged(to: resumed)
 
-        reportingUsage { TileCache.shared.removeAllTiles() }
+        reportingUsage { await Self.removeAllTiles() }
     }
 
-    /// `nonisolated`: the union is O(tile budget) trig per download record, so
-    /// it belongs inside the detached tasks above rather than on the way in.
-    nonisolated private static func keys(of claims: [TileOwnership]) -> Set<String> {
-        claims.reduce(into: Set<String>()) { $0.formUnion($1.tileKeys()) }
+    /// The union is O(tile budget) trig per download record, so it belongs
+    /// inside the `@concurrent` measurements and deletions below rather than
+    /// on the way in.
+    nonisolated private static func keys(
+        of claims: [TileOwnership]
+    ) throws(CancellationError) -> Set<String> {
+        var keys = Set<String>()
+        for claim in claims {
+            keys.formUnion(try claim.tileKeys())
+        }
+        return keys
+    }
+
+    /// The three storage jobs, each `@concurrent` so they run on the concurrent
+    /// executor while staying in the caller's task — a `Task` started from this
+    /// main-actor view would otherwise inherit its isolation and put the trig,
+    /// the `stat` calls and the deletions straight back on the main thread.
+    ///
+    /// A cancelled key enumeration deletes nothing rather than a partial set:
+    /// cache keys carry no hike identity, so an under-reported claim set frees
+    /// tiles that a surviving hike still needs.
+    @concurrent nonisolated
+    private static func diskUsage(
+        claimedBy claims: [TileOwnership]
+    ) async -> TileCache.DiskUsage? {
+        guard let keys = try? keys(of: claims) else { return nil }
+        return TileCache.shared.diskUsage(claimedBy: keys)
+    }
+
+    @concurrent nonisolated
+    private static func removeTiles(unclaimedBy claims: [TileOwnership]) async {
+        guard let keys = try? keys(of: claims) else { return }
+        TileCache.shared.removeTiles(unclaimedBy: keys)
+    }
+
+    @concurrent nonisolated
+    private static func removeAllTiles() async {
+        TileCache.shared.removeAllTiles()
     }
 
     /// `nonisolated`: passed as a bare function reference to `Optional.map`,
