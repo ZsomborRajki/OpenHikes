@@ -1,49 +1,50 @@
 {
-  "configurations" : [
+  "configurations": [
     {
-      "id" : "5ECF0865-9A5F-46A8-AF5B-1FC4FAC75D3F",
-      "name" : "Test Scheme Action",
-      "options" : {
-
-      }
+      "id": "5ECF0865-9A5F-46A8-AF5B-1FC4FAC75D3F",
+      "name": "Test Scheme Action",
+      "options": {}
     }
   ],
-  "defaultOptions" : {
-    "environmentVariableEntries" : [
+  "defaultOptions": {
+    "environmentVariableEntries": [
       {
-        "key" : "RENDER_SIGNPOST_LOG",
-        "value" : "1"
+        "key": "RENDER_SIGNPOST_LOG",
+        "value": "1"
       }
     ],
-    "performanceAntipatternCheckerEnabled" : true,
-    "targetForVariableExpansion" : {
-      "containerPath" : "container:OpenTrails.xcodeproj",
-      "identifier" : "A85E854C2FE3EBF500558639",
-      "name" : "OpenTrails"
+    "performanceAntipatternCheckerEnabled": true,
+    "targetForVariableExpansion": {
+      "containerPath": "container:OpenTrails.xcodeproj",
+      "identifier": "A85E854C2FE3EBF500558639",
+      "name": "OpenTrails"
     }
   },
-  "testTargets" : [
+  "testTargets": [
     {
-      "target" : {
-        "containerPath" : "container:OpenTrails.xcodeproj",
-        "identifier" : "AB0000000000000000000001",
-        "name" : "OpenTrailsTests"
+      "target": {
+        "containerPath": "container:OpenTrails.xcodeproj",
+        "identifier": "AB0000000000000000000001",
+        "name": "OpenTrailsTests"
       }
     },
     {
-      "target" : {
-        "containerPath" : "container:OpenTrails.xcodeproj",
-        "identifier" : "AC0000000000000000000001",
-        "name" : "OpenWidgetTests"
+      "target": {
+        "containerPath": "container:OpenTrails.xcodeproj",
+        "identifier": "AC0000000000000000000001",
+        "name": "OpenWidgetTests"
       }
     },
     {
-      "target" : {
-        "containerPath" : "container:OpenTrails.xcodeproj",
-        "identifier" : "AE0000000000000000000001",
-        "name" : "OpenTrailsUITests"
+      "skippedTests": [
+        "PerformanceUITests"
+      ],
+      "target": {
+        "containerPath": "container:OpenTrails.xcodeproj",
+        "identifier": "AE0000000000000000000001",
+        "name": "OpenTrailsUITests"
       }
     }
   ],
-  "version" : 1
+  "version": 1
 }

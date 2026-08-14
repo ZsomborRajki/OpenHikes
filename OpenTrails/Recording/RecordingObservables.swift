@@ -40,27 +40,45 @@ final class RecordingTrace {
     @ObservationIgnored private(set) var reviewSegment:
         [CLLocationCoordinate2D] = []
     @ObservationIgnored private(set) var generation = 0
+    /// Change tokens for the two overlays a consumer draws separately. `revision`
+    /// says "something moved"; these say *which*, so `MapCoordinator` can rebuild
+    /// one `MKPolyline` instead of both. Bumped only on a real change — a token
+    /// that moved for an identical geometry would defeat its own purpose.
+    @ObservationIgnored private(set) var tailRevision = 0
+    @ObservationIgnored private(set) var reviewRevision = 0
     /// Drained from the front every time a chunk is sealed, so it's a `Deque`
     /// rather than an `Array`: `removeFirst(_:)` on an array shifts every
     /// surviving element down, and this runs on the main actor once per 255
     /// fixes for the whole life of a recording.
     @ObservationIgnored private var stableTail: Deque<CLLocationCoordinate2D> = []
     @ObservationIgnored private var provisionalTail: [CLLocationCoordinate2D] = []
+    /// Bumped whenever `stableTail` or `committedChunks` moves. `rebuildTail()`
+    /// uses it to decide whether the stable prefix of `tail` is still valid,
+    /// which is what lets the common case avoid copying it.
+    @ObservationIgnored private var stableRevision = 0
+    @ObservationIgnored private var tailStableRevision = -1
+    /// How many leading elements of `tail` came from `stableTail`.
+    @ObservationIgnored private var tailStableCount = 0
+    /// Scratch for comparing the provisional remainder across a rebuild.
+    /// Held rather than allocated per call because this runs once per fix.
+    @ObservationIgnored private var previousProvisional: [CLLocationCoordinate2D] = []
     private(set) var revision = 0
 
     func append(
         _ coordinate: CLLocationCoordinate2D,
         provisional: Bool = false
     ) {
-        reviewSegment = []
+        var changed = clearReviewSegment()
         if provisional {
             Self.appendDistinct(coordinate, to: &provisionalTail)
         } else {
             appendStable([coordinate])
             provisionalTail = []
         }
-        rebuildTail()
-        revision &+= 1
+        changed = rebuildTail() || changed
+        if changed {
+            revision &+= 1
+        }
     }
 
     func replace(with coordinates: [CLLocationCoordinate2D]) {
@@ -73,10 +91,8 @@ final class RecordingTrace {
     ) {
         generation &+= 1
         committedChunks = []
-        reviewSegment = []
-        stableTail = []
-        provisionalTail = []
-        tail = []
+        _ = clearReviewSegment()
+        clearTails()
         guard !stableCoordinates.isEmpty
             || !provisionalCoordinates.isEmpty else {
             revision &+= 1
@@ -87,7 +103,7 @@ final class RecordingTrace {
         for coordinate in provisionalCoordinates {
             Self.appendDistinct(coordinate, to: &provisionalTail)
         }
-        rebuildTail()
+        _ = rebuildTail()
         revision &+= 1
     }
 
@@ -99,14 +115,19 @@ final class RecordingTrace {
         guard generation == expectedGeneration else {
             return false
         }
-        reviewSegment = []
+        var changed = clearReviewSegment()
         appendStable(stableCoordinates)
         provisionalTail = []
         for coordinate in provisionalCoordinates {
             Self.appendDistinct(coordinate, to: &provisionalTail)
         }
-        rebuildTail()
-        revision &+= 1
+        changed = rebuildTail() || changed
+        // A match that lands on the geometry already drawn is not news. Saying
+        // so anyway would cost an overlay rebuild to draw the same line, and a
+        // stationary recorder produces exactly that match repeatedly.
+        if changed {
+            revision &+= 1
+        }
         return true
     }
 
@@ -116,25 +137,53 @@ final class RecordingTrace {
     ) {
         replace(with: route)
         reviewSegment = highlightedSegment
+        reviewRevision &+= 1
         revision &+= 1
     }
 
     func reset() {
         generation &+= 1
         committedChunks = []
+        _ = clearReviewSegment()
+        clearTails()
+        revision &+= 1
+    }
+
+    /// Clears the review highlight, reporting whether there was one to clear.
+    /// The report is what stops a fix from publishing a revision purely to say
+    /// that an already-empty highlight is still empty.
+    private func clearReviewSegment() -> Bool {
+        guard !reviewSegment.isEmpty else { return false }
         reviewSegment = []
+        reviewRevision &+= 1
+        return true
+    }
+
+    /// Empties both halves of the tail and invalidates the cached stable
+    /// prefix, so the next `rebuildTail()` rebuilds rather than trusting
+    /// bookkeeping that describes a tail which no longer exists.
+    private func clearTails() {
+        stableRevision &+= 1
         stableTail = []
         provisionalTail = []
         tail = []
-        revision &+= 1
+        tailStableCount = 0
     }
 
     private func appendStable(
         _ coordinates: [CLLocationCoordinate2D]
     ) {
+        guard !coordinates.isEmpty else { return }
+        var appended = false
         for coordinate in coordinates {
-            Self.appendDistinct(coordinate, to: &stableTail)
+            appended = Self.appendDistinct(coordinate, to: &stableTail) || appended
         }
+        // A fix too close to the last one is dropped, which leaves the stable
+        // prefix byte-for-byte what it was. Bumping the revision anyway would
+        // invalidate the tail's prefix cache and force a full rebuild to
+        // produce the identical tail.
+        guard appended else { return }
+        stableRevision &+= 1
         while stableTail.count >= Self.chunkSize {
             committedChunks.append(
                 Array(stableTail.prefix(Self.chunkSize))
@@ -143,26 +192,75 @@ final class RecordingTrace {
         }
     }
 
-    private func rebuildTail() {
-        tail = Array(stableTail)
+    /// Rebuilds `tail` from the stable and provisional halves, and reports
+    /// whether the result differs from what was there before.
+    ///
+    /// Two things this deliberately avoids. The first is copying the stable
+    /// prefix on every fix: a live match rewrites the provisional tail far more
+    /// often than it moves the stable one, and `stableRevision` is what makes
+    /// "the prefix is still valid" an O(1) question instead of an O(255) copy.
+    /// The second is publishing a revision for a tail that did not actually
+    /// change — every such revision costs an `MKPolyline` rebuild and a MapKit
+    /// overlay swap, which is far more expensive than the comparison that
+    /// prevents it. Only the provisional remainder is compared, because the
+    /// prefix cannot have changed without `stableRevision` saying so.
+    private func rebuildTail() -> Bool {
+        let changed = RenderSignpost.interval("RecordingTailRebuilt") {
+            guard tailStableRevision == stableRevision else {
+                tail = Array(stableTail)
+                tailStableCount = tail.count
+                tailStableRevision = stableRevision
+                appendProvisionalToTail()
+                return true
+            }
+
+            previousProvisional.removeAll(keepingCapacity: true)
+            previousProvisional.append(contentsOf: tail[tailStableCount...])
+            tail.removeLast(tail.count - tailStableCount)
+            appendProvisionalToTail()
+            return !Self.isSame(previousProvisional, tail[tailStableCount...])
+        }
+        if changed {
+            tailRevision &+= 1
+        }
+        return changed
+    }
+
+    private func appendProvisionalToTail() {
         for coordinate in provisionalTail {
             Self.appendDistinct(coordinate, to: &tail)
         }
     }
 
-    private static func appendDistinct<C>(
+    private static func isSame(
+        _ lhs: [CLLocationCoordinate2D],
+        _ rhs: ArraySlice<CLLocationCoordinate2D>
+    ) -> Bool {
+        guard lhs.count == rhs.count else { return false }
+        for (left, right) in zip(lhs, rhs)
+        where left.latitude != right.latitude
+            || left.longitude != right.longitude {
+            return false
+        }
+        return true
+    }
+
+    /// Appends `coordinate` unless it is close enough to the previous one to be
+    /// noise, and reports whether it was in fact appended.
+    @discardableResult private static func appendDistinct<C>(
         _ coordinate: CLLocationCoordinate2D,
         to coordinates: inout C
-    ) where C: RangeReplaceableCollection & BidirectionalCollection,
+    ) -> Bool where C: RangeReplaceableCollection & BidirectionalCollection,
         C.Element == CLLocationCoordinate2D {
         if let previous = coordinates.last,
            RouteGeometry.distanceMeters(
                from: previous,
                to: coordinate
            ) <= minimumDistinctDistanceMeters {
-            return
+            return false
         }
         coordinates.append(coordinate)
+        return true
     }
 
     func widgetPolyline(

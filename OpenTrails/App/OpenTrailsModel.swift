@@ -93,12 +93,15 @@ final class OpenTrailsModel {
     private convenience init(
         uiTestingDefaults: UserDefaults
     ) throws {
-        let testingContainer = try ModelContainer(
-            for: Hike.self,
-            configurations: ModelConfiguration(
-                isStoredInMemoryOnly: true
+        let testingContainer = try RenderSignpost.interval("ModelContainerInit") {
+            () throws(Swift.Error) in
+            try ModelContainer(
+                for: Hike.self,
+                configurations: ModelConfiguration(
+                    isStoredInMemoryOnly: true
+                )
             )
-        )
+        }
         let graphProvider = AppLaunchEnvironment
             .trailGraphFixtureName
             .flatMap { name in
@@ -130,7 +133,10 @@ final class OpenTrailsModel {
         do {
             return try loadContainer(
                 persistent: {
-                    try ModelContainer(for: Hike.self)
+                    try RenderSignpost.interval("ModelContainerInit") {
+                        () throws(Swift.Error) in
+                        try ModelContainer(for: Hike.self)
+                    }
                 },
                 fallback: {
                     try ModelContainer(
@@ -206,6 +212,12 @@ final class OpenTrailsModel {
         autoSaveController.sceneWillResignActive {
             try container.mainContext.save()
         }
+        #if DEBUG
+        // The last moment a measured run can count on: UI automation
+        // backgrounds the app and only then terminates it, so this is what
+        // gets the tail of the scenario onto disk.
+        PerformanceLog.shared?.flush()
+        #endif
     }
 
     func selectedHikeDidChange(to hike: Hike?) {

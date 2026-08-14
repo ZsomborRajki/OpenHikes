@@ -143,6 +143,13 @@ struct OpenTrailsView: View {
                         .padding(.top, Self.weatherBadgeTopPadding)
                 }
             }
+            // Reads nothing and draws nothing outside a measured launch; see
+            // ``PerformanceCounterProbe``.
+            .overlay(alignment: .topTrailing) {
+                #if DEBUG
+                PerformanceCounterProbe()
+                #endif
+            }
             .onAppear {
                 restoreLastSelectedHike()
                 if AppLaunchEnvironment.usesLiveLocation {

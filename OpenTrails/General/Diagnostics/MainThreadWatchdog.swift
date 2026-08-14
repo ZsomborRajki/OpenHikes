@@ -98,6 +98,11 @@ nonisolated enum MainThreadWatchdog {
                         Thread.sleep(forTimeInterval: retryInterval)
                     }
                     let elapsed = ContinuousClock.now - sentAt
+                    PerformanceLog.shared?.record(
+                        kind: .stall,
+                        name: "MainThread",
+                        value: milliseconds(elapsed)
+                    )
                     let stallMsg = "Main thread unresponsive for"
                         + " \(elapsed.formatted(.units(allowed: [.seconds], fractionalPart: .show(length: 2))))"
                         + " — something synchronous (disk I/O, a big collection op,"
@@ -112,6 +117,13 @@ nonisolated enum MainThreadWatchdog {
         thread.name = "MainThreadWatchdog"
         thread.qualityOfService = .background
         thread.start()
+    }
+
+    private static func milliseconds(_ duration: Duration) -> Double {
+        let attosecondsPerMillisecond = 1e15
+        let millisecondsPerSecond = 1000.0
+        return Double(duration.components.seconds) * millisecondsPerSecond
+            + Double(duration.components.attoseconds) / attosecondsPerMillisecond
     }
 }
 #endif

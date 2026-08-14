@@ -17,7 +17,12 @@ struct OpenTrailsApp: App {
 
     init() {
         #if DEBUG
-        if !AppLaunchEnvironment.isUITesting {
+        // Ordinary UI automation keeps the watchdog off — its ping loop is one
+        // more thread competing with the runner. A *measured* launch is the
+        // exception: a stall it never reported is a stall the report cannot
+        // contain.
+        if !AppLaunchEnvironment.isUITesting
+            || AppLaunchEnvironment.performanceLogScenario != nil {
             MainThreadWatchdog.start()
         }
         #endif
@@ -33,7 +38,9 @@ struct OpenTrailsApp: App {
         // `.onAppear` — the location manager has to already be live and
         // delegated by the time this returns, or the relaunch's one pending
         // location event has nothing to deliver to.
-        _model = State(initialValue: OpenTrailsModel())
+        _model = State(initialValue: RenderSignpost.interval("AppModelInit") {
+            OpenTrailsModel()
+        })
     }
 
     var body: some Scene {

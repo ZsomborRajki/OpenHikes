@@ -22,6 +22,10 @@ extension MapView {
         var recordingTailOverlay: MKPolyline?
         var recordingReviewOverlay: MKPolyline?
         private var recordingTraceGeneration = -1
+        /// What the drawn overlays currently correspond to. `nil` means nothing
+        /// is drawn, which is not the same as "drawn at revision 0".
+        private var appliedTailRevision: Int?
+        private var appliedReviewRevision: Int?
         /// The live renderer for the route line, kept so a tint change can recolor
         /// it in place without rebuilding the overlay.
         weak var routeRenderer: MKPolylineRenderer?
@@ -332,39 +336,65 @@ extension MapView {
                 }
             }
         }
+    }
+}
 
-        private func applyRecordingTrace(
-            _ trace: RecordingTrace,
-            on mapView: MKMapView
-        ) {
-            if recordingTraceGeneration != trace.generation {
-                mapView.removeOverlays(recordingChunkOverlays)
-                if let recordingTailOverlay {
-                    mapView.removeOverlay(recordingTailOverlay)
-                }
-                if let recordingReviewOverlay {
-                    mapView.removeOverlay(recordingReviewOverlay)
-                }
-                recordingChunkOverlays = []
-                recordingTailOverlay = nil
-                recordingReviewOverlay = nil
-                recordingTraceGeneration = trace.generation
+// MARK: - Recording trace overlays
+
+/// Split out so the coordinator's own body stays inside its length limit;
+/// this is the one part of the map that changes at GPS frequency, and it
+/// reads better as a unit than buried among the other observers.
+private extension MapView.Coordinator {
+    func applyRecordingTrace(
+        _ trace: RecordingTrace,
+        on mapView: MKMapView
+    ) {
+        RenderSignpost.mark(
+            "MapRecordingTraceApplied",
+            "chunks=\(trace.committedChunks.count) tail=\(trace.tail.count)"
+        )
+        if recordingTraceGeneration != trace.generation {
+            mapView.removeOverlays(recordingChunkOverlays)
+            if let recordingTailOverlay {
+                mapView.removeOverlay(recordingTailOverlay)
             }
-
-            // No `count > 1` guard: the loop's index *is* `recordingChunkOverlays.count`,
-            // so skipping a chunk would stall every later one forever. A chunk
-            // is always `RecordingTrace.chunkSize` points by construction —
-            // both `append` and `replace(with:)` only ever commit full ones.
-            while recordingChunkOverlays.count < trace.committedChunks.count {
-                let coordinates = trace.committedChunks[recordingChunkOverlays.count]
-                let overlay = MKPolyline(
-                    coordinates: coordinates,
-                    count: coordinates.count
-                )
-                recordingChunkOverlays.append(overlay)
-                mapView.addOverlay(overlay, level: .aboveLabels)
+            if let recordingReviewOverlay {
+                mapView.removeOverlay(recordingReviewOverlay)
             }
+            recordingChunkOverlays = []
+            recordingTailOverlay = nil
+            recordingReviewOverlay = nil
+            recordingTraceGeneration = trace.generation
+            // The overlays are gone, so the tokens describing what was
+            // drawn describe nothing. Invalidate them, or the rebuilds
+            // below will decide there is nothing to do.
+            appliedTailRevision = nil
+            appliedReviewRevision = nil
+        }
 
+        // No `count > 1` guard: the loop's index *is* `recordingChunkOverlays.count`,
+        // so skipping a chunk would stall every later one forever. A chunk
+        // is always `RecordingTrace.chunkSize` points by construction —
+        // both `append` and `replace(with:)` only ever commit full ones.
+        while recordingChunkOverlays.count < trace.committedChunks.count {
+            let coordinates = trace.committedChunks[recordingChunkOverlays.count]
+            let overlay = MKPolyline(
+                coordinates: coordinates,
+                count: coordinates.count
+            )
+            recordingChunkOverlays.append(overlay)
+            mapView.addOverlay(overlay, level: .aboveLabels)
+        }
+
+        // Guarded on the trace's own change tokens rather than rebuilt
+        // unconditionally. `MKPolyline` is immutable, so "update the tail"
+        // means allocating a new one and making MapKit drop and re-render
+        // the old — the most expensive thing on the per-fix path. A
+        // revision that moved the tail says nothing about the review
+        // highlight, and vice versa; charging both for either is what this
+        // avoids.
+        if appliedTailRevision != trace.tailRevision {
+            appliedTailRevision = trace.tailRevision
             if let recordingTailOverlay {
                 mapView.removeOverlay(recordingTailOverlay)
                 self.recordingTailOverlay = nil
@@ -377,7 +407,10 @@ extension MapView {
                 recordingTailOverlay = tail
                 mapView.addOverlay(tail, level: .aboveLabels)
             }
+        }
 
+        if appliedReviewRevision != trace.reviewRevision {
+            appliedReviewRevision = trace.reviewRevision
             if let recordingReviewOverlay {
                 mapView.removeOverlay(recordingReviewOverlay)
                 self.recordingReviewOverlay = nil
