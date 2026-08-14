@@ -41,9 +41,43 @@ nonisolated struct TrailGraphEdge: Codable, Equatable, Hashable, Sendable {
     let trailVisibility: String?
     let access: String?
     let surface: String?
+    /// OSM `tracktype` (`grade1`…`grade5`), the firmness scale tracks carry
+    /// instead of a `surface` tag often enough to be worth keeping: it raises
+    /// surface coverage by about seven points on a typical alpine region.
+    ///
+    /// Written after ``surface`` and decoded with the synthesized optional
+    /// decoding, so a graph cached before this property existed still loads
+    /// (as `nil`) rather than failing and forcing a refetch.
+    let tracktype: String?
 
     var displayName: String? {
         hikingRouteName ?? name
+    }
+
+    init(
+        id: TrailGraphEdgeID,
+        fromNodeID: Int64,
+        toNodeID: Int64,
+        lengthMeters: Double,
+        name: String? = nil,
+        hikingRouteName: String? = nil,
+        sacScale: String? = nil,
+        trailVisibility: String? = nil,
+        access: String? = nil,
+        surface: String? = nil,
+        tracktype: String? = nil
+    ) {
+        self.id = id
+        self.fromNodeID = fromNodeID
+        self.toNodeID = toNodeID
+        self.lengthMeters = lengthMeters
+        self.name = name
+        self.hikingRouteName = hikingRouteName
+        self.sacScale = sacScale
+        self.trailVisibility = trailVisibility
+        self.access = access
+        self.surface = surface
+        self.tracktype = tracktype
     }
 }
 

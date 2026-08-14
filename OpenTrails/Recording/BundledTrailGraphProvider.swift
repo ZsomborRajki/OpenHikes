@@ -42,4 +42,12 @@ nonisolated struct BundledTrailGraphProvider: TrailGraphProviding {
     ) -> TrailGraph? {
         graph
     }
+
+    /// Always complete: the fixture is the whole world this provider knows,
+    /// and there is no network behind it to fill a gap from.
+    func hasCompleteCachedGraph(
+        covering coordinates: [CLLocationCoordinate2D]
+    ) -> Bool {
+        true
+    }
 }

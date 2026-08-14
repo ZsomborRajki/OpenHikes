@@ -88,6 +88,7 @@ struct OverpassTrailGraphProviderTests {
         #expect(edge.hikingRouteName == "Alpine Route")
         #expect(edge.displayName == "Alpine Route")
         #expect(edge.surface == "gravel")
+        #expect(edge.tracktype == "grade2")
     }
 
     @Test("prefetch identifies itself, is bounded, and reuses its disk cache")
@@ -332,7 +333,8 @@ struct OverpassTrailGraphProviderTests {
                     "tags":{
                         "highway":"path",
                         "name":"Local Path",
-                        "surface":"gravel"
+                        "surface":"gravel",
+                        "tracktype":"grade2"
                     }
                 },
                 {

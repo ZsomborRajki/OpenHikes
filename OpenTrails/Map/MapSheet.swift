@@ -197,7 +197,8 @@ struct MapSheet: View {
                 mapController: mapController,
                 autoSave: appModel.autoSaveController,
                 locationManager: appModel.locationManager,
-                backgroundTracker: appModel.backgroundTracker
+                backgroundTracker: appModel.backgroundTracker,
+                trailGraphProvider: appModel.trailGraphProvider
             ) { withAnimation { detent = .medium } }
         case .recording:
             RecordingView(

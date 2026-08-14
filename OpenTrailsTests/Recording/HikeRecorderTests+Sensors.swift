@@ -420,6 +420,12 @@ extension HikeRecorderTests {
             .empty
         }
 
+        func hasCompleteCachedGraph(
+            covering coordinates: [CLLocationCoordinate2D]
+        ) -> Bool {
+            true
+        }
+
         func didStart() -> Bool {
             started
         }
