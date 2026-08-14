@@ -223,6 +223,47 @@ extension HikeRecorderTests {
         #expect(recorder.phase == .idle)
     }
 
+    @Test("a failed direct save retains the completed hike for retry")
+    func directSaveFailureCanRetry() async throws {
+        let saver = ScriptedModelContextSaver(failedSaveNumbers: [2])
+        let recorder = makeRecorder(saveModelContext: saver.save)
+        await recorder.start()
+        source.deliver(fix(latitude: 47.63))
+        await settleDelegateHop()
+        clock.advance(by: 10)
+        source.deliver(fix(latitude: 47.6302))
+        await settleDelegateHop()
+
+        do {
+            _ = try await recorder.stop(
+                customName: "  Retried Direct Hike  "
+            )
+            Issue.record("the injected persistence failure was ignored")
+        } catch let failure as RecordingFailure {
+            guard case .save = failure else {
+                Issue.record("the direct save returned the wrong failure")
+                return
+            }
+        }
+
+        #expect(recorder.canRetrySave)
+        #expect(recorder.currentHike?.isRecording == true)
+        guard case .failed = recorder.phase else {
+            Issue.record("the failed save did not remain recoverable")
+            return
+        }
+
+        let hike = try await recorder.retrySave()
+
+        #expect(hike.customName == "Retried Direct Hike")
+        #expect(!hike.isRecording)
+        #expect(recorder.phase == .idle)
+        #expect(saver.saveCount == 3)
+        let freshContext = ModelContext(container)
+        let reloaded = try freshContext.fetch(FetchDescriptor<Hike>())
+        #expect(reloaded.first?.customName == "Retried Direct Hike")
+    }
+
     @Test("pending widget anchors are merged before recovery resumes")
     func pendingWidgetFixesMergeDuringRecovery() async throws {
         let sessionID = UUID()

@@ -4,6 +4,7 @@
 //
 
 import Foundation
+import os
 import SwiftUI
 #if os(iOS)
 import UIKit
@@ -25,7 +26,9 @@ struct RecordingView: View {
 
     private var showingFailure: Binding<Bool> {
         Binding(
-            get: { recordingFailure != nil },
+            get: {
+                recordingFailure != nil && !recorder.canRetrySave
+            },
             set: { if !$0 { recorder.dismissFailure() } }
         )
     }
@@ -285,7 +288,6 @@ private struct RecordingControls: View {
     @State private var showDiscardConfirmation = false
     @State private var showStopAlert = false
     @State private var stopNameDraft = ""
-    @State private var pendingName = ""
 
     var body: some View {
         VStack(spacing: 12) {
@@ -363,13 +365,29 @@ private struct RecordingControls: View {
                     recorder: recorder,
                     review: review
                 ) { hike in
-                    apply(pendingName, to: hike)
                     onSaved(hike)
                 }
             }
             discardButton
-        case .failed:
-            if recorder.isActive {
+        case .failed(let failure):
+            if recorder.canRetrySave {
+                VStack(alignment: .leading, spacing: 12) {
+                    Text(failure.errorDescription ?? "The hike could not be saved.")
+                        .font(.headline)
+                    if let suggestion = failure.recoverySuggestion {
+                        Text(suggestion)
+                            .font(.subheadline)
+                            .foregroundStyle(.secondary)
+                    }
+                    Button("Retry Save") {
+                        Task { await retrySave() }
+                    }
+                    .buttonStyle(.borderedProminent)
+                    .accessibilityIdentifier("recording-retry-save")
+                    discardButton
+                }
+                .frame(maxWidth: .infinity, alignment: .leading)
+            } else if recorder.isActive {
                 discardButton
             } else {
                 Button("Try Again") {
@@ -397,20 +415,28 @@ private struct RecordingControls: View {
     }
 
     private func stopAndSave() async {
-        pendingName = stopNameDraft.trimmingCharacters(
+        let customName = stopNameDraft.trimmingCharacters(
             in: .whitespacesAndNewlines
         )
-        guard let outcome = try? await recorder.stop() else { return }
-        if case .saved(let hike) = outcome {
-            apply(pendingName, to: hike)
-            onSaved(hike)
+        do {
+            let outcome = try await recorder.stop(customName: customName)
+            if case .saved(let hike) = outcome {
+                onSaved(hike)
+            }
+        } catch {
+            HikeRecorder.logger.error(
+                "Recording save failed: \(error.localizedDescription, privacy: .public)"
+            )
         }
     }
 
-    /// A name typed into the stop alert has to survive the review step, which
-    /// saves the hike itself.
-    private func apply(_ name: String, to hike: Hike) {
-        guard !name.isEmpty else { return }
-        hike.customName = name
+    private func retrySave() async {
+        do {
+            onSaved(try await recorder.retrySave())
+        } catch {
+            HikeRecorder.logger.error(
+                "Recording save retry failed: \(error.localizedDescription, privacy: .public)"
+            )
+        }
     }
 }

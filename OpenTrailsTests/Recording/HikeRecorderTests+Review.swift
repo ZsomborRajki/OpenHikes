@@ -87,6 +87,60 @@ extension HikeRecorderTests {
         #expect(recorder.phase == .idle)
     }
 
+    @Test("a failed reviewed save retains its choices and name for retry")
+    func reviewedSaveFailureCanRetry() async throws {
+        let saver = ScriptedModelContextSaver(failedSaveNumbers: [2])
+        let recorder = makeRecorder(
+            trailGraphProvider: StubTrailGraphProvider(
+                graph: matchedPathGraph()
+            ),
+            saveModelContext: saver.save
+        )
+        await recorder.start()
+        source.deliver(fix(latitude: SnappedTrace.startLatitude))
+        await settleDelegateHop()
+        clock.advance(by: 10)
+        source.deliver(fix(latitude: SnappedTrace.endLatitude))
+        await settleDelegateHop()
+
+        guard case .needsReview = try await recorder.stop(
+            customName: "  Retried Reviewed Hike  "
+        ) else {
+            Issue.record("the moved route did not enter review")
+            return
+        }
+        recorder.selectRouteChoice(.gps)
+        do {
+            _ = try await recorder.saveReviewedRecording()
+            Issue.record("the injected persistence failure was ignored")
+        } catch let failure as RecordingFailure {
+            guard case .save = failure else {
+                Issue.record("the reviewed save returned the wrong failure")
+                return
+            }
+        }
+
+        #expect(recorder.canRetrySave)
+        #expect(recorder.routeReview != nil)
+        guard case .failed = recorder.phase else {
+            Issue.record("the failed reviewed save did not remain recoverable")
+            return
+        }
+
+        let hike = try await recorder.retrySave()
+
+        #expect(hike.customName == "Retried Reviewed Hike")
+        #expect(hike.route.allSatisfy { coordinate in
+            abs(coordinate.longitude - 12.86) < 0.00001
+        })
+        #expect(hike.rawRoute.isEmpty)
+        #expect(recorder.phase == .idle)
+        #expect(saver.saveCount == 3)
+        let freshContext = ModelContext(container)
+        let reloaded = try freshContext.fetch(FetchDescriptor<Hike>())
+        #expect(reloaded.first?.customName == "Retried Reviewed Hike")
+    }
+
     @Test("a choice only reaches the recording while the review is open")
     func choicesAreIgnoredOutsideReview() async throws {
         let recorder = await recordSnappedTrace()

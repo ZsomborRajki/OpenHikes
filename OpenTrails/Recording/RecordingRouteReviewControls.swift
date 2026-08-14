@@ -11,6 +11,7 @@
 //  leave the whole review answering to one name.
 //
 
+import os
 import SwiftUI
 
 struct RecordingRouteReviewControls: View {
@@ -77,10 +78,13 @@ struct RecordingRouteReviewControls: View {
     private var saveReviewedHikeButton: some View {
         Button("Save Reviewed Hike") {
             Task {
-                guard let hike = try? await recorder.saveReviewedRecording() else {
-                    return
+                do {
+                    onSaved(try await recorder.saveReviewedRecording())
+                } catch {
+                    HikeRecorder.logger.error(
+                        "Reviewed recording save failed: \(error.localizedDescription, privacy: .public)"
+                    )
                 }
-                onSaved(hike)
             }
         }
         .buttonStyle(.borderedProminent)

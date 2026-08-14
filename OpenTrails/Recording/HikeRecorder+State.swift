@@ -227,6 +227,60 @@ enum RecordingStopOutcome {
     case saved(Hike)
 }
 
+nonisolated struct TrailGraphPrefetchRetryPolicy: Sendable {
+    static let standard = Self()
+
+    private enum Defaults {
+        static let initialDelay: TimeInterval = 30
+        static let maximumDelay: TimeInterval = 15 * 60
+        static let jitterFraction = 0.25
+        static let maximumExponent = 30
+    }
+
+    let initialDelay: TimeInterval
+    let maximumDelay: TimeInterval
+    let jitterFraction: Double
+
+    init(
+        initialDelay: TimeInterval = Defaults.initialDelay,
+        maximumDelay: TimeInterval = Defaults.maximumDelay,
+        jitterFraction: Double = Defaults.jitterFraction
+    ) {
+        let resolvedInitialDelay = max(0, initialDelay)
+        self.initialDelay = resolvedInitialDelay
+        self.maximumDelay = max(resolvedInitialDelay, maximumDelay)
+        self.jitterFraction = max(0, jitterFraction)
+    }
+
+    func delay(afterFailures failures: Int, jitter: Double) -> TimeInterval {
+        let exponent = min(
+            max(0, failures - 1),
+            Defaults.maximumExponent
+        )
+        let baseDelay = min(
+            maximumDelay,
+            initialDelay * pow(2, Double(exponent))
+        )
+        let boundedJitter = min(max(0, jitter), 1)
+        return min(
+            maximumDelay,
+            baseDelay * (1 + jitterFraction * boundedJitter)
+        )
+    }
+}
+
+enum TrailGraphPrefetchState: Equatable {
+    case fetching(previousFailures: Int)
+    case loaded
+    case waiting(failures: Int, retryAt: Date)
+}
+
+nonisolated struct PendingPreparedSave: Sendable {
+    let session: TrackJournalSession
+    let prepared: PreparedRecording
+    let customName: String?
+}
+
 /// The sections of a finished recording the hiker can still change, and what
 /// they are currently set to. The recording is not saved until this is
 /// resolved, so a review that vanishes silently would lose the hike.
@@ -302,6 +356,7 @@ nonisolated struct PendingReviewSave: Sendable {
     let session: TrackJournalSession
     let normalizedPoints: [RecordingPoint]
     let matchResult: TrailMatchResult
+    let customName: String?
     /// Grouped once off the main actor, so the decision to review and the
     /// review itself cannot disagree about what there is to review.
     let sections: [RouteReviewSection]

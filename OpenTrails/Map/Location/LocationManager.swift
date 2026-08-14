@@ -74,6 +74,30 @@ nonisolated enum LocationFixPolicy {
     }
 }
 
+/// The slice of `CLLocationManager` the foreground map feed needs.
+///
+/// Kept tiny and injected so tests can verify battery-related tuning and the
+/// authorization/start lifecycle without walking outside.
+protocol ForegroundLocationSource: AnyObject {
+    var foregroundAuthorizationStatus: CLAuthorizationStatus { get }
+    var foregroundDelegate: CLLocationManagerDelegate? { get set }
+
+    var desiredAccuracy: CLLocationAccuracy { get set }
+    var distanceFilter: CLLocationDistance { get set }
+
+    func requestWhenInUseAuthorization()
+    func startUpdatingLocation()
+}
+
+extension CLLocationManager: ForegroundLocationSource {
+    var foregroundAuthorizationStatus: CLAuthorizationStatus { authorizationStatus }
+
+    var foregroundDelegate: CLLocationManagerDelegate? {
+        get { delegate }
+        set { delegate = newValue }
+    }
+}
+
 @Observable
 final class LocationManager: NSObject {
     /// Non-isolated so releasing the last reference never requires proving
@@ -86,12 +110,14 @@ final class LocationManager: NSObject {
     private(set) var coordinate: CLLocationCoordinate2D?
     @ObservationIgnored private var latestLocation: CLLocation?
 
-    private let manager = CLLocationManager()
+    @ObservationIgnored private let manager: any ForegroundLocationSource
     /// CLLocationManager can deliver updates far more often than once a second;
     /// `coordinate` is `@Observable`, so every write can re-render anything
     /// reading it (this app's map centering, the elevation graph's auto-follow).
     /// Throttled here so downstream consumers only ever see ~1 update/sec.
     private var lastPublished: Date?
+    private static let baselineDesiredAccuracy = kCLLocationAccuracyNearestTenMeters
+    private static let baselineDistanceFilter: CLLocationDistance = 25
     private static let minimumPublishInterval: TimeInterval = 1
     /// Authorization callbacks can arrive as soon as the delegate is assigned.
     /// Only start hardware updates after the owning view has called `start()`.
@@ -101,11 +127,16 @@ final class LocationManager: NSObject {
     /// which is both slower and, being a race against a real clock, flakier.
     @ObservationIgnored private let clock: @Sendable () -> Date
 
-    init(clock: @escaping @Sendable () -> Date = { Date() }) {
+    init(
+        manager: (any ForegroundLocationSource)? = nil,
+        clock: @escaping @Sendable () -> Date = { Date() }
+    ) {
+        self.manager = manager ?? CLLocationManager()
         self.clock = clock
         super.init()
-        manager.delegate = self
-        manager.desiredAccuracy = kCLLocationAccuracyBest
+        self.manager.foregroundDelegate = self
+        self.manager.desiredAccuracy = Self.baselineDesiredAccuracy
+        self.manager.distanceFilter = Self.baselineDistanceFilter
     }
 
     /// Requests "when in use" authorization on first use (if needed) and starts
@@ -113,7 +144,7 @@ final class LocationManager: NSObject {
     /// long as this object lives.
     func start() {
         updatesRequested = true
-        let status = manager.authorizationStatus
+        let status = manager.foregroundAuthorizationStatus
         if status == .notDetermined {
             manager.requestWhenInUseAuthorization()
         } else if Self.isAuthorized(status) {
@@ -201,13 +232,9 @@ extension LocationManager: CLLocationManagerDelegate {
     }
 
     nonisolated func locationManagerDidChangeAuthorization(_ manager: CLLocationManager) {
-        let status = manager.authorizationStatus
         Task { @MainActor in
+            let status = self.manager.foregroundAuthorizationStatus
             guard updatesRequested, Self.isAuthorized(status) else { return }
-            // `self.manager`, not the callback's parameter: they are the same
-            // object, but the parameter would have to cross an isolation
-            // boundary as a non-`Sendable` value to get here, while the
-            // stored one is already main-actor state.
             self.manager.startUpdatingLocation()
         }
     }

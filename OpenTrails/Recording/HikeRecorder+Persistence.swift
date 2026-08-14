@@ -20,7 +20,8 @@ extension HikeRecorder {
     // MARK: Save preparation
 
     func prepareForSave(
-        _ session: TrackJournalSession
+        _ session: TrackJournalSession,
+        customName: String? = nil
     ) async throws(RecordingFailure) -> (
         prepared: PreparedRecording,
         review: PendingReviewSave?
@@ -68,6 +69,7 @@ extension HikeRecorder {
                 session: session,
                 normalizedPoints: normalized,
                 matchResult: matchResult,
+                customName: customName,
                 sections: sections
             )
         } else {
@@ -128,7 +130,8 @@ extension HikeRecorder {
 
     func persist(
         _ session: TrackJournalSession,
-        prepared: PreparedRecording
+        prepared: PreparedRecording,
+        customName: String? = nil
     ) throws(RecordingFailure) -> Hike {
         let hikeID = session.metadata.sessionID
         stats.matchedTrailName = prepared.matchedTrailName
@@ -141,20 +144,23 @@ extension HikeRecorder {
             let previousDate = existing.date
             let previousRoute = existing.route
             let previousRawRoute = existing.rawRoute
+            let previousCustomName = existing.customName
 
             existing.distanceMeters = prepared.distanceMeters
             existing.date = prepared.startedAt
             existing.route = prepared.route
             existing.rawRoute = prepared.rawRoute
+            existing.customName = customName
             existing.isRecording = false
             do {
-                try container.mainContext.save()
+                try saveModelContext(container.mainContext)
                 return existing
             } catch {
                 existing.distanceMeters = previousDistance
                 existing.date = previousDate
                 existing.route = previousRoute
                 existing.rawRoute = previousRawRoute
+                existing.customName = previousCustomName
                 existing.isRecording = true
                 throw .save(error.localizedDescription)
             }
@@ -170,9 +176,10 @@ extension HikeRecorder {
             rawRoute: prepared.rawRoute,
             isRecording: false
         )
+        hike.customName = customName
         container.mainContext.insert(hike)
         do {
-            try container.mainContext.save()
+            try saveModelContext(container.mainContext)
             return hike
         } catch {
             container.mainContext.delete(hike)
@@ -203,7 +210,7 @@ extension HikeRecorder {
         )
         container.mainContext.insert(hike)
         do {
-            try container.mainContext.save()
+            try saveModelContext(container.mainContext)
             currentHike = hike
             return hike
         } catch {
@@ -220,7 +227,7 @@ extension HikeRecorder {
         }
         container.mainContext.delete(hike)
         do {
-            try container.mainContext.save()
+            try saveModelContext(container.mainContext)
         } catch {
             throw .save(error.localizedDescription)
         }
@@ -251,7 +258,7 @@ extension HikeRecorder {
             container.mainContext.delete(hike)
         }
         do {
-            try container.mainContext.save()
+            try saveModelContext(container.mainContext)
         } catch {
             throw .save(error.localizedDescription)
         }
@@ -259,7 +266,8 @@ extension HikeRecorder {
 
     func finishPreparedSession(
         _ session: TrackJournalSession,
-        journal: TrackJournal
+        journal: TrackJournal,
+        customName: String? = nil
     ) async throws(RecordingFailure) -> RecordingStopOutcome {
         if let existing = try existingHike(
             sessionID: session.metadata.sessionID
@@ -268,8 +276,12 @@ extension HikeRecorder {
             return .saved(existing)
         }
 
-        let result = try await prepareForSave(session)
+        let result = try await prepareForSave(
+            session,
+            customName: customName
+        )
         if let pending = result.review {
+            pendingPreparedSave = nil
             pendingReviewSave = pending
             routeReview = RecordingRouteReview(sections: pending.sections)
             phase = .reviewing
@@ -278,7 +290,18 @@ extension HikeRecorder {
             return .needsReview
         }
 
-        let hike = try persist(session, prepared: result.prepared)
+        let pending = PendingPreparedSave(
+            session: session,
+            prepared: result.prepared,
+            customName: customName
+        )
+        pendingPreparedSave = pending
+        pendingReviewSave = nil
+        let hike = try persist(
+            session,
+            prepared: pending.prepared,
+            customName: pending.customName
+        )
         await finishSavedSession(session, journal: journal)
         return .saved(hike)
     }
@@ -357,13 +380,14 @@ extension HikeRecorder {
         currentHike = nil
         routeReview = nil
         pendingReviewSave = nil
+        pendingPreparedSave = nil
         sessionID = nil
         sessionUptimeBase = nil
         lastAcceptedPoint = nil
         accumulator = RecordingDistanceAccumulator()
         elevationFilter.reset()
         latestMotionState = .unknown
-        requestedGraphRegions = []
+        trailGraphPrefetchStates = [:]
         startRequested = false
         isActivating = false
         pendingResumeFlag = false
@@ -431,7 +455,9 @@ extension HikeRecorder {
         elevationFilter.reset()
         latestMotionState = .unknown
         lastAcceptedPoint = nil
-        requestedGraphRegions = []
+        trailGraphPrefetchStates = [:]
+        pendingReviewSave = nil
+        pendingPreparedSave = nil
         pendingResumeFlag = false
         recoveryState = .absent
         startElevationUpdates()
@@ -449,5 +475,14 @@ extension HikeRecorder {
         scheduleJournalFlush()
         schedulePendingWidgetFixMerge()
         publishSharedRecordingSnapshot(force: stats.pointCount == 1)
+    }
+
+    nonisolated static func normalizedCustomName(
+        _ customName: String?
+    ) -> String? {
+        let trimmed = customName?.trimmingCharacters(
+            in: .whitespacesAndNewlines
+        )
+        return trimmed?.isEmpty == false ? trimmed : nil
     }
 }

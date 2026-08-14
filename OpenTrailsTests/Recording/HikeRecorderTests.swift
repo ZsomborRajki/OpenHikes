@@ -149,6 +149,64 @@ actor StubTrailGraphProvider: TrailGraphProviding {
     }
 }
 
+actor ScriptedTrailGraphProvider: TrailGraphProviding {
+    private let failuresBeforeSuccess: Int
+    private var attempts = 0
+
+    init(failuresBeforeSuccess: Int) {
+        self.failuresBeforeSuccess = failuresBeforeSuccess
+    }
+
+    nonisolated func region(
+        containing coordinate: CLLocationCoordinate2D
+    ) -> TrailGraphRegion? {
+        TrailGraphRegion(zoom: 12, x: 1, y: 1)
+    }
+
+    func prefetch(
+        around coordinate: CLLocationCoordinate2D
+    ) async throws {
+        attempts += 1
+        await Task.yield()
+        if attempts <= failuresBeforeSuccess {
+            throw URLError(.notConnectedToInternet)
+        }
+    }
+
+    func cachedGraph(
+        covering coordinates: [CLLocationCoordinate2D]
+    ) -> TrailGraph? {
+        .empty
+    }
+
+    func attemptCount() -> Int {
+        attempts
+    }
+}
+
+struct InjectedPersistenceError: LocalizedError {
+    var errorDescription: String? {
+        "Injected persistence failure."
+    }
+}
+
+final class ScriptedModelContextSaver {
+    private var failedSaveNumbers: Set<Int>
+    private(set) var saveCount = 0
+
+    init(failedSaveNumbers: Set<Int>) {
+        self.failedSaveNumbers = failedSaveNumbers
+    }
+
+    func save(_ context: ModelContext) throws {
+        saveCount += 1
+        if failedSaveNumbers.remove(saveCount) != nil {
+            throw InjectedPersistenceError()
+        }
+        try context.save()
+    }
+}
+
 actor StubRecordingSharedStateStore:
     RecordingSharedStateStoring {
     private var snapshots: [SharedRecordingSnapshot] = []
@@ -273,8 +331,15 @@ final class HikeRecorderTests {
         elevationSource: (any RecordingElevationSource)? = nil,
         motionSource: (any RecordingMotionSource)? = nil,
         trailGraphProvider: (any TrailGraphProviding)? = nil,
+        trailGraphRetryPolicy: TrailGraphPrefetchRetryPolicy = .standard,
+        trailGraphRetryJitter: @escaping @Sendable () -> Double = {
+            Double.random(in: 0...1)
+        },
         sharedStateStore: (any RecordingSharedStateStoring)? = nil,
         automaticallyRecovers: Bool = false,
+        saveModelContext: @escaping (ModelContext) throws -> Void = { context in
+            try context.save()
+        },
         configureDefaults: (UserDefaults) -> Void = { _ in /* no-op */ }
     ) -> HikeRecorder {
         let defaults = UserDefaults(
@@ -283,10 +348,13 @@ final class HikeRecorderTests {
         configureDefaults(defaults)
         let instance = HikeRecorder(
             container: container,
+            saveModelContext: saveModelContext,
             source: source,
             elevationSource: elevationSource,
             motionSource: motionSource,
             trailGraphProvider: trailGraphProvider,
+            trailGraphRetryPolicy: trailGraphRetryPolicy,
+            trailGraphRetryJitter: trailGraphRetryJitter,
             defaults: defaults,
             sharedStateStore: sharedStateStore,
             journalDirectory: directory,

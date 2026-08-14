@@ -263,6 +263,112 @@ extension HikeRecorderTests {
         #expect(Set(regions).count == 2)
     }
 
+    @Test("trail graph retry delay exponentiates with jitter and a ceiling")
+    func trailGraphRetryPolicyBacksOff() {
+        let policy = TrailGraphPrefetchRetryPolicy(
+            initialDelay: 10,
+            maximumDelay: 100,
+            jitterFraction: 0.5
+        )
+
+        #expect(policy.delay(afterFailures: 1, jitter: 0) == 10)
+        #expect(policy.delay(afterFailures: 1, jitter: 1) == 15)
+        #expect(policy.delay(afterFailures: 2, jitter: 0) == 20)
+        #expect(policy.delay(afterFailures: 10, jitter: 1) == 100)
+    }
+
+    @Test("ordinary trail graph failures wait for per-region backoff")
+    func trailGraphFailuresBackOff() async throws {
+        let provider = ScriptedTrailGraphProvider(
+            failuresBeforeSuccess: 2
+        )
+        let policy = TrailGraphPrefetchRetryPolicy(
+            initialDelay: 30,
+            maximumDelay: 120,
+            jitterFraction: 0
+        )
+        let recorder = makeRecorder(
+            trailGraphProvider: provider,
+            trailGraphRetryPolicy: policy
+        )
+        let coordinate = CLLocationCoordinate2D(
+            latitude: 47.63,
+            longitude: 12.86
+        )
+        let region = try #require(provider.region(containing: coordinate))
+        await recorder.start()
+
+        let firstRetryAt = clock.now.addingTimeInterval(30)
+        await deliverTrailGraphFix(at: coordinate)
+        await waitForTrailGraphPrefetchState(
+            .waiting(failures: 1, retryAt: firstRetryAt),
+            region: region,
+            recorder: recorder
+        )
+        #expect(await provider.attemptCount() == 1)
+        #expect(
+            recorder.trailGraphPrefetchStates[region]
+                == .waiting(failures: 1, retryAt: firstRetryAt)
+        )
+
+        await deliverTrailGraphFix(at: coordinate, after: 20)
+        #expect(await provider.attemptCount() == 1)
+
+        let secondRetryAt = firstRetryAt.addingTimeInterval(60)
+        await deliverTrailGraphFix(at: coordinate, after: 10)
+        await waitForTrailGraphPrefetchState(
+            .waiting(failures: 2, retryAt: secondRetryAt),
+            region: region,
+            recorder: recorder
+        )
+        #expect(await provider.attemptCount() == 2)
+        #expect(
+            recorder.trailGraphPrefetchStates[region]
+                == .waiting(failures: 2, retryAt: secondRetryAt)
+        )
+
+        await deliverTrailGraphFix(at: coordinate, after: 50)
+        #expect(await provider.attemptCount() == 2)
+
+        await deliverTrailGraphFix(at: coordinate, after: 10)
+        await waitForTrailGraphPrefetchState(
+            .loaded,
+            region: region,
+            recorder: recorder
+        )
+        #expect(await provider.attemptCount() == 3)
+        #expect(recorder.trailGraphPrefetchStates[region] == .loaded)
+
+        clock.advance(by: 1000)
+        source.deliver(
+            fix(latitude: coordinate.latitude, longitude: coordinate.longitude)
+        )
+        await settleDelegateHop()
+        #expect(await provider.attemptCount() == 3)
+    }
+
+    private func deliverTrailGraphFix(
+        at coordinate: CLLocationCoordinate2D,
+        after interval: TimeInterval = 0
+    ) async {
+        clock.advance(by: interval)
+        source.deliver(
+            fix(latitude: coordinate.latitude, longitude: coordinate.longitude)
+        )
+        await settleDelegateHop()
+    }
+
+    private func waitForTrailGraphPrefetchState(
+        _ expected: TrailGraphPrefetchState,
+        region: TrailGraphRegion,
+        recorder: HikeRecorder
+    ) async {
+        for _ in 0..<100
+        where recorder.trailGraphPrefetchStates[region] != expected {
+            await Task.yield()
+        }
+    }
+
     @Test("widget anchors are journalled and shared state clears at Stop")
     func widgetFixesAreFoldedIntoTheRecording() async throws {
         let sharedStore = StubRecordingSharedStateStore()

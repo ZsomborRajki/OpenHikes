@@ -261,18 +261,53 @@ extension HikeRecorder {
 
     func prefetchTrailGraphIfNeeded(around coordinate: CLLocationCoordinate2D) {
         guard let trailGraphProvider,
-              let region = trailGraphProvider.region(containing: coordinate),
-              requestedGraphRegions.insert(region).inserted else { return }
+              let region = trailGraphProvider.region(containing: coordinate)
+        else { return }
+
+        let previousFailures: Int
+        switch trailGraphPrefetchStates[region] {
+        case nil:
+            previousFailures = 0
+
+        case let .waiting(failures, retryAt):
+            guard clock() >= retryAt else { return }
+            previousFailures = failures
+
+        case .fetching, .loaded:
+            return
+        }
+
+        trailGraphPrefetchStates[region] = .fetching(
+            previousFailures: previousFailures
+        )
         let expectedSessionID = sessionID
         Task { [weak self] in
             do {
                 try await trailGraphProvider.prefetch(around: coordinate)
+                guard let self, sessionID == expectedSessionID else { return }
+                trailGraphPrefetchStates[region] = .loaded
             } catch {
-                if self?.sessionID == expectedSessionID {
-                    self?.requestedGraphRegions.remove(region)
+                guard let self, sessionID == expectedSessionID else { return }
+                let failures = previousFailures + 1
+                var delay = trailGraphRetryPolicy.delay(
+                    afterFailures: failures,
+                    jitter: trailGraphRetryJitter()
+                )
+                if let providerError = error as? TrailGraphProviderError,
+                   case .rateLimited(let retryAfter) = providerError {
+                    delay = max(delay, retryAfter)
                 }
+                let retryAt = clock().addingTimeInterval(delay)
+                trailGraphPrefetchStates[region] = .waiting(
+                    failures: failures,
+                    retryAt: retryAt
+                )
                 Self.logger.error(
-                    "Trail graph prefetch failed: \(error.localizedDescription, privacy: .public)"
+                    """
+                    Trail graph prefetch failed; retrying after \
+                    \(retryAt, privacy: .public): \
+                    \(error.localizedDescription, privacy: .public)
+                    """
                 )
             }
         }

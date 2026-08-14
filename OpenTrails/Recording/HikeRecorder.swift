@@ -50,10 +50,13 @@ final class HikeRecorder: NSObject {
     let trace = RecordingTrace()
 
     @ObservationIgnored let container: ModelContainer
+    @ObservationIgnored let saveModelContext: (ModelContext) throws -> Void
     @ObservationIgnored let source: any RecordingLocationSource
     @ObservationIgnored let elevationSource: (any RecordingElevationSource)?
     @ObservationIgnored let motionSource: (any RecordingMotionSource)?
     @ObservationIgnored let trailGraphProvider: (any TrailGraphProviding)?
+    @ObservationIgnored let trailGraphRetryPolicy: TrailGraphPrefetchRetryPolicy
+    @ObservationIgnored let trailGraphRetryJitter: @Sendable () -> Double
     @ObservationIgnored let distanceEvidenceSource: (any RecordingDistanceEvidenceSource)?
     @ObservationIgnored let defaults: UserDefaults
     @ObservationIgnored let sharedStateStore: (any RecordingSharedStateStoring)?
@@ -67,7 +70,8 @@ final class HikeRecorder: NSObject {
     @ObservationIgnored var accumulator = RecordingDistanceAccumulator()
     @ObservationIgnored var elevationFilter = RecordingElevationFilter()
     @ObservationIgnored var latestMotionState: RecordingMotionState = .unknown
-    @ObservationIgnored var requestedGraphRegions: Set<TrailGraphRegion> = []
+    @ObservationIgnored var trailGraphPrefetchStates:
+        [TrailGraphRegion: TrailGraphPrefetchState] = [:]
     @ObservationIgnored var startRequested = false
     @ObservationIgnored var isActivating = false
     @ObservationIgnored var pendingResumeFlag = false
@@ -77,6 +81,7 @@ final class HikeRecorder: NSObject {
     @ObservationIgnored var liveMatchingTaskID: UUID?
     @ObservationIgnored var liveMatchNeedsRun = false
     @ObservationIgnored var pendingReviewSave: PendingReviewSave?
+    @ObservationIgnored var pendingPreparedSave: PendingPreparedSave?
     @ObservationIgnored let journalQueue = SerialAsyncQueue()
     @ObservationIgnored var journalFlushTask: Task<Void, Never>?
     @ObservationIgnored var pendingFixMergeTask: Task<Void, Never>?
@@ -94,6 +99,11 @@ final class HikeRecorder: NSObject {
         case .recovering: true
         case .waitingForFix, .recording, .paused, .saving, .reviewing, .failed: sessionID != nil || startRequested
         }
+    }
+
+    var canRetrySave: Bool {
+        guard case .failed = phase else { return false }
+        return pendingPreparedSave != nil || pendingReviewSave != nil
     }
 
     /// Whether fixes are actually being taken right now, as opposed to a
@@ -143,10 +153,17 @@ final class HikeRecorder: NSObject {
 
     init(
         container: ModelContainer,
+        saveModelContext: @escaping (ModelContext) throws -> Void = { context in
+            try context.save()
+        },
         source: (any RecordingLocationSource)? = nil,
         elevationSource: (any RecordingElevationSource)? = nil,
         motionSource: (any RecordingMotionSource)? = nil,
         trailGraphProvider: (any TrailGraphProviding)? = nil,
+        trailGraphRetryPolicy: TrailGraphPrefetchRetryPolicy = .standard,
+        trailGraphRetryJitter: @escaping @Sendable () -> Double = {
+            Double.random(in: 0...1)
+        },
         distanceEvidenceSource: (any RecordingDistanceEvidenceSource)? = nil,
         defaults: UserDefaults = .standard,
         sharedStateStore: (any RecordingSharedStateStoring)? = nil,
@@ -163,10 +180,13 @@ final class HikeRecorder: NSObject {
                 appGroupContainer: SharedStore.appGroupContainerURL()
             )
         self.container = container
+        self.saveModelContext = saveModelContext
         self.source = source ?? SystemRecordingLocationSource()
         self.elevationSource = elevationSource
         self.motionSource = motionSource
         self.trailGraphProvider = trailGraphProvider
+        self.trailGraphRetryPolicy = trailGraphRetryPolicy
+        self.trailGraphRetryJitter = trailGraphRetryJitter
         self.distanceEvidenceSource = distanceEvidenceSource
         self.defaults = defaults
         self.sharedStateStore = sharedStateStore
@@ -269,7 +289,9 @@ extension HikeRecorder {
         publishSharedRecordingSnapshot(force: true)
     }
 
-    @discardableResult func stop() async throws -> RecordingStopOutcome {
+    @discardableResult func stop(
+        customName: String? = nil
+    ) async throws -> RecordingStopOutcome {
         guard phase == .waitingForFix
             || phase == .recording
             || phase == .paused else {
@@ -308,7 +330,13 @@ extension HikeRecorder {
             fail(failure)
             throw failure
         }
-        do { return try await finishPreparedSession(session, journal: journal) } catch {
+        do {
+            return try await finishPreparedSession(
+                session,
+                journal: journal,
+                customName: Self.normalizedCustomName(customName)
+            )
+        } catch {
             fail(error, endLocationUpdates: false)
             throw error
         }
@@ -356,6 +384,7 @@ extension HikeRecorder {
 
     func dismissFailure() {
         guard case .failed = phase else { return }
+        guard !canRetrySave else { return }
         if sessionID == nil {
             resetSession()
         } else if pendingReviewSave != nil {
@@ -390,8 +419,43 @@ extension HikeRecorder {
     }
 
     func saveReviewedRecording() async throws -> Hike {
-        guard phase == .reviewing,
-              let pendingReviewSave,
+        guard phase == .reviewing else {
+            throw RecordingFailure.save("No reviewed recording is ready to save.")
+        }
+        return try await savePendingReviewedRecording()
+    }
+
+    func retrySave() async throws -> Hike {
+        guard case .failed = phase, let journal else {
+            throw RecordingFailure.save("No failed recording save is ready to retry.")
+        }
+        if pendingReviewSave != nil {
+            return try await savePendingReviewedRecording()
+        }
+        guard let pendingPreparedSave else {
+            throw RecordingFailure.save("No failed recording save is ready to retry.")
+        }
+
+        phase = .saving
+        do {
+            let hike = try persist(
+                pendingPreparedSave.session,
+                prepared: pendingPreparedSave.prepared,
+                customName: pendingPreparedSave.customName
+            )
+            await finishSavedSession(
+                pendingPreparedSave.session,
+                journal: journal
+            )
+            return hike
+        } catch {
+            fail(error, endLocationUpdates: false)
+            throw error
+        }
+    }
+
+    private func savePendingReviewedRecording() async throws -> Hike {
+        guard let pendingReviewSave,
               let routeReview,
               let journal else {
             throw RecordingFailure.save("No reviewed recording is ready to save.")
@@ -417,7 +481,16 @@ extension HikeRecorder {
                     choices: choices
                 )
             }.value
-            let hike = try persist(pendingReviewSave.session, prepared: prepared)
+            pendingPreparedSave = PendingPreparedSave(
+                session: pendingReviewSave.session,
+                prepared: prepared,
+                customName: pendingReviewSave.customName
+            )
+            let hike = try persist(
+                pendingReviewSave.session,
+                prepared: prepared,
+                customName: pendingReviewSave.customName
+            )
             await finishSavedSession(pendingReviewSave.session, journal: journal)
             return hike
         } catch let failure as RecordingFailure {
