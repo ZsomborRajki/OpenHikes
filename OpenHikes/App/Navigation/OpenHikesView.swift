@@ -223,7 +223,7 @@ struct OpenHikesView: View {
                     "Existing data was left untouched."
                 )
             }
-            .onOpenURL { url in openWidgetLink(url) }
+            .onOpenURL { url in openInboundURL(url) }
             // Follows finished selections for map styling, auto-save, and
             // background route matching. A recording draft remains selected
             // in the list but is filtered by `OpenHikesModel`.
@@ -250,6 +250,34 @@ struct OpenHikesView: View {
                 selectedHike = hike
                 highlight.move(to: nil)
             }
+    }
+
+    /// Routes a URL the system hands the app.
+    ///
+    /// Two unrelated things arrive here now that OpenHikes declares the GPX
+    /// document type: a file opened from Files, AirDrop or a share sheet, and
+    /// a widget tap. A file URL is never a widget link, so the split is on
+    /// that rather than on a scheme this app doesn't own.
+    private func openInboundURL(_ url: URL) {
+        if url.isFileURL {
+            openImportedFile(url)
+        } else {
+            openWidgetLink(url)
+        }
+    }
+
+    /// Imports a file the system opened the app for, then discards it if it
+    /// arrived as a copy. Unlike the document picker's file, this one may be
+    /// the app's to clean up — see ``GPXInbox``.
+    ///
+    /// The copy goes whether the import succeeded or not: a file that couldn't
+    /// become a hike still won't on the next launch, and leaving it behind
+    /// only hides it in a directory nothing else reads.
+    private func openImportedFile(_ url: URL) {
+        Task {
+            await performImport(from: url)
+            await GPXInbox.discardCopy(at: url)
+        }
     }
 
     /// Handles a widget tap, opening either the live recording or a hike.

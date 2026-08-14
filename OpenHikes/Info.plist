@@ -2,6 +2,29 @@
 <!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
 <plist version="1.0">
 <dict>
+	<key>CFBundleDocumentTypes</key>
+	<array>
+		<dict>
+			<key>CFBundleTypeName</key>
+			<string>GPS Exchange File</string>
+			<key>CFBundleTypeRole</key>
+			<string>Viewer</string>
+			<!-- Alternate, not Owner: a .gpx file belongs to whichever mapping
+			     app the user prefers, and claiming ownership would make
+			     OpenHikes the default for files it only reads. -->
+			<key>LSHandlerRank</key>
+			<string>Alternate</string>
+			<key>LSItemContentTypes</key>
+			<array>
+				<string>com.topografix.gpx</string>
+			</array>
+		</dict>
+	</array>
+	<!-- Lets Files hand over the original file with a security scope instead
+	     of copying it into Documents/Inbox; see `GPXInbox` for the copies the
+	     delivery methods that can't do this still leave behind. -->
+	<key>LSSupportsOpeningDocumentsInPlace</key>
+	<true/>
 	<key>NSLocationTemporaryUsageDescriptionDictionary</key>
 	<dict>
 		<key>RecordHike</key>
@@ -12,6 +35,35 @@
 	<key>UIBackgroundModes</key>
 	<array>
 		<string>location</string>
+	</array>
+	<!-- GPX has no system-declared type, so the app imports topografix's.
+	     Imported rather than exported because OpenHikes reads the format but
+	     doesn't define it. Declaring it is what puts the app in the Files
+	     app's "Open With" list, and what makes `UTType(filenameExtension:)`
+	     resolve .gpx instead of falling through to public.xml. -->
+	<key>UTImportedTypeDeclarations</key>
+	<array>
+		<dict>
+			<key>UTTypeConformsTo</key>
+			<array>
+				<string>public.xml</string>
+			</array>
+			<key>UTTypeDescription</key>
+			<string>GPS Exchange File</string>
+			<key>UTTypeIdentifier</key>
+			<string>com.topografix.gpx</string>
+			<key>UTTypeTagSpecification</key>
+			<dict>
+				<key>public.filename-extension</key>
+				<array>
+					<string>gpx</string>
+				</array>
+				<key>public.mime-type</key>
+				<array>
+					<string>application/gpx+xml</string>
+				</array>
+			</dict>
+		</dict>
 	</array>
 </dict>
 </plist>
