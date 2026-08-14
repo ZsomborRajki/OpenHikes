@@ -14,6 +14,7 @@
 
 import Foundation
 import Network
+import Synchronization
 
 nonisolated extension TileCache {
 

@@ -154,7 +154,7 @@ nonisolated final class TileCache: @unchecked Sendable {
     /// circuit on these, so an offline app doesn't fire (and log) a doomed
     /// request for every visible tile — and a metered or Low Data Mode
     /// connection doesn't quietly become the most expensive part of a hike.
-    private let conditions = Mutex(TileNetworkConditions())
+    let conditions = Mutex(TileNetworkConditions())
     var isOnline: Bool { conditions.withLock { $0.isOnline } }
     var networkConditions: TileNetworkConditions { conditions.withLock { $0 } }
 
@@ -163,10 +163,10 @@ nonisolated final class TileCache: @unchecked Sendable {
     /// every miss, from a background queue, and a defaults read is a real call
     /// rather than a field access. ``setAllowsCellularDownloads(_:)`` keeps it
     /// in step with the settings screen.
-    private let cellularAllowed: Mutex<Bool>
+    let cellularAllowed: Mutex<Bool>
 
     /// Reads the device's power state for the fetch policy. See `init`.
-    private let readPower: @Sendable () -> PowerState
+    let readPower: @Sendable () -> PowerState
 
     /// Network fetches currently in flight, keyed by cache key.
     ///
@@ -193,11 +193,11 @@ nonisolated final class TileCache: @unchecked Sendable {
 
     /// Weakly-held reconnect listeners. A boxed array keeps the reference weak so
     /// a deallocated renderer drops out without needing to unregister.
-    private struct WeakObserver: Sendable { weak var value: TileCacheObserver? }
+    struct WeakObserver: Sendable { weak var value: TileCacheObserver? }
 
-    private let observers = Mutex([WeakObserver]())
+    let observers = Mutex([WeakObserver]())
 
-    private let monitor = NWPathMonitor()
+    let monitor = NWPathMonitor()
     private let monitorsNetwork: Bool
 
     /// OSM's tile usage policy requires an identifying User-Agent. Named so a

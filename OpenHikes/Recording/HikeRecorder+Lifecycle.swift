@@ -170,14 +170,9 @@ extension HikeRecorder {
             pendingResumeFlag = false
         }
         switch latestMotionState {
-        case .stationary:
-            flags.insert(.motionStationary)
-
-        case .nonPedestrian:
-            flags.insert(.nonPedestrian)
-
-        case .unknown, .pedestrian:
-            break
+        case .stationary: flags.insert(.motionStationary)
+        case .nonPedestrian: flags.insert(.nonPedestrian)
+        case .unknown, .pedestrian: break
         }
         return flags
     }
