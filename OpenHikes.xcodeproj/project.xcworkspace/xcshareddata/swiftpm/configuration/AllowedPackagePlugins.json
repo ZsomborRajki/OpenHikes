@@ -1,0 +1,8 @@
+{
+  "plugins" : [
+    {
+      "identity" : "swiftlintplugins",
+      "name" : "SwiftLintBuildToolPlugin"
+    }
+  ]
+}
