@@ -42,10 +42,7 @@ extension TileTransportTests {
         let load = Task {
             await cache.loadTile(forKey: deleted, url: url())
         }
-        for _ in 0..<100 {
-            if StubTileProtocol.requestCount == 1 { break }
-            await Task.yield()
-        }
+        await StubTileProtocol.waitForRequest()
 
         await offMain {
             cache.removeTiles(forKeys: [deleted])
