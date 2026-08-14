@@ -11,14 +11,14 @@
 //  outside WidgetKit, so the provider's decisions are reached through the
 //  static entry points those methods delegate to — which is why they exist.
 //
-//  This bundle is hosted by OpenTrails.app so it inherits the App Group
+//  This bundle is hosted by OpenHikes.app so it inherits the App Group
 //  entitlement the widget reads through; without it there is no container and
 //  nothing to read.
 //
 
 import CoreLocation
 import Foundation
-import OpenTrailsShared
+import OpenHikesShared
 import Testing
 import WidgetKit
 
@@ -38,7 +38,7 @@ nonisolated enum WidgetStoreProbe {
         #if REQUIRE_ALL_SUITES
         return true
         #else
-        return ProcessInfo.processInfo.environment["OPENTRAILS_REQUIRE_ALL_SUITES"] == "1"
+        return ProcessInfo.processInfo.environment["OPENHIKES_REQUIRE_ALL_SUITES"] == "1"
         #endif
     }
 }
@@ -55,7 +55,7 @@ struct WidgetPreconditionTests {
         } else {
             print(
                 "⚠︎ Skipped coverage — precondition not met: \(message)." +
-                " Set OPENTRAILS_REQUIRE_ALL_SUITES=1 to make this a failure."
+                " Set OPENHIKES_REQUIRE_ALL_SUITES=1 to make this a failure."
             )
         }
     }

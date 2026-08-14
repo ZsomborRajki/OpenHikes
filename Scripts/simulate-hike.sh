@@ -3,14 +3,14 @@
 set -euo pipefail
 
 repository_root="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
-default_route="$repository_root/OpenTrails/SimulatedLocations/ThumseeLoopFast.gpx"
+default_route="$repository_root/OpenHikes/SimulatedLocations/ThumseeLoopFast.gpx"
 
 action="start"
-device="${OPENTRAILS_SIMULATOR:-booted}"
+device="${OPENHIKES_SIMULATOR:-booted}"
 route="$default_route"
-speed="${OPENTRAILS_DEMO_SPEED:-12}"
-interval="${OPENTRAILS_DEMO_INTERVAL:-1}"
-point_limit="${OPENTRAILS_DEMO_POINTS:-60}"
+speed="${OPENHIKES_DEMO_SPEED:-12}"
+interval="${OPENHIKES_DEMO_INTERVAL:-1}"
+point_limit="${OPENHIKES_DEMO_POINTS:-60}"
 dry_run=false
 
 usage() {

@@ -4,7 +4,7 @@
 <dict>
 	<key>com.apple.security.application-groups</key>
 	<array>
-		<string>group.tappium.com.OpenTrails</string>
+		<string>group.tappium.com.OpenHikes</string>
 	</array>
 </dict>
 </plist>

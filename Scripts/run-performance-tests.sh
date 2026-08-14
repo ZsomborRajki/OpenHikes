@@ -2,7 +2,7 @@
 #
 # Runs the performance UI automation and turns it into a report.
 #
-# The measurement itself lives in OpenTrailsUITests/PerformanceUITests.swift.
+# The measurement itself lives in OpenHikesUITests/PerformanceUITests.swift.
 # This script exists for the two halves of it that cannot happen inside a test
 # process: booting a clean simulator with no leftover simulated location, and
 # retrieving the event files the app wrote into its own container afterwards.
@@ -14,13 +14,13 @@
 set -euo pipefail
 
 repository_root="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
-project="$repository_root/OpenTrails.xcodeproj"
-scheme="OpenTrailsUI"
-bundle="OpenTrailsUITests"
+project="$repository_root/OpenHikes.xcodeproj"
+scheme="OpenHikesUI"
+bundle="OpenHikesUITests"
 suite="PerformanceUITests"
-app_bundle_id="tappium.com.OpenTrails"
+app_bundle_id="tappium.com.OpenHikes"
 
-device="${OPENTRAILS_SIMULATOR_NAME:-iPhone 17 Pro}"
+device="${OPENHIKES_SIMULATOR_NAME:-iPhone 17 Pro}"
 test_name=""
 output_root="$repository_root/PerformanceReports"
 keep_going=false

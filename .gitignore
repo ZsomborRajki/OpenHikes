@@ -1,5 +1,5 @@
 # Secrets — bundled API keys, never commit the real one.
-# Copy Secrets.example.plist to OpenTrails/Secrets.plist and fill in your key.
+# Copy Secrets.example.plist to OpenHikes/Secrets.plist and fill in your key.
 **/Secrets.plist
 
 # Xcode user-specific state

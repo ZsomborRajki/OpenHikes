@@ -3,13 +3,13 @@
 set -euo pipefail
 
 repository_root="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
-project="$repository_root/OpenTrails.xcodeproj"
-scheme="OpenTrailsUI"
-bundle="OpenTrailsUITests"
-suite="OpenTrailsUITests"
+project="$repository_root/OpenHikes.xcodeproj"
+scheme="OpenHikesUI"
+bundle="OpenHikesUITests"
+suite="OpenHikesUITests"
 default_test="testReviewsSnappedRouteAfterStopping"
 
-device="${OPENTRAILS_SIMULATOR_NAME:-iPhone 17 Pro}"
+device="${OPENHIKES_SIMULATOR_NAME:-iPhone 17 Pro}"
 test_name="$default_test"
 run_all=false
 verbose=false

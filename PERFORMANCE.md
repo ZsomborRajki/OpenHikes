@@ -1,16 +1,26 @@
-# OpenTrails performance
+# OpenHikes performance and energy
 
-A record of what the app actually costs, how that was measured, and what to do
-about it. Every number here was produced by `Scripts/run-performance-tests.sh`
-on an iPhone 17 Pro simulator (iOS 26.5, Xcode 26.6, Debug); none of it is
-estimated.
+A record of what the app actually costs — in frames and in battery — how that
+was measured, and what to do about it. Every number here was produced by
+`Scripts/run-performance-tests.sh` on an iPhone 17 Pro simulator (iOS 26.5,
+Xcode 26.6, Debug); none of it is estimated.
 
-The measurement exists because the architecture makes a specific, falsifiable
-claim. `RouteHighlight`, `SheetMetrics`, `RouteStyle`, `MapController`,
-`TrackerState` and `LocationManager` are stable `@Observable` reference types
-precisely so that high-frequency state — a GPS fix, a finger on the elevation
-chart — moves the map without re-evaluating any SwiftUI body above it. That is
-either true or it isn't, and until now nothing checked.
+There are two claims to check, and they are not the same claim.
+
+The first is about *rendering*. `RouteHighlight`, `SheetMetrics`, `RouteStyle`,
+`MapController`, `TrackerState` and `LocationManager` are stable `@Observable`
+reference types precisely so that high-frequency state — a GPS fix, a finger on
+the elevation chart — moves the map without re-evaluating any SwiftUI body
+above it.
+
+The second is about *energy*, and it is the one the app exists for. This is a
+hiking recorder: it runs for six hours, in a pocket, with the screen off, on a
+phone that has to still have charge when its owner needs a map to get down. An
+app that renders beautifully and flattens a battery by three in the afternoon
+has failed at the only job that mattered. Energy is therefore not a subsection
+of performance here. It is the other half of the document.
+
+Both claims are either true or they aren't, and both are now measured.
 
 ## How to run it
 
@@ -19,7 +29,7 @@ either true or it isn't, and until now nothing checked.
 Scripts/run-performance-tests.sh
 
 # One scenario
-Scripts/run-performance-tests.sh --test testLiveRecordingCostPerFix
+Scripts/run-performance-tests.sh --test testBackgroundRecordingCostsNothingPerFix
 Scripts/run-performance-tests.sh --list
 
 # Still produce a report when a budget fails
@@ -34,13 +44,12 @@ measure an app that reports nothing at all.
 
 Three pieces, because no single one of them can see the whole picture.
 
-**`PerformanceLog`** (`OpenTrails/General/Diagnostics/PerformanceLog.swift`) is
+**`PerformanceLog`** (`OpenHikes/General/Diagnostics/PerformanceLog.swift`) is
 a debug-only text sink, switched on by `--ui-test-performance-log=<scenario>`.
 Every `RenderSignpost` mark and interval, every `MainThreadWatchdog` stall and a
-1 Hz CPU/footprint sample land in
-`Documents/PerformanceLogs/<scenario>.tsv` as
-`epoch_s, elapsed_s, kind, name, value, detail`. The recording path only takes a
-lock and appends a struct; formatting and file I/O happen on a utility serial
+1 Hz CPU/footprint/power sample land in `Documents/PerformanceLogs/<scenario>.tsv`
+as `epoch_s, elapsed_s, kind, name, value, detail`. The recording path only takes
+a lock and appends a struct; formatting and file I/O happen on a utility serial
 queue, so the instrument does not become the thing being measured.
 
 **`PerformanceCounterProbe`** is a 1×1 `UIViewRepresentable` whose
@@ -57,9 +66,10 @@ about, and because a body-evaluation count is stable across machines in a way
 that a millisecond budget is not.
 
 `Scripts/perf-report.py` then joins the `PERF-PHASE`/`PERF-COUNT` lines the test
-prints with the app's event file and writes the markdown report.
+prints with the app's event file and writes the markdown report, including the
+per-scenario **Energy** section described below.
 
-### Three measurement traps this had to solve
+### Four measurement traps this had to solve
 
 Worth recording, because each produced a convincing wrong answer first.
 
@@ -88,7 +98,17 @@ of an idle app — which looks like a measurement but is the absence of one.
 `simctl privacy` and the test no longer resets it; the monitor stays as a
 fallback.
 
+*A cache is a lie detector that has already been bribed.* The offline scenario
+asserts that browsing the map opens no connection. On its first run it passed
+instantly and proved nothing: every tile in the fixture region was already on
+disk from the *previous* scenario, so there was no miss, no fetch to refuse and
+no policy under test. `--ui-test-offline` now also hands the launch an empty
+tile root (`AppLaunchEnvironment.isolatedTileRoot()`), which turns 0 refusals
+into 80 and the assertion into a real one.
+
 ## Baseline — 2026-08-14
+
+Seven scenarios, all passing. `PerformanceReports/20260814-185650/`.
 
 ### What is already right
 
@@ -97,26 +117,225 @@ These are the load-bearing claims of the architecture, and they hold.
 | Scenario | Measurement | Result |
 |---|---|---|
 | Idle, 7 s, map visible | body evaluations | **0** |
-| Idle, 7 s | CPU | **0.034 s — 0.5% of one core** |
+| Idle, 7 s | CPU | **0.040 s — 0.6% of one core** |
 | Chart scrub, one drag | `ElevationChartBody` | 15 |
-| Chart scrub, one drag | `OpenTrailsViewBody`, `MapSheetBody`, `MapRouteRebuilt` | **0, 0, 0** |
-| Map browsing, 17 s of pans and zooms | `OpenTrailsViewBody` | 1–2 |
-| Live recording | `TrailMatcherWork` on the main thread | **0** (off-main, 0.2–4 ms) |
+| Chart scrub, one drag | `OpenHikesViewBody`, `MapSheetBody`, `MapRouteRebuilt` | **0, 0, 0** |
+| Map browsing, 17 s of pans and zooms | `OpenHikesViewBody` | 1–2 |
+| Live recording | `TrailMatcherWork` on the main thread | **0** (off-main, 0.5–8.5 ms) |
+| Offline browsing, 17 s | connections opened | **0**, with 80 fetches refused |
+| Backgrounded recording | SwiftUI bodies per fix | **0** |
 
 A sustained scrub moves the map marker fifteen times without re-evaluating a
-single body above the chart, and an idle app with a map on screen costs half a
-percent of one core. The render-isolation design does what it claims.
+single body above the chart; an idle app with a map on screen costs half a
+percent of one core; and a recording in a pocket does no rendering work at all.
+
+## Energy
+
+### What a hike actually costs
+
+Battery has no single counter an app can read, and the one iOS does expose —
+`UIDevice.batteryLevel` — is quantised to 5% and useless over a test that lasts
+thirty seconds. What the app can see are four proxies, and the report now puts
+them side by side per scenario:
+
+1. **CPU seconds.** The most direct thing under our control.
+2. **Radio wake-ups** — `TileNetworkFetch`, `WeatherFetch`, `TrailGraphFetch`,
+   counted and timed. A cellular radio that has to be woken costs far more than
+   the bytes it moves, especially at one bar.
+3. **GPS duty** — the location funnel, below, plus which accuracy profile was
+   in force and when it changed.
+4. **Screen work** — the body-evaluation counts the rest of this document is
+   about, which matter to energy only while the screen is actually on.
+
+Extrapolated to a hiking hour from the current run:
+
+| Scenario | CPU per hour (extrapolated) |
+|---|---|
+| Idle with the map up | 213 CPU-s |
+| Offline browsing | 283 CPU-s |
+| Map browsing (online) | 316 CPU-s |
+| Live recording, screen on | 450 CPU-s |
+| Recording, backgrounded | 469 CPU-s |
+
+Read those with care: they are whole-run figures that include launch and the
+automation's own polling, and the backgrounded run polls *less*, so its
+apparently higher number is an artefact of a shorter run amortising the same
+fixed launch cost. The comparable figure is per accepted fix, where the phases
+are like for like:
+
+| | CPU per accepted fix |
+|---|---|
+| Recording, screen on | 0.363 s |
+| Recording, backgrounded | **0.199 s** |
+
+Putting the phone in a pocket roughly halves the per-fix cost, which is the
+right shape — and, since that is how the app is used for all but a few minutes
+of a walk, the backgrounded number is the one that decides whether the battery
+lasts.
+
+### The location funnel
+
+Every scenario's report now includes this, because "the GPS is busy" and "the
+GPS is busy and we are throwing the results away" cost identical energy and
+need opposite fixes:
+
+```
+LocationFixDelivered   → CoreLocation handed us a fix
+LocationPublished      → it passed LocationManager's filters
+RecordingFixReceived   → it reached the recorder
+LiveFixAccepted        → it became part of the route
+RecordingFixRejected   → it did not
+```
+
+A high rejection rate is not a recording problem, it is an energy problem: full
+GPS duty paid, half a route recorded. `Scripts/perf-report.py` raises it as a
+finding above 50%.
+
+### Finding E1 — the GPS never stepped down (fixed)
+
+Until this change the recorder pinned `kCLLocationAccuracyBest` with a 10 m
+distance filter for the entire walk and never reconsidered. Low Power Mode was
+read exactly once, to show a warning; `thermalState` was not read anywhere in
+the app. So the app told the walker their phone was struggling and then carried
+on asking for the most expensive positioning mode iOS offers, for six hours.
+
+`RecordingEnergyPolicy` replaces the constant with a function of conditions,
+along two axes that answer to different authorities:
+
+| | Precise (default) | Conserving |
+|---|---|---|
+| `desiredAccuracy` | `kCLLocationAccuracyBest` | `kCLLocationAccuracyNearestTenMeters` |
+| `distanceFilter`, moving | 10 m | 20 m |
+| `distanceFilter`, stationary | 25 m | 25 m |
+
+`desiredAccuracy` moves only for Low Power Mode or thermal `.serious` and
+above — both explicit signals that the *user or the system* wants less work
+done, and neither something an app should overrule for a slightly smoother
+line. `distanceFilter` moves for those and for standing still, taking the
+larger of the two candidates: both conditions are reasons to be woken less, and
+standing still in Low Power Mode is not a reason to be woken more than either
+alone.
+
+Three thresholds worth defending:
+
+*Why the filter is the better lever.* It is applied inside `locationd`. Raising
+it stops the fix before it costs this process a delegate callback, a main-actor
+hop and a `RecordingFixPolicy` evaluation that was only ever going to reject it.
+
+*Why accuracy is not lowered merely for standing still.* A stationary walker is
+one step from a moving one, and the first fix after they set off anchors the
+next leg of the track. Buying a little energy by making that fix coarse is a bad
+trade for a route somebody keeps. A raised filter costs nothing there, because a
+step past the filter distance still arrives at full accuracy.
+
+*Why `.fair` thermal is excluded.* A phone in a jacket pocket in direct sun
+reaches `.fair` and stays there for an entire summer walk. Treating it as a
+signal would make the conserving profile the normal one — and a mitigation
+that is always on is indistinguishable from having lowered the default.
+
+`PowerStateMonitor` watches both notifications and re-evaluates, so the
+transition that has no fix to prompt it — a walker stopping for lunch while the
+battery crosses 20% — still reconfigures. Each application emits
+`RecordingEnergyProfileApplied` with the profile name and filter, and the
+recording screen now explains itself in the walker's terms: *"Low Power Mode —
+recording at ten-metre accuracy to save battery."*
+
+Pinned by `RecordingEnergyPolicyTests` (the decision) and
+`HikeRecorderTests+Energy` (that the decision reaches CoreLocation, at the
+right moments, and is not re-applied when it has not changed).
+
+### Finding E2 — nothing acted on network conditions (fixed)
+
+`NWPathMonitor` was already running and its `isExpensive` and `isConstrained`
+flags were already being delivered. The cache read neither. A tile miss on one
+bar of cellular in a valley — the most expensive networking a phone can do,
+because a weak signal makes the radio transmit harder and for longer — was
+treated exactly like a miss on home Wi-Fi.
+
+`TileNetworkPolicy` now decides, split by purpose rather than by caller, because
+the same `loadTile` serves a visible tile and a prefetch:
+
+| Condition | Interactive (drawing now) | Speculative (prefetch) |
+|---|---|---|
+| Offline | denied | denied |
+| Low Data Mode (`isConstrained`) | denied | denied |
+| Cellular, setting off | denied | denied |
+| Cellular, setting on | **allowed** | denied (`cellular-speculative`) |
+| Low Power Mode | allowed | denied |
+| Thermal `.serious`+ | allowed | denied |
+
+The asymmetry is the point. A walker looking at the map gets their tile; what
+stops is the app spending a metered, expensive radio on tiles nobody has asked
+to see. Low Data Mode has no override and no setting, because it is an explicit
+per-network instruction from the user and a hiking app is not the exception.
+Cellular has one — **Settings › Data Use › Download Maps on Cellular**, default
+on, so a first-time user on the approach road does not get a blank map and
+conclude the app is broken.
+
+Every refusal emits `TileFetchSuppressed` with `purpose=` and `reason=`, which
+matters more than it sounds: a tile that silently never loads is the hardest
+thing in this pipeline to debug, and this policy creates exactly that situation
+on purpose. The reasons are also grouped into a table in the report.
+
+Pinned by `TileNetworkPolicyTests` (the decision) and four cases in
+`TileTransportTests` that drive it through the real cache.
+
+### Finding E3 — a backgrounded recording drew a map nobody could see (fixed)
+
+Measured on the first run of the new background scenario: with the app
+backgrounded and fixes still arriving, `MapRecordingTraceApplied` fired **2.0
+times per fix**. Each one allocates an `MKPolyline` and makes MapKit drop and
+re-render the old overlay — for a map that is not on screen. Over a six-hour
+walk at ~2000 fixes that is four thousand overlay swaps whose entire output is
+discarded.
+
+`MapView.Coordinator` now gates the apply on foreground, observed through
+`UIApplication` lifecycle notifications rather than `scenePhase` so it stays
+entirely off SwiftUI's render path. The `withObservationTracking` registration
+continues regardless — the revision must keep being tracked or the map would
+never learn about the fixes that arrived while it was away. The work is
+deferred, not dropped, and caught up in a single pass on return, which draws an
+hour of pocket walking for the price of one fix.
+
+| | Before | After |
+|---|---|---|
+| `MapRecordingTraceApplied`, 3 backgrounded fixes | 6 | **1** |
+| …per fix | 2.0 | **0.33** |
+
+`RecordingTailRebuilt` stays at 2.0 per fix and should: that is the in-memory
+trace, which has to keep up so the catch-up pass has something correct to draw.
+It costs 0.02 ms.
+
+### Finding E4 — what a backgrounded fix costs now
+
+The measured answer, from `testBackgroundRecordingCostsNothingPerFix`:
+
+| Counter | Total, 3 fixes | Per fix |
+|---|---|---|
+| `ScenePhaseChanged` | 4 | — |
+| `OpenHikesViewBody` | 4 | **0** beyond the transitions |
+| `MapSheetHikesBody` | 4 | **0** beyond the transitions |
+| `RecordingBody` | 4 | **0** beyond the transitions |
+| `MapRecordingTraceApplied` | 1 | **0.33** |
+| `RecordingTailRebuilt` | 6 | 2.0 (in-memory only) |
+
+Four bodies for four scene transitions, and nothing per fix. The test asserts
+exactly that shape — body count ≤ transition count — rather than a constant,
+because a per-fix budget would pass *more* easily the longer the walk, which is
+backwards.
+
+## Rendering findings
 
 ### Finding 1 — launch blocks the main thread for ~600 ms (P1)
 
-`XCTApplicationLaunchMetric` puts first-responsive-frame at **1.371 s**
-(RSD 0.47%, n=3). The watchdog reports a **534–685 ms** unbroken main-thread
+`XCTApplicationLaunchMetric` puts first-responsive-frame at **1.413 s**
+(RSD 1.489%, n=3). The watchdog reports a **538–651 ms** unbroken main-thread
 stall in *every* scenario. The bisection intervals split it as:
 
 | Span | Cost |
 |---|---|
-| `ModelContainerInit` (SwiftData) | 24–29 ms |
-| `AppModelInit` (whole `OpenTrailsModel`, includes the above) | 48–55 ms |
+| `ModelContainerInit` (SwiftData) | 24–26 ms |
+| `AppModelInit` (whole `OpenHikesModel`, includes the above) | 46–53 ms |
 | SwiftUI/UIKit bootstrap before the first body runs | **~240 ms** |
 | First render → main thread free again | **~370 ms** |
 
@@ -125,7 +344,9 @@ Inside that last 370 ms, `MapViewCreated` → `MapRecordingTraceApplied` alone i
 times before the app settles.
 
 The 240 ms of framework bootstrap is not ours. The ~370 ms of first render
-largely is.
+largely is. This is also the largest single *energy* item in a short session,
+which is worth saying out loud: a walker who opens the app to check where they
+are, and closes it, pays this and almost nothing else.
 
 ### Finding 2 — the 210 MB "recording footprint" is the harness, not the app (P1, resolved)
 
@@ -147,64 +368,42 @@ It is not real. Launching the same build outside XCUITest, driven only by
 
 Neither Core Location, nor the bundled trail graph, nor a map actively
 following a position and loading tiles for it moves the number. The same app
-under UI automation reports 95–223 MB.
+under UI automation reports 95–225 MB.
 
 The difference is the automation. Every counter read, every `waitForExistence`,
 every element query makes the app build an accessibility snapshot of its
-hierarchy, and the recording scenario polls far more than the others — it waits
-on `recording-point-count` in a loop for the whole walk.
+hierarchy, and the recording scenarios poll far more than the others.
 
 **The rule this establishes: absolute footprint under XCUITest is not the app's
 footprint.** Only footprint *deltas inside a single phase* mean anything, and
-even those are contaminated by however much querying the phase does. Measuring
-the real number requires a run that nothing is watching, which is what the
-`simctl` table above is.
+even those are contaminated by however much querying the phase does.
 
-A later run makes the same point from inside the harness: the recording scenario
-peaks at 205.7 MB and **ends at 83.8 MB**, having started at 84.2 MB. Nothing
-was leaked and nothing settled high — the peak is transient automation cost that
-is handed straight back. The original "settled at 210 MB" reading was the last
-sample of a run that was still being queried when it stopped.
+The current run makes the same point from inside the harness: recording peaks at
+213.2 MB and **ends at 83.6 MB**, having started at 85.7 MB; the backgrounded
+scenario peaks at 225.4 MB and ends at 83.1 MB from 83.3 MB. Nothing was leaked
+and nothing settled high — the peak is transient automation cost handed straight
+back.
 
 Recorded here rather than deleted because the wrong version of this finding was
 convincing, and the next person to read a memory column off a UI-test run
 deserves to know that first.
 
-### Finding 3 — every accepted fix does the trace work twice (P2)
+### Finding 3 — every accepted fix does the trace work twice (P2, resolved)
 
 | Counter | Per accepted fix |
 |---|---|
 | `RecordingTailRebuilt` | **2.0** |
-| `MapRecordingTraceApplied` | **2.0** |
+| `MapRecordingTraceApplied` | **2.0** (foreground; 0.33 backgrounded — see E3) |
 | `LiveTrailMatchApplied` | 1.0 |
 | `TrailMatcherWork` | 1.0 |
 
-Reproduced identically across five runs. The cause is visible in the event
+Reproduced identically across every run. The cause is visible in the event
 timeline and is *by design*: `receive(_:)` calls
 `trace.append(coordinate, provisional: true)` so the raw fix draws immediately,
 then the live match returns and `applyLiveMatch(…)` replaces the provisional
 tail with the snapped geometry. Two genuine state changes, two revisions, two
-overlay rebuilds.
-
-What makes it worth fixing is *when* the second one lands:
-
-```
-15.0948  LocationPublished
-15.0949  RecordingTailRebuilt      0.010 ms
-15.0968  MapRecordingTraceApplied            <- draws the raw fix
-15.1013  TrailMatcherWork          4.060 ms
-15.1014  RecordingTailRebuilt      0.006 ms
-15.1015  MapRecordingTraceApplied            <- draws the snapped fix, 4.7 ms later
-```
-
-0.7–4.7 ms apart, inside the same frame, on all three fixes. The intermediate
-state is never presented to anyone. The app removes and re-adds an `MKPolyline`
-to show a point it then discards.
-
-The absolute cost today is small — `rebuildTail` is 0.006–0.06 ms. The problem
-is its *shape*: `rebuildTail()` copied the entire stable tail (up to 255
-coordinates) on every call, so the per-fix cost grew with the recording and was
-paid twice.
+overlay rebuilds — 0.7–4.7 ms apart, inside the same frame. The intermediate
+state is never presented to anyone.
 
 **Fixed.** `RecordingTrace` now caches how much of `tail` came from the stable
 half and validates that cache with a `stableRevision` counter, so a fix that
@@ -212,12 +411,9 @@ only moves the provisional tail — the common case — costs the provisional
 remainder instead of the whole tail. It also compares the rebuilt remainder
 against the previous one and publishes a revision only when the geometry
 actually moved, which matters because a stationary recorder produces the same
-matched geometry repeatedly and each published revision costs an `MKPolyline`
-allocation and a MapKit overlay swap to redraw an identical line.
-`MapCoordinator` now takes separate `tailRevision`/`reviewRevision` tokens, so a
-revision that moved one overlay no longer rebuilds the other.
-
-Measured over the same three-fix walk, with a four-point tail:
+matched geometry repeatedly. `MapCoordinator` takes separate
+`tailRevision`/`reviewRevision` tokens, so a revision that moved one overlay no
+longer rebuilds the other.
 
 | | Before | After |
 |---|---|---|
@@ -225,21 +421,16 @@ Measured over the same three-fix walk, with a four-point tail:
 | `RecordingTailRebuilt` max | 0.0638 ms | **0.0365 ms** |
 
 A 24% mean and 43% peak improvement on a tail four coordinates long, which is
-the least favourable case the change has — the saving is proportional to the
-stable tail, and this one is nearly empty. Proving the rest of it needs the
+the least favourable case the change has. Proving the rest of it needs the
 long-recording scenario in the P3 list.
 
-The count stays at 2.0 per fix, and the budget now says 2.5 rather than 1.5:
-two publications per fix is correct, and a test that fails permanently is a
-test everyone learns to ignore. What is worth defending is that it stays two.
-
-`RecordingTraceTests` pins all of it — an identical match publishing nothing, a
-real move still publishing, a commit underneath the cached prefix producing the
-tail a full rebuild would, and `reset()` invalidating the cache.
+The count stays at 2.0 per fix, and the budget says 2.5 rather than 1.5: two
+publications per fix is correct, and a test that fails permanently is a test
+everyone learns to ignore. What is worth defending is that it stays two.
 
 ### Finding 4 — discrete taps on the chart cost more than dragging across it (P3)
 
-Thirteen taps along the elevation profile produced **1** `OpenTrailsViewBody`,
+Thirteen taps along the elevation profile produced **1** `OpenHikesViewBody`,
 **2** `MapSheetBody`, **3** `MapSheetHikesBody` and **3** `HikeDetailBody` — and
 **zero** `ElevationChartBody`. A continuous drag over the same pixels produced
 15 chart bodies and nothing above them.
@@ -247,37 +438,130 @@ Thirteen taps along the elevation profile produced **1** `OpenTrailsViewBody`,
 So a tap does not scrub at all, while still costing renders somewhere above the
 chart. Low priority — nobody taps a chart repeatedly — but it says a scrub's
 start/stop edges are not as isolated as its middle, and that is where a future
-regression would appear first. Note that one run produced *no* renders at all
-during the tap phase, so part of this is whatever the automation is doing rather
-than the taps themselves; that is the first thing to establish.
+regression would appear first.
+
+### Finding 5 — panning re-renders the hike list (P2)
+
+Map browsing produces up to **4** `MapSheetHikesBody`, **3** `MapSheetBody` and
+**2** `OpenHikesViewBody` for a gesture that changes no hike and selects
+nothing. Until now only the first two were asserted; the hike list was not
+budgeted at all, which is how it grew.
+
+It is small in absolute terms and it is not on the per-fix path, but panning is
+the single most common thing anyone does in this app, and a `@Query`-backed
+list re-evaluating on it is exactly the shape that becomes expensive when
+somebody has two hundred hikes. Now budgeted at 4 in
+`testMapBrowsingDoesNotReRenderTheSheet`, which stops it growing while the cause
+is found.
+
+## Finding a UI performance problem while using the app
+
+The suite above catches regressions in scenarios someone thought to write. This
+is how to chase one you can feel but cannot name.
+
+**1. Turn on the signpost console.** Set `RENDER_SIGNPOST_LOG=1` in the scheme's
+run action, run on a device or simulator, and use the app. Every body
+evaluation, map update and matcher run prints as it happens. If something
+re-renders when you touch an unrelated control, you will see it in the stream
+before you can measure it.
+
+**2. Watch it in Instruments.** The same marks are `os_signpost` events, so
+*File › Recording Options › os_signpost* plus the **Energy Log** and **Location
+Energy Impact** instruments give the render stream and the battery cost on one
+timeline. This is the only way to see a radio wake-up you did not cause and a
+GPS duty cycle you did not ask for.
+
+**3. Reproduce it as a scenario.** Add a `test…` to `PerformanceUITests`, launch
+with `--ui-test-performance-log=<name>`, wrap the interaction in
+`measurePhase(named:in:seconds:)`, and read the counter deltas. If the number
+is stable, assert it; if it is not, the instability is the finding.
+
+**4. Drive a real route.** `Scripts/simulate-hike.sh` plays a GPX through the
+simulator for long-running behaviour that a three-fix scenario cannot show —
+drift, growth per fix, the accumulator deciding you have stopped.
+
+**5. Check the energy section of the report.** Radio wake-ups, refused fetches
+by reason, the location funnel, and every GPS reconfiguration with a timestamp.
+A scenario that renders perfectly and opens forty connections is a bug this
+document cares about just as much.
+
+Useful launch arguments, all gated behind `--ui-testing`:
+
+| Argument | Effect |
+|---|---|
+| `--ui-test-performance-log=<scenario>` | Opens the event log and the counter probe |
+| `--ui-test-offline` | Holds `TileCache` offline **and** gives it an empty tile root |
+| `--ui-test-enable-location` | Uses real simulator Core Location |
+| `--ui-test-import-gpx=<name>` | Imports a bundled GPX fixture |
+| `--ui-test-trail-graph=<name>` | Matches against a bundled graph instead of Overpass |
+| `--ui-test-expanded-sheet` | Starts with the sheet expanded |
+
+### Signpost reference
+
+Rendering: `OpenHikesViewBody`, `MapSheetBody`, `MapSheetHikesBody`,
+`HikeDetailBody`, `RecordingBody`, `ElevationChartBody`.
+
+Map: `MapViewCreated`, `MapUpdateCalled`, `MapRouteRebuilt`, `MapRouteRestyled`,
+`MapTileSourceRebuilt`, `MapCentered`, `MapRecordingTraceApplied`.
+
+Recording: `LocationFixDelivered`, `LocationPublished`, `RecordingFixReceived`,
+`RecordingFixRejected`, `LiveFixAccepted`, `LiveTrailMatchApplied`,
+`LiveFollowUpdate`, `RecordingTailRebuilt`, `TrailMatcherWork` (interval),
+`RecordingEnergyProfileApplied`.
+
+Energy and network: `PowerStateChanged`, `ScenePhaseChanged`,
+`TileNetworkFetch` (interval), `TileFetchSuppressed`, `WeatherFetch`
+(interval), `TrailGraphFetch` (interval).
+
+Startup: `AppModelInit`, `ModelContainerInit`, `GPXParsed`,
+`HikeDetailPrepared` (all intervals).
 
 ## TODO
 
 ### P1
 
-- [x] ~~Attribute the 210 MB recording footprint.~~ Done — it is the automation,
-      not the app (Finding 2). The app settles at 78 MB with location, trail
-      graph and a following map.
 - [ ] **Cut the first render.** ~370 ms between the first body and a free main
       thread, of which ~62 ms is `MKMapView` construction and the rest is a
       sheet that renders three to four times before settling. Find out how much
-      of the sheet hierarchy is required for the first frame.
+      of the sheet hierarchy is required for the first frame. This is the
+      dominant cost of a short "where am I" session.
 - [ ] **Assert the launch stall.** The watchdog records it; nothing fails on it.
-      A ceiling somewhat above today's 685 ms turns a regression into a test
+      A ceiling somewhat above today's 651 ms turns a regression into a test
       failure instead of a thing someone notices on an old device.
 
-### P2
+### P2 — energy
+
+- [x] ~~Make the GPS configuration a function of conditions.~~ Done —
+      `RecordingEnergyPolicy`, Finding E1.
+- [x] ~~Act on `isExpensive` / `isConstrained` / Low Power Mode for tiles.~~
+      Done — `TileNetworkPolicy`, Finding E2.
+- [x] ~~Stop rebuilding map overlays while backgrounded.~~ Done — 2.0 → 0.33
+      applications per fix, Finding E3.
+- [ ] **Measure a real hike-length recording's energy.** Every number above
+      extrapolates from a three-fix scenario. `Scripts/simulate-hike.sh` plus
+      the Energy Log instrument over a full GPX is the only way to know whether
+      the per-fix cost is flat, and it is the one measurement this harness
+      structurally cannot make.
+- [ ] **Suppress the 1 Hz `TimelineView` in `RecordingView` while
+      backgrounded.** It is almost certainly already suspended by the system,
+      but "almost certainly" is not a measurement, and it is the last known
+      per-second wake-up in the recording path.
+- [ ] **Consider `isIdleTimerDisabled` deliberately.** The app never sets it,
+      which is the right default — but a walker navigating a junction with the
+      screen dimming every 30 s will reach for the power button repeatedly, and
+      each wake costs more than the timeout saved. Worth a setting rather than
+      a constant.
+
+### P2 — rendering
 
 - [x] ~~Make `rebuildTail()` cost the provisional tail, not the whole tail.~~
       Done — mean per-fix cost down 24%, peak down 43% (Finding 3).
 - [x] ~~Stop rebuilding unchanged overlays in `applyRecordingTrace`.~~ Done —
-      the tail and review polylines now carry independent change tokens.
-- [x] ~~Keep the per-fix budget honest.~~ Done — 2.5, with the reasoning in the
-      test.
+      the tail and review polylines carry independent change tokens.
 - [x] ~~Publish no revision when a fix changes nothing.~~ Done — a fix dropped by
-      `appendDistinct` as too close to the last no longer bumps `stableRevision`,
-      so it neither publishes a revision nor invalidates the tail's prefix
-      cache. A stationary recorder now costs nothing per fix beyond the match.
+      `appendDistinct` as too close to the last no longer bumps `stableRevision`.
+- [ ] **Find out why panning re-renders `MapSheetHikesBody`** (Finding 5). Now
+      budgeted, not yet explained.
 
 ### P3
 
@@ -285,11 +569,14 @@ than the taps themselves; that is the first thing to establish.
       chart (Finding 4).
 - [ ] Add a `--ui-test-*` scenario for a long recording (hundreds of fixes) so
       the O(n)-per-fix shapes show up as a slope rather than as an argument.
-      This is also what would size the `rebuildTail()` win properly.
+      This is also what would size the `rebuildTail()` win properly, and what
+      would make the per-hike-hour extrapolations above into measurements.
 - [ ] Run the suite on a device once. `XCTHitchMetric` needs a signpost stream
       the Simulator does not emit — it raises inside `harvestData` rather than
       degrading — so frame-level hitch data is the one thing this harness cannot
-      currently produce.
+      currently produce. A device is also the only place thermal state ever
+      leaves `.nominal`, so the conserving profile has never been exercised
+      anywhere but in unit tests.
 - [ ] Give the report generator a `--baseline` flag so a run can be diffed
       against a stored one instead of by hand.
 
@@ -299,18 +586,26 @@ Verified on 2026-08-14, iPhone 17 Pro simulator, iOS 26.5, Xcode 26.6:
 
 | Check | Result |
 |---|---|
-| `PerformanceUITests` | 5 of 5 passed |
-| App and widget unit tests | 633 passed |
+| `PerformanceUITests` | **7 of 7 passed** |
+| App and widget unit tests | **658 passed** (639 + 19) |
 | `swiftlint --strict` | Clean |
-| Launch, first responsive frame | 1.364 s, RSD 0.87% (n=3) |
-| `RecordingTailRebuilt` per fix | 2.0, mean 0.019 ms (was 0.026 ms) |
-| Recording footprint | 84.2 MB start → 83.8 MB end, 205.7 MB transient peak |
+| Launch, first responsive frame | 1.413 s, RSD 1.49% (n=3) |
+| Idle CPU, 7 s | 0.040 s — 0.6% of one core |
+| Offline browsing | 0 connections, 80 fetches refused |
+| Backgrounded recording | 0 bodies per fix, 0.199 CPU-s per fix |
+| `MapRecordingTraceApplied` backgrounded | 2.0 → **0.33** per fix |
+| `RecordingTailRebuilt` per fix | 2.0, mean 0.019 ms |
+| Recording footprint | 85.7 MB start → 83.6 MB end, 213.2 MB transient peak |
 
-The P2 work is done and pinned by `RecordingTraceTests`. What remains is the two
-P1 launch items, which are about the ~370 ms first render rather than about
-anything measured here being wrong, and the P3 list.
+The energy work is done and pinned by `RecordingEnergyPolicyTests`,
+`HikeRecorderTests+Energy`, `TileNetworkPolicyTests` and four cases in
+`TileTransportTests`. What remains is the two P1 launch items, the long-hike
+measurement that no simulator scenario can substitute for, and the P3 list.
 
-Two caveats for anyone reading a future run. Memory columns from a UI-test run
-describe the harness as much as the app (Finding 2). And the suite has never run
-on a physical device, which is the only place `XCTHitchMetric` works and the
-only place the launch number means what a user would experience.
+Three caveats for anyone reading a future run. Memory columns from a UI-test run
+describe the harness as much as the app (Finding 2). The per-hike-hour energy
+figures are extrapolations from thirty-second scenarios and should be treated as
+shapes, not values. And the suite has never run on a physical device — which is
+the only place `XCTHitchMetric` works, the only place the launch number means
+what a user would experience, and the only place thermal throttling has ever
+actually happened.

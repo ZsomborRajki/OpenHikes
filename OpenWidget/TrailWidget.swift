@@ -2,14 +2,14 @@
 //  TrailWidget.swift
 //  OpenWidget
 //
-//  Shows the shape of whichever trail is currently selected in OpenTrails,
+//  Shows the shape of whichever trail is currently selected in OpenHikes,
 //  plus your last-known position along it. During an active recording it may
 //  request one coarse location anchor on a sparse WidgetKit timeline; all
-//  displayed state still comes from SharedStore (see OpenTrailsShared).
+//  displayed state still comes from SharedStore (see OpenHikesShared).
 //
 
 import CoreLocation
-import OpenTrailsShared
+import OpenHikesShared
 import SwiftUI
 import WidgetKit
 
@@ -425,7 +425,7 @@ struct TrailWidgetEntryView: View {
             Image(systemName: "figure.hiking")
                 .font(.title2)
                 .foregroundStyle(.secondary)
-            Text("Select a trail in OpenTrails")
+            Text("Select a trail in OpenHikes")
                 .font(.caption)
                 .foregroundStyle(.secondary)
                 .multilineTextAlignment(.center)

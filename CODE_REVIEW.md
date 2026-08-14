@@ -1,4 +1,4 @@
-# OpenTrails code review
+# OpenHikes code review
 
 The current tree contains 165 Swift files and 39,533 lines, plus project and
 package configuration, scripts, entitlements, tests, and documentation. The

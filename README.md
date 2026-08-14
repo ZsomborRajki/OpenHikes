@@ -1,6 +1,6 @@
-# OpenTrails
+# OpenHikes
 
-OpenTrails is a local-first SwiftUI and SwiftData trail viewer for iOS, iPadOS, macOS, and visionOS. It imports GPX tracks, displays them on a MapKit map, provides route statistics and an interactive elevation profile, and keeps selected map areas available offline.
+OpenHikes is a local-first SwiftUI and SwiftData trail viewer for iOS, iPadOS, macOS, and visionOS. It imports GPX tracks, displays them on a MapKit map, provides route statistics and an interactive elevation profile, and keeps selected map areas available offline.
 
 ## Features
 
@@ -12,7 +12,7 @@ OpenTrails is a local-first SwiftUI and SwiftData trail viewer for iOS, iPadOS, 
 - Live location, trail auto-follow with a progress readout, and current WeatherKit conditions.
 - Passive tile auto-save for browsed areas, plus bulk offline downloads where the provider permits them.
 - An iOS Home Screen widget with trail progress, live-recording takeover, recording deep links, and sparse location anchors that help repair degraded GPS gaps.
-- Local SwiftData and App Group storage; OpenTrails has no backend or account sync.
+- Local SwiftData and App Group storage; OpenHikes has no backend or account sync.
 
 ## Requirements
 
@@ -24,22 +24,22 @@ OpenStreetMap is the keyless default. Stadia and Thunderforest require build-tim
 
 ## Setup
 
-1. Open `OpenTrails.xcodeproj`.
-2. Set your development team for `OpenTrails` and `OpenWidgetExtension`.
-3. If your team cannot use `group.tappium.com.OpenTrails`, replace it in both entitlement files and in `SharedStore.appGroupID`.
+1. Open `OpenHikes.xcodeproj`.
+2. Set your development team for `OpenHikes` and `OpenWidgetExtension`.
+3. If your team cannot use `group.tappium.com.OpenHikes`, replace it in both entitlement files and in `SharedStore.appGroupID`.
 4. Optionally enable Stadia or Thunderforest:
 
    ```sh
-   cp Secrets.example.plist OpenTrails/Secrets.plist
+   cp Secrets.example.plist OpenHikes/Secrets.plist
    ```
 
-   Add your keys to the copied file. `OpenTrails/Secrets.plist` is gitignored and must never be committed; unavailable providers remain disabled in Settings.
+   Add your keys to the copied file. `OpenHikes/Secrets.plist` is gitignored and must never be committed; unavailable providers remain disabled in Settings.
 
 5. Build and run. For simulated location features, use Xcode's location controls or the recording demo below.
 
 ## Recording demo
 
-Build and launch OpenTrails on a booted iOS Simulator, open **Record Hike**, and tap **Start Recording**. From the repository root, replay the first 60 points of the bundled Thumsee route:
+Build and launch OpenHikes on a booted iOS Simulator, open **Record Hike**, and tap **Start Recording**. From the repository root, replay the first 60 points of the bundled Thumsee route:
 
 ```sh
 Scripts/simulate-hike.sh start
@@ -57,19 +57,19 @@ Run `Scripts/simulate-hike.sh --help` to select a simulator, another GPX file, p
 
 ```sh
 xcodebuild build \
-  -project OpenTrails.xcodeproj \
-  -scheme OpenTrails \
+  -project OpenHikes.xcodeproj \
+  -scheme OpenHikes \
   -destination 'platform=iOS Simulator,name=iPhone 17 Pro'
 
 xcodebuild test \
-  -project OpenTrails.xcodeproj \
-  -scheme OpenTrails \
+  -project OpenHikes.xcodeproj \
+  -scheme OpenHikes \
   -destination 'platform=iOS Simulator,name=iPhone 17 Pro'
 
 # Run simulator UI automation and launch metrics only
 xcodebuild test \
-  -project OpenTrails.xcodeproj \
-  -scheme OpenTrailsUI \
+  -project OpenHikes.xcodeproj \
+  -scheme OpenHikesUI \
   -destination 'platform=iOS Simulator,name=iPhone 17 Pro'
 
 # Or run one UI test on a simulator; --list shows the available tests
@@ -80,12 +80,12 @@ Scripts/run-ui-tests.sh --all
 Scripts/run-performance-tests.sh
 Scripts/run-performance-tests.sh --test testLiveRecordingCostPerFix
 
-swift test --package-path OpenTrailsShared
+swift test --package-path OpenHikesShared
 
 swiftlint lint --strict
 ```
 
-Unit and integration tests use Swift Testing. `OpenTrailsUITests` uses
+Unit and integration tests use Swift Testing. `OpenHikesUITests` uses
 XCTest/XCUITest because Apple's UI automation and launch-performance metrics
 are not available through Swift Testing. UI-test launches use an in-memory
 SwiftData store and isolated preferences; coverage includes app/settings smoke
@@ -107,34 +107,34 @@ app writes every render signpost, main-thread stall and a 1 Hz CPU/memory sample
 to a TSV in its container. `Scripts/run-performance-tests.sh` runs the suite,
 pulls those logs off the simulator, and turns them into a markdown report.
 [`PERFORMANCE.md`](PERFORMANCE.md) documents the measured baseline, what it
-found, and what is worth doing about it. It is excluded from the `OpenTrails`
+found, and what is worth doing about it. It is excluded from the `OpenHikes`
 test plan, so a normal `xcodebuild test` run does not pay for it; the
-`OpenTrailsUI` scheme still sees it, which is how the script runs it.
+`OpenHikesUI` scheme still sees it, which is how the script runs it.
 
 ## Project layout
 
 Following Apple's [Food Truck](https://github.com/apple/sample-food-truck) and
 [Backyard Birds](https://github.com/apple/sample-backyard-birds) samples, app
 source is organized by product domain rather than generic `Managers`, `Models`,
-and `Views` layers. `OpenTrailsModel` is the composition root injected into the
+and `Views` layers. `OpenHikesModel` is the composition root injected into the
 SwiftUI environment; feature-specific state and behavior remain in their
 domain folders.
 
 | Path | Purpose |
 |---|---|
-| `OpenTrails/App/` | App entry point, shared app model, configuration, deep-link routing, and root navigation. |
-| `OpenTrails/Hikes/` | Persisted hike model, GPX import, route profile, statistics, and hike screens. |
-| `OpenTrails/Recording/` | Live recording, recovery journal, sensors, trail matching, and recording UI. |
-| `OpenTrails/Map/` | MapKit bridge, map state, search, location tracking, and map rendering. |
-| `OpenTrails/Tiles/` | Tile provider policy, cache, auto-save, offline downloads, and overlay rendering. |
-| `OpenTrails/Weather/` | WeatherKit polling and presentation state. |
-| `OpenTrails/Settings/` | User-facing app, recording, map, and storage settings. |
-| `OpenTrails/General/` | Cross-domain extensions and diagnostics. |
-| `OpenTrailsShared/` | Domain-foldered local Swift package shared by the app and widget. |
+| `OpenHikes/App/` | App entry point, shared app model, configuration, deep-link routing, and root navigation. |
+| `OpenHikes/Hikes/` | Persisted hike model, GPX import, route profile, statistics, and hike screens. |
+| `OpenHikes/Recording/` | Live recording, recovery journal, sensors, trail matching, and recording UI. |
+| `OpenHikes/Map/` | MapKit bridge, map state, search, location tracking, and map rendering. |
+| `OpenHikes/Tiles/` | Tile provider policy, cache, auto-save, offline downloads, and overlay rendering. |
+| `OpenHikes/Weather/` | WeatherKit polling and presentation state. |
+| `OpenHikes/Settings/` | User-facing app, recording, map, and storage settings. |
+| `OpenHikes/General/` | Cross-domain extensions and diagnostics. |
+| `OpenHikesShared/` | Domain-foldered local Swift package shared by the app and widget. |
 | `OpenWidget/` | iOS Home Screen widget. |
-| `OpenTrailsTests/` | App-hosted tests mirroring the app's domain folders. |
+| `OpenHikesTests/` | App-hosted tests mirroring the app's domain folders. |
 | `OpenWidgetTests/` | App-hosted tests for the widget's timeline, families, and basemap pairing. |
-| `OpenTrailsUITests/` | iOS Simulator UI automation, location spoofing, and launch metrics. |
+| `OpenHikesUITests/` | iOS Simulator UI automation, location spoofing, and launch metrics. |
 
 See [`.github/copilot-instructions.md`](.github/copilot-instructions.md) for architecture and repository conventions. See [`CODE_REVIEW.md`](CODE_REVIEW.md) for the open code-quality action plan and unresolved design decisions.
 

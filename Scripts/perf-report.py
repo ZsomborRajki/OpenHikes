@@ -114,6 +114,22 @@ def parse_events(path: Path) -> list[Event]:
     return events
 
 
+def detail_fields(detail: str) -> dict[str, str]:
+    """Splits a ``key=value key=value`` detail string.
+
+    The detail column started life as a single number and grew keys as the log
+    learned to record more than one thing per sample. Parsing it positionally
+    is how a report silently reads the wrong column after the next addition, so
+    everything that reads a detail goes through here.
+    """
+    fields: dict[str, str] = {}
+    for token in detail.split():
+        key, separator, value = token.partition("=")
+        if separator:
+            fields[key] = value
+    return fields
+
+
 def percentile(values: list[float], fraction: float) -> float:
     if not values:
         return 0.0
@@ -183,8 +199,9 @@ def resource_section(scenario: Scenario) -> list[str]:
     footprints = [event.value for event in samples if event.value is not None]
     cpu = []
     for event in samples:
-        if event.detail.startswith("cpu_s="):
-            cpu.append(float(event.detail.removeprefix("cpu_s=")))
+        seconds = detail_fields(event.detail).get("cpu_s")
+        if seconds is not None:
+            cpu.append(float(seconds))
     span = samples[-1].elapsed - samples[0].elapsed or 1.0
     burned = (cpu[-1] - cpu[0]) if len(cpu) > 1 else 0.0
     rows = [
@@ -195,6 +212,138 @@ def resource_section(scenario: Scenario) -> list[str]:
         ["Mean CPU utilisation", f"{100 * burned / span:.1f}% of one core"],
     ]
     return markdown_table(["Measure", "Value"], rows)
+
+
+# The signposts that mean a radio woke up. Nothing else in the app opens a
+# connection, so a scenario with none of these on the clock spent its whole run
+# on cached bytes — which is the offline claim, stated as a number.
+NETWORK_SIGNPOSTS = ("TileNetworkFetch", "WeatherFetch", "TrailGraphFetch")
+
+# The path a GPS reading walks, in order. Each step is a place a fix can be
+# dropped; reading them as a funnel is what distinguishes "CoreLocation is
+# quiet" from "CoreLocation is loud and we are throwing the results away",
+# which cost very different amounts of battery and need opposite fixes.
+LOCATION_FUNNEL = (
+    ("LocationFixDelivered", "CoreLocation delivered"),
+    ("LocationPublished", "published to the app"),
+    ("RecordingFixReceived", "reached the recorder"),
+    ("LiveFixAccepted", "accepted into the route"),
+    ("RecordingFixRejected", "rejected by policy"),
+)
+
+
+def energy_section(scenario: Scenario) -> list[str]:
+    """What the scenario cost a battery, as opposed to a frame.
+
+    Energy has no single counter. What it has are four proxies the app can see
+    from inside itself — CPU seconds, radio wake-ups, GPS duty, and how often
+    the screen was asked to redraw — and this puts them next to each other so
+    the expensive one is obvious.
+    """
+    events = scenario.events
+    if not events:
+        return ["_No events were recorded._", ""]
+
+    samples = [event for event in events if event.kind == "sample"]
+    span = (samples[-1].elapsed - samples[0].elapsed) if len(samples) > 1 else 0.0
+    cpu = [
+        float(seconds)
+        for event in samples
+        if (seconds := detail_fields(event.detail).get("cpu_s")) is not None
+    ]
+    burned = (cpu[-1] - cpu[0]) if len(cpu) > 1 else 0.0
+
+    lines: list[str] = []
+    if span > 0:
+        # Per hiking hour, because that is the unit the walker experiences.
+        # A short scenario extrapolates badly, so the number is labelled as
+        # what it is: an extrapolation, not a measurement.
+        lines.extend(
+            markdown_table(
+                ["Energy proxy", "Value"],
+                [
+                    ["CPU burned", f"{burned:.2f} s over {span:.1f} s"],
+                    ["Extrapolated", f"{burned * 3600 / span:.0f} CPU-s per hiking hour"],
+                ],
+            )
+        )
+
+    network = [
+        event
+        for event in events
+        if event.name in NETWORK_SIGNPOSTS and event.kind == "interval"
+    ]
+    grouped: dict[str, list[float]] = defaultdict(list)
+    for event in network:
+        grouped[event.name].append(event.value or 0.0)
+    lines.append("**Network**")
+    lines.append("")
+    if grouped:
+        lines.extend(
+            markdown_table(
+                ["Request", "Count", "Total ms", "Max ms"],
+                [
+                    [name, str(len(values)), f"{sum(values):.0f}", f"{max(values):.0f}"]
+                    for name, values in sorted(grouped.items())
+                ],
+            )
+        )
+    else:
+        lines.extend(["No request left the device. Every byte came from cache.", ""])
+
+    suppressed: dict[str, int] = defaultdict(int)
+    for event in events:
+        if event.name == "TileFetchSuppressed":
+            reason = detail_fields(event.detail).get("reason", event.detail or "unknown")
+            suppressed[reason] += 1
+    if suppressed:
+        lines.extend(["**Fetches the policy refused**", ""])
+        lines.extend(
+            markdown_table(
+                ["Reason", "Count"],
+                [[reason, str(count)] for reason, count in sorted(suppressed.items())],
+            )
+        )
+
+    funnel = []
+    for name, description in LOCATION_FUNNEL:
+        count = sum(1 for event in events if event.name == name)
+        if count:
+            funnel.append([description, f"`{name}`", str(count)])
+    if funnel:
+        lines.extend(["**Location funnel**", ""])
+        lines.extend(markdown_table(["Step", "Signpost", "Count"], funnel))
+
+    profiles = [event for event in events if event.name == "RecordingEnergyProfileApplied"]
+    if profiles:
+        lines.extend(["**GPS reconfigurations**", ""])
+        lines.extend(
+            markdown_table(
+                ["At", "Applied"],
+                [[f"{event.elapsed:.2f} s", f"`{event.detail}`"] for event in profiles],
+            )
+        )
+
+    states = {
+        (
+            fields.get("lowPower", "?"),
+            fields.get("thermal", "?"),
+        )
+        for event in samples
+        if (fields := detail_fields(event.detail))
+    }
+    if states:
+        lines.extend(["**Power state seen during the run**", ""])
+        lines.extend(
+            markdown_table(
+                ["Low Power Mode", "Thermal state"],
+                [
+                    ["yes" if low == "1" else "no", thermal]
+                    for low, thermal in sorted(states)
+                ],
+            )
+        )
+    return lines
 
 
 def stall_section(scenario: Scenario) -> list[str]:
@@ -241,7 +390,43 @@ def findings(scenarios: dict[str, Scenario]) -> list[str]:
                 notes.append(
                     f"`{scenario.name}` spent {max(values):.1f} ms in `{name}`, over one frame."
                 )
+        notes.extend(energy_findings(scenario))
     return notes or ["Nothing exceeded a reporting threshold."]
+
+
+def energy_findings(scenario: Scenario) -> list[str]:
+    """The battery-shaped regressions, which look like nothing in a frame count.
+
+    A radio that wakes on a schedule and a GPS that never steps down cost a
+    hike its afternoon without ever dropping a frame, so neither shows up in
+    the counters above. These are the shapes worth a look.
+    """
+    notes: list[str] = []
+    requests = sum(
+        1
+        for event in scenario.events
+        if event.name in NETWORK_SIGNPOSTS and event.kind == "interval"
+    )
+    if "offline" in scenario.name and requests:
+        notes.append(
+            f"`{scenario.name}` opened {requests} connection(s) in a scenario that claims to be offline."
+        )
+    fixes = sum(1 for event in scenario.events if event.name == "LiveFixAccepted")
+    if fixes and requests / fixes > 1.0:
+        notes.append(
+            f"`{scenario.name}` made {requests / fixes:.1f} network requests per accepted fix."
+        )
+    delivered = sum(1 for event in scenario.events if event.name == "LocationFixDelivered")
+    rejected = sum(1 for event in scenario.events if event.name == "RecordingFixRejected")
+    if delivered and rejected / delivered > 0.5:
+        # Fixes are the expensive part of a recording. Paying for them and
+        # then discarding most is the worst of both: full GPS duty, half a
+        # route. It means the filter is wrong, not that the walker is slow.
+        notes.append(
+            f"`{scenario.name}` rejected {rejected} of {delivered} delivered fixes — "
+            "GPS duty paid for, route not recorded."
+        )
+    return notes
 
 
 def main() -> int:
@@ -258,7 +443,7 @@ def main() -> int:
             scenario.events = parse_events(tsv)
 
     lines = [
-        "# OpenTrails performance run",
+        "# OpenHikes performance run",
         "",
         "Generated by `Scripts/run-performance-tests.sh`. Counter deltas come from",
         "the app's live `RenderSignpost` tally read through the accessibility tree;",
@@ -285,6 +470,8 @@ def main() -> int:
         lines.extend(timeline_section(scenario))
         lines.extend(["**Process resources**", ""])
         lines.extend(resource_section(scenario))
+        lines.extend(["**Energy**", ""])
+        lines.extend(energy_section(scenario))
         lines.extend(["**Main-thread stalls**", ""])
         lines.extend(stall_section(scenario))
 

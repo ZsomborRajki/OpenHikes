@@ -1,0 +1,1192 @@
+// !$*UTF8*$!
+{
+	archiveVersion = 1;
+	classes = {
+	};
+	objectVersion = 77;
+	objects = {
+
+/* Begin PBXBuildFile section */
+		A8838AE7302A232300FAEEEE /* WidgetKit.framework in Frameworks */ = {isa = PBXBuildFile; fileRef = A8838AE6302A232300FAEEEE /* WidgetKit.framework */; };
+		A8838AE9302A232300FAEEEE /* SwiftUI.framework in Frameworks */ = {isa = PBXBuildFile; fileRef = A8838AE8302A232300FAEEEE /* SwiftUI.framework */; };
+		A8838AF6302A232400FAEEEE /* OpenWidgetExtension.appex in Embed Foundation Extensions */ = {isa = PBXBuildFile; fileRef = A8838AE4302A232300FAEEEE /* OpenWidgetExtension.appex */; platformFilter = ios; settings = {ATTRIBUTES = (RemoveHeadersOnCopy, ); }; };
+		A8838B92302A302500FAEEEE /* OpenHikesShared in Frameworks */ = {isa = PBXBuildFile; productRef = A8838B91302A302500FAEEEE /* OpenHikesShared */; };
+		A8838B94302A305800FAEEEE /* OpenHikesShared in Frameworks */ = {isa = PBXBuildFile; productRef = A8838B93302A305800FAEEEE /* OpenHikesShared */; };
+		AB000000000000000000000D /* OpenHikesShared in Frameworks */ = {isa = PBXBuildFile; productRef = AB000000000000000000000C /* OpenHikesShared */; };
+		AC000000000000000000000D /* OpenHikesShared in Frameworks */ = {isa = PBXBuildFile; productRef = AC000000000000000000000C /* OpenHikesShared */; };
+		F9B04201302D981D00E03D91 /* DequeModule in Frameworks */ = {isa = PBXBuildFile; productRef = F9B04200302D981D00E03D91 /* DequeModule */; };
+		F9B04203302D981D00E03D91 /* HeapModule in Frameworks */ = {isa = PBXBuildFile; productRef = F9B04202302D981D00E03D91 /* HeapModule */; };
+		F9B04205302D981D00E03D91 /* OrderedCollections in Frameworks */ = {isa = PBXBuildFile; productRef = F9B04204302D981D00E03D91 /* OrderedCollections */; };
+		F9B04212302D981D00E03D91 /* Algorithms in Frameworks */ = {isa = PBXBuildFile; productRef = F9B04211302D981D00E03D91 /* Algorithms */; };
+		F9B04465302DA28800E03D91 /* AsyncAlgorithms in Frameworks */ = {isa = PBXBuildFile; productRef = F9B04221302D981D00E03D91 /* AsyncAlgorithms */; };
+/* End PBXBuildFile section */
+
+/* Begin PBXContainerItemProxy section */
+		A8838AF4302A232400FAEEEE /* PBXContainerItemProxy */ = {
+			isa = PBXContainerItemProxy;
+			containerPortal = A85E85452FE3EBF500558639 /* Project object */;
+			proxyType = 1;
+			remoteGlobalIDString = A8838AE3302A232300FAEEEE;
+			remoteInfo = OpenWidgetExtension;
+		};
+		AB000000000000000000000B /* PBXContainerItemProxy */ = {
+			isa = PBXContainerItemProxy;
+			containerPortal = A85E85452FE3EBF500558639 /* Project object */;
+			proxyType = 1;
+			remoteGlobalIDString = A85E854C2FE3EBF500558639;
+			remoteInfo = OpenHikes;
+		};
+		AC000000000000000000000B /* PBXContainerItemProxy */ = {
+			isa = PBXContainerItemProxy;
+			containerPortal = A85E85452FE3EBF500558639 /* Project object */;
+			proxyType = 1;
+			remoteGlobalIDString = A85E854C2FE3EBF500558639;
+			remoteInfo = OpenHikes;
+		};
+		AE000000000000000000000B /* PBXContainerItemProxy */ = {
+			isa = PBXContainerItemProxy;
+			containerPortal = A85E85452FE3EBF500558639 /* Project object */;
+			proxyType = 1;
+			remoteGlobalIDString = A85E854C2FE3EBF500558639;
+			remoteInfo = OpenHikes;
+		};
+/* End PBXContainerItemProxy section */
+
+/* Begin PBXCopyFilesBuildPhase section */
+		A8838AFB302A232400FAEEEE /* Embed Foundation Extensions */ = {
+			isa = PBXCopyFilesBuildPhase;
+			buildActionMask = 2147483647;
+			dstPath = "";
+			dstSubfolderSpec = 13;
+			files = (
+				A8838AF6302A232400FAEEEE /* OpenWidgetExtension.appex in Embed Foundation Extensions */,
+			);
+			name = "Embed Foundation Extensions";
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+/* End PBXCopyFilesBuildPhase section */
+
+/* Begin PBXFileReference section */
+		A85E854D2FE3EBF500558639 /* OpenHikes.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = OpenHikes.app; sourceTree = BUILT_PRODUCTS_DIR; };
+		A8838AE4302A232300FAEEEE /* OpenWidgetExtension.appex */ = {isa = PBXFileReference; explicitFileType = "wrapper.app-extension"; includeInIndex = 0; path = OpenWidgetExtension.appex; sourceTree = BUILT_PRODUCTS_DIR; };
+		A8838AE6302A232300FAEEEE /* WidgetKit.framework */ = {isa = PBXFileReference; lastKnownFileType = wrapper.framework; name = WidgetKit.framework; path = System/Library/Frameworks/WidgetKit.framework; sourceTree = SDKROOT; };
+		A8838AE8302A232300FAEEEE /* SwiftUI.framework */ = {isa = PBXFileReference; lastKnownFileType = wrapper.framework; name = SwiftUI.framework; path = System/Library/Frameworks/SwiftUI.framework; sourceTree = SDKROOT; };
+		A8838B99302A30FA00FAEEEE /* OpenWidgetExtension.entitlements */ = {isa = PBXFileReference; lastKnownFileType = text.plist.entitlements; path = OpenWidgetExtension.entitlements; sourceTree = "<group>"; };
+		AB0000000000000000000008 /* OpenHikesTests.xctest */ = {isa = PBXFileReference; explicitFileType = wrapper.cfbundle; includeInIndex = 0; path = OpenHikesTests.xctest; sourceTree = BUILT_PRODUCTS_DIR; };
+		AC0000000000000000000008 /* OpenWidgetTests.xctest */ = {isa = PBXFileReference; explicitFileType = wrapper.cfbundle; includeInIndex = 0; path = OpenWidgetTests.xctest; sourceTree = BUILT_PRODUCTS_DIR; };
+		AE0000000000000000000008 /* OpenHikesUITests.xctest */ = {isa = PBXFileReference; explicitFileType = wrapper.cfbundle; includeInIndex = 0; path = OpenHikesUITests.xctest; sourceTree = BUILT_PRODUCTS_DIR; };
+		F904328F302E65CC00D840D2 /* OpenHikes.xctestplan */ = {isa = PBXFileReference; lastKnownFileType = text; path = OpenHikes.xctestplan; sourceTree = "<group>"; };
+/* End PBXFileReference section */
+
+/* Begin PBXFileSystemSynchronizedBuildFileExceptionSet section */
+		A8838AF7302A232400FAEEEE /* Exceptions for "OpenWidget" folder in "OpenWidgetExtension" target */ = {
+			isa = PBXFileSystemSynchronizedBuildFileExceptionSet;
+			membershipExceptions = (
+				Info.plist,
+			);
+			target = A8838AE3302A232300FAEEEE /* OpenWidgetExtension */;
+		};
+		AC000000000000000000000E /* Exceptions for "OpenWidget" folder in "OpenWidgetTests" target */ = {
+			isa = PBXFileSystemSynchronizedBuildFileExceptionSet;
+			membershipExceptions = (
+				Info.plist,
+				OpenWidgetBundle.swift,
+			);
+			target = AC0000000000000000000001 /* OpenWidgetTests */;
+		};
+		AD0000000000000000000001 /* Exceptions for "OpenHikes" folder in "OpenHikes" target */ = {
+			isa = PBXFileSystemSynchronizedBuildFileExceptionSet;
+			membershipExceptions = (
+				Info.plist,
+			);
+			target = A85E854C2FE3EBF500558639 /* OpenHikes */;
+		};
+/* End PBXFileSystemSynchronizedBuildFileExceptionSet section */
+
+/* Begin PBXFileSystemSynchronizedRootGroup section */
+		A85E854F2FE3EBF500558639 /* OpenHikes */ = {
+			isa = PBXFileSystemSynchronizedRootGroup;
+			exceptions = (
+				AD0000000000000000000001 /* Exceptions for "OpenHikes" folder in "OpenHikes" target */,
+			);
+			path = OpenHikes;
+			sourceTree = "<group>";
+		};
+		A8838AEA302A232300FAEEEE /* OpenWidget */ = {
+			isa = PBXFileSystemSynchronizedRootGroup;
+			exceptions = (
+				A8838AF7302A232400FAEEEE /* Exceptions for "OpenWidget" folder in "OpenWidgetExtension" target */,
+				AC000000000000000000000E /* Exceptions for "OpenWidget" folder in "OpenWidgetTests" target */,
+			);
+			path = OpenWidget;
+			sourceTree = "<group>";
+		};
+		AB0000000000000000000009 /* OpenHikesTests */ = {
+			isa = PBXFileSystemSynchronizedRootGroup;
+			path = OpenHikesTests;
+			sourceTree = "<group>";
+		};
+		AC0000000000000000000009 /* OpenWidgetTests */ = {
+			isa = PBXFileSystemSynchronizedRootGroup;
+			path = OpenWidgetTests;
+			sourceTree = "<group>";
+		};
+		AE0000000000000000000009 /* OpenHikesUITests */ = {
+			isa = PBXFileSystemSynchronizedRootGroup;
+			path = OpenHikesUITests;
+			sourceTree = "<group>";
+		};
+/* End PBXFileSystemSynchronizedRootGroup section */
+
+/* Begin PBXFrameworksBuildPhase section */
+		A85E854A2FE3EBF500558639 /* Frameworks */ = {
+			isa = PBXFrameworksBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+				F9B04465302DA28800E03D91 /* AsyncAlgorithms in Frameworks */,
+				F9B04212302D981D00E03D91 /* Algorithms in Frameworks */,
+				F9B04201302D981D00E03D91 /* DequeModule in Frameworks */,
+				F9B04203302D981D00E03D91 /* HeapModule in Frameworks */,
+				F9B04205302D981D00E03D91 /* OrderedCollections in Frameworks */,
+				A8838B92302A302500FAEEEE /* OpenHikesShared in Frameworks */,
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+		A8838AE1302A232300FAEEEE /* Frameworks */ = {
+			isa = PBXFrameworksBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+				A8838AE9302A232300FAEEEE /* SwiftUI.framework in Frameworks */,
+				A8838B94302A305800FAEEEE /* OpenHikesShared in Frameworks */,
+				A8838AE7302A232300FAEEEE /* WidgetKit.framework in Frameworks */,
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+		AB0000000000000000000006 /* Frameworks */ = {
+			isa = PBXFrameworksBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+				AB000000000000000000000D /* OpenHikesShared in Frameworks */,
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+		AC0000000000000000000006 /* Frameworks */ = {
+			isa = PBXFrameworksBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+				AC000000000000000000000D /* OpenHikesShared in Frameworks */,
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+		AE0000000000000000000006 /* Frameworks */ = {
+			isa = PBXFrameworksBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+/* End PBXFrameworksBuildPhase section */
+
+/* Begin PBXGroup section */
+		A85E85442FE3EBF500558639 = {
+			isa = PBXGroup;
+			children = (
+				F904328F302E65CC00D840D2 /* OpenHikes.xctestplan */,
+				A8838B99302A30FA00FAEEEE /* OpenWidgetExtension.entitlements */,
+				A85E854F2FE3EBF500558639 /* OpenHikes */,
+				AB0000000000000000000009 /* OpenHikesTests */,
+				A8838AEA302A232300FAEEEE /* OpenWidget */,
+				AC0000000000000000000009 /* OpenWidgetTests */,
+				AE0000000000000000000009 /* OpenHikesUITests */,
+				A8838AE5302A232300FAEEEE /* Frameworks */,
+				A85E854E2FE3EBF500558639 /* Products */,
+			);
+			sourceTree = "<group>";
+		};
+		A85E854E2FE3EBF500558639 /* Products */ = {
+			isa = PBXGroup;
+			children = (
+				A85E854D2FE3EBF500558639 /* OpenHikes.app */,
+				AB0000000000000000000008 /* OpenHikesTests.xctest */,
+				A8838AE4302A232300FAEEEE /* OpenWidgetExtension.appex */,
+				AC0000000000000000000008 /* OpenWidgetTests.xctest */,
+				AE0000000000000000000008 /* OpenHikesUITests.xctest */,
+			);
+			name = Products;
+			sourceTree = "<group>";
+		};
+		A8838AE5302A232300FAEEEE /* Frameworks */ = {
+			isa = PBXGroup;
+			children = (
+				A8838AE6302A232300FAEEEE /* WidgetKit.framework */,
+				A8838AE8302A232300FAEEEE /* SwiftUI.framework */,
+			);
+			name = Frameworks;
+			sourceTree = "<group>";
+		};
+/* End PBXGroup section */
+
+/* Begin PBXNativeTarget section */
+		A85E854C2FE3EBF500558639 /* OpenHikes */ = {
+			isa = PBXNativeTarget;
+			buildConfigurationList = A85E855A2FE3EBF600558639 /* Build configuration list for PBXNativeTarget "OpenHikes" */;
+			buildPhases = (
+				A85E85492FE3EBF500558639 /* Sources */,
+				A85E854A2FE3EBF500558639 /* Frameworks */,
+				A85E854B2FE3EBF500558639 /* Resources */,
+				A8838AFB302A232400FAEEEE /* Embed Foundation Extensions */,
+			);
+			buildRules = (
+			);
+			dependencies = (
+				E18FCCCC29AF416C97E1F400 /* PBXTargetDependency */,
+				A8838AF5302A232400FAEEEE /* PBXTargetDependency */,
+			);
+			fileSystemSynchronizedGroups = (
+				A85E854F2FE3EBF500558639 /* OpenHikes */,
+			);
+			name = OpenHikes;
+			packageProductDependencies = (
+				A8838B91302A302500FAEEEE /* OpenHikesShared */,
+				F9B04211302D981D00E03D91 /* Algorithms */,
+				F9B04221302D981D00E03D91 /* AsyncAlgorithms */,
+				F9B04200302D981D00E03D91 /* DequeModule */,
+				F9B04202302D981D00E03D91 /* HeapModule */,
+				F9B04204302D981D00E03D91 /* OrderedCollections */,
+			);
+			productName = OpenHikes;
+			productReference = A85E854D2FE3EBF500558639 /* OpenHikes.app */;
+			productType = "com.apple.product-type.application";
+		};
+		A8838AE3302A232300FAEEEE /* OpenWidgetExtension */ = {
+			isa = PBXNativeTarget;
+			buildConfigurationList = A8838AF8302A232400FAEEEE /* Build configuration list for PBXNativeTarget "OpenWidgetExtension" */;
+			buildPhases = (
+				A8838AE0302A232300FAEEEE /* Sources */,
+				A8838AE1302A232300FAEEEE /* Frameworks */,
+				A8838AE2302A232300FAEEEE /* Resources */,
+			);
+			buildRules = (
+			);
+			dependencies = (
+				3CE072E7648F4329B5B4297A /* PBXTargetDependency */,
+			);
+			fileSystemSynchronizedGroups = (
+				A8838AEA302A232300FAEEEE /* OpenWidget */,
+			);
+			name = OpenWidgetExtension;
+			packageProductDependencies = (
+				A8838B93302A305800FAEEEE /* OpenHikesShared */,
+			);
+			productName = OpenWidgetExtension;
+			productReference = A8838AE4302A232300FAEEEE /* OpenWidgetExtension.appex */;
+			productType = "com.apple.product-type.app-extension";
+		};
+		AB0000000000000000000001 /* OpenHikesTests */ = {
+			isa = PBXNativeTarget;
+			buildConfigurationList = AB0000000000000000000002 /* Build configuration list for PBXNativeTarget "OpenHikesTests" */;
+			buildPhases = (
+				AB0000000000000000000005 /* Sources */,
+				AB0000000000000000000006 /* Frameworks */,
+				AB0000000000000000000007 /* Resources */,
+			);
+			buildRules = (
+			);
+			dependencies = (
+				EF4BAF084DBB48CA878846F1 /* PBXTargetDependency */,
+				AB000000000000000000000A /* PBXTargetDependency */,
+			);
+			fileSystemSynchronizedGroups = (
+				AB0000000000000000000009 /* OpenHikesTests */,
+			);
+			name = OpenHikesTests;
+			packageProductDependencies = (
+				AB000000000000000000000C /* OpenHikesShared */,
+			);
+			productName = OpenHikesTests;
+			productReference = AB0000000000000000000008 /* OpenHikesTests.xctest */;
+			productType = "com.apple.product-type.bundle.unit-test";
+		};
+		AC0000000000000000000001 /* OpenWidgetTests */ = {
+			isa = PBXNativeTarget;
+			buildConfigurationList = AC0000000000000000000002 /* Build configuration list for PBXNativeTarget "OpenWidgetTests" */;
+			buildPhases = (
+				AC0000000000000000000005 /* Sources */,
+				AC0000000000000000000006 /* Frameworks */,
+				AC0000000000000000000007 /* Resources */,
+			);
+			buildRules = (
+			);
+			dependencies = (
+				05DE24349D4845F0A63B9037 /* PBXTargetDependency */,
+				AC000000000000000000000A /* PBXTargetDependency */,
+			);
+			fileSystemSynchronizedGroups = (
+				A8838AEA302A232300FAEEEE /* OpenWidget */,
+				AC0000000000000000000009 /* OpenWidgetTests */,
+			);
+			name = OpenWidgetTests;
+			packageProductDependencies = (
+				AC000000000000000000000C /* OpenHikesShared */,
+			);
+			productName = OpenWidgetTests;
+			productReference = AC0000000000000000000008 /* OpenWidgetTests.xctest */;
+			productType = "com.apple.product-type.bundle.unit-test";
+		};
+		AE0000000000000000000001 /* OpenHikesUITests */ = {
+			isa = PBXNativeTarget;
+			buildConfigurationList = AE0000000000000000000002 /* Build configuration list for PBXNativeTarget "OpenHikesUITests" */;
+			buildPhases = (
+				AE0000000000000000000005 /* Sources */,
+				AE0000000000000000000006 /* Frameworks */,
+				AE0000000000000000000007 /* Resources */,
+			);
+			buildRules = (
+			);
+			dependencies = (
+				AE000000000000000000000A /* PBXTargetDependency */,
+			);
+			fileSystemSynchronizedGroups = (
+				AE0000000000000000000009 /* OpenHikesUITests */,
+			);
+			name = OpenHikesUITests;
+			packageProductDependencies = (
+			);
+			productName = OpenHikesUITests;
+			productReference = AE0000000000000000000008 /* OpenHikesUITests.xctest */;
+			productType = "com.apple.product-type.bundle.ui-testing";
+		};
+/* End PBXNativeTarget section */
+
+/* Begin PBXProject section */
+		A85E85452FE3EBF500558639 /* Project object */ = {
+			isa = PBXProject;
+			attributes = {
+				BuildIndependentTargetsInParallel = 1;
+				LastSwiftUpdateCheck = 2660;
+				LastUpgradeCheck = 2660;
+				TargetAttributes = {
+					A85E854C2FE3EBF500558639 = {
+						CreatedOnToolsVersion = 26.5;
+					};
+					A8838AE3302A232300FAEEEE = {
+						CreatedOnToolsVersion = 26.6;
+					};
+					AB0000000000000000000001 = {
+						CreatedOnToolsVersion = 26.6;
+						TestTargetID = A85E854C2FE3EBF500558639;
+					};
+					AC0000000000000000000001 = {
+						CreatedOnToolsVersion = 26.6;
+						TestTargetID = A85E854C2FE3EBF500558639;
+					};
+					AE0000000000000000000001 = {
+						CreatedOnToolsVersion = 26.6;
+						TestTargetID = A85E854C2FE3EBF500558639;
+					};
+				};
+			};
+			buildConfigurationList = A85E85482FE3EBF500558639 /* Build configuration list for PBXProject "OpenHikes" */;
+			developmentRegion = en;
+			hasScannedForEncodings = 0;
+			knownRegions = (
+				en,
+				Base,
+			);
+			mainGroup = A85E85442FE3EBF500558639;
+			minimizedProjectReferenceProxies = 1;
+			packageReferences = (
+				A8838B90302A302500FAEEEE /* XCLocalSwiftPackageReference "OpenHikesShared" */,
+				F9B04193302D981D00E03D91 /* XCRemoteSwiftPackageReference "swift-collections" */,
+				F9B04210302D981D00E03D91 /* XCRemoteSwiftPackageReference "swift-algorithms" */,
+				F9B04220302D981D00E03D91 /* XCRemoteSwiftPackageReference "swift-async-algorithms" */,
+				04A61451D23F435EBCB01C29 /* XCRemoteSwiftPackageReference "SwiftLintPlugins" */,
+			);
+			preferredProjectObjectVersion = 77;
+			productRefGroup = A85E854E2FE3EBF500558639 /* Products */;
+			projectDirPath = "";
+			projectRoot = "";
+			targets = (
+				A85E854C2FE3EBF500558639 /* OpenHikes */,
+				AB0000000000000000000001 /* OpenHikesTests */,
+				A8838AE3302A232300FAEEEE /* OpenWidgetExtension */,
+				AC0000000000000000000001 /* OpenWidgetTests */,
+				AE0000000000000000000001 /* OpenHikesUITests */,
+			);
+		};
+/* End PBXProject section */
+
+/* Begin PBXResourcesBuildPhase section */
+		A85E854B2FE3EBF500558639 /* Resources */ = {
+			isa = PBXResourcesBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+		A8838AE2302A232300FAEEEE /* Resources */ = {
+			isa = PBXResourcesBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+		AB0000000000000000000007 /* Resources */ = {
+			isa = PBXResourcesBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+		AC0000000000000000000007 /* Resources */ = {
+			isa = PBXResourcesBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+		AE0000000000000000000007 /* Resources */ = {
+			isa = PBXResourcesBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+/* End PBXResourcesBuildPhase section */
+
+/* Begin PBXSourcesBuildPhase section */
+		A85E85492FE3EBF500558639 /* Sources */ = {
+			isa = PBXSourcesBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+		A8838AE0302A232300FAEEEE /* Sources */ = {
+			isa = PBXSourcesBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+		AB0000000000000000000005 /* Sources */ = {
+			isa = PBXSourcesBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+		AC0000000000000000000005 /* Sources */ = {
+			isa = PBXSourcesBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+		AE0000000000000000000005 /* Sources */ = {
+			isa = PBXSourcesBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+/* End PBXSourcesBuildPhase section */
+
+/* Begin PBXTargetDependency section */
+		05DE24349D4845F0A63B9037 /* PBXTargetDependency */ = {
+			isa = PBXTargetDependency;
+			productRef = BC64C9A2049F4FA089C19205 /* SwiftLintBuildToolPlugin */;
+		};
+		3CE072E7648F4329B5B4297A /* PBXTargetDependency */ = {
+			isa = PBXTargetDependency;
+			productRef = EFF8FCFDD9064FE285B31035 /* SwiftLintBuildToolPlugin */;
+		};
+		A8838AF5302A232400FAEEEE /* PBXTargetDependency */ = {
+			isa = PBXTargetDependency;
+			platformFilter = ios;
+			target = A8838AE3302A232300FAEEEE /* OpenWidgetExtension */;
+			targetProxy = A8838AF4302A232400FAEEEE /* PBXContainerItemProxy */;
+		};
+		AB000000000000000000000A /* PBXTargetDependency */ = {
+			isa = PBXTargetDependency;
+			target = A85E854C2FE3EBF500558639 /* OpenHikes */;
+			targetProxy = AB000000000000000000000B /* PBXContainerItemProxy */;
+		};
+		AC000000000000000000000A /* PBXTargetDependency */ = {
+			isa = PBXTargetDependency;
+			target = A85E854C2FE3EBF500558639 /* OpenHikes */;
+			targetProxy = AC000000000000000000000B /* PBXContainerItemProxy */;
+		};
+		AE000000000000000000000A /* PBXTargetDependency */ = {
+			isa = PBXTargetDependency;
+			target = A85E854C2FE3EBF500558639 /* OpenHikes */;
+			targetProxy = AE000000000000000000000B /* PBXContainerItemProxy */;
+		};
+		E18FCCCC29AF416C97E1F400 /* PBXTargetDependency */ = {
+			isa = PBXTargetDependency;
+			productRef = 8B526EAB84824A31A0B35BCE /* SwiftLintBuildToolPlugin */;
+		};
+		EF4BAF084DBB48CA878846F1 /* PBXTargetDependency */ = {
+			isa = PBXTargetDependency;
+			productRef = D8E7B06498004382AE2DB59C /* SwiftLintBuildToolPlugin */;
+		};
+/* End PBXTargetDependency section */
+
+/* Begin XCBuildConfiguration section */
+		A85E85582FE3EBF600558639 /* Debug */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				ALWAYS_SEARCH_USER_PATHS = NO;
+				ASSETCATALOG_COMPILER_GENERATE_SWIFT_ASSET_SYMBOL_EXTENSIONS = YES;
+				CLANG_ANALYZER_NONNULL = YES;
+				CLANG_ANALYZER_NUMBER_OBJECT_CONVERSION = YES_AGGRESSIVE;
+				CLANG_CXX_LANGUAGE_STANDARD = "gnu++20";
+				CLANG_ENABLE_MODULES = YES;
+				CLANG_ENABLE_OBJC_ARC = YES;
+				CLANG_ENABLE_OBJC_WEAK = YES;
+				CLANG_WARN_BLOCK_CAPTURE_AUTORELEASING = YES;
+				CLANG_WARN_BOOL_CONVERSION = YES;
+				CLANG_WARN_COMMA = YES;
+				CLANG_WARN_CONSTANT_CONVERSION = YES;
+				CLANG_WARN_DEPRECATED_OBJC_IMPLEMENTATIONS = YES;
+				CLANG_WARN_DIRECT_OBJC_ISA_USAGE = YES_ERROR;
+				CLANG_WARN_DOCUMENTATION_COMMENTS = YES;
+				CLANG_WARN_EMPTY_BODY = YES;
+				CLANG_WARN_ENUM_CONVERSION = YES;
+				CLANG_WARN_INFINITE_RECURSION = YES;
+				CLANG_WARN_INT_CONVERSION = YES;
+				CLANG_WARN_NON_LITERAL_NULL_CONVERSION = YES;
+				CLANG_WARN_OBJC_IMPLICIT_RETAIN_SELF = YES;
+				CLANG_WARN_OBJC_LITERAL_CONVERSION = YES;
+				CLANG_WARN_OBJC_ROOT_CLASS = YES_ERROR;
+				CLANG_WARN_QUOTED_INCLUDE_IN_FRAMEWORK_HEADER = YES;
+				CLANG_WARN_RANGE_LOOP_ANALYSIS = YES;
+				CLANG_WARN_STRICT_PROTOTYPES = YES;
+				CLANG_WARN_SUSPICIOUS_MOVE = YES;
+				CLANG_WARN_UNGUARDED_AVAILABILITY = YES_AGGRESSIVE;
+				CLANG_WARN_UNREACHABLE_CODE = YES;
+				CLANG_WARN__DUPLICATE_METHOD_MATCH = YES;
+				COPY_PHASE_STRIP = NO;
+				DEAD_CODE_STRIPPING = YES;
+				DEBUG_INFORMATION_FORMAT = dwarf;
+				DEVELOPMENT_TEAM = 697EW27G9U;
+				ENABLE_STRICT_OBJC_MSGSEND = YES;
+				ENABLE_TESTABILITY = YES;
+				ENABLE_USER_SCRIPT_SANDBOXING = YES;
+				GCC_C_LANGUAGE_STANDARD = gnu17;
+				GCC_DYNAMIC_NO_PIC = NO;
+				GCC_NO_COMMON_BLOCKS = YES;
+				GCC_OPTIMIZATION_LEVEL = 0;
+				GCC_PREPROCESSOR_DEFINITIONS = (
+					"DEBUG=1",
+					"$(inherited)",
+				);
+				GCC_WARN_64_TO_32_BIT_CONVERSION = YES;
+				GCC_WARN_ABOUT_RETURN_TYPE = YES_ERROR;
+				GCC_WARN_UNDECLARED_SELECTOR = YES;
+				GCC_WARN_UNINITIALIZED_AUTOS = YES_AGGRESSIVE;
+				GCC_WARN_UNUSED_FUNCTION = YES;
+				GCC_WARN_UNUSED_VARIABLE = YES;
+				LOCALIZATION_PREFERS_STRING_CATALOGS = YES;
+				MTL_ENABLE_DEBUG_INFO = INCLUDE_SOURCE;
+				MTL_FAST_MATH = YES;
+				ONLY_ACTIVE_ARCH = YES;
+				STRING_CATALOG_GENERATE_SYMBOLS = YES;
+				SWIFT_ACTIVE_COMPILATION_CONDITIONS = "DEBUG $(inherited)";
+				SWIFT_OPTIMIZATION_LEVEL = "-Onone";
+			};
+			name = Debug;
+		};
+		A85E85592FE3EBF600558639 /* Release */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				ALWAYS_SEARCH_USER_PATHS = NO;
+				ASSETCATALOG_COMPILER_GENERATE_SWIFT_ASSET_SYMBOL_EXTENSIONS = YES;
+				CLANG_ANALYZER_NONNULL = YES;
+				CLANG_ANALYZER_NUMBER_OBJECT_CONVERSION = YES_AGGRESSIVE;
+				CLANG_CXX_LANGUAGE_STANDARD = "gnu++20";
+				CLANG_ENABLE_MODULES = YES;
+				CLANG_ENABLE_OBJC_ARC = YES;
+				CLANG_ENABLE_OBJC_WEAK = YES;
+				CLANG_WARN_BLOCK_CAPTURE_AUTORELEASING = YES;
+				CLANG_WARN_BOOL_CONVERSION = YES;
+				CLANG_WARN_COMMA = YES;
+				CLANG_WARN_CONSTANT_CONVERSION = YES;
+				CLANG_WARN_DEPRECATED_OBJC_IMPLEMENTATIONS = YES;
+				CLANG_WARN_DIRECT_OBJC_ISA_USAGE = YES_ERROR;
+				CLANG_WARN_DOCUMENTATION_COMMENTS = YES;
+				CLANG_WARN_EMPTY_BODY = YES;
+				CLANG_WARN_ENUM_CONVERSION = YES;
+				CLANG_WARN_INFINITE_RECURSION = YES;
+				CLANG_WARN_INT_CONVERSION = YES;
+				CLANG_WARN_NON_LITERAL_NULL_CONVERSION = YES;
+				CLANG_WARN_OBJC_IMPLICIT_RETAIN_SELF = YES;
+				CLANG_WARN_OBJC_LITERAL_CONVERSION = YES;
+				CLANG_WARN_OBJC_ROOT_CLASS = YES_ERROR;
+				CLANG_WARN_QUOTED_INCLUDE_IN_FRAMEWORK_HEADER = YES;
+				CLANG_WARN_RANGE_LOOP_ANALYSIS = YES;
+				CLANG_WARN_STRICT_PROTOTYPES = YES;
+				CLANG_WARN_SUSPICIOUS_MOVE = YES;
+				CLANG_WARN_UNGUARDED_AVAILABILITY = YES_AGGRESSIVE;
+				CLANG_WARN_UNREACHABLE_CODE = YES;
+				CLANG_WARN__DUPLICATE_METHOD_MATCH = YES;
+				COPY_PHASE_STRIP = NO;
+				DEAD_CODE_STRIPPING = YES;
+				DEBUG_INFORMATION_FORMAT = "dwarf-with-dsym";
+				DEVELOPMENT_TEAM = 697EW27G9U;
+				ENABLE_NS_ASSERTIONS = NO;
+				ENABLE_STRICT_OBJC_MSGSEND = YES;
+				ENABLE_USER_SCRIPT_SANDBOXING = YES;
+				GCC_C_LANGUAGE_STANDARD = gnu17;
+				GCC_NO_COMMON_BLOCKS = YES;
+				GCC_WARN_64_TO_32_BIT_CONVERSION = YES;
+				GCC_WARN_ABOUT_RETURN_TYPE = YES_ERROR;
+				GCC_WARN_UNDECLARED_SELECTOR = YES;
+				GCC_WARN_UNINITIALIZED_AUTOS = YES_AGGRESSIVE;
+				GCC_WARN_UNUSED_FUNCTION = YES;
+				GCC_WARN_UNUSED_VARIABLE = YES;
+				LOCALIZATION_PREFERS_STRING_CATALOGS = YES;
+				MTL_ENABLE_DEBUG_INFO = NO;
+				MTL_FAST_MATH = YES;
+				STRING_CATALOG_GENERATE_SYMBOLS = YES;
+				SWIFT_COMPILATION_MODE = wholemodule;
+			};
+			name = Release;
+		};
+		A85E855B2FE3EBF600558639 /* Debug */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon;
+				ASSETCATALOG_COMPILER_GLOBAL_ACCENT_COLOR_NAME = AccentColor;
+				CODE_SIGN_ENTITLEMENTS = OpenHikes/OpenHikes.entitlements;
+				CODE_SIGN_STYLE = Automatic;
+				CURRENT_PROJECT_VERSION = 1;
+				DEAD_CODE_STRIPPING = YES;
+				DEVELOPMENT_TEAM = 697EW27G9U;
+				ENABLE_APP_SANDBOX = YES;
+				ENABLE_HARDENED_RUNTIME = YES;
+				ENABLE_PREVIEWS = YES;
+				ENABLE_USER_SELECTED_FILES = readonly;
+				GENERATE_INFOPLIST_FILE = YES;
+				INFOPLIST_FILE = OpenHikes/Info.plist;
+				INFOPLIST_KEY_NSLocationAlwaysAndWhenInUseUsageDescription = "OpenHikes uses Always location, only when you turn on Background Trail Tracking in Settings, to keep your Home Screen widget showing your progress along the trail while the app isn't open.";
+				INFOPLIST_KEY_NSLocationWhenInUseUsageDescription = "OpenHikes uses your location to show where you are on the map and record hikes you choose to start.";
+				"INFOPLIST_KEY_UIApplicationSceneManifest_Generation[sdk=iphoneos*]" = YES;
+				"INFOPLIST_KEY_UIApplicationSceneManifest_Generation[sdk=iphonesimulator*]" = YES;
+				"INFOPLIST_KEY_UIApplicationSupportsIndirectInputEvents[sdk=iphoneos*]" = YES;
+				"INFOPLIST_KEY_UIApplicationSupportsIndirectInputEvents[sdk=iphonesimulator*]" = YES;
+				"INFOPLIST_KEY_UILaunchScreen_Generation[sdk=iphoneos*]" = YES;
+				"INFOPLIST_KEY_UILaunchScreen_Generation[sdk=iphonesimulator*]" = YES;
+				"INFOPLIST_KEY_UIStatusBarStyle[sdk=iphoneos*]" = UIStatusBarStyleDefault;
+				"INFOPLIST_KEY_UIStatusBarStyle[sdk=iphonesimulator*]" = UIStatusBarStyleDefault;
+				INFOPLIST_KEY_UISupportedInterfaceOrientations_iPad = "UIInterfaceOrientationPortrait UIInterfaceOrientationPortraitUpsideDown UIInterfaceOrientationLandscapeLeft UIInterfaceOrientationLandscapeRight";
+				INFOPLIST_KEY_UISupportedInterfaceOrientations_iPhone = "UIInterfaceOrientationPortrait UIInterfaceOrientationLandscapeLeft UIInterfaceOrientationLandscapeRight";
+				IPHONEOS_DEPLOYMENT_TARGET = 26.5;
+				LD_RUNPATH_SEARCH_PATHS = "@executable_path/Frameworks";
+				"LD_RUNPATH_SEARCH_PATHS[sdk=macosx*]" = "@executable_path/../Frameworks";
+				MACOSX_DEPLOYMENT_TARGET = 26.5;
+				MARKETING_VERSION = 1.0;
+				PRODUCT_BUNDLE_IDENTIFIER = tappium.com.OpenHikes;
+				PRODUCT_NAME = "$(TARGET_NAME)";
+				REGISTER_APP_GROUPS = YES;
+				SDKROOT = auto;
+				STRING_CATALOG_GENERATE_SYMBOLS = YES;
+				SUPPORTED_PLATFORMS = "iphoneos iphonesimulator macosx xros xrsimulator";
+				SWIFT_APPROACHABLE_CONCURRENCY = YES;
+				SWIFT_DEFAULT_ACTOR_ISOLATION = MainActor;
+				SWIFT_EMIT_LOC_STRINGS = YES;
+				SWIFT_STRICT_CONCURRENCY = complete;
+				SWIFT_TREAT_WARNINGS_AS_ERRORS = YES;
+				SWIFT_UPCOMING_FEATURE_MEMBER_IMPORT_VISIBILITY = YES;
+				SWIFT_VERSION = 6.0;
+				TARGETED_DEVICE_FAMILY = "1,2,7";
+				XROS_DEPLOYMENT_TARGET = 26.5;
+			};
+			name = Debug;
+		};
+		A85E855C2FE3EBF600558639 /* Release */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon;
+				ASSETCATALOG_COMPILER_GLOBAL_ACCENT_COLOR_NAME = AccentColor;
+				CODE_SIGN_ENTITLEMENTS = OpenHikes/OpenHikes.entitlements;
+				CODE_SIGN_STYLE = Automatic;
+				CURRENT_PROJECT_VERSION = 1;
+				DEAD_CODE_STRIPPING = YES;
+				DEVELOPMENT_TEAM = 697EW27G9U;
+				ENABLE_APP_SANDBOX = YES;
+				ENABLE_HARDENED_RUNTIME = YES;
+				ENABLE_PREVIEWS = YES;
+				ENABLE_USER_SELECTED_FILES = readonly;
+				GENERATE_INFOPLIST_FILE = YES;
+				INFOPLIST_FILE = OpenHikes/Info.plist;
+				INFOPLIST_KEY_NSLocationAlwaysAndWhenInUseUsageDescription = "OpenHikes uses Always location, only when you turn on Background Trail Tracking in Settings, to keep your Home Screen widget showing your progress along the trail while the app isn't open.";
+				INFOPLIST_KEY_NSLocationWhenInUseUsageDescription = "OpenHikes uses your location to show where you are on the map and record hikes you choose to start.";
+				"INFOPLIST_KEY_UIApplicationSceneManifest_Generation[sdk=iphoneos*]" = YES;
+				"INFOPLIST_KEY_UIApplicationSceneManifest_Generation[sdk=iphonesimulator*]" = YES;
+				"INFOPLIST_KEY_UIApplicationSupportsIndirectInputEvents[sdk=iphoneos*]" = YES;
+				"INFOPLIST_KEY_UIApplicationSupportsIndirectInputEvents[sdk=iphonesimulator*]" = YES;
+				"INFOPLIST_KEY_UILaunchScreen_Generation[sdk=iphoneos*]" = YES;
+				"INFOPLIST_KEY_UILaunchScreen_Generation[sdk=iphonesimulator*]" = YES;
+				"INFOPLIST_KEY_UIStatusBarStyle[sdk=iphoneos*]" = UIStatusBarStyleDefault;
+				"INFOPLIST_KEY_UIStatusBarStyle[sdk=iphonesimulator*]" = UIStatusBarStyleDefault;
+				INFOPLIST_KEY_UISupportedInterfaceOrientations_iPad = "UIInterfaceOrientationPortrait UIInterfaceOrientationPortraitUpsideDown UIInterfaceOrientationLandscapeLeft UIInterfaceOrientationLandscapeRight";
+				INFOPLIST_KEY_UISupportedInterfaceOrientations_iPhone = "UIInterfaceOrientationPortrait UIInterfaceOrientationLandscapeLeft UIInterfaceOrientationLandscapeRight";
+				IPHONEOS_DEPLOYMENT_TARGET = 26.5;
+				LD_RUNPATH_SEARCH_PATHS = "@executable_path/Frameworks";
+				"LD_RUNPATH_SEARCH_PATHS[sdk=macosx*]" = "@executable_path/../Frameworks";
+				MACOSX_DEPLOYMENT_TARGET = 26.5;
+				MARKETING_VERSION = 1.0;
+				PRODUCT_BUNDLE_IDENTIFIER = tappium.com.OpenHikes;
+				PRODUCT_NAME = "$(TARGET_NAME)";
+				REGISTER_APP_GROUPS = YES;
+				SDKROOT = auto;
+				STRING_CATALOG_GENERATE_SYMBOLS = YES;
+				SUPPORTED_PLATFORMS = "iphoneos iphonesimulator macosx xros xrsimulator";
+				SWIFT_APPROACHABLE_CONCURRENCY = YES;
+				SWIFT_DEFAULT_ACTOR_ISOLATION = MainActor;
+				SWIFT_EMIT_LOC_STRINGS = YES;
+				SWIFT_STRICT_CONCURRENCY = complete;
+				SWIFT_TREAT_WARNINGS_AS_ERRORS = YES;
+				SWIFT_UPCOMING_FEATURE_MEMBER_IMPORT_VISIBILITY = YES;
+				SWIFT_VERSION = 6.0;
+				TARGETED_DEVICE_FAMILY = "1,2,7";
+				XROS_DEPLOYMENT_TARGET = 26.5;
+			};
+			name = Release;
+		};
+		A8838AF9302A232400FAEEEE /* Debug */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				ASSETCATALOG_COMPILER_GLOBAL_ACCENT_COLOR_NAME = AccentColor;
+				ASSETCATALOG_COMPILER_WIDGET_BACKGROUND_COLOR_NAME = WidgetBackground;
+				CODE_SIGN_ENTITLEMENTS = OpenWidgetExtension.entitlements;
+				CODE_SIGN_STYLE = Automatic;
+				CURRENT_PROJECT_VERSION = 1;
+				DEVELOPMENT_TEAM = 697EW27G9U;
+				GENERATE_INFOPLIST_FILE = YES;
+				INFOPLIST_FILE = OpenWidget/Info.plist;
+				INFOPLIST_KEY_CFBundleDisplayName = OpenWidget;
+				INFOPLIST_KEY_NSHumanReadableCopyright = "";
+				IPHONEOS_DEPLOYMENT_TARGET = 26.5;
+				LD_RUNPATH_SEARCH_PATHS = (
+					"$(inherited)",
+					"@executable_path/Frameworks",
+					"@executable_path/../../Frameworks",
+				);
+				MARKETING_VERSION = 1.0;
+				PRODUCT_BUNDLE_IDENTIFIER = tappium.com.OpenHikes.OpenWidget;
+				PRODUCT_NAME = "$(TARGET_NAME)";
+				SDKROOT = iphoneos;
+				SKIP_INSTALL = YES;
+				STRING_CATALOG_GENERATE_SYMBOLS = YES;
+				SWIFT_APPROACHABLE_CONCURRENCY = YES;
+				SWIFT_DEFAULT_ACTOR_ISOLATION = MainActor;
+				SWIFT_EMIT_LOC_STRINGS = YES;
+				SWIFT_STRICT_CONCURRENCY = complete;
+				SWIFT_TREAT_WARNINGS_AS_ERRORS = YES;
+				SWIFT_UPCOMING_FEATURE_MEMBER_IMPORT_VISIBILITY = YES;
+				SWIFT_VERSION = 6.0;
+				TARGETED_DEVICE_FAMILY = "1,2";
+			};
+			name = Debug;
+		};
+		A8838AFA302A232400FAEEEE /* Release */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				ASSETCATALOG_COMPILER_GLOBAL_ACCENT_COLOR_NAME = AccentColor;
+				ASSETCATALOG_COMPILER_WIDGET_BACKGROUND_COLOR_NAME = WidgetBackground;
+				CODE_SIGN_ENTITLEMENTS = OpenWidgetExtension.entitlements;
+				CODE_SIGN_STYLE = Automatic;
+				CURRENT_PROJECT_VERSION = 1;
+				DEVELOPMENT_TEAM = 697EW27G9U;
+				GENERATE_INFOPLIST_FILE = YES;
+				INFOPLIST_FILE = OpenWidget/Info.plist;
+				INFOPLIST_KEY_CFBundleDisplayName = OpenWidget;
+				INFOPLIST_KEY_NSHumanReadableCopyright = "";
+				IPHONEOS_DEPLOYMENT_TARGET = 26.5;
+				LD_RUNPATH_SEARCH_PATHS = (
+					"$(inherited)",
+					"@executable_path/Frameworks",
+					"@executable_path/../../Frameworks",
+				);
+				MARKETING_VERSION = 1.0;
+				PRODUCT_BUNDLE_IDENTIFIER = tappium.com.OpenHikes.OpenWidget;
+				PRODUCT_NAME = "$(TARGET_NAME)";
+				SDKROOT = iphoneos;
+				SKIP_INSTALL = YES;
+				STRING_CATALOG_GENERATE_SYMBOLS = YES;
+				SWIFT_APPROACHABLE_CONCURRENCY = YES;
+				SWIFT_DEFAULT_ACTOR_ISOLATION = MainActor;
+				SWIFT_EMIT_LOC_STRINGS = YES;
+				SWIFT_STRICT_CONCURRENCY = complete;
+				SWIFT_TREAT_WARNINGS_AS_ERRORS = YES;
+				SWIFT_UPCOMING_FEATURE_MEMBER_IMPORT_VISIBILITY = YES;
+				SWIFT_VERSION = 6.0;
+				TARGETED_DEVICE_FAMILY = "1,2";
+				VALIDATE_PRODUCT = YES;
+			};
+			name = Release;
+		};
+		AB0000000000000000000003 /* Debug */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				BUNDLE_LOADER = "$(TEST_HOST)";
+				CODE_SIGN_STYLE = Automatic;
+				CURRENT_PROJECT_VERSION = 1;
+				DEVELOPMENT_TEAM = 697EW27G9U;
+				GENERATE_INFOPLIST_FILE = YES;
+				IPHONEOS_DEPLOYMENT_TARGET = 26.5;
+				LD_RUNPATH_SEARCH_PATHS = (
+					"$(inherited)",
+					"@executable_path/Frameworks",
+					"@loader_path/Frameworks",
+				);
+				MACOSX_DEPLOYMENT_TARGET = 26.5;
+				MARKETING_VERSION = 1.0;
+				PRODUCT_BUNDLE_IDENTIFIER = tappium.com.OpenHikesTests;
+				PRODUCT_NAME = "$(TARGET_NAME)";
+				SDKROOT = auto;
+				SUPPORTED_PLATFORMS = "iphoneos iphonesimulator macosx xros xrsimulator";
+				SWIFT_APPROACHABLE_CONCURRENCY = YES;
+				SWIFT_DEFAULT_ACTOR_ISOLATION = MainActor;
+				SWIFT_EMIT_LOC_STRINGS = NO;
+				SWIFT_STRICT_CONCURRENCY = complete;
+				SWIFT_TREAT_WARNINGS_AS_ERRORS = YES;
+				SWIFT_UPCOMING_FEATURE_MEMBER_IMPORT_VISIBILITY = YES;
+				SWIFT_VERSION = 6.0;
+				TARGETED_DEVICE_FAMILY = "1,2,7";
+				TEST_HOST = "$(BUILT_PRODUCTS_DIR)/OpenHikes.app/$(BUNDLE_EXECUTABLE_FOLDER_PATH)/OpenHikes";
+				TEST_TARGET_NAME = OpenHikes;
+				XROS_DEPLOYMENT_TARGET = 26.5;
+			};
+			name = Debug;
+		};
+		AB0000000000000000000004 /* Release */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				BUNDLE_LOADER = "$(TEST_HOST)";
+				CODE_SIGN_STYLE = Automatic;
+				CURRENT_PROJECT_VERSION = 1;
+				DEVELOPMENT_TEAM = 697EW27G9U;
+				GENERATE_INFOPLIST_FILE = YES;
+				IPHONEOS_DEPLOYMENT_TARGET = 26.5;
+				LD_RUNPATH_SEARCH_PATHS = (
+					"$(inherited)",
+					"@executable_path/Frameworks",
+					"@loader_path/Frameworks",
+				);
+				MACOSX_DEPLOYMENT_TARGET = 26.5;
+				MARKETING_VERSION = 1.0;
+				PRODUCT_BUNDLE_IDENTIFIER = tappium.com.OpenHikesTests;
+				PRODUCT_NAME = "$(TARGET_NAME)";
+				SDKROOT = auto;
+				SUPPORTED_PLATFORMS = "iphoneos iphonesimulator macosx xros xrsimulator";
+				SWIFT_APPROACHABLE_CONCURRENCY = YES;
+				SWIFT_DEFAULT_ACTOR_ISOLATION = MainActor;
+				SWIFT_EMIT_LOC_STRINGS = NO;
+				SWIFT_STRICT_CONCURRENCY = complete;
+				SWIFT_TREAT_WARNINGS_AS_ERRORS = YES;
+				SWIFT_UPCOMING_FEATURE_MEMBER_IMPORT_VISIBILITY = YES;
+				SWIFT_VERSION = 6.0;
+				TARGETED_DEVICE_FAMILY = "1,2,7";
+				TEST_HOST = "$(BUILT_PRODUCTS_DIR)/OpenHikes.app/$(BUNDLE_EXECUTABLE_FOLDER_PATH)/OpenHikes";
+				TEST_TARGET_NAME = OpenHikes;
+				XROS_DEPLOYMENT_TARGET = 26.5;
+			};
+			name = Release;
+		};
+		AC0000000000000000000003 /* Debug */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				BUNDLE_LOADER = "$(TEST_HOST)";
+				CODE_SIGN_STYLE = Automatic;
+				CURRENT_PROJECT_VERSION = 1;
+				DEVELOPMENT_TEAM = 697EW27G9U;
+				GENERATE_INFOPLIST_FILE = YES;
+				IPHONEOS_DEPLOYMENT_TARGET = 26.5;
+				LD_RUNPATH_SEARCH_PATHS = (
+					"$(inherited)",
+					"@executable_path/Frameworks",
+					"@loader_path/Frameworks",
+				);
+				MARKETING_VERSION = 1.0;
+				PRODUCT_BUNDLE_IDENTIFIER = tappium.com.OpenWidgetTests;
+				PRODUCT_NAME = "$(TARGET_NAME)";
+				SDKROOT = iphoneos;
+				SUPPORTED_PLATFORMS = "iphoneos iphonesimulator";
+				SWIFT_APPROACHABLE_CONCURRENCY = YES;
+				SWIFT_DEFAULT_ACTOR_ISOLATION = MainActor;
+				SWIFT_EMIT_LOC_STRINGS = NO;
+				SWIFT_STRICT_CONCURRENCY = complete;
+				SWIFT_TREAT_WARNINGS_AS_ERRORS = YES;
+				SWIFT_UPCOMING_FEATURE_MEMBER_IMPORT_VISIBILITY = YES;
+				SWIFT_VERSION = 6.0;
+				TARGETED_DEVICE_FAMILY = "1,2";
+				TEST_HOST = "$(BUILT_PRODUCTS_DIR)/OpenHikes.app/$(BUNDLE_EXECUTABLE_FOLDER_PATH)/OpenHikes";
+				TEST_TARGET_NAME = OpenHikes;
+			};
+			name = Debug;
+		};
+		AC0000000000000000000004 /* Release */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				BUNDLE_LOADER = "$(TEST_HOST)";
+				CODE_SIGN_STYLE = Automatic;
+				CURRENT_PROJECT_VERSION = 1;
+				DEVELOPMENT_TEAM = 697EW27G9U;
+				GENERATE_INFOPLIST_FILE = YES;
+				IPHONEOS_DEPLOYMENT_TARGET = 26.5;
+				LD_RUNPATH_SEARCH_PATHS = (
+					"$(inherited)",
+					"@executable_path/Frameworks",
+					"@loader_path/Frameworks",
+				);
+				MARKETING_VERSION = 1.0;
+				PRODUCT_BUNDLE_IDENTIFIER = tappium.com.OpenWidgetTests;
+				PRODUCT_NAME = "$(TARGET_NAME)";
+				SDKROOT = iphoneos;
+				SUPPORTED_PLATFORMS = "iphoneos iphonesimulator";
+				SWIFT_APPROACHABLE_CONCURRENCY = YES;
+				SWIFT_DEFAULT_ACTOR_ISOLATION = MainActor;
+				SWIFT_EMIT_LOC_STRINGS = NO;
+				SWIFT_STRICT_CONCURRENCY = complete;
+				SWIFT_TREAT_WARNINGS_AS_ERRORS = YES;
+				SWIFT_UPCOMING_FEATURE_MEMBER_IMPORT_VISIBILITY = YES;
+				SWIFT_VERSION = 6.0;
+				TARGETED_DEVICE_FAMILY = "1,2";
+				TEST_HOST = "$(BUILT_PRODUCTS_DIR)/OpenHikes.app/$(BUNDLE_EXECUTABLE_FOLDER_PATH)/OpenHikes";
+				TEST_TARGET_NAME = OpenHikes;
+			};
+			name = Release;
+		};
+		AE0000000000000000000003 /* Debug */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				CODE_SIGN_STYLE = Automatic;
+				CURRENT_PROJECT_VERSION = 1;
+				DEVELOPMENT_TEAM = 697EW27G9U;
+				GENERATE_INFOPLIST_FILE = YES;
+				IPHONEOS_DEPLOYMENT_TARGET = 26.5;
+				LD_RUNPATH_SEARCH_PATHS = (
+					"$(inherited)",
+					"@executable_path/Frameworks",
+					"@loader_path/Frameworks",
+				);
+				MARKETING_VERSION = 1.0;
+				PRODUCT_BUNDLE_IDENTIFIER = tappium.com.OpenHikesUITests;
+				PRODUCT_NAME = "$(TARGET_NAME)";
+				SDKROOT = iphoneos;
+				SUPPORTED_PLATFORMS = "iphoneos iphonesimulator";
+				SWIFT_APPROACHABLE_CONCURRENCY = YES;
+				SWIFT_DEFAULT_ACTOR_ISOLATION = MainActor;
+				SWIFT_EMIT_LOC_STRINGS = NO;
+				SWIFT_STRICT_CONCURRENCY = complete;
+				SWIFT_TREAT_WARNINGS_AS_ERRORS = YES;
+				SWIFT_UPCOMING_FEATURE_MEMBER_IMPORT_VISIBILITY = YES;
+				SWIFT_VERSION = 6.0;
+				TARGETED_DEVICE_FAMILY = "1,2";
+				TEST_TARGET_NAME = OpenHikes;
+			};
+			name = Debug;
+		};
+		AE0000000000000000000004 /* Release */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				CODE_SIGN_STYLE = Automatic;
+				CURRENT_PROJECT_VERSION = 1;
+				DEVELOPMENT_TEAM = 697EW27G9U;
+				GENERATE_INFOPLIST_FILE = YES;
+				IPHONEOS_DEPLOYMENT_TARGET = 26.5;
+				LD_RUNPATH_SEARCH_PATHS = (
+					"$(inherited)",
+					"@executable_path/Frameworks",
+					"@loader_path/Frameworks",
+				);
+				MARKETING_VERSION = 1.0;
+				PRODUCT_BUNDLE_IDENTIFIER = tappium.com.OpenHikesUITests;
+				PRODUCT_NAME = "$(TARGET_NAME)";
+				SDKROOT = iphoneos;
+				SUPPORTED_PLATFORMS = "iphoneos iphonesimulator";
+				SWIFT_APPROACHABLE_CONCURRENCY = YES;
+				SWIFT_DEFAULT_ACTOR_ISOLATION = MainActor;
+				SWIFT_EMIT_LOC_STRINGS = NO;
+				SWIFT_STRICT_CONCURRENCY = complete;
+				SWIFT_TREAT_WARNINGS_AS_ERRORS = YES;
+				SWIFT_UPCOMING_FEATURE_MEMBER_IMPORT_VISIBILITY = YES;
+				SWIFT_VERSION = 6.0;
+				TARGETED_DEVICE_FAMILY = "1,2";
+				TEST_TARGET_NAME = OpenHikes;
+			};
+			name = Release;
+		};
+/* End XCBuildConfiguration section */
+
+/* Begin XCConfigurationList section */
+		A85E85482FE3EBF500558639 /* Build configuration list for PBXProject "OpenHikes" */ = {
+			isa = XCConfigurationList;
+			buildConfigurations = (
+				A85E85582FE3EBF600558639 /* Debug */,
+				A85E85592FE3EBF600558639 /* Release */,
+			);
+			defaultConfigurationIsVisible = 0;
+			defaultConfigurationName = Release;
+		};
+		A85E855A2FE3EBF600558639 /* Build configuration list for PBXNativeTarget "OpenHikes" */ = {
+			isa = XCConfigurationList;
+			buildConfigurations = (
+				A85E855B2FE3EBF600558639 /* Debug */,
+				A85E855C2FE3EBF600558639 /* Release */,
+			);
+			defaultConfigurationIsVisible = 0;
+			defaultConfigurationName = Release;
+		};
+		A8838AF8302A232400FAEEEE /* Build configuration list for PBXNativeTarget "OpenWidgetExtension" */ = {
+			isa = XCConfigurationList;
+			buildConfigurations = (
+				A8838AF9302A232400FAEEEE /* Debug */,
+				A8838AFA302A232400FAEEEE /* Release */,
+			);
+			defaultConfigurationIsVisible = 0;
+			defaultConfigurationName = Release;
+		};
+		AB0000000000000000000002 /* Build configuration list for PBXNativeTarget "OpenHikesTests" */ = {
+			isa = XCConfigurationList;
+			buildConfigurations = (
+				AB0000000000000000000003 /* Debug */,
+				AB0000000000000000000004 /* Release */,
+			);
+			defaultConfigurationIsVisible = 0;
+			defaultConfigurationName = Release;
+		};
+		AC0000000000000000000002 /* Build configuration list for PBXNativeTarget "OpenWidgetTests" */ = {
+			isa = XCConfigurationList;
+			buildConfigurations = (
+				AC0000000000000000000003 /* Debug */,
+				AC0000000000000000000004 /* Release */,
+			);
+			defaultConfigurationIsVisible = 0;
+			defaultConfigurationName = Release;
+		};
+		AE0000000000000000000002 /* Build configuration list for PBXNativeTarget "OpenHikesUITests" */ = {
+			isa = XCConfigurationList;
+			buildConfigurations = (
+				AE0000000000000000000003 /* Debug */,
+				AE0000000000000000000004 /* Release */,
+			);
+			defaultConfigurationIsVisible = 0;
+			defaultConfigurationName = Release;
+		};
+/* End XCConfigurationList section */
+
+/* Begin XCLocalSwiftPackageReference section */
+		A8838B90302A302500FAEEEE /* XCLocalSwiftPackageReference "OpenHikesShared" */ = {
+			isa = XCLocalSwiftPackageReference;
+			relativePath = OpenHikesShared;
+		};
+/* End XCLocalSwiftPackageReference section */
+
+/* Begin XCRemoteSwiftPackageReference section */
+		04A61451D23F435EBCB01C29 /* XCRemoteSwiftPackageReference "SwiftLintPlugins" */ = {
+			isa = XCRemoteSwiftPackageReference;
+			repositoryURL = "https://github.com/SimplyDanny/SwiftLintPlugins";
+			requirement = {
+				kind = upToNextMajorVersion;
+				minimumVersion = 0.65.0;
+			};
+		};
+		F9B04193302D981D00E03D91 /* XCRemoteSwiftPackageReference "swift-collections" */ = {
+			isa = XCRemoteSwiftPackageReference;
+			repositoryURL = "https://github.com/apple/swift-collections/";
+			requirement = {
+				kind = upToNextMajorVersion;
+				minimumVersion = 1.6.0;
+			};
+		};
+		F9B04210302D981D00E03D91 /* XCRemoteSwiftPackageReference "swift-algorithms" */ = {
+			isa = XCRemoteSwiftPackageReference;
+			repositoryURL = "https://github.com/apple/swift-algorithms/";
+			requirement = {
+				kind = upToNextMajorVersion;
+				minimumVersion = 1.2.1;
+			};
+		};
+		F9B04220302D981D00E03D91 /* XCRemoteSwiftPackageReference "swift-async-algorithms" */ = {
+			isa = XCRemoteSwiftPackageReference;
+			repositoryURL = "https://github.com/apple/swift-async-algorithms/";
+			requirement = {
+				kind = upToNextMajorVersion;
+				minimumVersion = 1.1.5;
+			};
+		};
+/* End XCRemoteSwiftPackageReference section */
+
+/* Begin XCSwiftPackageProductDependency section */
+		8B526EAB84824A31A0B35BCE /* SwiftLintBuildToolPlugin */ = {
+			isa = XCSwiftPackageProductDependency;
+			package = 04A61451D23F435EBCB01C29 /* XCRemoteSwiftPackageReference "SwiftLintPlugins" */;
+			productName = "plugin:SwiftLintBuildToolPlugin";
+		};
+		A8838B91302A302500FAEEEE /* OpenHikesShared */ = {
+			isa = XCSwiftPackageProductDependency;
+			productName = OpenHikesShared;
+		};
+		A8838B93302A305800FAEEEE /* OpenHikesShared */ = {
+			isa = XCSwiftPackageProductDependency;
+			package = A8838B90302A302500FAEEEE /* XCLocalSwiftPackageReference "OpenHikesShared" */;
+			productName = OpenHikesShared;
+		};
+		AB000000000000000000000C /* OpenHikesShared */ = {
+			isa = XCSwiftPackageProductDependency;
+			package = A8838B90302A302500FAEEEE /* XCLocalSwiftPackageReference "OpenHikesShared" */;
+			productName = OpenHikesShared;
+		};
+		AC000000000000000000000C /* OpenHikesShared */ = {
+			isa = XCSwiftPackageProductDependency;
+			package = A8838B90302A302500FAEEEE /* XCLocalSwiftPackageReference "OpenHikesShared" */;
+			productName = OpenHikesShared;
+		};
+		BC64C9A2049F4FA089C19205 /* SwiftLintBuildToolPlugin */ = {
+			isa = XCSwiftPackageProductDependency;
+			package = 04A61451D23F435EBCB01C29 /* XCRemoteSwiftPackageReference "SwiftLintPlugins" */;
+			productName = "plugin:SwiftLintBuildToolPlugin";
+		};
+		D8E7B06498004382AE2DB59C /* SwiftLintBuildToolPlugin */ = {
+			isa = XCSwiftPackageProductDependency;
+			package = 04A61451D23F435EBCB01C29 /* XCRemoteSwiftPackageReference "SwiftLintPlugins" */;
+			productName = "plugin:SwiftLintBuildToolPlugin";
+		};
+		EFF8FCFDD9064FE285B31035 /* SwiftLintBuildToolPlugin */ = {
+			isa = XCSwiftPackageProductDependency;
+			package = 04A61451D23F435EBCB01C29 /* XCRemoteSwiftPackageReference "SwiftLintPlugins" */;
+			productName = "plugin:SwiftLintBuildToolPlugin";
+		};
+		F9B04200302D981D00E03D91 /* DequeModule */ = {
+			isa = XCSwiftPackageProductDependency;
+			package = F9B04193302D981D00E03D91 /* XCRemoteSwiftPackageReference "swift-collections" */;
+			productName = DequeModule;
+		};
+		F9B04202302D981D00E03D91 /* HeapModule */ = {
+			isa = XCSwiftPackageProductDependency;
+			package = F9B04193302D981D00E03D91 /* XCRemoteSwiftPackageReference "swift-collections" */;
+			productName = HeapModule;
+		};
+		F9B04204302D981D00E03D91 /* OrderedCollections */ = {
+			isa = XCSwiftPackageProductDependency;
+			package = F9B04193302D981D00E03D91 /* XCRemoteSwiftPackageReference "swift-collections" */;
+			productName = OrderedCollections;
+		};
+		F9B04211302D981D00E03D91 /* Algorithms */ = {
+			isa = XCSwiftPackageProductDependency;
+			package = F9B04210302D981D00E03D91 /* XCRemoteSwiftPackageReference "swift-algorithms" */;
+			productName = Algorithms;
+		};
+		F9B04221302D981D00E03D91 /* AsyncAlgorithms */ = {
+			isa = XCSwiftPackageProductDependency;
+			package = F9B04220302D981D00E03D91 /* XCRemoteSwiftPackageReference "swift-async-algorithms" */;
+			productName = AsyncAlgorithms;
+		};
+/* End XCSwiftPackageProductDependency section */
+	};
+	rootObject = A85E85452FE3EBF500558639 /* Project object */;
+}

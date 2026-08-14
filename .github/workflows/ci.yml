@@ -40,17 +40,17 @@ jobs:
         run: swiftlint lint --strict --quiet
 
       - name: Test shared package
-        run: swift test --package-path OpenTrailsShared -Xswiftc -warnings-as-errors
+        run: swift test --package-path OpenHikesShared -Xswiftc -warnings-as-errors
 
       - name: Verify resolved packages
         run: |
           xcodebuild -resolvePackageDependencies \
-            -project OpenTrails.xcodeproj \
-            -scheme OpenTrails \
+            -project OpenHikes.xcodeproj \
+            -scheme OpenHikes \
             -skipPackagePluginValidation \
             -quiet
           git diff --exit-code -- \
-            OpenTrails.xcodeproj/project.xcworkspace/xcshareddata/swiftpm/Package.resolved
+            OpenHikes.xcodeproj/project.xcworkspace/xcshareddata/swiftpm/Package.resolved
 
   unit-tests:
     name: App and widget tests
@@ -63,10 +63,10 @@ jobs:
         run: |
           mkdir -p TestResults
           xcodebuild test \
-            -project OpenTrails.xcodeproj \
-            -scheme OpenTrails \
+            -project OpenHikes.xcodeproj \
+            -scheme OpenHikes \
             -destination "$IOS_DESTINATION" \
-            -only-testing:OpenTrailsTests \
+            -only-testing:OpenHikesTests \
             -only-testing:OpenWidgetTests \
             -enableCodeCoverage YES \
             -resultBundlePath TestResults/UnitTests.xcresult \
@@ -107,8 +107,8 @@ jobs:
             code_signing+=(CODE_SIGNING_ALLOWED=NO)
           fi
           xcodebuild build \
-            -project OpenTrails.xcodeproj \
-            -scheme OpenTrails \
+            -project OpenHikes.xcodeproj \
+            -scheme OpenHikes \
             -configuration "${{ matrix.configuration }}" \
             -destination "${{ matrix.destination }}" \
             -skipPackagePluginValidation \
@@ -125,11 +125,11 @@ jobs:
       - name: Run concurrent GPX imports under TSan
         run: |
           xcodebuild test \
-            -project OpenTrails.xcodeproj \
-            -scheme OpenTrails \
+            -project OpenHikes.xcodeproj \
+            -scheme OpenHikes \
             -destination "$IOS_DESTINATION" \
-            -only-testing:OpenTrailsTests/GPXImportTests \
-            -only-testing:OpenTrailsTests/GPXImportDateTests \
+            -only-testing:OpenHikesTests/GPXImportTests \
+            -only-testing:OpenHikesTests/GPXImportDateTests \
             -enableThreadSanitizer YES \
             -parallel-testing-enabled NO \
             -skipPackagePluginValidation \

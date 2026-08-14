@@ -5,11 +5,11 @@
 
 # --- Targets to lint ----------------------------------------------------------
 included:
-  - OpenTrails
-  - OpenTrailsTests
-  - OpenTrailsUITests
-  - OpenTrailsShared/Sources
-  - OpenTrailsShared/Tests
+  - OpenHikes
+  - OpenHikesTests
+  - OpenHikesUITests
+  - OpenHikesShared/Sources
+  - OpenHikesShared/Tests
   - OpenWidget
   - OpenWidgetTests
 
@@ -17,7 +17,7 @@ excluded:
   - .build
   - build
   - DerivedData
-  - "OpenTrailsShared/.build"
+  - "OpenHikesShared/.build"
 
 # --- Rule sets ----------------------------------------------------------------
 # Enable every opt-in rule …
