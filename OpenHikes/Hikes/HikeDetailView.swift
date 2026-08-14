@@ -125,8 +125,8 @@ struct HikeDetailView: View {
     /// Fed the same auto-follow matches as the chart/map, throttled, so the
     /// widget stays reasonably fresh while this hike is being viewed.
     let backgroundTracker: BackgroundTrailTracker
-    /// OSM walking graph used for the surface breakdown. `nil` disables that
-    /// section entirely — see ``HikeSurfaceSection``.
+    /// OSM walking graph behind the surface and difficulty sections. `nil`
+    /// disables both — see ``HikeTrailAnalysis``.
     var trailGraphProvider: (any TrailGraphProviding)?
     /// Collapses the sheet so the map is visible when zooming to the route.
     var onZoomToRoute: () -> Void = { /* no-op default */ }
@@ -240,6 +240,9 @@ struct HikeDetailView: View {
             // Keep the first live fix from racing the widget's initial trail snapshot.
             await backgroundTracker.waitForSelectionPublish()
             await followLocation(profile: built)
+        }
+        .task(id: hike.id) {
+            await loadTrailBreakdowns()
         }
         // Toggling off should clear the live dot immediately, not wait for the
         // next fix. Toggling on should hand the map pin back to auto-follow
@@ -474,19 +477,52 @@ private extension HikeDetailView {
         }
     }
 
-    // MARK: Surface
+    // MARK: Trail data
 
-    /// Owns its own analysis state, so downloading a trail graph and writing
-    /// the result back to the hike redraws the section rather than this view.
+    /// Reads the breakdown straight off the hike, so the write that fills it
+    /// in redraws the section rather than this view. Renders nothing until
+    /// there is one — see ``loadTrailBreakdowns()``.
     private var surfaceSection: some View {
-        HikeSurfaceSection(hike: hike, provider: trailGraphProvider)
+        HikeSurfaceSection(hike: hike)
     }
 
-    // MARK: Difficulty
-
-    /// Owns its own analysis state, mirroring ``surfaceSection``.
+    /// Mirrors ``surfaceSection``.
     private var difficultySection: some View {
-        HikeDifficultySection(hike: hike, provider: trailGraphProvider)
+        HikeDifficultySection(hike: hike)
+    }
+
+    /// Asks OpenStreetMap what this route runs on, and how hard it is, the
+    /// first time the hike is opened.
+    ///
+    /// It runs here rather than inside the two sections because they are
+    /// hidden until they have something to show, and a view that isn't in the
+    /// hierarchy can't run the task that would put it there. Doing it once for
+    /// both is also the cheaper arrangement: they read different tags off the
+    /// same ways, so they share one fetch and one decode.
+    ///
+    /// Failure is deliberately invisible. Nobody asked for this, so an
+    /// Overpass outage, a flight-mode gap or a valley nobody has mapped leaves
+    /// the screen exactly as it was; the next open tries again.
+    private func loadTrailBreakdowns() async {
+        guard let trailGraphProvider,
+              hike.surfaceBreakdown == nil || hike.difficultyBreakdown == nil
+        else { return }
+        let breakdowns = await HikeTrailAnalysis.breakdowns(
+            route: hike.route,
+            provider: trailGraphProvider
+        )
+        guard !Task.isCancelled, !breakdowns.isEmpty else { return }
+        // No transition and no curve of our own: SwiftUI's default animation
+        // and default insertion — a fade — are what every other section that
+        // appears late on this screen already uses.
+        withAnimation {
+            if let surface = breakdowns.surface {
+                hike.surfaceBreakdown = surface
+            }
+            if let difficulty = breakdowns.difficulty {
+                hike.difficultyBreakdown = difficulty
+            }
+        }
     }
 
     // MARK: Metadata

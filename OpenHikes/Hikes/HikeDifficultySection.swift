@@ -6,8 +6,9 @@
 //  stacked bar of how demanding each stretch of trail is, and a legend that
 //  reads it out.
 //
-//  Split into its own view so the analysis states — and the model write that
-//  ends them — invalidate this section rather than the whole detail screen.
+//  Split into its own view so the write that fills it in — see
+//  ``HikeTrailAnalysis`` — invalidates this section rather than the whole
+//  detail screen.
 //
 
 import SwiftUI
@@ -29,19 +30,10 @@ nonisolated extension TrailDifficulty {
     }
 }
 
+/// Absent until OpenStreetMap has actually answered for this route — see
+/// ``HikeSurfaceSection``, which it mirrors.
 struct HikeDifficultySection: View {
-    nonisolated enum AnalysisState: Equatable, Sendable {
-        case idle
-        case analyzing
-        case failed(String)
-    }
-
     let hike: Hike
-    /// `nil` in previews and in UI-test launches without a bundled graph;
-    /// the section hides itself rather than offering an action that can't run.
-    let provider: (any TrailGraphProviding)?
-
-    @State private var state: AnalysisState = .idle
 
     private static let percentStyle = FloatingPointFormatStyle<Double>.Percent
         .percent
@@ -49,84 +41,22 @@ struct HikeDifficultySection: View {
     private static let fullCoverageThreshold = 0.995
 
     var body: some View {
-        if provider != nil, hike.route.count > 1 {
-            VStack(alignment: .leading, spacing: 12) {
-                header
-                content
-            }
-            .task(id: hike.id) { await analyzeFromCache() }
-        }
-    }
-
-    // MARK: Header
-
-    private var header: some View {
-        HStack(alignment: .firstTextBaseline) {
-            Text("Difficulty").font(.headline)
-            Spacer()
-            if hike.difficultyBreakdown != nil, state != .analyzing {
-                Button {
-                    analyze()
-                } label: {
-                    Label("Refresh", systemImage: "arrow.clockwise")
-                        .labelStyle(.iconOnly)
-                        .font(.subheadline)
-                }
-                .buttonStyle(.plain)
-                .foregroundStyle(.secondary)
-                .accessibilityLabel("Refresh difficulty analysis")
-                .accessibilityIdentifier("difficulty-refresh-button")
-            }
-        }
-    }
-
-    // MARK: Content
-
-    @ViewBuilder private var content: some View {
         if let breakdown = hike.difficultyBreakdown {
-            TrailDifficultyBar(shares: breakdown.shares)
-            VStack(spacing: 8) {
-                ForEach(breakdown.shares) { share in
-                    TrailDifficultyLegendRow(share: share)
+            VStack(alignment: .leading, spacing: 12) {
+                Text("Difficulty")
+                    .font(.headline)
+                    .frame(maxWidth: .infinity, alignment: .leading)
+                TrailDifficultyBar(shares: breakdown.shares)
+                VStack(spacing: 8) {
+                    ForEach(breakdown.shares) { share in
+                        TrailDifficultyLegendRow(share: share)
+                    }
                 }
-            }
-            Text(footnote(for: breakdown))
-                .font(.caption2)
-                .foregroundStyle(.secondary)
-        } else {
-            unanalyzed
-        }
-    }
-
-    @ViewBuilder private var unanalyzed: some View {
-        switch state {
-        case .analyzing:
-            HStack(spacing: 8) {
-                ProgressView()
-                Text("Looking up trail data…")
-                    .font(.subheadline)
+                Text(footnote(for: breakdown))
+                    .font(.caption2)
                     .foregroundStyle(.secondary)
             }
-            .accessibilityIdentifier("difficulty-analyzing")
-
-        case .idle, .failed:
-            VStack(alignment: .leading, spacing: 10) {
-                Text(
-                    "See how demanding each section of this route is using the"
-                        + " SAC hiking scale from OpenStreetMap."
-                )
-                .font(.subheadline)
-                .foregroundStyle(.secondary)
-                if case .failed(let message) = state {
-                    Text(message)
-                        .font(.caption)
-                        .foregroundStyle(.red)
-                        .accessibilityIdentifier("difficulty-error")
-                }
-                Button("Analyze Difficulty") { analyze() }
-                    .buttonStyle(.borderedProminent)
-                    .accessibilityIdentifier("difficulty-analyze-button")
-            }
+            .accessibilityIdentifier("difficulty-section")
         }
     }
 
@@ -138,38 +68,6 @@ struct HikeDifficultySection: View {
         let formatted = surveyed.formatted(Self.percentStyle)
         return "Difficulty grades from OpenStreetMap (SAC scale), which"
             + " describes \(formatted) of this route."
-    }
-
-    // MARK: Analysis
-
-    private func analyzeFromCache() async {
-        guard let provider, hike.difficultyBreakdown == nil else { return }
-        let route = hike.route
-        let breakdown = await TrailDifficultyAnalysis.cachedBreakdown(
-            route: route,
-            provider: provider
-        )
-        guard !Task.isCancelled, let breakdown else { return }
-        hike.difficultyBreakdown = breakdown
-    }
-
-    private func analyze() {
-        guard let provider else { return }
-        let route = hike.route
-        state = .analyzing
-        Task {
-            do {
-                let breakdown = try await TrailDifficultyAnalysis
-                    .downloadedBreakdown(route: route, provider: provider)
-                guard !Task.isCancelled else { return }
-                hike.difficultyBreakdown = breakdown
-                state = .idle
-            } catch is CancellationError {
-                state = .idle
-            } catch {
-                state = .failed(error.localizedDescription)
-            }
-        }
     }
 }
 

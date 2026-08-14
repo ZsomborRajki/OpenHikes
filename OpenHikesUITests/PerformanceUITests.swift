@@ -237,7 +237,7 @@ nonisolated final class PerformanceUITests: XCTestCase {
         addLocationPermissionMonitor()
         setSimulatedLocation(Self.recordedTrace[0])
         defer { XCUIDevice.shared.location = nil }
-        app.activate()
+        bringToForeground(app)
         app.tap()
 
         let recordButton = element("record-hike-button", in: app)
@@ -260,7 +260,7 @@ nonisolated final class PerformanceUITests: XCTestCase {
         }
         Thread.sleep(forTimeInterval: Self.flushSeconds)
 
-        app.activate()
+        bringToForeground(app)
         XCTAssertTrue(points.waitForExistence(timeout: Self.existenceTimeout))
         let after = counters(in: app)
         printPhase("background-recording", from: started, to: Date().timeIntervalSince1970)
@@ -405,7 +405,7 @@ nonisolated final class PerformanceUITests: XCTestCase {
         addLocationPermissionMonitor()
         setSimulatedLocation(Self.recordedTrace[0])
         defer { XCUIDevice.shared.location = nil }
-        app.activate()
+        bringToForeground(app)
         app.tap()
 
         let recordButton = element("record-hike-button", in: app)
@@ -601,61 +601,6 @@ private extension PerformanceUITests {
 // MARK: - Assertions and reporting
 
 private extension PerformanceUITests {
-    /// The counterpart to `assertNoMoreThan`: proof that the gesture reached
-    /// the app at all. Without it a phase that silently failed to touch
-    /// anything would satisfy every budget above it by doing nothing.
-    func assertAtLeast(
-        _ minimum: Double,
-        of name: String,
-        in delta: PerformanceCounterDelta,
-        phase: String
-    ) {
-        let observed = delta.count(of: name)
-        XCTAssertGreaterThanOrEqual(
-            observed,
-            minimum,
-            "\(name) ran \(observed) times during \(phase); the gesture may not have landed"
-        )
-    }
-
-    func assertNoMoreThan(
-        _ limit: Double,
-        of name: String,
-        in delta: PerformanceCounterDelta,
-        phase: String
-    ) {
-        let observed = delta.count(of: name)
-        XCTAssertLessThanOrEqual(
-            observed,
-            limit,
-            "\(name) ran \(observed) times during \(phase), budget \(limit)"
-        )
-    }
-
-    func assertRatio(
-        atMost limit: Double,
-        of name: String,
-        per events: Double,
-        in delta: PerformanceCounterDelta
-    ) {
-        guard events > 0 else { return }
-        let ratio = delta.count(of: name) / events
-        XCTAssertLessThanOrEqual(
-            ratio,
-            limit,
-            "\(name) ran \(ratio) times per accepted fix, budget \(limit)"
-        )
-    }
-
-    func assertNoStall(in delta: PerformanceCounterDelta, phase: String) {
-        let stalls = delta.count(of: "MainThread")
-        XCTAssertEqual(
-            stalls,
-            0,
-            "the main thread stalled \(stalls) times during \(phase)"
-        )
-    }
-
     /// Everything the phase saw, printed for the generated report — including
     /// the counters no assertion covers, since an unexplained new name in this
     /// list is itself a finding.
@@ -694,7 +639,27 @@ private extension PerformanceUITests {
         // runner and not the app under test.
         app.launchEnvironment["RENDER_SIGNPOST_LOG"] = "1"
         app.launch()
+        // Same reason: `launch()` returning and the app being there to be
+        // queried are not the same event.
+        XCTAssertTrue(
+            app.wait(for: .runningForeground, timeout: Self.existenceTimeout),
+            "the app never reached the foreground after launch"
+        )
         return app
+    }
+
+    /// Activating is asynchronous. Querying the accessibility tree of an app
+    /// that has not finished coming forward is what turns into
+    /// `kAXErrorServerNotFound` or "Application … is not running" — a failure
+    /// about the harness wearing the costume of a failure about the app. Wait
+    /// for the state, then look.
+    @MainActor
+    func bringToForeground(_ app: XCUIApplication) {
+        app.activate()
+        XCTAssertTrue(
+            app.wait(for: .runningForeground, timeout: Self.existenceTimeout),
+            "the app never reached the foreground"
+        )
     }
 
     @MainActor

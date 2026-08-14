@@ -98,20 +98,12 @@ extension MapCoordinatorTests {
     /// `followUser()` must not also re-fit the route, which would throw away a
     /// viewport the user had panned to.
     @Test("a run of one command leaves the others alone")
-    func coalescingDoesNotCrossCommands() async throws {
+    func coalescingDoesNotCrossCommands() async {
         let coordinator = MapView.Coordinator()
         let view = mapView(route: Self.route())
         let map = makeMap(view, coordinator)
         defer { detach(map) }
         view.update(map, coordinator)
-
-        // Drawing the route also fits it into view, *animated*, and MapKit
-        // runs that out on CoreAnimation's clock rather than the scheduler's.
-        // Panning away while the fit is still in flight leaves the map
-        // wherever the animation ends — on the route — which reads exactly
-        // like the regression below and failed this test on CI for it.
-        let routeCentre = try #require(coordinator.routeOverlay).coordinate
-        await settleViewport(of: map, at: routeCentre)
 
         let elsewhere = MKCoordinateRegion(
             center: CLLocationCoordinate2D(latitude: 40.71, longitude: -74.00),
