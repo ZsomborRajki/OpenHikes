@@ -145,6 +145,7 @@ struct MapView: MapViewRepresentable, Equatable {
         let tracking = MKUserTrackingButton(mapView: mapView)
         tracking.translatesAutoresizingMaskIntoConstraints = false
         mapView.addSubview(tracking)
+        coordinator.trackingButton = tracking
 
         // The bottom is pinned to the map's top (full-screen space) so its constant
         // is a global Y that the sheet observation drives as the sheet is dragged.
@@ -156,6 +157,9 @@ struct MapView: MapViewRepresentable, Equatable {
             tracking.trailingAnchor.constraint(equalTo: guide.trailingAnchor, constant: -12),
             bottom,
         ])
+        // Replaces the placeholder above with a real position as soon as the
+        // map has a height to measure against.
+        coordinator.applySheetTop(on: mapView)
         #endif
     }
 

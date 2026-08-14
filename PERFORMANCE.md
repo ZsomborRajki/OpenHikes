@@ -69,7 +69,7 @@ that a millisecond budget is not.
 prints with the app's event file and writes the markdown report, including the
 per-scenario **Energy** section described below.
 
-### Four measurement traps this had to solve
+### Five measurement traps this had to solve
 
 Worth recording, because each produced a convincing wrong answer first.
 
@@ -104,11 +104,23 @@ instantly and proved nothing: every tile in the fixture region was already on
 disk from the *previous* scenario, so there was no miss, no fetch to refuse and
 no policy under test. `--ui-test-offline` now also hands the launch an empty
 tile root (`AppLaunchEnvironment.isolatedTileRoot()`), which turns 0 refusals
-into 80 and the assertion into a real one.
+into 45 and the assertion into a real one.
+
+*A harness failure will happily impersonate a product failure.* Running the
+suite four times back to back produced a different set of failures each time —
+`kAXErrorServerNotFound`, `Error getting main window`, `Application … is not
+running` — and never the same test twice. None of them were assertions; all of
+them were the accessibility server being asked about an app that had not
+finished coming forward, after `launch()` or after `activate()`. Both return
+before the state they name is true. `bringToForeground(_:)` and the wait added
+to `launch()` block on `XCUIApplication.wait(for: .runningForeground)` first, so
+a genuine regression is now the only thing that can fail these tests. The
+lesson generalises: when a performance suite starts failing *differently* on
+each run, suspect the harness before the app.
 
 ## Baseline — 2026-08-14
 
-Seven scenarios, all passing. `PerformanceReports/20260814-185650/`.
+Seven scenarios, all passing. `PerformanceReports/20260814-200407/`.
 
 ### What is already right
 
@@ -117,12 +129,12 @@ These are the load-bearing claims of the architecture, and they hold.
 | Scenario | Measurement | Result |
 |---|---|---|
 | Idle, 7 s, map visible | body evaluations | **0** |
-| Idle, 7 s | CPU | **0.040 s — 0.6% of one core** |
+| Idle, 7 s | CPU | **0.042 s — 0.6% of one core** |
 | Chart scrub, one drag | `ElevationChartBody` | 15 |
 | Chart scrub, one drag | `OpenHikesViewBody`, `MapSheetBody`, `MapRouteRebuilt` | **0, 0, 0** |
 | Map browsing, 17 s of pans and zooms | `OpenHikesViewBody` | 1–2 |
 | Live recording | `TrailMatcherWork` on the main thread | **0** (off-main, 0.5–8.5 ms) |
-| Offline browsing, 17 s | connections opened | **0**, with 80 fetches refused |
+| Offline browsing, 17 s | connections opened | **0**, with 45 fetches refused |
 | Backgrounded recording | SwiftUI bodies per fix | **0** |
 
 A sustained scrub moves the map marker fifteen times without re-evaluating a
@@ -151,11 +163,11 @@ Extrapolated to a hiking hour from the current run:
 
 | Scenario | CPU per hour (extrapolated) |
 |---|---|
-| Idle with the map up | 213 CPU-s |
-| Offline browsing | 283 CPU-s |
-| Map browsing (online) | 316 CPU-s |
-| Live recording, screen on | 450 CPU-s |
-| Recording, backgrounded | 469 CPU-s |
+| Idle with the map up | 216 CPU-s |
+| Offline browsing | 320 CPU-s |
+| Map browsing (online) | 331 CPU-s |
+| Live recording, screen on | 474 CPU-s |
+| Recording, backgrounded | 500 CPU-s |
 
 Read those with care: they are whole-run figures that include launch and the
 automation's own polling, and the backgrounded run polls *less*, so its
@@ -165,8 +177,8 @@ are like for like:
 
 | | CPU per accepted fix |
 |---|---|
-| Recording, screen on | 0.363 s |
-| Recording, backgrounded | **0.199 s** |
+| Recording, screen on | 0.467 s |
+| Recording, backgrounded | **0.254 s** |
 
 Putting the phone in a pocket roughly halves the per-fix cost, which is the
 right shape — and, since that is how the app is used for all but a few minutes
@@ -328,8 +340,8 @@ backwards.
 
 ### Finding 1 — launch blocks the main thread for ~600 ms (P1)
 
-`XCTApplicationLaunchMetric` puts first-responsive-frame at **1.413 s**
-(RSD 1.489%, n=3). The watchdog reports a **538–651 ms** unbroken main-thread
+`XCTApplicationLaunchMetric` puts first-responsive-frame at **1.476 s**
+(RSD 1.682%, n=3). The watchdog reports a **568–713 ms** unbroken main-thread
 stall in *every* scenario. The bisection intervals split it as:
 
 | Span | Cost |
@@ -589,10 +601,10 @@ Verified on 2026-08-14, iPhone 17 Pro simulator, iOS 26.5, Xcode 26.6:
 | `PerformanceUITests` | **7 of 7 passed** |
 | App and widget unit tests | **658 passed** (639 + 19) |
 | `swiftlint --strict` | Clean |
-| Launch, first responsive frame | 1.413 s, RSD 1.49% (n=3) |
-| Idle CPU, 7 s | 0.040 s — 0.6% of one core |
-| Offline browsing | 0 connections, 80 fetches refused |
-| Backgrounded recording | 0 bodies per fix, 0.199 CPU-s per fix |
+| Launch, first responsive frame | 1.476 s, RSD 1.68% (n=3) |
+| Idle CPU, 7 s | 0.042 s — 0.6% of one core |
+| Offline browsing | 0 connections, 45 fetches refused |
+| Backgrounded recording | 0 bodies per fix, 0.254 CPU-s per fix |
 | `MapRecordingTraceApplied` backgrounded | 2.0 → **0.33** per fix |
 | `RecordingTailRebuilt` per fix | 2.0, mean 0.019 ms |
 | Recording footprint | 85.7 MB start → 83.6 MB end, 213.2 MB transient peak |

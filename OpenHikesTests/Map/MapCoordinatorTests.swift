@@ -551,11 +551,79 @@ extension MapCoordinatorTests {
         coordinator.applySheetTop(on: map)
         #expect(constraint.constant == 700 - spacing)
 
-        // A sheet dragged nearly to the top: the button stops at the vertical
-        // midpoint rather than climbing into the status bar.
-        sheetMetrics.topY = 80
+        // A detent that stops just above the map's midpoint, which is what the
+        // medium detent does on a tall phone. The button belongs above it.
+        let aboveMidpoint = map.bounds.height * 0.5 - 20
+        sheetMetrics.topY = aboveMidpoint
         coordinator.applySheetTop(on: map)
-        #expect(constraint.constant == map.bounds.height * 0.5 - spacing)
+        #expect(constraint.constant == aboveMidpoint - spacing)
+
+        // A sheet dragged nearly to the top: the button stops clear of the top
+        // safe area rather than climbing into the status bar. The sheet covers
+        // it entirely by then, so there is nothing to see either way.
+        let button = try #require(coordinator.trackingButton)
+        let buttonHeight = max(
+            button.bounds.height,
+            button.intrinsicContentSize.height
+        )
+        sheetMetrics.topY = 8
+        coordinator.applySheetTop(on: map)
+        #expect(
+            constraint.constant == map.safeAreaInsets.top + buttonHeight + spacing
+        )
+        #endif
+    }
+
+    /// The regression this guards: the clamp keeping the button out of the
+    /// status bar used to read `max(sheetTop, height * 0.5)`, which assumed the
+    /// medium detent always stops below the map's midpoint. On a tall phone it
+    /// stops a little above, and the "cap" then pushed the button *down* to the
+    /// midpoint — behind the sheet's top curve.
+    @Test("the tracking button is never pushed down into the sheet")
+    func trackingButtonStaysClearOfTheSheet() throws {
+        #if os(iOS)
+        let coordinator = MapView.Coordinator()
+        let map = makeMap(mapView(), coordinator)
+        defer { detach(map) }
+        let constraint = try #require(coordinator.trackingBottomConstraint)
+
+        // Every detent a sheet can rest at, from full height down to compact.
+        for topY in stride(from: 120.0, through: map.bounds.height, by: 20) {
+            sheetMetrics.topY = topY
+            coordinator.applySheetTop(on: map)
+            #expect(
+                constraint.constant < topY,
+                "the button's bottom is inside the sheet at a top of \(topY)"
+            )
+        }
+        #endif
+    }
+
+    /// A reading that can't be the sheet's edge — the sheet is presented over
+    /// this map — is refused rather than followed off screen.
+    @Test("an out-of-bounds sheet report falls back rather than being followed")
+    func trackingButtonIgnoresImpossibleSheetTops() throws {
+        #if os(iOS)
+        let coordinator = MapView.Coordinator()
+        let map = makeMap(mapView(), coordinator)
+        defer { detach(map) }
+        let constraint = try #require(coordinator.trackingBottomConstraint)
+
+        sheetMetrics.topY = 700
+        coordinator.applySheetTop(on: map)
+        let followed = constraint.constant
+
+        sheetMetrics.topY = map.bounds.height + 500
+        coordinator.applySheetTop(on: map)
+        #expect(constraint.constant != map.bounds.height + 500 - 16)
+        #expect(constraint.constant < map.bounds.height)
+
+        // And the same for the state before the sheet has reported anything.
+        sheetMetrics.topY = 0
+        coordinator.applySheetTop(on: map)
+        let fallback = constraint.constant
+        #expect(fallback < map.bounds.height)
+        #expect(fallback != followed)
         #endif
     }
 

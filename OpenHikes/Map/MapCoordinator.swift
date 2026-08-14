@@ -70,6 +70,11 @@ extension MapView {
         var routePattern: RouteLinePattern = RouteStyle.defaultPattern
         var highlightAnnotation: MKPointAnnotation?
         var trackingBottomConstraint: NSLayoutConstraint?
+        #if canImport(UIKit)
+        /// The "my location" button itself, so the clamp that keeps it out of
+        /// the top safe area can measure it rather than assume its size.
+        weak var trackingButton: UIView?
+        #endif
         private weak var sheetMetrics: SheetMetrics?
         /// Screen-point radius within which the selection dot and the "my location"
         /// puck are considered overlapping (roughly the size of either dot).
@@ -78,7 +83,14 @@ extension MapView {
         private static let routeInsetStandard: CGFloat = 60
         private static let routeInsetTop: CGFloat = 80
         private static let initialCenterMeters: CLLocationDistance = 2000
+        /// Where the sheet's top is assumed to be until it says otherwise:
+        /// the compact detent, plus the room its shadow and grabber want.
         private static let sheetFallbackOffset: CGFloat = 92
+        /// Gap kept between the button and whatever bounds it — the sheet below
+        /// it, or the top safe area above.
+        private static let trackingButtonSpacing: CGFloat = 16
+        /// Used only before the button has been laid out or measured.
+        private static let trackingButtonFallbackHeight: CGFloat = 44
         private static let annotationDiameter: CGFloat = 18
         private static let annotationBorderWidth: CGFloat = 3
         private static let annotationShadowOpacity: Float = 0.3
@@ -255,32 +267,93 @@ extension MapView {
             }
         }
 
-        /// The `mapView.bounds.height` last seen by `applySheetTopIfHeightChanged`,
-        /// so repeated `update(_:_:)` calls during a sheet drag (where the map's
-        /// own bounds haven't moved) can skip reapplying — `observeSheetMetrics`
-        /// already keeps the button tracking `topY` at full frame rate on its own.
-        private var lastAppliedHeight: CGFloat = -1
+        /// The map geometry `applySheetTopIfHeightChanged` last positioned
+        /// against, so repeated `update(_:_:)` calls during a sheet drag (where
+        /// the map's own bounds haven't moved) can skip reapplying —
+        /// `observeSheetMetrics` already keeps the button tracking `topY` at
+        /// full frame rate on its own.
+        ///
+        /// The top inset is part of it because the button's upper limit is
+        /// measured from it: a status bar that appears or disappears moves that
+        /// limit without touching the map's height.
+        private var lastAppliedGeometry = (height: CGFloat(-1), topInset: CGFloat(-1))
 
-        /// Reapplies the button position only when the map's own bounds height
-        /// has changed (first layout, rotation) — everything else `topY`-driven
-        /// is already handled reactively by `observeSheetMetrics`.
+        /// Reapplies the button position only when the map's own geometry has
+        /// changed (first layout, rotation, a safe-area change) — everything
+        /// else `topY`-driven is already handled reactively by
+        /// `observeSheetMetrics`.
         func applySheetTopIfHeightChanged(on mapView: MKMapView) {
-            let height = mapView.bounds.height
-            guard height != lastAppliedHeight else { return }
-            lastAppliedHeight = height
+            let geometry = (
+                height: mapView.bounds.height,
+                topInset: mapView.safeAreaInsets.top
+            )
+            guard geometry != lastAppliedGeometry else { return }
+            lastAppliedGeometry = geometry
             applySheetTop(on: mapView)
         }
 
-        /// Positions the "my location" button just above the sheet's top edge,
-        /// capped at the vertical midpoint so it never climbs into the top safe area.
+        /// Positions the "my location" button just above the sheet's top edge.
+        ///
+        /// The constraint's constant is the button's *bottom* in the map's own
+        /// coordinates, and the map fills the screen, so this is one comparison
+        /// between two Ys in the same space: where the sheet starts, and the
+        /// highest the button is allowed to sit.
+        ///
+        /// The clamp is a floor and never a ceiling, which is the whole point.
+        /// It used to read `max(sheetTop, height * 0.5)`, which assumed the
+        /// medium detent always stops below the map's midpoint. On a tall phone
+        /// it stops a little above it, and the "cap" then pushed the button
+        /// *down* to the midpoint — behind the sheet's top curve, and visibly
+        /// so once tracking mode fills the button in. Nothing may move the
+        /// button below `sheetTop - spacing`.
         func applySheetTop(on mapView: MKMapView) {
+            guard mapView.bounds.height > 0,
+                  let constraint = trackingBottomConstraint
+            else { return }
+            constraint.constant = max(
+                sheetTop(in: mapView) - Self.trackingButtonSpacing,
+                highestTrackingButtonBottom(in: mapView)
+            )
+        }
+
+        /// Where the sheet starts, in the map's coordinates.
+        ///
+        /// ``SheetMetrics`` reports a global Y and the map ignores the safe
+        /// area, so the two already agree. A report outside the map is refused
+        /// rather than followed: the sheet is presented over this map, so a
+        /// value that doesn't land on it isn't the sheet's edge but a reading
+        /// taken in some other space, and the compact detent is a better guess
+        /// than a button parked off screen. That is also the state on the first
+        /// frames of a launch, before the sheet has reported anything.
+        private func sheetTop(in mapView: MKMapView) -> CGFloat {
             let height = mapView.bounds.height
-            guard height > 0, let constraint = trackingBottomConstraint else { return }
-            let spacing: CGFloat = 16
-            let reportedTop = sheetMetrics?.topY ?? 0
-            // Fall back to a sensible estimate until the sheet reports its position.
-            let sheetTop = reportedTop > 0 ? reportedTop : height - Self.sheetFallbackOffset
-            constraint.constant = max(sheetTop, height * 0.5) - spacing
+            let reported = sheetMetrics?.topY ?? 0
+            guard reported > 0, reported <= height else {
+                return height - Self.sheetFallbackOffset
+            }
+            return reported
+        }
+
+        /// The highest the button may sit — clear of the status bar and the
+        /// Dynamic Island, measured from the map's own safe area and the
+        /// button's own height rather than from a fraction of the screen.
+        ///
+        /// Only reached when the sheet is dragged past it, and the sheet covers
+        /// the button by then.
+        private func highestTrackingButtonBottom(in mapView: MKMapView) -> CGFloat {
+            var buttonHeight = Self.trackingButtonFallbackHeight
+            #if canImport(UIKit)
+            if let trackingButton {
+                let measured = max(
+                    trackingButton.bounds.height,
+                    trackingButton.intrinsicContentSize.height
+                )
+                if measured > 0 { buttonHeight = measured }
+            }
+            #endif
+            return mapView.safeAreaInsets.top
+                + buttonHeight
+                + Self.trackingButtonSpacing
         }
 
         /// Observes the drawn route's tint, width and line pattern and restyles
