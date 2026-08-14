@@ -20,14 +20,17 @@ usage() {
     cat <<EOF
 Usage: Scripts/run-ui-tests.sh [options]
 
-Runs the simulator UI automation in $bundle. With no options it runs
+Runs the simulator UI automation in $suite. With no options it runs
 $default_test, which records a short simulated
 hike, reviews the snapped route, and saves it.
+
+PerformanceUITests lives in the same bundle but is measurement rather than
+automation; run it through Scripts/run-performance-tests.sh instead.
 
 Options:
   --device <name>         Simulator name (default: $device)
   --test <name>           Test method to run (default: $default_test)
-  --all                   Run the whole $bundle bundle
+  --all                   Run every functional test in $suite
   --result-bundle <path>  Write an .xcresult bundle for inspection
   --verbose               Show the full xcodebuild output
   --list                  List the available test methods
@@ -111,7 +114,7 @@ if [[ ! -d "$project" ]]; then
     exit 1
 fi
 
-only_testing="$bundle"
+only_testing="$bundle/$suite"
 if [[ "$run_all" == false ]]; then
     if ! list_tests | grep -qx "$test_name"; then
         echo "Unknown test: $test_name" >&2

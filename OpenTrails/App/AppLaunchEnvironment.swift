@@ -16,12 +16,14 @@ nonisolated enum AppLaunchEnvironment {
         private static let liveLocationArgument = "--ui-test-enable-location"
         private static let importGPXPrefix = "--ui-test-import-gpx="
         private static let trailGraphPrefix = "--ui-test-trail-graph="
+        private static let performanceLogPrefix = "--ui-test-performance-log="
 
         let isUITesting: Bool
         let startsWithExpandedSheet: Bool
         let usesLiveLocation: Bool
         let importedGPXFixtureName: String?
         let trailGraphFixtureName: String?
+        let performanceLogScenario: String?
 
         init(arguments: [String]) {
             isUITesting = arguments.contains(Self.uiTestingArgument)
@@ -39,11 +41,17 @@ nonisolated enum AppLaunchEnvironment {
                 prefix: Self.trailGraphPrefix,
                 isUITesting: isUITesting
             )
+            performanceLogScenario = Self.fixtureName(
+                in: arguments,
+                prefix: Self.performanceLogPrefix,
+                isUITesting: isUITesting
+            )
         }
 
-        /// Reads a bundled fixture name out of a launch argument. A name that
-        /// could escape the bundle is refused rather than sanitized, because
-        /// the only caller that should ever set one is the UI test runner.
+        /// Reads a name out of a launch argument, for a bundled fixture or a
+        /// file this process will write. A name that could escape the bundle
+        /// or the container is refused rather than sanitized, because the only
+        /// caller that should ever set one is the UI test runner.
         private static func fixtureName(
             in arguments: [String],
             prefix: String,
@@ -96,6 +104,13 @@ nonisolated enum AppLaunchEnvironment {
     /// review section does not depend on reaching Overpass.
     static let trailGraphFixtureName =
         configuration.trailGraphFixtureName
+
+    /// Name of the scenario whose render marks, main-thread stalls and
+    /// resource samples this launch should write to a file — see
+    /// ``PerformanceLog``. `nil` for every launch that is not being measured,
+    /// which is what keeps the diagnostics off an ordinary run.
+    static let performanceLogScenario =
+        configuration.performanceLogScenario
 
     /// Gives UI automation fresh settings without erasing the normal
     /// simulator app's preferences.

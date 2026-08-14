@@ -73,10 +73,15 @@ struct ElevationChartView: View, Equatable {
     }
 
     var body: some View {
+        // The chart is the one view live follow is *meant* to invalidate ~1/s,
+        // so its rate is the reference every other body's rate is judged
+        // against: anything else moving at this rate is following location it
+        // was supposed to be insulated from.
+        RenderSignpost.mark("ElevationChartBody", "\(profile.samples.count) samples")
         let domain = elevationDomain(profile, plotWidth: plotWidth)
         let trackerSample = profile.sample(atDistance: tracker.trackerDistance)
         let liveSample = tracker.liveTrackerDistance.flatMap { profile.sample(atDistance: $0) }
-        Chart {
+        return Chart {
             routeMarks(domain: domain)
             trackerMarks(sample: trackerSample)
             liveMarks(sample: liveSample)
@@ -107,6 +112,10 @@ struct ElevationChartView: View, Equatable {
             }
         }
         .frame(height: Self.chartHeight)
+        // On the `Chart` itself, which is the surface `chartXSelection` reads
+        // drags from — UI automation has to scrub the plot area, and there is
+        // no leaf inside a chart to hang this on.
+        .accessibilityIdentifier("elevation-chart")
         .onGeometryChange(for: CGFloat.self) { proxy in
             proxy.size.width
         } action: { plotWidth = $0 }

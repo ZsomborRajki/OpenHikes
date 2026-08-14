@@ -57,7 +57,13 @@ nonisolated enum TrailMatcher {
         gapDistances: [Int: Double] = [:]
     ) async -> TrailMatchResult {
         assertOffMainThread("Trail matching must stay off the main thread")
-        return match(points: points, graph: graph, gapDistances: gapDistances)
+        // Timed, not just counted: this is the largest single piece of work a
+        // recording schedules, and the question it has to answer is whether a
+        // pass still finishes inside the interval before the next fix
+        // reschedules it.
+        return RenderSignpost.interval("TrailMatcherWork") {
+            match(points: points, graph: graph, gapDistances: gapDistances)
+        }
     }
 
     static func match(

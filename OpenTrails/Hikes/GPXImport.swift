@@ -143,7 +143,12 @@ nonisolated enum GPXImport {
         assertOffMainThread(
             "GPX parsing and route preparation must stay off the main thread"
         )
-        return try load(from: url)
+        // Timed rather than counted: an import happens once, and what matters
+        // is whether the main thread stayed answerable for the whole of it.
+        // Pair this interval with any `MainThread` stall at the same instant.
+        return try RenderSignpost.interval("GPXParsed") { () throws(ImportFailure) in
+            try load(from: url)
+        }
     }
 
     private static func track(from document: ParsedDocument) -> Track? {

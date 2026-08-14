@@ -41,10 +41,13 @@ P1/P2 energy remediations:
 5. Auto-save and a maximum-budget offline download.
 
 Capture Energy Log/Power Profiler, Location activity, Network, CPU wakeups,
-thermal state, and disk writes. Add signposts around graph prefetch, live
-matching, route projection, tile planning, and storage measurement. Compare
-against the same device, route, screen state, and radio conditions rather than
-using a universal percentage-per-hour target.
+thermal state, and disk writes. Live matching, GPX parsing, location publication
+and recording-trace rebuilds now carry signposts, and `PerformanceLog` will
+write them to a TSV alongside CPU and footprint samples under
+`--ui-test-performance-log=`; graph prefetch, tile planning, and storage
+measurement still need theirs. Compare against the same device, route, screen
+state, and radio conditions rather than using a universal percentage-per-hour
+target.
 
 ## Validation performed
 
@@ -52,14 +55,15 @@ using a universal percentage-per-hour target.
 |---|---|
 | Strict SwiftLint | Passed |
 | Shared package tests | 51 tests in 8 suites passed with warnings treated as errors |
-| App and widget unit tests | 584 tests in 68 suites plus 19 widget tests in 3 suites passed with strict suite preconditions enabled |
+| App and widget unit tests | 633 tests in 70 suites plus 19 widget tests in 3 suites passed with strict suite preconditions enabled |
 | iOS debug build | Passed with first-party Swift warnings treated as errors |
 | iOS release build | Passed with first-party Swift warnings treated as errors |
 | macOS compile | Passed with code signing disabled |
 | GPX Thread Sanitizer suite | Passed, including concurrent timestamp parsing |
 | UI automation and launch metrics | All 6 tests passed, including record-review-save |
+| Render and resource performance suite | All 5 `PerformanceUITests` passed; baseline and findings in `PERFORMANCE.md` |
 | Package resolution | Passed; CoreGPX is absent from `Package.resolved` |
-| CI workflow | Added; equivalent local commands passed, hosted run awaits the next push |
+| CI workflow | Added; equivalent local commands passed, hosted run awaits the next push. UI automation and the performance suite are excluded from CI and run locally through their scripts |
 | visionOS build | Not run; the visionOS 26.5 platform is not installed |
 | Physical-device energy trace | Not run |
 

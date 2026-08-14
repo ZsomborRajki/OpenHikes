@@ -76,6 +76,10 @@ xcodebuild test \
 Scripts/run-ui-tests.sh --test testReviewsSnappedRouteAfterStopping
 Scripts/run-ui-tests.sh --all
 
+# Measure render, main-thread and resource behavior; writes a markdown report
+Scripts/run-performance-tests.sh
+Scripts/run-performance-tests.sh --test testLiveRecordingCostPerFix
+
 swift test --package-path OpenTrailsShared
 
 swiftlint lint --strict
@@ -87,9 +91,25 @@ are not available through Swift Testing. UI-test launches use an in-memory
 SwiftData store and isolated preferences; coverage includes app/settings smoke
 navigation, bundled GPX import, programmatic simulator location, recording
 startup, the record → review → save round trip, and
-`XCTApplicationLaunchMetric`. CI runs these checks, strict SwiftLint, the shared
-package suite, warning-free debug/release builds, and the concurrent GPX parser
-under Thread Sanitizer.
+`XCTApplicationLaunchMetric`.
+
+CI runs strict SwiftLint, the shared package suite, the app and widget unit
+tests, warning-free debug/release builds, and the concurrent GPX parser under
+Thread Sanitizer. It deliberately does not run the simulator UI automation or
+the performance suite: both drive real gestures against a booted simulator with
+timing-sensitive waits, which a shared runner makes slow and flaky. Run those
+locally with `Scripts/run-ui-tests.sh` and `Scripts/run-performance-tests.sh`
+before a change that touches recording, the map, or render isolation.
+
+`PerformanceUITests` measures rather than asserts correctness: it drives the app
+through idle, map-browsing, chart-scrub and live-recording scenarios while the
+app writes every render signpost, main-thread stall and a 1 Hz CPU/memory sample
+to a TSV in its container. `Scripts/run-performance-tests.sh` runs the suite,
+pulls those logs off the simulator, and turns them into a markdown report.
+[`PERFORMANCE.md`](PERFORMANCE.md) documents the measured baseline, what it
+found, and what is worth doing about it. It is excluded from the `OpenTrails`
+test plan, so a normal `xcodebuild test` run does not pay for it; the
+`OpenTrailsUI` scheme still sees it, which is how the script runs it.
 
 ## Project layout
 

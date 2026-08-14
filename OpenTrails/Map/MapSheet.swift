@@ -63,7 +63,8 @@ struct MapSheet: View {
         // pushed into. `MapSheetHikes` holds the `@Query`, which has no
         // per-property granularity, so keeping it out of here is what stops a
         // slider drag re-evaluating the search field and the navigation stack.
-        NavigationStack(path: $path) {
+        RenderSignpost.mark("MapSheetBody")
+        return NavigationStack(path: $path) {
             VStack(spacing: 0) {
                 HStack(spacing: 10) {
                     searchField

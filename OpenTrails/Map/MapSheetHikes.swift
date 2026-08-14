@@ -52,6 +52,15 @@ struct MapSheetHikes: View {
         // focused, so an unfocused pass doesn't rank at all — and a focused
         // pass reuses the last ranking unless the query or the hikes
         // themselves changed.
+        //
+        // This is where SwiftData's `@Query` lands, and a query has no
+        // per-property granularity: any write to any `Hike` re-runs it. The
+        // mark is how a recording that writes to its draft hike per fix would
+        // show up — as this body ticking at fix rate.
+        RenderSignpost.mark(
+            "MapSheetHikesBody",
+            "\(hikes.count) hikes searching=\(isSearchFocused)"
+        )
         let matchingHikes = isSearchFocused ? hikeSearch.rankedHikes(matching: searchText, in: hikes) : []
         let isSearching = isSearchFocused && (!completer.suggestions.isEmpty || !matchingHikes.isEmpty)
 

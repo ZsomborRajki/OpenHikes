@@ -22,3 +22,6 @@ violations.txt
 
 # macOS
 .DS_Store
+
+# Performance runs — Scripts/run-performance-tests.sh writes measured output here.
+PerformanceReports/

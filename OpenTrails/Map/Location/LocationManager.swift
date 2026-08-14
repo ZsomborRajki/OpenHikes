@@ -183,6 +183,10 @@ final class LocationManager: NSObject {
         let now = clock()
         if let lastPublished, now.timeIntervalSince(lastPublished) < Self.minimumPublishInterval { return }
         lastPublished = now
+        // Marks only the publishes that survive both filters above, so the
+        // rate here is the rate every downstream body is allowed to move at.
+        // Anything re-rendering faster than this is following something else.
+        RenderSignpost.mark("LocationPublished")
         coordinate = next
     }
 

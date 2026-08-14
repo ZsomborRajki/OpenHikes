@@ -135,20 +135,11 @@ jobs:
             -skipPackagePluginValidation \
             -quiet
 
-  ui-tests:
-    name: UI automation and launch metrics
-    runs-on: macos-26
-    timeout-minutes: 30
-    steps:
-      - uses: actions/checkout@v4
-
-      - name: Run UI tests
-        run: |
-          xcrun simctl location booted clear >/dev/null 2>&1 || true
-          xcodebuild test \
-            -project OpenTrails.xcodeproj \
-            -scheme OpenTrailsUI \
-            -destination "$IOS_DESTINATION" \
-            -only-testing:OpenTrailsUITests \
-            -skipPackagePluginValidation \
-            -quiet
+# UI automation and the performance suite are deliberately not run here.
+# Both drive a simulator through real gestures and timing-sensitive waits, which
+# a shared runner makes slow and unreliable, and `PerformanceUITests` additionally
+# needs `simctl privacy grant location-always` and produces measurements that are
+# only comparable against the same hardware.
+#
+#   Scripts/run-ui-tests.sh --all
+#   Scripts/run-performance-tests.sh
