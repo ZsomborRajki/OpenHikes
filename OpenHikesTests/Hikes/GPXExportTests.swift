@@ -277,16 +277,18 @@ struct GPXExportTests {
         #expect(GPXExport.fileName(for: payload).hasPrefix("Sunrise Walk-"))
     }
 
-    /// The serializer asserts it isn't on the main thread, so a debug build
+    /// The exporter asserts it isn't on the main thread, so a debug build
     /// traps here the day the `@concurrent` hop stops happening — which is
-    /// the whole guarantee, since a multi-day route is megabytes of XML.
-    @Test("serialization runs off the main thread and agrees with the writer")
-    func serializesOffTheMainThread() async {
+    /// the whole guarantee, since a multi-day route is megabytes of XML with
+    /// a file write behind it.
+    @Test("the export runs off the main thread and agrees with the writer")
+    func exportsOffTheMainThread() async throws {
         let payload = track()
 
-        let data = await GPXExport.dataOffMain(for: payload)
+        let url = try await GPXExport.writeTemporaryFile(for: payload)
+        defer { Self.discardStagedExport(at: url) }
 
-        #expect(data == GPXExport.data(for: payload))
+        #expect(try Data(contentsOf: url) == GPXExport.data(for: payload))
     }
 
     /// Without the declared type the share sheet hands over an untyped blob,
@@ -301,5 +303,190 @@ struct GPXExportTests {
         #expect(!UTType.gpx.isDynamic)
         #expect(file.exportedContentTypes().contains(.gpx))
         #expect(try await file.exported(as: .gpx) == GPXExport.data(for: payload))
+    }
+
+    /// The one that decides whether a GPX app appears in the share sheet at
+    /// all: the sheet's "Copy to <App>" row matches a *file* against the
+    /// document types installed apps declare, so a payload offered only as
+    /// bytes reaches Files and Mail and nothing else. Everything else in this
+    /// suite passes either way, which is how that shipped.
+    @Test("the shared item reaches a receiver as a file, not loose bytes")
+    func sharesAFile() async throws {
+        let payload = track()
+        let provider = NSItemProvider()
+        provider.register(HikeGPXFile(track: payload))
+        #expect(provider.registeredTypeIdentifiers.contains(Self.gpxIdentifier))
+
+        let delivered = try await Self.receiveFile(
+            ofType: Self.gpxIdentifier,
+            from: provider
+        )
+
+        #expect(delivered.isFile)
+        #expect(delivered.name == GPXExport.fileName(for: payload))
+        #expect(delivered.contentType == .gpx)
+        #expect(delivered.contents == GPXExport.data(for: payload))
+    }
+
+    // MARK: Staging
+
+    /// The receiver reads the name off the file's last path component and the
+    /// track out of its bytes, so both have to survive the trip to disk.
+    @Test("a staged export is a named GPX file a reader can open")
+    func stagesNamedFile() async throws {
+        let payload = track()
+
+        let url = try await GPXExport.writeTemporaryFile(for: payload)
+        defer { Self.discardStagedExport(at: url) }
+
+        #expect(url.lastPathComponent == GPXExport.fileName(for: payload))
+        #expect(try url.resourceValues(forKeys: [.contentTypeKey]).contentType == .gpx)
+        #expect(try GPXImport.load(from: url).route.count == payload.route.count)
+    }
+
+    /// Staged inside the app's own directory, which is the only place
+    /// ``GPXExport/purgeStagedExports(in:before:)`` looks — a file written
+    /// anywhere else under `tmp` would outlive every share that could clean
+    /// it up.
+    @Test("a staged export sits in the directory the purge sweeps")
+    func stagesInsideTheSweptDirectory() async throws {
+        let url = try await GPXExport.writeTemporaryFile(for: track())
+        defer { Self.discardStagedExport(at: url) }
+
+        let parent = url.deletingLastPathComponent().deletingLastPathComponent()
+
+        #expect(parent.standardizedFileURL == GPXExport.stagingDirectory.standardizedFileURL)
+    }
+
+    /// Two exports of one hike carry the same file name, so each needs a
+    /// directory of its own: sharing one would leave the second either
+    /// overwriting the first or renamed to `…-1.gpx` on the way out.
+    @Test("exporting the same hike twice stages two files under one name")
+    func stagesRepeatedExportsSeparately() async throws {
+        let payload = track()
+
+        let first = try await GPXExport.writeTemporaryFile(for: payload)
+        let second = try await GPXExport.writeTemporaryFile(for: payload)
+        defer {
+            Self.discardStagedExport(at: first)
+            Self.discardStagedExport(at: second)
+        }
+
+        #expect(first != second)
+        #expect(first.lastPathComponent == second.lastPathComponent)
+        // And the second export's purge must not take the first one's file
+        // with it — a share still copying is exactly the file at risk.
+        #expect(FileManager.default.fileExists(atPath: first.path))
+    }
+
+    @Test("the purge takes exports older than the cutoff and leaves the rest")
+    func purgesOnlyStaleStagedExports() throws {
+        let directory = FileManager.default.temporaryDirectory
+            .appending(path: "purge-\(UUID().uuidString)", directoryHint: .isDirectory)
+        defer { try? FileManager.default.removeItem(at: directory) }
+        let cutoff = Date.now.addingTimeInterval(-60)
+        let stale = try Self.stageDirectory(
+            named: "stale",
+            in: directory,
+            modified: cutoff.addingTimeInterval(-60)
+        )
+        let fresh = try Self.stageDirectory(named: "fresh", in: directory)
+
+        GPXExport.purgeStagedExports(in: directory, before: cutoff)
+
+        #expect(!FileManager.default.fileExists(atPath: stale.path))
+        #expect(FileManager.default.fileExists(atPath: fresh.path))
+    }
+
+    /// A missing directory is the state before the first share of the run,
+    /// and every share starts by sweeping — so this is the common case, not
+    /// an edge one, and it must not throw its way out of an export.
+    @Test("purging a directory that was never created does nothing")
+    func purgesMissingDirectoryQuietly() {
+        let missing = FileManager.default.temporaryDirectory
+            .appending(path: "absent-\(UUID().uuidString)", directoryHint: .isDirectory)
+
+        GPXExport.purgeStagedExports(in: missing, before: .now)
+
+        #expect(!FileManager.default.fileExists(atPath: missing.path))
+    }
+}
+
+// MARK: - Delivery
+
+private extension GPXExportTests {
+    /// What a receiving app ends up holding.
+    struct DeliveredFile: Sendable {
+        var name: String
+        var contentType: UTType?
+        var contents: Data
+        /// Whether what arrived was a file at all, rather than bytes the
+        /// system spooled to disk to satisfy the request.
+        var isFile: Bool
+    }
+
+    struct NothingDelivered: Error {}
+
+    /// Takes delivery the way a receiving app does.
+    ///
+    /// `NSItemProvider` lends the URL only for the duration of the callback
+    /// and deletes the file behind it on return, so everything asserted on is
+    /// read inside. `loadItem` is asked first because it's the half that can
+    /// tell the two representations apart: a file-backed item comes back as a
+    /// `URL`, a data-backed one as `Data`, while `loadFileRepresentation`
+    /// obligingly spools the latter to a temporary file and hides the
+    /// difference.
+    static func receiveFile(
+        ofType identifier: String,
+        from provider: NSItemProvider
+    ) async throws -> DeliveredFile {
+        let item = try? await provider.loadItem(forTypeIdentifier: identifier)
+        let isFile = item is URL
+        return try await withCheckedThrowingContinuation { continuation in
+            _ = provider.loadFileRepresentation(
+                forTypeIdentifier: identifier
+            ) { url, error in
+                continuation.resume(with: Result {
+                    if let error { throw error }
+                    guard let url else { throw NothingDelivered() }
+                    return DeliveredFile(
+                        name: url.lastPathComponent,
+                        contentType: try url.resourceValues(
+                            forKeys: [.contentTypeKey]
+                        ).contentType,
+                        contents: try Data(contentsOf: url),
+                        isFile: isFile
+                    )
+                })
+            }
+        }
+    }
+
+    /// A staged export and the directory it was given to itself.
+    static func discardStagedExport(at url: URL) {
+        try? FileManager.default.removeItem(at: url.deletingLastPathComponent())
+    }
+
+    /// A staged export as the purge sees one: a directory holding a file,
+    /// dated after it's filled so the write doesn't reset the date.
+    static func stageDirectory(
+        named name: String,
+        in parent: URL,
+        modified: Date? = nil
+    ) throws -> URL {
+        let directory = parent.appending(path: name, directoryHint: .isDirectory)
+        try FileManager.default.createDirectory(
+            at: directory,
+            withIntermediateDirectories: true
+        )
+        try Data("<gpx/>".utf8).write(
+            to: directory.appending(path: "Hike.gpx", directoryHint: .notDirectory)
+        )
+        guard let modified else { return directory }
+        try FileManager.default.setAttributes(
+            [.modificationDate: modified],
+            ofItemAtPath: directory.path
+        )
+        return directory
     }
 }

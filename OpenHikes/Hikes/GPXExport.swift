@@ -69,10 +69,11 @@ nonisolated enum GPXExport {
 
     /// The GPX 1.1 document for `track`.
     ///
-    /// Deliberately free of the off-main assertion that ``dataOffMain(for:)``
-    /// carries, mirroring ``GPXImport/load(from:)``: this is the pure function
-    /// tests call directly, and the `@concurrent` entry point below is what
-    /// promises the app never runs it on the main thread.
+    /// Deliberately free of the off-main assertion that
+    /// ``writeTemporaryFile(for:)`` carries, mirroring ``GPXImport/load(from:)``:
+    /// this is the pure function tests call directly, and the `@concurrent`
+    /// entry point below is what promises the app never runs it on the main
+    /// thread.
     static func xml(for track: Track) -> String {
         var xml = ""
         xml.reserveCapacity(preambleBytes + track.route.count * bytesPerPoint)
@@ -87,25 +88,9 @@ nonisolated enum GPXExport {
         return xml
     }
 
-    /// The same document as bytes, which is what a share hands over.
+    /// The same document as bytes, which is what goes to disk.
     static func data(for track: Track) -> Data {
         Data(xml(for: track).utf8)
-    }
-
-    /// Serialization off the main actor.
-    ///
-    /// `@concurrent` rather than a detached task, as in ``GPXImport``: the
-    /// write stays part of the sharing task, so abandoning the share sheet
-    /// cancels it, and a multi-day route's few megabytes of XML are never
-    /// built on the thread drawing the sheet.
-    @concurrent
-    static func dataOffMain(for track: Track) async -> Data {
-        assertOffMainThread("GPX serialization must stay off the main thread")
-        // Timed rather than counted: a share happens once, and what matters is
-        // whether it cost enough to be worth streaming instead.
-        return RenderSignpost.interval("GPXExported") {
-            data(for: track)
-        }
     }
 }
 
@@ -255,19 +240,118 @@ nonisolated extension GPXExport {
     }
 }
 
+// MARK: - Staging
+
+nonisolated extension GPXExport {
+    /// Where a share writes the file it hands over.
+    ///
+    /// A directory of the app's own inside `tmp`, so
+    /// ``purgeStagedExports(in:before:)`` can sweep it without having to tell
+    /// exports apart from whatever else the system leaves there.
+    static var stagingDirectory: URL {
+        FileManager.default.temporaryDirectory
+            .appending(path: "GPXExports", directoryHint: .isDirectory)
+    }
+
+    /// How long a staged file is left alone before a later share removes it.
+    ///
+    /// The share sheet copies the file during the transfer and is done with it
+    /// seconds later, so this is only slack for a destination that takes its
+    /// time; the purge exists so `tmp` doesn't end up holding a copy of every
+    /// hike ever exported.
+    private static let stagedExportLifetime: TimeInterval = 3600
+
+    /// Writes the document to a file and returns its URL.
+    ///
+    /// The file is the point. A share sheet builds its "Copy to <App>" row by
+    /// matching a *file* against the document types each installed app
+    /// declares it opens, so a hike offered only as bytes reaches Files, Mail
+    /// and AirDrop but never appears to the GPX apps this export exists for.
+    /// The file also carries the name for certain: a suggested one is a hint
+    /// the receiver may ignore, a last path component is not.
+    ///
+    /// Each export gets a directory of its own, so the name can be exactly
+    /// ``fileName(for:)`` rather than the `-1` suffix a shared directory would
+    /// force onto the second export of the same hike.
+    ///
+    /// `@concurrent` rather than a detached task, as in ``GPXImport``: the
+    /// work stays part of the sharing task, so abandoning the share sheet
+    /// cancels it, and a multi-day route's few megabytes of XML are never
+    /// built — or written — on the thread drawing the sheet.
+    @concurrent
+    static func writeTemporaryFile(for track: Track) async throws -> URL {
+        assertOffMainThread("GPX serialization must stay off the main thread")
+        // Spanning the write as well as the markup, since what a share costs
+        // the walker is both of them together.
+        return try RenderSignpost.interval("GPXExported") {
+            let directory = stagingDirectory
+            purgeStagedExports(in: directory, before: .now - stagedExportLifetime)
+            let staged = directory.appending(
+                path: UUID().uuidString,
+                directoryHint: .isDirectory
+            )
+            try FileManager.default.createDirectory(
+                at: staged,
+                withIntermediateDirectories: true
+            )
+            let url = staged.appending(
+                path: fileName(for: track),
+                directoryHint: .notDirectory
+            )
+            try data(for: track).write(to: url, options: .atomic)
+            return url
+        }
+    }
+
+    /// Removes exports staged before `cutoff`.
+    ///
+    /// Dated rather than emptied wholesale: a file still being copied out
+    /// belongs to a share that is still happening. Silent about failure for
+    /// the same reason ``GPXInbox/discardCopy(at:)`` is — a staged file that
+    /// outlives its share is housekeeping, not something to fail a share over.
+    static func purgeStagedExports(in directory: URL, before cutoff: Date) {
+        let manager = FileManager.default
+        let staged = (try? manager.contentsOfDirectory(
+            at: directory,
+            includingPropertiesForKeys: [.contentModificationDateKey]
+        )) ?? []
+        for url in staged {
+            let modified = try? url
+                .resourceValues(forKeys: [.contentModificationDateKey])
+                .contentModificationDate
+            guard let modified, modified < cutoff else { continue }
+            try? manager.removeItem(at: url)
+        }
+    }
+}
+
 // MARK: - Sharing
 
-/// The share sheet's view of a hike: a GPX file, serialized on demand.
+/// The share sheet's view of a hike: a GPX file, written on demand.
 ///
 /// The payload is a ``GPXExport/Track`` rather than the `Hike` itself — see
-/// that type for why — and the bytes are produced only if the walker actually
+/// that type for why — and nothing is serialized until the walker actually
 /// picks a destination, so opening the share sheet costs nothing.
 nonisolated struct HikeGPXFile: Transferable, Sendable {
     let track: GPXExport.Track
 
+    /// The file and nothing beside it.
+    ///
+    /// A second `DataRepresentation` of the same type looks like a harmless
+    /// convenience for the destinations that only want bytes, and isn't:
+    /// `NSItemProvider` takes both, and `loadItem` — the path a share sheet
+    /// takes to fill its "Copy to <App>" row — answers with whichever was
+    /// registered last, whatever the preference order here says. Offering the
+    /// bytes at all is enough to put the loose-bytes behaviour back. Nothing
+    /// is lost by leaving them out: a receiver that wants bytes reads them out
+    /// of the file.
+    ///
+    /// `SentTransferredFile` defaults to copying rather than lending the
+    /// original, which is what lets the staged file be swept on a timer
+    /// instead of tracked until the receiver is finished with it.
     static var transferRepresentation: some TransferRepresentation {
-        DataRepresentation(exportedContentType: .gpx) { file in
-            await GPXExport.dataOffMain(for: file.track)
+        FileRepresentation(exportedContentType: .gpx) { file in
+            SentTransferredFile(try await GPXExport.writeTemporaryFile(for: file.track))
         }
         .suggestedFileName { GPXExport.fileName(for: $0.track) }
     }

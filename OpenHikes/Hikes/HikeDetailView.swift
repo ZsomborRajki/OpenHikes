@@ -458,10 +458,16 @@ private extension HikeDetailView {
     /// off the main actor, where a `@Model` must not be read. Building the
     /// snapshot is a retain of the route's storage, not a copy of it, and the
     /// XML itself is written only once a destination is picked.
+    ///
+    /// The preview carries an icon so the sheet's header reads as the document
+    /// being sent rather than as a bare line of text.
     private var shareButton: some View {
         ShareLink(
             item: HikeGPXFile(track: GPXExport.Track(hike: hike)),
-            preview: SharePreview(hike.displayTitle)
+            preview: SharePreview(
+                hike.displayTitle,
+                icon: Image(systemName: "point.topleft.down.to.point.bottomright.curvepath")
+            )
         ) {
             Image(systemName: "square.and.arrow.up")
                 .font(.subheadline)
