@@ -108,6 +108,49 @@ struct MapCoordinatorTests {
         for _ in 0..<8 { await Task.yield() }
     }
 
+    /// Waits for something MapKit finishes on its own clock rather than on the
+    /// task scheduler's.
+    ///
+    /// ``settle()`` covers the fixed number of actor hops an observation
+    /// re-registers through, which is all the commands need. It cannot cover
+    /// an *animated* viewport change: `setVisibleMapRect(_:animated: true)`
+    /// lands over CoreAnimation's timeline, so no number of yields is the
+    /// right number — on an idle machine the animation happens to be over by
+    /// the time the yields are spent, and under coverage instrumentation on a
+    /// busy runner it has not even started.
+    func settle(within timeout: Duration = .seconds(5), until reached: () -> Bool) async {
+        let deadline = ContinuousClock.now.advanced(by: timeout)
+        while !reached(), ContinuousClock.now < deadline {
+            try? await Task.sleep(for: .milliseconds(10))
+        }
+    }
+
+    /// Waits until `map` has arrived at `destination` *and* stopped moving.
+    ///
+    /// Both halves are needed. Arriving is not enough on its own — an
+    /// animation is within a fraction of a degree of its target well before
+    /// its last frame, and a region set during those frames is overwritten by
+    /// them. Stillness is not enough either: sampled before the animation
+    /// starts, a map that has not moved yet looks exactly like one that has
+    /// finished.
+    func settleViewport(of map: MKMapView, at destination: CLLocationCoordinate2D) async {
+        await settle { abs(map.region.center.latitude - destination.latitude) < 0.1 }
+
+        // Sampled after each sleep rather than before, and required to hold
+        // more than once: one reading can fall between two animation frames.
+        let deadline = ContinuousClock.now.advanced(by: .seconds(5))
+        var previous = map.region.center
+        var stillSamples = 0
+        while stillSamples < 3, ContinuousClock.now < deadline {
+            try? await Task.sleep(for: .milliseconds(50))
+            let current = map.region.center
+            let moved = current.latitude != previous.latitude
+                || current.longitude != previous.longitude
+            stillSamples = moved ? 0 : stillSamples + 1
+            previous = current
+        }
+    }
+
     // MARK: Registration
 
     /// Everything `makeMapView` is responsible for wiring, checked on the map

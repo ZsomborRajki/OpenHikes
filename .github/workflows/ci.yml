@@ -16,6 +16,7 @@ permissions:
 
 env:
   DEVELOPER_DIR: /Applications/Xcode_26.6.app/Contents/Developer
+  IOS_SIMULATOR: iPhone 17 Pro
   IOS_DESTINATION: platform=iOS Simulator,name=iPhone 17 Pro
 
 jobs:
@@ -59,20 +60,51 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
-      - name: Run tests with strict suite preconditions
+      - name: Build for testing
         run: |
-          mkdir -p TestResults
-          xcodebuild test \
+          xcodebuild build-for-testing \
             -project OpenHikes.xcodeproj \
             -scheme OpenHikes \
             -destination "$IOS_DESTINATION" \
+            -derivedDataPath DerivedData \
+            -skipPackagePluginValidation \
+            'SWIFT_ACTIVE_COMPILATION_CONDITIONS=$(inherited) REQUIRE_ALL_SUITES' \
+            -quiet
+
+      # Booted as its own step so the first test launch does not pay for it.
+      # A cold simulator is a known source of "Early unexpected exit, operation
+      # never finished bootstrapping": the host app is killed by the watchdog
+      # that is timing its launch, and the run fails without a single test
+      # having reported anything.
+      - name: Boot the simulator
+        run: |
+          xcrun simctl boot "$IOS_SIMULATOR" || true
+          xcrun simctl bootstatus "$IOS_SIMULATOR" -b
+
+      - name: Run tests with strict suite preconditions
+        run: |
+          mkdir -p TestResults
+          xcodebuild test-without-building \
+            -project OpenHikes.xcodeproj \
+            -scheme OpenHikes \
+            -destination "$IOS_DESTINATION" \
+            -derivedDataPath DerivedData \
             -only-testing:OpenHikesTests \
             -only-testing:OpenWidgetTests \
             -enableCodeCoverage YES \
             -resultBundlePath TestResults/UnitTests.xcresult \
-            -skipPackagePluginValidation \
-            'SWIFT_ACTIVE_COMPILATION_CONDITIONS=$(inherited) REQUIRE_ALL_SUITES' \
-            -quiet
+            -skipPackagePluginValidation
+
+      # Deliberately not `-quiet`: the output is one line per test, and a
+      # failing one carries its assertion text. The result bundle below is the
+      # backstop for a failure that prints no such line — a crash or a hang.
+      - name: Upload result bundle
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: unit-tests-xcresult
+          path: TestResults/UnitTests.xcresult
+          retention-days: 7
 
       - name: Print coverage report
         run: xcrun xccov view --report TestResults/UnitTests.xcresult
@@ -122,8 +154,14 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
+      - name: Boot the simulator
+        run: |
+          xcrun simctl boot "$IOS_SIMULATOR" || true
+          xcrun simctl bootstatus "$IOS_SIMULATOR" -b
+
       - name: Run concurrent GPX imports under TSan
         run: |
+          mkdir -p TestResults
           xcodebuild test \
             -project OpenHikes.xcodeproj \
             -scheme OpenHikes \
@@ -132,8 +170,16 @@ jobs:
             -only-testing:OpenHikesTests/GPXImportDateTests \
             -enableThreadSanitizer YES \
             -parallel-testing-enabled NO \
-            -skipPackagePluginValidation \
-            -quiet
+            -resultBundlePath TestResults/ThreadSanitizer.xcresult \
+            -skipPackagePluginValidation
+
+      - name: Upload result bundle
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: thread-sanitizer-xcresult
+          path: TestResults/ThreadSanitizer.xcresult
+          retention-days: 7
 
 # UI automation and the performance suite are deliberately not run here.
 # Both drive a simulator through real gestures and timing-sensitive waits, which

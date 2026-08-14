@@ -25,3 +25,7 @@ violations.txt
 
 # Performance runs — Scripts/run-performance-tests.sh writes measured output here.
 PerformanceReports/
+
+# Test result bundles — CI writes one here, and so does anyone running the
+# same `xcodebuild ... -resultBundlePath` command locally.
+TestResults/

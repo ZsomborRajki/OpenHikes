@@ -138,7 +138,11 @@ struct HikeDetailWorkloadTests {
             )
         }
 
-        await Task.yield()
+        // Cancelled without suspending first. The task body inherits this
+        // test's main-actor context, so it cannot begin until the test yields
+        // — and a `Task.yield()` here handed a loaded CI runner long enough to
+        // walk all 400,000 points before `cancel()` landed, which failed the
+        // test for doing its job too quickly.
         preparation.cancel()
 
         do {
@@ -165,7 +169,7 @@ struct HikeDetailWorkloadTests {
             )
         }
 
-        await Task.yield()
+        // Cancelled before the first suspension, for the reason above.
         measurement.cancel()
 
         do {
