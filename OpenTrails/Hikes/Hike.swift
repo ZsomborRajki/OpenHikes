@@ -76,6 +76,20 @@ final class Hike {
     var author: String?
     var keywords: String?
 
+    /// Metres of this route attributed to each ``TrailSurface``, keyed by the
+    /// surface's raw value.
+    ///
+    /// Persisted rather than derived on demand because producing it needs the
+    /// OSM trail graph for every region the route crosses, which for an
+    /// imported hike means going to Overpass. Storing the answer keeps
+    /// re-opening a hike free, and keeps casual browsing from turning into
+    /// repeated requests against a volunteer-run API.
+    ///
+    /// Empty means "never analyzed", which is what the detail view offers a
+    /// button for. The inline `= [:]` default is required for SwiftData
+    /// lightweight migration, as for the auto-save fields above.
+    var surfaceMetersByCategory: [String: Double] = [:]
+
     init(
         title: String,
         distanceMeters: Double,
@@ -94,7 +108,8 @@ final class Hike {
         autoFollowEnabled: Bool = true,
         trackDescription: String? = nil,
         author: String? = nil,
-        keywords: String? = nil
+        keywords: String? = nil,
+        surfaceMetersByCategory: [String: Double] = [:]
     ) {
         self.id = id
         self.title = title
@@ -114,6 +129,7 @@ final class Hike {
         self.trackDescription = trackDescription
         self.author = author
         self.keywords = keywords
+        self.surfaceMetersByCategory = surfaceMetersByCategory
     }
 }
 

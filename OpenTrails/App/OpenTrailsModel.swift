@@ -34,6 +34,12 @@ final class OpenTrailsModel {
     let hikeRecorder: HikeRecorder
     let locationManager: LocationManager
     let weatherManager: WeatherManager
+    /// The OSM walking graph, shared with ``hikeRecorder`` rather than built
+    /// per consumer: it owns a durable cache, an in-flight request table and
+    /// the retry deadline Overpass hands back when it rate-limits us. A second
+    /// instance would keep its own copy of all three and double the request
+    /// rate against a volunteer-run API.
+    let trailGraphProvider: (any TrailGraphProviding)?
     var startupIssue: StorageStartupIssue?
 
     let defaults: UserDefaults
@@ -58,6 +64,7 @@ final class OpenTrailsModel {
         // Built explicitly so background relaunch services and the view
         // hierarchy share one SwiftData store.
         let load = Self.loadDefaultContainer()
+        let graphProvider = OverpassTrailGraphProvider()
 
         self.init(
             container: load.container,
@@ -70,13 +77,14 @@ final class OpenTrailsModel {
                 container: load.container,
                 elevationSource: SystemRecordingElevationSource(),
                 motionSource: SystemRecordingMotionSource(),
-                trailGraphProvider: OverpassTrailGraphProvider(),
+                trailGraphProvider: graphProvider,
                 distanceEvidenceSource: SystemPedometerDistanceSource(),
                 defaults: launchDefaults,
                 sharedStateStore: AppGroupRecordingSharedStateStore()
             ),
             locationManager: LocationManager(),
             weatherManager: WeatherManager(),
+            trailGraphProvider: graphProvider,
             defaults: launchDefaults,
             startupIssue: load.startupIssue
         )
@@ -91,6 +99,11 @@ final class OpenTrailsModel {
                 isStoredInMemoryOnly: true
             )
         )
+        let graphProvider = AppLaunchEnvironment
+            .trailGraphFixtureName
+            .flatMap { name in
+                BundledTrailGraphProvider(fixtureName: name)
+            }
         self.init(
             container: testingContainer,
             backgroundTracker: BackgroundTrailTracker(
@@ -100,11 +113,7 @@ final class OpenTrailsModel {
             autoSaveController: AutoSaveController(),
             hikeRecorder: HikeRecorder(
                 container: testingContainer,
-                trailGraphProvider: AppLaunchEnvironment
-                    .trailGraphFixtureName
-                    .flatMap { name in
-                        BundledTrailGraphProvider(fixtureName: name)
-                    },
+                trailGraphProvider: graphProvider,
                 defaults: uiTestingDefaults,
                 journalDirectory:
                     AppLaunchEnvironment.recordingJournalDirectory(),
@@ -112,6 +121,7 @@ final class OpenTrailsModel {
             ),
             locationManager: LocationManager(),
             weatherManager: WeatherManager(),
+            trailGraphProvider: graphProvider,
             defaults: uiTestingDefaults
         )
     }
@@ -168,6 +178,7 @@ final class OpenTrailsModel {
         hikeRecorder: HikeRecorder,
         locationManager: LocationManager,
         weatherManager: WeatherManager,
+        trailGraphProvider: (any TrailGraphProviding)? = nil,
         defaults: UserDefaults = .standard,
         startupIssue: StorageStartupIssue? = nil
     ) {
@@ -177,6 +188,7 @@ final class OpenTrailsModel {
         self.hikeRecorder = hikeRecorder
         self.locationManager = locationManager
         self.weatherManager = weatherManager
+        self.trailGraphProvider = trailGraphProvider
         self.defaults = defaults
         self.startupIssue = startupIssue
     }

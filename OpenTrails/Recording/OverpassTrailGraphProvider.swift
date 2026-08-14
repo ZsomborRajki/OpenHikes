@@ -25,6 +25,66 @@ nonisolated protocol TrailGraphProviding: Sendable {
     func cachedGraph(
         covering coordinates: [CLLocationCoordinate2D]
     ) async throws -> TrailGraph?
+    /// Whether every region the coordinates cross is already cached.
+    ///
+    /// ``cachedGraph(covering:)`` merges whatever happens to be on disk, which
+    /// is the right answer while matching a live recording — a partial graph
+    /// still snaps the part of the walk it covers. A measurement of the whole
+    /// route can't use it blind: a region that was never downloaded is
+    /// indistinguishable from a region OSM has nothing in, and reporting the
+    /// former as unmapped trail would be a wrong number rather than a missing
+    /// one.
+    ///
+    /// Deliberately has no default implementation. The obvious one — "complete
+    /// whenever `cachedGraph(covering:)` answers at all" — is right for a
+    /// provider with no per-region cache and quietly wrong for one that has
+    /// any, and the wrong answer looks like a plausible number rather than an
+    /// error. Providers that keep no cache can return `true` in one line;
+    /// making them say so is cheaper than the bug.
+    func hasCompleteCachedGraph(
+        covering coordinates: [CLLocationCoordinate2D]
+    ) async -> Bool
+}
+
+nonisolated extension TrailGraphProviding {
+    /// Highest number of distinct regions one route is allowed to download.
+    /// A region is a z12 tile — a few kilometres across — so this covers a
+    /// route far longer than a day's walk while keeping a corrupt or
+    /// round-the-world track from turning into an unbounded run of Overpass
+    /// requests.
+    static var maximumPrefetchRegions: Int { 24 }
+
+    /// Downloads whatever the route crosses that isn't cached yet, then
+    /// returns the merged graph.
+    ///
+    /// Unlike ``cachedGraph(covering:)`` this reaches the network, so it
+    /// belongs to explicit, user-initiated work rather than to browsing. A
+    /// region that fails is skipped rather than abandoning the rest: a partial
+    /// graph still describes most of the route, and the caller reports the
+    /// uncovered distance instead of a wrong total. The first failure is only
+    /// rethrown when nothing at all could be assembled.
+    func graph(
+        covering coordinates: [CLLocationCoordinate2D]
+    ) async throws -> TrailGraph? {
+        var requested: Set<TrailGraphRegion> = []
+        var firstFailure: (any Error)?
+        for coordinate in coordinates {
+            guard let region = region(containing: coordinate),
+                  requested.insert(region).inserted else { continue }
+            guard requested.count <= Self.maximumPrefetchRegions else { break }
+            do {
+                try await prefetch(around: coordinate)
+            } catch {
+                firstFailure = firstFailure ?? error
+            }
+        }
+
+        let graph = try await cachedGraph(covering: coordinates)
+        if graph == nil, let firstFailure {
+            throw firstFailure
+        }
+        return graph
+    }
 }
 
 nonisolated enum TrailGraphProviderError: LocalizedError, Equatable, Sendable {
@@ -218,6 +278,21 @@ actor OverpassTrailGraphProvider: TrailGraphProviding {
             }
         }
         return combined
+    }
+
+    /// Complete when every distinct region the route crosses has an unexpired
+    /// entry. Expired entries deliberately don't count: ``cachedGraph(covering:)``
+    /// falls back to them so a live recording is never left without a graph,
+    /// but a measurement should refetch rather than quietly report month-old
+    /// tagging.
+    func hasCompleteCachedGraph(
+        covering coordinates: [CLLocationCoordinate2D]
+    ) -> Bool {
+        let keys = Set(coordinates.compactMap(region(containing:)))
+        guard !keys.isEmpty else { return false }
+        return keys.allSatisfy { key in
+            (try? cachedGraph(for: key, allowExpired: false)) != nil
+        }
     }
 
     private func cachedGraph(
@@ -483,7 +558,8 @@ private extension OverpassTrailGraphProvider {
                         sacScale: element.tags["sac_scale"],
                         trailVisibility: element.tags["trail_visibility"],
                         access: element.tags["access"],
-                        surface: element.tags["surface"]
+                        surface: element.tags["surface"],
+                        tracktype: element.tags["tracktype"]
                     )
                 )
             }

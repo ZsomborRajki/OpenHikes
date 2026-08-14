@@ -120,6 +120,9 @@ struct HikeDetailView: View {
     /// Fed the same auto-follow matches as the chart/map, throttled, so the
     /// widget stays reasonably fresh while this hike is being viewed.
     let backgroundTracker: BackgroundTrailTracker
+    /// OSM walking graph used for the surface breakdown. `nil` disables that
+    /// section entirely — see ``HikeSurfaceSection``.
+    var trailGraphProvider: (any TrailGraphProviding)?
     /// Collapses the sheet so the map is visible when zooming to the route.
     var onZoomToRoute: () -> Void = { /* no-op default */ }
 
@@ -195,6 +198,7 @@ struct HikeDetailView: View {
                 progressSection
                 header
                 statsGrid
+                surfaceSection
                 if hasMetadata { metadataSection }
                 actionBar
             }
@@ -462,6 +466,14 @@ private extension HikeDetailView {
                 StatTile(label: stat.label, value: stat.value)
             }
         }
+    }
+
+    // MARK: Surface
+
+    /// Owns its own analysis state, so downloading a trail graph and writing
+    /// the result back to the hike redraws the section rather than this view.
+    private var surfaceSection: some View {
+        HikeSurfaceSection(hike: hike, provider: trailGraphProvider)
     }
 
     // MARK: Metadata
