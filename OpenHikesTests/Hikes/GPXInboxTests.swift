@@ -28,8 +28,7 @@ struct GPXInboxTests {
         return inbox
     }
 
-    @discardableResult
-    private func writeFile(named name: String, in directory: URL) throws -> URL {
+    @discardableResult private func writeFile(named name: String, in directory: URL) throws -> URL {
         let url = directory.appending(path: name)
         try Data("<gpx/>".utf8).write(to: url)
         return url

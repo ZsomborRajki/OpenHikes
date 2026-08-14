@@ -29,16 +29,20 @@ jobs:
 
       - name: Install pinned SwiftLint
         run: |
+          version="$(cat .swiftlint-version)"
           curl --fail --location --retry 3 \
             --output SwiftLint.pkg \
-            https://github.com/realm/SwiftLint/releases/download/0.65.0/SwiftLint.pkg
+            "https://github.com/realm/SwiftLint/releases/download/${version}/SwiftLint.pkg"
           echo "825e687d618e17d24bd5fad6d2cf98d4c32a157940ad5b7ce8ae4d722d6afb3a  SwiftLint.pkg" \
             | shasum --algorithm 256 --check
           sudo installer -pkg SwiftLint.pkg -target /
           rm SwiftLint.pkg
 
+      # The same script a developer runs locally, and the same one the
+      # opt-in pre-push hook runs — so a violation cannot be green in one
+      # place and red in another.
       - name: Run strict SwiftLint
-        run: swiftlint lint --strict --quiet
+        run: Scripts/lint.sh
 
       - name: Test shared package
         run: swift test --package-path OpenHikesShared -Xswiftc -warnings-as-errors
@@ -120,31 +124,20 @@ jobs:
           - name: iOS Debug build
             configuration: Debug
             destination: generic/platform=iOS Simulator
-            disable_code_signing: false
           - name: iOS Release build
             configuration: Release
             destination: generic/platform=iOS Simulator
-            disable_code_signing: false
-          - name: macOS Debug build
-            configuration: Debug
-            destination: generic/platform=macOS
-            disable_code_signing: true
     steps:
       - uses: actions/checkout@v4
 
       - name: Build
         run: |
-          code_signing=()
-          if [[ "${{ matrix.disable_code_signing }}" == "true" ]]; then
-            code_signing+=(CODE_SIGNING_ALLOWED=NO)
-          fi
           xcodebuild build \
             -project OpenHikes.xcodeproj \
             -scheme OpenHikes \
             -configuration "${{ matrix.configuration }}" \
             -destination "${{ matrix.destination }}" \
             -skipPackagePluginValidation \
-            "${code_signing[@]}" \
             -quiet
 
   gpx-thread-sanitizer:

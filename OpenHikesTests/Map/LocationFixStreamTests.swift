@@ -60,7 +60,7 @@ struct LocationFixStreamTests {
     /// the consumer task, and the consumer appends — three scheduling steps,
     /// none of which involves a real clock.
     private func settle() async {
-        for _ in 0..<32 { await Task.yield() }
+        await settleDelegateHop()
     }
 
     /// Starts a consumer and returns its log plus the task holding it, so the

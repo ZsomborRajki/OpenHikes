@@ -78,12 +78,6 @@ func makeScratchDefaults() throws -> UserDefaults {
     return try #require(UserDefaults(suiteName: suite))
 }
 
-/// Lets the `Task { @MainActor in … }` hop that every delegate callback in
-/// this app makes actually run.
-func settleDelegateHop() async {
-    for _ in 0..<8 { await Task.yield() }
-}
-
 // MARK: - Authorization
 
 /// No App Group needed: none of these publish anything. They're about which

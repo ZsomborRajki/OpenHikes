@@ -1,6 +1,6 @@
 # OpenHikes
 
-OpenHikes is a local-first SwiftUI and SwiftData trail viewer for iOS, iPadOS, macOS, and visionOS. It imports GPX tracks, displays them on a MapKit map, provides route statistics and an interactive elevation profile, and keeps selected map areas available offline.
+OpenHikes is a local-first SwiftUI and SwiftData trail viewer for iPhone. It imports GPX tracks, displays them on a MapKit map, provides route statistics and an interactive elevation profile, and keeps selected map areas available offline.
 
 ## Features
 
@@ -18,7 +18,9 @@ OpenHikes is a local-first SwiftUI and SwiftData trail viewer for iOS, iPadOS, m
 ## Requirements
 
 - Xcode 26.5 or later.
-- iOS/iPadOS 26.5, macOS 26.5, or visionOS 26.5.
+- iOS 26.5. Every target ships iPhone-only (`TARGETED_DEVICE_FAMILY = 1`); the
+  sources still carry their `canImport(AppKit)` and `#if os(iOS)` guards, but
+  no iPad, Mac or visionOS destination is built or tested.
 - An Apple development team that can sign the WeatherKit entitlement and the shared App Group.
 
 OpenStreetMap is the keyless default. Stadia and Thunderforest require build-time API keys.
@@ -83,8 +85,16 @@ Scripts/run-performance-tests.sh --test testLiveRecordingCostPerFix
 
 swift test --package-path OpenHikesShared
 
-swiftlint lint --strict
+Scripts/lint.sh
+Scripts/lint.sh --fix
 ```
+
+`Scripts/lint.sh` is the same strict SwiftLint the CI `quality` job runs, at
+the version pinned in `.swiftlint-version` — CI invokes the script rather than
+`swiftlint` directly, so the two cannot disagree. SwiftLint is not part of the
+Xcode build, so nothing reports a violation until it is run; `Scripts/install-git-hooks.sh`
+installs an opt-in pre-push hook that runs it for you (bypass with
+`git push --no-verify`).
 
 Unit and integration tests use Swift Testing. `OpenHikesUITests` uses
 XCTest/XCUITest because Apple's UI automation and launch-performance metrics

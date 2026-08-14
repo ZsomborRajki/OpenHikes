@@ -56,6 +56,10 @@ struct MapCoordinatorTests {
         maximumZ: 17
     )
 
+    /// MapKit round-trips a region through its own projection, so a centre
+    /// comes back close to what was asked for rather than equal to it.
+    static let centreTolerance = 0.001
+
     func mapView(
         route: DisplayedRoute? = nil,
         tileSource: ActiveTileSource = osm
@@ -109,7 +113,7 @@ struct MapCoordinatorTests {
     /// Lets the `Task { @MainActor in … }` hop each observation re-registers
     /// through actually run — the same hop the app pays for a scrub or a drag.
     func settle() async {
-        for _ in 0..<8 { await Task.yield() }
+        await settleDelegateHop()
     }
 
     // MARK: Registration
@@ -483,7 +487,14 @@ extension MapCoordinatorTests {
             CLLocationManager(),
             didUpdateLocations: [CLLocation(latitude: 47.6300, longitude: 12.8600)]
         )
-        await settle()
+        // Waits for the region, not just for the flag: `centerOnUser` sets
+        // `hasCentered` and then calls `setRegion(_:animated: true)`, so the
+        // map can still be moving when the flag is already true. Capturing
+        // `centred` mid-animation would make the comparison below fail for a
+        // reason that has nothing to do with the second fix.
+        await settleDelegateHop(until: "the first fix to centre the map") {
+            coordinator.hasCentered && abs(map.region.center.latitude - 47.6300) < Self.centreTolerance
+        }
         #expect(coordinator.hasCentered)
         let centred = map.region.center.latitude
 
@@ -493,7 +504,9 @@ extension MapCoordinatorTests {
             CLLocationManager(),
             didUpdateLocations: [CLLocation(latitude: 47.6400, longitude: 12.8600)]
         )
-        await settle()
+        await settleDelegateHop(until: "the second fix to be published") {
+            locationManager.coordinate?.latitude == 47.6400
+        }
 
         #expect(locationManager.coordinate?.latitude == 47.6400, "precondition: the second fix was published")
         #expect(map.region.center.latitude == centred, "a later fix must not drag the map back")

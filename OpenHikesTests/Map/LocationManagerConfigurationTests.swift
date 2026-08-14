@@ -49,7 +49,7 @@ struct LocationManagerConfigurationTests {
     }
 
     private func settleAuthorizationHop() async {
-        for _ in 0..<8 { await Task.yield() }
+        await settleDelegateHop()
     }
 
     @Test("uses nearest-ten-meters accuracy and a distance filter")

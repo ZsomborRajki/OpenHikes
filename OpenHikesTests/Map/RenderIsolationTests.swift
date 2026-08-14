@@ -52,7 +52,7 @@ final class ObservationCounter {
     /// callback synchronously but the re-registration hops through a `Task`,
     /// same as in the app.
     func settle() async {
-        for _ in 0..<8 { await Task.yield() }
+        await settleDelegateHop()
     }
 }
 
@@ -552,12 +552,12 @@ struct LocationPublishingTests {
             speedAccuracy: -1,
             timestamp: .now
         )
+        let tolerance = RouteProfile.followMatchThresholdMeters
         manager.locationManager(CLLocationManager(), didUpdateLocations: [walking])
-        await Task.yield()
-
-        let fix = try #require(
-            manager.routeFix(maximumHorizontalAccuracy: RouteProfile.followMatchThresholdMeters)
-        )
+        await settleDelegateHop(until: "the delivered fix to reach the manager") {
+            manager.routeFix(maximumHorizontalAccuracy: tolerance) != nil
+        }
+        let fix = try #require(manager.routeFix(maximumHorizontalAccuracy: tolerance))
         #expect(fix.coordinate.latitude == 47.63)
         #expect(fix.course == 42)
     }
