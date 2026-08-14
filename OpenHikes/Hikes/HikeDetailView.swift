@@ -437,16 +437,8 @@ private extension HikeDetailView {
                     HStack(alignment: .firstTextBaseline, spacing: 6) {
                         Text(hike.displayTitle)
                             .font(.title2.bold())
-                        Button {
-                            titleDraft = hike.displayTitle
-                            isEditingTitle = true
-                        } label: {
-                            Image(systemName: "pencil")
-                                .font(.subheadline)
-                                .foregroundStyle(.secondary)
-                        }
-                        .buttonStyle(.plain)
-                        .accessibilityLabel("Rename hike")
+                        shareButton
+                        renameButton
                     }
                 }
                 Text(hike.date.formatted(date: .complete, time: .omitted))
@@ -456,6 +448,41 @@ private extension HikeDetailView {
 
             Spacer()
         }
+    }
+
+    /// Hands the route to the share sheet as a `.gpx` file — the export half
+    /// of the import this app already does.
+    ///
+    /// The payload is a `Sendable` ``GPXExport/Track`` snapshot rather than the
+    /// `Hike`: `ShareLink` passes the exporter to the system, which calls it
+    /// off the main actor, where a `@Model` must not be read. Building the
+    /// snapshot is a retain of the route's storage, not a copy of it, and the
+    /// XML itself is written only once a destination is picked.
+    private var shareButton: some View {
+        ShareLink(
+            item: HikeGPXFile(track: GPXExport.Track(hike: hike)),
+            preview: SharePreview(hike.displayTitle)
+        ) {
+            Image(systemName: "square.and.arrow.up")
+                .font(.subheadline)
+                .foregroundStyle(.secondary)
+        }
+        .buttonStyle(.plain)
+        .accessibilityLabel("Share hike")
+        .disabled(hike.pointCount < 2)
+    }
+
+    private var renameButton: some View {
+        Button {
+            titleDraft = hike.displayTitle
+            isEditingTitle = true
+        } label: {
+            Image(systemName: "pencil")
+                .font(.subheadline)
+                .foregroundStyle(.secondary)
+        }
+        .buttonStyle(.plain)
+        .accessibilityLabel("Rename hike")
     }
 
     private func commitTitleEdit() {

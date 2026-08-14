@@ -316,7 +316,9 @@ private func startSearch(request: MKLocalSearch.Request) {
     }
 }
 
-/// GPX has no first-party UTType; match by extension and fall back to XML.
+/// GPX has no system-declared UTType; the app imports topografix's, which
+/// is what makes the lookup below resolve. XML stays as a fallback for a
+/// track exported under a different extension.
 private static var gpxContentTypes: [UTType] {
     var types: [UTType] = []
     if let gpx = UTType(filenameExtension: "gpx") { types.append(gpx) }

@@ -4,7 +4,8 @@ OpenHikes is a local-first SwiftUI and SwiftData trail viewer for iOS, iPadOS, m
 
 ## Features
 
-- GPX import with track metadata, route statistics, elevation chart scrubbing, route styling, and direction chevrons.
+- GPX import with track metadata, route statistics, elevation chart scrubbing, route styling, and direction chevrons. A downloaded `.gpx` file opens straight into the app from Files, AirDrop, or any share sheet, as well as through the in-app document picker.
+- GPX export from a hike's detail view: the Share button hands the route, its elevations, its fix times, and its metadata to any share destination as a GPX 1.1 file, serialized off the main thread only once a destination is picked.
 - Live hike recording with balanced location accuracy, background location, pause/resume, crash-safe recovery, motion-aware fix handling, barometric elevation fusion, and one-time SwiftData save.
 - Bounded live trail matching from an extending cached OpenStreetMap walking graph, and a post-recording review where every section the matcher moved or found ambiguous can be kept as the mapped trail, handed back to the raw GPS trace, or swapped for an alternative route; unavailable matches preserve the GPS trace.
 - Search across saved hikes and MapKit place suggestions.
@@ -123,7 +124,7 @@ domain folders.
 | Path | Purpose |
 |---|---|
 | `OpenHikes/App/` | App entry point, shared app model, configuration, deep-link routing, and root navigation. |
-| `OpenHikes/Hikes/` | Persisted hike model, GPX import, route profile, statistics, and hike screens. |
+| `OpenHikes/Hikes/` | Persisted hike model, GPX import and export, route profile, statistics, and hike screens. |
 | `OpenHikes/Recording/` | Live recording, recovery journal, sensors, trail matching, and recording UI. |
 | `OpenHikes/Map/` | MapKit bridge, map state, search, location tracking, and map rendering. |
 | `OpenHikes/Tiles/` | Tile provider policy, cache, auto-save, offline downloads, and overlay rendering. |
