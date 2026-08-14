@@ -57,6 +57,62 @@ final class SheetMetrics {
     nonisolated deinit { /* intentionally empty */ }
 
     var topY: CGFloat = 0
+
+    /// Where the sheet comes to rest at its middle detent.
+    ///
+    /// Learned by watching the sheet rather than computed from the screen,
+    /// because there is no fraction that works: the system's medium detent
+    /// rests 43% of the way down an iPhone 17 Pro and 48% down an iPhone 14
+    /// Pro Max, and the gap between those is wider than the room the "my
+    /// location" button needs above it. A guess is therefore either too low to
+    /// be useful or low enough to push the button behind the sheet.
+    ///
+    /// `nil` until the sheet has been seen resting there — the map falls back
+    /// to keeping the button clear of the status bar until then.
+    private(set) var middleRestY: CGFloat?
+
+    @ObservationIgnored private let clock: @Sendable () -> Date
+    @ObservationIgnored private var lastReportAt: Date?
+    @ObservationIgnored private var awaitingMiddleRest = true
+
+    /// Longer than a stutter, shorter than a pause a hand would make. Only
+    /// used to tell "the sheet is sitting still" from "the sheet is moving".
+    private static let restGap: TimeInterval = 0.2
+
+    init(clock: @escaping @Sendable () -> Date = { Date() }) {
+        self.clock = clock
+    }
+
+    /// Reports the sheet's top edge, and whether the sheet is currently
+    /// committed to its middle detent.
+    ///
+    /// Doubles as where ``middleRestY`` is learned. A drag reports at display
+    /// rate, so a gap between two reports means the sheet stopped in between —
+    /// and if it stopped while committed to the middle detent, the value it
+    /// stopped at is that detent's resting place. The detent binding can't
+    /// answer this on its own: it stays on the middle detent for the whole
+    /// drag towards the large one and only changes when the drag is released.
+    ///
+    /// Learned once per visit, so a hand pausing mid-drag isn't mistaken for
+    /// the sheet resting.
+    func report(topY: CGFloat, atMiddleDetent: Bool) {
+        let now = clock()
+        defer {
+            lastReportAt = now
+            self.topY = topY
+        }
+        guard atMiddleDetent, awaitingMiddleRest, let lastReportAt else { return }
+        guard now.timeIntervalSince(lastReportAt) > Self.restGap else { return }
+        middleRestY = self.topY
+        awaitingMiddleRest = false
+    }
+
+    /// Re-arms the learning above whenever the sheet commits to a detent, so
+    /// the resting place is measured again after every visit — it moves with
+    /// rotation, and with anything else that changes the sheet's height.
+    func detentCommitted(toMiddle: Bool) {
+        awaitingMiddleRest = toMiddle
+    }
 }
 
 /// One-shot map commands the detail view issues (e.g. the Zoom button). Held in a

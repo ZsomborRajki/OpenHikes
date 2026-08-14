@@ -21,7 +21,7 @@ nonisolated struct HikeTrailBreakdowns: Equatable, Sendable {
     let surface: TrailSurfaceBreakdown?
     let difficulty: TrailDifficultyBreakdown?
 
-    static let none = Self(surface: nil, difficulty: nil)
+    static let empty = Self(surface: nil, difficulty: nil)
 
     var isEmpty: Bool { surface == nil && difficulty == nil }
 }
@@ -35,7 +35,7 @@ nonisolated enum HikeTrailAnalysis {
     ///
     /// Never throws. A failed download, a region OpenStreetMap has nothing in,
     /// and a view torn down mid-analysis all come back as
-    /// ``HikeTrailBreakdowns/none``; the caller tells the last of those apart
+    /// ``HikeTrailBreakdowns/empty``; the caller tells the last of those apart
     /// with `Task.isCancelled` before writing anything to the store.
     @concurrent
     static func breakdowns(
@@ -43,14 +43,14 @@ nonisolated enum HikeTrailAnalysis {
         provider: any TrailGraphProviding
     ) async -> HikeTrailBreakdowns {
         assertOffMainThread("Hike trail analysis must stay off the main thread")
-        guard route.count > 1 else { return .none }
+        guard route.count > 1 else { return .empty }
         // Timed so an open that waits on Overpass can be told apart from one
         // that measured a graph already on disk.
         let state = RenderSignpost.beginInterval("HikeTrailAnalysis")
         defer { RenderSignpost.endInterval("HikeTrailAnalysis", state) }
 
         guard let graph = await graph(covering: route, provider: provider) else {
-            return .none
+            return .empty
         }
         let surface = try? await TrailSurfaceAnalyzer.breakdown(
             route: route,

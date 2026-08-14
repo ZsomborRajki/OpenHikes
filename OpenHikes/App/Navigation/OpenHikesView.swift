@@ -175,7 +175,9 @@ struct OpenHikesView: View {
                     mapController: mapController,
                     onImportGPX: importGPX,
                     onImportFailed: { importFailure = .unreadable },
-                    onSheetTopChange: { sheetMetrics.topY = $0 }
+                    onSheetTopChange: { topY in
+                        sheetMetrics.report(topY: topY, atMiddleDetent: sheetDetent == .medium)
+                    }
                 )
                     .presentationDetents([.height(Self.compactDetentHeight), .medium, .large], selection: $sheetDetent)
                     .presentationBackgroundInteraction(.enabled(upThrough: .medium))
@@ -188,6 +190,12 @@ struct OpenHikesView: View {
                     }
                     .presentationDragIndicator(.visible)
                     .interactiveDismissDisabled()
+                    // The sheet settles at a new detent: let the map measure
+                    // where the middle one rests, so the "my location" button
+                    // knows how far it may follow the sheet up.
+                    .onChange(of: sheetDetent) { _, detent in
+                        sheetMetrics.detentCommitted(toMiddle: detent == .medium)
+                    }
             }
             // The sheet is the app's primary surface and must always stay up. The
             // GPX document picker (a UIKit controller presented from within a

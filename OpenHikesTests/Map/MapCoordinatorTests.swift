@@ -26,19 +26,23 @@ import Testing
 struct MapCoordinatorTests {
     private let highlight = RouteHighlight()
     private let recordingTrace = RecordingTrace()
-    private let sheetMetrics = SheetMetrics()
+    /// Internal, like `mapController` below, so the tracking-button tests get
+    /// their own file — see `MapCoordinatorTests+SheetInsets.swift`.
+    let sheetMetrics: SheetMetrics
     /// Internal, like the four helpers below it, so the command observers get
     /// their own file — see `MapCoordinatorTests+Commands.swift`.
     let mapController = MapController()
     private let routeStyle = RouteStyle()
     /// Driven by a clock the test owns: `LocationManager` publishes at most
-    /// once a second, so whether a second fix reaches the map would otherwise
-    /// depend on how long the preceding assertions took.
-    private let clock = TestClock()
+    /// once a second, and `SheetMetrics` tells a resting sheet from a moving
+    /// one by the gap between reports, so both would otherwise depend on how
+    /// long the preceding assertions took.
+    let clock = TestClock()
     private let locationManager: LocationManager
 
     init() {
         locationManager = LocationManager(clock: clock.read)
+        sheetMetrics = SheetMetrics(clock: clock.read)
     }
 
     static let osm = ActiveTileSource(
@@ -532,116 +536,6 @@ extension MapCoordinatorTests {
             map.visibleMapRect.intersects(polyline.boundingMapRect),
             "the trail is what the map was asked to frame"
         )
-    }
-
-    // MARK: Sheet insets
-
-    /// The "my location" button rides just above the sheet's top edge as it is
-    /// dragged, at touch frequency, without a SwiftUI pass in between.
-    @Test("the tracking button follows the sheet's top edge")
-    func trackingButtonFollowsTheSheet() throws {
-        #if os(iOS)
-        let coordinator = MapView.Coordinator()
-        let map = makeMap(mapView(), coordinator)
-        defer { detach(map) }
-        let constraint = try #require(coordinator.trackingBottomConstraint)
-        let spacing: CGFloat = 16
-
-        sheetMetrics.topY = 700
-        coordinator.applySheetTop(on: map)
-        #expect(constraint.constant == 700 - spacing)
-
-        // A detent that stops just above the map's midpoint, which is what the
-        // medium detent does on a tall phone. The button belongs above it.
-        let aboveMidpoint = map.bounds.height * 0.5 - 20
-        sheetMetrics.topY = aboveMidpoint
-        coordinator.applySheetTop(on: map)
-        #expect(constraint.constant == aboveMidpoint - spacing)
-
-        // A sheet dragged nearly to the top: the button stops clear of the top
-        // safe area rather than climbing into the status bar. The sheet covers
-        // it entirely by then, so there is nothing to see either way.
-        let button = try #require(coordinator.trackingButton)
-        let buttonHeight = max(
-            button.bounds.height,
-            button.intrinsicContentSize.height
-        )
-        sheetMetrics.topY = 8
-        coordinator.applySheetTop(on: map)
-        #expect(
-            constraint.constant == map.safeAreaInsets.top + buttonHeight + spacing
-        )
-        #endif
-    }
-
-    /// The regression this guards: the clamp keeping the button out of the
-    /// status bar used to read `max(sheetTop, height * 0.5)`, which assumed the
-    /// medium detent always stops below the map's midpoint. On a tall phone it
-    /// stops a little above, and the "cap" then pushed the button *down* to the
-    /// midpoint — behind the sheet's top curve.
-    @Test("the tracking button is never pushed down into the sheet")
-    func trackingButtonStaysClearOfTheSheet() throws {
-        #if os(iOS)
-        let coordinator = MapView.Coordinator()
-        let map = makeMap(mapView(), coordinator)
-        defer { detach(map) }
-        let constraint = try #require(coordinator.trackingBottomConstraint)
-
-        // Every detent a sheet can rest at, from full height down to compact.
-        for topY in stride(from: 120.0, through: map.bounds.height, by: 20) {
-            sheetMetrics.topY = topY
-            coordinator.applySheetTop(on: map)
-            #expect(
-                constraint.constant < topY,
-                "the button's bottom is inside the sheet at a top of \(topY)"
-            )
-        }
-        #endif
-    }
-
-    /// A reading that can't be the sheet's edge — the sheet is presented over
-    /// this map — is refused rather than followed off screen.
-    @Test("an out-of-bounds sheet report falls back rather than being followed")
-    func trackingButtonIgnoresImpossibleSheetTops() throws {
-        #if os(iOS)
-        let coordinator = MapView.Coordinator()
-        let map = makeMap(mapView(), coordinator)
-        defer { detach(map) }
-        let constraint = try #require(coordinator.trackingBottomConstraint)
-
-        sheetMetrics.topY = 700
-        coordinator.applySheetTop(on: map)
-        let followed = constraint.constant
-
-        sheetMetrics.topY = map.bounds.height + 500
-        coordinator.applySheetTop(on: map)
-        #expect(constraint.constant != map.bounds.height + 500 - 16)
-        #expect(constraint.constant < map.bounds.height)
-
-        // And the same for the state before the sheet has reported anything.
-        sheetMetrics.topY = 0
-        coordinator.applySheetTop(on: map)
-        let fallback = constraint.constant
-        #expect(fallback < map.bounds.height)
-        #expect(fallback != followed)
-        #endif
-    }
-
-    /// Observed rather than passed in, so a drag never reaches SwiftUI.
-    @Test("a sheet drag moves the button without an update pass")
-    func sheetDragIsObserved() async throws {
-        #if os(iOS)
-        let coordinator = MapView.Coordinator()
-        let map = makeMap(mapView(), coordinator)
-        defer { detach(map) }
-        let constraint = try #require(coordinator.trackingBottomConstraint)
-        let spacing: CGFloat = 16
-
-        sheetMetrics.topY = 640
-        await settle()
-
-        #expect(constraint.constant == 640 - spacing, "no `update` call in between")
-        #endif
     }
 
     // MARK: Highlight
