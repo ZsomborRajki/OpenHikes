@@ -485,7 +485,12 @@ private struct WeatherBadge: View {
         }
         .padding(.horizontal, 14)
         .padding(.vertical, 8)
-        .background(.ultraThinMaterial, in: Capsule())
+        // Liquid Glass rather than `.ultraThinMaterial`: this hovers over live
+        // map imagery, which is exactly what the material could not adapt to —
+        // it took on whatever the tiles under it happened to be, so a
+        // temperature over a snowfield and one over forest were two different
+        // badges. Glass keeps its own legibility over both.
+        .glassSurface(.regular, in: .capsule)
         // A symbol and a number that only mean anything together, and the
         // number needs its unit spelled out to be spoken as a temperature.
         .accessibilityElement(children: .ignore)

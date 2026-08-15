@@ -365,6 +365,12 @@ private extension AccessibilityUITests {
 
     /// Enough to find the view again — the compact description alone names the
     /// problem but not the control.
+    ///
+    /// The fallbacks matter as much as the identifier does. An issue the audit
+    /// cannot attribute to any element used to report as "an unidentifiable
+    /// element" and nothing else, which named neither the view nor the screen
+    /// region and left the only way forward a guess; the type and the frame
+    /// are what turn that back into something locatable.
     @MainActor
     static func report(_ issue: XCUIAccessibilityAuditIssue) -> String {
         let element = issue.element
@@ -379,10 +385,11 @@ private extension AccessibilityUITests {
             ? (element?.elementType).map { "element type \($0.rawValue)" }
                 ?? "an unidentifiable element"
             : parts.joined(separator: " / ")
+        let frame = element.map { "\n Frame: \($0.frame)" } ?? ""
         return """
             \(issue.compactDescription)
             \(issue.detailedDescription)
-            Element: \(subject)
+            Element: \(subject)\(frame)
             """
     }
 
@@ -394,12 +401,35 @@ private extension AccessibilityUITests {
     /// which is the only handle an out-of-process test has on it: those views
     /// carry no identifier, and the map itself is the only element of ours they
     /// can be attributed to.
+    ///
+    /// The third clause covers the map's *tiles* rather than its subviews.
+    /// Element detection reads rendered pixels, and an OpenStreetMap raster
+    /// tile has town and road names drawn into it — text with no element
+    /// behind it anywhere, because it is a picture of text. While the map is
+    /// the front screen those issues are attributed to `trail-map` and the
+    /// first clause catches them. Behind a presented sheet it is not in the
+    /// accessibility tree at all, so the audit reports them with no element to
+    /// attribute them to, and they arrive here as an unnamed "potentially
+    /// inaccessible text".
+    ///
+    /// That combination — element detection, and no element at all — is only
+    /// reachable for something outside the tree, which the app's own frontmost
+    /// content never is. It stays narrow for that reason: a `Text` this app
+    /// forgot to expose is still attributed to the SwiftUI element that drew
+    /// it and is still reported.
+    ///
+    /// This is the same argument `.contrast` is excluded wholesale under —
+    /// both read pixels, and the pixels behind this app's sheets are an
+    /// arbitrary map.
     @MainActor
     static func isSystemOwned(
         _ issue: XCUIAccessibilityAuditIssue
     ) -> Bool {
         if let identifier = issue.element?.identifier,
            Self.systemOwnedIdentifiers.contains(identifier) {
+            return true
+        }
+        if issue.auditType == .elementDetection, issue.element == nil {
             return true
         }
         return issue.detailedDescription

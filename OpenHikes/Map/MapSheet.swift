@@ -15,6 +15,10 @@ struct MapSheet: View {
     private static let compactDetentHeight: CGFloat = 80
     private static let topPadding: CGFloat = 18
     private static let selectedHikeHighlightOpacity: Double = 0.15
+    /// How close the search field and the settings button have to come before
+    /// their glass merges. Slightly under the 10pt gap between them, so they
+    /// stay two shapes at rest and blend as the layout tightens.
+    private static let chromeGlassSpacing: CGFloat = 8
 
     @Binding var searchText: String
     @Binding var detent: PresentationDetent
@@ -66,9 +70,16 @@ struct MapSheet: View {
         RenderSignpost.mark("MapSheetBody")
         return NavigationStack(path: $path) {
             VStack(spacing: 0) {
-                HStack(spacing: 10) {
-                    searchField
-                    settingsButton
+                // One container for the two pieces of chrome side by side:
+                // they sample the map behind them once between them, and the
+                // field's capsule and the button's circle blend as the
+                // keyboard pushes them together rather than sliding past each
+                // other as two unrelated panes.
+                GlassStack(spacing: Self.chromeGlassSpacing) {
+                    HStack(spacing: 10) {
+                        searchField
+                        settingsButton
+                    }
                 }
                     .padding(.horizontal)
                     .padding(.top, Self.topPadding)
@@ -171,7 +182,10 @@ struct MapSheet: View {
             }
         }
         .padding(10)
-        .sheetGlassBackground(in: RoundedRectangle(cornerRadius: 12))
+        // A capsule rather than a 12pt rounded rectangle: a search field is a
+        // capsule everywhere in iOS 26, and it is what lets the circular
+        // settings button beside it read as the same family of control.
+        .glassSurface(.regular, in: .capsule)
     }
 
     /// Profile/settings entry point, sitting to the right of the search field —
@@ -382,17 +396,4 @@ private func belongsToActiveRecording(_ hike: Hike) -> Bool {
         currentHikeID: hikeRecorder.currentHike?.id
     )
 }
-}
-
-/// Shared by the sheet's own chrome and by ``MapSheetHikes``, which is why it
-/// is not fileprivate.
-extension View {
-    @ViewBuilder
-    func sheetGlassBackground<S: Shape>(in shape: S) -> some View {
-        #if os(visionOS)
-        background(.regularMaterial, in: shape)
-        #else
-        glassEffect(.regular, in: shape)
-        #endif
-    }
 }

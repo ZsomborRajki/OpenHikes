@@ -19,14 +19,21 @@ struct RouteLinePatternPicker: View {
     let hike: Hike
 
     private static let tileCornerRadius: CGFloat = 10
+    /// Under the 6pt gap between swatches, so the five stay distinct targets
+    /// and their glass still blends where they meet.
+    private static let glassSpacing: CGFloat = 4
 
     var body: some View {
         VStack(alignment: .leading, spacing: 6) {
             Label("Line style", systemImage: "scribble.variable")
                 .font(.caption.weight(.medium))
             HStack(spacing: 6) {
-                ForEach(RouteLinePattern.displayOrder) { pattern in
-                    swatchButton(for: pattern)
+                GlassStack(spacing: Self.glassSpacing) {
+                    HStack(spacing: 6) {
+                        ForEach(RouteLinePattern.displayOrder) { pattern in
+                            swatchButton(for: pattern)
+                        }
+                    }
                 }
             }
         }
@@ -42,9 +49,15 @@ struct RouteLinePatternPicker: View {
                 .frame(height: swatchHeight)
                 .frame(maxWidth: .infinity)
                 .padding(.vertical, 6)
-                .background(
-                    .quaternary,
-                    in: RoundedRectangle(cornerRadius: Self.tileCornerRadius)
+                // The selected swatch is tinted glass rather than plain glass
+                // under a stroked border: the tint is the route's own colour,
+                // so selection is carried by the surface as well as by the
+                // outline that still marks it.
+                .glassSurface(
+                    isSelected
+                        ? .regular.tint(hike.tintOpaque).interactive()
+                        : .regular.interactive(),
+                    in: .rect(cornerRadius: Self.tileCornerRadius)
                 )
                 .overlay {
                     RoundedRectangle(cornerRadius: Self.tileCornerRadius)

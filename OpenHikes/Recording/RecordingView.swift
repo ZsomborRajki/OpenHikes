@@ -58,6 +58,7 @@ struct RecordingView: View {
         #if os(iOS)
         .navigationBarTitleDisplayMode(.inline)
         #endif
+        .softScrollEdgeEffect(for: .top)
         .onAppear {
             mapController.followUser()
         }
@@ -90,7 +91,6 @@ private struct RecordingRecoveryNotice: View {
     private let noticeRadius: CGFloat = 12
     private let noticeSpacingResumed: CGFloat = 10
     private let noticeSpacingDecision: CGFloat = 6
-    private let noticeBgOpacity: Double = 0.12
 
     @ViewBuilder var body: some View {
         switch recorder.recoveryState {
@@ -109,7 +109,14 @@ private struct RecordingRecoveryNotice: View {
                 .font(.caption)
             }
             .padding(noticePadding)
-            .background(.orange.opacity(noticeBgOpacity), in: RoundedRectangle(cornerRadius: noticeRadius))
+            // Orange-tinted glass rather than a flat 12% orange wash: the
+            // notice keeps the colour that says "recovered" while staying a
+            // card that floats over the screen rather than a block painted
+            // onto it.
+            .glassSurface(
+                .regular.tint(.orange),
+                in: .rect(cornerRadius: noticeRadius)
+            )
         case .needsDecision(let summary):
             VStack(alignment: .leading, spacing: noticeSpacingDecision) {
                 Label("Recovered recording", systemImage: "clock.arrow.circlepath")
@@ -127,7 +134,10 @@ private struct RecordingRecoveryNotice: View {
             }
             .frame(maxWidth: .infinity, alignment: .leading)
             .padding(noticePadding)
-            .background(.orange.opacity(noticeBgOpacity), in: RoundedRectangle(cornerRadius: noticeRadius))
+            .glassSurface(
+                .regular.tint(.orange),
+                in: .rect(cornerRadius: noticeRadius)
+            )
         }
     }
 
@@ -277,6 +287,9 @@ private struct RecordingStatsGrid: View {
 }
 
 private struct RecordingControls: View {
+    /// How close two adjacent glass controls have to come before they merge.
+    private static let controlGlassSpacing: CGFloat = 8
+
     let recorder: HikeRecorder
     var onSaved: (Hike) -> Void
     var onDiscarded: (UUID?) -> Void
@@ -334,22 +347,29 @@ private struct RecordingControls: View {
             ProgressView("Recovering recorded hike…")
                 .frame(maxWidth: .infinity)
         case .waitingForFix, .recording:
-            HStack {
-                Button("Pause", systemImage: "pause.fill") {
-                    recorder.pause()
-                }
-                .glassButtonStyle()
+            // Two `.glass` buttons side by side: a container renders them in
+            // one pass and lets them blend as they meet, which is what makes
+            // a pair read as one control group rather than two panes.
+            GlassStack(spacing: Self.controlGlassSpacing) {
+                HStack {
+                    Button("Pause", systemImage: "pause.fill") {
+                        recorder.pause()
+                    }
+                    .glassButtonStyle()
 
-                stopButton
+                    stopButton
+                }
             }
         case .paused:
-            HStack {
-                Button("Resume", systemImage: "play.fill") {
-                    Task { await recorder.resume() }
-                }
-                .glassButtonStyle()
+            GlassStack(spacing: Self.controlGlassSpacing) {
+                HStack {
+                    Button("Resume", systemImage: "play.fill") {
+                        Task { await recorder.resume() }
+                    }
+                    .glassButtonStyle()
 
-                stopButton
+                    stopButton
+                }
             }
             discardButton
         case .saving:

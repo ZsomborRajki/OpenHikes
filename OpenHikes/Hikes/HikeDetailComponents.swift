@@ -7,6 +7,48 @@
 
 import SwiftUI
 
+/// The one tile the hike detail's action row is built from — zoom, offline
+/// download, and the colour well.
+///
+/// Liquid Glass rather than the filled `.quaternary` rectangle each of the
+/// three used to carry a copy of. These are controls, and glass is the
+/// controls layer: the tiles now float over the sheet the way the `.glass`
+/// buttons beside them do, and `.interactive()` gives them the same press
+/// response, which a filled rectangle behind a `.plain` button never had.
+///
+/// The read-only ``StatTile`` deliberately did *not* move with them. It is
+/// content, not a control, and glass drawn behind content inside a glass sheet
+/// reads as neither.
+struct ActionTile<Content: View>: View {
+    private let tint: Color
+    private let content: Content
+
+    init(tint: Color = .accentColor, @ViewBuilder _ content: () -> Content) {
+        self.tint = tint
+        self.content = content()
+    }
+
+    var body: some View {
+        VStack(spacing: ActionTileMetrics.contentSpacing) { content }
+            .frame(maxWidth: .infinity)
+            .padding(.vertical, ActionTileMetrics.verticalPadding)
+            .glassSurface(
+                .regular.interactive(),
+                in: .rect(cornerRadius: ActionTileMetrics.cornerRadius)
+            )
+            .foregroundStyle(tint)
+    }
+}
+
+nonisolated enum ActionTileMetrics {
+    static let cornerRadius: CGFloat = 12
+    static let contentSpacing: CGFloat = 5
+    static let verticalPadding: CGFloat = 8
+    /// Under the 12pt gap between tiles, so a row reads as separate targets at
+    /// rest and merges as it tightens.
+    static let glassSpacing: CGFloat = 10
+}
+
 /// How far along the trail the tracked position is, as a percentage and a
 /// bar.
 ///
@@ -168,9 +210,15 @@ struct RouteAppearanceControls<
 
     var body: some View {
         VStack(spacing: 12) {
-            HStack(spacing: 12) {
-                actions
-                colorControl
+            // The action row is two or three glass tiles side by side, so it
+            // samples the screen behind it once for the row rather than once
+            // per tile — and the tiles blend into each other as the row
+            // tightens at large text sizes.
+            GlassStack(spacing: ActionTileMetrics.glassSpacing) {
+                HStack(spacing: 12) {
+                    actions
+                    colorControl
+                }
             }
             middleControls
             widthSlider
@@ -179,7 +227,7 @@ struct RouteAppearanceControls<
     }
 
     private var colorControl: some View {
-        tile {
+        ActionTile {
             ColorPicker(
                 "Route color",
                 selection: tintBinding,
@@ -230,15 +278,6 @@ struct RouteAppearanceControls<
             set: { hike.routeWidth = $0 }
         )
     }
-
-    private func tile<Content: View>(
-        @ViewBuilder _ content: () -> Content
-    ) -> some View {
-        VStack(spacing: 5) { content() }
-            .frame(maxWidth: .infinity)
-            .padding(.vertical, 8)
-            .background(.quaternary, in: RoundedRectangle(cornerRadius: 12))
-    }
 }
 
 /// Owns the high-frequency download observations so per-tile progress only
@@ -285,7 +324,7 @@ struct OfflineDownloadButton: View {
     @ViewBuilder private var tile: some View {
         switch downloader.phase {
         case .downloading:
-            actionTile {
+            ActionTile {
                 ProgressView().controlSize(.small)
                     .accessibilityHidden(true)
                 Text("\(Int(downloader.progress * 100))%")
@@ -293,31 +332,20 @@ struct OfflineDownloadButton: View {
                     .foregroundStyle(.secondary)
             }
         case .finished:
-            actionTile(tint: .green) {
+            ActionTile(tint: .green) {
                 Image(systemName: "checkmark.circle.fill")
                     .font(.title3)
                     .accessibilityHidden(true)
                 Text("Saved").font(.caption2.weight(.medium))
             }
         default:
-            actionTile(tint: canDownload ? .accentColor : .secondary) {
+            ActionTile(tint: canDownload ? .accentColor : .secondary) {
                 Image(systemName: "arrow.down.circle")
                     .font(.title3)
                     .accessibilityHidden(true)
                 Text("Offline").font(.caption2.weight(.medium))
             }
         }
-    }
-
-    private func actionTile<Content: View>(
-        tint: Color = .accentColor,
-        @ViewBuilder content: () -> Content
-    ) -> some View {
-        VStack(spacing: 5) { content() }
-            .frame(maxWidth: .infinity)
-            .padding(.vertical, 8)
-            .background(.quaternary, in: RoundedRectangle(cornerRadius: 12))
-            .foregroundStyle(tint)
     }
 }
 

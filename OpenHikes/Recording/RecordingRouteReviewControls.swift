@@ -22,7 +22,10 @@ struct RecordingRouteReviewControls: View {
 
     private let choicePadding: CGFloat = 10
     private let choiceRadius: CGFloat = 10
-    private let choiceOpacity: Double = 0.08
+    /// Matches the surrounding stack, so the cards keep the rhythm they had.
+    private let choiceSpacing: CGFloat = 12
+    /// Under `choiceSpacing`, so the cards stay separate targets at rest.
+    private let choiceGlassSpacing: CGFloat = 10
 
     var body: some View {
         if let section = review.current {
@@ -48,11 +51,18 @@ struct RecordingRouteReviewControls: View {
                 .font(.subheadline)
                 .foregroundStyle(.secondary)
 
-            ForEach(
-                Array(section.availableChoices.enumerated()),
-                id: \.offset
-            ) { _, choice in
-                choiceButton(choice, in: section)
+            // One container for the stack of choice cards: they sample the
+            // screen once between them rather than once each, and blend at
+            // their edges the way a set of related controls should.
+            GlassStack(spacing: choiceGlassSpacing) {
+                VStack(alignment: .leading, spacing: choiceSpacing) {
+                    ForEach(
+                        Array(section.availableChoices.enumerated()),
+                        id: \.offset
+                    ) { _, choice in
+                        choiceButton(choice, in: section)
+                    }
+                }
             }
 
             navigationButtons
@@ -123,9 +133,14 @@ struct RecordingRouteReviewControls: View {
         }
         .buttonStyle(.plain)
         .padding(choicePadding)
-        .background(
-            .secondary.opacity(choiceOpacity),
-            in: RoundedRectangle(cornerRadius: choiceRadius)
+        // Glass, and tinted with the accent when it is the chosen one: the
+        // selection used to be carried only by a checkmark glyph, and the card
+        // behind it was the same flat wash either way.
+        .glassSurface(
+            review.choice(for: section) == choice
+                ? .regular.tint(.accentColor).interactive()
+                : .regular.interactive(),
+            in: .rect(cornerRadius: choiceRadius)
         )
         .accessibilityIdentifier(Self.identifier(for: choice))
         .accessibilityAddTraits(

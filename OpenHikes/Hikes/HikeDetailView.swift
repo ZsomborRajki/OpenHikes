@@ -214,6 +214,11 @@ struct HikeDetailView: View {
         #if os(iOS)
         .navigationBarTitleDisplayMode(.inline)
         #endif
+        // The elevation chart and the tinted header run right up under the
+        // navigation bar. `.soft` is the progressive blur that lets them scroll
+        // away behind it instead of meeting a hard line, which is what the
+        // bar's own glass is drawn to sit on.
+        .softScrollEdgeEffect(for: .top)
         .task(id: hike.id) {
             let route = hike.route
             let distanceMeters = hike.distanceMeters
@@ -393,20 +398,12 @@ private extension HikeDetailView {
     }
 
     private func actionTile(icon: String, title: String, tint: Color = .accentColor) -> some View {
-        tile {
+        ActionTile(tint: tint) {
             Image(systemName: icon)
                 .font(.title3)
                 .accessibilityHidden(true)
             Text(title).font(.caption2.weight(.medium))
         }
-        .foregroundStyle(tint)
-    }
-
-    private func tile<Content: View>(@ViewBuilder _ content: () -> Content) -> some View {
-        VStack(spacing: 5) { content() }
-            .frame(maxWidth: .infinity)
-            .padding(.vertical, 8)
-            .background(.quaternary, in: RoundedRectangle(cornerRadius: 12))
     }
 
     /// `renderable`, not `provider`: this drives whether a bulk download is

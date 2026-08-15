@@ -23,6 +23,9 @@ import SwiftUI
 struct MapSheetHikes: View {
     private static let selectedHikeHighlightOpacity: Double = 0.15
     private static let actionGlyphSize: CGFloat = 40
+    /// Under the 8pt gap between the two action circles, so they stay separate
+    /// targets at rest and their glass still blends at the edges.
+    private static let actionGlassSpacing: CGFloat = 6
 
     @Query(sort: \Hike.date, order: .reverse)
     private var hikes: [Hike]
@@ -116,48 +119,67 @@ private extension MapSheetHikes {
     /// target a finger can be expected to hit — the sizes are separate so the
     /// row keeps its proportions.
     var hikeActions: some View {
-        HStack(spacing: 8) {
-            #if os(iOS)
-            Button {
-                Task {
-                    if !recorder.isActive {
-                        await recorder.start()
-                    }
-                    onRecord()
-                }
-            } label: {
-                Image(
-                    systemName: recorder.isActive
-                        ? "stop.circle.fill"
-                        : "record.circle"
-                )
-                    .foregroundStyle(.red)
-                    .frame(width: Self.actionGlyphSize, height: Self.actionGlyphSize)
-                    .sheetGlassBackground(in: Circle())
-                    .minimumTapTarget()
+        GlassStack(spacing: Self.actionGlassSpacing) {
+            HStack(spacing: 8) {
+                #if os(iOS)
+                recordButton
+                #endif
+                importButton
             }
-            .accessibilityLabel(
-                recorder.isActive
-                    ? "Open hike recording"
-                    : "Record a hike"
-            )
-            .accessibilityIdentifier("record-hike-button")
-            #endif
-
-            Button {
-                onImport()
-            } label: {
-                Image(systemName: "square.and.arrow.down")
-                    .foregroundStyle(.tint)
-                    .frame(width: Self.actionGlyphSize, height: Self.actionGlyphSize)
-                    .sheetGlassBackground(in: Circle())
-                    .minimumTapTarget()
-            }
-            .accessibilityLabel("Import GPX file")
-            .accessibilityIdentifier("import-gpx-button")
         }
         .font(.title3)
         .buttonStyle(.plain)
+    }
+
+    #if os(iOS)
+    var recordButton: some View {
+        Button {
+            Task {
+                if !recorder.isActive {
+                    await recorder.start()
+                }
+                onRecord()
+            }
+        } label: {
+            Image(
+                systemName: recorder.isActive
+                    ? "stop.circle.fill"
+                    : "record.circle"
+            )
+                .foregroundStyle(.red)
+                .frame(width: Self.actionGlyphSize, height: Self.actionGlyphSize)
+                // Tinted while a recording is live, so the control carries the
+                // same red the map and the row badge use rather than leaving
+                // only its glyph to say so.
+                .glassSurface(
+                    recorder.isActive
+                        ? .regular.tint(.red).interactive()
+                        : .regular.interactive(),
+                    in: .circle
+                )
+                .minimumTapTarget()
+        }
+        .accessibilityLabel(
+            recorder.isActive
+                ? "Open hike recording"
+                : "Record a hike"
+        )
+        .accessibilityIdentifier("record-hike-button")
+    }
+    #endif
+
+    var importButton: some View {
+        Button {
+            onImport()
+        } label: {
+            Image(systemName: "square.and.arrow.down")
+                .foregroundStyle(.tint)
+                .frame(width: Self.actionGlyphSize, height: Self.actionGlyphSize)
+                .glassSurface(.regular.interactive(), in: .circle)
+                .minimumTapTarget()
+        }
+        .accessibilityLabel("Import GPX file")
+        .accessibilityIdentifier("import-gpx-button")
     }
 
     var hikesList: some View {

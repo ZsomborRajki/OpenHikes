@@ -8,8 +8,11 @@
 //
 //  Both are `@available(visionOS, unavailable)` — glass there is the window's
 //  own material, not a control's — so they are wrapped the same way
-//  ``sheetGlassBackground(in:)`` wraps `glassEffect`: the guard costs nothing
+//  ``glassSurface(_:in:)`` wraps `glassEffect`: the guard costs nothing
 //  and keeps the visionOS path a build away rather than a rewrite away.
+//
+//  For a glass *surface* rather than a glass control — a badge, a floating
+//  callout, a tile — see ``LiquidGlass.swift``.
 //
 
 import SwiftUI

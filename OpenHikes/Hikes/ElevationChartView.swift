@@ -227,7 +227,12 @@ struct ElevationChartView: View, Equatable {
         }
         .padding(.horizontal, 8)
         .padding(.vertical, 4)
-        // Opaque (not a material) so it never picks up the graph colours behind it.
+        // Opaque (not a material) so it never picks up the graph colours behind
+        // it, and deliberately not `glassSurface` either: a Chart annotation
+        // gives Liquid Glass no backdrop worth sampling, so over the near-white
+        // plot area the surface and its text both wash out to the point of
+        // being unreadable. Verified on device — this is the one control in the
+        // app that has to stay a solid card.
         .background(Self.calloutBackground, in: RoundedRectangle(cornerRadius: 8))
         .shadow(color: .black.opacity(Self.shadowOpacity), radius: 3, y: 1)
     }
