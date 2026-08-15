@@ -156,6 +156,23 @@ nonisolated struct RecordingElevationFilter: Sendable {
     static let maximumVerticalAccuracy: CLLocationAccuracy = 15
     static let gpsCorrectionWeight = 0.02
 
+    /// The GPS altitude a fix may contribute, or `nil` when its vertical
+    /// accuracy is missing or too loose to trust — or when the altitude
+    /// itself isn't a number.
+    ///
+    /// One function rather than one test per caller: ``RecordingPoint`` builds
+    /// its own elevation straight from a fix when no barometer is running, and
+    /// while that check was written out a second time the two shared a
+    /// threshold by coincidence. Tightening one and not the other would have
+    /// silently changed which recordings get elevation, with nothing to say so.
+    static func trustedAltitude(of location: CLLocation) -> CLLocationDistance? {
+        guard location.verticalAccuracy >= 0,
+              location.verticalAccuracy <= maximumVerticalAccuracy,
+              location.altitude.isFinite
+        else { return nil }
+        return location.altitude
+    }
+
     private var latestRelativeAltitude: Double?
     private var relativeAnchor: Double?
     private var elevationAnchor: Double?
@@ -176,14 +193,7 @@ nonisolated struct RecordingElevationFilter: Sendable {
     }
 
     mutating func elevation(for location: CLLocation) -> Double? {
-        let gpsAltitude: Double?
-        if location.verticalAccuracy >= 0,
-           location.verticalAccuracy <= Self.maximumVerticalAccuracy,
-           location.altitude.isFinite {
-            gpsAltitude = location.altitude
-        } else {
-            gpsAltitude = nil
-        }
+        let gpsAltitude = Self.trustedAltitude(of: location)
 
         guard let relativeAltitude = latestRelativeAltitude else { return gpsAltitude }
 

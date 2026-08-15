@@ -38,12 +38,16 @@ struct HikeRenameTests {
         #expect(hike.displayTitle == "Ridge Loop")
     }
 
-    @Test("displayTitle falls back to title when customName is whitespace only")
-    func displayTitleIgnoresBlankCustomName() {
+    /// The name this test used to carry ("falls back to title when customName
+    /// is whitespace only") described the opposite of what it asserts, and of
+    /// what ``Hike/displayTitle`` does. The behaviour is deliberate — the
+    /// getter tests `isEmpty`, not blankness, and trimming belongs to the UI
+    /// layer, which `commitWhitespaceDraftClearsCustomName` below covers — so
+    /// the name moved rather than the assertion.
+    @Test("displayTitle uses a whitespace-only customName as written")
+    func displayTitleKeepsBlankCustomName() {
         let hike = Hike(title: "Ridge Loop", distanceMeters: 1000)
         hike.customName = "   "
-        // `displayTitle` checks `isEmpty`, not blankness, so a whitespace-only
-        // value is used as written; trimming is the UI layer's job.
         #expect(hike.displayTitle == "   ")
     }
 

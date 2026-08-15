@@ -75,15 +75,23 @@ nonisolated final class CachingTileOverlayRenderer: MKOverlayRenderer, TileCache
 
     private let tileOverlay: TileOverlay
 
+    /// The cache this renderer answers to — the overlay's, never the app's
+    /// singleton. ``TileOverlay/cache`` is injectable precisely so a test can
+    /// hand over one wired to a stub transport and its own directories, and a
+    /// renderer that reached for `TileCache.shared` instead would register its
+    /// reconnect listener on, and read `isOnline` from, a cache the overlay
+    /// has nothing to do with.
+    private var cache: TileCache { tileOverlay.cache }
+
     init(overlay: TileOverlay) {
         tileOverlay = overlay
         super.init(overlay: overlay)
         // Retry tiles once the network is back (delivered on the main queue).
-        TileCache.shared.addObserver(self)
+        overlay.cache.addObserver(self)
     }
 
     deinit {
-        TileCache.shared.removeObserver(self)
+        tileOverlay.cache.removeObserver(self)
         retryWake.withLock { $0.task?.cancel() }
     }
 
@@ -121,7 +129,7 @@ nonisolated final class CachingTileOverlayRenderer: MKOverlayRenderer, TileCache
         // Offline, `TileFailureLog` holds every failed tile indefinitely and
         // the reconnect notification is what releases them — so there is
         // nothing for a timer to make eligible.
-        guard TileCache.shared.isOnline, let due = failures.withLock({ $0.earliestRetry() }) else { return }
+        guard cache.isOnline, let due = failures.withLock({ $0.earliestRetry() }) else { return }
 
         retryWake.withLock { wake in
             // A wake-up already scheduled at or before this deadline covers it.
@@ -207,7 +215,7 @@ nonisolated final class CachingTileOverlayRenderer: MKOverlayRenderer, TileCache
         // Skip tiles we already know we can't get — until their backoff runs
         // out, or a reconnect clears them outright.
         let now = ContinuousClock.now
-        let isOnline = TileCache.shared.isOnline
+        let isOnline = cache.isOnline
         guard failures.withLock({ $0.mayAttempt(key, at: now, isOnline: isOnline) }) else { return }
 
         let isNew = inFlight.withLock { $0.insert(key).inserted }

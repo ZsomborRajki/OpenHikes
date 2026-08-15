@@ -70,11 +70,9 @@ nonisolated struct RecordingPoint: Equatable, Sendable {
         speed = location.speed >= 0 ? location.speed : nil
         self.flags = flags
 
-        if location.verticalAccuracy >= 0, location.verticalAccuracy <= 15 {
-            elevation = location.altitude
-        } else {
-            elevation = nil
-        }
+        // Same rule as the barometric filter's, and deliberately the same
+        // function: two copies of it drifted apart silently.
+        elevation = RecordingElevationFilter.trustedAltitude(of: location)
     }
 
     init(sharedFix: SharedRecordingFix) {

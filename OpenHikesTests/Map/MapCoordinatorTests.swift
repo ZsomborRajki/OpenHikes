@@ -543,10 +543,11 @@ extension MapCoordinatorTests {
         coordinator.fitToCurrentRoute(map, animated: false)
 
         let polyline = try #require(coordinator.routeOverlay)
-        #expect(map.visibleMapRect.contains(polyline.boundingMapRect.origin))
+        // Containment, not intersection: a viewport that merely overlaps the
+        // trail is exactly the failure this test is here to catch.
         #expect(
-            map.visibleMapRect.intersects(polyline.boundingMapRect),
-            "the trail is what the map was asked to frame"
+            map.visibleMapRect.contains(polyline.boundingMapRect),
+            "the trail is what the map was asked to frame, all of it"
         )
     }
 

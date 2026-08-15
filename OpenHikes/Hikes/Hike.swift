@@ -21,7 +21,7 @@ final class Hike {
     /// the map polyline; other UI reads ``tintOpaque``.
     var tintHex: String
     /// Map polyline width, in points.
-    var routeWidth: Double
+    var routeWidth: Double = 3
     /// How the map draws this route's line — see ``RouteLinePattern``. Stored
     /// as its stable string id (like ``tintHex``) rather than as an enum, so an
     /// unrecognised value degrades to the default instead of failing to decode.
@@ -52,7 +52,7 @@ final class Hike {
 
     /// Records of offline tile downloads for this hike, enough to recompute (and
     /// so measure and remove) exactly the tiles each one saved.
-    var offlineDownloads: [OfflineDownloadRecord]
+    var offlineDownloads: [OfflineDownloadRecord] = []
 
     /// Cache keys of tiles auto-saved for this hike while browsing (OSM-style,
     /// non-bulk-downloadable providers) — recorded exactly, since (unlike
