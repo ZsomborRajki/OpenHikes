@@ -91,10 +91,23 @@ Scripts/lint.sh --fix
 
 `Scripts/lint.sh` is the same strict SwiftLint the CI `quality` job runs, at
 the version pinned in `.swiftlint-version` — CI invokes the script rather than
-`swiftlint` directly, so the two cannot disagree. SwiftLint is not part of the
-Xcode build, so nothing reports a violation until it is run; `Scripts/install-git-hooks.sh`
-installs an opt-in pre-push hook that runs it for you (bypass with
-`git push --no-verify`).
+`swiftlint` directly, so the two cannot disagree. The Xcode build additionally
+runs SwiftLint through SwiftLintPlugins' `SwiftLintBuildToolPlugin`, attached to
+the app, widget and both unit-test targets, but it lints without `--strict` and
+at the version the package resolves to, so it surfaces violations as warnings
+rather than deciding whether a change is clean. `Scripts/lint.sh` stays the
+authority; `Scripts/install-git-hooks.sh` installs an opt-in pre-push hook that
+runs it for you (bypass with `git push --no-verify`).
+
+A build tool plugin only runs once its package fingerprint is trusted, and that
+trust is recorded per user in `~/Library/org.swift.swiftpm/security/plugins.json`
+— outside the repository. A fresh CI machine therefore fails with `Plugin
+"SwiftLintBuildToolPlugin" ... must be enabled before it can be used` until it is
+told otherwise. GitHub Actions passes `-skipPackagePluginValidation` to every
+`xcodebuild` call; Xcode Cloud composes its own invocation and cannot take that
+flag, so `ci_scripts/ci_post_clone.sh` sets the equivalent Xcode preference
+instead. Add the flag to any new `xcodebuild` step in `ci.yml`, and keep the
+post-clone script if a workflow builds through Xcode Cloud.
 
 Unit and integration tests use Swift Testing. `OpenHikesUITests` uses
 XCTest/XCUITest because Apple's UI automation and launch-performance metrics
@@ -146,6 +159,7 @@ domain folders.
 | `OpenHikesTests/` | App-hosted tests mirroring the app's domain folders. |
 | `OpenWidgetTests/` | App-hosted tests for the widget's timeline, families, and basemap pairing. |
 | `OpenHikesUITests/` | iOS Simulator UI automation, location spoofing, and launch metrics. |
+| `ci_scripts/` | Xcode Cloud hooks, run automatically by name. |
 
 See [`.github/copilot-instructions.md`](.github/copilot-instructions.md) for architecture and repository conventions. See [`CODE_REVIEW.md`](CODE_REVIEW.md) for the open code-quality action plan and unresolved design decisions.
 
