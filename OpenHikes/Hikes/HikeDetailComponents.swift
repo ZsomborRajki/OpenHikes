@@ -39,7 +39,7 @@ struct TrailProgressView: View {
                         : "location.fill"
                 )
                 .font(.caption.weight(.medium))
-                .foregroundStyle(live == nil ? AnyShapeStyle(.secondary) : AnyShapeStyle(Color.blue))
+                .foregroundStyle(live == nil ? .secondary : Color.blue)
 
                 Spacer()
 
@@ -341,7 +341,7 @@ struct OfflineDownloadStatus: View {
         if let note {
             Text(note)
                 .font(.caption2)
-                .foregroundStyle(downloader.isFailed ? AnyShapeStyle(.red) : AnyShapeStyle(.secondary))
+                .foregroundStyle(downloader.isFailed ? .red : .secondary)
                 .frame(maxWidth: .infinity, alignment: .center)
                 .multilineTextAlignment(.center)
         }

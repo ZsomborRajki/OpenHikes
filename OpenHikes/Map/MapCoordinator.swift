@@ -100,10 +100,6 @@ extension MapView {
         private static let routeInsetStandard: CGFloat = 60
         private static let routeInsetTop: CGFloat = 80
         private static let initialCenterMeters: CLLocationDistance = 2000
-        private static let annotationDiameter: CGFloat = 18
-        private static let annotationBorderWidth: CGFloat = 3
-        private static let annotationShadowOpacity: Float = 0.3
-        private static let annotationShadowRadius: CGFloat = 2
         private static let recordingAlpha: CGFloat = 0.9
         private static let overlapFadedAlpha: CGFloat = 0.25
 
@@ -550,7 +546,7 @@ extension MapView.Coordinator {
         view.canShowCallout = false
 
         // A small filled dot in the route tint with a white ring.
-        let diameter: CGFloat = Self.annotationDiameter
+        let diameter: CGFloat = 18
         view.bounds = CGRect(x: 0, y: 0, width: diameter, height: diameter)
         #if os(macOS)
         view.wantsLayer = true
@@ -564,10 +560,11 @@ extension MapView.Coordinator {
         layer.borderColor = UIColor.white.cgColor
         #endif
         layer.cornerRadius = diameter / 2
-        layer.borderWidth = Self.annotationBorderWidth
+        layer.borderWidth = 3
+        let annotationShadowOpacity: Float = 0.3
         layer.shadowColor = CGColor(gray: 0, alpha: 1)
-        layer.shadowOpacity = Self.annotationShadowOpacity
-        layer.shadowRadius = Self.annotationShadowRadius
+        layer.shadowOpacity = annotationShadowOpacity
+        layer.shadowRadius = 2
         layer.shadowOffset = .zero
         return view
     }

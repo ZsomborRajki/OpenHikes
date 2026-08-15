@@ -270,7 +270,6 @@ nonisolated struct TrailGraphPrefetchRetryPolicy: Sendable {
         static let initialDelay: TimeInterval = 30
         static let maximumDelay: TimeInterval = 15 * 60
         static let jitterFraction = 0.25
-        static let maximumExponent = 30
     }
 
     let initialDelay: TimeInterval
@@ -289,10 +288,7 @@ nonisolated struct TrailGraphPrefetchRetryPolicy: Sendable {
     }
 
     func delay(afterFailures failures: Int, jitter: Double) -> TimeInterval {
-        let exponent = min(
-            max(0, failures - 1),
-            Defaults.maximumExponent
-        )
+        let exponent = min(max(0, failures - 1), 30)
         let baseDelay = min(
             maximumDelay,
             initialDelay * pow(2, Double(exponent))

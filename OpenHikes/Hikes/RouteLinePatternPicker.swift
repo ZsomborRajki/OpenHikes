@@ -18,9 +18,7 @@ import SwiftUI
 struct RouteLinePatternPicker: View {
     let hike: Hike
 
-    private static let swatchHeight: CGFloat = 26
     private static let tileCornerRadius: CGFloat = 10
-    private static let selectedBorderWidth: CGFloat = 2
 
     var body: some View {
         VStack(alignment: .leading, spacing: 6) {
@@ -35,12 +33,13 @@ struct RouteLinePatternPicker: View {
     }
 
     private func swatchButton(for pattern: RouteLinePattern) -> some View {
+        let swatchHeight: CGFloat = 26
         let isSelected = hike.routeLinePattern == pattern
         return Button {
             hike.routeLinePattern = pattern
         } label: {
             RouteLinePatternSwatch(pattern: pattern, tint: hike.tintOpaque)
-                .frame(height: Self.swatchHeight)
+                .frame(height: swatchHeight)
                 .frame(maxWidth: .infinity)
                 .padding(.vertical, 6)
                 .background(
@@ -51,7 +50,7 @@ struct RouteLinePatternPicker: View {
                     RoundedRectangle(cornerRadius: Self.tileCornerRadius)
                         .strokeBorder(
                             isSelected ? hike.tintOpaque : .clear,
-                            lineWidth: Self.selectedBorderWidth
+                            lineWidth: 2
                         )
                 }
         }

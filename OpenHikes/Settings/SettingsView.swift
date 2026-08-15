@@ -33,7 +33,6 @@ struct SettingsView: View {
     @AppStorage(SettingsKey.cellularTileDownloads)
     private var cellularTileDownloads = SettingsDefault.cellularTileDownloads
 
-    private static let accountIconSize: CGFloat = 44
     private static let disabledOpacity: Double = 0.55
 
     /// Tile bytes on disk, split into offline coverage and browsing residue;
@@ -78,7 +77,7 @@ struct SettingsView: View {
         Section {
             HStack(spacing: 14) {
                 Image(systemName: "person.crop.circle.fill")
-                    .font(.system(size: Self.accountIconSize))
+                    .font(.system(size: 44))
                     .foregroundStyle(.secondary)
                     .accessibilityHidden(true)
                 VStack(alignment: .leading, spacing: 2) {
@@ -303,7 +302,7 @@ struct SettingsView: View {
             HStack(alignment: .top, spacing: 12) {
                 Image(systemName: isSelected ? "checkmark.circle.fill" : "circle")
                     .font(.title3)
-                    .foregroundStyle(isSelected ? AnyShapeStyle(Color.accentColor) : AnyShapeStyle(.secondary))
+                    .foregroundStyle(isSelected ? Color.accentColor : .secondary)
                     .accessibilityHidden(true)
 
                 VStack(alignment: .leading, spacing: 3) {

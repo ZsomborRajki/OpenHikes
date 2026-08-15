@@ -122,11 +122,6 @@ public struct TrailGlyphView: View {
 /// basemap) and ``TrailMapView`` (Mercator, registered to a rendered map) so
 /// the trail reads identically on every surface regardless of what's under it.
 enum TrailStroke {
-    private static let casingOpacity: Double = 0.85
-    private static let casingWidthBonus: CGFloat = 2.5
-    private static let ringDiameterMultiplier: CGFloat = 2.6
-    private static let dotDiameterMultiplier: CGFloat = 1.6
-
     /// - Parameter casing: draws a light halo beneath the line. Off over a
     ///   flat background where it would only add fuzz; on over map imagery,
     ///   where a bare stroke loses contrast the moment it crosses a road or a
@@ -145,6 +140,8 @@ enum TrailStroke {
         path.addLines(points)
 
         if casing {
+            let casingOpacity: Double = 0.85
+            let casingWidthBonus: CGFloat = 2.5
             context.stroke(
                 path,
                 with: .color(.white.opacity(casingOpacity)),
@@ -158,6 +155,8 @@ enum TrailStroke {
         )
 
         guard let dot = liveFixPoint else { return }
+        let ringDiameterMultiplier: CGFloat = 2.6
+        let dotDiameterMultiplier: CGFloat = 1.6
         let ringDiameter = lineWidth * ringDiameterMultiplier
         let dotDiameter = lineWidth * dotDiameterMultiplier
         let ringRect = CGRect(

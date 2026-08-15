@@ -20,8 +20,6 @@ import Synchronization
 /// `@unchecked` because of the superclass: `URLProtocol` is not declared
 /// `Sendable` by the SDK. The one piece of shared state is a `Mutex`.
 nonisolated final class StubTileProtocol: URLProtocol, @unchecked Sendable {
-    private static let httpOK = 200
-
     /// What the tile server says back.
     struct Response: Sendable {
         var statusCode: Int = 200
@@ -41,7 +39,8 @@ nonisolated final class StubTileProtocol: URLProtocol, @unchecked Sendable {
         /// A 200 carrying something that isn't an image: a captive-portal
         /// login page, an HTML error body, a truncated download.
         static func undecodable(_ body: String = "<html>Rate limited</html>") -> Self {
-            Self(statusCode: httpOK, data: Data(body.utf8))
+            let httpOK = 200
+            return Self(statusCode: httpOK, data: Data(body.utf8))
         }
 
         static func status(_ code: Int) -> Self {

@@ -17,8 +17,6 @@ typealias MapViewRepresentable = UIViewRepresentable
 #endif
 
 struct MapView: MapViewRepresentable, Equatable {
-    private static let initialTrackingButtonY: CGFloat = 400
-
     private static let logger = Logger(subsystem: "OpenHikes", category: "MapView")
 
     /// Source of the user's live location. Observed directly by the map (not
@@ -148,9 +146,10 @@ struct MapView: MapViewRepresentable, Equatable {
         mapView.addSubview(tracking)
         coordinator.trackingButton = tracking
 
+        let initialTrackingButtonY: CGFloat = 400
         // The bottom is pinned to the map's top (full-screen space) so its constant
         // is a global Y that the sheet observation drives as the sheet is dragged.
-        let bottom = tracking.bottomAnchor.constraint(equalTo: mapView.topAnchor, constant: Self.initialTrackingButtonY)
+        let bottom = tracking.bottomAnchor.constraint(equalTo: mapView.topAnchor, constant: initialTrackingButtonY)
         coordinator.trackingBottomConstraint = bottom
 
         let guide = mapView.safeAreaLayoutGuide

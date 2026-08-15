@@ -33,7 +33,6 @@ final class RecordingTrace {
     nonisolated deinit { /* intentionally ignored */ }
 
     static let chunkSize = 256
-    private static let minimumDistinctDistanceMeters = 0.05
 
     @ObservationIgnored private(set) var committedChunks: [[CLLocationCoordinate2D]] = []
     @ObservationIgnored private(set) var tail: [CLLocationCoordinate2D] = []
@@ -250,6 +249,7 @@ final class RecordingTrace {
         to coordinates: inout C
     ) -> Bool where C: RangeReplaceableCollection & BidirectionalCollection,
         C.Element == CLLocationCoordinate2D {
+        let minimumDistinctDistanceMeters = 0.05
         if let previous = coordinates.last,
            RouteGeometry.distanceMeters(
                from: previous,

@@ -63,7 +63,6 @@ nonisolated final class PerformanceUITests: XCTestCase {
     private var scenario = ""
     private static let browsingGestures = 3
     private static let scrubSteps = 9
-    private static let dragPressSeconds: TimeInterval = 0.1
     private static let launchIterations = 3
 
     // MARK: - Idle
@@ -344,7 +343,7 @@ nonisolated final class PerformanceUITests: XCTestCase {
             let end = chart.coordinate(
                 withNormalizedOffset: CGVector(dx: 0.9, dy: 0.5)
             )
-            start.press(forDuration: Self.dragPressSeconds, thenDragTo: end)
+            start.press(forDuration: 0.1, thenDragTo: end)
         }
 
         // The drag is the strict one: a continuous scrub must not escape the
