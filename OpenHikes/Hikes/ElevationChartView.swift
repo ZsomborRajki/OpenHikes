@@ -73,10 +73,11 @@ struct ElevationChartView: View, Equatable {
     }
 
     var body: some View {
-        // The chart is the one view live follow is *meant* to invalidate ~1/s,
-        // so its rate is the reference every other body's rate is judged
-        // against: anything else moving at this rate is following location it
-        // was supposed to be insulated from.
+        // Live follow is *meant* to invalidate this body (and the progress
+        // row) once per published fix — at most once a second, and only while
+        // the walker is moving. That rate is the reference every other body's
+        // rate is judged against: anything else moving at it is following
+        // location it was supposed to be insulated from.
         RenderSignpost.mark("ElevationChartBody", "\(profile.samples.count) samples")
         let domain = elevationDomain(profile, plotWidth: plotWidth)
         let trackerSample = profile.sample(atDistance: tracker.trackerDistance)

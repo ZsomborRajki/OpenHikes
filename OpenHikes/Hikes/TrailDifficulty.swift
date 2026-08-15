@@ -14,8 +14,8 @@ import Foundation
 /// most widely used difficulty system in OSM. The grades below map one-to-one
 /// onto the six SAC values, plus the two honest ways of not knowing.
 ///
-/// The cases are declared in ascending difficulty order, which is also the
-/// natural presentation order.
+/// The cases are declared alphabetically; the order they are *presented* in —
+/// easiest grade first — is ``displayOrdering``.
 nonisolated enum TrailDifficulty: String, CaseIterable, Codable, Hashable, Sendable {
     /// Broken terrain; continuous use of hands required.
     case alpineHiking = "alpine_hiking"

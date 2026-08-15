@@ -8,10 +8,9 @@
 //
 //  WidgetKit gives an app a finite number of timeline reloads per day and
 //  quietly throttles a widget that overruns it. `publishLiveFix` is fed from a
-//  once-a-second poll and defends itself with a 45-second interval, but that
-//  interval has an explicit escape hatch — a change in on/off-route status
-//  publishes immediately, throttle or not — and nothing bounds how often that
-//  escape hatch can fire.
+//  once-a-second poll and defends itself with a 45-second interval, and that
+//  interval has an escape hatch — a change in on/off-route status publishes
+//  immediately, throttle or not — which is what these tests hold to a bound.
 //
 
 import CoreLocation
@@ -62,14 +61,14 @@ final class WidgetFeedBudgetTests {
 
     /// A walker on the edge of the 75 m follow threshold — a ridge path with
     /// trees, a switchback, a phone in a rucksack — flips on/off-route with
-    /// ordinary GPS noise. Every flip takes the escape hatch: a full
+    /// ordinary GPS noise. Every flip that takes the escape hatch costs a full
     /// `SharedStore.load`, a re-encode, an atomic write to the App Group, and
-    /// a `WidgetCenter.reloadTimelines` call, once a second, indefinitely.
+    /// a `WidgetCenter.reloadTimelines` call.
     ///
-    /// The throttle exists to stop exactly this, and the status-flip bypass
-    /// reopens it. What's missing is a floor — a minimum interval, or
-    /// hysteresis on the threshold, so that recovering the trail is prompt but
-    /// oscillating around it is not free.
+    /// Two things hold that down: `statusFlipInterval` is a floor under the
+    /// bypass, and `offRouteExitMeters` widens the threshold for leaving the
+    /// trail, so recovering it stays prompt while oscillating around it is not
+    /// free.
     @Test("flapping on and off the trail can't spend the whole reload budget")
     func statusFlappingIsBounded() async throws {
         let hike = Fixture.hike(in: context)

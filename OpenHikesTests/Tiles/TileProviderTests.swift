@@ -75,8 +75,8 @@ struct TileProviderTests {
     /// A missing key resolves to an empty string rather than leaving `{key}`
     /// in the URL — the request still fails, but as a plain 401/403 rather
     /// than a malformed URL. Reaching this at all now takes a stored id that
-    /// outlived its key (see `renderable(id:)`), because Settings won't let a
-    /// keyless provider be picked in the first place.
+    /// outlived its key (see `renderable(id:)`), because Settings won't offer
+    /// a key-gated provider with no key in the first place.
     @Test("a missing key leaves an empty parameter, not a literal placeholder")
     func resolvedTemplateWithoutKey() {
         let resolved = TileProvider.stadiaOutdoors.resolvedTemplate(apiKey: "")
@@ -139,9 +139,9 @@ struct TileProviderTests {
         #expect(provider.resolvedTemplate(apiKey: "SECRET") == provider.urlTemplate)
     }
 
-    /// The settings keys are read from two places each (the settings UI and
-    /// the map/tracker), by name — pinning the strings is what stops a rename
-    /// on one side from silently resetting a user's choice.
+    /// Each of these is written in one place and read in another, by name —
+    /// pinning the strings is what stops a rename on one side from silently
+    /// resetting a user's choice.
     @Test("persisted setting keys are stable")
     func settingsKeys() {
         #expect(SettingsKey.tileProviderID == "settings.tileProviderID")

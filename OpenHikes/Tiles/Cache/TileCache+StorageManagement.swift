@@ -18,7 +18,8 @@ nonisolated extension TileCache {
         var claimed: Int64 = 0
         /// Bytes held by everything else: tiles fetched to draw the map that no
         /// hike ever claimed (panned past the corridor, browsed before anything
-        /// was selected, over a hike's cap), which nothing reclaims on its own.
+        /// was selected, over a hike's cap). Only the TTL sweep and
+        /// ``trimCache(claimedBy:limit:)`` reclaim these.
         var unclaimed: Int64 = 0
 
         var total: Int64 { claimed + unclaimed }

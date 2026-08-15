@@ -81,8 +81,9 @@ nonisolated enum RouteLinePattern: String, CaseIterable, Identifiable, Sendable 
     /// Empty for an unbroken stroke.
     ///
     /// Both derive from the width so a 12 pt line doesn't close its own gaps:
-    /// round caps extend each stroke by half the line width at either end, and
-    /// a fixed gap disappears entirely once the line is thick enough.
+    /// a fixed gap disappears entirely once the line is thick enough, and a
+    /// dotted pattern's round caps extend every stroke by half the line width
+    /// at either end on top of that.
     func dashLengths(forWidth width: Double) -> [Double] {
         let lineWidth = max(width, Self.minimumLineWidth)
         switch self {

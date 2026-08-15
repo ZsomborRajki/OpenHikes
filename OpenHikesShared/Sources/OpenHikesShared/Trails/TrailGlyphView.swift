@@ -5,9 +5,9 @@
 //  Draws a trail as a stroked line fitted to the view's bounds, with an
 //  optional dot at the last-known position — no basemap, no image assets, no
 //  network. This is the iOS widget's fallback whenever a rendered basemap
-//  isn't available yet:
-//  the first seconds after a trail is selected, offline, or if a snapshot
-//  render failed. See ``TrailMapView`` for the phone's map-backed version.
+//  isn't available yet: the first seconds after a trail is selected, offline,
+//  or if a snapshot render failed. See ``TrailMapView``, which draws this
+//  instead of a map in exactly those cases.
 //
 //  The fit-to-bounds projection here is what makes it a good fallback rather
 //  than a degraded one: with no basemap to line up against, the trail is free
@@ -87,8 +87,6 @@ public struct TrailGlyphView: View {
             minLon = min(minLon, point.longitude); maxLon = max(maxLon, point.longitude)
         }
         let centerLat = (minLat + maxLat) / 2
-        // Clamped well away from zero so a degenerate (near-polar, never
-        // realistic for a hiking trail) bounding box can't blow up the scale.
         let cosLat = max(cos(centerLat * .pi / 180), Self.minCosLat)
 
         func flat(_ c: SharedTrailSnapshot.CodableCoordinate) -> CGPoint {

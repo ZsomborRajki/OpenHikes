@@ -265,7 +265,9 @@ because a weak signal makes the radio transmit harder and for longer — was
 treated exactly like a miss on home Wi-Fi.
 
 `TileNetworkPolicy` now decides, split by purpose rather than by caller, because
-the same `loadTile` serves a visible tile and a prefetch:
+what matters is whether anyone is waiting for the tile: `loadTile` takes that as
+a parameter and defaults to `.interactive`, while `saveTileDurably` — the
+bulk-download path — fixes it at `.speculative`:
 
 | Condition | Interactive (drawing now) | Speculative (prefetch) |
 |---|---|---|

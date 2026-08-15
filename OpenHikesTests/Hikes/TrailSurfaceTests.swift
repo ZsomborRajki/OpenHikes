@@ -164,8 +164,9 @@ struct TrailSurfaceBreakdownTests {
         #expect(
             breakdown.shares.map(\.surface) == [.ground, .paved, .gravel, .unmapped]
         )
-        // `paved` precedes `gravel` on the declaration-order tie-break, so a
-        // rebuild of the same data can't reshuffle the legend.
+        // `paved` precedes `gravel` in `TrailSurface.displayOrdering`, which
+        // is the tie-break, so a rebuild of the same data can't reshuffle the
+        // legend.
         let dominant = try #require(breakdown.dominant)
         #expect(dominant.surface == .ground)
     }

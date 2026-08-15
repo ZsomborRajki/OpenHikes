@@ -16,8 +16,7 @@ import Foundation
 /// that can't wait for a disk write. Chaining each new operation onto the
 /// previous one's `Task` orders them, but leaves no way to ask *"is the queue
 /// empty yet?"*: awaiting the tail races with whatever was appended while that
-/// await was suspended, which is why the widget-merge path used to re-read a
-/// revision counter in a loop until it stopped changing.
+/// await was suspended.
 ///
 /// A stream gives that question an answer. ``drain()`` submits a barrier and
 /// waits for it, and because the consumer takes operations in order, every

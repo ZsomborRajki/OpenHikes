@@ -2,9 +2,10 @@
 //  AutoSaveController.swift
 //  OpenHikes
 //
-//  Owns which hike (if any) is currently auto-saving OSM tiles while the user
-//  browses its map, and periodically drains newly-persisted tile keys from
-//  ``AutoSaveTileStore`` into that hike's SwiftData-backed manifest.
+//  Owns which hike (if any) is currently auto-saving map tiles while the user
+//  browses its map, and folds newly-persisted tile keys from
+//  ``AutoSaveTileStore`` into that hike's SwiftData-backed manifest as they
+//  arrive.
 //
 
 import CoreLocation
@@ -19,10 +20,10 @@ final class AutoSaveController {
     /// selected-hike state, the pushed detail view); this controller shouldn't
     /// be the thing keeping a deleted hike around.
     private weak var activeHike: Hike?
-    /// Not UI state, so excluded from observation tracking. `nonisolated(unsafe)`:
-    /// only ever written in `init`/`deinit`, and `Task` cancellation is
-    /// thread-safe, so this is safe to touch from `deinit` (which, on a
-    /// main-actor-isolated class, runs nonisolated).
+    /// Not UI state, so excluded from observation tracking. `nonisolated(unsafe)`
+    /// so `deinit` — which runs nonisolated on a main-actor-isolated class — can
+    /// cancel them; every write is on the main actor, and `Task` cancellation is
+    /// itself thread-safe.
     @ObservationIgnored nonisolated(unsafe) private var drainTask: Task<Void, Never>?
     @ObservationIgnored nonisolated(unsafe) private var activationTask: Task<Void, Never>?
     @ObservationIgnored private var isSuspended = false

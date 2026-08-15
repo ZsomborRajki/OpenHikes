@@ -38,10 +38,11 @@ struct PerformanceCounters {
 
     /// True when the two readings describe the same amount of *work*.
     ///
-    /// The sampler's own entries are excluded on purpose: elapsed process
-    /// time, CPU seconds and footprint move every second whether or not the
-    /// app is doing anything, so a comparison that included them could never
-    /// report a quiet app and `settle(in:)` would spin until its timeout.
+    /// The sampler's own entries are excluded on purpose: the once-a-second
+    /// sample count, CPU seconds and footprint move every second whether or
+    /// not the app is doing anything, so a comparison that included them could
+    /// never report a quiet app and `settle(in:)` would spin until its
+    /// timeout.
     func isEquivalent(to other: Self) -> Bool {
         let sampled: Set<String> = ["Process", "CPU.s", "Footprint.MB"]
         let compared = Set(values.keys).union(other.values.keys)

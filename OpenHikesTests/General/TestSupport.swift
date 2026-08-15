@@ -85,9 +85,9 @@ enum Fixture {
         }
     }
 
-    /// A short out-and-back near Cupertino: ~1.4 km, climbs then descends,
-    /// one point per minute. Small enough to reason about by hand, real
-    /// enough that distances/gradients aren't degenerate.
+    /// A short line due north near Cupertino: six points ~1.1 km apart end to
+    /// end, one per minute, climbing and dipping twice. Small enough to reason
+    /// about by hand, real enough that distances/gradients aren't degenerate.
     nonisolated static let ridgeRoute: [RouteCoordinate] = makeRidgeRoute()
 
     nonisolated private static func makeLoopRoute() -> [RouteCoordinate] {
@@ -105,9 +105,9 @@ enum Fixture {
         return points
     }
 
-    /// A closed loop whose finish comes back within a few metres of its
-    /// start — the geometry that makes route-matching ambiguous, and the
-    /// reason `RouteProfile.nearestPoint` takes a continuity reference.
+    /// A ~500 m-radius loop whose last point repeats its first — the geometry
+    /// that makes route-matching ambiguous, and the reason
+    /// `RouteProfile.nearestPoint` takes a continuity reference.
     nonisolated static let loopRoute: [RouteCoordinate] = makeLoopRoute()
 
     nonisolated private static func makeOutAndBackRoute() -> [RouteCoordinate] {
@@ -193,8 +193,6 @@ enum Fixture {
         static let samplesPerPixel: Int = 4
     }
 
-    /// A 1×1 tile image that really encodes — what the tile pipeline is
-    /// handed in production, minus the 256×256.
     /// A tile at the size providers actually serve, for the questions where
     /// 1×1 gives the wrong answer — chiefly what a decoded tile costs in
     /// memory, where the whole point is that it dwarfs the compressed file.
@@ -279,14 +277,13 @@ nonisolated enum TileStore {
 /// This is the seam the suites used to do without. `TileCache.shared` writes
 /// into the host app's real `Caches`/`Application Support` pair and
 /// `AutoSaveTileStore.shared` has exactly one active hike, so every suite that
-/// touched either was mutating state its neighbours could see — and since
-/// Swift Testing runs top-level suites in parallel, the only thing keeping
-/// them apart was a hand-written `.serialized` nesting that had to be
-/// rediscovered by breaking it. A sandbox per suite makes that impossible to
-/// get wrong: there is nothing shared left to corrupt.
+/// touched either was mutating state its neighbours could see — and Swift
+/// Testing runs top-level suites in parallel. A sandbox per suite makes that
+/// impossible to get wrong: there is nothing shared left to corrupt.
 ///
-/// `TileCache` keeps the directory names and the key→filename mapping private,
-/// so they're restated here; a change to either belongs in this type too.
+/// `TileCache` keeps the directory names private, so they're restated here
+/// along with the key→filename mapping; a change to either belongs in this
+/// type too.
 nonisolated final class TileSandbox: Sendable {
     private enum Constants {
         static let secondsPerDay: Double = 86_400

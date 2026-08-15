@@ -48,9 +48,10 @@ extension HikeDetailView {
     /// only plain, cheap properties here (array references, not `.coordinates`,
     /// which remaps the whole route) — everything expensive (tile-grid
     /// enumeration across every download record, the keys `Set` union, and the
-    /// disk stat calls) happens inside the detached task. Auto-save manifest
-    /// changes reach this through ``scheduleStoredBytesRefresh()`` so a run of
-    /// drains collapses into one trailing measurement.
+    /// disk stat calls) happens inside ``OfflineStorageMeasurement``, which
+    /// runs on the concurrent executor. Auto-save manifest changes reach this
+    /// through ``scheduleStoredBytesRefresh()`` so a run of drains collapses
+    /// into one trailing measurement.
     func refreshStoredBytes() {
         invalidateStoredBytesMeasurement()
         let route = hike.route
@@ -96,12 +97,12 @@ extension HikeDetailView {
 
     /// Forgets this hike's downloads and auto-saved tiles, and deletes them from
     /// disk. The key computation (tile-grid enumeration per download record) is
-    /// real CPU work, so it's done inside the detached task, mirroring
-    /// ``refreshStoredBytes()``.
+    /// real CPU work, so it happens inside ``StoredTileDeletionPlan``'s
+    /// `@concurrent` removal rather than here, mirroring ``refreshStoredBytes()``.
     func deleteStoredTiles() {
-        // First, and before the manifest is read: switching auto-save off folds
-        // in the tiles saved since the last drain. Reading the manifest ahead of
-        // that would delete a snapshot taken up to two seconds ago and strand
+        // Before the manifest is read: switching auto-save off folds in the
+        // tiles saved since the last drain. Reading the manifest ahead of that
+        // would delete a snapshot taken up to two seconds ago and strand
         // everything saved since — durably, where nothing would reclaim it.
         let hikes: [Hike]
         do {

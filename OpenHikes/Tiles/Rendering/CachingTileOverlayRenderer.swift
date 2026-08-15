@@ -2,7 +2,7 @@
 //  CachingTileOverlayRenderer.swift
 //  OpenHikes
 //
-//  Draws OSM tiles from the cache, falling back to clipped lower-zoom tiles
+//  Draws map tiles from the cache, falling back to clipped lower-zoom tiles
 //  while higher-zoom tiles load. This avoids the blank/flickering tiles seen
 //  with MKTileOverlayRenderer when zooming hard.
 //
@@ -16,13 +16,13 @@ import Synchronization
 
 // Why the tile loads below go through a gate at all:
 //
-// `loadTileIfNeeded` spawns one unstructured `Task` per cache-missed tile,
-// with nothing limiting how many run together. Normally that's a handful. But
-// right after fitting the map to a freshly-imported route, MapKit's
-// zoom-to-fit animation calls `draw(_:zoomScale:in:)` across many tiles and
-// zoom levels in quick succession, and since a fresh route has nothing cached
-// yet, every one of them is a miss. That can fire off dozens of Tasks
-// together, each blocking a thread in Swift's small cooperative pool on
+// `loadTileIfNeeded` spawns one unstructured `Task` per cache-missed tile, and
+// nothing about the draw pass bounds how many of those there are. Normally
+// that's a handful. But right after fitting the map to a freshly-imported
+// route, MapKit's zoom-to-fit animation calls `draw(_:zoomScale:in:)` across
+// many tiles and zoom levels in quick succession, and since a fresh route has
+// nothing cached yet, every one of them is a miss. That can fire off dozens of
+// Tasks together, each blocking a thread in Swift's small cooperative pool on
 // synchronous filesystem work (slower still on the Simulator). The pool
 // doesn't grow to absorb that — it backs up, and since MapKit's own
 // tile-rendering dispatch competes for the same worker threads, the whole map
@@ -169,9 +169,8 @@ nonisolated final class CachingTileOverlayRenderer: MKOverlayRenderer, TileCache
                 // MapKit can hand out columns/rows outside the valid tile grid
                 // while panning/scrolling continuously around the world (or
                 // near the poles) — an unnormalized path produces an invalid
-                // request URL that the tile server 400s, permanently blanking
-                // that spot until reconnect. Normalize before it's used for
-                // caching, fallback, or fetching.
+                // request URL the tile server rejects, leaving that spot blank.
+                // Normalize before it's used for caching, fallback, or fetching.
                 let path = MKTileOverlayPath(
                     x: SlippyTileMath.wrap(x, to: tileCount),
                     y: SlippyTileMath.clamp(y, to: tileCount),

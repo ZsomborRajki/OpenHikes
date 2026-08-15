@@ -10,9 +10,9 @@
 //
 //  An actor, because this is the one part of the widget pipeline that's
 //  genuinely expensive: four MKMapSnapshotter passes (two shapes × light and
-//  dark), each a network round-trip. Serializing them here means a burst of
-//  selection changes collapses into one render, and the *last* selection is
-//  the one that ends up on disk.
+//  dark), each a network round-trip. It keeps the bookkeeping below —
+//  `inFlight` and `generation` — consistent across overlapping calls, so a
+//  burst of selection changes ends with the *last* selection on disk.
 //
 //  Nothing here runs on the live-fix path. The images depend only on where
 //  the trail is, so they're re-rendered when its geometry changes and left
@@ -72,8 +72,8 @@ actor TrailBasemapRenderer {
     }
 
     /// Renders `polyline`'s surroundings unless the images on disk already
-    /// frame it. Safe and cheap to call on every selection change and every
-    /// foreground — the common case is a bounds comparison and no work.
+    /// frame it. Safe to call on every selection change and every foreground —
+    /// the common case is a manifest load, a bounds comparison, and no render.
     func refreshIfNeeded(hikeID: UUID, polyline: [SharedTrailSnapshot.CodableCoordinate]) async {
         guard polyline.count > 1, let coverage = UnitMercatorRect(bounding: polyline) else { return }
 

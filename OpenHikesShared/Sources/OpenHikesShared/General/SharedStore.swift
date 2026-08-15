@@ -2,7 +2,9 @@
 //  SharedStore.swift
 //  OpenHikesShared
 //
-//  Reads/writes the current SharedTrailSnapshot to the App Group container.
+//  Reads and writes everything the app and the widget share through the App
+//  Group container: the trail snapshot, the live recording snapshot and its
+//  pending widget fixes, and the rendered basemaps.
 //  The same code runs unmodified in OpenHikes and OpenWidgetExtension, which
 //  resolve the same device-local App Group container.
 //

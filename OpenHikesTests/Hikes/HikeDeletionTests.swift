@@ -4,17 +4,17 @@
 //
 //  Deleting a hike is the one operation that touches every subsystem at once:
 //  the auto-save store, the tile manifests, the widget feed, the selection,
-//  and the sheet's navigation stack. `OfflineStorageAccountingTests` covers
-//  the tiles thoroughly. What isn't covered is the object itself — a deleted
+//  and the sheet's navigation stack. `StorageAccountingTests` covers the
+//  tiles thoroughly. What isn't covered is the object itself — a deleted
 //  `Hike` that other parts of the app are still holding a reference to.
 //
-//  `OpenHikesView` holds two: `selectedHike`, and `navigationPath`, which is
-//  typed `[Hike]` rather than `NavigationPath` so a widget tap can inspect it.
-//  `MapSheet.delete(_:)` clears the first when it matches and never touches
-//  the second, so a deleted model can stay in the navigation stack — and
-//  `navigationDestination(for: Hike.self)` will hand it straight to
-//  `HikeDetailView`, which reads `hike.title`, `hike.route`, `hike.tint` and
-//  builds a `RouteProfile` from them.
+//  `OpenHikesView` holds two: `selectedHike`, and `navigationPath`, typed
+//  `[SheetRoute]` rather than `NavigationPath` so a widget tap can inspect
+//  it. `MapSheet.delete(_:among:)` clears both, and these tests pin that
+//  rule: a hike left in the path would be handed straight to
+//  `HikeDetailView` by `navigationDestination(for: SheetRoute.self)`, which
+//  reads `hike.title`, `hike.route`, `hike.tint` and builds a
+//  `RouteProfile` from them.
 //
 
 import Foundation
@@ -46,35 +46,32 @@ struct HikeDeletionTests {
         #expect(remaining.isEmpty, "and it really is gone from the store")
     }
 
-    /// The screen that results. A hike deleted while its detail view is on the
-    /// navigation stack leaves that view pushed, showing a trail that no
+    /// The screen this prevents. A hike left in the navigation stack after
+    /// deletion would keep its detail view pushed, showing a trail that no
     /// longer exists — its stats, its elevation chart, its Offline and
     /// Auto-Save controls all live and tappable, writing to a detached object
     /// that nothing will persist.
     ///
-    /// `MapSheet.delete(_:)` clears `selectedHike` when it matches, which is
-    /// what stops the *map* drawing a ghost route. `navigationPath` needs the
-    /// same treatment, and gets it through `path.removeAll { $0.id == hike.id }`.
+    /// `MapSheet.delete(_:among:)` clears `selectedHike` when it matches,
+    /// which is what stops the *map* drawing a ghost route, and removes the
+    /// hike from `path` unconditionally — a widget deep link pushes onto that
+    /// path directly, so "pushed" and "selected" need not be the same hike.
     ///
-    /// Not reachable by swipe today (the list and the detail view are never on
-    /// screen together), and one step away from being reachable: the widget
-    /// deep link pushes onto this same path, and a delete-from-detail action
-    /// is the obvious next thing to add to that screen.
-    ///
-    /// Mirrors `delete(_:)` rather than calling it — it's a private method on a
-    /// `View`, wired to `@Query`, bindings and the tile cache — so it's the
-    /// established pattern in this suite and in `StorageAccountingTests`, with
-    /// the same caveat: it pins the *rule*, not the call site.
+    /// Mirrors `delete(_:among:)` rather than calling it — it's a private
+    /// method on a `View`, wired to `@Query`, bindings and the tile cache — so
+    /// it's the established pattern in this suite and in
+    /// `StorageAccountingTests`, with the same caveat: it pins the *rule*, not
+    /// the call site.
     @Test("deleting a hike takes it out of the navigation stack too")
     func deletionClearsTheNavigationPath() throws {
         let context = try Fixture.modelContext()
         let hike = Fixture.hike(in: context)
 
-        // The state `OpenHikesView` holds, as `MapSheet` would leave it.
+        // The state `OpenHikesView` holds, with the path simplified to `[Hike]`.
         var selectedHike: Hike? = hike
         var navigationPath: [Hike] = [hike]
 
-        // `MapSheet.delete(_:)`, in the order it does it.
+        // `MapSheet.delete(_:among:)`, in the order it does it.
         if hike.id == selectedHike?.id { selectedHike = nil }
         navigationPath.removeAll { $0.id == hike.id }
         context.delete(hike)
@@ -83,9 +80,9 @@ struct HikeDeletionTests {
         #expect(navigationPath.isEmpty, "and the detail view showing it is popped")
     }
 
-    /// Deleting one hike must not pop a different one. The path is typed
-    /// `[Hike]` and a deep link can push a trail that isn't the selected one,
-    /// so "pop everything" would be as wrong as popping nothing.
+    /// Deleting one hike must not pop a different one. A deep link can push a
+    /// trail that isn't the selected one, so "pop everything" would be as
+    /// wrong as popping nothing.
     @Test("deleting a hike leaves other pushed hikes alone")
     func deletionKeepsUnrelatedNavigation() throws {
         let context = try Fixture.modelContext()
@@ -120,7 +117,7 @@ struct HikeDeletionTests {
 
     /// The widget's side of the same event: `BackgroundTrailTracker` is told
     /// through the selection change, and the deep link it published is
-    /// answered by `openHike(from:)`, which fetches by id and returns quietly
+    /// answered by `openHike(id:)`, which fetches by id and returns quietly
     /// when there's nothing there. Pinned so a future "open the trail anyway"
     /// convenience can't reintroduce a ghost.
     @Test("a widget tap on a deleted trail resolves to nothing")

@@ -62,18 +62,11 @@ struct WeatherPollingTests {
     }
 
     /// `OpenHikesModel` buckets the user's position to two decimal places —
-    /// about
-    /// 1.1 km — and any change of bucket resets this state wholesale:
-    /// `lastSuccess`, `failureCount` and `nextAttempt` all go, and the next
-    /// poll requests. That is right for someone who has genuinely moved, and
-    /// wrong for someone standing on a bucket boundary, where consecutive
-    /// fixes land on either side of it.
-    ///
-    /// The poll runs once a second, so an oscillation there is a WeatherKit
-    /// request every second, indefinitely — against a metered API, on a phone
-    /// that is by definition outdoors on battery. Neither the freshness
-    /// interval nor the failure backoff applies, because both are keyed to the
-    /// bucket that just changed.
+    /// about 1.1 km — and GPS noise on a boundary lands consecutive fixes on
+    /// either side of it. A state that remembered only the current bucket
+    /// would read every crossing as new ground and request again, because both
+    /// the freshness interval and the failure backoff are keyed to the bucket
+    /// that just changed.
     ///
     /// A boundary is not a corner case here: bucket edges are a fixed 1.1 km
     /// grid laid over the world, and a trail crosses one every kilometre or so.
@@ -148,9 +141,9 @@ struct WeatherPollingTests {
         #expect(revisitsFirst)
     }
 
-    /// The behaviour any fix has to keep: someone who really has moved a
-    /// kilometre gets fresh weather without waiting out the freshness
-    /// interval for the place they left.
+    /// The behaviour any fix has to keep: someone who really has moved — far
+    /// enough to land in a different bucket — gets fresh weather without
+    /// waiting out the freshness interval for the place they left.
     @Test("a genuine move still refreshes before the interval is up")
     func realMovementStillRefreshes() {
         var state = WeatherPollState()

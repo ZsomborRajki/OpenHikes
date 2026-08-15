@@ -2,7 +2,8 @@
 //  OpenHikesView.swift
 //  OpenHikes
 //
-//  Single full-screen OpenStreetMap view that zooms to the user on launch.
+//  Single full-screen tiled map — OpenStreetMap by default, whichever
+//  provider Settings selected otherwise — that zooms to the user's first fix.
 //
 
 import OpenHikesShared
@@ -21,7 +22,7 @@ struct OpenHikesView: View {
     @State private var sheetDetent: PresentationDetent = .height(Self.compactDetentHeight)
     @State private var selectedHike: Hike?
     /// The sheet's navigation stack, held here rather than inside `MapSheet`
-    /// so a widget tap can push a hike's detail view (see `openHike(from:)`).
+    /// so a widget tap can push a hike's detail view (see `openHike(id:)`).
     /// The cost is that popping the detail view now re-evaluates this body
     /// too; `MapView` is `.equatable()`, so that diff stops at the map.
     @State private var navigationPath: [SheetRoute] = []
@@ -119,9 +120,9 @@ struct OpenHikesView: View {
     var body: some View {
         // Fires on every re-evaluation of this view's body — the throttled
         // `appModel.locationManager.coordinate` publish (~1/sec while moving)
-        // is the
-        // most likely repeat offender; compare its rate here against the
-        // `MapUpdateCalled`/`MapCentered` marks in MapView.
+        // is the most likely repeat offender; compare its rate here against
+        // the `MapUpdateCalled` mark in MapView and `MapCentered` in
+        // MapCoordinator.
         RenderSignpost.mark("OpenHikesViewBody")
         return MapView(
             locationManager: appModel.locationManager,
@@ -224,9 +225,9 @@ struct OpenHikesView: View {
                 )
             }
             .onOpenURL { url in openInboundURL(url) }
-            // Follows finished selections for map styling, auto-save, and
-            // background route matching. A recording draft remains selected
-            // in the list but is filtered by `OpenHikesModel`.
+            // Re-points map styling, auto-save and background route matching
+            // at the new selection. A recording draft still styles its route;
+            // `OpenHikesModel` filters it out of the rest.
             .onChange(of: selectedHikeState) { _, _ in
                 importSelectionGate.invalidate()
                 if selectedHike == nil {
@@ -282,9 +283,9 @@ struct OpenHikesView: View {
 
     /// Handles a widget tap, opening either the live recording or a hike.
     ///
-    /// Does nothing if its detail view is already the thing on screen —
-    /// coming back to the app you were already looking at shouldn't reshuffle
-    /// it. Otherwise the hike is selected (drawing its route on the map) and
+    /// A hike whose detail view is already on screen is left alone — coming
+    /// back to the app you were already looking at shouldn't reshuffle it.
+    /// Otherwise the hike is selected (drawing its route on the map) and
     /// pushed, replacing rather than stacking onto whatever was open, since
     /// the widget is a jump to one trail and not a step in a journey.
     private func openWidgetLink(_ url: URL) {
@@ -339,11 +340,12 @@ struct OpenHikesView: View {
     /// Restores an active recording draft when recovery has already found it;
     /// otherwise restores the last selected finished hike across launches.
     ///
-    /// Skipped while hosting tests: restoring a selection publishes a widget
-    /// payload into the App Group and reloads the widget's timelines,
-    /// underneath suites whose whole subject is that one file. It's a race no
-    /// test can win, and it made a widget-feed assertion fail with whatever
-    /// trail this simulator was last left on. See ``AppLaunchEnvironment``.
+    /// The stored-selection half is skipped while any test bundle is running:
+    /// restoring a selection publishes a widget payload into the App Group and
+    /// reloads the widget's timelines, underneath suites whose whole subject is
+    /// that one file. The guard itself is in
+    /// ``OpenHikesModel/restoreLastSelectedHike(in:)``; see
+    /// ``AppLaunchEnvironment``.
     private func restoreLastSelectedHike() {
         if let recordingHike = appModel.hikeRecorder.currentHike {
             selectedHike = recordingHike

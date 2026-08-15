@@ -98,7 +98,7 @@ extension RouteProfileTests {
     }
 
     /// The reason `nearestPoint` takes a reference distance at all: on a loop,
-    /// the start and the finish are metres apart, so a fix near the junction
+    /// the start and the finish are the same place, so a fix near the junction
     /// is genuinely ambiguous. Without continuity, ordinary GPS jitter can
     /// throw the tracker a full lap; with it, the match stays where the
     /// walker actually is.
@@ -165,7 +165,7 @@ extension RouteProfileTests {
     func headingPicksTheLeg() throws {
         let profile = RouteProfile(route: Fixture.outAndBackRoute)
         let total = try #require(profile.distances.last)
-        // A point on the way back, roughly a third of the way home.
+        // A point on the return leg, about four fifths of the way round.
         let onTheWayBack = profile.coordinates[30]
         let expected = profile.distances[30]
 
@@ -206,8 +206,8 @@ extension RouteProfileTests {
     }
 
     /// The percentage the walker actually sees, end to end: the same fix that
-    /// reads as a third of the way along the trail while walking out reads as
-    /// two thirds while walking home.
+    /// reads as a fifth of the way along the trail while walking out reads as
+    /// four fifths while walking home.
     @Test("progress follows the leg the heading picked")
     func progressFollowsTheHeading() throws {
         let profile = RouteProfile(route: Fixture.outAndBackRoute)
@@ -305,9 +305,9 @@ extension RouteProfileTests {
         )
     }
 
-    /// …and once a match exists, continuity carries it around the turning
-    /// point onto the return leg, where progress counts up rather than back
-    /// down the outbound one.
+    /// …and once a match exists on the return leg, continuity keeps it there
+    /// rather than letting the fix snap to its outbound twin, so progress
+    /// counts up rather than back down the outbound leg.
     @Test("continuity follows an out-and-back around its turn")
     func outAndBackFollowsTheReturnLeg() throws {
         let profile = RouteProfile(route: Fixture.outAndBackRoute)
@@ -396,9 +396,12 @@ extension RouteProfileTests {
     }
 
     /// The app's progress row and the widget's "62% · 1.4 mi left" are two
-    /// readouts of one position, derived on two sides of an App Group. They
-    /// divide by the same total — `RouteProfile`'s and `Hike.distanceMeters`
-    /// are the same haversine sum — so they must not be able to disagree.
+    /// readouts of one position, derived on two sides of an App Group. Given
+    /// the same total they must not be able to disagree, so this hands one
+    /// total to both and pins the arithmetic. The totals are not the same
+    /// source, though: the widget divides by `Hike.distanceMeters`, which for
+    /// a recording is the accumulator's figure rather than a haversine sum
+    /// over the stored route.
     @Test("the app and the widget compute the same percentage")
     func progressMatchesTheWidget() throws {
         let profile = RouteProfile(route: Fixture.outAndBackRoute)

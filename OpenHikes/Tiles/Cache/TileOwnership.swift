@@ -26,9 +26,9 @@ nonisolated struct TileOwnership: Sendable {
     private let autoSavedTileKeys: [String]
 
     /// Snapshots `hike`'s claims. Call `AutoSaveController.flushPendingKeys()`
-    /// first if tiles may have been auto-saved since the last periodic flush —
-    /// this reads the manifest, and anything not yet folded into it is
-    /// invisible here.
+    /// first if tiles may have been auto-saved since the last drain — this
+    /// reads the manifest, and anything not yet folded into it is invisible
+    /// here.
     init(_ hike: Hike) {
         route = hike.route
         offlineDownloads = hike.offlineDownloads

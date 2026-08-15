@@ -35,9 +35,10 @@ struct OpenHikesApp: App {
         // Constructed here, not lazily inside a view, because a background
         // relaunch (triggered by a significant-location-change event) runs
         // `init()` unconditionally but may never reach a view's `.task`/
-        // `.onAppear` — the location manager has to already be live and
-        // delegated by the time this returns, or the relaunch's one pending
-        // location event has nothing to deliver to.
+        // `.onAppear` — `BackgroundTrailTracker`'s significant-change monitor
+        // has to already be re-armed and delegated by the time this returns,
+        // or the relaunch's one pending location event has nothing to deliver
+        // to.
         _model = State(initialValue: RenderSignpost.interval("AppModelInit") {
             OpenHikesModel()
         })

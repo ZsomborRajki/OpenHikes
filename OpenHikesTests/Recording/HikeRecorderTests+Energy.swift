@@ -76,9 +76,8 @@ extension HikeRecorderTests {
         )
     }
 
-    /// Re-evaluated on every accepted fix, so it had better cost nothing when
-    /// the answer has not moved: a walk of a thousand fixes must not be a walk
-    /// of a thousand writes into the location daemon.
+    /// Re-evaluated on every accepted fix, so a walk at steady conditions has
+    /// to resolve to one configuration rather than flipping between profiles.
     @Test("An unchanged profile is not re-applied")
     func unchangedProfileIsNotReapplied() async {
         let hikeRecorder = makeRecorder()
@@ -97,10 +96,9 @@ extension HikeRecorderTests {
         )
     }
 
-    /// A paused session's accumulator still remembers where the walker stopped.
-    /// Resuming an hour later must not start out believing they are still
-    /// standing there, because the wide stationary filter would then delay the
-    /// first fix of the next leg.
+    /// ``resolvedEnergyProfile()`` only lets `isStationary` through while
+    /// fixes are being taken, so a session that is not capturing them resolves
+    /// to `.precise` rather than to the wide stationary filter.
     @Test("A stopped session is never described as stationary")
     func inactiveSessionIsNotStationary() {
         let hikeRecorder = makeRecorder()

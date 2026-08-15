@@ -13,7 +13,7 @@ import SwiftData
 import Testing
 
 /// The trace `recordSnappedTrace` walks, beside the trail `matchedPathGraph`
-/// puts ~11 m to its west.
+/// puts ~7.5 m to its west.
 private enum SnappedTrace {
     static let startLatitude = 47.63
     static let endLatitude = 47.6302
@@ -177,7 +177,7 @@ extension HikeRecorderTests {
         #expect(hike.rawRoute.isEmpty)
     }
 
-    /// Records two fixes ~11 m east of `matchedPathGraph`'s trail, which the
+    /// Records two fixes ~7.5 m east of `matchedPathGraph`'s trail, which the
     /// matcher snaps onto it.
     private func recordSnappedTrace() async -> HikeRecorder {
         let recorder = makeRecorder(

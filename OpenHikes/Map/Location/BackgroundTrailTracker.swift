@@ -15,10 +15,10 @@
 //  in Settings.
 //
 //  Significant-change monitoring (unlike continuous background updates)
-//  needs neither `allowsBackgroundLocationUpdates` nor the "Location
-//  updates" background mode — both are reserved for continuous tracking,
-//  which this deliberately isn't. That's what keeps this battery-friendly
-//  and free of the persistent background-location indicator.
+//  relies on neither `allowsBackgroundLocationUpdates` nor the "Location
+//  updates" background mode — the app declares both, but only the hike
+//  recorder uses them (see `HikeRecorder+State`). That's what keeps this feed
+//  battery-friendly and free of the persistent background-location indicator.
 //
 
 import CoreLocation
@@ -42,9 +42,10 @@ import WidgetKit
 /// The members are renamed rather than reusing `CLLocationManager`'s own, and
 /// authorization is exposed as two questions rather than as a
 /// `CLAuthorizationStatus`: neither `.authorizedAlways` nor the
-/// significant-change API exists on every platform this app builds for. The
-/// `#if os(iOS)` guards therefore live in the adapter below, and the tracker
-/// itself has one code path — which is also the one the tests drive.
+/// significant-change API exists on every Apple platform the sources still
+/// guard for. The `#if os(iOS)` guards therefore live in the adapter below,
+/// and the tracker itself has one code path — which is also the one the tests
+/// drive.
 protocol SignificantLocationMonitor: AnyObject {
     /// Whether Always authorization is granted right now.
     var isAlwaysAuthorized: Bool { get }
@@ -151,11 +152,11 @@ final class BackgroundTrailTracker: NSObject {
     /// The bypass exists so that genuinely losing the trail reaches the widget
     /// at once rather than up to 45 s later, and that's worth keeping — but
     /// unbounded it is a hole straight through the throttle it bypasses. A
-    /// walker flipping on and off with ordinary GPS noise took it on every
-    /// one-second poll, each time costing a `SharedStore.load`, a re-encode, an
-    /// atomic App Group write and a `WidgetCenter.reloadTimelines`. WidgetKit
-    /// throttles a widget that overruns its daily reload budget, so the
-    /// unbounded bypass degrades the very feature it's trying to keep fresh.
+    /// walker flipping on and off with ordinary GPS noise took it on every fix,
+    /// each time costing a `SharedStore.load`, a re-encode, an atomic App Group
+    /// write and a `WidgetCenter.reloadTimelines`. WidgetKit throttles a widget
+    /// that overruns its daily reload budget, so the unbounded bypass degrades
+    /// the very feature it's trying to keep fresh.
     private var lastStatusFlipPublish: Date?
     /// Floor under that bypass: the first flip is immediate, a second one waits.
     private static let statusFlipInterval: TimeInterval = 30
@@ -307,8 +308,8 @@ final class BackgroundTrailTracker: NSObject {
 
     // MARK: Foreground feed
 
-    /// Called from `HikeDetailView`'s existing once-a-second auto-follow
-    /// poll. Throttled internally — does not write on every call.
+    /// Called from `HikeDetailView`'s auto-follow loop, which advances once per
+    /// published fix. Throttled internally — does not write on every call.
     func publishLiveFix(
         hike: Hike,
         profile: RouteProfile,

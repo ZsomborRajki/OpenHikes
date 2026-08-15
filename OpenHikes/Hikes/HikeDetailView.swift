@@ -120,7 +120,8 @@ struct HikeDetailView: View {
     let mapController: MapController
     /// Owns whether this hike is passively auto-saving OSM tiles while browsed.
     let autoSave: AutoSaveController
-    /// Source of the user's live location, polled (throttled) to drive auto-follow.
+    /// Source of the user's live location. Auto-follow consumes
+    /// ``LocationManager/fixes``, so it is driven per published fix, not by a timer.
     let locationManager: LocationManager
     /// Fed the same auto-follow matches as the chart/map, throttled, so the
     /// widget stays reasonably fresh while this hike is being viewed.
@@ -155,7 +156,6 @@ struct HikeDetailView: View {
     @State var storedBytesMeasurementGeneration = 0
     @State var storageDeletionFailed = false
     // swiftlint:enable private_swiftui_state
-    /// Whether the title is currently being edited inline.
     @State private var isEditingTitle = false
     /// Draft text while the inline title field is open.
     @State private var titleDraft = ""
@@ -183,8 +183,8 @@ struct HikeDetailView: View {
     /// the far end of the trail decide where the next reacquired fix matched —
     /// on an out-and-back, that is the difference between the start and the
     /// finish. `nil` means no fix has been matched yet, which is what tells
-    /// ``RouteProfile/nearestPoint(to:near:heading:)`` to work out the leg
-    /// from scratch rather than continue from a position.
+    /// ``RouteProfile/nearestPoint(to:near:heading:scope:)`` to work out the
+    /// leg from scratch rather than continue from a position.
     @State private var followAnchor: FollowAnchor?
     @State private var offRouteSearch = OffRouteSearchPolicy()
 
@@ -192,10 +192,10 @@ struct HikeDetailView: View {
         // Fires on every re-evaluation of this view's body. Auto-follow's
         // per-fix tracker updates should NOT show up here — they live in
         // `tracker` (a `TrackerState`), which this body never reads, so those
-        // updates invalidate only `ElevationChartView` below. If this mark
-        // starts firing at that cadence again, something re-introduced a read
-        // of `tracker`'s properties into this body (directly or via a
-        // computed var it calls, like `elevationSection`).
+        // updates invalidate only the chart and the progress row below. If
+        // this mark starts firing at that cadence again, something
+        // re-introduced a read of `tracker`'s properties into this body
+        // (directly or via a computed var it calls, like `elevationSection`).
         RenderSignpost.mark("HikeDetailBody")
         return ScrollView {
             VStack(alignment: .leading, spacing: 24) {
@@ -352,9 +352,10 @@ private extension HikeDetailView {
         .disabled(hike.pointCount < 2)
     }
 
-    /// Passive gap-filler alongside (or instead of) the bulk `downloadButton`:
-    /// saves tiles as they're actually browsed, so areas a bulk download
-    /// missed — or, for OSM-style providers, everything — still end up saved.
+    /// Passive gap-filler alongside (or instead of) the bulk
+    /// ``OfflineDownloadButton``: saves tiles as they're actually browsed, so
+    /// areas a bulk download missed — or, for OSM-style providers, everything
+    /// — still end up saved.
     private var autoSaveToggle: some View {
         Toggle(isOn: autoSaveBinding) {
             Label("Auto-Save Tiles", systemImage: "arrow.down.circle")
@@ -637,8 +638,8 @@ private extension HikeDetailView {
     /// The no-match half of ``updateLiveFollow(profile:)``: clears the live dot
     /// and tells the widget there is nothing to show.
     private func clearLiveFollow(profile: RouteProfile, reason: String) {
-        // Guarded so a stationary/off-route poll (nil already) doesn't
-        // write `tracker` every second for nothing.
+        // Guarded so a run of off-route fixes (nil already) doesn't write
+        // `tracker` for nothing.
         if tracker.liveTrackerDistance != nil {
             tracker.liveTrackerDistance = nil
             RenderSignpost.mark("LiveFollowUpdate", "cleared")
@@ -655,7 +656,7 @@ private extension HikeDetailView {
 
     private func updateLiveFollow(profile: RouteProfile) {
         // Split from the match below so only a fix that actually reached the
-        // matcher feeds the search policy: a poll with no usable fix says
+        // matcher feeds the search policy: a fix too inaccurate to match says
         // nothing about where the walker is relative to the route, and must
         // neither re-arm the whole-route search nor spend one of the fixes
         // that delays it.
@@ -685,7 +686,8 @@ private extension HikeDetailView {
         // Guarded like `trackerDistance` below — reassigning `@Observable`
         // storage to an equal value still triggers dependent views, so an
         // unconditional write here would invalidate `ElevationChartView` (and,
-        // previously, `HikeDetailView` itself) on every "unchanged" poll too.
+        // previously, `HikeDetailView` itself) on every fix that matched to
+        // the same place too.
         if moved { tracker.liveTrackerDistance = match.distanceAlongRoute }
         // Don't fight an in-progress manual scrub; the live dot still moves,
         // but the persistent tracker stays under the user's finger.
@@ -697,8 +699,8 @@ private extension HikeDetailView {
         }
         // Skip the tracker write when the projected position hasn't actually
         // moved (e.g. paused, or GPS noise below the route-matching
-        // resolution) — avoids a redundant `TrackerState` update every second
-        // at rest.
+        // resolution) — avoids a redundant `TrackerState` update on a fix that
+        // projects to the same distance along the route.
         if tracker.trackerDistance != match.distanceAlongRoute {
             tracker.trackerDistance = match.distanceAlongRoute
         }
@@ -707,7 +709,7 @@ private extension HikeDetailView {
         // sitting on top of (and fading against) it. It only reappears while
         // the user is scrubbing the elevation graph, to compare other
         // sections of the trail. Clearing an already-clear highlight is free —
-        // `move(to:)` does the comparison this poll used to do by hand.
+        // `move(to:)` does the comparison this path used to do by hand.
         highlight.move(to: nil)
         RenderSignpost.mark("LiveFollowUpdate", moved ? "moved" : "unchanged")
         backgroundTracker.publishLiveFix(hike: hike, profile: profile, match: match)

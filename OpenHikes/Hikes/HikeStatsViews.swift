@@ -2,8 +2,8 @@
 //  HikeStatsViews.swift
 //  OpenHikes
 //
-//  Small building-block views used by HikeDetailView's stats grid and
-//  metadata section.
+//  Small building-block views used by HikeDetailView's stats grid and metadata
+//  section; StatTile is also used by the recording screen's live stats.
 //
 
 import SwiftUI

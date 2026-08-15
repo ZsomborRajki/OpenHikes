@@ -76,13 +76,11 @@ extension MapView.Coordinator {
     /// between two Ys in the same space: where the sheet starts, and the
     /// highest the button is allowed to sit.
     ///
-    /// The clamp is a floor and never a ceiling, which is the whole point. It
-    /// used to read `max(sheetTop, height * 0.5)`, which assumed the middle
-    /// detent always stops below the map's midpoint. On a tall phone it stops a
-    /// little above, and the "cap" then pushed the button *down* to the
-    /// midpoint — behind the sheet's top curve, and visibly so once tracking
-    /// mode fills the button in. Nothing may move the button below
-    /// `sheetTop - spacing`.
+    /// `limit` is a floor on that constant, so the button stops climbing at
+    /// the middle detent. Past that the sheet rises over the parked button,
+    /// which is what the fade is for: a control left visible behind the
+    /// sheet's top curve reads as a glitch, the more so once tracking mode
+    /// fills it in.
     func applySheetTop(on mapView: MKMapView) {
         guard mapView.bounds.height > 0,
               let constraint = trackingBottomConstraint

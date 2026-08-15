@@ -26,9 +26,11 @@
 //    stop *speculative* traffic only. A map the walker is looking at still
 //    loads; what stops is the app fetching tiles nobody asked to see yet.
 //
-//  Split by purpose rather than by caller, because the same
-//  ``TileCache/loadTile(forKey:url:)`` serves both a visible tile and a
-//  prefetch, and only the caller knows which one it is.
+//  Split by purpose rather than by caller: what the policy weighs is whether
+//  anyone is waiting for the tile. ``TileCache/loadTile(forKey:url:purpose:)``
+//  takes that as a parameter, defaulting to `.interactive`, while
+//  ``TileCache/saveTileDurably(forKey:url:)`` — the bulk-download path — fixes
+//  it at `.speculative`.
 //
 
 import Foundation
@@ -38,8 +40,8 @@ nonisolated enum TileFetchPurpose: String, Sendable {
     /// blank square, so only an unambiguous instruction — offline, Low Data
     /// Mode, cellular with the setting off — is allowed to.
     case interactive = "interactive"
-    /// Bulk download, auto-save promotion, or anything else fetching a tile
-    /// ahead of it being needed. Always the first thing to give up.
+    /// A bulk download, or anything else fetching a tile ahead of it being
+    /// needed. Always the first thing to give up.
     case speculative = "speculative"
 }
 

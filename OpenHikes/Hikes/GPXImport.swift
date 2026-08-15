@@ -218,8 +218,7 @@ nonisolated private extension GPXImport {
     private final class DocumentParser: NSObject, XMLParserDelegate {
         /// GPX element names, which the schema defines in lower case. XML is
         /// case-sensitive and `XMLParser` reports the local name verbatim, so
-        /// these are compared as-is — the same way the previous parser matched
-        /// them.
+        /// these are compared as-is.
         private enum Element {
             static let track = "trk"
             static let trackPoint = "trkpt"
@@ -268,7 +267,7 @@ nonisolated private extension GPXImport {
             // GPX defines its element names in lower case and `XMLParser` is
             // handing back the local name already, so this is a straight
             // append: `lowercased()` here allocated a fresh `String` for every
-            // start *and* end tag, which on a 100,000-point export is hundreds
+            // start *and* end tag, which on a 100,000-point track is hundreds
             // of thousands of allocations to normalise names that were already
             // normal.
             path.append(elementName)

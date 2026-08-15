@@ -17,8 +17,6 @@ nonisolated enum GPXExport {
     /// A `Hike` is a `@Model` — a main-actor reference type tied to its
     /// context, so it can't be handed to the exporter the share sheet calls on
     /// whatever executor it likes. This is the `Sendable` copy that crosses.
-    /// `name` is a `var` because the payload is snapshotted with the route
-    /// while the title can still be renamed underneath it.
     struct Track: Sendable, Equatable {
         var name: String
         var trackDescription: String?
@@ -269,8 +267,8 @@ nonisolated extension GPXExport {
     /// the receiver may ignore, a last path component is not.
     ///
     /// Each export gets a directory of its own, so the name can be exactly
-    /// ``fileName(for:)`` rather than the `-1` suffix a shared directory would
-    /// force onto the second export of the same hike.
+    /// ``fileName(for:)`` rather than having to be made unique against an
+    /// earlier export of the same hike still staged in a shared directory.
     ///
     /// `@concurrent` rather than a detached task, as in ``GPXImport``: the
     /// work stays part of the sharing task, so abandoning the share sheet
@@ -345,8 +343,8 @@ nonisolated struct HikeGPXFile: Transferable, Sendable {
     /// of the file.
     ///
     /// `SentTransferredFile` defaults to copying rather than lending the
-    /// original, which is what lets the staged file be swept on a timer
-    /// instead of tracked until the receiver is finished with it.
+    /// original, which is what lets the staged file be swept by a later
+    /// export instead of tracked until the receiver is finished with it.
     static var transferRepresentation: some TransferRepresentation {
         FileRepresentation(exportedContentType: .gpx) { file in
             SentTransferredFile(try await GPXExport.writeTemporaryFile(for: file.track))

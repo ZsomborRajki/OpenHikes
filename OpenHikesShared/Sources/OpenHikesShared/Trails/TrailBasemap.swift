@@ -23,7 +23,8 @@ import Foundation
 /// is `0...1` on both axes, y growing south.
 ///
 /// Unit space rather than `MKMapRect` so this type — and everything that
-/// draws with it — stays free of MapKit, which the widget can't use anyway.
+/// draws with it — stays free of MapKit, which the widget can't draw with
+/// anyway.
 public struct UnitMercatorRect: Codable, Sendable, Equatable {
     public var originX: Double
     public var originY: Double

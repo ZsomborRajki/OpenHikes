@@ -50,7 +50,7 @@ struct FollowAnchorTests {
         #expect(!assumed.isCourseConfirmed)
 
         // Still standing still: nothing better to go on, so keep the anchor
-        // rather than re-deciding the leg on every poll.
+        // rather than re-deciding the leg on every fix.
         #expect(FollowAnchor.tieBreak(assumed, course: nil) == 400)
 
         // Walking again: work it out afresh, with the course this time.
@@ -163,11 +163,11 @@ struct FollowInteractionTests {
     }
 }
 
-/// The latch that keeps the 1 Hz live-follow loop from rescanning the whole
-/// route on every fix once the walker has left it. A full scan is O(route), so
-/// on a long trail an off-route walker paid for one per second, forever, to be
-/// told again that nothing is near — the one case where the search can't
-/// short-circuit on a hit.
+/// The latch that keeps live follow from rescanning the whole route on every
+/// fix once the walker has left it. A full scan is O(route), so on a long
+/// trail an off-route walker paid for one per fix — the one case where the
+/// search can't short-circuit on a hit — to be told again that nothing is
+/// near.
 @Suite("Off-route search policy")
 struct OffRouteSearchPolicyTests {
     /// The first fix has to be able to find the route from anywhere: there is

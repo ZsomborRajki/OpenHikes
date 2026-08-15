@@ -2,7 +2,7 @@
 //  HikeDetailComponents.swift
 //  OpenHikes
 //
-//  Private helper views used only by HikeDetailView.
+//  Helper views used only by HikeDetailView.
 //
 
 import SwiftUI

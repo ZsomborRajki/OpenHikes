@@ -6,9 +6,10 @@
 //  frequently invalidated one — a bad combination that only shows up on long
 //  tracks. `ElevationChartView` plots two marks (an `AreaMark` and a
 //  `LineMark`, both `catmullRom`-interpolated) per elevation sample, and
-//  every sample of the imported GPX is a sample: a 1 Hz five-hour recording
-//  is 18,000 points, so 36,000 marks. That view is invalidated on every
-//  scrub event (drag frequency) and once a second by auto-follow.
+//  left unthinned every point of an imported GPX would be one: a 1 Hz
+//  five-hour recording is 18,000 points, so 36,000 marks. That view is
+//  invalidated on every scrub event (drag frequency) and about once a second
+//  by auto-follow.
 //
 //  Rendering it through `ImageRenderer` at 390×200 pt, on this machine's
 //  Simulator (subtract ~0.2 ms of renderer overhead):
@@ -129,14 +130,11 @@ struct ElevationChartWorkloadTests {
 
     // MARK: Identity
 
-    /// `ForEach` diffs the plotted samples by `id`. `ElevationSample.id` is a
-    /// fresh `UUID` per instance, so rebuilding the profile for the same
-    /// route produces an entirely new set of identities and the chart diffs
-    /// as a wholesale replacement rather than a match.
-    ///
-    /// It isn't free to generate, either: of the 8.2 ms spent building a
-    /// 20,000-point profile, 4.6 ms is `UUID()`. The sample's distance is
-    /// already a unique, stable key.
+    /// `ForEach` diffs the plotted samples by `id`, and `ElevationSample.id`
+    /// is the sample's own `distanceMeters` — unique within a profile and
+    /// identical across rebuilds, so redrawing the same route diffs as a match
+    /// rather than a wholesale replacement. A per-instance `UUID` would give
+    /// neither, and would be allocated per sample besides.
     @Test("a sample's identity is stable across rebuilds of the same route")
     func sampleIdentityIsStable() {
         let first = RouteProfile(route: Fixture.ridgeRoute)
@@ -146,16 +144,12 @@ struct ElevationChartWorkloadTests {
 
     // MARK: The view's own equality
 
-    /// `ElevationChartView.==` exists to "catch the parent reconstructing the
-    /// view with a genuinely different `tint`/`profile`" — but it compares
-    /// only the *counts* of the samples and distances, so two different
-    /// trails of the same length are indistinguishable to it, and the chart
-    /// keeps drawing the old one.
-    ///
-    /// Hard to hit today (a pushed detail view is torn down per hike), which
-    /// is exactly why it's worth pinning: live recording — the next feature
-    /// on the list — changes a profile in place while its length stays put
-    /// between two ticks, and this is what would silently freeze the graph.
+    /// `ElevationChartView.==` catches the parent reconstructing the view with
+    /// a genuinely different `tint` or `profile`. It compares the plotted
+    /// samples by value rather than by count, so two trails of the same length
+    /// are told apart — an equality that only counted them would leave the
+    /// chart drawing the old one while a profile changed in place underneath
+    /// it, which is what a live recording would do between two ticks.
     @Test("equality distinguishes two different trails of the same length")
     func equalityCatchesADifferentProfile() {
         let tracker = TrackerState()

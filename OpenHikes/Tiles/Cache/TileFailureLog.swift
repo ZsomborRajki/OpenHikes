@@ -30,7 +30,10 @@ import Foundation
 nonisolated struct TileRetryPolicy: Sendable {
     static let standard = Self()
 
-    /// Indexed by consecutive-failure count; the last entry is the ceiling.
+    private static let maximumRetryDelaySecs: Int = 300
+
+    /// In consecutive-failure order, so the first failure waits `delays[0]`;
+    /// the last entry is the ceiling.
     ///
     /// The first retry is deliberately quick — a single transient error on a
     /// shared tile server is the common case, and five seconds is short
@@ -38,8 +41,6 @@ nonisolated struct TileRetryPolicy: Sendable {
     /// ceiling is deliberately long: by the fifth failure the tile is
     /// probably genuinely absent, and the cost of asking is a request the
     /// provider's usage policy would rather we didn't make.
-    private static let maximumRetryDelaySecs: Int = 300
-
     var delays: [Duration] = [
         .seconds(5), .seconds(15), .seconds(45), .seconds(120), .seconds(Self.maximumRetryDelaySecs)
     ]

@@ -2,12 +2,12 @@
 //  RenderIsolationTests.swift
 //  OpenHikesTests
 //
-//  The app's central performance idea (see README, "Keeping SwiftUI's diffing
-//  out of the hot paths") is that high-frequency state lives in `@Observable`
-//  reference types that the owning views never read in their own `body`, so a
-//  GPS fix or a sheet drag moves one annotation instead of re-diffing a view
-//  tree. That only holds if two things are true, and neither is checkable by
-//  reading the code:
+//  The app's central performance idea (the "Preserve render isolation"
+//  convention in `.github/copilot-instructions.md`) is that high-frequency
+//  state lives in `@Observable` reference types that the owning views never
+//  read in their own `body`, so a GPS fix or a sheet drag moves one
+//  annotation instead of re-diffing a view tree. That only holds if two
+//  things are true, and neither is checkable by reading the code:
 //
 //  * an observer really is notified per write — including writes that don't
 //    change the value, which is why the coordinate-typed publishers compare
@@ -143,10 +143,10 @@ struct RecordingIsolationTests {
     }
 
     /// `RecordingView.body` and the whole hikes sheet (via
-    /// `HikeRecorder.isActive`) read `phase`, and a recording writes it on
-    /// every accepted fix. Those bodies are budgeted at one invalidation per
-    /// phase change, not one per fix, so a fix that leaves the phase alone
-    /// must wake nothing.
+    /// `HikeRecorder.isActive`) read `phase`, and the accepted-fix path in
+    /// `HikeRecorder` touches it on every fix. Those bodies are budgeted at
+    /// one invalidation per phase change, not one per fix, so a fix that
+    /// leaves the phase alone must wake nothing.
     @Test("a fix that doesn't change the phase doesn't wake a body reading it")
     func steadyRecordingDoesNotInvalidatePhaseReaders() async throws {
         let container = try Fixture.modelContainer()
@@ -386,9 +386,8 @@ struct RouteHighlightTests {
         #expect(highlight.coordinate == nil)
     }
 
-    /// `updateLiveFollow` hides the pin on every poll while auto-follow owns
-    /// the map — once a second, for as long as the detail view is open. Only
-    /// the first of those polls has anything to say.
+    /// `updateLiveFollow` hides the pin on every matched fix while auto-follow
+    /// owns the map. Only the first of those has anything to say.
     @Test("auto-follow's per-second clear reaches the map once")
     func repeatedClearIsSilentAfterTheFirst() async {
         let highlight = RouteHighlight()
@@ -583,15 +582,14 @@ struct LocationPublishingTests {
     }
 
     /// A walker who has stopped — at a viewpoint, a hut, a photo — still gets
-    /// a fix every second, and every one of them is republished as a new
-    /// value even though it is the same place. Each republish wakes the map
-    /// coordinator, which re-registers its observation through a `Task` hop,
-    /// once a second, for as long as the app is open.
+    /// a fix every second. Republishing each one as a new value would wake the
+    /// map coordinator, which re-registers its observation through a `Task`
+    /// hop, once a second for as long as the app is open.
     ///
-    /// Nothing downstream needs the heartbeat: auto-follow and the weather
-    /// poll both *poll* `coordinate` on their own timers, and the map only
-    /// uses it to center on the very first fix. So an unchanged fix has
-    /// nobody to tell.
+    /// Nothing downstream needs that heartbeat: auto-follow and the weather
+    /// poll both drive off `fixes`, which only emits when `coordinate`
+    /// changes, and the map only uses it to center on the very first fix. So
+    /// an unchanged fix has nobody to tell.
     @Test("an unchanged fix isn't republished")
     func unchangedFixIsNotRepublished() async {
         let clock = TestClock()

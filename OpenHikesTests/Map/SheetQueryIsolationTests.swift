@@ -2,12 +2,12 @@
 //  SheetQueryIsolationTests.swift
 //  OpenHikesTests
 //
-//  `MapSheet` holds the app's only broad `@Query` — every `Hike`, sorted by
-//  date — and the sheet is also the `NavigationStack` the hike detail view is
-//  pushed into. That puts a SwiftData query and a colour/width slider in the
-//  same live hierarchy, which is worth measuring rather than assuming: unlike
-//  `@Observable`, `@Query` has no per-property granularity, so a write to any
-//  `Hike` field invalidates every view holding one.
+//  `MapSheetHikes` holds the sheet's broad `@Query` — every `Hike`, sorted by
+//  date — and its parent `MapSheet` is the `NavigationStack` the hike detail
+//  view is pushed into. That puts a SwiftData query and a colour/width slider
+//  in the same live hierarchy, which is worth measuring rather than assuming:
+//  unlike `@Observable`, `@Query` has no per-property granularity, so a write
+//  to any `Hike` field invalidates every view holding one.
 //
 //  Measured on a real hosted hierarchy rather than reasoned about, because the
 //  answer is SwiftData's rather than this app's, and the fix (which subtree

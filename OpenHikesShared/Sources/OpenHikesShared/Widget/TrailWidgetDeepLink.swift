@@ -3,8 +3,8 @@
 //  OpenHikesShared
 //
 //  The URL a widget tap hands back to the app, and the parser that turns it
-//  into a hike again. Both halves live here so the widget can't format a link
-//  the app doesn't recognise.
+//  back into a destination — a hike, or the live recording. Both halves live
+//  here so the widget can't format a link the app doesn't recognise.
 //
 //  No URL scheme registration is needed for this to work: the system already
 //  knows which app owns a widget and routes `widgetURL` straight to it. The

@@ -24,9 +24,9 @@ final class OfflineTileDownloader {
     /// Tiles actually saved so far — not tiles attempted.
     ///
     /// The difference is the whole point: attempts always reach `total`, so a
-    /// download that saved nothing still filled its progress bar to 100% and
-    /// then reported "Saved 0 of 4,000 tiles." A bar that stalls is telling the
-    /// truth about a download that has stopped saving anything.
+    /// progress bar driven by them fills to 100% however many tiles were
+    /// really written. A bar that stalls is telling the truth about a download
+    /// that has stopped saving anything.
     private(set) var completed = 0
     private(set) var total = 0
     /// Coverage produced by the latest completed run. Complete runs omit the

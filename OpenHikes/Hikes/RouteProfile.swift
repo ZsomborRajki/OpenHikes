@@ -13,9 +13,9 @@ import Foundation
 
 nonisolated struct RouteProfile: Sendable {
     /// How far off the route (in meters) a GPS fix can be and still count as
-    /// "on the trail" — shared by every consumer of `nearestPoint(to:near:)`
-    /// (in-app auto-follow, the foreground/background widget feeds) so they
-    /// all agree on the same trail.
+    /// "on the trail" — shared by every consumer of
+    /// `nearestPoint(to:near:heading:scope:)` (in-app auto-follow, the
+    /// foreground/background widget feeds) so they all agree on the same trail.
     static let followMatchThresholdMeters: Double = 75
 
     /// How far a segment's direction may differ from the walker's own course
@@ -234,9 +234,9 @@ nonisolated struct RouteProfile: Sendable {
     /// would mean nothing.
     ///
     /// Deliberately the same arithmetic as `SharedTrailSnapshot.fractionComplete`,
-    /// which the widget reads: both divide a matched distance-along-route by
-    /// the same haversine total, so the app and the widget can't show two
-    /// different percentages for one position.
+    /// which the widget reads: both clamp a matched distance-along-route over
+    /// the route's total the same way, so the app and the widget can't turn one
+    /// position into two different percentages.
     func fractionComplete(atDistance distance: Double) -> Double? {
         let total = totalDistanceMeters
         guard total > 0 else { return nil }
@@ -286,7 +286,8 @@ nonisolated extension RouteProfile {
     /// used to auto-follow the elevation graph. Returns the distance-along-route
     /// of the nearest point on any route segment and how far off the route
     /// that point is, in meters — callers use the latter to decide whether the
-    /// fix is actually near the trail. O(n): fine for a once-a-second poll.
+    /// fix is actually near the trail. O(n): fine at the at-most-one-a-second
+    /// rate ``LocationManager/fixes`` publishes at.
     ///
     /// `referenceDistance`, when given (the previous match), breaks ties in
     /// favor of continuity. Loops, out-and-backs, and switchbacks can bring

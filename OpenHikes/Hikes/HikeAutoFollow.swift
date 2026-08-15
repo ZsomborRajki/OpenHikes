@@ -8,13 +8,14 @@
 import CoreLocation
 import Observation
 
-/// The elevation graph's tracker positions, held in a reference type so the
-/// once-a-second auto-follow poll moves the chart without re-rendering the
-/// rest of `HikeDetailView` (header, stats grid, buttons) — the same
-/// technique `RouteHighlight`/`SheetMetrics` use for the map. `HikeDetailView`
-/// only ever passes this object down; it never reads its properties directly,
-/// so mutating them invalidates `ElevationChartView` (which does read them)
-/// and nothing above it.
+/// The elevation graph's tracker positions, held in a reference type so a
+/// published location fix moves the chart without re-rendering the rest of
+/// `HikeDetailView` (header, stats grid, buttons) — the same technique
+/// `RouteHighlight`/`SheetMetrics` use for the map. `HikeDetailView` passes
+/// this object down and only touches its properties from event handlers,
+/// never from `body`, so mutating them invalidates `ElevationChartView` and
+/// `TrailProgressView` — which do read them in their bodies — and nothing
+/// above them.
 @Observable
 final class TrackerState {
     /// Persistent tracker position along the route (metres from start). Starts
@@ -40,8 +41,8 @@ struct FollowAnchor: Equatable {
     /// Whether that match was settled by a usable course.
     ///
     /// `false` while it rests on nothing better than
-    /// ``RouteProfile/nearestPoint(to:near:heading:)``'s assumption that a
-    /// hike starts at its start — which is what a walker gets if they open
+    /// ``RouteProfile/nearestPoint(to:near:heading:scope:)``'s assumption that
+    /// a hike starts at its start — which is what a walker gets if they open
     /// the app *standing still* halfway round an out-and-back. They'd be
     /// placed on the outbound leg, and continuity would then hold them there
     /// for the rest of the walk however far they went.

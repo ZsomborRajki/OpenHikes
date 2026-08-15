@@ -28,12 +28,12 @@ struct DisplayedRoute: Equatable {
 
     /// The finished route to draw for the current selection.
     ///
-    /// This is the *whole* read `OpenHikesView.body` performs against the
-    /// selected `Hike`, which is why it lives here rather than inline in the
-    /// view: the property this reads (`id`, and `route` only on a change of
-    /// selection) is the property set that decides how often the root view —
-    /// and with it the sheet closure inside it — is invalidated. Keeping it in
-    /// one named place is what lets a test observe exactly that set.
+    /// It lives here rather than inline in the view because the properties it
+    /// reads — `id` and `isRecording`, plus `route` only on a change of
+    /// selection — are the set that decides how often the root view, and with
+    /// it the sheet closure inside it, is invalidated. Keeping it in one named
+    /// place is what lets a test observe exactly that set; see
+    /// `RouteAppearanceIsolationTests`.
     static func forSelection(
         _ hike: Hike?,
         cache: DisplayedRouteCoordinateCache,

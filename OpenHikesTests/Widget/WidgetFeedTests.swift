@@ -72,7 +72,6 @@ final class WidgetFeedTests {
         #expect(abs(last.latitude - (Fixture.ridgeRoute.last?.latitude ?? 0)) < 1e-9)
         #expect(snapshot.polyline.count == Fixture.ridgeRoute.count)
 
-        // And the elevation band the complication reads.
         #expect(snapshot.elevationLowMeters == 100)
         #expect(snapshot.elevationHighMeters == 260)
     }

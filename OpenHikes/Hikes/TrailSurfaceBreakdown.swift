@@ -24,15 +24,17 @@ nonisolated struct TrailSurfaceBreakdown: Equatable, Sendable {
     /// "what did I mostly walk on".
     let shares: [Share]
     /// Route length as measured by this walk, which is the sum of the shares
-    /// rather than ``Hike/distanceMeters`` — the two agree to within rounding,
-    /// and using the sum keeps the fractions adding up to exactly 1.
+    /// rather than ``Hike/distanceMeters`` — using the sum keeps the fractions
+    /// adding up to exactly 1.
     let totalMeters: Double
 
     static let empty = Self(shares: [], totalMeters: 0)
 
     var isEmpty: Bool { shares.isEmpty }
 
-    /// The single biggest share, or `nil` for an empty breakdown.
+    /// The leading share: the longest surveyed surface, or — when nothing on
+    /// this route was surveyed — the longest share of any kind. `nil` for an
+    /// empty breakdown.
     var dominant: Share? { shares.first }
 
     /// How much of the route OSM actually describes. A low value means the
@@ -82,14 +84,14 @@ nonisolated struct TrailSurfaceBreakdown: Equatable, Sendable {
 
 nonisolated enum TrailSurfaceAnalyzer {
     /// How far a sample may sit from a way before that way stops being a
-    /// plausible explanation for it. Deliberately wider than the matcher's own
-    /// tolerance for moving geometry: attributing a surface is a much cheaper
-    /// claim than relocating a route, and an imported GPX can be a good 20 m
-    /// off a correctly mapped trail under tree cover.
+    /// plausible explanation for it. An imported GPX can be a good 20 m off a
+    /// correctly mapped trail under tree cover, and attributing a surface is a
+    /// much cheaper claim than relocating a route.
     static let defaultToleranceMeters = 25.0
-    /// Distance between samples. Small enough to catch the short paved
+    /// Upper bound on the spacing between samples — a route segment shorter
+    /// than this still contributes one. Small enough to catch the short paved
     /// connectors between trail sections, large enough that a five-hour track
-    /// is a few thousand grid lookups rather than a few hundred thousand.
+    /// is a few thousand grid lookups rather than one per metre.
     static let samplingStepMeters = 20.0
     /// How much closer a rival way has to be before a sample abandons the way
     /// the previous sample used. Without it a route running between a path and

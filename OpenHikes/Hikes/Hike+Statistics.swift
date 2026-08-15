@@ -199,16 +199,14 @@ nonisolated struct HikeRouteStatistics: Sendable {
 extension Hike {
     var pointCount: Int { route.count }
 
-    /// Every derived statistic — duration, gain and loss, the two speeds —
-    /// comes from ``HikeRouteStatistics``, built once off the main thread by
-    /// ``HikeDetailPreparation``.
+    /// Walks the route and derives every statistic — duration, gain and loss,
+    /// the two speeds — from scratch, on the calling thread, on every read.
     ///
-    /// There were convenience properties here that wrapped it, one per stat.
-    /// Each one rebuilt the whole thing, so reading four of them walked the
-    /// route four times, on whatever thread happened to ask — which for a
-    /// SwiftUI body is the main one. Nothing in the app read them; they were a
-    /// trap laid for the next person who needed a number in a view. Build the
-    /// statistics once and read the fields off it instead.
+    /// The app's own numbers do not come through here: ``HikeDetailPreparation``
+    /// drives ``HikeRouteStatistics/Builder`` off the main thread from the walk
+    /// ``RouteProfile`` performs anyway. Don't read this from a SwiftUI body,
+    /// and don't add per-stat wrappers around it — each one would repeat the
+    /// walk.
     var routeStatistics: HikeRouteStatistics {
         HikeRouteStatistics(distanceMeters: distanceMeters, route: route)
     }

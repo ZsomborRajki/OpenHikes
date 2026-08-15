@@ -2,9 +2,10 @@
 //  RecordingRouteReviewControls.swift
 //  OpenHikes
 //
-//  The screen a finished recording has to pass through before it becomes a
-//  `Hike`: one section at a time, the hiker keeps the trail the matcher found
-//  or hands the section back to the GPS that recorded it.
+//  The screen a recording the matcher moved — or found ambiguous — has to pass
+//  through before it is saved: one section at a time, the hiker keeps the
+//  trail the matcher found or hands the section back to the GPS that recorded
+//  it.
 //
 //  Accessibility identifiers stay on the leaves UI automation taps: SwiftUI
 //  pushes a container's identifier down onto every descendant, which would

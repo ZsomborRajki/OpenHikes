@@ -107,7 +107,7 @@ nonisolated extension TileCache {
     func notifyReconnect() {
         // MKOverlayRenderer.setNeedsDisplay must run on the main thread; the path
         // handler fires on a background queue, so hop first, then read observers
-        // there (keeps the non-Sendable listeners off the queue boundary).
+        // there — the listener list is only ever touched on the main thread.
         DispatchQueue.main.async { [weak self] in
             guard let self else { return }
             let live = observers.withLock { boxes -> [TileCacheObserver] in

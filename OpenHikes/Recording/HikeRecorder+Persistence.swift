@@ -3,7 +3,7 @@
 //  OpenHikes
 //
 //  Persistence, route review, session lifecycle, and failure/reset helpers
-//  for HikeRecorder, split out to keep HikeRecorderHelpers.swift under the
+//  for HikeRecorder, split out to keep HikeRecorder+Helpers.swift under the
 //  file-length limit.
 //
 

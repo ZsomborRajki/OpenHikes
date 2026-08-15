@@ -7,9 +7,8 @@
 //  Deliberately not the newer `CLLocationUpdate.liveUpdates()` async stream:
 //  that API stalls after the first fix when the Simulator's location is driven
 //  by `simctl location ... start` (GPX playback), while a delegate-based
-//  CLLocationManager keeps receiving updates — the same mechanism MapKit's own
-//  `showsUserLocation` dot uses internally, which is why the map kept moving
-//  while this stayed frozen.
+//  CLLocationManager keeps receiving updates — MapKit's own
+//  `showsUserLocation` dot kept moving while this stayed frozen.
 //
 
 import CoreLocation
@@ -175,8 +174,8 @@ final class LocationManager: NSObject {
         // walker standing still at a viewpoint would otherwise wake every
         // observer once a second for as long as the app is open. Nothing
         // downstream wants that heartbeat: auto-follow and the weather poll
-        // read `coordinate` on their own timers, and the map only uses it to
-        // centre on the very first fix.
+        // are driven by ``fixes``, which carries only what survives this
+        // filter, and the map only uses it to centre on the very first fix.
         if let coordinate, coordinate.latitude == next.latitude, coordinate.longitude == next.longitude { return }
         // Only an actual publish restarts the throttle window, so the first
         // step after standing still reaches the map straight away.

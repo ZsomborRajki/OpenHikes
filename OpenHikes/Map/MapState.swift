@@ -34,7 +34,7 @@ final class RouteHighlight {
     /// no movement.
     ///
     /// Guarding here rather than at each call site is deliberate: the write
-    /// sites are spread across the detail view's scrub, its auto-follow poll
+    /// sites are spread across the detail view's scrub, its auto-follow updates
     /// and its toggles, and a missed guard is invisible until someone profiles
     /// a drag.
     func move(to coordinate: CLLocationCoordinate2D?) {
@@ -115,10 +115,11 @@ final class SheetMetrics {
     }
 }
 
-/// One-shot map commands the detail view issues (e.g. the Zoom button). Held in a
-/// reference type the map observes directly, so triggering one doesn't re-render
-/// any SwiftUI view. `fitRouteRequest` is a token — bumping it asks the map to
-/// re-fit the current route into view.
+/// One-shot map commands the UI issues: the detail view's Zoom button, a
+/// search result, and recording's follow request. Held in a reference type the
+/// map observes directly, so triggering one doesn't re-render any SwiftUI
+/// view. `fitRouteRequest` is a token — bumping it asks the map to re-fit the
+/// current route into view.
 @Observable
 final class MapController {
     /// Non-isolated so releasing the last reference never requires proving

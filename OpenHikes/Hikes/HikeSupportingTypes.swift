@@ -2,8 +2,9 @@
 //  HikeSupportingTypes.swift
 //  OpenHikes
 //
-//  Value types stored inline by SwiftData as part of a Hike, plus the
-//  elevation-profile sample type derived from a route.
+//  Value types stored inline by SwiftData as part of a Hike, the
+//  elevation-profile sample type derived from a route, and the coordinate
+//  geometry every route-matching path shares.
 //
 
 import CoreLocation
@@ -38,8 +39,8 @@ nonisolated struct OfflineDownloadRecord: Codable, Hashable, Sendable {
 /// `ForEach` diffs the plotted samples by `id`, so a fresh identity per instance
 /// made every rebuild of the same route diff as a wholesale replacement. Distance
 /// along the route is unique within a profile (``RouteProfile`` keeps the plotted
-/// samples strictly ascending) and identical across rebuilds — and free, where
-/// `UUID()` was over half the cost of building a long profile.
+/// samples strictly ascending) and identical across rebuilds — and costs nothing
+/// to derive, where `UUID()` is allocated per sample.
 nonisolated struct ElevationSample: Identifiable, Equatable, Sendable {
     var id: Double { distanceMeters }
     let distanceMeters: Double
@@ -134,17 +135,17 @@ nonisolated enum RouteGeometry {
         /// The segment's local east/north components, pointing the way the
         /// segment runs. Kept as components rather than a bearing so the
         /// `atan2` is paid only by the callers that need a direction, not by
-        /// every segment of a five-hour track twice a second.
+        /// every segment scanned on every published fix.
         let dx: Double
         let dy: Double
     }
 
     /// Projects `coordinate` onto the segment between `start` and `end`.
     ///
-    /// Route scrubbing, live auto-follow, and trail matching all need the same
-    /// answer, and all three used to carry their own copy of this arithmetic.
-    /// One implementation means a fix can't be judged on-route by the chart
-    /// and off-route by the matcher.
+    /// Live auto-follow (``RouteProfile``), trail matching, and surface and
+    /// difficulty attribution all need the same answer. One implementation
+    /// means a fix can't be judged on-route by one of them and off-route by
+    /// another.
     static func project(
         _ coordinate: CLLocationCoordinate2D,
         onSegmentFrom start: CLLocationCoordinate2D,

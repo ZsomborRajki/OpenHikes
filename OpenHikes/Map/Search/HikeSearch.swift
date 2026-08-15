@@ -13,11 +13,11 @@ import Foundation
 /// surfaced above map suggestions so a user's own trails come first.
 ///
 /// The ranking folds every title and sorts the survivors, so it is the one
-/// real cost in `MapSheet.body` — and that body runs far more often than the
-/// query changes. Every detent change a sheet drag produces re-evaluates it,
-/// as does any unrelated invalidation while the field is focused (a completer
-/// result arriving, a selection changing). So the result is kept here, across
-/// body passes, rather than rebuilt on each one.
+/// real cost in `MapSheetHikes.body` — and that body runs far more often than
+/// the query changes. Every detent change a sheet drag produces re-evaluates
+/// it, as does any unrelated invalidation while the field is focused (a
+/// completer result arriving, a selection changing). So the result is kept
+/// here, across body passes, rather than rebuilt on each one.
 ///
 /// The cache is keyed by what the ranking actually reads: the trimmed query,
 /// and each hike's identity *and* title in order. Titles are part of the key

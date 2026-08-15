@@ -82,8 +82,7 @@ extension StorageAccountingTests {
     // MARK: - Bounding the cache
 
     /// The map cache is the one thing here that grows without anyone asking:
-    /// every tile MapKit draws is written, and until now nothing ever put a
-    /// ceiling on that. A trim is what bounds it.
+    /// every tile MapKit draws is written. A trim is what bounds it.
     @Test("browsing residue past the limit is trimmed back under it")
     func trimBringsCacheUnderTheLimit() async throws {
         let browsed = (0..<8).map { key(16, 20, $0) }

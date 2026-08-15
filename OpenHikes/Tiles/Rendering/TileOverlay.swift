@@ -8,11 +8,11 @@
 import Foundation
 import MapKit
 
-/// OpenStreetMap tile overlay that serves tiles through the shared cache.
+/// Raster tile overlay for the selected provider, served through ``TileCache``.
 ///
 /// `@unchecked` because of the superclass, not because of any state of its
-/// own: `MKTileOverlay` is not declared `Sendable` by the SDK, while both
-/// stored properties below are immutable `let`s.
+/// own: `MKTileOverlay` is not declared `Sendable` by the SDK, while every
+/// stored property below is an immutable `let`.
 nonisolated final class TileOverlay: MKTileOverlay, @unchecked Sendable {
     /// The cache tiles are served from and filed into. Injectable so a test
     /// can hand over one wired to a stub transport and its own directories;

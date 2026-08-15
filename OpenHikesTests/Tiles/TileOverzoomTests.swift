@@ -73,8 +73,8 @@ struct TileOverzoomTests {
         }
     }
 
-    /// The cache key is the tile's identity everywhere — memory, both disk
-    /// tiers, the auto-save manifest and the bulk-download bookkeeping.
+    /// The path portion of a cache key. `TileCacheKey.namespaced` prefixes the
+    /// provider id before a tile is stored under it.
     @Test("the cache key identifies zoom, position and scale")
     func cacheKey() {
         #expect(MKTileOverlayPath(x: 3, y: 4, z: 5, contentScaleFactor: 2).cacheKey == "5/3/4@2.0")

@@ -14,9 +14,8 @@
 //  that later measures and frees them.
 //
 //  Every suite here builds its own `TileSandbox`: its own tile directories and
-//  its own store with one active hike of its own. These used to be nested
-//  inside a `.serialized` parent because they drove the process-wide
-//  singletons instead, which made "add a suite" a question about parallelism.
+//  its own store with one active hike of its own, rather than the process-wide
+//  singletons the app drives.
 //
 
 import CoreLocation
@@ -558,12 +557,8 @@ struct AutoSaveLifecycleTests {
     /// `sceneWillResignActive` appends the pending snapshot to the manifest
     /// and rolls it back if the save throws. The rollback removes by *count*
     /// (`removeSubrange(previousCount...)`), which is only correct while
-    /// nothing else has appended in between — and `flushPendingKeys` also runs
-    /// from the controller's drain task, which is not stopped for the duration.
-    ///
-    /// Pinned rather than fixed: the window is small and the drain is
-    /// main-actor bound, so today the two can't interleave. It becomes a real
-    /// corruption the moment any flush moves off the main actor.
+    /// nothing else has appended in between — and what guarantees that is
+    /// `flushPendingKeys()`'s own `isSuspended` guard, set before the append.
     @Test("a failed suspension save leaves the manifest exactly as it found it")
     func failedSuspensionSaveRestoresTheManifest() async throws {
         let context = try Fixture.modelContext()
@@ -582,14 +577,12 @@ struct AutoSaveLifecycleTests {
         #expect(hike.autoSavedTileKeys == before, "a failed save must not leave a half-written manifest")
     }
 
-    /// Two hikes over the same ground both auto-save, and the cap is per hike.
-    /// Nothing pins what happens when the *second* one is activated while the
-    /// first still has pending keys that the activation's own flush is
-    /// supposed to hand back — `activate` flushes before replacing the store's
-    /// state, and this is the assertion that keeps that ordering honest under
-    /// a same-hike re-activation, which the app does on every selection change
-    /// (`OpenHikesModel.selectedHikeDidChange` and `HikeDetailView.task` both
-    /// call it).
+    /// Re-selecting the hike that is already active takes `activate`'s early
+    /// return: it must neither rebuild the corridor nor replace the store's
+    /// state, or the pending key saved a moment ago would be dropped or folded
+    /// in twice. The app does exactly this on every selection change —
+    /// `OpenHikesModel.selectedHikeDidChange` and `HikeDetailView`'s `.task`
+    /// both call `hikeSelectionChanged` for one tap.
     @Test("re-selecting the same hike doesn't lose or duplicate its pending tiles")
     func reactivatingTheSameHikeIsIdempotent() async throws {
         let context = try Fixture.modelContext()

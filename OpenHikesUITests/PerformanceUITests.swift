@@ -17,10 +17,10 @@
 //     Sampled before and after a phase and diffed, so a slow simulator moves
 //     the wall clock but not the verdict.
 //
-//  2. XCTest's own metrics — `XCTApplicationLaunchMetric`, `XCTCPUMetric`,
-//     `XCTMemoryMetric`, `XCTHitchMetric` — targeted at the app under test.
-//     These see what the app cannot see about itself: launch time before its
-//     first line runs, and hitches at the frame level.
+//  2. XCTest's own metrics — `XCTApplicationLaunchMetric`, `XCTCPUMetric` and
+//     `XCTMemoryMetric` — targeted at the app under test. These see what the
+//     app cannot see about itself, starting with launch time before its first
+//     line runs.
 //
 //  3. `PerformanceLog`'s tab-separated file in the app container, pulled by
 //     `Scripts/run-performance-tests.sh` afterwards. Nothing is asserted from
@@ -32,11 +32,11 @@
 //  the app's timeline to the phase that was running at the time.
 //
 //  Thresholds are regression tripwires, not budgets. Each is set well above
-//  what the app does today, because a performance test that fails when the CI
-//  machine is busy gets disabled, and a disabled test measures nothing. The
-//  precise figures belong in the generated report; the assertions exist to
-//  catch a change in *shape* — a body that starts following GPS, a per-fix
-//  cost that starts growing with route length.
+//  what the app does today, because a performance test that fails whenever the
+//  machine running it is busy gets disabled, and a disabled test measures
+//  nothing. The precise figures belong in the generated report; the assertions
+//  exist to catch a change in *shape* — a body that starts following GPS, a
+//  per-fix cost that starts growing with route length.
 //
 
 import CoreLocation

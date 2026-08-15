@@ -86,9 +86,8 @@ struct StorageAccountingTests {
         return await offMain { cache.diskUsage(claimedBy: keys) }
     }
 
-    /// The Clear Map Cache button. This really does empty the host app's tile
-    /// store of everything `keys` doesn't name — which is the behaviour under
-    /// test. Nothing else in the target keeps tile files across suites.
+    /// The Clear Map Cache button, run against this suite's own cache: it
+    /// really does delete everything `keys` doesn't name.
     func clearMapCache(claimedBy keys: Set<String>) async {
         let cache = sandbox.cache
         await offMain { cache.removeTiles(unclaimedBy: keys) }
@@ -155,7 +154,7 @@ struct StorageAccountingTests {
         #expect(stored == fullKeys.union([extra]))
     }
 
-    /// The delete-a-hike path from `MapSheet.delete(_:)`, minus the SwiftUI.
+    /// The delete-a-hike path from `MapSheet.delete(_:among:)`, minus the SwiftUI.
     func deleteHike(_ hike: Hike, using controller: AutoSaveController, survivors: [Hike] = []) async {
         controller.hikeWillBeDeleted(hike)
         let deletionPlan = StoredTileDeletionPlan(removing: hike, among: [hike] + survivors)
@@ -202,13 +201,12 @@ struct StorageAccountingTests {
         #expect(usage.claimed == hikeBytes, "and Settings should report the same bytes back")
     }
 
-    /// Issue 1, exactly: with one hike imported, the hike sheet said 11 MB and
-    /// Settings said 17 MB. Both were right — panning past the corridor makes
-    /// MapKit fetch tiles that `TileCache` writes and no manifest ever claims —
-    /// but adding them into one "Downloaded tiles" figure presented browsing
-    /// residue as deliberately saved data, and left the total permanently ahead
-    /// of what the only hike could account for. Reported apart, the coverage
-    /// number matches the hike sheet and the residue is named for what it is.
+    /// Why the two numbers are reported apart. Panning past the corridor makes
+    /// MapKit fetch tiles that `TileCache` writes and no manifest ever claims,
+    /// so a single "Downloaded tiles" figure would present browsing residue as
+    /// deliberately saved data and sit permanently ahead of what the hikes can
+    /// account for. Split, the coverage number matches the hike sheet and the
+    /// residue is named for what it is.
     @Test("browsing residue is reported as cache, not as offline coverage")
     func browsedTilesAreReportedAsCache() async throws {
         let controller = makeController()
@@ -220,7 +218,7 @@ struct StorageAccountingTests {
         try await persist(key: saved, tile: tile())
         controller.flushPendingKeys()
 
-        // Panned ~25 km off the trail: drawn, cached, correctly not auto-saved.
+        // A tile far off the trail: drawn and cached, never claimed.
         let browsed = key(16, 92, 92)
         try sandbox.browse(key: browsed)
 
@@ -253,8 +251,8 @@ struct StorageAccountingTests {
 
         let claimed = try await claimedKeys(of: hike)
         let downloaded = try #require(claimed.first)
-        // A bulk download writes through `loadTile`, i.e. into the same place
-        // browsing does.
+        // The user merely browsed this one, so it sits in the ephemeral tier
+        // while a download record claims it.
         try sandbox.browse(key: downloaded)
 
         let usage = await diskUsage(claimedBy: claimed)
@@ -375,11 +373,9 @@ struct StorageAccountingTests {
         #expect(try await bytes([saved]) == 0)
     }
 
-    /// Issue 2: the hike was the only one in the app, and Settings still showed
-    /// downloaded data after deleting it. Deletion is driven off the manifests,
-    /// so it frees what the hike claimed and leaves what browsing put on disk
-    /// without claiming — but with no hikes left, none of that is coverage any
-    /// more, and it says so.
+    /// Deletion is driven off the manifests, so it frees what the hike claimed
+    /// and leaves what browsing put on disk without claiming — but with no
+    /// hikes left, none of that is coverage any more, and Settings says so.
     @Test("deleting the only hike leaves no coverage, only clearable cache")
     func deletingTheOnlyHikeLeavesOnlyCache() async throws {
         let controller = makeController()
@@ -403,9 +399,8 @@ struct StorageAccountingTests {
         #expect(try await bytes([browsed]) == TileStore.tileByteCount, "its browsing residue is cache now")
     }
 
-    /// The other half of issue 2's fix: the residue is reclaimable on its own,
-    /// without a hike having to be deleted and without touching the offline
-    /// maps of the ones that remain.
+    /// The residue is reclaimable on its own, without a hike having to be
+    /// deleted and without touching the offline maps of the ones that remain.
     @Test("clearing the map cache frees the residue and keeps the coverage")
     func clearingTheCacheKeepsCoverage() async throws {
         let controller = makeController()

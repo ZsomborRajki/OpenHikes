@@ -2,7 +2,8 @@
 //  TileCache.swift
 //  OpenHikes
 //
-//  Two-tier (memory + disk) tile cache with async network loading.
+//  Three-tier (memory, ephemeral disk, durable disk) tile cache with async
+//  network loading.
 //
 
 import Foundation
@@ -19,12 +20,13 @@ import AppKit
 typealias TileImage = NSImage
 #endif
 
-/// Receives connectivity callbacks from ``TileCache``, always on the main queue.
-/// Renderers adopt this to retry tiles once the network is back.
-/// A reconnect listener. `Sendable` because ``TileCache`` holds these across
-/// the network monitor's queue and the main thread: the notification is raised
-/// off-main and delivered on-main, so the reference itself crosses an
-/// isolation boundary even though every call to it lands on the main thread.
+/// A reconnect listener. Renderers adopt this to retry tiles once the network
+/// is back; the callback always lands on the main queue.
+///
+/// `Sendable` because ``TileCache`` holds these across the network monitor's
+/// queue and the main thread: the notification is raised off-main and
+/// delivered on-main, so the reference itself crosses an isolation boundary
+/// even though every call to it lands on the main thread.
 protocol TileCacheObserver: AnyObject, Sendable {
     func tileCacheDidReconnect()
 }
@@ -115,7 +117,7 @@ nonisolated final class TileCache: @unchecked Sendable {
 
     /// One tile off the network: the bytes exactly as served, plus the decoded
     /// image. `@unchecked Sendable` for the same reason ``MemoryTile`` is —
-    /// `NSImage` isn't `Sendable`, and a decoded tile is never mutated after
+    /// `TileImage` isn't `Sendable`, and a decoded tile is never mutated after
     /// this is built.
     private struct FetchedTile: @unchecked Sendable {
         let data: Data
@@ -299,17 +301,6 @@ nonisolated final class TileCache: @unchecked Sendable {
 
 nonisolated extension TileCache {
 
-    /// Fast, synchronous memory-only lookup — safe to call from the render loop.
-    ///
-    /// Applies the TTL lazily, evicting as it finds one expired. This is the
-    /// *only* thing keeping a stale tile off the screen — the disk sweeps
-    /// deliberately don't touch this tier — so an expired entry must never be
-    /// returned from here, however it got in.
-    ///
-    /// `referenceDate` is defaulted for the same reason it is on
-    /// ``removeExpiredTiles(referenceDate:)``: a test can't wait out a
-    /// seven-day TTL, and a memory entry's age comes from when it was cached
-    /// rather than from a file it could backdate.
     /// Puts a tile in the memory tier, charged at its decoded size.
     ///
     /// The single insertion point on purpose: `setObject(_:forKey:)` without a
@@ -322,6 +313,17 @@ nonisolated extension TileCache {
         memory.setObject(tile, forKey: key as NSString, cost: tile.byteCost)
     }
 
+    /// Fast, synchronous memory-only lookup — safe to call from the render loop.
+    ///
+    /// Applies the TTL lazily, evicting as it finds one expired. This is the
+    /// *only* thing keeping a stale tile off the screen — the disk sweeps
+    /// deliberately don't touch this tier — so an expired entry must never be
+    /// returned from here, however it got in.
+    ///
+    /// `referenceDate` is defaulted for the same reason it is on
+    /// ``removeExpiredTiles(referenceDate:)``: a test can't wait out a
+    /// seven-day TTL, and a memory entry's age comes from when it was cached
+    /// rather than from a file it could backdate.
     func memoryImage(forKey key: String, referenceDate: Date = Date()) -> TileImage? {
         // swiftlint:disable:next legacy_objc_type
         let cacheKey = key as NSString
@@ -559,11 +561,11 @@ nonisolated extension TileCache {
         }
     }
 
+    private static let httpSuccessRange = 100 * 2..<100 * 3
+
     /// One tile off the network, validated and decoded, with nothing written
     /// anywhere — the caller decides which tier it belongs in. Go through
     /// ``fetchTileOnce(forKey:url:)`` rather than calling this directly.
-    private static let httpSuccessRange = 100 * 2..<100 * 3
-
     private func fetchTile(forKey key: String, url: URL) async -> FetchedTile? {
         #if DEBUG
         Self.logger.debug("Requesting tile \(key, privacy: .public) from \(url.absoluteString, privacy: .public)")
@@ -618,14 +620,10 @@ nonisolated extension TileCache {
     /// already fetched through ``loadTile(forKey:url:)``, which is what put that
     /// cached copy there.
     ///
-    /// A move, not a re-encode. Providers serve PNG, which is what flat-filled,
-    /// sharp-edged cartography compresses best in, so those bytes are already
-    /// both the smallest and the only lossless representation on offer: a
-    /// lossless PNG round-trip through ImageIO measured +10% on real tiles, and
-    /// HEIC at full quality +178%. Lossy HEIC did save 7% on average, but
-    /// inflated flat tiles (desert, coastline, low-zoom overviews) by up to 4×,
-    /// which is exactly backwards. Moving the file instead also keeps a decode
-    /// and an encode off the drawing path entirely.
+    /// A move, not a re-encode. Providers serve PNG, which is already both a
+    /// lossless and a compact representation of flat-filled, sharp-edged
+    /// cartography, so re-encoding buys nothing — and moving the file keeps a
+    /// decode and an encode off the drawing path entirely.
     ///
     /// Returns whether the tile is durably stored once this returns — including
     /// when it already was, which is what lets a second hike over the same

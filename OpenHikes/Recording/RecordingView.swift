@@ -164,10 +164,8 @@ private struct RecordingConditionsNotice: View {
     private var warnings: [String] {
         var warnings: [String] = []
         // The energy profile's own words rather than a separate sentence about
-        // Low Power Mode, because they would otherwise contradict each other:
-        // the old copy said fixes "may arrive less often", which was the
-        // system's doing and outside the app's control. Now it is the app's
-        // doing, so it says so — and says what it bought.
+        // Low Power Mode: the profile is what the app did about it, and two
+        // messages about the same condition would contradict each other.
         if let reason = recorder.energyProfile.reason {
             warnings.append(reason)
         }
@@ -195,9 +193,10 @@ private struct RecordingHeader: View {
             Spacer()
             if recorder.sessionStartedAt != nil {
                 TimelineView(.periodic(from: .now, by: 1)) { _ in
-                    // The tick only says *when* to redraw; the value itself
-                    // comes from the recorder's monotonic clock, so a system
-                    // clock change mid-hike can't rewind the readout.
+                    // The tick only says *when* to redraw; the value comes
+                    // from ``HikeRecorder/elapsedSeconds()``, which counts
+                    // from a monotonic source wherever it has one rather than
+                    // from the wall clock.
                     Text(HikeFormat.duration(recorder.elapsedSeconds()))
                         .font(.headline.monospacedDigit())
                         .foregroundStyle(.secondary)

@@ -92,7 +92,7 @@ struct TileCorridorTests {
         let z = 14
         let anchor = Fixture.coordinates(Fixture.ridgeRoute)[0]
         let tile = tile(at: anchor, z: z)
-        // At z14 a tile is ~2.4 km across at this latitude, and the corridor
+        // At z14 a tile is ~1.9 km across at this latitude, and the corridor
         // extends 1.5 km past the route — so the neighbouring tiles overlap
         // it even though their centers are outside.
         #expect(corridor.overlaps(z: z, x: tile.x - 1, y: tile.y))

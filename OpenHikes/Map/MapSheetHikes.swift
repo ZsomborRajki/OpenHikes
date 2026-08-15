@@ -108,7 +108,7 @@ private extension MapSheetHikes {
         }
     }
 
-    /// Always-visible recording and GPX import actions.
+    /// Recording and GPX import actions, shown whether or not there are hikes.
     var hikeActions: some View {
         HStack(spacing: 8) {
             #if os(iOS)

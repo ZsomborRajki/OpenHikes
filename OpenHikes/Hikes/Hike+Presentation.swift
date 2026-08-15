@@ -42,8 +42,8 @@ extension Hike {
     }
 
     /// The same tint, from a caller-supplied source of randomness — so a test
-    /// that sweeps hundreds of generated tints can seed it and reproduce a
-    /// failure on exactly the hue that caused it.
+    /// that sweeps generated tints can seed it and reproduce a failure on
+    /// exactly the hue that caused it.
     static func randomTintHex<G: RandomNumberGenerator>(using generator: inout G) -> String {
         Color(
             hue: .random(in: 0..<1, using: &generator),

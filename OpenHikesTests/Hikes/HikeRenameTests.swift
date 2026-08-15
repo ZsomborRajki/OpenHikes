@@ -42,13 +42,8 @@ struct HikeRenameTests {
     func displayTitleIgnoresBlankCustomName() {
         let hike = Hike(title: "Ridge Loop", distanceMeters: 1000)
         hike.customName = "   "
-        // Whitespace-only strings pass the isEmpty guard; the presenter
-        // trims before writing, but if a raw whitespace value is ever stored
-        // directly we still fall back to the original title.
-        // displayTitle itself doesn't trim — it just checks isEmpty.
-        // A whitespace-only value is non-empty, so it is used as-is; the
-        // UI layer is responsible for trimming before setting customName.
-        // This test documents that contract explicitly.
+        // `displayTitle` checks `isEmpty`, not blankness, so a whitespace-only
+        // value is used as written; trimming is the UI layer's job.
         #expect(hike.displayTitle == "   ")
     }
 

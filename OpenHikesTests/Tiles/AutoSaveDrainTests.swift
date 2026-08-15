@@ -6,8 +6,8 @@
 //  the hike's SwiftData manifest.
 //
 //  The controller used to poll for that every two seconds, for as long as the
-//  app was frontmost, whether or not a hike was even selected — a wake-up a
-//  second every other second, almost always with nothing to do. It now waits
+//  app was frontmost, whether or not a hike was even selected — one wake-up
+//  every two seconds, almost always with nothing to do. It now waits
 //  on `pendingKeySignals()` and sleeps only once it has been told there is
 //  something to fold, so the two halves worth pinning are that a claim really
 //  does raise the signal, and that work nobody claimed really doesn't.

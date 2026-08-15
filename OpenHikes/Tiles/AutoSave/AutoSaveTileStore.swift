@@ -55,9 +55,9 @@ nonisolated final class AutoSaveTileStore: Sendable {
     private let pendingObservers = Mutex([UUID: AsyncStream<Void>.Continuation]())
 
     /// Where claimed tiles are promoted from browsing storage to durable
-    /// storage. Injectable for the same reason ``TileCache/init(storageRoot:sessionConfiguration:monitorsNetwork:)``
-    /// takes a root: a test gets a store with its own directories and its own
-    /// single active hike, instead of sharing the process's one of each.
+    /// storage. Injectable for the same reason ``TileCache``'s `storageRoot`
+    /// is: a test gets a store with its own directories and its own single
+    /// active hike, instead of sharing the process's one of each.
     private let tileCache: TileCache
 
     init(tileCache: TileCache = .shared) {
@@ -122,10 +122,10 @@ nonisolated final class AutoSaveTileStore: Sendable {
     }
 
     /// Called after a tile has already been resolved for on-screen display
-    /// (memory/disk/network hit alike). No-ops unless a hike is active, the
-    /// tile falls in its corridor, it's under the cap, and it isn't already
-    /// saved — otherwise moves the cached tile into durable storage, bytes
-    /// unchanged.
+    /// (memory/disk/network hit alike). No-ops unless a hike is active, is
+    /// still accepting claims, and the tile falls in its corridor; a key the
+    /// hike doesn't already know also has to be under the cap. Otherwise the
+    /// cached tile is moved into durable storage, bytes unchanged.
     func considerPersisting(key: String, z: Int, x: Int, y: Int) {
         assertOffMainThread("considerPersisting moves a file on disk — call it off the main thread")
         // Claim the tile up front so two threads drawing it at once don't both

@@ -7,7 +7,7 @@
 //  footprint and no steady-state cost of its own (unlike a debug HUD, it
 //  can't skew the very thing it's measuring).
 //
-//  Two ways to look at it:
+//  Three ways to look at it:
 //
 //  1. Instruments, on a real device: Product ▸ Profile (⌘I) ▸ a "Blank"
 //     template with the "os_signpost" (or "Points of Interest") instrument
@@ -93,7 +93,7 @@ nonisolated enum RenderSignpost {
     /// A single point-in-time marker — e.g. "a body evaluated" or "an update
     /// call ran". `detail` should say what happened (or didn't) so the
     /// Points of Interest track (or console line) reads like a log, not just
-    /// unlabeled dots — e.g. `.mark("MapUpdate", "tile=skip center=skip route=rebuild")`.
+    /// unlabeled dots — e.g. `.mark("LiveFollowUpdate", "moved-scrubbing")`.
     static func mark(_ name: StaticString, _ detail: @autoclosure () -> String = "") {
         let resolvedDetail = detail()
         signposter.emitEvent(name, "\(resolvedDetail, privacy: .public)")

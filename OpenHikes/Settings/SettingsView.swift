@@ -3,7 +3,9 @@
 //  OpenHikes
 //
 //  The profile/settings sheet reached from the button next to the search bar.
-//  Hosts a (future) Apple sign-in and the map tile-provider selector.
+//  Hosts a (future) Apple sign-in, the map tile-provider selector, the
+//  cellular-download and background-tracking switches, and the offline tile
+//  storage readout.
 //
 
 import SwiftData

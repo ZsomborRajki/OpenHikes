@@ -29,7 +29,7 @@ extension MapView {
         /// is drawn, which is not the same as "drawn at revision 0".
         private var appliedTailRevision: Int?
         private var appliedReviewRevision: Int?
-        /// Whether the map is on screen at all.
+        /// Whether the app is in the foreground.
         ///
         /// The recording trace is the one thing here that changes at GPS
         /// frequency, and a backgrounded app draws to nobody: an `MKPolyline`
@@ -46,9 +46,9 @@ extension MapView {
         private weak var observedRecordingMapView: MKMapView?
         /// `nonisolated(unsafe)` for the same reason ``PowerStateMonitor``'s
         /// tokens are: `deinit` is nonisolated and cannot touch main-actor
-        /// state, and this is written only while registering on the main actor
-        /// and read only once the last reference is gone, so the two can never
-        /// overlap.
+        /// state. Registration reads and writes this on the main actor, and
+        /// `deinit` reads it only once the last reference is gone, so the two
+        /// can never overlap.
         nonisolated(unsafe) private var scenePhaseObservers: [NSObjectProtocol] = []
 
         deinit {
@@ -388,8 +388,8 @@ private extension MapView.Coordinator {
 
     /// One catch-up pass for everything that arrived while the app was away.
     /// The trace is a snapshot of the whole recording rather than a stream of
-    /// deltas, so a single apply draws an hour of pocket walking as cheaply as
-    /// it draws one fix.
+    /// deltas, so an hour of pocket walking is caught up by a single apply
+    /// rather than by one apply per fix.
     func resumeForegroundDrawing() {
         isForeground = true
         guard pendingRecordingTrace,
@@ -433,7 +433,7 @@ private extension MapView.Coordinator {
         // No `count > 1` guard: the loop's index *is* `recordingChunkOverlays.count`,
         // so skipping a chunk would stall every later one forever. A chunk
         // is always `RecordingTrace.chunkSize` points by construction —
-        // both `append` and `replace(with:)` only ever commit full ones.
+        // the trace seals one only when the stable tail has that many.
         while recordingChunkOverlays.count < trace.committedChunks.count {
             let coordinates = trace.committedChunks[recordingChunkOverlays.count]
             let overlay = MKPolyline(
@@ -581,10 +581,8 @@ extension MapView.Coordinator {
     }
 
     func mapView(_ mapView: MKMapView, didSelect view: MKAnnotationView) {
-        // MapKit's default callout for the blue dot pulls in the "Me"
-        // contact's photo (or a placeholder silhouette) from Contacts;
-        // `canShowCallout = false` alone doesn't reliably suppress it,
-        // so deselect immediately to dismiss the callout before it shows.
+        // `canShowCallout = false` doesn't reliably suppress MapKit's own
+        // callout for the blue dot, so deselect immediately to dismiss it.
         guard view.annotation is MKUserLocation else { return }
         mapView.deselectAnnotation(view.annotation, animated: false)
     }

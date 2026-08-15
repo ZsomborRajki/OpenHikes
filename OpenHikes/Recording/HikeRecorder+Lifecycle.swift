@@ -209,10 +209,8 @@ extension HikeRecorder {
         if accumulator.isStationary {
             point.flags.insert(.stationary)
         }
-        // Frozen here on purpose: the journal append below is an escaping
-        // closure that runs on the serial queue, and capturing the mutable
-        // binding would let a later edit to `point` reach the write that has
-        // already been handed off.
+        // An immutable copy: the journal append below hands this to a
+        // `@Sendable` closure, which cannot capture the mutable `point`.
         let accepted = point
         lastAcceptedPoint = accepted
         acceptedFixRevision &+= 1

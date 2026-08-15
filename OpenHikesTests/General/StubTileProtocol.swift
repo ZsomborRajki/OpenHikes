@@ -8,8 +8,8 @@
 //  A `URLProtocol` rather than a closure swapped in for `URLSession.data`,
 //  because half of what's worth testing here is what URLSession itself
 //  produces: the User-Agent OSM's usage policy requires, the request that
-//  a cache hit is supposed to *not* make, and the two separate requests the
-//  map and the bulk downloader currently make for the same tile. A stub
+//  a cache hit is supposed to *not* make, and the single request the map and
+//  the bulk downloader share when they want the same tile at once. A stub
 //  further up would take all of that on trust.
 //
 
@@ -90,10 +90,8 @@ nonisolated final class StubTileProtocol: URLProtocol, @unchecked Sendable {
     ///
     /// The alternative — ``setDelay(_:)`` — buys a test a fixed number of
     /// milliseconds to do something before the response lands, which is a race
-    /// the test loses whenever the machine is busy enough. Two suites in this
-    /// bundle raced a 150 ms delay and lost it only under a full parallel run,
-    /// which is the worst way to find out. A gate has no such window: the
-    /// response cannot land until the test says so.
+    /// the test loses whenever the machine is busy enough. A gate has no such
+    /// window: the response cannot land until the test says so.
     static func holdResponses() {
         state.withLock { $0.isHeld = true }
     }

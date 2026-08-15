@@ -2,11 +2,12 @@
 //  HikeSearchTests.swift
 //  OpenHikesTests
 //
-//  `MapSheet.body` ranked every hike title against the query on every pass —
-//  including each detent change a sheet drag produces, which is a body pass
-//  per step of a gesture nobody is typing during. `HikeSearch` keeps the
-//  result instead, so there are two halves to hold onto: the ranking must
-//  still be the ranking, and a repeat pass must not redo it.
+//  Ranking every hike title against the query is the one real cost in
+//  `MapSheetHikes.body` — a body that runs far more often than the query
+//  changes, including once per detent change a sheet drag produces.
+//  `HikeSearch` keeps the result instead, so there are two halves to hold
+//  onto: the ranking must still be the ranking, and a repeat pass must not
+//  redo it.
 //
 
 import Foundation

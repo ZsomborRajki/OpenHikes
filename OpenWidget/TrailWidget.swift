@@ -91,8 +91,8 @@ struct TrailWidgetProvider: TimelineProvider {
     /// (selection changes, the foreground follow loop, and background
     /// significant-location-change events) — not by a fixed schedule. This
     /// distant `.after` is only a safety net in case a reload call is ever
-    /// missed (e.g. the app is killed mid-write); it costs at most a couple of
-    /// extra reloads a day against the system's daily budget.
+    /// missed (e.g. the app is killed mid-write); it costs four extra reloads
+    /// a day against the system's daily budget.
     static let safetyNetHours = 6
     static let recordingRefreshMinutes = 20
 
@@ -353,8 +353,8 @@ struct TrailWidgetEntryView: View {
 
     var body: some View {
         content
-            // Whole-widget tap target: opens the app straight to this trail's
-            // detail view.
+            // Whole-widget tap target: opens the app on the live recording,
+            // or on this trail's detail view.
             .widgetURL(entry.deepLinkURL)
     }
 

@@ -115,14 +115,13 @@ struct MapCoordinatorTests {
     func settle() async {
         await settleDelegateHop()
     }
+}
 
+extension MapCoordinatorTests {
     // MARK: Registration
 
     /// Everything `makeMapView` is responsible for wiring, checked on the map
     /// itself rather than on the code that was supposed to wire it.
-}
-
-extension MapCoordinatorTests {
     @Test("building the map registers the coordinator and installs the tiles")
     func buildingRegistersEverything() throws {
         let coordinator = MapView.Coordinator()
@@ -531,8 +530,8 @@ extension MapCoordinatorTests {
         #expect(!coordinator.hasCentered, "the route decides what's on screen")
     }
 
-    /// The Zoom button, and the initial draw, both go through this: the whole
-    /// trail has to end up inside the visible rect.
+    /// The Zoom button, and the initial draw, both go through this: fitting
+    /// has to bring the trail's bounding rect into the visible one.
     @Test("fitting the route puts all of it on screen")
     func fitContainsTheWholeRoute() throws {
         let coordinator = MapView.Coordinator()

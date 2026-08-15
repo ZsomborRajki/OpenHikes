@@ -8,13 +8,12 @@
 //  suite treats those tiers as mutually exclusive, and the cache's job is to
 //  make that true: **one key, at most one file.**
 //
-//  It isn't automatic. The two writers race — the map's renderer fetches
-//  through `loadTile` and the bulk downloader through `saveTileDurably`, with
-//  no shared in-flight set — so downloading the area you're looking at fetches
-//  each tile twice and files the copies in different directories. These tests
-//  pin the invariant from both ends: that no write path leaves two files, and
-//  that no read path counts one key twice. Plus the one memory-tier behaviour
-//  the launch path depends on.
+//  It isn't automatic. The two writers reach the disk through different entry
+//  points — the map's renderer through `loadTile`, the bulk downloader through
+//  `saveTileDurably` — and file their bytes in different directories. These
+//  tests pin the invariant from both ends: that no write path leaves two
+//  files, and that no read path counts one key twice. Plus the one memory-tier
+//  behaviour the launch path depends on.
 //
 
 import Foundation
@@ -39,10 +38,8 @@ struct TileCacheTierTests {
         "tiertest-\(suffix)/12/2200/1400@2.0"
     }
 
-    /// Puts the same bytes in both tiers, which is what a `loadTile` write and
-    /// a concurrent `promoteCachedTile` leave behind: the move creates the
-    /// durable copy, and the fetch that was already in flight writes the
-    /// ephemeral one back a moment later.
+    /// Puts the same bytes in both tiers — the state an install carries
+    /// forward from a build whose write paths didn't reconcile them.
     private func writeBothTiers(_ key: String) throws {
         try sandbox.browse(key: key)
         try sandbox.save(key: key)
@@ -88,14 +85,8 @@ struct TileCacheTierTests {
         )
     }
 
-    /// How a tile ends up in both tiers at once: the map's renderer and the
-    /// bulk downloader fetch through different entry points (`loadTile` and
-    /// `saveTileDurably`) with no shared in-flight set between them, so
-    /// downloading the area you are currently looking at fetches each tile
-    /// twice and files the two copies in different directories.
-    ///
-    /// `promoteCachedTile` is where the two are reconciled: it already notices
-    /// the durable copy and returns `true`, and now drops the redundant
+    /// `promoteCachedTile` is where a tile found in both tiers is reconciled:
+    /// it notices the durable copy, returns `true`, and drops the redundant
     /// ephemeral one instead of leaving the tile occupying two files for the
     /// rest of its seven-day life. That was pure waste on the one axis this app
     /// is careful about everywhere else, and it inflated the residue figure
@@ -112,10 +103,8 @@ struct TileCacheTierTests {
     }
 
     /// What that duplication did to the number the user reads. The hike sheet
-    /// measures its offline coverage with `bytes(forKeys:)`, which stated both
-    /// tiers per key and added them — so a duplicated tile was reported as
-    /// twice the coverage it actually provides, and "Offline tiles · 24 MB"
-    /// described 12 MB of map.
+    /// measures its offline coverage with `bytes(forKeys:)`, which takes one
+    /// tier per key — summing both would bill a duplicated tile twice.
     @Test("a duplicated tile isn't reported as twice the coverage")
     func bytesDoesNotDoubleCountAcrossTiers() async throws {
         let key = makeKey()
@@ -170,9 +159,7 @@ struct TileCacheTierTests {
     /// An expired tile is deleted where it lies and refetched. If the refetch
     /// always wrote to the browsing tier, a tile a hike is keeping offline
     /// would come back as OS-reclaimable cache — still claimed by the manifest,
-    /// but no longer actually durable — and, before the delete-then-write was
-    /// ordered properly, would sit alongside the expired durable file as a
-    /// second copy of the same key.
+    /// but no longer actually durable.
     @Test("refetching an expired tile keeps it in the tier it was in")
     func refetchPreservesTheDurableTier() async throws {
         let key = makeKey()
@@ -185,9 +172,8 @@ struct TileCacheTierTests {
         let url = try #require(URL(string: "https://tile.invalid/never-fetched.png"))
         _ = await sandbox.cache.loadTile(forKey: key, url: url)
 
-        // The fetch fails (unreachable), so what's pinned here is that the
-        // expired durable copy was dropped and nothing was written to the
-        // browsing tier in its place.
+        // The fetch fails (unreachable), so what's pinned here is that nothing
+        // was written to the browsing tier in the expired tile's place.
         #expect(!sandbox.isBrowsed(key), "an expired durable tile must not reappear as cache")
     }
 

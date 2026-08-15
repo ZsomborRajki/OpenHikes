@@ -24,7 +24,7 @@
 //  1. The recording path takes a lock, appends a struct, and returns. No
 //     formatting of the line, no I/O.
 //  2. Rendering and every write happen on a utility-priority serial queue, one
-//     batch per second. The main thread never touches the file.
+//     batch per second. No line is formatted or written on the main thread.
 //
 //  Debug-only, like the rest of this folder — release builds have no sink
 //  because `RenderSignpost` has nothing to feed it.

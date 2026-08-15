@@ -37,8 +37,8 @@ extension TileTransportTests {
         StubTileProtocol.alwaysRespond(with: .tile())
         // Gated rather than delayed. The deletions below have to happen while
         // the response is in flight, and a fixed delay gives them a fixed
-        // number of milliseconds to do it in — a window this test lost under a
-        // full parallel run, and only there.
+        // number of milliseconds to do it in — a window a loaded machine can
+        // close.
         StubTileProtocol.holdResponses()
 
         let cache = stub.cache

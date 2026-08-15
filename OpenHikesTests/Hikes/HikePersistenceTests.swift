@@ -7,12 +7,13 @@
 //  lose a user's data has never been exercised: opening a store that is
 //  already on disk.
 //
-//  `Hike`'s three newest columns carry inline defaults (`= []`, `= true`)
-//  specifically so SwiftData's lightweight migration can backfill them on
-//  existing rows; the comment there records that without them the app fails to
-//  open with "missing attribute values on mandatory destination attribute" for
-//  anyone who already has hikes saved. That is a claim about a real store and
-//  an older schema, so it is checked here against exactly that: a store written
+//  `Hike`'s non-optional columns added after the first release carry inline
+//  declaration defaults (`= []`, `= false`, `= true`, `= [:]`) specifically
+//  so SwiftData's lightweight migration can backfill them on existing rows;
+//  the comment there records that without them the app fails to open with
+//  "missing attribute values on mandatory destination attribute" for anyone
+//  who already has hikes saved. That is a claim about a real store and an
+//  older schema, so it is checked here against exactly that: a store written
 //  by the previous shape of the model, then opened by the current one.
 //
 

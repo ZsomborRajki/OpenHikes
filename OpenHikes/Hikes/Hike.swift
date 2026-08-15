@@ -36,8 +36,8 @@ final class Hike {
     /// A user-chosen name that overrides the GPS/import-derived ``title``.
     /// `nil` means no override is set and the original title is displayed.
     ///
-    /// The inline `= nil` default is required for SwiftData lightweight
-    /// migration so existing stores can backfill the new optional column.
+    /// Optional, so SwiftData's lightweight migration can backfill existing
+    /// stores with `nil` instead of failing on a mandatory attribute.
     var customName: String?
 
     /// The unmatched GPS trace when trail matching moved a recorded route.
@@ -59,7 +59,7 @@ final class Hike {
     /// ``OfflineDownloadRecord``) organic partial coverage can't be recomputed
     /// deterministically from a bounding box.
     ///
-    /// The inline `= []`/`= false` defaults below (not just the `init`
+    /// The inline `= []`/`= true` defaults below (not just the `init`
     /// parameter defaults) are required so SwiftData's lightweight migration
     /// can backfill these values on existing rows — without them, adding the
     /// column fails with "missing attribute values on mandatory destination
@@ -85,9 +85,10 @@ final class Hike {
     /// re-opening a hike free, and keeps casual browsing from turning into
     /// repeated requests against a volunteer-run API.
     ///
-    /// Empty means "never analyzed", which is what the detail view offers a
-    /// button for. The inline `= [:]` default is required for SwiftData
-    /// lightweight migration, as for the auto-save fields above.
+    /// Empty means "never analyzed", which is what opening the hike triggers —
+    /// see ``HikeDetailView``'s `loadTrailBreakdowns()`. The inline `= [:]`
+    /// default is required for SwiftData lightweight migration, as for the
+    /// auto-save fields above.
     var surfaceMetersByCategory: [String: Double] = [:]
 
     /// Metres of this route attributed to each ``TrailDifficulty``, keyed by

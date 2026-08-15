@@ -51,16 +51,16 @@ struct ImportWorkloadTests {
     ///     GPXImport.load .......... 60 ms
     ///     Track.distanceMeters .... 5 ms
     ///
-    /// Both on the main thread, both while the document picker is dismissing,
-    /// which is when SwiftUI is already busy. 60 ms is four dropped frames at
-    /// 60 Hz; iOS's own watchdog starts caring an order of magnitude above
-    /// that, and a 100,000-point multi-day export is within an order of
-    /// magnitude of it.
+    /// Both would land on the main thread while the document picker is
+    /// dismissing, which is when SwiftUI is already busy: 60 ms is four
+    /// dropped frames at 60 Hz, and a 100,000-point multi-day export is
+    /// several times that again.
     ///
-    /// The fix is structural rather than clever: `GPXImport` is already
-    /// `nonisolated` and takes a `URL`, so the parse can happen on the
-    /// concurrent executor (`@concurrent`) and only the `Hike` construction
-    /// and insert need the main actor.
+    /// The fix is structural rather than clever: `GPXImport` is `nonisolated`
+    /// and takes a `URL`, so `loadOffMain` parses on the concurrent executor
+    /// (`@concurrent`) and only the `Hike` construction and insert need the
+    /// main actor. It asserts it is off the main thread, so awaiting it from
+    /// this main-actor-isolated suite is the check.
     @Test("importing a long recording doesn't block the main thread")
     func longImportStaysOffTheMainThread() async throws {
         let url = try writeGPX(pointCount: 18_000)

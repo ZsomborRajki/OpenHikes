@@ -65,8 +65,8 @@ extension StorageAccountingTests {
     }
 
     /// Deleting the hike the user is looking at is the case where the pending
-    /// window matters most: those tiles are durable, so nothing — not iOS
-    /// storage pressure, not a later delete — will ever reclaim them.
+    /// window matters most: the tiles are durably on disk and no manifest names
+    /// them, so the delete path has nothing to free them by.
     @Test("deleting a hike frees even the tiles it saved a moment ago")
     func deletingFreesPendingTiles() async throws {
         let controller = makeController()

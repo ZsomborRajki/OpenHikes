@@ -304,7 +304,8 @@ final class BackgroundDeliveryTests {
     }
 
     /// Significant-change delivery hands over cached fixes on relaunch, and a
-    /// fix from half an hour ago is a position the walker has left.
+    /// fix older than ``LocationFixPolicy/backgroundMaximumAge`` is a position
+    /// the walker has left.
     @Test("a stale fix is refused")
     func staleFixIsRefused() async {
         let hike = selectedHike()

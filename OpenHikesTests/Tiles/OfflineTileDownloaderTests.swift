@@ -158,16 +158,12 @@ struct OfflineTileEnumerationTests {
         #expect(deep.count > keys(maxZoom: 12).count, "deeper zooms should add tiles")
     }
 
-    /// The budget is documented as a cap on what a download will fetch
-    /// ("capped at 4,000 tiles"), and the UI shows the number as a fait
-    /// accompli ("Saving N tiles…") with no way to say no.
-    ///
-    /// The enumeration only applies the budget *between* zoom levels, and
-    /// takes the shallowest level unconditionally — so a route whose overview
-    /// zoom alone exceeds the budget blows straight through it. This route
-    /// (a long point-to-point across central Europe, the kind of GPX a user
-    /// might import from a road trip or a flight) is not a hike, but it is a
-    /// file the importer accepts.
+    /// The budget is a soft cap on what a download will fetch (4,000 tiles),
+    /// and the UI shows the number as a fait accompli ("Saving N tiles…") with
+    /// no way to say no — so it has to bind at the overview zoom as well as
+    /// between zoom levels. This route (a long point-to-point across Europe,
+    /// the kind of GPX a user might import from a road trip or a flight) is
+    /// not a hike, but it is a file the importer accepts.
     @Test("the tile budget holds even for a route too big for the overview zoom")
     func hugeRouteRespectsBudget() {
         let sprawling = [
@@ -184,12 +180,12 @@ struct OfflineTileEnumerationTests {
         #expect(keys.count <= OfflineTileDownloader.tileBudget)
     }
 
-    /// A route that crosses the antimeridian has a bounding box that spans
-    /// the whole world once longitude is treated as a plain interval — so the
-    /// enumeration walks the entire globe at the overview zoom and has no
-    /// budget left for the zooms that would actually make the trail usable
-    /// offline. Tile columns wrap (`SlippyTileMath.wrap` exists for exactly
-    /// this reason); the bounding box doesn't.
+    /// Read as a plain `min`/`max` interval, a route across the antimeridian
+    /// has a bounding box spanning the whole world — the enumeration would
+    /// walk the globe at the overview zoom and have no budget left for the
+    /// zooms that make the trail usable offline. `TileBoundingBox` takes the
+    /// shorter of the two arcs instead, and the columns it hands back run
+    /// through `SlippyTileMath.wrap`.
     @Test("a route across the antimeridian saves its surroundings, not a band around the world")
     func antimeridianRoute() {
         let acrossTheLine = Fixture.antimeridianRoute
@@ -445,8 +441,9 @@ struct OfflineDownloadStateTests {
         #expect(downloader.completed < downloader.total, "half the tiles saved is not a full bar")
     }
 
-    /// The case that made this worth changing: every tile fails, the bar fills
-    /// to 100%, and the message underneath it says "Saved 0 of N tiles."
+    /// Progress counts tiles that really landed, not attempts: a download
+    /// where every tile fails must not fill its bar on the way to reporting
+    /// "Couldn't save any tiles."
     @Test("a download that saves nothing doesn't fill its progress bar")
     func failedDownloadReportsNoProgress() async {
         let downloader = OfflineTileDownloader(

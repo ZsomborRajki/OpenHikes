@@ -11,10 +11,10 @@
 //  `ColorPicker` drag and a `Slider` drag). While `OpenHikesView.body` read them
 //  — to hand them to the map inside `DisplayedRoute` — every drag sample
 //  invalidated the root view, and with it the `.sheet` closure that builds
-//  `MapSheet`: `rankedMatchingHikes()` re-ran, the `NavigationStack` rebuilt,
-//  and the pushed `HikeDetailView` that owns the slider being dragged was
-//  re-evaluated. `MapView` is `.equatable()`, so the diff stopped before
-//  MapKit; nothing stopped it before the sheet.
+//  `MapSheet`: `HikeSearch.rankedHikes(matching:in:)` re-ran, the
+//  `NavigationStack` rebuilt, and the pushed `HikeDetailView` that owns the
+//  slider being dragged was re-evaluated. `MapView` is `.equatable()`, so the
+//  diff stopped before MapKit; nothing stopped it before the sheet.
 //
 //  They now travel through `RouteStyle`, which the map coordinator observes
 //  directly. So there are two halves to hold onto, and a test for each: the

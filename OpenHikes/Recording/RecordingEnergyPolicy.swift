@@ -59,9 +59,9 @@ nonisolated struct RecordingEnergyProfile: Equatable, Sendable {
 }
 
 nonisolated enum RecordingEnergyPolicy {
-    /// The filter a moving walker is tracked with. Roughly three paces, which
-    /// is fine enough that the drawn line follows a switchback and coarse
-    /// enough that GPS jitter alone rarely clears it.
+    /// The filter a moving walker is tracked with. Fine enough that the drawn
+    /// line follows a switchback and coarse enough that GPS jitter alone
+    /// rarely clears it.
     static let walkingDistanceFilter: CLLocationDistance = 10
     /// Applied once ``RecordingDistanceAccumulator`` reports the walker has
     /// stopped. Sized above the horizontal accuracy a good fix reports, so
@@ -77,7 +77,7 @@ nonisolated enum RecordingEnergyPolicy {
     /// accuracy and then waking for every ten metres.
     static let conservingDistanceFilter: CLLocationDistance = 20
 
-    /// Everything the policy is allowed to look at. A struct rather than four
+    /// Everything the policy is allowed to look at. A struct rather than three
     /// arguments so a caller that learns about a new condition updates one
     /// place, and so the whole decision can be logged as one value.
     struct Conditions: Equatable, Sendable {
@@ -140,9 +140,9 @@ nonisolated enum RecordingEnergyPolicy {
     }
 
     /// Phrased as what the app is doing about the situation rather than as a
-    /// warning about it. The recording screen already tells the walker that
-    /// Low Power Mode is on; what it could not tell them before is that the
-    /// app responded to it.
+    /// warning about it: this string is the whole of what the recording screen
+    /// shows about a degraded profile, so it has to say both what happened and
+    /// what the app did with it.
     private static func reason(
         lowPower: Bool,
         hot: Bool,

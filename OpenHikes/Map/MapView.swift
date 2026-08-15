@@ -2,7 +2,8 @@
 //  MapView.swift
 //  OpenHikes
 //
-//  A full-screen MKMapView that renders OpenStreetMap tiles and follows the user.
+//  A full-screen MKMapView that renders raster tiles from the selected
+//  provider and shows the user's location.
 //
 
 import MapKit
@@ -22,10 +23,10 @@ struct MapView: MapViewRepresentable, Equatable {
 
     /// Source of the user's live location. Observed directly by the map (not
     /// via SwiftUI), the same technique `highlight`/`sheetMetrics` use, so the
-    /// ~1/sec publish that drives it (continuous whether or not the user is
-    /// moving — see `LocationManager`) never re-renders any view. The map
-    /// centers on the user's first fix, once, while no route is selected —
-    /// see `Coordinator.observeLocation`.
+    /// publishes that drive it (at most one a second, and none at all while
+    /// the user stands still — see `LocationManager`) never re-render any
+    /// view. The map centers on the user's first fix, once, while no route is
+    /// selected — see `Coordinator.observeLocation`.
     var locationManager: LocationManager
 
     /// An imported/selected route to draw and zoom to. Draws a line and fits the map to it.

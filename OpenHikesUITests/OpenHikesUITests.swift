@@ -152,10 +152,10 @@ nonisolated final class OpenHikesUITests: XCTestCase {
         )
     }
 
-    /// A hike's line pattern is picked from five swatches that carry no text,
-    /// so their accessibility identifiers are the only thing that tells them
-    /// apart — and SwiftUI pushes a container's identifier down onto every
-    /// descendant, which would leave all five answering to one name.
+    /// A hike's line pattern is picked from five swatches that draw no text,
+    /// and each is addressed by its own identifier — SwiftUI pushes a
+    /// container's identifier down onto every descendant, which would leave
+    /// all five answering to one name.
     @MainActor
     func testPicksARouteLinePattern() {
         let app = makeApp(

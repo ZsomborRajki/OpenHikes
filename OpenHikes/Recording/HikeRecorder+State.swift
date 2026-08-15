@@ -3,7 +3,8 @@
 //  OpenHikes
 //
 //  Supporting types for HikeRecorder: failure cases, location authorization,
-//  source protocols, recovery summary, stop outcome, and review state.
+//  source protocols, recovery summary, stop outcome, trail-graph prefetch
+//  retry state, and the pending-save and review state.
 //
 
 import CoreLocation

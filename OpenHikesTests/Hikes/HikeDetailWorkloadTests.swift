@@ -74,9 +74,9 @@ struct HikeDetailWorkloadTests {
 
     /// Sharing the distances must not change a single number. The statistics
     /// built through the shared walk are compared against the ones built by a
-    /// walk that measures its own segments, on a route carrying every awkward
-    /// case the stats have to decline: no elevation, no timestamp, and a
-    /// timestamp that doesn't advance.
+    /// walk that measures its own segments, on a route carrying the awkward
+    /// cases the stats have to decline: a point with no elevation, and a point
+    /// with no timestamp — which also costs its successor a speed.
     @Test("shared-walk statistics match a standalone walk")
     func sharedWalkMatchesStandaloneWalk() async throws {
         let start = Date(timeIntervalSince1970: 1_750_000_000)
@@ -86,7 +86,8 @@ struct HikeDetailWorkloadTests {
             RouteCoordinate(latitude: 47.631, longitude: 12.861, elevation: 640, timestamp: at(10)),
             RouteCoordinate(latitude: 47.632, longitude: 12.862, elevation: nil, timestamp: at(20)),
             RouteCoordinate(latitude: 47.633, longitude: 12.863, elevation: 610, timestamp: nil),
-            // Same instant as the point before it: no elapsed time, no speed.
+            // Its predecessor carries no timestamp, so this segment has no
+            // elapsed time to divide by and contributes no speed.
             RouteCoordinate(latitude: 47.634, longitude: 12.864, elevation: 660, timestamp: at(20)),
             RouteCoordinate(latitude: 47.640, longitude: 12.870, elevation: 700, timestamp: at(320)),
         ]

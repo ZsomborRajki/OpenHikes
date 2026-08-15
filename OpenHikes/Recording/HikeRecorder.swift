@@ -4,7 +4,8 @@
 //
 //  App-scoped live recording coordinator. The view may come and go; this
 //  object owns Core Location delivery, the crash-safe journal, and the
-//  persisted draft Hike that is finalized in place at Stop.
+//  persisted draft Hike, finalized in place once Stop — and any route review
+//  it opens — has resolved.
 //
 
 import CoreLocation

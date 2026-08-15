@@ -2,8 +2,8 @@
 //  RecordingModels.swift
 //  OpenHikes
 //
-//  Pure recording policy/state plus the observable leaf models used by the UI
-//  and map coordinator.
+//  Pure recording values and the fix-acceptance policy. The observable leaf
+//  models the UI and map coordinator read live in RecordingObservables.swift.
 //
 
 import Algorithms

@@ -119,8 +119,8 @@ struct TileOwnershipTests {
         let neighbour = Fixture.hike(
             in: context,
             title: "Neighbour",
-            // A few hundred metres north of the ridge fixture: different
-            // close-in tiles, same overview tile.
+            // ~2 km north of the ridge fixture: different close-in tiles,
+            // same overview tile.
             route: Fixture.ridgeRoute.map { coord in
                 RouteCoordinate(latitude: coord.latitude + 0.02, longitude: coord.longitude, elevation: coord.elevation)
             }

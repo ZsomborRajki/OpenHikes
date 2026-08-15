@@ -144,15 +144,16 @@ struct HikeStatisticsTests {
         #expect(fastest > average)
     }
 
-    /// A standing rest is not a speed sample: segments with no elapsed time
-    /// (or no timestamp on either end) are skipped, not treated as instant.
+    /// A segment is a speed sample only when both its ends carry a timestamp.
+    /// Here the first two segments have an unstamped end, so the fastest is
+    /// the last segment alone.
     @Test("max speed skips segments with no elapsed time")
     func maxSpeedSkipsUntimedSegments() throws {
         let start = Date(timeIntervalSince1970: 1_750_000_000)
         let route = [
             RouteCoordinate(latitude: 47.630, longitude: 12.86, timestamp: start),
             RouteCoordinate(latitude: 47.631, longitude: 12.86),                                    // no stamp
-            RouteCoordinate(latitude: 47.632, longitude: 12.86, timestamp: start),                  // no elapsed time
+            RouteCoordinate(latitude: 47.632, longitude: 12.86, timestamp: start),                  // no stamp before
             RouteCoordinate(latitude: 47.633, longitude: 12.86, timestamp: start.addingTimeInterval(100)),
         ]
         let stats = Fixture.hike(in: context, route: route).routeStatistics

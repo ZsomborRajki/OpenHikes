@@ -447,7 +447,7 @@ struct TrailWidgetTests {
     }
 
     /// The small widget draws a thinner line and tighter padding — it is the
-    /// same trail in a quarter of the area.
+    /// same trail in less space than any of the larger families.
     @Test("the small family is drawn more tightly than the larger ones")
     func smallFamilyIsTighter() {
         let small = TrailWidgetLayout(family: .systemSmall)
