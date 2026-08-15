@@ -300,8 +300,7 @@ struct OpenHikesView: View {
             )
             highlight.move(to: nil)
             withAnimation { sheetDetent = .medium }
-        case .hike(let id):
-            openHike(id: id)
+        case .hike(let id): openHike(id: id)
         }
     }
 
@@ -364,9 +363,7 @@ struct OpenHikesView: View {
 
     private func importRequestedGPXFixture() async {
         guard !didProcessLaunchFixture,
-              let name = AppLaunchEnvironment.importedGPXFixtureName else {
-            return
-        }
+              let name = AppLaunchEnvironment.importedGPXFixtureName else { return }
         didProcessLaunchFixture = true
         guard let url = Bundle.main.url(
             forResource: name,

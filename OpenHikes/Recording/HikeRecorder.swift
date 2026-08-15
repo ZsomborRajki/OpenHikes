@@ -121,11 +121,8 @@ final class HikeRecorder: NSObject {
     /// described as actively capturing fixes.
     var isCapturingFixes: Bool {
         switch phase {
-        case .waitingForFix, .recording:
-            true
-
-        case .idle, .recovering, .paused, .saving, .reviewing, .failed:
-            false
+        case .waitingForFix, .recording: true
+        case .idle, .recovering, .paused, .saving, .reviewing, .failed: false
         }
     }
 
@@ -230,14 +227,9 @@ extension HikeRecorder {
         startRequested = true
         phase = .waitingForFix
         switch source.authorization {
-        case .notDetermined:
-            source.requestWhenInUseAuthorization()
-
-        case .denied:
-            fail(.locationDenied, endLocationUpdates: false)
-
-        case .authorized:
-            await activateSessionIfPossible()
+        case .notDetermined: source.requestWhenInUseAuthorization()
+        case .denied: fail(.locationDenied, endLocationUpdates: false)
+        case .authorized: await activateSessionIfPossible()
         }
     }
 
@@ -277,9 +269,7 @@ extension HikeRecorder {
             return
         }
         do {
-            guard let journal else {
-                throw RecordingFailure.storageUnavailable
-            }
+            guard let journal else { throw RecordingFailure.storageUnavailable }
             await journalQueue.drain()
             try await journal.reopenForAppending()
             try await journal.resume(at: clock())
@@ -306,9 +296,7 @@ extension HikeRecorder {
     ) async throws -> RecordingStopOutcome {
         guard phase == .waitingForFix
             || phase == .recording
-            || phase == .paused else {
-            throw RecordingFailure.save("No active recording is ready to stop.")
-        }
+            || phase == .paused else { throw RecordingFailure.save("No active recording is ready to stop.") }
         guard let journal, sessionStartedAt != nil else {
             let failure = RecordingFailure.storageUnavailable
             fail(failure)
@@ -330,9 +318,7 @@ extension HikeRecorder {
         let session: TrackJournalSession
         do {
             try await journal.finish(at: endedAt)
-            guard let loaded = try await journal.loadSession() else {
-                throw RecordingFailure.storageUnavailable
-            }
+            guard let loaded = try await journal.loadSession() else { throw RecordingFailure.storageUnavailable }
             session = loaded
             stopLocationSensors()
         } catch let failure as RecordingFailure {
@@ -433,9 +419,7 @@ extension HikeRecorder {
     }
 
     func saveReviewedRecording() async throws -> Hike {
-        guard phase == .reviewing else {
-            throw RecordingFailure.save("No reviewed recording is ready to save.")
-        }
+        guard phase == .reviewing else { throw RecordingFailure.save("No reviewed recording is ready to save.") }
         return try await savePendingReviewedRecording()
     }
 
@@ -443,9 +427,7 @@ extension HikeRecorder {
         guard case .failed = phase, let journal else {
             throw RecordingFailure.save("No failed recording save is ready to retry.")
         }
-        if pendingReviewSave != nil {
-            return try await savePendingReviewedRecording()
-        }
+        if pendingReviewSave != nil { return try await savePendingReviewedRecording() }
         guard let pendingPreparedSave else {
             throw RecordingFailure.save("No failed recording save is ready to retry.")
         }
@@ -471,9 +453,7 @@ extension HikeRecorder {
     private func savePendingReviewedRecording() async throws -> Hike {
         guard let pendingReviewSave,
               let routeReview,
-              let journal else {
-            throw RecordingFailure.save("No reviewed recording is ready to save.")
-        }
+              let journal else { throw RecordingFailure.save("No reviewed recording is ready to save.") }
         phase = .saving
         do {
             let points = pendingReviewSave.normalizedPoints

@@ -123,9 +123,7 @@ final class SystemRecordingLocationSource: RecordingLocationSource {
 
     func requestTemporaryFullAccuracy() async {
         #if os(iOS)
-        guard manager.accuracyAuthorization == .reducedAccuracy else {
-            return
-        }
+        guard manager.accuracyAuthorization == .reducedAccuracy else { return }
         do {
             try await manager.requestTemporaryFullAccuracyAuthorization(
                 withPurposeKey: "RecordHike"
@@ -368,23 +366,17 @@ final class RecordingRouteReview {
     }
 
     func select(_ choice: TrailRouteChoice) {
-        guard let current else {
-            return
-        }
+        guard let current else { return }
         choices[current.id] = choice
     }
 
     func moveBackward() {
-        guard canMoveBackward else {
-            return
-        }
+        guard canMoveBackward else { return }
         currentIndex -= 1
     }
 
     func moveForward() {
-        guard canMoveForward else {
-            return
-        }
+        guard canMoveForward else { return }
         currentIndex += 1
     }
 }

@@ -96,9 +96,7 @@ final class HikeSearch {
                 return (index, titleKey.hasPrefix(queryKey) ? 0 : 1, titleKey)
             }
             .sorted { lhs, rhs in
-                if lhs.prefixRank != rhs.prefixRank {
-                    return lhs.prefixRank < rhs.prefixRank
-                }
+                if lhs.prefixRank != rhs.prefixRank { return lhs.prefixRank < rhs.prefixRank }
                 return lhs.titleKey < rhs.titleKey
             }
             .map(\.index)

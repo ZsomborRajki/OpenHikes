@@ -45,9 +45,7 @@ nonisolated extension OfflineTileDownloader {
         var coordinates: [CLLocationCoordinate2D] = []
         coordinates.reserveCapacity(route.count)
         for (index, point) in route.enumerated() {
-            if index.isMultiple(of: 255), Task.isCancelled {
-                throw CancellationError()
-            }
+            if index.isMultiple(of: 255), Task.isCancelled { throw CancellationError() }
             coordinates.append(point.clCoordinate)
         }
         let result = tiles(
@@ -56,9 +54,7 @@ nonisolated extension OfflineTileDownloader {
             maxZoom: maxZoom,
             budget: tileBudget
         )
-        guard !Task.isCancelled else {
-            throw CancellationError()
-        }
+        guard !Task.isCancelled else { throw CancellationError() }
         return result
     }
 
@@ -133,9 +129,7 @@ nonisolated extension OfflineTileDownloader {
         budget: Int
     ) -> [Tile] {
         guard maxZoom >= minZoom,
-              let box = TileBoundingBox(route: route) else {
-            return []
-        }
+              let box = TileBoundingBox(route: route) else { return [] }
 
         // A route too sprawling for even the overview zoom to fit the budget
         // gets a shallower overview rather than nothing at all: the budget has

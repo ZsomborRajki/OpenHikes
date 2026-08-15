@@ -174,9 +174,7 @@ struct OverpassTrailGraphProviderTests {
             try await provider.prefetch(around: coordinate)
         }
         for _ in 0..<100 {
-            if !(await recorder.requests).isEmpty {
-                break
-            }
+            if !(await recorder.requests).isEmpty { break }
             await Task.yield()
         }
         let graph = try await provider.cachedGraph(
@@ -227,9 +225,7 @@ struct OverpassTrailGraphProviderTests {
             try await provider.prefetch(around: coordinate)
         }
         for _ in 0..<100 {
-            if (await recorder.requests).count == 2 {
-                break
-            }
+            if (await recorder.requests).count == 2 { break }
             await Task.yield()
         }
         let graph = try await provider.cachedGraph(

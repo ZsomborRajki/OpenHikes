@@ -69,9 +69,7 @@ nonisolated extension TileCache {
         )
         var total: Int64 = 0
         for (index, key) in keys.enumerated() {
-            if index.isMultiple(of: 32), Task.isCancelled {
-                throw CancellationError()
-            }
+            if index.isMultiple(of: 32), Task.isCancelled { throw CancellationError() }
             let (cached, durable) = filePaths(forKey: key)
             let durableSize = fileSize(durable)
             total += durableSize > 0 ? durableSize : fileSize(cached)
@@ -180,9 +178,7 @@ nonisolated extension TileCache {
             total += size
         }
 
-        guard total > limit else {
-            return 0
-        }
+        guard total > limit else { return 0 }
 
         // Disk only, for the same reason as `removeExpiredTiles()`: this also
         // runs at launch, and dropping the memory tier would throw away the
@@ -196,9 +192,7 @@ nonisolated extension TileCache {
             guard removeItemIgnoringNotFound(
                 at: tile.url,
                 operation: "trim cached tile"
-            ) else {
-                continue
-            }
+            ) else { continue }
             freed += tile.size
         }
         #if DEBUG

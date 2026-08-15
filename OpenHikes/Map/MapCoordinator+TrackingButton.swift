@@ -108,9 +108,7 @@ extension MapView.Coordinator {
     private func sheetTop(in mapView: MKMapView) -> CGFloat {
         let height = mapView.bounds.height
         let reported = sheetMetrics?.topY ?? 0
-        guard reported > 0, reported <= height else {
-            return height - Self.sheetFallbackOffset
-        }
+        guard reported > 0, reported <= height else { return height - Self.sheetFallbackOffset }
         return reported
     }
 
@@ -126,9 +124,7 @@ extension MapView.Coordinator {
     /// the top safe area.
     private func trackingButtonLimit(in mapView: MKMapView) -> CGFloat {
         let clearOfStatusBar = clearOfStatusBar(in: mapView)
-        guard let middleRestY = sheetMetrics?.middleRestY, middleRestY > 0 else {
-            return clearOfStatusBar
-        }
+        guard let middleRestY = sheetMetrics?.middleRestY, middleRestY > 0 else { return clearOfStatusBar }
         return max(clearOfStatusBar, middleRestY - Self.trackingButtonSpacing)
     }
 

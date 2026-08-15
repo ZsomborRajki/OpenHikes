@@ -212,11 +212,8 @@ public enum TrailBasemapVariant: String, Codable, Sendable, CaseIterable {
     /// a hard memory ceiling and these get decoded inside it.
     public var pointSize: CGSize {
         switch self {
-        case .square:
-            CGSize(width: PointSize.squareSide, height: PointSize.squareSide)
-
-        case .wide:
-            CGSize(width: PointSize.wideWidth, height: PointSize.wideHeight)
+        case .square: CGSize(width: PointSize.squareSide, height: PointSize.squareSide)
+        case .wide: CGSize(width: PointSize.wideWidth, height: PointSize.wideHeight)
         }
     }
 

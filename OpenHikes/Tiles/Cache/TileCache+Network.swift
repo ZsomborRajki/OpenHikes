@@ -109,9 +109,7 @@ nonisolated extension TileCache {
         // handler fires on a background queue, so hop first, then read observers
         // there (keeps the non-Sendable listeners off the queue boundary).
         DispatchQueue.main.async { [weak self] in
-            guard let self else {
-                return
-            }
+            guard let self else { return }
             let live = observers.withLock { boxes -> [TileCacheObserver] in
                 boxes.removeAll { $0.value == nil }
                 return boxes.compactMap(\.value)

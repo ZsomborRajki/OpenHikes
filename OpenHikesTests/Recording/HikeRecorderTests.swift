@@ -130,9 +130,7 @@ final class ScriptedModelContextSaver {
 
     func save(_ context: ModelContext) throws {
         saveCount += 1
-        if failedSaveNumbers.remove(saveCount) != nil {
-            throw InjectedPersistenceError()
-        }
+        if failedSaveNumbers.remove(saveCount) != nil { throw InjectedPersistenceError() }
         try context.save()
     }
 }

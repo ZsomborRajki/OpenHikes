@@ -175,9 +175,7 @@ final class OfflineTileDownloader {
     /// Leaves a stale generation alone — a newer `start()` owns the phase — but
     /// never leaves the current run advertising a download that will not begin.
     private func resetPhaseIfPreparing(generation: Int) {
-        guard generation == self.generation, phase == .downloading, total == 0 else {
-            return
-        }
+        guard generation == self.generation, phase == .downloading, total == 0 else { return }
         phase = .idle
     }
 
@@ -201,9 +199,8 @@ final class OfflineTileDownloader {
                 active += 1
                 group.addTask {
                     let key = tile.cacheKey(providerID: source.providerID, scale: scale)
-                    guard let url = tile.url(from: source.urlTemplate) else {
-                        return SaveResult(key: key, saved: false)
-                    }
+                    guard let url = tile.url(from: source.urlTemplate)
+                    else { return SaveResult(key: key, saved: false) }
                     // Shared with the map's own tile loads, at `.background`:
                     // nobody minds a download taking a minute longer, and
                     // everybody minds the map stalling while it runs.

@@ -27,9 +27,7 @@ nonisolated struct ProcessResourceSample: Sendable {
     let cpuSeconds: Double
 
     static func current() -> Self? {
-        guard let footprint = footprintBytes(), let cpu = cpuSeconds() else {
-            return nil
-        }
+        guard let footprint = footprintBytes(), let cpu = cpuSeconds() else { return nil }
         return Self(footprintBytes: footprint, cpuSeconds: cpu)
     }
 

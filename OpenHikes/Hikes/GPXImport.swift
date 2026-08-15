@@ -115,21 +115,15 @@ nonisolated enum GPXImport {
     /// call, not the parser's, and the distinction is what lets the caller say
     /// which of the two happened. See ``ImportFailure``.
     static func load(from url: URL) throws(ImportFailure) -> Track {
-        guard let data = try? Data(contentsOf: url), !data.isEmpty else {
-            throw .unreadable
-        }
+        guard let data = try? Data(contentsOf: url), !data.isEmpty else { throw .unreadable }
         let documentParser = DocumentParser()
         let parser = XMLParser(data: data)
         parser.delegate = documentParser
         parser.shouldProcessNamespaces = true
         parser.shouldReportNamespacePrefixes = false
         parser.shouldResolveExternalEntities = false
-        guard parser.parse() else {
-            throw .unreadable
-        }
-        guard let track = track(from: documentParser.document) else {
-            throw .noUsablePoints
-        }
+        guard parser.parse() else { throw .unreadable }
+        guard let track = track(from: documentParser.document) else { throw .noUsablePoints }
         return track
     }
 
@@ -281,28 +275,23 @@ nonisolated private extension GPXImport {
             text = ""
 
             switch elementName {
-            case Element.track:
-                currentTrackIndex += 1
-            case Element.trackPoint:
-                pendingPoint = PendingPoint(
-                    kind: .track,
-                    element: elementName,
-                    value: point(from: attributeDict)
-                )
-            case Element.routePoint:
-                pendingPoint = PendingPoint(
-                    kind: .route,
-                    element: elementName,
-                    value: point(from: attributeDict)
-                )
-            case Element.waypoint:
-                pendingPoint = PendingPoint(
-                    kind: .waypoint,
-                    element: elementName,
-                    value: point(from: attributeDict)
-                )
-            default:
-                break
+            case Element.track: currentTrackIndex += 1
+            case Element.trackPoint: pendingPoint = PendingPoint(
+                kind: .track,
+                element: elementName,
+                value: point(from: attributeDict)
+            )
+            case Element.routePoint: pendingPoint = PendingPoint(
+                kind: .route,
+                element: elementName,
+                value: point(from: attributeDict)
+            )
+            case Element.waypoint: pendingPoint = PendingPoint(
+                kind: .waypoint,
+                element: elementName,
+                value: point(from: attributeDict)
+            )
+            default: break
             }
         }
 
@@ -314,9 +303,7 @@ nonisolated private extension GPXImport {
         }
 
         func parser(_ parser: XMLParser, foundCDATA CDATABlock: Data) {
-            guard let string = String(bytes: CDATABlock, encoding: .utf8) else {
-                return
-            }
+            guard let string = String(bytes: CDATABlock, encoding: .utf8) else { return }
             text.append(string)
         }
 
@@ -338,42 +325,27 @@ nonisolated private extension GPXImport {
             value: String
         ) {
             guard var point = pendingPoint,
-                  path.dropLast().last == point.element else {
-                return
-            }
+                  path.dropLast().last == point.element else { return }
             switch element {
-            case Element.elevation:
-                point.value.elevation = Double(value)
-            case Element.time:
-                point.value.time = date(from: value)
-            default:
-                return
+            case Element.elevation: point.value.elevation = Double(value)
+            case Element.time: point.value.time = date(from: value)
+            default: return
             }
             pendingPoint = point
         }
 
         private func apply(value: String, for element: String) {
             switch element {
-            case Element.name where isDirectChild(of: Element.metadata):
-                document.metadataName = value
-            case Element.description where isDirectChild(of: Element.metadata):
-                document.metadataDescription = value
-            case Element.name where isMetadataAuthorChild:
-                document.metadataAuthor = value
-            case Element.keywords where isDirectChild(of: Element.metadata):
-                document.metadataKeywords = value
-            case Element.time where isDirectChild(of: Element.metadata):
-                document.metadataTime = date(from: value)
-            case Element.name where isFirstTrackChild:
-                document.firstTrackName = value
-            case Element.description where isFirstTrackChild:
-                document.firstTrackDescription = value
-            case Element.comment where isFirstTrackChild:
-                document.firstTrackComment = value
-            case Element.trackPoint, Element.routePoint, Element.waypoint:
-                finishPoint(element)
-            default:
-                break
+            case Element.name where isDirectChild(of: Element.metadata): document.metadataName = value
+            case Element.description where isDirectChild(of: Element.metadata): document.metadataDescription = value
+            case Element.name where isMetadataAuthorChild: document.metadataAuthor = value
+            case Element.keywords where isDirectChild(of: Element.metadata): document.metadataKeywords = value
+            case Element.time where isDirectChild(of: Element.metadata): document.metadataTime = date(from: value)
+            case Element.name where isFirstTrackChild: document.firstTrackName = value
+            case Element.description where isFirstTrackChild: document.firstTrackDescription = value
+            case Element.comment where isFirstTrackChild: document.firstTrackComment = value
+            case Element.trackPoint, Element.routePoint, Element.waypoint: finishPoint(element)
+            default: break
             }
         }
 
@@ -403,16 +375,11 @@ nonisolated private extension GPXImport {
         }
 
         private func finishPoint(_ element: String) {
-            guard let point = pendingPoint, point.element == element else {
-                return
-            }
+            guard let point = pendingPoint, point.element == element else { return }
             switch point.kind {
-            case .track:
-                document.trackPoints.append(point.value)
-            case .route:
-                document.routePoints.append(point.value)
-            case .waypoint:
-                document.waypoints.append(point.value)
+            case .track: document.trackPoints.append(point.value)
+            case .route: document.routePoints.append(point.value)
+            case .waypoint: document.waypoints.append(point.value)
             }
             pendingPoint = nil
         }

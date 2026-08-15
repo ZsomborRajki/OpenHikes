@@ -48,9 +48,7 @@ nonisolated extension TileCache {
     /// elapsed. Modification time is the fetch time because tile files are
     /// written atomically and never rewritten except by a fresh response.
     func freshModificationDate(for file: URL, referenceDate: Date = Date()) -> Date? {
-        guard FileManager.default.fileExists(atPath: file.path) else {
-            return nil
-        }
+        guard FileManager.default.fileExists(atPath: file.path) else { return nil }
         let modified: Date?
         do {
             modified = try file.resourceValues(
@@ -96,9 +94,7 @@ nonisolated extension TileCache {
             try FileManager.default.removeItem(at: url)
             return true
         } catch {
-            guard !Self.isMissingFileError(error) else {
-                return false
-            }
+            guard !Self.isMissingFileError(error) else { return false }
             logFileError(error, operation: operation, url: url)
             return false
         }
@@ -109,9 +105,7 @@ nonisolated extension TileCache {
         operation: String,
         url: URL
     ) {
-        guard !Self.isMissingFileError(error) else {
-            return
-        }
+        guard !Self.isMissingFileError(error) else { return }
         Self.logger.error(
             // swiftlint:disable:next line_length
             "Could not \(operation, privacy: .public) at \(url.path, privacy: .public): \(error.localizedDescription, privacy: .public)"
@@ -120,9 +114,7 @@ nonisolated extension TileCache {
 
     static func isMissingFileError(_ error: Error) -> Bool {
         let nsError = error as NSError
-        guard nsError.domain == NSCocoaErrorDomain else {
-            return false
-        }
+        guard nsError.domain == NSCocoaErrorDomain else { return false }
         return nsError.code == NSFileNoSuchFileError
             || nsError.code == NSFileReadNoSuchFileError
     }

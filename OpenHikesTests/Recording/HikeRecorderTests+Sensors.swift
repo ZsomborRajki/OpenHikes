@@ -74,9 +74,7 @@ extension HikeRecorderTests {
         await settleDelegateHop()
 
         for _ in 0..<100 {
-            if recorder.stats.matchedTrailName == "Matched Path" {
-                break
-            }
+            if recorder.stats.matchedTrailName == "Matched Path" { break }
             try await Task.sleep(for: .milliseconds(10))
         }
         #expect(recorder.stats.matchedTrailName == "Matched Path")
@@ -117,9 +115,7 @@ extension HikeRecorderTests {
         await settleDelegateHop()
 
         for _ in 0..<100 {
-            if recorder.stats.matchedTrailName == "Live Path" {
-                break
-            }
+            if recorder.stats.matchedTrailName == "Live Path" { break }
             try await Task.sleep(for: .milliseconds(10))
         }
         #expect(recorder.stats.matchedTrailName == "Live Path")
@@ -128,9 +124,7 @@ extension HikeRecorderTests {
         source.deliver(fix(latitude: 47.632))
         await settleDelegateHop()
         for _ in 0..<100 {
-            if recorder.stats.matchedTrailName == nil {
-                break
-            }
+            if recorder.stats.matchedTrailName == nil { break }
             try await Task.sleep(for: .milliseconds(10))
         }
 
@@ -252,9 +246,7 @@ extension HikeRecorderTests {
         await settleDelegateHop()
 
         for _ in 0..<100 {
-            if await provider.prefetches().count == 2 {
-                break
-            }
+            if await provider.prefetches().count == 2 { break }
             await Task.yield()
         }
 
@@ -455,9 +447,7 @@ extension HikeRecorderTests {
         await sharedStore.setPendingFixes([widgetFix])
         recorder.sceneDidBecomeActive()
         for _ in 0..<100 {
-            if recorder.stats.pointCount == 2 {
-                break
-            }
+            if recorder.stats.pointCount == 2 { break }
             try await Task.sleep(for: .milliseconds(10))
         }
 
@@ -490,9 +480,7 @@ extension HikeRecorderTests {
         await settleDelegateHop()
 
         for _ in 0..<100 {
-            if await sharedStore.savedSnapshots().count >= 3 {
-                break
-            }
+            if await sharedStore.savedSnapshots().count >= 3 { break }
             try await Task.sleep(for: .milliseconds(10))
         }
 

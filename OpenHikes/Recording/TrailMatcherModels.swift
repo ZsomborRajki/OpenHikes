@@ -60,9 +60,7 @@ nonisolated struct TrailMatchResult: Sendable {
     func points(
         resolving choices: [Int: TrailRouteChoice]
     ) -> [RecordingPoint] {
-        guard !legs.isEmpty else {
-            return points
-        }
+        guard !legs.isEmpty else { return points }
         var output: [RecordingPoint] = []
         for leg in legs {
             output.appendJoiningRoute(leg.points(for: choices[leg.index] ?? .matched))
@@ -74,16 +72,11 @@ nonisolated struct TrailMatchResult: Sendable {
 nonisolated extension TrailMatchLeg {
     func points(for choice: TrailRouteChoice) -> [RecordingPoint] {
         switch choice {
-        case .matched:
-            return defaultPoints
-
-        case .gps:
-            return rawPoints.isEmpty ? defaultPoints : rawPoints
-
-        case .alternative(let alternativeID):
-            return alternatives.first { alternative in
-                alternative.id == alternativeID
-            }?.points ?? defaultPoints
+        case .matched: return defaultPoints
+        case .gps: return rawPoints.isEmpty ? defaultPoints : rawPoints
+        case .alternative(let alternativeID): return alternatives.first { alternative in
+            alternative.id == alternativeID
+        }?.points ?? defaultPoints
         }
     }
 }

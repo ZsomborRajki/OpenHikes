@@ -194,9 +194,7 @@ nonisolated extension GPXExport {
     }
 
     private static func isRepresentable(_ scalar: Unicode.Scalar) -> Bool {
-        if scalar.value < firstTextScalar {
-            return literalControlScalars.contains(scalar.value)
-        }
+        if scalar.value < firstTextScalar { return literalControlScalars.contains(scalar.value) }
         return scalar.value != bmpNonCharacter && scalar.value != bmpSentinel
     }
 }

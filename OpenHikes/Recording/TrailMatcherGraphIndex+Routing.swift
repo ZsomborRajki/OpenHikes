@@ -68,13 +68,8 @@ nonisolated extension TrailMatcherGraphIndex {
                 maximumDistance: maximumDistance,
                 bannedNodes: [],
                 bannedEdges: []
-              )
-        else {
-            return []
-        }
-        guard limit > 1, first.nodes.count > 1 else {
-            return [first]
-        }
+              ) else { return [] }
+        guard limit > 1, first.nodes.count > 1 else { return [first] }
         var accepted = [first]
         var candidateHeap = Heap<RankedPath>()
         var seenSignatures: Set<[Int]> = [first.edgeIndices]
@@ -123,15 +118,11 @@ nonisolated extension TrailMatcherGraphIndex {
                 maximumDistance: maximumDistance - rootDistance,
                 bannedNodes: bannedNodes,
                 bannedEdges: bannedEdges
-            ) else {
-                continue
-            }
+            ) else { continue }
             let pathNodes = Array(rootNodes.dropLast()) + spur.nodes
             guard Set(pathNodes).count == pathNodes.count else { continue }
             let edgeIndices = rootEdges + spur.edgeIndices
-            guard seenSignatures.insert(edgeIndices).inserted else {
-                continue
-            }
+            guard seenSignatures.insert(edgeIndices).inserted else { continue }
             candidateHeap.insert(
                 RankedPath(
                     path: NodePath(
@@ -153,22 +144,13 @@ nonisolated extension TrailMatcherGraphIndex {
     ) -> NodePath? {
         guard nodes[start] != nil, nodes[end] != nil,
               !bannedNodes.contains(start),
-              !bannedNodes.contains(end)
-        else {
-            return nil
-        }
-        if start == end {
-            return NodePath(nodes: [start], edgeIndices: [], distance: 0)
-        }
+              !bannedNodes.contains(end) else { return nil }
+        if start == end { return NodePath(nodes: [start], edgeIndices: [], distance: 0) }
         let mayUseCache = bannedNodes.isEmpty && bannedEdges.isEmpty
         let cacheKey = NodePair(start, end)
         if mayUseCache, let cached = shortestPathCache[cacheKey] {
-            guard cached.distance <= maximumDistance else {
-                return nil
-            }
-            if cached.nodes.first == start {
-                return cached
-            }
+            guard cached.distance <= maximumDistance else { return nil }
+            if cached.nodes.first == start { return cached }
             return NodePath(
                 nodes: Array(cached.nodes.reversed()),
                 edgeIndices: Array(cached.edgeIndices.reversed()),
@@ -181,17 +163,13 @@ nonisolated extension TrailMatcherGraphIndex {
             maximumDistance: maximumDistance,
             bannedNodes: bannedNodes,
             bannedEdges: bannedEdges
-        ) else {
-            return nil
-        }
+        ) else { return nil }
         guard let path = reconstructPath(
             from: end,
             to: start,
             previous: previous,
             distance: distance
-        ) else {
-            return nil
-        }
+        ) else { return nil }
         if mayUseCache {
             shortestPathCache[cacheKey] = path
         }
@@ -211,28 +189,20 @@ nonisolated extension TrailMatcherGraphIndex {
         frontier.insert(HeapEntry(distance: 0, nodeID: start))
         while let current = frontier.popMin() {
             guard current.distance == distances[current.nodeID],
-                  current.distance <= maximumDistance
-            else {
-                continue
-            }
+                  current.distance <= maximumDistance else { continue }
             if current.nodeID == end { break }
             for neighbor in adjacency[current.nodeID] ?? []
             where !bannedNodes.contains(neighbor.nodeID)
                 && !bannedEdges.contains(neighbor.edgeIndex) {
                 let dist = current.distance + neighbor.distance
                 guard dist <= maximumDistance,
-                      dist < distances[neighbor.nodeID, default: .infinity]
-                else {
-                    continue
-                }
+                      dist < distances[neighbor.nodeID, default: .infinity] else { continue }
                 distances[neighbor.nodeID] = dist
                 previous[neighbor.nodeID] = (current.nodeID, neighbor.edgeIndex)
                 frontier.insert(HeapEntry(distance: dist, nodeID: neighbor.nodeID))
             }
         }
-        guard let distance = distances[end] else {
-            return nil
-        }
+        guard let distance = distances[end] else { return nil }
         return (distance, previous)
     }
 
@@ -246,9 +216,7 @@ nonisolated extension TrailMatcherGraphIndex {
         var pathEdges: [Int] = []
         var cursor = end
         while cursor != start {
-            guard let step = previous[cursor] else {
-                return nil
-            }
+            guard let step = previous[cursor] else { return nil }
             pathEdges.append(step.edgeIndex)
             cursor = step.nodeID
             pathNodes.append(cursor)

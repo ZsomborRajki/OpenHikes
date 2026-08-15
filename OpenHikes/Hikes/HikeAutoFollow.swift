@@ -56,12 +56,8 @@ struct FollowAnchor: Equatable {
     /// is the price of getting the leg right, and it's paid at most once —
     /// ``matched(at:course:from:)`` confirms the anchor from then on.
     static func tieBreak(_ anchor: Self?, course: CLLocationDirection?) -> Double? {
-        guard let anchor else {
-            return nil
-        }
-        if !anchor.isCourseConfirmed, course != nil {
-            return nil
-        }
+        guard let anchor else { return nil }
+        if !anchor.isCourseConfirmed, course != nil { return nil }
         return anchor.distance
     }
 
@@ -120,8 +116,7 @@ struct OffRouteSearchPolicy: Equatable {
             return
         }
         switch scope {
-        case .wholeRoute:
-            fixesSinceEmptyWholeRouteSearch = 0
+        case .wholeRoute: fixesSinceEmptyWholeRouteSearch = 0
         case .continuityWindow:
             let elapsed = (fixesSinceEmptyWholeRouteSearch ?? 0) + 1
             fixesSinceEmptyWholeRouteSearch =
@@ -143,17 +138,11 @@ enum FollowInteractionPolicy {
         profile: RouteProfile?,
         trackerDistance: Double
     ) -> FollowHighlightUpdate {
-        guard !isScrubbing else {
-            return .unchanged
-        }
-        if autoFollowEnabled {
-            return .clear
-        }
+        guard !isScrubbing else { return .unchanged }
+        if autoFollowEnabled { return .clear }
         guard let coordinate = profile?.coordinate(
             atDistance: trackerDistance
-        ) else {
-            return .unchanged
-        }
+        ) else { return .unchanged }
         return .move(coordinate)
     }
 

@@ -294,9 +294,7 @@ private extension MapSheetHikes {
 private extension MapSheetHikes {
     func recordingStatus(for hike: Hike) -> HikeRow.Status? {
         guard belongsToActiveRecording(hike) else { return nil }
-        guard hike.id == recorder.currentHike?.id else {
-            return HikeRow.Status(title: "Recording", tint: .red)
-        }
+        guard hike.id == recorder.currentHike?.id else { return HikeRow.Status(title: "Recording", tint: .red) }
         return switch recorder.phase {
         case .idle: HikeRow.Status(title: "Recording", tint: .red)
         case .recovering: HikeRow.Status(title: "Recovering", tint: .orange)

@@ -142,9 +142,7 @@ actor TrackJournal {
         )
         guard !points.isEmpty else { return 0 }
         try flush()
-        guard fileHandle != nil else {
-            throw TrackJournalError.io("The recording journal is closed.")
-        }
+        guard fileHandle != nil else { throw TrackJournalError.io("The recording journal is closed.") }
 
         let data: Data
         do {
@@ -165,9 +163,7 @@ actor TrackJournal {
             guard !timestamps.contains(
                 point.timestamp,
                 within: tolerance
-            ), !duplicatesAccepted else {
-                continue
-            }
+            ), !duplicatesAccepted else { continue }
             accepted.append(point)
             lastAcceptedTimestamp = point.timestamp
         }
@@ -180,9 +176,7 @@ actor TrackJournal {
 
     func pause(at date: Date) throws {
         try flush()
-        guard var metadata else {
-            throw TrackJournalError.io("No recording session is open.")
-        }
+        guard var metadata else { throw TrackJournalError.io("No recording session is open.") }
         if metadata.pausedIntervals.last?.endedAt != nil || metadata.pausedIntervals.isEmpty {
             metadata.pausedIntervals.append(
                 RecordingPauseInterval(startedAt: date, endedAt: nil)
@@ -195,9 +189,7 @@ actor TrackJournal {
 
     func resume(at date: Date) throws {
         try flush()
-        guard var metadata else {
-            throw TrackJournalError.io("No recording session is open.")
-        }
+        guard var metadata else { throw TrackJournalError.io("No recording session is open.") }
         if let index = metadata.pausedIntervals.indices.last,
            metadata.pausedIntervals[index].endedAt == nil {
             metadata.pausedIntervals[index].endedAt = date
@@ -210,9 +202,7 @@ actor TrackJournal {
 
     func finish(at date: Date) throws {
         try flush()
-        guard var metadata else {
-            throw TrackJournalError.io("No recording session is open.")
-        }
+        guard var metadata else { throw TrackJournalError.io("No recording session is open.") }
         if let index = metadata.pausedIntervals.indices.last,
            metadata.pausedIntervals[index].endedAt == nil {
             metadata.pausedIntervals[index].endedAt = date
@@ -227,9 +217,7 @@ actor TrackJournal {
     func flush() throws {
         assertOffMainThread("Track journal writes must stay off the main thread")
         guard !pending.isEmpty else { return }
-        guard let fileHandle else {
-            throw TrackJournalError.io("The recording journal is closed.")
-        }
+        guard let fileHandle else { throw TrackJournalError.io("The recording journal is closed.") }
 
         do {
             var bytes = Data()
@@ -275,10 +263,7 @@ actor TrackJournal {
                     header.startedAt.timeIntervalSince(
                         loadedMetadata.startedAt
                     )
-                  ) < Self.timestampMatchTolerance
-            else {
-                throw TrackJournalError.invalidHeader
-            }
+                  ) < Self.timestampMatchTolerance else { throw TrackJournalError.invalidHeader }
             return TrackJournalSession(
                 metadata: loadedMetadata,
                 points: Self.decodeRecords(data)
@@ -304,10 +289,7 @@ actor TrackJournal {
             guard header.sessionID == reopenedMetadata.sessionID,
                   abs(
                     header.startedAt.timeIntervalSince(reopenedMetadata.startedAt)
-                  ) < Self.timestampMatchTolerance
-            else {
-                throw TrackJournalError.invalidHeader
-            }
+                  ) < Self.timestampMatchTolerance else { throw TrackJournalError.invalidHeader }
 
             let newHandle = try FileHandle(forWritingTo: journalURL)
             fileHandle = newHandle
@@ -414,10 +396,7 @@ private extension TrackJournal {
         _ data: Data
     ) throws(TrackJournalError) -> (sessionID: UUID, startedAt: Date) {
         guard data.count >= headerByteCount,
-              data.prefix(magic.count) == magic
-        else {
-            throw .invalidHeader
-        }
+              data.prefix(magic.count) == magic else { throw .invalidHeader }
 
         let version: UInt16 = data.littleEndianValue(at: 4)
         guard version == self.version else { throw .unsupportedVersion(version) }

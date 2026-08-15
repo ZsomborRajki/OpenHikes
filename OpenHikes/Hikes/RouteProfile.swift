@@ -95,9 +95,7 @@ nonisolated struct RouteProfile: Sendable {
         let profile = Self.build(route: route, onPoint: onPoint) {
             !Task.isCancelled
         }
-        guard !Task.isCancelled else {
-            throw CancellationError()
-        }
+        guard !Task.isCancelled else { throw CancellationError() }
         return profile
     }
 
@@ -126,9 +124,7 @@ nonisolated struct RouteProfile: Sendable {
         var cumulative = 0.0
         var previous: CLLocationCoordinate2D?
         for (index, point) in route.enumerated() {
-            if index.isMultiple(of: 255), !shouldContinue() {
-                break
-            }
+            if index.isMultiple(of: 255), !shouldContinue() { break }
             let coordinate = point.clCoordinate
             var segment = 0.0
             if let previous {
@@ -485,9 +481,7 @@ nonisolated extension RouteProfile {
         var bestContinuity = abs(best.distanceAlongRoute - anchor)
         for contender in candidates {
             guard contender.offRouteMeters
-                <= best.offRouteMeters + Self.tieBreakToleranceMeters else {
-                continue
-            }
+                <= best.offRouteMeters + Self.tieBreakToleranceMeters else { continue }
             let contenderRunsWith = runsWithTheWalker(contender)
             if contenderRunsWith != tiedRunsWith {
                 guard contenderRunsWith else { continue }

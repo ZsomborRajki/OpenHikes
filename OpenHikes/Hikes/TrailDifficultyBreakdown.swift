@@ -66,12 +66,8 @@ nonisolated struct TrailDifficultyBreakdown: Equatable, Sendable {
                 )
             }
             .sorted { lhs, rhs in
-                if lhs.difficulty.isSurveyed != rhs.difficulty.isSurveyed {
-                    return lhs.difficulty.isSurveyed
-                }
-                if lhs.meters != rhs.meters {
-                    return lhs.meters > rhs.meters
-                }
+                if lhs.difficulty.isSurveyed != rhs.difficulty.isSurveyed { return lhs.difficulty.isSurveyed }
+                if lhs.meters != rhs.meters { return lhs.meters > rhs.meters }
                 // Among equal distances, easier grade first.
                 return (TrailDifficulty.displayOrdering.firstIndex(of: lhs.difficulty) ?? 0)
                     < (TrailDifficulty.displayOrdering.firstIndex(of: rhs.difficulty) ?? 0)
@@ -126,9 +122,7 @@ nonisolated enum TrailDifficultyAnalyzer {
             let stepMeters = segmentMeters / Double(steps)
             for step in 0..<steps {
                 if samplesTaken.isMultiple(of: cancellationCheckInterval),
-                   Task.isCancelled {
-                    throw CancellationError()
-                }
+                   Task.isCancelled { throw CancellationError() }
                 samplesTaken += 1
                 let sample = RouteGeometry.interpolate(
                     from: from,

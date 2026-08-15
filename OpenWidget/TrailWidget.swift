@@ -203,8 +203,7 @@ struct TrailWidgetProvider: TimelineProvider {
                 return
             }
             switch manager.authorizationStatus {
-            case .authorizedAlways, .authorizedWhenInUse:
-                break
+            case .authorizedAlways, .authorizedWhenInUse: break
             case .notDetermined, .restricted, .denied:
                 completion()
                 return

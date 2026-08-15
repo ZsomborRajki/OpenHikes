@@ -265,9 +265,7 @@ final class OpenHikesModel {
         }
 
         let track = try await GPXImport.loadOffMain(from: url)
-        guard track.points.count > 1 else {
-            throw .tooShort
-        }
+        guard track.points.count > 1 else { throw .tooShort }
 
         let hike = Hike(
             title: track.name

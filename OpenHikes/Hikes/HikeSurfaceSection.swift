@@ -69,9 +69,7 @@ struct HikeSurfaceSection: View {
 
     private func footnote(for breakdown: TrailSurfaceBreakdown) -> String {
         let surveyed = breakdown.surveyedFraction
-        guard surveyed < Self.fullCoverageThreshold else {
-            return "Surfaces from OpenStreetMap."
-        }
+        guard surveyed < Self.fullCoverageThreshold else { return "Surfaces from OpenStreetMap." }
         let formatted = surveyed.formatted(Self.percentStyle)
         return "Surfaces from OpenStreetMap, which describes \(formatted)"
             + " of this route."

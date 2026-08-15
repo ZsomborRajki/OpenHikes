@@ -141,9 +141,7 @@ nonisolated final class StubTileProtocol: URLProtocol, @unchecked Sendable {
     static func waitForRequest(count: Int = 1) async {
         await withCheckedContinuation { continuation in
             let alreadyMet = state.withLock { s -> Bool in
-                if s.requests.count >= count {
-                    return true
-                }
+                if s.requests.count >= count { return true }
                 s.requestWaiters.append((threshold: count, continuation: continuation))
                 return false
             }

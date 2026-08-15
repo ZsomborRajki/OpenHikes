@@ -106,9 +106,7 @@ nonisolated final class TileCache: @unchecked Sendable {
         #elseif canImport(AppKit)
         let bitmap = image.cgImage(forProposedRect: nil, context: nil, hints: nil)
         #endif
-        if let bitmap, bitmap.bytesPerRow > 0, bitmap.height > 0 {
-            return bitmap.bytesPerRow * bitmap.height
-        }
+        if let bitmap, bitmap.bytesPerRow > 0, bitmap.height > 0 { return bitmap.bytesPerRow * bitmap.height }
         // No backing bitmap to measure. Estimate from the point size at four
         // bytes a pixel rather than charging nothing, which would exempt the
         // entry from the limit entirely — `NSCache` treats a zero cost as free.
@@ -327,9 +325,7 @@ nonisolated extension TileCache {
     func memoryImage(forKey key: String, referenceDate: Date = Date()) -> TileImage? {
         // swiftlint:disable:next legacy_objc_type
         let cacheKey = key as NSString
-        guard let tile = memory.object(forKey: cacheKey) else {
-            return nil
-        }
+        guard let tile = memory.object(forKey: cacheKey) else { return nil }
         guard !isExpired(tile.storedAt, referenceDate: referenceDate) else {
             memory.removeObject(forKey: cacheKey)
             return nil
@@ -354,9 +350,7 @@ nonisolated extension TileCache {
         purpose: TileFetchPurpose = .interactive
     ) async -> TileImage? {
         let mutationToken = mutationToken(forKey: key)
-        if let cached = memoryImage(forKey: key) {
-            return cached
-        }
+        if let cached = memoryImage(forKey: key) { return cached }
 
         // Which tier holds this key, read *before* `diskImage` — it deletes an
         // expired file as it finds it, and the answer decides where a refetched
@@ -369,9 +363,7 @@ nonisolated extension TileCache {
                 tile,
                 forKey: key,
                 token: mutationToken
-            ) else {
-                return nil
-            }
+            ) else { return nil }
             return tile.image
         }
 
@@ -394,10 +386,7 @@ nonisolated extension TileCache {
             return nil
         }
 
-        guard let fetched = await fetchTileOnce(forKey: key, url: url)
-        else {
-            return nil
-        }
+        guard let fetched = await fetchTileOnce(forKey: key, url: url) else { return nil }
         // Back into the tier it came from. A tile that was durable is offline
         // coverage some hike is counting on; writing its replacement to the
         // browsing tier instead would leave the manifest still claiming it while
@@ -409,9 +398,7 @@ nonisolated extension TileCache {
             forKey: key,
             at: wasDurable ? paths.durable : paths.cached,
             token: mutationToken
-        ) else {
-            return nil
-        }
+        ) else { return nil }
         return fetched.image
     }
 
@@ -429,9 +416,7 @@ nonisolated extension TileCache {
         // Already saved by an earlier download or by auto-save, or already
         // browsed and so sitting on disk in the wrong tier: either way, no
         // reason to ask the tile server for a second copy.
-        if promoteCachedTile(forKey: key) {
-            return true
-        }
+        if promoteCachedTile(forKey: key) { return true }
 
         let decision = networkDecision(for: .speculative)
         guard decision.isAllowed else {
@@ -441,10 +426,7 @@ nonisolated extension TileCache {
             )
             return false
         }
-        guard let fetched = await fetchTileOnce(forKey: key, url: url)
-        else {
-            return false
-        }
+        guard let fetched = await fetchTileOnce(forKey: key, url: url) else { return false }
         return storeFetchedTileDurably(
             fetched,
             forKey: key,
@@ -492,13 +474,9 @@ nonisolated extension TileCache {
     /// caller starts a redundant second one.
     private func fetchTileOnce(forKey key: String, url: URL) async -> FetchedTile? {
         let fetch = inFlightFetches.withLock { tasks -> Task<FetchedTile?, Never> in
-            if let existing = tasks[key] {
-                return existing
-            }
+            if let existing = tasks[key] { return existing }
             let task = Task { [weak self] () -> FetchedTile? in
-                guard let self else {
-                    return nil
-                }
+                guard let self else { return nil }
                 let fetched = await fetchTile(forKey: key, url: url)
                 inFlightFetches.withLock { $0[key] = nil }
                 return fetched
@@ -528,9 +506,7 @@ nonisolated extension TileCache {
             guard token == MutationToken(
                 global: versions.global,
                 key: versions.keys[key, default: 0]
-            ) else {
-                return false
-            }
+            ) else { return false }
             do {
                 try fetched.data.write(to: destination, options: .atomic)
             } catch {
@@ -558,9 +534,7 @@ nonisolated extension TileCache {
             guard token == MutationToken(
                 global: versions.global,
                 key: versions.keys[key, default: 0]
-            ) else {
-                return false
-            }
+            ) else { return false }
             cacheInMemory(
                 tile.image,
                 storedAt: tile.storedAt,
@@ -579,9 +553,7 @@ nonisolated extension TileCache {
             guard token == MutationToken(
                 global: versions.global,
                 key: versions.keys[key, default: 0]
-            ) else {
-                return false
-            }
+            ) else { return false }
             cacheInMemory(fetched.image, storedAt: Date(), forKey: key)
             return writeDurable(fetched.data, forKey: key)
         }
@@ -667,9 +639,7 @@ nonisolated extension TileCache {
                 discardRedundantCachedCopy(forKey: key)
                 return true
             }
-            guard freshModificationDate(for: cached) != nil else {
-                return false
-            }
+            guard freshModificationDate(for: cached) != nil else { return false }
             do {
                 // `moveItem` refuses to overwrite, so clear the destination
                 // first. A missing destination is the expected case.
@@ -799,9 +769,7 @@ nonisolated extension TileCache {
     /// only by chance.
     func discardRedundantCachedCopy(forKey key: String) {
         let (cached, durable) = filePaths(forKey: key)
-        guard FileManager.default.fileExists(atPath: durable.path) else {
-            return
-        }
+        guard FileManager.default.fileExists(atPath: durable.path) else { return }
         _ = removeItemIgnoringNotFound(
             at: cached,
             operation: "remove redundant cached tile"

@@ -214,10 +214,7 @@ nonisolated private extension TrailMatcher {
         while end + 1 < points.count {
             let next = end + 1
             guard !points[next].flags.contains(.resumed),
-                  !candidates[next].isEmpty
-            else {
-                break
-            }
+                  !candidates[next].isEmpty else { break }
             let previousScores = scoreHistory[scoreHistory.count - 1]
             var nextScores = [Double](repeating: -.infinity, count: candidates[next].count)
             var nextBack = [Int](repeating: -1, count: candidates[next].count)
@@ -234,9 +231,7 @@ nonisolated private extension TrailMatcher {
                               to: candidates[next][currentIndex],
                               parameters: parameters
                           )
-                    else {
-                        continue
-                    }
+                    else { continue }
                     let score = previousScores[previousIndex]
                         + transitionLogProbability(
                             transition.distanceMeters,

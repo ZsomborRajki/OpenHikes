@@ -51,8 +51,7 @@ public enum TrailWidgetDeepLink {
             guard url.path.isEmpty else { return nil }
             return .recording
 
-        default:
-            return nil
+        default: return nil
         }
     }
 

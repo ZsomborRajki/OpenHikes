@@ -26,7 +26,6 @@ public extension Color {
                 blue: Double(value & 0xFF) / 255,
                 opacity: 1
             )
-
         case 8:
             self.init(
                 .sRGB,
@@ -35,9 +34,7 @@ public extension Color {
                 blue: Double((value >> 8) & 0xFF) / 255,
                 opacity: Double(value & 0xFF) / 255
             )
-
-        default:
-            return nil
+        default: return nil
         }
     }
 }

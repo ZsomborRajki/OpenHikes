@@ -77,9 +77,8 @@ public enum SharedStore {
     public static func saveRecording(
         _ snapshot: SharedRecordingSnapshot
     ) throws {
-        guard let recordingFileURL, let pendingRecordingFixStore else {
-            throw SharedRecordingStoreError.containerUnavailable
-        }
+        guard let recordingFileURL, let pendingRecordingFixStore
+        else { throw SharedRecordingStoreError.containerUnavailable }
         try pendingRecordingFixStore.saveRecording(
             snapshot,
             to: recordingFileURL
@@ -87,9 +86,8 @@ public enum SharedStore {
     }
 
     public static func clearRecording(sessionID: UUID? = nil) throws {
-        guard let recordingFileURL, let pendingRecordingFixStore else {
-            throw SharedRecordingStoreError.containerUnavailable
-        }
+        guard let recordingFileURL, let pendingRecordingFixStore
+        else { throw SharedRecordingStoreError.containerUnavailable }
         try pendingRecordingFixStore.clearRecordingState(
             recordingURL: recordingFileURL,
             sessionID: sessionID
@@ -99,9 +97,8 @@ public enum SharedStore {
     @discardableResult public static func appendPendingRecordingFix(
         _ fix: SharedRecordingFix
     ) throws -> Bool {
-        guard let pendingRecordingFixStore, let recordingFileURL else {
-            throw SharedRecordingStoreError.containerUnavailable
-        }
+        guard let pendingRecordingFixStore, let recordingFileURL
+        else { throw SharedRecordingStoreError.containerUnavailable }
         return try pendingRecordingFixStore.append(
             fix,
             validatingRecordingAt: recordingFileURL
@@ -110,18 +107,14 @@ public enum SharedStore {
 
     public static func loadPendingRecordingFixes() throws
         -> [SharedRecordingFix] {
-        guard let pendingRecordingFixStore else {
-            throw SharedRecordingStoreError.containerUnavailable
-        }
+        guard let pendingRecordingFixStore else { throw SharedRecordingStoreError.containerUnavailable }
         return try pendingRecordingFixStore.load()
     }
 
     public static func removePendingRecordingFixes(
         ids: Set<UUID>
     ) throws {
-        guard let pendingRecordingFixStore else {
-            throw SharedRecordingStoreError.containerUnavailable
-        }
+        guard let pendingRecordingFixStore else { throw SharedRecordingStoreError.containerUnavailable }
         try pendingRecordingFixStore.remove(ids: ids)
     }
 
@@ -130,9 +123,7 @@ public enum SharedStore {
         minimumInterval: TimeInterval,
         at date: Date = .now
     ) throws -> Bool {
-        guard let pendingRecordingFixStore else {
-            throw SharedRecordingStoreError.containerUnavailable
-        }
+        guard let pendingRecordingFixStore else { throw SharedRecordingStoreError.containerUnavailable }
         return try pendingRecordingFixStore.claimSample(
             sessionID: sessionID,
             at: date,
@@ -143,9 +134,7 @@ public enum SharedStore {
     public static func clearPendingRecordingFixes(
         sessionID: UUID? = nil
     ) throws {
-        guard let pendingRecordingFixStore else {
-            throw SharedRecordingStoreError.containerUnavailable
-        }
+        guard let pendingRecordingFixStore else { throw SharedRecordingStoreError.containerUnavailable }
         try pendingRecordingFixStore.clear(sessionID: sessionID)
     }
 

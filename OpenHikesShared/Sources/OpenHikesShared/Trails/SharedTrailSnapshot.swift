@@ -98,9 +98,8 @@ public struct SharedTrailSnapshot: Codable, Sendable, Equatable {
     /// the trail's total length. Shared with the iOS widget so the app and
     /// extension cannot drift out of sync.
     public var statusText: String {
-        guard let fractionComplete, let remainingDistanceMeters else {
-            return Self.formattedLength(totalDistanceMeters)
-        }
+        guard let fractionComplete, let remainingDistanceMeters
+        else { return Self.formattedLength(totalDistanceMeters) }
         return "\(Int((fractionComplete * 100).rounded()))% · \(Self.formattedLength(remainingDistanceMeters)) left"
     }
 

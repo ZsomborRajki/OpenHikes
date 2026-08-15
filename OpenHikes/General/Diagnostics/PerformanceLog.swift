@@ -107,9 +107,10 @@ nonisolated final class PerformanceLog: Sendable {
                 withIntermediateDirectories: true
             )
             try? FileManager.default.removeItem(at: destination)
-            guard FileManager.default.createFile(atPath: destination.path, contents: nil) else {
-                throw CocoaError(.fileWriteUnknown)
-            }
+            guard FileManager.default.createFile(
+                atPath: destination.path,
+                contents: nil
+            ) else { throw CocoaError(.fileWriteUnknown) }
             handle = try FileHandle(forWritingTo: destination)
         } catch {
             Self.logger.error(

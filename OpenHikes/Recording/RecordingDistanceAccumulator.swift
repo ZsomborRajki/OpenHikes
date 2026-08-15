@@ -40,9 +40,7 @@ nonisolated struct RecordingDistanceAccumulator: Sendable {
             return distanceMeters
         }
 
-        if point.flags.contains(.resumed) {
-            return handleResumed(point)
-        }
+        if point.flags.contains(.resumed) { return handleResumed(point) }
 
         let beganMotionStationary = updateMotionStationaryStart(for: point)
         recordedDuration += max(
@@ -50,9 +48,7 @@ nonisolated struct RecordingDistanceAccumulator: Sendable {
             point.timestamp.timeIntervalSince(previous.timestamp)
         )
 
-        if let result = handleStationary(point, previous: previous) {
-            return result
-        }
+        if let result = handleStationary(point, previous: previous) { return result }
 
         let leg = RouteGeometry.distanceMeters(
             from: previous.coordinate,
@@ -78,21 +74,15 @@ nonisolated struct RecordingDistanceAccumulator: Sendable {
         _ point: RecordingPoint,
         previous: RecordingPoint
     ) -> Double? {
-        guard isStationary else {
-            return nil
-        }
+        guard isStationary else { return nil }
         let anchor = stationaryAnchor ?? previous
         let displacement = RouteGeometry.distanceMeters(
             from: anchor.coordinate,
             to: point.coordinate
         )
         self.previous = point
-        if point.flags.contains(.motionStationary) {
-            return distanceMeters
-        }
-        guard displacement > Self.resumeDisplacement else {
-            return distanceMeters
-        }
+        if point.flags.contains(.motionStationary) { return distanceMeters }
+        guard displacement > Self.resumeDisplacement else { return distanceMeters }
         isStationary = false
         stationaryAnchor = nil
         distanceMeters += displacement
@@ -113,10 +103,7 @@ nonisolated struct RecordingDistanceAccumulator: Sendable {
 
         guard let movementWindowStart,
               point.timestamp.timeIntervalSince(movementWindowStart.timestamp)
-                >= Self.stationaryInterval
-        else {
-            return distanceMeters
-        }
+                >= Self.stationaryInterval else { return distanceMeters }
 
         let netDisplacement = RouteGeometry.distanceMeters(
             from: movementWindowStart.coordinate,
@@ -143,9 +130,7 @@ nonisolated struct RecordingDistanceAccumulator: Sendable {
         for point: RecordingPoint
     ) -> Bool {
         if point.flags.contains(.motionStationary) {
-            guard motionStationaryStartedAt == nil else {
-                return false
-            }
+            guard motionStationaryStartedAt == nil else { return false }
             motionStationaryStartedAt = point.timestamp
             return true
         }

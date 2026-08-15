@@ -86,9 +86,7 @@ nonisolated enum TileNetworkPolicy {
         if conditions.isExpensive, !allowsCellular { return .denied("cellular") }
         guard purpose == .speculative else { return .allowed }
         if power.isLowPowerModeEnabled { return .denied("low-power-mode") }
-        if RecordingEnergyPolicy.conserves(power.thermalState) {
-            return .denied("thermal")
-        }
+        if RecordingEnergyPolicy.conserves(power.thermalState) { return .denied("thermal") }
         // Speculative traffic over cellular costs the same radio as
         // interactive traffic and buys nothing the walker is waiting for, so
         // it needs the setting even when the setting has been granted for

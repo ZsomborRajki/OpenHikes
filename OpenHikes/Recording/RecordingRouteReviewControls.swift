@@ -146,11 +146,8 @@ private extension RecordingRouteReviewControls {
 
     func prompt(for section: RouteReviewSection) -> String {
         switch section.kind {
-        case .snapped:
-            "The highlighted section was moved onto a mapped trail."
-
-        case .ambiguous:
-            "The highlighted section has more than one plausible route."
+        case .snapped: "The highlighted section was moved onto a mapped trail."
+        case .ambiguous: "The highlighted section has more than one plausible route."
         }
     }
 
@@ -159,14 +156,9 @@ private extension RecordingRouteReviewControls {
         in section: RouteReviewSection
     ) -> String {
         switch choice {
-        case .matched:
-            section.trailName.map { "Use \($0)" } ?? "Use the mapped trail"
-
-        case .gps:
-            "Use GPS only"
-
-        case .alternative(let alternativeID):
-            "Option \(Self.optionLabel(alternativeID))"
+        case .matched: section.trailName.map { "Use \($0)" } ?? "Use the mapped trail"
+        case .gps: "Use GPS only"
+        case .alternative(let alternativeID): "Option \(Self.optionLabel(alternativeID))"
         }
     }
 
@@ -175,26 +167,17 @@ private extension RecordingRouteReviewControls {
         in section: RouteReviewSection
     ) -> String {
         switch choice {
-        case .matched:
-            "Snapped to the trail · "
-                + Self.formatted(section.matchedDistanceMeters)
-
-        case .gps:
-            "Keep the recorded line · "
-                + Self.formatted(section.rawDistanceMeters)
-
-        case .alternative(let alternativeID):
-            section.alternatives
-                .first { $0.id == alternativeID }
-                .map(Self.alternativeSubtitle) ?? ""
+        case .matched: "Snapped to the trail · " + Self.formatted(section.matchedDistanceMeters)
+        case .gps: "Keep the recorded line · " + Self.formatted(section.rawDistanceMeters)
+        case .alternative(let alternativeID): section.alternatives
+            .first { $0.id == alternativeID }
+            .map(Self.alternativeSubtitle) ?? ""
         }
     }
 
     static func optionLabel(_ index: Int) -> String {
         guard index >= 0, index < alphabetCount,
-              let scalar = UnicodeScalar(uppercaseAScalar + index) else {
-            return "\(index + 1)"
-        }
+              let scalar = UnicodeScalar(uppercaseAScalar + index) else { return "\(index + 1)" }
         return String(Character(scalar))
     }
 

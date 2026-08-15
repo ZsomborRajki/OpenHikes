@@ -26,9 +26,7 @@ extension HikeRecorder {
         prepared: PreparedRecording,
         review: PendingReviewSave?
     ) {
-        guard let endedAt = session.metadata.endedAt else {
-            throw .save("The recording has not been finished yet.")
-        }
+        guard let endedAt = session.metadata.endedAt else { throw .save("The recording has not been finished yet.") }
 
         let (normalized, graph, gapEvidence) = await normalizeSession(session)
         // `prepareOffMain` is typed `throws(RecordingFailure)` and `@concurrent`
@@ -116,9 +114,7 @@ extension HikeRecorder {
         let hikeID = session.metadata.sessionID
         stats.matchedTrailName = prepared.matchedTrailName
         if let existing = try existingHike(sessionID: hikeID) {
-            guard existing.isRecording else {
-                return existing
-            }
+            guard existing.isRecording else { return existing }
 
             let previousDistance = existing.distanceMeters
             let previousDate = existing.date
@@ -202,9 +198,7 @@ extension HikeRecorder {
     func deleteRecordingHike(sessionID: UUID?) throws(RecordingFailure) {
         guard let sessionID,
               let hike = try existingHike(sessionID: sessionID),
-              hike.isRecording else {
-            return
-        }
+              hike.isRecording else { return }
         container.mainContext.delete(hike)
         do {
             try saveModelContext(container.mainContext)
@@ -226,9 +220,7 @@ extension HikeRecorder {
             throw .save(error.localizedDescription)
         }
         let orphans = drafts.filter { $0.id != sessionID }
-        guard !orphans.isEmpty else {
-            return
-        }
+        guard !orphans.isEmpty else { return }
 
         if let currentHike,
            orphans.contains(where: { $0.id == currentHike.id }) {
@@ -300,10 +292,7 @@ extension HikeRecorder {
     // MARK: Route review
 
     func updateReviewPreview() {
-        guard let pendingReviewSave,
-              let routeReview else {
-            return
-        }
+        guard let pendingReviewSave, let routeReview else { return }
         let points = pendingReviewSave.matchResult.points(
             resolving: routeReview.legChoices
         )

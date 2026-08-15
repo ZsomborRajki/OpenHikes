@@ -83,9 +83,7 @@ actor ScriptedTrailGraphProvider: TrailGraphProviding {
     ) async throws {
         attempts += 1
         await Task.yield()
-        if attempts <= failuresBeforeSuccess {
-            throw URLError(.notConnectedToInternet)
-        }
+        if attempts <= failuresBeforeSuccess { throw URLError(.notConnectedToInternet) }
     }
 
     func cachedGraph(

@@ -274,20 +274,15 @@ extension HikeRecorder {
 
     func prefetchTrailGraphIfNeeded(around coordinate: CLLocationCoordinate2D) {
         guard let trailGraphProvider,
-              let region = trailGraphProvider.region(containing: coordinate)
-        else { return }
+              let region = trailGraphProvider.region(containing: coordinate) else { return }
 
         let previousFailures: Int
         switch trailGraphPrefetchStates[region] {
-        case nil:
-            previousFailures = 0
-
+        case nil: previousFailures = 0
         case let .waiting(failures, retryAt):
             guard clock() >= retryAt else { return }
             previousFailures = failures
-
-        case .fetching, .loaded:
-            return
+        case .fetching, .loaded: return
         }
 
         trailGraphPrefetchStates[region] = .fetching(
@@ -320,18 +315,14 @@ extension HikeRecorder {
                 try await provider.prefetch(around: coordinate)
                 guard let self,
                       !Task.isCancelled,
-                      sessionID == expectedSessionID else {
-                    return
-                }
+                      sessionID == expectedSessionID else { return }
                 trailGraphPrefetchStates[region] = .loaded
             } catch is CancellationError {
                 return
             } catch {
                 guard let self,
                       !Task.isCancelled,
-                      sessionID == expectedSessionID else {
-                    return
-                }
+                      sessionID == expectedSessionID else { return }
                 recordTrailGraphPrefetchFailure(
                     error,
                     region: region,
@@ -435,12 +426,8 @@ extension HikeRecorder: CLLocationManagerDelegate {
         Task { @MainActor in
             guard startRequested else { return }
             switch source.authorization {
-            case .notDetermined:
-                return
-
-            case .denied:
-                fail(.locationDenied, endLocationUpdates: sessionID != nil)
-
+            case .notDetermined: return
+            case .denied: fail(.locationDenied, endLocationUpdates: sessionID != nil)
             case .authorized:
                 if sessionID != nil {
                     if !source.hasFullAccuracy {

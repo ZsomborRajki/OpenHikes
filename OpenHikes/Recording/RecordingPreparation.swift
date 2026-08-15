@@ -183,14 +183,10 @@ nonisolated enum RecordingPreparation {
         _ points: [RecordingPoint]
     ) -> [RecordingPoint] {
         let ordered = points.sorted { lhs, rhs in
-            if lhs.timestamp != rhs.timestamp {
-                return lhs.timestamp < rhs.timestamp
-            }
+            if lhs.timestamp != rhs.timestamp { return lhs.timestamp < rhs.timestamp }
             let firstIsWidget = lhs.flags.contains(.widgetSourced)
             let secondIsWidget = rhs.flags.contains(.widgetSourced)
-            if firstIsWidget != secondIsWidget {
-                return !firstIsWidget
-            }
+            if firstIsWidget != secondIsWidget { return !firstIsWidget }
             return lhs.horizontalAccuracy < rhs.horizontalAccuracy
         }
         let foregroundTimestamps = TimestampIndex(
@@ -205,9 +201,7 @@ nonisolated enum RecordingPreparation {
                foregroundTimestamps.contains(point.timestamp, within: 5) {
                 continue
             }
-            guard point.timestamp != deduplicated.last?.timestamp else {
-                continue
-            }
+            guard point.timestamp != deduplicated.last?.timestamp else { continue }
             deduplicated.append(point)
         }
         return deduplicated
@@ -216,9 +210,7 @@ nonisolated enum RecordingPreparation {
     private static func matchedDistance(
         _ points: [RecordingPoint]
     ) -> Double {
-        guard points.count > 1 else {
-            return 0
-        }
+        guard points.count > 1 else { return 0 }
         var distance = 0.0
         for index in 1..<points.count {
             guard !points[index].flags.contains(.resumed) else { continue }
@@ -234,9 +226,7 @@ nonisolated enum RecordingPreparation {
         _ route: [RecordingPoint],
         from raw: [RecordingPoint]
     ) -> Bool {
-        guard route.count == raw.count else {
-            return true
-        }
+        guard route.count == raw.count else { return true }
         return zip(route, raw).contains { routePoint, rawPoint in
             RouteGeometry.distanceMeters(
                 from: routePoint.coordinate,

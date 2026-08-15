@@ -71,12 +71,8 @@ nonisolated struct TrailSurfaceBreakdown: Equatable, Sendable {
                 )
             }
             .sorted { lhs, rhs in
-                if lhs.surface.isSurveyed != rhs.surface.isSurveyed {
-                    return lhs.surface.isSurveyed
-                }
-                if lhs.meters != rhs.meters {
-                    return lhs.meters > rhs.meters
-                }
+                if lhs.surface.isSurveyed != rhs.surface.isSurveyed { return lhs.surface.isSurveyed }
+                if lhs.meters != rhs.meters { return lhs.meters > rhs.meters }
                 return lhs.surface.displayOrder < rhs.surface.displayOrder
             }
     }
@@ -149,9 +145,7 @@ nonisolated enum TrailSurfaceAnalyzer {
             let stepMeters = segmentMeters / Double(steps)
             for step in 0..<steps {
                 if samplesTaken.isMultiple(of: cancellationCheckInterval),
-                   Task.isCancelled {
-                    throw CancellationError()
-                }
+                   Task.isCancelled { throw CancellationError() }
                 samplesTaken += 1
                 // The midpoint of each sub-step, so a sample never lands
                 // exactly on a junction where two differently surfaced ways
@@ -218,9 +212,7 @@ nonisolated enum TrailSurfaceAnalyzer {
         guard let best else { return nil }
         if let preferred,
            preferred.offRouteMeters
-           <= best.offRouteMeters + wayStickinessMeters {
-            return preferred.edgeIndex
-        }
+           <= best.offRouteMeters + wayStickinessMeters { return preferred.edgeIndex }
         return best.edgeIndex
     }
 }

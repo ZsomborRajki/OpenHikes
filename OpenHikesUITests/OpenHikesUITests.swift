@@ -191,7 +191,8 @@ nonisolated final class OpenHikesUITests: XCTestCase {
     }
 
     @MainActor
-    func testLaunchPerformance() {        let options = XCTMeasureOptions()
+    func testLaunchPerformance() {
+        let options = XCTMeasureOptions()
         options.iterationCount = 3
 
         measure(

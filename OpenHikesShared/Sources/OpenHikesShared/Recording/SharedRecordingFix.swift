@@ -53,11 +53,8 @@ public enum SharedRecordingStoreError: LocalizedError, Sendable {
 
     public var errorDescription: String? {
         switch self {
-        case .containerUnavailable:
-            "The shared recording container is unavailable."
-
-        case .io(let detail):
-            detail
+        case .containerUnavailable: "The shared recording container is unavailable."
+        case .io(let detail): detail
         }
     }
 }

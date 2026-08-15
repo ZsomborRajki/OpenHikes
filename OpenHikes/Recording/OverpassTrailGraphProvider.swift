@@ -80,9 +80,7 @@ nonisolated extension TrailGraphProviding {
         }
 
         let graph = try await cachedGraph(covering: coordinates)
-        if graph == nil, let firstFailure {
-            throw firstFailure
-        }
+        if graph == nil, let firstFailure { throw firstFailure }
         return graph
     }
 }
@@ -316,8 +314,7 @@ actor OverpassTrailGraphProvider: TrailGraphProviding {
             )
             guard allowExpired
                 || clock().timeIntervalSince(cached.fetchedAt)
-                    <= Self.cacheLifetime
-            else { return nil }
+                    <= Self.cacheLifetime else { return nil }
             memory[key] = cached
             return cached
         } catch {
@@ -486,10 +483,7 @@ private extension OverpassTrailGraphProvider {
         for element in elements where element.type == "node" {
             guard let lat = element.lat,
                   let lon = element.lon,
-                  Mercator.isRepresentable(latitude: lat, longitude: lon)
-            else {
-                continue
-            }
+                  Mercator.isRepresentable(latitude: lat, longitude: lon) else { continue }
             nodeCoordinates[element.id] = CLLocationCoordinate2D(
                 latitude: lat,
                 longitude: lon
@@ -504,10 +498,7 @@ private extension OverpassTrailGraphProvider {
         var hikingRouteNames: [Int64: String] = [:]
         for element in elementsByKey.values where element.type == "relation" {
             guard element.tags["route"] == "hiking",
-                  let name = element.tags["name"] ?? element.tags["ref"]
-            else {
-                continue
-            }
+                  let name = element.tags["name"] ?? element.tags["ref"] else { continue }
             for member in element.members where member.type == "way" {
                 if let existing = hikingRouteNames[member.ref] {
                     hikingRouteNames[member.ref] = min(existing, name)
@@ -530,10 +521,7 @@ private extension OverpassTrailGraphProvider {
             guard let highway = element.tags["highway"],
                   allowedHighways.contains(highway),
                   element.nodes.count > 1,
-                  permitsWalking(element.tags)
-            else {
-                continue
-            }
+                  permitsWalking(element.tags) else { continue }
 
             let nodeIDs = element.nodes
             for index in 0..<(nodeIDs.count - 1) {
@@ -541,10 +529,7 @@ private extension OverpassTrailGraphProvider {
                 let toID = nodeIDs[index + 1]
                 guard fromID != toID,
                       let from = nodeCoordinates[fromID],
-                      let to = nodeCoordinates[toID]
-                else {
-                    continue
-                }
+                      let to = nodeCoordinates[toID] else { continue }
                 let length = RouteGeometry.distanceMeters(from: from, to: to)
                 guard length.isFinite, length > 0 else { continue }
                 graphNodes[fromID] = TrailGraphNode(id: fromID, coordinate: from)
@@ -574,8 +559,7 @@ private extension OverpassTrailGraphProvider {
     ) -> Bool {
         if let foot = tags["foot"], foot == "no" || foot == "private" { return false }
         guard let access = tags["access"],
-              access == "no" || access == "private"
-        else { return true }
+              access == "no" || access == "private" else { return true }
         return ["yes", "designated", "permissive"].contains(tags["foot"])
     }
 }

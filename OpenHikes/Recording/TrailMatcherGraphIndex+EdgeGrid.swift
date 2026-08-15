@@ -57,8 +57,7 @@ nonisolated extension TrailMatcherGraphIndex {
                     endOffset.y - startOffset.y
                 ) / 2
                 guard halfLength <= Self.maximumEdgeReachMeters,
-                      let cell = Self.cell(x: midpointX, y: midpointY)
-                else {
+                      let cell = Self.cell(x: midpointX, y: midpointY) else {
                     longEdges.append(edgeIdx)
                     continue
                 }
@@ -77,10 +76,7 @@ nonisolated extension TrailMatcherGraphIndex {
             let cellY = (y / cellSizeMeters).rounded(.down)
             guard cellX.isFinite, cellY.isFinite,
                   cellX.magnitude < Double(Int32.max),
-                  cellY.magnitude < Double(Int32.max)
-            else {
-                return nil
-            }
+                  cellY.magnitude < Double(Int32.max) else { return nil }
             return Cell(x: Int32(cellX), y: Int32(cellY))
         }
 
@@ -90,9 +86,7 @@ nonisolated extension TrailMatcherGraphIndex {
             _ body: (Int) -> Void
         ) {
             for index in alwaysScanned { body(index) }
-            guard !cells.isEmpty else {
-                return
-            }
+            guard !cells.isEmpty else { return }
             let centre = RouteGeometry.localOffset(from: origin, to: coordinate)
             let expanded = radius + reachMeters + Self.marginMeters
             guard let minimum = Self.cell(
@@ -101,9 +95,7 @@ nonisolated extension TrailMatcherGraphIndex {
             ), let maximum = Self.cell(
                 x: centre.x + expanded,
                 y: centre.y + expanded
-            ) else {
-                return
-            }
+            ) else { return }
             for x in minimum.x...maximum.x {
                 for y in minimum.y...maximum.y {
                     guard let bucket = cells[Cell(x: x, y: y)] else { continue }

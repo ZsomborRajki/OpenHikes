@@ -86,8 +86,7 @@ nonisolated extension Color {
                 blue: Double((value >> 8) & 0xFF) / 255,
                 opacity: Double(value & 0xFF) / 255
             )
-        default:
-            return nil
+        default: return nil
         }
     }
 }

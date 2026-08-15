@@ -62,9 +62,7 @@ struct HikeDifficultySection: View {
 
     private func footnote(for breakdown: TrailDifficultyBreakdown) -> String {
         let surveyed = breakdown.surveyedFraction
-        guard surveyed < Self.fullCoverageThreshold else {
-            return "Difficulty grades from OpenStreetMap (SAC scale)."
-        }
+        guard surveyed < Self.fullCoverageThreshold else { return "Difficulty grades from OpenStreetMap (SAC scale)." }
         let formatted = surveyed.formatted(Self.percentStyle)
         return "Difficulty grades from OpenStreetMap (SAC scale), which"
             + " describes \(formatted) of this route."

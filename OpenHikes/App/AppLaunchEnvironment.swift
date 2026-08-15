@@ -64,9 +64,7 @@ nonisolated enum AppLaunchEnvironment {
             guard isUITesting,
                   let argument = arguments.first(where: { argument in
                       argument.hasPrefix(prefix)
-                  }) else {
-                return nil
-            }
+                  }) else { return nil }
 
             let name = String(argument.dropFirst(prefix.count))
             return name.isEmpty

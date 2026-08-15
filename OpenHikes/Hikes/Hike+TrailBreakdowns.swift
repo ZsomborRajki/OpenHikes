@@ -22,9 +22,7 @@ extension Hike {
         get {
             var recognised: [TrailSurface: Double] = [:]
             for (category, meters) in surfaceMetersByCategory {
-                guard let surface = TrailSurface(rawValue: category) else {
-                    continue
-                }
+                guard let surface = TrailSurface(rawValue: category) else { continue }
                 recognised[surface] = meters
             }
             guard !recognised.isEmpty else { return nil }
@@ -48,9 +46,7 @@ extension Hike {
         get {
             var recognised: [TrailDifficulty: Double] = [:]
             for (grade, meters) in difficultyMetersByGrade {
-                guard let difficulty = TrailDifficulty(rawValue: grade) else {
-                    continue
-                }
+                guard let difficulty = TrailDifficulty(rawValue: grade) else { continue }
                 recognised[difficulty] = meters
             }
             guard !recognised.isEmpty else { return nil }

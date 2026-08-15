@@ -194,15 +194,11 @@ final class AutoSaveController {
         activationRevision &+= 1
         let revision = activationRevision
         activationTask = Task(priority: .utility) { [weak self] in
-            guard let corridor = try? await Self.preparedCorridor(for: route) else {
-                return
-            }
+            guard let corridor = try? await Self.preparedCorridor(for: route) else { return }
             guard let self,
                   !Task.isCancelled,
                   activationRevision == revision,
-                  activeHike?.id == hikeID else {
-                return
-            }
+                  activeHike?.id == hikeID else { return }
             store.updateCorridor(corridor, for: hikeID)
             activationTask = nil
         }
@@ -221,14 +217,10 @@ final class AutoSaveController {
         var coordinates: [CLLocationCoordinate2D] = []
         coordinates.reserveCapacity(route.count)
         for (index, point) in route.enumerated() {
-            if index.isMultiple(of: 255), Task.isCancelled {
-                throw CancellationError()
-            }
+            if index.isMultiple(of: 255), Task.isCancelled { throw CancellationError() }
             coordinates.append(point.clCoordinate)
         }
-        guard !Task.isCancelled else {
-            throw CancellationError()
-        }
+        guard !Task.isCancelled else { throw CancellationError() }
         return TileCorridor(
             route: coordinates,
             bufferMeters: AutoSaveTileStore.corridorBufferMeters

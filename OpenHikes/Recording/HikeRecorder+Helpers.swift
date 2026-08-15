@@ -65,18 +65,14 @@ extension HikeRecorder {
         trailGraphProvider: any TrailGraphProviding
     ) async {
         let graph = await loadLiveGraph(for: points, provider: trailGraphProvider)
-        guard !Task.isCancelled else {
-            return
-        }
+        guard !Task.isCancelled else { return }
         let match = await TrailMatcher.matchOffMain(points: points, graph: graph)
 
         guard isMatchStillValid(
             expectedSessionID: expectedSessionID,
             expectedGeneration: expectedGeneration,
             taskID: taskID
-        ) else {
-            return
-        }
+        ) else { return }
         liveMatchingTask = nil
         liveMatchingTaskID = nil
 
@@ -178,9 +174,7 @@ extension HikeRecorder {
             committing: stablePoints.map(\.coordinate),
             provisional: (provisionalPoints + newerPoints).map(\.coordinate),
             expectedGeneration: expectedGeneration
-        ) else {
-            return false
-        }
+        ) else { return false }
 
         liveMatchWindow = retainedPoints + newerPoints
         return true
@@ -189,9 +183,7 @@ extension HikeRecorder {
     nonisolated static func liveWindowRetainedStart(
         in points: [RecordingPoint]
     ) -> Int {
-        guard points.count > 2 else {
-            return 0
-        }
+        guard points.count > 2 else { return 0 }
         let latest = points[points.count - 1].timestamp
         let earliest = latest.addingTimeInterval(-liveMatchingDuration)
         var start = max(0, points.count - liveMatchingMaximumPoints)
@@ -216,9 +208,7 @@ extension HikeRecorder {
     // MARK: Gap distances
 
     func gapDistances(for points: [RecordingPoint]) async -> [Int: Double] {
-        guard let distanceEvidenceSource, points.count > 1 else {
-            return [:]
-        }
+        guard let distanceEvidenceSource, points.count > 1 else { return [:] }
         var distances: [Int: Double] = [:]
         for index in 1..<points.count
         where TrailMatcher.needsDistanceEvidence(
@@ -265,9 +255,7 @@ extension HikeRecorder {
     }
 
     func scheduleJournalFlush() {
-        guard journalFlushTask == nil else {
-            return
-        }
+        guard journalFlushTask == nil else { return }
         let delay = journalFlushDelay
         journalFlushTask = Task { [weak self] in
             do {
@@ -275,9 +263,7 @@ extension HikeRecorder {
             } catch {
                 return
             }
-            guard let self, !Task.isCancelled else {
-                return
-            }
+            guard let self, !Task.isCancelled else { return }
             journalFlushTask = nil
             enqueueJournalOperation { journal in
                 try await journal.flush()
@@ -293,13 +279,9 @@ extension HikeRecorder {
                 || phase == .paused,
               pendingFixMergeTask == nil,
               let sessionID,
-              sharedStateStore != nil else {
-            return
-        }
+              sharedStateStore != nil else { return }
         pendingFixMergeTask = Task { [weak self] in
-            guard let self else {
-                return
-            }
+            guard let self else { return }
             await mergePendingWidgetFixes(for: sessionID)
             pendingFixMergeTask = nil
         }
@@ -308,9 +290,7 @@ extension HikeRecorder {
     func mergePendingWidgetFixes(for expectedSessionID: UUID) async {
         guard sessionID == expectedSessionID,
               let sharedStateStore,
-              let journal else {
-            return
-        }
+              let journal else { return }
 
         let fixes: [SharedRecordingFix]
         do {
@@ -323,9 +303,7 @@ extension HikeRecorder {
             )
             return
         }
-        guard !fixes.isEmpty else {
-            return
-        }
+        guard !fixes.isEmpty else { return }
 
         // Every fix accepted before now is on disk once the queue drains, so
         // the merge sees a settled journal. A fix arriving after this point is
@@ -333,12 +311,8 @@ extension HikeRecorder {
         // deduplicates by timestamp, so it needs no ordering of its own.
         let mergeRevision = acceptedFixRevision
         await journalQueue.drain()
-        guard sessionID == expectedSessionID else {
-            return
-        }
-        if case .failed = phase {
-            return
-        }
+        guard sessionID == expectedSessionID else { return }
+        if case .failed = phase { return }
         let mergedCount: Int
         do {
             mergedCount = try await journal.mergeWidgetFixes(
@@ -361,9 +335,7 @@ extension HikeRecorder {
             )
         }
 
-        guard mergedCount > 0 else {
-            return
-        }
+        guard mergedCount > 0 else { return }
         await refreshLiveStateAfterJournalMerge(
             expectedSessionID: expectedSessionID,
             journal: journal,
@@ -380,24 +352,16 @@ extension HikeRecorder {
               acceptedFixRevision >= minimumRevision {
             let revision = acceptedFixRevision
             await journalQueue.drain()
-            guard sessionID == expectedSessionID else {
-                return
-            }
-            if case .failed = phase {
-                return
-            }
+            guard sessionID == expectedSessionID else { return }
+            if case .failed = phase { return }
 
             do {
-                guard let mergedSession = try await journal.loadSession() else {
-                    return
-                }
+                guard let mergedSession = try await journal.loadSession() else { return }
                 let points = mergedSession.points
                 let normalized = await RecordingPreparation
                     .normalizedPointsOffMain(points)
                 guard acceptedFixRevision == revision,
-                      sessionID == expectedSessionID else {
-                    continue
-                }
+                      sessionID == expectedSessionID else { continue }
                 lastAcceptedPoint = normalized.last
                 rebuildLiveState(from: normalized)
                 publishSharedRecordingSnapshot(force: true)
@@ -414,18 +378,14 @@ extension HikeRecorder {
     func publishSharedRecordingSnapshot(force: Bool) {
         guard sharedStateStore != nil,
               let sessionID,
-              let sessionStartedAt else {
-            return
-        }
+              let sessionStartedAt else { return }
         let now = clock()
         let firstPoint = stats.pointCount == 1
             && lastSharedSnapshotPointCount == 0
         let intervalElapsed = lastSharedSnapshotAt.map { snapshotDate in
             now.timeIntervalSince(snapshotDate) >= Self.sharedSnapshotInterval
         } ?? true
-        guard force || firstPoint || intervalElapsed else {
-            return
-        }
+        guard force || firstPoint || intervalElapsed else { return }
 
         let snapshot = SharedRecordingSnapshot(
             sessionID: sessionID,
@@ -449,9 +409,7 @@ extension HikeRecorder {
             any RecordingSharedStateStoring
         ) async throws -> Void
     ) {
-        guard let sharedStateStore else {
-            return
-        }
+        guard let sharedStateStore else { return }
         sharedStateQueue.enqueue {
             do {
                 try await operation(sharedStateStore)
@@ -464,9 +422,7 @@ extension HikeRecorder {
     }
 
     func clearSharedRecordingState(sessionID: UUID?) async {
-        guard let sharedStateStore else {
-            return
-        }
+        guard let sharedStateStore else { return }
         await sharedStateQueue.drain()
         do {
             try await sharedStateStore.clear(sessionID: sessionID)

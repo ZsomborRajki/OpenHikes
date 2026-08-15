@@ -112,9 +112,7 @@ final class RecordingTrace {
         provisional provisionalCoordinates: [CLLocationCoordinate2D],
         expectedGeneration: Int
     ) -> Bool {
-        guard generation == expectedGeneration else {
-            return false
-        }
+        guard generation == expectedGeneration else { return false }
         var changed = clearReviewSegment()
         appendStable(stableCoordinates)
         provisionalTail = []
@@ -266,9 +264,7 @@ final class RecordingTrace {
     func widgetPolyline(
         maxPoints: Int = 180
     ) -> [SharedTrailSnapshot.CodableCoordinate] {
-        guard maxPoints > 0 else {
-            return []
-        }
+        guard maxPoints > 0 else { return [] }
         let committedCount = committedChunks.enumerated().reduce(0) { count, item in
             count + max(0, item.element.count - (item.offset == 0 ? 0 : 1))
         }
@@ -277,9 +273,7 @@ final class RecordingTrace {
             tail.count - (committedChunks.isEmpty ? 0 : 1)
         )
         let totalCount = committedCount + tailCount
-        guard totalCount > 0 else {
-            return []
-        }
+        guard totalCount > 0 else { return [] }
 
         let outputCount = min(maxPoints, totalCount)
         let targetIndices: [Int]

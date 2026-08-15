@@ -59,27 +59,19 @@ nonisolated struct RouteReviewSection: Identifiable, Sendable {
 
     func points(for choice: TrailRouteChoice) -> [RecordingPoint] {
         switch choice {
-        case .matched:
-            matchedPoints
-
-        case .gps:
-            rawPoints
-
-        case .alternative(let alternativeID):
-            alternatives.first { alternative in
-                alternative.id == alternativeID
-            }?.points ?? matchedPoints
+        case .matched: matchedPoints
+        case .gps: rawPoints
+        case .alternative(let alternativeID): alternatives.first { alternative in
+            alternative.id == alternativeID
+        }?.points ?? matchedPoints
         }
     }
 
     /// Every choice this section can offer, in the order the review shows them.
     var availableChoices: [TrailRouteChoice] {
         switch kind {
-        case .snapped:
-            [.matched, .gps]
-
-        case .ambiguous:
-            [.gps] + alternatives.map { .alternative($0.id) }
+        case .snapped: [.matched, .gps]
+        case .ambiguous: [.gps] + alternatives.map { .alternative($0.id) }
         }
     }
 

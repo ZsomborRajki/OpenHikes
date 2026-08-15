@@ -24,9 +24,7 @@ nonisolated struct HikeRouteStatistics: Sendable {
         var duration: TimeInterval? {
             guard let firstTimestamp,
                   let lastTimestamp,
-                  lastTimestamp > firstTimestamp else {
-                return nil
-            }
+                  lastTimestamp > firstTimestamp else { return nil }
             return lastTimestamp.timeIntervalSince(firstTimestamp)
         }
 
@@ -46,9 +44,7 @@ nonisolated struct HikeRouteStatistics: Sendable {
         }
 
         private mutating func record(timestamp: Date?) {
-            guard let timestamp else {
-                return
-            }
+            guard let timestamp else { return }
             if firstTimestamp == nil {
                 firstTimestamp = timestamp
             }
@@ -56,9 +52,7 @@ nonisolated struct HikeRouteStatistics: Sendable {
         }
 
         private mutating func record(elevation: Double?) {
-            guard let elevation else {
-                return
-            }
+            guard let elevation else { return }
             elevationCount += 1
             minimumElevation = min(minimumElevation ?? elevation, elevation)
             maximumElevation = max(maximumElevation ?? elevation, elevation)
@@ -79,13 +73,9 @@ nonisolated struct HikeRouteStatistics: Sendable {
         ) {
             guard let previousPoint,
                   let previousTimestamp = previousPoint.timestamp,
-                  let timestamp = point.timestamp else {
-                return
-            }
+                  let timestamp = point.timestamp else { return }
             let elapsed = timestamp.timeIntervalSince(previousTimestamp)
-            guard elapsed > 0 else {
-                return
-            }
+            guard elapsed > 0 else { return }
             fastestMetersPerSecond = max(
                 fastestMetersPerSecond,
                 segmentMeters() / elapsed

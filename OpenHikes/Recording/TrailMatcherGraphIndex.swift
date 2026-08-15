@@ -102,10 +102,7 @@ nonisolated struct TrailMatcherGraphIndex {
         endpoints.reserveCapacity(graph.edges.count)
         for edge in graph.edges {
             guard let start = nodeMap[edge.fromNodeID]?.coordinate,
-                  let end = nodeMap[edge.toNodeID]?.coordinate
-            else {
-                continue
-            }
+                  let end = nodeMap[edge.toNodeID]?.coordinate else { continue }
             validEdges.append(edge)
             endpoints.append(EdgeEndpoints(start: start, end: end))
         }
@@ -153,9 +150,7 @@ nonisolated extension TrailMatcherGraphIndex {
                 onSegmentFrom: ep.start,
                 to: ep.end
             )
-            guard projection.offRouteMeters <= radius else {
-                return
-            }
+            guard projection.offRouteMeters <= radius else { return }
             closest.insert(
                 TrailMatcherCandidate(
                     edgeIndex: edgeIndex,
@@ -227,14 +222,10 @@ nonisolated extension TrailMatcherGraphIndex {
         let ranked = unique.values.sorted { lhs, rhs in
             let lhsError = abs(lhs.distance - parameters.expectedDistance)
             let rhsError = abs(rhs.distance - parameters.expectedDistance)
-            if lhsError == rhsError {
-                return lhs.distance < rhs.distance
-            }
+            if lhsError == rhsError { return lhs.distance < rhs.distance }
             return lhsError < rhsError
         }
-        guard let best = ranked.first else {
-            return nil
-        }
+        guard let best = ranked.first else { return nil }
         let margin = computeLikelihoodMargin(ranked: ranked, parameters: parameters)
         return makeTransitionResult(best: best, ranked: ranked, likelihoodMargin: margin, parameters: parameters)
     }
@@ -309,10 +300,7 @@ nonisolated extension TrailMatcherGraphIndex {
         parameters: TrailMatcherTransitionParameters
     ) -> Double {
         guard parameters.isSparse, ranked.count > 1,
-              let best = ranked.first
-        else {
-            return .infinity
-        }
+              let best = ranked.first else { return .infinity }
         let bestError = abs(best.distance - parameters.expectedDistance)
         let nextError = abs(ranked[1].distance - parameters.expectedDistance)
         let similarlyLong = !parameters.hasDistanceEvidence

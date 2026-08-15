@@ -86,8 +86,7 @@ nonisolated enum RouteLinePattern: String, CaseIterable, Identifiable, Sendable 
     func dashLengths(forWidth width: Double) -> [Double] {
         let lineWidth = max(width, Self.minimumLineWidth)
         switch self {
-        case .solid, .directional, .arrowheads:
-            return []
+        case .solid, .directional, .arrowheads: return []
         case .dashed:
             return [
                 max(lineWidth * Self.dashLengthMultiplier, Self.minimumDashLength),

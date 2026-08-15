@@ -28,18 +28,14 @@ nonisolated enum OfflineStorageMeasurement {
         var coordinates: [CLLocationCoordinate2D] = []
         coordinates.reserveCapacity(route.count)
         for (index, point) in route.enumerated() {
-            if index.isMultiple(of: 255), Task.isCancelled {
-                throw CancellationError()
-            }
+            if index.isMultiple(of: 255), Task.isCancelled { throw CancellationError() }
             coordinates.append(point.clCoordinate)
         }
         let downloadedKeys = try OfflineTileDownloader.storedTileKeys(
             route: coordinates,
             offlineDownloads: offlineDownloads
         )
-        guard !Task.isCancelled else {
-            throw CancellationError()
-        }
+        guard !Task.isCancelled else { throw CancellationError() }
         let keys = Array(Set(downloadedKeys).union(autoSavedTileKeys))
         return try cache.bytes(forKeys: keys)
     }
@@ -78,9 +74,7 @@ extension HikeDetailView {
                 return
             }
             guard !Task.isCancelled,
-                  generation == storedBytesMeasurementGeneration else {
-                return
-            }
+                  generation == storedBytesMeasurementGeneration else { return }
             storedBytes = bytes
         }
     }

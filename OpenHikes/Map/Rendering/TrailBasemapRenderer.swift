@@ -240,9 +240,7 @@ actor TrailBasemapRenderer {
 
         let snapshotter = MKMapSnapshotter(options: options)
         return await withTaskExecutorPreference(renderExecutor) {
-            guard let snapshot = try? await snapshotter.start() else {
-                return nil
-            }
+            guard let snapshot = try? await snapshotter.start() else { return nil }
             return measure(
                 snapshot,
                 northWest: northWest,

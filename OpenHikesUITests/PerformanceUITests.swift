@@ -579,9 +579,7 @@ private extension PerformanceUITests {
             Thread.sleep(forTimeInterval: Self.settlePollSeconds)
             let current = counters(in: app)
             if current.isEquivalent(to: previous) {
-                if Date().timeIntervalSince(quietSince) >= Self.quietSeconds {
-                    return
-                }
+                if Date().timeIntervalSince(quietSince) >= Self.quietSeconds { return }
             } else {
                 previous = current
                 quietSince = Date()

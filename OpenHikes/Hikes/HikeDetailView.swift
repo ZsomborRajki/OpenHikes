@@ -288,9 +288,7 @@ struct HikeDetailView: View {
             // there's no timer to cancel by hand.
             for await generation in storedBytesRefreshes.stream
                 .debounce(for: Self.storedBytesRefreshDebounce) {
-                guard generation == storedBytesMeasurementGeneration else {
-                    continue
-                }
+                guard generation == storedBytesMeasurementGeneration else { continue }
                 refreshStoredBytes()
             }
         }

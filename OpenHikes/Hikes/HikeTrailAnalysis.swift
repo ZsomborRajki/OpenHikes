@@ -49,9 +49,7 @@ nonisolated enum HikeTrailAnalysis {
         let state = RenderSignpost.beginInterval("HikeTrailAnalysis")
         defer { RenderSignpost.endInterval("HikeTrailAnalysis", state) }
 
-        guard let graph = await graph(covering: route, provider: provider) else {
-            return .empty
-        }
+        guard let graph = await graph(covering: route, provider: provider) else { return .empty }
         let surface = try? await TrailSurfaceAnalyzer.breakdown(
             route: route,
             graph: graph
@@ -82,9 +80,7 @@ nonisolated enum HikeTrailAnalysis {
         let coordinates = route.map(\.clCoordinate)
         if await provider.hasCompleteCachedGraph(covering: coordinates),
            let cached = try? await provider.cachedGraph(covering: coordinates),
-           !cached.isEmpty {
-            return cached
-        }
+           !cached.isEmpty { return cached }
         guard let downloaded = try? await provider.graph(covering: coordinates),
               !downloaded.isEmpty
         else { return nil }
