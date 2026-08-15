@@ -72,12 +72,18 @@ nonisolated extension TileCache {
         return modified
     }
 
-    static func createDirectoryIfNeeded(at url: URL) {
+    static func createDirectoryIfNeeded(at url: URL, excludeFromBackup: Bool = false) {
         do {
             try FileManager.default.createDirectory(
                 at: url,
                 withIntermediateDirectories: true
             )
+            if excludeFromBackup {
+                var mutable = url
+                var values = URLResourceValues()
+                values.isExcludedFromBackup = true
+                try mutable.setResourceValues(values)
+            }
         } catch {
             logger.error(
                 // swiftlint:disable:next line_length

@@ -176,6 +176,10 @@ struct MapSheet: View {
 
     /// Profile/settings entry point, sitting to the right of the search field —
     /// like Apple Maps' account button.
+    ///
+    /// The circular glass here is the real button style rather than a glass
+    /// background under a `.plain` button, so it picks up the press and
+    /// morph response the style draws and the search field's chrome cannot.
     private var settingsButton: some View {
         Button {
             searchFocused = false
@@ -184,10 +188,10 @@ struct MapSheet: View {
             Image(systemName: "person.crop.circle")
                 .font(.title2)
                 .foregroundStyle(.secondary)
-                .frame(width: 44, height: 44)
-                .sheetGlassBackground(in: Circle())
+                .minimumTapTarget()
         }
-        .buttonStyle(.plain)
+        .glassButtonStyle()
+        .buttonBorderShape(.circle)
         .accessibilityLabel("Profile and settings")
         .accessibilityIdentifier("settings-button")
     }

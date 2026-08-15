@@ -254,7 +254,7 @@ nonisolated final class TileCache: @unchecked Sendable {
         directory = cacheRoot.appendingPathComponent(Self.cacheDirectoryName, isDirectory: true)
         durableDirectory = durableRoot.appendingPathComponent(Self.durableDirectoryName, isDirectory: true)
         Self.createDirectoryIfNeeded(at: directory)
-        Self.createDirectoryIfNeeded(at: durableDirectory)
+        Self.createDirectoryIfNeeded(at: durableDirectory, excludeFromBackup: true)
 
         let config = Self.tileSessionConfiguration(from: sessionConfiguration)
         session = URLSession(configuration: config)

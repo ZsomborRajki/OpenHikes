@@ -406,7 +406,7 @@ struct OfflineStorageStatus: View {
                 ) {
                     Text("Delete").font(.caption.weight(.medium))
                 }
-                .buttonStyle(.bordered)
+                .glassButtonStyle()
                 .controlSize(.small)
                 // "Delete" alone doesn't say what goes.
                 .accessibilityLabel("Delete this hike's offline tiles")

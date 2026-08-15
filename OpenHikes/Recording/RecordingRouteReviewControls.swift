@@ -66,12 +66,14 @@ struct RecordingRouteReviewControls: View {
             Button("Previous") {
                 recorder.moveToPreviousReviewSection()
             }
+            .glassButtonStyle()
             .disabled(!review.canMoveBackward)
             .accessibilityIdentifier("review-previous-section")
             Spacer()
             Button("Next") {
                 recorder.moveToNextReviewSection()
             }
+            .glassButtonStyle()
             .disabled(!review.canMoveForward)
             .accessibilityIdentifier("review-next-section")
         }
@@ -89,7 +91,7 @@ struct RecordingRouteReviewControls: View {
                 }
             }
         }
-        .buttonStyle(.borderedProminent)
+        .prominentGlassButtonStyle()
         .frame(maxWidth: .infinity)
         .accessibilityIdentifier("review-save-hike")
     }

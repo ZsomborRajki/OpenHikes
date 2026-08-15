@@ -328,7 +328,7 @@ private struct RecordingControls: View {
             Button("Start Recording", systemImage: "record.circle") {
                 Task { await recorder.start() }
             }
-            .buttonStyle(.borderedProminent)
+            .prominentGlassButtonStyle()
             .tint(.red)
         case .recovering:
             ProgressView("Recovering recorded hike…")
@@ -338,7 +338,7 @@ private struct RecordingControls: View {
                 Button("Pause", systemImage: "pause.fill") {
                     recorder.pause()
                 }
-                .buttonStyle(.bordered)
+                .glassButtonStyle()
 
                 stopButton
             }
@@ -347,7 +347,7 @@ private struct RecordingControls: View {
                 Button("Resume", systemImage: "play.fill") {
                     Task { await recorder.resume() }
                 }
-                .buttonStyle(.bordered)
+                .glassButtonStyle()
 
                 stopButton
             }
@@ -378,7 +378,7 @@ private struct RecordingControls: View {
                     Button("Retry Save") {
                         Task { await retrySave() }
                     }
-                    .buttonStyle(.borderedProminent)
+                    .prominentGlassButtonStyle()
                     .accessibilityIdentifier("recording-retry-save")
                     discardButton
                 }
@@ -389,7 +389,7 @@ private struct RecordingControls: View {
                 Button("Try Again") {
                     recorder.dismissFailure()
                 }
-                .buttonStyle(.borderedProminent)
+                .prominentGlassButtonStyle()
             }
         }
     }
@@ -399,7 +399,7 @@ private struct RecordingControls: View {
             stopNameDraft = recorder.currentHike?.title ?? ""
             showStopAlert = true
         }
-        .buttonStyle(.borderedProminent)
+        .prominentGlassButtonStyle()
         .tint(.red)
     }
 
@@ -407,7 +407,7 @@ private struct RecordingControls: View {
         Button("Discard Recording", role: .destructive) {
             showDiscardConfirmation = true
         }
-        .buttonStyle(.bordered)
+        .glassButtonStyle()
     }
 
     private func stopAndSave() async {
