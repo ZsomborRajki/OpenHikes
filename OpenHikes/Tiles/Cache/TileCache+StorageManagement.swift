@@ -9,7 +9,7 @@ import Synchronization
 
 nonisolated extension TileCache {
 
-    // MARK: - Storage management
+    // MARK: Storage management
 
     /// How the tiles on disk divide between offline coverage and browsing.
     struct DiskUsage: Equatable, Sendable {

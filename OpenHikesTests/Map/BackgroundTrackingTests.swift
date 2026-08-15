@@ -384,7 +384,7 @@ final class BackgroundDeliveryTests {
         #expect(cold.distanceAlongRouteMeters < total / 2, "with nothing to go on, a fix here is the start")
 
         // Now the app is relaunched knowing the walker was nearly home.
-        defaults.set(total, forKey: BackgroundTrailTracker.Keys.lastMatchedDistance)
+        defaults.set(total, forKey: SettingsKey.lastMatchedDistance)
         monitor.deliver(fix(at: trailhead))
         await settleDelegateHop()
 
@@ -405,7 +405,7 @@ final class BackgroundDeliveryTests {
         monitor.deliver(fix(at: profile.coordinates[3]))
         await settleDelegateHop()
 
-        let persisted = defaults.object(forKey: BackgroundTrailTracker.Keys.lastMatchedDistance) as? Double
+        let persisted = defaults.object(forKey: SettingsKey.lastMatchedDistance) as? Double
         #expect(abs(try #require(persisted) - profile.distances[3]) < 1)
     }
 }

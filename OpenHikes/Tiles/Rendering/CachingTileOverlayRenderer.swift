@@ -112,7 +112,7 @@ nonisolated final class CachingTileOverlayRenderer: MKOverlayRenderer, TileCache
         setNeedsDisplay()
     }
 
-    // MARK: - Retry scheduling
+    // MARK: Retry scheduling
 
     /// Arranges a redraw for when the soonest-eligible failed tile comes due.
     ///
@@ -204,7 +204,7 @@ nonisolated final class CachingTileOverlayRenderer: MKOverlayRenderer, TileCache
         }
     }
 
-    // MARK: - Loading
+    // MARK: Loading
 
     private func loadTileIfNeeded(for path: MKTileOverlayPath, in tileRect: MKMapRect, overlay: TileOverlay) {
         // Beyond the source's max zoom no real tile exists, so fetch the deepest
@@ -273,7 +273,7 @@ nonisolated final class CachingTileOverlayRenderer: MKOverlayRenderer, TileCache
         return nil
     }
 
-    // MARK: - Drawing
+    // MARK: Drawing
 
     private func drawImage(
         _ image: TileImage,

@@ -40,7 +40,7 @@ final class WidgetFeedTests {
 
     deinit {
         SharedStore.clear()
-        UserDefaults.standard.removeObject(forKey: "trailTracking.lastMatchedDistance")
+        UserDefaults.standard.removeObject(forKey: SettingsKey.lastMatchedDistance)
     }
 
     private func hike() -> Hike {

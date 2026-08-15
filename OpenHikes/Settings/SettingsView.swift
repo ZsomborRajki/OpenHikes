@@ -71,7 +71,7 @@ struct SettingsView: View {
         .accessibilityIdentifier("settings-screen")
     }
 
-    // MARK: - Account
+    // MARK: Account
 
     private var accountSection: some View {
         Section {
@@ -120,7 +120,7 @@ struct SettingsView: View {
         .accessibilityValue("Coming soon")
     }
 
-    // MARK: - Map tiles
+    // MARK: Map tiles
 
     private var mapProviderSection: some View {
         Section {
@@ -142,7 +142,7 @@ struct SettingsView: View {
         }
     }
 
-    // MARK: - Data use
+    // MARK: Data use
 
     /// The one energy control worth exposing. Everything else the app does
     /// about battery — backing the GPS off in Low Power Mode, dropping
@@ -181,7 +181,7 @@ struct SettingsView: View {
         )
     }
 
-    // MARK: - Background tracking
+    // MARK: Background tracking
 
     /// iOS-only: this is what feeds the Home Screen widget while OpenHikes
     /// isn't open. Off by default — turning it
@@ -219,7 +219,7 @@ struct SettingsView: View {
         )
     }
 
-    // MARK: - Offline
+    // MARK: Offline
 
     /// Two numbers, not one: the tiles the hikes are keeping for offline use,
     /// and the ones the map merely happened to draw. They used to be added

@@ -367,7 +367,7 @@ extension HikeRecorder {
         trailGraphPrefetchStates.removeAll()
     }
 
-    // MARK: - Recovery helpers
+    // MARK: Recovery helpers
 
     private func prepareRecoveredSession(
         from session: TrackJournalSession

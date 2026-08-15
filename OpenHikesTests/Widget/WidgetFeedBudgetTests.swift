@@ -36,7 +36,7 @@ final class WidgetFeedBudgetTests {
 
     deinit {
         SharedStore.clear()
-        UserDefaults.standard.removeObject(forKey: "trailTracking.lastMatchedDistance")
+        UserDefaults.standard.removeObject(forKey: SettingsKey.lastMatchedDistance)
     }
 
     /// A five-hour recording at 1 Hz — the size of track this app is built to

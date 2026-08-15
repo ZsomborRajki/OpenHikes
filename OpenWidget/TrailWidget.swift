@@ -446,7 +446,9 @@ private struct TrailWidgetContent: View {
     let basemaps: TrailBasemapSet?
     let family: WidgetFamily
 
-    private enum Layout {
+    /// Text treatment for the light-on-map case, the companion to ``Scrim``:
+    /// the scrim darkens the map, these keep the glyphs legible on top of it.
+    private enum MapTextStyle {
         static let shadowOpacity: Double = 0.35
         static let timestampOpacity: Double = 0.7
     }
@@ -486,7 +488,7 @@ private struct TrailWidgetContent: View {
 
             statLine
         }
-        .shadow(color: .black.opacity(hasMap ? Layout.shadowOpacity : 0), radius: 2, y: 1)
+        .shadow(color: .black.opacity(hasMap ? MapTextStyle.shadowOpacity : 0), radius: 2, y: 1)
         .padding(layout.padding)
         // One tap target, so one element — and the title is spoken on every
         // family, including the small one that has no room to draw it.
@@ -545,7 +547,7 @@ private struct TrailWidgetContent: View {
                     .font(.caption2)
                     .foregroundStyle(
                         hasMap
-                            ? AnyShapeStyle(Color.white.opacity(Layout.timestampOpacity))
+                            ? AnyShapeStyle(Color.white.opacity(MapTextStyle.timestampOpacity))
                             : AnyShapeStyle(.tertiary)
                     )
             }

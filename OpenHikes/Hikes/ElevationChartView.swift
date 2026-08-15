@@ -246,7 +246,7 @@ struct ElevationChartView: View, Equatable {
         #endif
     }()
 
-    // MARK: - Accessibility
+    // MARK: Accessibility
 
     /// Where an increment/decrement swipe puts the tracker, or `nil` at an end
     /// of the trail so VoiceOver plays its "no more" tone rather than

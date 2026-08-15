@@ -128,15 +128,15 @@ final class BackgroundTrailTracker: NSObject {
     /// background relaunch, which starts with no in-memory state at all.
     private var lastMatchedDistance: Double? {
         get {
-            defaults.object(forKey: Keys.lastMatchedDistance) != nil
-                ? defaults.double(forKey: Keys.lastMatchedDistance)
+            defaults.object(forKey: SettingsKey.lastMatchedDistance) != nil
+                ? defaults.double(forKey: SettingsKey.lastMatchedDistance)
                 : nil
         }
         set {
             if let newValue {
-                defaults.set(newValue, forKey: Keys.lastMatchedDistance)
+                defaults.set(newValue, forKey: SettingsKey.lastMatchedDistance)
             } else {
-                defaults.removeObject(forKey: Keys.lastMatchedDistance)
+                defaults.removeObject(forKey: SettingsKey.lastMatchedDistance)
             }
         }
     }
@@ -169,10 +169,6 @@ final class BackgroundTrailTracker: NSObject {
     /// grudging, and only by the width of this band.
     private static let offRouteExitHysteresisMultiplier: Double = 1.5
     private static let offRouteExitMeters = RouteProfile.followMatchThresholdMeters * offRouteExitHysteresisMultiplier
-
-    enum Keys {
-        static let lastMatchedDistance = "trailTracking.lastMatchedDistance"
-    }
 
     /// - Parameters:
     ///   - monitor: significant-change delivery. Deliberately a *separate*
