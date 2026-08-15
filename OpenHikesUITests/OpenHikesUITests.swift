@@ -2,42 +2,32 @@
 //  OpenHikesUITests.swift
 //  OpenHikesUITests
 //
+//  The functional half of this bundle: the app driven the way a hiker drives
+//  it. Fixtures, launch helpers and location plumbing live in
+//  ``UITestSupport``; accessibility-specific assertions live in
+//  ``AccessibilityUITests``.
+//
 
 import CoreLocation
 import XCTest
 
 nonisolated final class OpenHikesUITests: XCTestCase {
-    private static let importedHikeTitle =
-        "Thumsee Loop (fast, simulated)"
-
-    /// Mirrors `UITestRecordingFixture` in `OpenHikesTests`, which asserts
-    /// that this trace still snaps onto the bundled graph and produces exactly
-    /// one reviewable section. The numbers are duplicated because this bundle
-    /// runs out-of-process and cannot import the app.
-    private static let trailGraphFixture = "ThumseeRidgePath"
     private static let reviewedHikeName = "Reviewed Route"
-    /// Slow enough that a 22 m step reads as a walk rather than a sprint the
-    /// recorder would reject.
-    private static let paceSeconds: TimeInterval = 4
-    private static let recordedTrace = [
-        CLLocationCoordinate2D(latitude: 47.71840, longitude: 12.83180),
-        CLLocationCoordinate2D(latitude: 47.71860, longitude: 12.83180),
-        CLLocationCoordinate2D(latitude: 47.71880, longitude: 12.83180),
-    ]
 
     @MainActor
     func testLaunchesMapAndOpensSettings() {
-        let app = makeApp()
-        app.launch()
+        let app = launchApp()
 
         XCTAssertTrue(
-            element("trail-map", in: app).waitForExistence(timeout: 10)
+            element("trail-map", in: app)
+                .waitForExistence(timeout: UITestTimeout.navigation)
         )
         XCTAssertTrue(element("map-search", in: app).exists)
 
         element("settings-button", in: app).tap()
         XCTAssertTrue(
-            app.navigationBars["Settings"].waitForExistence(timeout: 5)
+            app.navigationBars["Settings"]
+                .waitForExistence(timeout: UITestTimeout.navigation)
         )
         XCTAssertTrue(element("settings-screen", in: app).exists)
         app.buttons["Done"].tap()
@@ -45,19 +35,11 @@ nonisolated final class OpenHikesUITests: XCTestCase {
 
     @MainActor
     func testImportsBundledGPXAndOpensItsDetails() {
-        let app = makeApp(
-            arguments: ["--ui-test-import-gpx=ThumseeLoopFast"]
+        let app = launchApp(
+            arguments: ["--ui-test-import-gpx=\(UITestFixture.gpxName)"]
         )
-        app.launch()
 
-        let hikeTitle = app.staticTexts[Self.importedHikeTitle]
-        XCTAssertTrue(hikeTitle.waitForExistence(timeout: 15))
-        hikeTitle.tap()
-
-        XCTAssertTrue(
-            app.navigationBars[Self.importedHikeTitle]
-                .waitForExistence(timeout: 5)
-        )
+        openHikeDetail(in: app)
     }
 
     @MainActor
@@ -70,27 +52,24 @@ nonisolated final class OpenHikesUITests: XCTestCase {
         )
         app.resetAuthorizationStatus(for: .location)
         addLocationPermissionMonitor()
-        setSimulatedLocation(latitude: 47.718420, longitude: 12.831774)
+        setSimulatedLocation(UITestFixture.trailheadCoordinate)
         defer { XCUIDevice.shared.location = nil }
 
-        app.launch()
-        app.tap()
+        launch(app)
+        startRecording(in: app)
 
-        let recordButton = element("record-hike-button", in: app)
-        XCTAssertTrue(recordButton.waitForExistence(timeout: 10))
-        recordButton.tap()
-        XCTAssertTrue(
-            app.navigationBars["Record Hike"].waitForExistence(timeout: 5)
+        setSimulatedLocation(
+            CLLocationCoordinate2D(latitude: 47.718598, longitude: 12.831420)
         )
-
-        setSimulatedLocation(latitude: 47.718598, longitude: 12.831420)
         let phase = element("recording-phase", in: app)
-        XCTAssertTrue(phase.waitForExistence(timeout: 5))
+        XCTAssertTrue(
+            phase.waitForExistence(timeout: UITestTimeout.navigation)
+        )
         expectation(
             for: NSPredicate(format: "label CONTAINS %@", "Recording"),
             evaluatedWith: phase
         )
-        waitForExpectations(timeout: 10)
+        waitForExpectations(timeout: UITestTimeout.navigation)
     }
 
     /// The full recording round trip: walk a trace the matcher can snap onto a
@@ -101,30 +80,27 @@ nonisolated final class OpenHikesUITests: XCTestCase {
             arguments: [
                 "--ui-test-expanded-sheet",
                 "--ui-test-enable-location",
-                "--ui-test-trail-graph=\(Self.trailGraphFixture)",
+                "--ui-test-trail-graph=\(UITestFixture.trailGraphName)",
             ]
         )
         app.resetAuthorizationStatus(for: .location)
         addLocationPermissionMonitor()
-        setSimulatedLocation(Self.recordedTrace[0])
+        setSimulatedLocation(UITestFixture.reviewableTrace[0])
         defer { XCUIDevice.shared.location = nil }
 
-        app.launch()
-        app.tap()
+        launch(app)
+        startRecording(in: app)
 
-        let recordButton = element("record-hike-button", in: app)
-        XCTAssertTrue(recordButton.waitForExistence(timeout: 10))
-        recordButton.tap()
+        let points = element("recording-point-count", in: app)
         XCTAssertTrue(
-            app.navigationBars["Record Hike"].waitForExistence(timeout: 5)
+            points.waitForExistence(timeout: UITestTimeout.existence)
         )
-
-        walkRecordedTrace(in: app)
+        walkRecordedTrace(UITestFixture.reviewableTrace, countedBy: points)
         stopRecording(in: app)
 
         XCTAssertTrue(
             element("review-section-title", in: app)
-                .waitForExistence(timeout: 30),
+                .waitForExistence(timeout: Self.reviewTimeout),
             "a snapped recording should stop in review"
         )
         let keepTrail = element("review-choice-trail", in: app)
@@ -136,18 +112,18 @@ nonisolated final class OpenHikesUITests: XCTestCase {
             "the matched trail is the standing choice"
         )
 
-        tap(useGPS, in: app)
+        scrollToTap(useGPS, in: app)
         XCTAssertTrue(
             waitUntilSelected(useGPS),
             "tapping a choice should move the checkmark to it"
         )
         XCTAssertFalse(keepTrail.isSelected)
 
-        tap(element("review-save-hike", in: app), in: app)
+        scrollToTap(element("review-save-hike", in: app), in: app)
 
         XCTAssertTrue(
             app.navigationBars[Self.reviewedHikeName]
-                .waitForExistence(timeout: 20),
+                .waitForExistence(timeout: Self.saveTimeout),
             "the reviewed hike should be saved under the name it was given"
         )
     }
@@ -158,31 +134,26 @@ nonisolated final class OpenHikesUITests: XCTestCase {
     /// all five answering to one name.
     @MainActor
     func testPicksARouteLinePattern() {
-        let app = makeApp(
+        let app = launchApp(
             arguments: [
                 "--ui-test-expanded-sheet",
-                "--ui-test-import-gpx=ThumseeLoopFast",
+                "--ui-test-import-gpx=\(UITestFixture.gpxName)",
             ]
         )
-        app.launch()
 
-        let hikeTitle = app.staticTexts[Self.importedHikeTitle]
-        XCTAssertTrue(hikeTitle.waitForExistence(timeout: 15))
-        hikeTitle.tap()
-        XCTAssertTrue(
-            app.navigationBars[Self.importedHikeTitle]
-                .waitForExistence(timeout: 5)
-        )
+        openHikeDetail(in: app)
 
         let directional = element("route-pattern-directional", in: app)
         let dotted = element("route-pattern-dotted", in: app)
-        XCTAssertTrue(directional.waitForExistence(timeout: 10))
+        XCTAssertTrue(
+            directional.waitForExistence(timeout: UITestTimeout.navigation)
+        )
         XCTAssertTrue(
             directional.isSelected,
             "a hike starts on the line-with-arrows it has always been drawn as"
         )
 
-        tap(dotted, in: app)
+        scrollToTap(dotted, in: app)
         XCTAssertTrue(
             waitUntilSelected(dotted),
             "tapping a swatch should move the selection to it"
@@ -193,7 +164,7 @@ nonisolated final class OpenHikesUITests: XCTestCase {
     @MainActor
     func testLaunchPerformance() {
         let options = XCTMeasureOptions()
-        options.iterationCount = 3
+        options.iterationCount = Self.launchIterations
 
         measure(
             metrics: [XCTApplicationLaunchMetric()],
@@ -203,116 +174,25 @@ nonisolated final class OpenHikesUITests: XCTestCase {
         }
     }
 
-    @MainActor
-    private func makeApp(
-        arguments: [String] = []
-    ) -> XCUIApplication {
-        continueAfterFailure = false
-        let app = XCUIApplication()
-        app.launchArguments = ["--ui-testing"] + arguments
-        return app
-    }
-
-    @MainActor
-    private func element(
-        _ identifier: String,
-        in app: XCUIApplication
-    ) -> XCUIElement {
-        app.descendants(matching: .any)[identifier]
-    }
-
-    @MainActor
-    private func addLocationPermissionMonitor() {
-        addUIInterruptionMonitor(
-            withDescription: "Location permission"
-        ) { alert in
-            guard alert.buttons.count >= 2 else { return false }
-            // Location prompts put affirmative choices before the final
-            // localized denial action.
-            alert.buttons.element(boundBy: 0).tap()
-            return true
-        }
-    }
-
-    @MainActor
-    private func setSimulatedLocation(
-        latitude: CLLocationDegrees,
-        longitude: CLLocationDegrees
-    ) {
-        let location = CLLocation(
-            coordinate: CLLocationCoordinate2D(
-                latitude: latitude,
-                longitude: longitude
-            ),
-            altitude: 535,
-            horizontalAccuracy: 5,
-            verticalAccuracy: 5,
-            timestamp: .now
-        )
-        XCUIDevice.shared.location = XCUILocation(location: location)
-    }
-
-    @MainActor
-    private func setSimulatedLocation(_ coordinate: CLLocationCoordinate2D) {
-        setSimulatedLocation(
-            latitude: coordinate.latitude,
-            longitude: coordinate.longitude
-        )
-    }
-
-    /// Steps the simulator through the fixture trace, waiting for the recorder
-    /// to accept each coordinate rather than guessing at a fix interval. A
-    /// static simulated location is delivered once, so a fix the recorder turns
-    /// down has to be handed to it again.
-    @MainActor
-    private func walkRecordedTrace(in app: XCUIApplication) {
-        let points = element("recording-point-count", in: app)
-        XCTAssertTrue(points.waitForExistence(timeout: 15))
-
-        for (index, coordinate) in Self.recordedTrace.enumerated() {
-            if index > 0 {
-                // The recorder rejects a step it would have to sprint, so the
-                // trace is walked at a believable pace.
-                Thread.sleep(forTimeInterval: Self.paceSeconds)
-                setSimulatedLocation(coordinate)
-            }
-            XCTAssertTrue(
-                waitForPointCount(atLeast: index + 1, in: points) {
-                    self.setSimulatedLocation(coordinate)
-                },
-                "the recorder never accepted fix \(index + 1)"
-            )
-        }
-    }
-
-    @MainActor
-    private func waitForPointCount(
-        atLeast count: Int,
-        in element: XCUIElement,
-        timeout: TimeInterval = 40,
-        redeliver: () -> Void
-    ) -> Bool {
-        let deadline = Date().addingTimeInterval(timeout)
-        while Date() < deadline {
-            if let value = element.value as? String,
-               let recorded = Int(value), recorded >= count {
-                return true
-            }
-            Thread.sleep(forTimeInterval: Self.paceSeconds)
-            redeliver()
-        }
-        return false
-    }
+    /// Matching a trace against the bundled graph is real work on a cold
+    /// simulator, and saving writes the route plus its widget payload.
+    private static let reviewTimeout: TimeInterval = 30
+    private static let saveTimeout: TimeInterval = 20
+    private static let launchIterations = 3
 
     @MainActor
     private func stopRecording(in app: XCUIApplication) {
         app.buttons["Stop"].tap()
         let namePrompt = app.alerts["Name Your Hike"]
-        XCTAssertTrue(namePrompt.waitForExistence(timeout: 5))
+        XCTAssertTrue(
+            namePrompt.waitForExistence(timeout: UITestTimeout.navigation)
+        )
         // The name is typed before the review opens, so saving it later also
         // proves the review step carries it through.
         let field = namePrompt.textFields.firstMatch
-        XCTAssertTrue(field.waitForExistence(timeout: 5))
+        XCTAssertTrue(
+            field.waitForExistence(timeout: UITestTimeout.navigation)
+        )
         field.tap()
         if let draft = field.value as? String, !draft.isEmpty {
             field.tap(withNumberOfTaps: 3, numberOfTouches: 1)
@@ -320,32 +200,5 @@ nonisolated final class OpenHikesUITests: XCTestCase {
         field.typeText(Self.reviewedHikeName)
         XCTAssertEqual(field.value as? String, Self.reviewedHikeName)
         namePrompt.buttons["Save"].tap()
-    }
-
-    /// The review runs past the bottom of a half-height sheet, so a control has
-    /// to be scrolled into reach before it can be tapped.
-    @MainActor
-    private func tap(_ target: XCUIElement, in app: XCUIApplication) {
-        XCTAssertTrue(target.waitForExistence(timeout: 15))
-        let sheet = app.scrollViews.firstMatch
-        var attempts = 0
-        while !target.isHittable, attempts < 5, sheet.exists {
-            sheet.swipeUp()
-            attempts += 1
-        }
-        target.tap()
-    }
-
-    @MainActor
-    private func waitUntilSelected(
-        _ target: XCUIElement,
-        timeout: TimeInterval = 10
-    ) -> Bool {
-        let deadline = Date().addingTimeInterval(timeout)
-        while Date() < deadline {
-            if target.isSelected { return true }
-            Thread.sleep(forTimeInterval: 0.25)
-        }
-        return false
     }
 }

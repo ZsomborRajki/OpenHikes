@@ -480,13 +480,21 @@ private struct WeatherBadge: View {
             Image(systemName: weather.symbolName)
                 .symbolRenderingMode(.multicolor)
                 .font(.title3)
-                .accessibilityLabel(weather.condition.description)
             Text("\(Int(weather.temperature.value.rounded()))°")
                 .font(.headline)
         }
         .padding(.horizontal, 14)
         .padding(.vertical, 8)
         .background(.ultraThinMaterial, in: Capsule())
+        // A symbol and a number that only mean anything together, and the
+        // number needs its unit spelled out to be spoken as a temperature.
+        .accessibilityElement(children: .ignore)
+        .accessibilityLabel("Current weather")
+        .accessibilityValue(
+            "\(weather.temperature.formatted(.measurement(width: .wide))), "
+                + weather.condition.description
+        )
+        .accessibilityIdentifier("weather-badge")
     }
 }
 

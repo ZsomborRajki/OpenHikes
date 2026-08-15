@@ -53,6 +53,7 @@ struct HikeSurfaceSection: View {
                 Text("Surface")
                     .font(.headline)
                     .frame(maxWidth: .infinity, alignment: .leading)
+                    .accessibilityAddTraits(.isHeader)
                 TrailSurfaceBar(shares: breakdown.shares)
                 VStack(spacing: 8) {
                     ForEach(breakdown.shares) { share in

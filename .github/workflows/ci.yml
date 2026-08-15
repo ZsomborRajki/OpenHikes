@@ -174,11 +174,67 @@ jobs:
           path: TestResults/ThreadSanitizer.xcresult
           retention-days: 7
 
-# UI automation and the performance suite are deliberately not run here.
-# Both drive a simulator through real gestures and timing-sensitive waits, which
-# a shared runner makes slow and unreliable, and `PerformanceUITests` additionally
-# needs `simctl privacy grant location-always` and produces measurements that are
-# only comparable against the same hardware.
+  accessibility-ui-tests:
+    name: Accessibility UI tests
+    runs-on: macos-26
+    timeout-minutes: 30
+    # Reporting, not gating. UI automation on a shared runner has to earn a
+    # place in the merge path, so this runs for a while and its flake rate is
+    # observed before a red run is allowed to block anything.
+    continue-on-error: true
+    steps:
+      - uses: actions/checkout@v4
+
+      # Same reason as the unit-test job: a cold simulator is what turns the
+      # first launch into "never finished bootstrapping".
+      - name: Boot the simulator
+        run: |
+          xcrun simctl boot "$IOS_SIMULATOR" || true
+          xcrun simctl bootstatus "$IOS_SIMULATOR" -b
+
+      # testRecordingScreenIsReadable is the one test here that needs a fix
+      # delivered. The grant is keyed by bundle id, so it can be made before
+      # the test installs the app and no permission alert ever appears; the
+      # test keeps its interruption monitor for a simulator where it does not
+      # take.
+      - name: Grant location up front
+        run: |
+          xcrun simctl privacy booted grant location-always tappium.com.OpenHikes \
+            || true
+
+      # The same script a developer runs locally, for the same reason as
+      # Scripts/lint.sh above. --suite scopes the run to the accessibility
+      # class, so neither PerformanceUITests nor the launch-metric test in
+      # OpenHikesUITests can execute here: a measurement taken on a shared
+      # runner is noise, and both assert nothing.
+      - name: Run the accessibility suite
+        run: |
+          mkdir -p TestResults
+          Scripts/run-ui-tests.sh \
+            --suite AccessibilityUITests \
+            --all \
+            --retry \
+            --result-bundle TestResults/AccessibilityUITests.xcresult
+
+      - name: Upload result bundle
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: accessibility-uitests-xcresult
+          path: TestResults/AccessibilityUITests.xcresult
+          retention-days: 7
+
+# The functional UI automation and the performance suite are deliberately not
+# run here. Both drive a simulator through real gestures and timing-sensitive
+# waits, which a shared runner makes slow and unreliable, and
+# `PerformanceUITests` additionally produces measurements that are only
+# comparable against the same hardware.
+#
+# `AccessibilityUITests` is the exception above: it is the only automated guard
+# on the VoiceOver contract, a regression in which is invisible to a unit test
+# and to a reviewer. It is also the cheapest half of the bundle to run — ten of
+# its eleven tests are launch, tap and assert against an in-memory store and a
+# bundled GPX, with no location and no measurement.
 #
 #   Scripts/run-ui-tests.sh --all
 #   Scripts/run-performance-tests.sh

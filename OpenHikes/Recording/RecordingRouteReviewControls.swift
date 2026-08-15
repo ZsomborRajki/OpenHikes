@@ -41,6 +41,7 @@ struct RecordingRouteReviewControls: View {
                     + "\(review.sections.count)"
             )
             .font(.headline)
+            .accessibilityAddTraits(.isHeader)
             .accessibilityIdentifier("review-section-title")
 
             Text(prompt(for: section))

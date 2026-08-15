@@ -61,14 +61,12 @@ struct RecordingView: View {
         .onAppear {
             mapController.followUser()
         }
-        #if os(iOS)
+        // The phase is a coloured dot and a word at the top of a scrolling
+        // screen, so a change nobody is looking at is a change nobody hears.
         .onChange(of: recorder.phase) { _, phase in
-            UIAccessibility.post(
-                notification: .announcement,
-                argument: phase.accessibilityTitle
-            )
+            AccessibilityNotification.Announcement(phase.accessibilityTitle)
+                .post()
         }
-        #endif
         .alert(isPresented: showingFailure, error: recordingFailure) {
             #if os(iOS)
             if failureNeedsSettings {
@@ -242,15 +240,11 @@ private struct RecordingStatsGrid: View {
     let stats: RecordingStats
 
     var body: some View {
-        LazyVGrid(
-            columns: [GridItem(.flexible()), GridItem(.flexible())],
-            spacing: 12
-        ) {
+        StatGrid {
             StatTile(label: "Distance", value: distance)
+            // `StatTile` already exposes itself as one label/value element;
+            // only the identifier UI automation waits on is added here.
             StatTile(label: "Points", value: stats.pointCount.formatted())
-                .accessibilityElement(children: .ignore)
-                .accessibilityLabel("Points")
-                .accessibilityValue(stats.pointCount.formatted())
                 .accessibilityIdentifier("recording-point-count")
             StatTile(label: "Avg Speed", value: averageSpeed)
             StatTile(label: "Accuracy", value: accuracy)

@@ -164,6 +164,10 @@ struct MapSheet: View {
                         .accessibilityHidden(true)
                 }
                 .buttonStyle(.plain)
+                // The glyph above is the button's only content and is hidden,
+                // which left this announcing itself as an unnamed button.
+                .accessibilityLabel("Clear search")
+                .accessibilityIdentifier("clear-search-button")
             }
         }
         .padding(10)

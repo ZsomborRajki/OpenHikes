@@ -90,6 +90,7 @@ struct SettingsView: View {
                 }
             }
             .padding(.vertical, 4)
+            .accessibilityElement(children: .combine)
 
             appleSignInPlaceholder
         } header: {
@@ -113,6 +114,11 @@ struct SettingsView: View {
         .foregroundStyle(.primary)
         .opacity(Self.disabledOpacity)
         .allowsHitTesting(false)
+        // Faded and un-tappable is a visual-only "not yet"; the badge has to
+        // be read out alongside the row it disables.
+        .accessibilityElement(children: .ignore)
+        .accessibilityLabel("Sign in with Apple")
+        .accessibilityValue("Coming soon")
     }
 
     // MARK: - Map tiles
@@ -276,114 +282,10 @@ struct SettingsView: View {
                 .foregroundStyle(.secondary)
                 .monospacedDigit()
         }
-    }
-
-    /// Snapshots every hike's claims on the main actor so the expensive part —
-    /// enumerating each one's tile grid — can run off it. Mirrors the delete
-    /// path in ``MapSheet``.
-    private func claimSnapshots() -> [TileOwnership] {
-        // Tiles auto-saved in the last couple of seconds are on disk with
-        // nothing in SwiftData pointing at them yet. Unflushed, they measure as
-        // cache and — worse — a cache clear would delete them.
-        autoSave.flushPendingKeys()
-        return hikes.filter(\.hasStoredTiles).map(TileOwnership.init)
-    }
-
-    private func refreshUsage() async {
-        usage = await Self.diskUsage(claimedBy: claimSnapshots())
-    }
-
-    /// Both storage actions below report by re-measuring, never by assuming.
-    ///
-    /// They used to write the expected result into `usage` before the detached
-    /// delete had run, and nothing refreshed afterwards — so a delete that
-    /// failed, or freed less than expected, left the screen claiming zero bytes
-    /// until the sheet was reopened. `nil` in the meantime is the "…" the rows
-    /// already show before the first measurement, which also disables the
-    /// buttons while the work is in flight.
-    private func reportingUsage(_ work: @escaping @Sendable () async -> Void) {
-        usage = nil
-        Task(priority: .utility) {
-            await work()
-            await refreshUsage()
-        }
-    }
-
-    private func clearMapCache() {
-        let claims = claimSnapshots()
-        reportingUsage { await Self.removeTiles(unclaimedBy: claims) }
-    }
-
-    private func deleteAllTiles() {
-        // Before the manifests are cleared: stopping auto-save folds in whatever
-        // it saved since the last drain, which would otherwise land in a
-        // manifest emptied a line later and claim tiles that are about to go.
-        // Held onto so it can be resumed below — this is a storage action, not
-        // a change to which hike is being saved.
-        let resumed = autoSave.currentHike
-        autoSave.hikeSelectionChanged(to: nil)
-
-        for hike in hikes {
-            hike.offlineDownloads.removeAll()
-            hike.autoSavedTileKeys.removeAll()
-            // `autoSaveTilesEnabled` is deliberately left alone. Reclaiming
-            // disk is not a decision about whether a hike should keep saving
-            // tiles, and this used to silently turn that setting off for every
-            // hike the user had ever enabled it on.
-        }
-
-        // Back on, with an empty manifest and a fresh cap, for whatever was
-        // selected before.
-        autoSave.hikeSelectionChanged(to: resumed)
-
-        reportingUsage { await Self.removeAllTiles() }
-    }
-
-    /// The union is O(tile budget) trig per download record, so it belongs
-    /// inside the `@concurrent` measurements and deletions below rather than
-    /// on the way in.
-    nonisolated private static func keys(
-        of claims: [TileOwnership]
-    ) throws(CancellationError) -> Set<String> {
-        var keys = Set<String>()
-        for claim in claims {
-            keys.formUnion(try claim.tileKeys())
-        }
-        return keys
-    }
-
-    /// The three storage jobs, each `@concurrent` so they run on the concurrent
-    /// executor while staying in the caller's task — a `Task` started from this
-    /// main-actor view would otherwise inherit its isolation and put the trig,
-    /// the `stat` calls and the deletions straight back on the main thread.
-    ///
-    /// A cancelled key enumeration deletes nothing rather than a partial set:
-    /// cache keys carry no hike identity, so an under-reported claim set frees
-    /// tiles that a surviving hike still needs.
-    @concurrent nonisolated
-    private static func diskUsage(
-        claimedBy claims: [TileOwnership]
-    ) async -> TileCache.DiskUsage? {
-        guard let keys = try? keys(of: claims) else { return nil }
-        return TileCache.shared.diskUsage(claimedBy: keys)
-    }
-
-    @concurrent nonisolated
-    private static func removeTiles(unclaimedBy claims: [TileOwnership]) async {
-        guard let keys = try? keys(of: claims) else { return }
-        TileCache.shared.removeTiles(unclaimedBy: keys)
-    }
-
-    @concurrent nonisolated
-    private static func removeAllTiles() async {
-        TileCache.shared.removeAllTiles()
-    }
-
-    /// `nonisolated`: passed as a bare function reference to `Optional.map`,
-    /// which (unlike a closure literal) doesn't inherit the view's actor
-    /// isolation. Doesn't touch any actor-isolated state, so this is safe.
-    nonisolated private static func byteText(_ bytes: Int64) -> String {
-        ByteCountFormatter.string(fromByteCount: bytes, countStyle: .file)
+        .accessibilityElement(children: .ignore)
+        .accessibilityLabel(title)
+        // "…" is a placeholder a screen reader has no way to interpret.
+        .accessibilityValue(bytes.map(Self.byteText) ?? "Measuring")
     }
 
     /// A provider whose key didn't resolve is shown, but not selectable: it can
@@ -431,6 +333,126 @@ struct SettingsView: View {
         .foregroundStyle(.primary)
         .opacity(isUsable ? 1 : Self.disabledOpacity)
         .disabled(!isUsable)
+        // Which provider is in use was drawn as a checkmark and nothing else,
+        // and that checkmark is hidden from VoiceOver as decoration — so the
+        // selection was unreadable without it.
+        .accessibilityAddTraits(isSelected ? [.isSelected] : [])
+        .accessibilityIdentifier("provider-row-\(provider.id)")
+    }
+}
+
+// MARK: - Offline storage
+
+/// The disk accounting behind the storage section: snapshotting claims on
+/// the main actor, then measuring and deleting off it. Kept apart from the
+/// view above because none of it draws anything.
+private extension SettingsView {
+    /// Snapshots every hike's claims on the main actor so the expensive part —
+    /// enumerating each one's tile grid — can run off it. Mirrors the delete
+    /// path in ``MapSheet``.
+    func claimSnapshots() -> [TileOwnership] {
+        // Tiles auto-saved in the last couple of seconds are on disk with
+        // nothing in SwiftData pointing at them yet. Unflushed, they measure as
+        // cache and — worse — a cache clear would delete them.
+        autoSave.flushPendingKeys()
+        return hikes.filter(\.hasStoredTiles).map(TileOwnership.init)
+    }
+
+    func refreshUsage() async {
+        usage = await Self.diskUsage(claimedBy: claimSnapshots())
+    }
+
+    /// Both storage actions below report by re-measuring, never by assuming.
+    ///
+    /// They used to write the expected result into `usage` before the detached
+    /// delete had run, and nothing refreshed afterwards — so a delete that
+    /// failed, or freed less than expected, left the screen claiming zero bytes
+    /// until the sheet was reopened. `nil` in the meantime is the "…" the rows
+    /// already show before the first measurement, which also disables the
+    /// buttons while the work is in flight.
+    func reportingUsage(_ work: @escaping @Sendable () async -> Void) {
+        usage = nil
+        Task(priority: .utility) {
+            await work()
+            await refreshUsage()
+        }
+    }
+
+    func clearMapCache() {
+        let claims = claimSnapshots()
+        reportingUsage { await Self.removeTiles(unclaimedBy: claims) }
+    }
+
+    func deleteAllTiles() {
+        // Before the manifests are cleared: stopping auto-save folds in whatever
+        // it saved since the last drain, which would otherwise land in a
+        // manifest emptied a line later and claim tiles that are about to go.
+        // Held onto so it can be resumed below — this is a storage action, not
+        // a change to which hike is being saved.
+        let resumed = autoSave.currentHike
+        autoSave.hikeSelectionChanged(to: nil)
+
+        for hike in hikes {
+            hike.offlineDownloads.removeAll()
+            hike.autoSavedTileKeys.removeAll()
+            // `autoSaveTilesEnabled` is deliberately left alone. Reclaiming
+            // disk is not a decision about whether a hike should keep saving
+            // tiles, and this used to silently turn that setting off for every
+            // hike the user had ever enabled it on.
+        }
+
+        // Back on, with an empty manifest and a fresh cap, for whatever was
+        // selected before.
+        autoSave.hikeSelectionChanged(to: resumed)
+
+        reportingUsage { await Self.removeAllTiles() }
+    }
+
+    /// The union is O(tile budget) trig per download record, so it belongs
+    /// inside the `@concurrent` measurements and deletions below rather than
+    /// on the way in.
+    nonisolated static func keys(
+        of claims: [TileOwnership]
+    ) throws(CancellationError) -> Set<String> {
+        var keys = Set<String>()
+        for claim in claims {
+            keys.formUnion(try claim.tileKeys())
+        }
+        return keys
+    }
+
+    /// The three storage jobs, each `@concurrent` so they run on the concurrent
+    /// executor while staying in the caller's task — a `Task` started from this
+    /// main-actor view would otherwise inherit its isolation and put the trig,
+    /// the `stat` calls and the deletions straight back on the main thread.
+    ///
+    /// A cancelled key enumeration deletes nothing rather than a partial set:
+    /// cache keys carry no hike identity, so an under-reported claim set frees
+    /// tiles that a surviving hike still needs.
+    @concurrent nonisolated
+    static func diskUsage(
+        claimedBy claims: [TileOwnership]
+    ) async -> TileCache.DiskUsage? {
+        guard let keys = try? keys(of: claims) else { return nil }
+        return TileCache.shared.diskUsage(claimedBy: keys)
+    }
+
+    @concurrent nonisolated
+    static func removeTiles(unclaimedBy claims: [TileOwnership]) async {
+        guard let keys = try? keys(of: claims) else { return }
+        TileCache.shared.removeTiles(unclaimedBy: keys)
+    }
+
+    @concurrent nonisolated
+    static func removeAllTiles() async {
+        TileCache.shared.removeAllTiles()
+    }
+
+    /// `nonisolated`: passed as a bare function reference to `Optional.map`,
+    /// which (unlike a closure literal) doesn't inherit the view's actor
+    /// isolation. Doesn't touch any actor-isolated state, so this is safe.
+    nonisolated static func byteText(_ bytes: Int64) -> String {
+        ByteCountFormatter.string(fromByteCount: bytes, countStyle: .file)
     }
 }
 

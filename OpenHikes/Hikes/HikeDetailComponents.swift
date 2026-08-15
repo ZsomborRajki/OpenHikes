@@ -189,6 +189,9 @@ struct RouteAppearanceControls<
             Text("Color")
                 .font(.caption2.weight(.medium))
                 .foregroundStyle(.secondary)
+                // `labelsHidden()` keeps the picker's spoken name, so this
+                // caption is a second stop that repeats it.
+                .accessibilityHidden(true)
         }
     }
 
@@ -203,8 +206,14 @@ struct RouteAppearanceControls<
                     .foregroundStyle(.secondary)
                     .monospacedDigit()
             }
+            // The caption row is what the slider's own label and value say, so
+            // it is not a stop of its own.
+            .accessibilityHidden(true)
             Slider(value: widthBinding, in: 1...12, step: 1)
                 .tint(hike.tintOpaque)
+                .accessibilityLabel("Line width")
+                .accessibilityValue("\(Int(hike.routeWidth)) points")
+                .accessibilityIdentifier("route-width-slider")
         }
     }
 
@@ -251,6 +260,26 @@ struct OfflineDownloadButton: View {
         }
         .buttonStyle(.plain)
         .disabled(!canDownload && downloader.phase != .downloading)
+        // The tile's text is a bare "45%" or "Saved", which says nothing about
+        // what the button does — so the action is named here and the progress
+        // is carried as the value.
+        .accessibilityLabel(
+            downloader.phase == .downloading
+                ? "Cancel offline map download"
+                : "Save maps for offline use"
+        )
+        .accessibilityValue(accessibilityValue)
+        .accessibilityIdentifier("offline-download-button")
+    }
+
+    private var accessibilityValue: String {
+        switch downloader.phase {
+        case .downloading:
+            downloader.progress.formatted(.percent.precision(.fractionLength(0)))
+        case .finished: "Saved"
+        case .failed: "Failed"
+        case .idle: "Not saved"
+        }
     }
 
     @ViewBuilder private var tile: some View {
@@ -258,6 +287,7 @@ struct OfflineDownloadButton: View {
         case .downloading:
             actionTile {
                 ProgressView().controlSize(.small)
+                    .accessibilityHidden(true)
                 Text("\(Int(downloader.progress * 100))%")
                     .font(.caption2.weight(.medium))
                     .foregroundStyle(.secondary)
@@ -364,6 +394,9 @@ struct OfflineStorageStatus: View {
                 )
                 .font(.caption)
                 .foregroundStyle(.secondary)
+                .accessibilityElement(children: .ignore)
+                .accessibilityLabel("Offline tiles")
+                .accessibilityValue(storedBytes.map(Self.byteText) ?? "Measuring")
 
                 Spacer()
 
@@ -375,6 +408,9 @@ struct OfflineStorageStatus: View {
                 }
                 .buttonStyle(.bordered)
                 .controlSize(.small)
+                // "Delete" alone doesn't say what goes.
+                .accessibilityLabel("Delete this hike's offline tiles")
+                .accessibilityIdentifier("delete-offline-tiles-button")
             }
         }
     }

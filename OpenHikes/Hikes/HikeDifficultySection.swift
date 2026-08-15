@@ -46,6 +46,7 @@ struct HikeDifficultySection: View {
                 Text("Difficulty")
                     .font(.headline)
                     .frame(maxWidth: .infinity, alignment: .leading)
+                    .accessibilityAddTraits(.isHeader)
                 TrailDifficultyBar(shares: breakdown.shares)
                 VStack(spacing: 8) {
                     ForEach(breakdown.shares) { share in

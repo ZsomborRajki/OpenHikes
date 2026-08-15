@@ -22,6 +22,7 @@ import SwiftUI
 
 struct MapSheetHikes: View {
     private static let selectedHikeHighlightOpacity: Double = 0.15
+    private static let actionGlyphSize: CGFloat = 40
 
     @Query(sort: \Hike.date, order: .reverse)
     private var hikes: [Hike]
@@ -93,6 +94,7 @@ private extension MapSheetHikes {
                 Text("Hikes")
                     .font(.title2.bold())
                     .foregroundStyle(.primary)
+                    .accessibilityAddTraits(.isHeader)
                 Spacer()
                 hikeActions
             }
@@ -109,6 +111,10 @@ private extension MapSheetHikes {
     }
 
     /// Recording and GPX import actions, shown whether or not there are hikes.
+    ///
+    /// The glass circles are drawn at 40pt but reach 44, which is the smallest
+    /// target a finger can be expected to hit — the sizes are separate so the
+    /// row keeps its proportions.
     var hikeActions: some View {
         HStack(spacing: 8) {
             #if os(iOS)
@@ -126,8 +132,9 @@ private extension MapSheetHikes {
                         : "record.circle"
                 )
                     .foregroundStyle(.red)
-                    .frame(width: 40, height: 40)
+                    .frame(width: Self.actionGlyphSize, height: Self.actionGlyphSize)
                     .sheetGlassBackground(in: Circle())
+                    .minimumTapTarget()
             }
             .accessibilityLabel(
                 recorder.isActive
@@ -142,8 +149,9 @@ private extension MapSheetHikes {
             } label: {
                 Image(systemName: "square.and.arrow.down")
                     .foregroundStyle(.tint)
-                    .frame(width: 40, height: 40)
+                    .frame(width: Self.actionGlyphSize, height: Self.actionGlyphSize)
                     .sheetGlassBackground(in: Circle())
+                    .minimumTapTarget()
             }
             .accessibilityLabel("Import GPX file")
             .accessibilityIdentifier("import-gpx-button")
@@ -197,10 +205,15 @@ private extension MapSheetHikes {
             Text("Tap \(importIcon) to import a GPX file.")
                 .font(.subheadline)
                 .foregroundStyle(.secondary)
+                // The glyph is interpolated as an image and contributes
+                // nothing spoken, so the sentence has to name the button it
+                // is pointing at.
+                .accessibilityLabel("Tap the Import GPX file button to import a GPX file.")
             #if os(iOS)
             Text("Or tap \(recordIcon) to record one as you walk.")
                 .font(.subheadline)
                 .foregroundStyle(.secondary)
+                .accessibilityLabel("Or tap the Record a hike button to record one as you walk.")
             #endif
         }
         .multilineTextAlignment(.center)
@@ -286,6 +299,7 @@ private extension MapSheetHikes {
             Spacer(minLength: 0)
         }
         .contentShape(.rect)
+        .accessibilityElement(children: .combine)
     }
 }
 

@@ -43,9 +43,6 @@ import CoreLocation
 import XCTest
 
 nonisolated final class PerformanceUITests: XCTestCase {
-    private static let importedHikeTitle = "Thumsee Loop (fast, simulated)"
-    private static let gpxFixture = "ThumseeLoopFast"
-    private static let trailGraphFixture = "ThumseeRidgePath"
     private static let probeIdentifier = "performance-counters"
     private static let existenceTimeout: TimeInterval = 30
     /// How long the app's counters have to stay unchanged before the previous
@@ -58,18 +55,9 @@ nonisolated final class PerformanceUITests: XCTestCase {
     /// The scene has to resign active and the log's one-second flush has to
     /// land before the app is torn down.
     private static let flushSeconds: TimeInterval = 2
-    private static let traceTimeout: TimeInterval = 40
-    private static let simulatedAltitude: CLLocationDistance = 535
-    private static let simulatedAccuracy: CLLocationAccuracy = 5
-    /// Slow enough that a 22 m step reads as a walk rather than a sprint the
-    /// recorder would reject — see `RecordingFixPolicy`.
-    private static let paceSeconds: TimeInterval = 4
-    private static let recordedTrace = [
-        CLLocationCoordinate2D(latitude: 47.71840, longitude: 12.83180),
-        CLLocationCoordinate2D(latitude: 47.71860, longitude: 12.83180),
-        CLLocationCoordinate2D(latitude: 47.71880, longitude: 12.83180),
-        CLLocationCoordinate2D(latitude: 47.71900, longitude: 12.83180),
-    ]
+    /// A longer walk than the review fixture in ``UITestFixture``: this
+    /// measures cost per fix, so it wants more than the minimum that snaps.
+    private static let recordedTrace = UITestFixture.extendedTrace
 
     /// Named on every printed line so one report can hold every scenario.
     private var scenario = ""
@@ -87,7 +75,7 @@ nonisolated final class PerformanceUITests: XCTestCase {
     func testIdleCostsNothing() {
         let app = launch(
             scenario: "idle",
-            arguments: ["--ui-test-import-gpx=\(Self.gpxFixture)"]
+            arguments: ["--ui-test-import-gpx=\(UITestFixture.gpxName)"]
         )
         awaitImportedHike(in: app)
         // The import settles asynchronously; measuring from the moment it
@@ -117,7 +105,7 @@ nonisolated final class PerformanceUITests: XCTestCase {
     func testMapBrowsingDoesNotReRenderTheSheet() {
         let app = launch(
             scenario: "map-browsing",
-            arguments: ["--ui-test-import-gpx=\(Self.gpxFixture)"]
+            arguments: ["--ui-test-import-gpx=\(UITestFixture.gpxName)"]
         )
         awaitImportedHike(in: app)
         settle(in: app)
@@ -165,7 +153,7 @@ nonisolated final class PerformanceUITests: XCTestCase {
             scenario: "offline-browsing",
             arguments: [
                 "--ui-test-offline",
-                "--ui-test-import-gpx=\(Self.gpxFixture)",
+                "--ui-test-import-gpx=\(UITestFixture.gpxName)",
             ]
         )
         awaitImportedHike(in: app)
@@ -231,7 +219,7 @@ nonisolated final class PerformanceUITests: XCTestCase {
             arguments: [
                 "--ui-test-expanded-sheet",
                 "--ui-test-enable-location",
-                "--ui-test-trail-graph=\(Self.trailGraphFixture)",
+                "--ui-test-trail-graph=\(UITestFixture.trailGraphName)",
             ]
         )
         addLocationPermissionMonitor()
@@ -255,7 +243,7 @@ nonisolated final class PerformanceUITests: XCTestCase {
         // accessibility tree, and reading it would foreground the app, which
         // is the one thing this scenario must not do.
         for coordinate in Self.recordedTrace.dropFirst() {
-            Thread.sleep(forTimeInterval: Self.paceSeconds)
+            Thread.sleep(forTimeInterval: UITestFixture.paceSeconds)
             setSimulatedLocation(coordinate)
         }
         Thread.sleep(forTimeInterval: Self.flushSeconds)
@@ -322,13 +310,13 @@ nonisolated final class PerformanceUITests: XCTestCase {
             scenario: "chart-scrub",
             arguments: [
                 "--ui-test-expanded-sheet",
-                "--ui-test-import-gpx=\(Self.gpxFixture)",
+                "--ui-test-import-gpx=\(UITestFixture.gpxName)",
             ]
         )
         awaitImportedHike(in: app)
-        app.staticTexts[Self.importedHikeTitle].tap()
+        hikeRow(titled: UITestFixture.importedHikeTitle, in: app).tap()
         XCTAssertTrue(
-            app.navigationBars[Self.importedHikeTitle]
+            app.navigationBars[UITestFixture.importedHikeTitle]
                 .waitForExistence(timeout: Self.existenceTimeout)
         )
         let chart = element("elevation-chart", in: app)
@@ -393,7 +381,7 @@ nonisolated final class PerformanceUITests: XCTestCase {
             arguments: [
                 "--ui-test-expanded-sheet",
                 "--ui-test-enable-location",
-                "--ui-test-trail-graph=\(Self.trailGraphFixture)",
+                "--ui-test-trail-graph=\(UITestFixture.trailGraphName)",
             ]
         )
         // Deliberately no `resetAuthorizationStatus(for: .location)`. Resetting
@@ -454,11 +442,9 @@ nonisolated final class PerformanceUITests: XCTestCase {
 
     @MainActor
     func testLaunchAndSteadyStateResourceMetrics() {
-        let app = XCUIApplication()
-        app.launchArguments = [
-            "--ui-testing",
-            "--ui-test-import-gpx=\(Self.gpxFixture)",
-        ]
+        let app = makeApp(
+            arguments: ["--ui-test-import-gpx=\(UITestFixture.gpxName)"]
+        )
         let options = XCTMeasureOptions()
         options.iterationCount = Self.launchIterations
 
@@ -485,7 +471,7 @@ nonisolated final class PerformanceUITests: XCTestCase {
         ) {
             app.launch()
             XCTAssertTrue(
-                app.staticTexts[Self.importedHikeTitle]
+                hikeRow(titled: UITestFixture.importedHikeTitle, in: app)
                     .waitForExistence(timeout: Self.existenceTimeout),
                 "the measured launch never reached a usable first screen"
             )
@@ -625,25 +611,15 @@ private extension PerformanceUITests {
 private extension PerformanceUITests {
     @MainActor
     func launch(scenario: String, arguments: [String] = []) -> XCUIApplication {
-        continueAfterFailure = false
         self.scenario = scenario
-        let app = XCUIApplication()
-        app.launchArguments = [
-            "--ui-testing",
-            "--ui-test-performance-log=\(scenario)",
-        ] + arguments
+        let app = makeApp(
+            arguments: ["--ui-test-performance-log=\(scenario)"] + arguments
+        )
         // Explicit rather than inherited from the test plan: a UI test's app is
         // launched by this process, so the plan's environment reaches the
         // runner and not the app under test.
         app.launchEnvironment["RENDER_SIGNPOST_LOG"] = "1"
-        app.launch()
-        // Same reason: `launch()` returning and the app being there to be
-        // queried are not the same event.
-        XCTAssertTrue(
-            app.wait(for: .runningForeground, timeout: Self.existenceTimeout),
-            "the app never reached the foreground after launch"
-        )
-        return app
+        return launch(app, timeout: Self.existenceTimeout)
     }
 
     /// Activating is asynchronous. Querying the accessibility tree of an app
@@ -661,16 +637,11 @@ private extension PerformanceUITests {
     }
 
     @MainActor
-    func element(_ identifier: String, in app: XCUIApplication) -> XCUIElement {
-        app.descendants(matching: .any).matching(identifier: identifier).firstMatch
-    }
-
-    @MainActor
     func awaitImportedHike(in app: XCUIApplication) {
-        XCTAssertTrue(
-            app.staticTexts[Self.importedHikeTitle]
-                .waitForExistence(timeout: Self.existenceTimeout),
-            "the fixture hike should import"
+        awaitHikeRow(
+            titled: UITestFixture.importedHikeTitle,
+            in: app,
+            timeout: Self.existenceTimeout
         )
     }
 }
@@ -678,63 +649,10 @@ private extension PerformanceUITests {
 // MARK: - Location
 
 private extension PerformanceUITests {
-    @MainActor
-    func addLocationPermissionMonitor() {
-        addUIInterruptionMonitor(withDescription: "Location permission") { alert in
-            guard alert.buttons.count >= 2 else { return false }
-            alert.buttons.element(boundBy: 0).tap()
-            return true
-        }
-    }
-
-    @MainActor
-    func setSimulatedLocation(_ coordinate: CLLocationCoordinate2D) {
-        XCUIDevice.shared.location = XCUILocation(
-            location: CLLocation(
-                coordinate: coordinate,
-                altitude: Self.simulatedAltitude,
-                horizontalAccuracy: Self.simulatedAccuracy,
-                verticalAccuracy: Self.simulatedAccuracy,
-                timestamp: .now
-            )
-        )
-    }
-
-    /// Steps the simulator through the fixture trace, waiting for the recorder
-    /// to accept each coordinate. A static simulated location is delivered
-    /// once, so a fix the recorder turns down has to be handed to it again —
-    /// the same contract `OpenHikesUITests` works under.
+    /// Steps the simulator through the measured trace. The generic walker in
+    /// ``UITestSupport`` does the waiting; this only names the trace.
     @MainActor
     func walkRecordedTrace(in app: XCUIApplication, points: XCUIElement) {
-        for (index, coordinate) in Self.recordedTrace.enumerated() {
-            if index > 0 {
-                Thread.sleep(forTimeInterval: Self.paceSeconds)
-                setSimulatedLocation(coordinate)
-            }
-            XCTAssertTrue(
-                waitForPointCount(atLeast: index + 1, in: points) {
-                    self.setSimulatedLocation(coordinate)
-                },
-                "the recorder never accepted fix \(index + 1)"
-            )
-        }
-    }
-
-    @MainActor
-    func waitForPointCount(
-        atLeast count: Int,
-        in element: XCUIElement,
-        redeliver: () -> Void
-    ) -> Bool {
-        let deadline = Date().addingTimeInterval(Self.traceTimeout)
-        while Date() < deadline {
-            if let value = element.value as? String,
-               let recorded = Int(value), recorded >= count {
-                return true
-            }
-            Thread.sleep(forTimeInterval: Self.paceSeconds)
-            redeliver()
-        }
-        return false
+        walkRecordedTrace(Self.recordedTrace, countedBy: points)
     }
 }

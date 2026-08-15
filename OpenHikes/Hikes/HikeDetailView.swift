@@ -425,6 +425,8 @@ private extension HikeDetailView {
                 if isEditingTitle {
                     TextField(hike.title, text: $titleDraft)
                         .font(.title2.bold())
+                        .accessibilityLabel("Hike name")
+                        .accessibilityIdentifier("hike-title-field")
                         .onSubmit { commitTitleEdit() }
                         .toolbar {
                             ToolbarItemGroup(placement: .keyboard) {
@@ -433,9 +435,10 @@ private extension HikeDetailView {
                             }
                         }
                 } else {
-                    HStack(alignment: .firstTextBaseline, spacing: 6) {
+                    HStack(alignment: .firstTextBaseline, spacing: 0) {
                         Text(hike.displayTitle)
                             .font(.title2.bold())
+                            .accessibilityAddTraits(.isHeader)
                         shareButton
                         renameButton
                     }
@@ -471,6 +474,7 @@ private extension HikeDetailView {
             Image(systemName: "square.and.arrow.up")
                 .font(.subheadline)
                 .foregroundStyle(.secondary)
+                .minimumTapTarget()
         }
         .buttonStyle(.plain)
         .accessibilityLabel("Share hike")
@@ -485,6 +489,7 @@ private extension HikeDetailView {
             Image(systemName: "pencil")
                 .font(.subheadline)
                 .foregroundStyle(.secondary)
+                .minimumTapTarget()
         }
         .buttonStyle(.plain)
         .accessibilityLabel("Rename hike")
@@ -499,10 +504,7 @@ private extension HikeDetailView {
     // MARK: Stats
 
     private var statsGrid: some View {
-        LazyVGrid(
-            columns: [GridItem(.flexible()), GridItem(.flexible())],
-            spacing: 12
-        ) {
+        StatGrid {
             ForEach(statItems) { stat in
                 StatTile(label: stat.label, value: stat.value)
             }
@@ -565,7 +567,9 @@ private extension HikeDetailView {
 
     private var metadataSection: some View {
         VStack(alignment: .leading, spacing: 12) {
-            Text("Details").font(.headline)
+            Text("Details")
+                .font(.headline)
+                .accessibilityAddTraits(.isHeader)
             if let description = hike.trackDescription { DetailRow(label: "Description", value: description) }
             if let author = hike.author { DetailRow(label: "Author", value: author) }
             if let keywords = hike.keywords { DetailRow(label: "Keywords", value: keywords) }

@@ -77,6 +77,7 @@ xcodebuild test \
 
 # Or run one UI test on a simulator; --list shows the available tests
 Scripts/run-ui-tests.sh --test testReviewsSnappedRouteAfterStopping
+Scripts/run-ui-tests.sh --suite AccessibilityUITests --all
 Scripts/run-ui-tests.sh --all
 
 # Measure render, main-thread and resource behavior; writes a markdown report
@@ -115,15 +116,34 @@ are not available through Swift Testing. UI-test launches use an in-memory
 SwiftData store and isolated preferences; coverage includes app/settings smoke
 navigation, bundled GPX import, programmatic simulator location, recording
 startup, the record → review → save round trip, and
-`XCTApplicationLaunchMetric`.
+`XCTApplicationLaunchMetric`. The bundle's fixtures, launch helpers and
+gestures live in `UITestSupport.swift`, so a new UI test reaches a screen the
+same way the existing ones do.
+
+`AccessibilityUITests` is the VoiceOver half of that bundle. It runs
+`performAccessibilityAudit` per screen — the sweep catches unnamed controls,
+tap targets below 44pt and elements it cannot reach — and then asserts the
+labels, values and traits this app promises: that a hike row reads as one
+element and reports which route the map is drawing, that a stat tile reads as
+a label and a number rather than as spelled-out capitals, that the elevation
+graph is a single adjustable element which speaks the point under the tracker,
+and that the selected tile provider is more than a checkmark. The audit
+excludes `.contrast`, `.textClipped` and `.dynamicType`, each for a reason
+recorded next to the exclusion; MapKit's own subviews are filtered out of the
+results rather than fixed, since the app does not draw them.
 
 CI runs strict SwiftLint, the shared package suite, the app and widget unit
 tests, warning-free debug/release builds, and the concurrent GPX parser under
-Thread Sanitizer. It deliberately does not run the simulator UI automation or
-the performance suite: both drive real gestures against a booted simulator with
-timing-sensitive waits, which a shared runner makes slow and flaky. Run those
-locally with `Scripts/run-ui-tests.sh` and `Scripts/run-performance-tests.sh`
-before a change that touches recording, the map, or render isolation.
+Thread Sanitizer. It also runs `AccessibilityUITests`, because a VoiceOver
+regression is invisible to a unit test and to a reviewer, and because ten of
+its eleven tests are launch, tap and assert against an in-memory store with no
+location and no measurement. That job is `continue-on-error` for now: UI
+automation on a shared runner has to demonstrate a flake rate before it is
+allowed to block a merge. The functional UI automation and the performance
+suite stay out — both lean harder on real gestures and timing-sensitive waits.
+Run those locally with `Scripts/run-ui-tests.sh` and
+`Scripts/run-performance-tests.sh` before a change that touches recording, the
+map, or render isolation.
 
 `PerformanceUITests` measures rather than asserts correctness: it drives the app
 through idle, map-browsing, chart-scrub and live-recording scenarios while the

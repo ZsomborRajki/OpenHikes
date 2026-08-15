@@ -55,6 +55,10 @@ struct ElevationChartView: View, Equatable {
     private static let shadowOpacity: Double = 0.15
     /// Padding fraction applied to elevation domain so data never hugs the axis edges.
     private static let domainPaddingFraction: Double = 0.15
+    /// How many swipes an adjustable-action user needs to cross the whole
+    /// trail. Enough to land on the features of a long route, few enough that
+    /// reaching the far end is not a chore.
+    private static let accessibilityScrubSteps: Double = 20
 
     // `tracker` is always the same instance (owned by the parent's `@State`),
     // so it's deliberately excluded here — its mutations reach this view via
@@ -113,10 +117,24 @@ struct ElevationChartView: View, Equatable {
             }
         }
         .frame(height: Self.chartHeight)
-        // On the `Chart` itself, which is the surface `chartXSelection` reads
-        // drags from — UI automation has to scrub the plot area, and there is
-        // no leaf inside a chart to hang this on.
+        // The graph is a drag target with no leaves of its own, so without
+        // this it is invisible to VoiceOver and its scrub is unreachable. One
+        // element with an adjustable action is the same interaction in the
+        // rotor: swipe up/down steps the tracker along the trail and speaks
+        // the point it lands on. Everything below has to be applied *after*
+        // it, since it replaces the subtree it wraps — including any
+        // identifier hung underneath.
+        .accessibilityElement()
+        // Kept on the same view as the gesture: UI automation scrubs the plot
+        // area by coordinate, and there is no leaf inside a chart to hang this
+        // on.
         .accessibilityIdentifier("elevation-chart")
+        .accessibilityLabel("Elevation profile")
+        .accessibilityValue(Self.description(of: trackerSample, in: profile))
+        .accessibilityAdjustableAction { direction in
+            guard let distance = adjustedDistance(direction) else { return }
+            onScrub(distance)
+        }
         .onGeometryChange(for: CGFloat.self) { proxy in
             proxy.size.width
         } action: { plotWidth = $0 }
@@ -222,6 +240,50 @@ struct ElevationChartView: View, Equatable {
         Color(uiColor: .secondarySystemBackground)
         #endif
     }()
+
+    // MARK: - Accessibility
+
+    /// Where an increment/decrement swipe puts the tracker, or `nil` at an end
+    /// of the trail so VoiceOver plays its "no more" tone rather than
+    /// re-announcing the same point.
+    private func adjustedDistance(
+        _ direction: AccessibilityAdjustmentDirection
+    ) -> Double? {
+        let total = profile.samples.last?.distanceMeters ?? 0
+        guard total > 0 else { return nil }
+        let step = total / Double(Self.accessibilityScrubSteps)
+        let current = tracker.trackerDistance
+        let next = switch direction {
+        case .increment: current + step
+        case .decrement: current - step
+        @unknown default: current
+        }
+        let clamped = min(max(next, 0), total)
+        return clamped == current ? nil : clamped
+    }
+
+    /// What the tracker is standing on, as the callout says it visually:
+    /// elevation first, then how far along the trail it is. Spelled out in
+    /// wide units — "535 meters", not "535 m" — because this is spoken.
+    private static func description(
+        of sample: ElevationSample?,
+        in profile: RouteProfile
+    ) -> String {
+        guard let sample else { return "No elevation data" }
+        let elevation = Measurement(
+            value: sample.elevation.rounded(),
+            unit: UnitLength.meters
+        ).formatted(.measurement(width: .wide, usage: .asProvided))
+        let distance = Measurement(
+            value: sample.distanceMeters,
+            unit: UnitLength.meters
+        ).formatted(.measurement(width: .wide, usage: .road))
+        guard let fraction = profile.fractionComplete(atDistance: sample.distanceMeters) else {
+            return "\(elevation) at \(distance)"
+        }
+        let percent = fraction.formatted(.percent.precision(.fractionLength(0)))
+        return "\(elevation) at \(distance), \(percent) along the trail"
+    }
 
     /// A y-range that keeps the rendered slope proportional to the real one
     /// (times `verticalExaggeration`), instead of always stretching to fill

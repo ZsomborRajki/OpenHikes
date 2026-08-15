@@ -27,6 +27,7 @@ struct HikeRow: View {
                 .foregroundStyle(.white)
                 .frame(width: Self.symbolFrameSize, height: Self.symbolFrameSize)
                 .background(hike.tintOpaque, in: Circle())
+                .accessibilityHidden(true)
 
             VStack(alignment: .leading, spacing: 2) {
                 Text(hike.displayTitle)
@@ -53,6 +54,16 @@ struct HikeRow: View {
             Image(systemName: "chevron.right")
                 .font(.subheadline.weight(.semibold))
                 .foregroundStyle(isSelected ? AnyShapeStyle(hike.tintOpaque) : AnyShapeStyle(.tertiary))
+                .accessibilityHidden(true)
         }
+        // One element rather than four: the row is a single tap target, so
+        // stepping through a symbol, a badge and a chevron to reach the
+        // subtitle is three stops that say nothing. The title leads, which is
+        // also what UI automation matches a row by.
+        .accessibilityElement(children: .combine)
+        // Being the drawn route is otherwise carried only by the tinted
+        // chevron and the tinted row background — colour alone.
+        .accessibilityAddTraits(isSelected ? [.isSelected] : [])
+        .accessibilityIdentifier("hike-row")
     }
 }

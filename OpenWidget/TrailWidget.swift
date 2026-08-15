@@ -404,6 +404,12 @@ struct TrailWidgetEntryView: View {
                     .foregroundStyle(.secondary)
             }
             .padding(layout.padding)
+            // The whole widget is one tap target, so it is read as one thing:
+            // the trail's name, then how the recording is going. The map
+            // behind it is a drawing of the same facts.
+            .accessibilityElement(children: .ignore)
+            .accessibilityLabel(snapshot.title)
+            .accessibilityValue(snapshot.statusText)
             .containerBackground(for: .widget) {
                 ZStack {
                     Rectangle().fill(.fill.tertiary)
@@ -424,6 +430,7 @@ struct TrailWidgetEntryView: View {
             Image(systemName: "figure.hiking")
                 .font(.title2)
                 .foregroundStyle(.secondary)
+                .accessibilityHidden(true)
             Text("Select a trail in OpenHikes")
                 .font(.caption)
                 .foregroundStyle(.secondary)
@@ -481,6 +488,11 @@ private struct TrailWidgetContent: View {
         }
         .shadow(color: .black.opacity(hasMap ? Layout.shadowOpacity : 0), radius: 2, y: 1)
         .padding(layout.padding)
+        // One tap target, so one element — and the title is spoken on every
+        // family, including the small one that has no room to draw it.
+        .accessibilityElement(children: .ignore)
+        .accessibilityLabel(snapshot.title)
+        .accessibilityValue(snapshot.statusText)
         // The map is the widget's background rather than a subview, so it
         // runs edge to edge under the text and the system rounds it to the
         // widget's own corner radius. It also means the system can drop it
