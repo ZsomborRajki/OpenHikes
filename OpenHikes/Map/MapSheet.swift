@@ -31,6 +31,9 @@ struct MapSheet: View {
     @Binding var path: [SheetRoute]
     var highlight: RouteHighlight
     var mapController: MapController
+    /// Handed down so a pushed screen can offer the map's camera pill, and
+    /// taken away again when it goes. See ``PhotoCaptureController``.
+    var photoCapture: PhotoCaptureController
 
     var onImportGPX: (URL) -> Void = { _ in /* no-op default */ }
     /// The document picker failed to produce a file at all.
@@ -48,6 +51,10 @@ struct MapSheet: View {
     @State private var showSettings = false
     @State private var completer = SearchCompleter()
     @State private var searchTask: Task<Void, Never>?
+    /// The height the sheet was at before a full-height screen was pushed, so
+    /// popping back restores it rather than collapsing a detail view that was
+    /// being read at `.large`.
+    @State private var detentBeforeFullHeight: PresentationDetent?
 
     private var autoSave: AutoSaveController {
         appModel.autoSaveController
@@ -138,6 +145,24 @@ struct MapSheet: View {
                 searchFocused = false
             }
         }
+        // The photo viewer draws one picture and nothing else, so it takes the
+        // whole sheet. Done here rather than in the viewer's own `onAppear`
+        // because the detent is this view's binding, and because popping back
+        // has to restore the height the hike screen was read at — a viewer
+        // dismissed to a full-height detail view has swallowed the map, and
+        // one dismissed to a fixed `.medium` has thrown away a reader's own
+        // choice of `.large`.
+        .onChange(of: path.last?.prefersFullHeight ?? false) { wasFull, isFull in
+            guard wasFull != isFull else { return }
+            guard isFull else {
+                let restored = detentBeforeFullHeight ?? .medium
+                detentBeforeFullHeight = nil
+                withAnimation { detent = restored }
+                return
+            }
+            detentBeforeFullHeight = detent
+            withAnimation { detent = .large }
+        }
         // Track the sheet's top edge continuously (including during interactive
         // drags) and hand it to the map so it can position the location button.
         .onTopEdgeChange(perform: onSheetTopChange)
@@ -221,14 +246,25 @@ struct MapSheet: View {
                 autoSave: appModel.autoSaveController,
                 locationManager: appModel.locationManager,
                 backgroundTracker: appModel.backgroundTracker,
-                trailGraphProvider: appModel.trailGraphProvider
-            ) { withAnimation { detent = .medium } }
+                trailGraphProvider: appModel.trailGraphProvider,
+                photoCapture: photoCapture,
+                onOpenPhoto: { photo in path.append(.photo(hike, photo.id)) },
+                onZoomToRoute: { withAnimation { detent = .medium } }
+            )
         case .recording:
             RecordingView(
                 recorder: appModel.hikeRecorder,
                 mapController: mapController,
+                photoCapture: photoCapture,
                 onSaved: showSavedRecording,
                 onDiscarded: closeDiscardedRecording
+            )
+        case let .photo(hike, photoID):
+            HikePhotoViewer(
+                hike: hike,
+                startID: photoID,
+                highlight: highlight,
+                mapController: mapController
             )
         }
     }
@@ -268,14 +304,15 @@ private func delete(_ hike: Hike, among hikes: [Hike]) {
     //
     // Unconditional, unlike the selection check above: a widget deep link
     // pushes onto this path directly, so "pushed" and "selected" aren't
-    // guaranteed to be the same hike.
-    path.removeAll { route in
-        if case let .hike(pushedHike) = route {
-            pushedHike.id == hike.id
-        } else {
-            false
-        }
-    }
+    // guaranteed to be the same hike. A pushed photo viewer goes with it —
+    // the gallery it pages through belongs to the hike being deleted.
+    path.removeAll { $0.shows(hikeID: hike.id) }
+
+    // The photos' own files, while the hike can still be asked which ones
+    // they are — a deleted `@Model` has nothing left to enumerate. Unlike
+    // tiles, a photo belongs to exactly one hike, so there is nothing to
+    // check against the survivors.
+    HikePhotoImport.discardFiles(of: hike)
 
     // Free the tiles this hike had saved offline — but only the ones no
     // surviving hike still claims. Cache keys carry no hike identity, so

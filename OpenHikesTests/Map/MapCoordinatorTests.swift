@@ -32,6 +32,9 @@ struct MapCoordinatorTests {
     /// Internal, like the four helpers below it, so the command observers get
     /// their own file — see `MapCoordinatorTests+Commands.swift`.
     let mapController = MapController()
+    /// Internal so the camera-pill tests can offer it a subject — see
+    /// `MapCoordinatorTests+PhotoControls.swift`.
+    let photoCapture = PhotoCaptureController()
     private let routeStyle = RouteStyle()
     /// Driven by a clock the test owns: `LocationManager` publishes at most
     /// once a second, and `SheetMetrics` tells a resting sheet from a moving
@@ -72,7 +75,8 @@ struct MapCoordinatorTests {
             recordingTrace: recordingTrace,
             sheetMetrics: sheetMetrics,
             tileSource: tileSource,
-            mapController: mapController
+            mapController: mapController,
+            photoCapture: photoCapture
         )
     }
 

@@ -100,6 +100,15 @@ final class Hike {
     /// lightweight migration.
     var difficultyMetersByGrade: [String: Double] = [:]
 
+    /// Photos taken or imported while this hike was open, newest last once
+    /// read through ``orderedPhotos``.
+    ///
+    /// Metadata only — a few dozen bytes each. The pixels live on disk under
+    /// ``HikePhotoStore``, because a SwiftData column is loaded whole whenever
+    /// the row is touched and a walk's worth of captures in one would be paid
+    /// for by the hikes list.
+    var photos: [HikePhoto] = []
+
     init(
         title: String,
         distanceMeters: Double,
@@ -120,7 +129,8 @@ final class Hike {
         author: String? = nil,
         keywords: String? = nil,
         surfaceMetersByCategory: [String: Double] = [:],
-        difficultyMetersByGrade: [String: Double] = [:]
+        difficultyMetersByGrade: [String: Double] = [:],
+        photos: [HikePhoto] = []
     ) {
         self.id = id
         self.title = title
@@ -142,10 +152,23 @@ final class Hike {
         self.keywords = keywords
         self.surfaceMetersByCategory = surfaceMetersByCategory
         self.difficultyMetersByGrade = difficultyMetersByGrade
+        self.photos = photos
     }
 }
 
 extension Hike {
+    /// Whether this hike is still part of a store, and so still worth writing
+    /// to.
+    ///
+    /// Both halves are needed, because SwiftData answers differently at the
+    /// two stages of a delete: `isDeleted` is true between `delete(_:)` and
+    /// the save, and then goes *back* to false once the save detaches the
+    /// object — at which point `modelContext` is what is nil. A check that
+    /// asked only the first question would let a write through to a detached
+    /// model, which is the quiet failure: it succeeds, and nothing persists
+    /// it. `HikePhotoDeletionSemanticsTests` pins the behaviour this reads.
+    var isAttached: Bool { !isDeleted && modelContext != nil }
+
     /// The persisted flag covers normal recording and recovery. The recorder's
     /// current ID bridges the short window after the finished route is saved
     /// but before shared-state and journal cleanup release ownership.

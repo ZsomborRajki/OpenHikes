@@ -93,6 +93,28 @@ extension MapView {
         /// limit without touching the map's height.
         var lastAppliedGeometry = (height: CGFloat(-1), topInset: CGFloat(-1))
 
+        // MARK: Camera pill
+        // Stored state for `MapPhotoControls.swift`. The pill rides the sheet
+        // on the map's leading edge, at the same height and through the same
+        // constraint arithmetic as the tracking button above — see
+        // `applySheetTop(on:)`, which drives both.
+
+        var photoControlsBottomConstraint: NSLayoutConstraint?
+
+        #if os(iOS)
+        weak var photoControls: MapPhotoControlsView?
+        #endif
+
+        weak var photoCaptureController: PhotoCaptureController?
+        /// Guards `observePhotoControls` the same way `isObservingLocation`
+        /// guards the location loop: a second registration would run a second
+        /// fade animation over the first one's view.
+        var isObservingPhotoControls = false
+        /// The opacity the sheet's position alone calls for, remembered so a
+        /// fade-in triggered by navigation mid-drag lands on it rather than on
+        /// full opacity.
+        var photoControlsSheetAlpha: CGFloat = 1
+
         /// Screen-point radius within which the selection dot and the "my location"
         /// puck are considered overlapping (roughly the size of either dot).
         static let overlapThresholdPoints: CGFloat = 20

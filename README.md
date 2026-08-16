@@ -11,7 +11,7 @@ OpenHikes is a local-first SwiftUI and SwiftData trail viewer for iPhone. It imp
 - Search across saved hikes and MapKit place suggestions.
 - OpenStreetMap, Stadia Outdoors, and Thunderforest Outdoors tile providers.
 - Live location, trail auto-follow with a progress readout, and current WeatherKit conditions.
-- Passive tile auto-save for browsed areas, plus bulk offline downloads where the provider permits them.
+- Photos taken on a walk or picked from the library, pinned to where on the trail they were taken, shown as a gallery strip on the hike and as pins on the map, with an optional copy saved to the photo library.- Passive tile auto-save for browsed areas, plus bulk offline downloads where the provider permits them.
 - An iOS Home Screen widget with trail progress, live-recording takeover, recording deep links, and sparse location anchors that help repair degraded GPS gaps.
 - Local SwiftData and App Group storage; OpenHikes has no backend or account sync.
 
@@ -171,6 +171,7 @@ domain folders.
 | `OpenHikes/Recording/` | Live recording, recovery journal, sensors, trail matching, and recording UI. |
 | `OpenHikes/Map/` | MapKit bridge, map state, search, location tracking, and map rendering. |
 | `OpenHikes/Tiles/` | Tile provider policy, cache, auto-save, offline downloads, and overlay rendering. |
+| `OpenHikes/Photos/` | Photo capture and import, the file store behind them, trail anchoring, and the gallery and viewer. |
 | `OpenHikes/Weather/` | WeatherKit polling and presentation state. |
 | `OpenHikes/Settings/` | User-facing app, recording, map, and storage settings. |
 | `OpenHikes/General/` | Cross-domain extensions and diagnostics. |

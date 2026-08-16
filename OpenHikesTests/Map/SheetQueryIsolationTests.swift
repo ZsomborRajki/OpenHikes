@@ -170,7 +170,8 @@ struct SheetQueryIsolationTests {
             selectedHike: .constant(nil),
             path: .constant([]),
             highlight: RouteHighlight(),
-            mapController: MapController()
+            mapController: MapController(),
+            photoCapture: PhotoCaptureController()
         )
         #expect(
             !declaresQuery(sheet),

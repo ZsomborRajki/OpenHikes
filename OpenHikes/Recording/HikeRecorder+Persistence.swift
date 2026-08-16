@@ -199,6 +199,7 @@ extension HikeRecorder {
         guard let sessionID,
               let hike = try existingHike(sessionID: sessionID),
               hike.isRecording else { return }
+        HikePhotoImport.discardFiles(of: hike)
         container.mainContext.delete(hike)
         do {
             try saveModelContext(container.mainContext)
@@ -227,6 +228,7 @@ extension HikeRecorder {
             self.currentHike = nil
         }
         for hike in orphans {
+            HikePhotoImport.discardFiles(of: hike)
             container.mainContext.delete(hike)
         }
         do {

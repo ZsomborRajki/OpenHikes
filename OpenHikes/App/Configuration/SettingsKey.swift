@@ -36,6 +36,11 @@ nonisolated enum SettingsKey {
     /// re-deriving it; absent means "no continuity reference yet", which is why
     /// it is removed rather than zeroed when the selection changes.
     static let lastMatchedDistance = "trailTracking.lastMatchedDistance"
+    /// Whether a photo taken in OpenHikes is also written to the system photo
+    /// library. Off unless the user turns it on — and the only reason the app
+    /// ever asks for photo-library access, which it does on the first save
+    /// after the switch is flipped rather than when it is flipped.
+    static let savePhotosToLibrary = "settings.savePhotosToLibrary"
 }
 
 /// Defaults for keys where "absent" and "false" are different answers, so the
@@ -46,4 +51,11 @@ nonisolated enum SettingsDefault {
     /// it the default would mean a blank map for anyone who never opens
     /// Settings, which is a bug report rather than a battery saving.
     static let cellularTileDownloads = true
+
+    /// Off. A second copy in the user's photo library is a reasonable thing to
+    /// want and an unreasonable thing to assume: it costs storage, it mixes
+    /// trail pictures into a library the user curates themselves, and it is
+    /// the only thing that would make the app ask for photo-library access at
+    /// all. The app's own copy is the one the hike depends on either way.
+    static let savePhotosToLibrary = false
 }

@@ -10,6 +10,10 @@
 //  a drag reaches the constraint without a SwiftUI pass in between, the same
 //  arrangement `observeHighlight` and `observeRouteStyle` use.
 //
+//  The camera pill on the opposite edge rides the same arithmetic, from the
+//  same call: see ``MapPhotoControlsView`` for why it is a UIKit subview
+//  rather than a SwiftUI overlay.
+//
 //  It follows the sheet only as far as the middle detent, and fades out over
 //  the rest of the way up. Two things had to be measured rather than assumed to
 //  get there. Where the middle detent rests, because it is 43% of the way down
@@ -68,27 +72,31 @@ extension MapView.Coordinator {
         applySheetTop(on: mapView)
     }
 
-    /// Positions the "my location" button just above the sheet's top edge, and
-    /// hands it over to the sheet once the sheet is expanding past it.
+    /// Positions the "my location" button — and the camera pill opposite it —
+    /// just above the sheet's top edge, and hands them over to the sheet once
+    /// the sheet is expanding past them.
     ///
-    /// The constraint's constant is the button's *bottom* in the map's own
+    /// The constraint's constant is the control's *bottom* in the map's own
     /// coordinates, and the map fills the screen, so this is one comparison
     /// between two Ys in the same space: where the sheet starts, and the
-    /// highest the button is allowed to sit.
+    /// highest the controls are allowed to sit.
     ///
-    /// `limit` is a floor on that constant, so the button stops climbing at
-    /// the middle detent. Past that the sheet rises over the parked button,
+    /// `limit` is a floor on that constant, so the controls stop climbing at
+    /// the middle detent. Past that the sheet rises over the parked controls,
     /// which is what the fade is for: a control left visible behind the
     /// sheet's top curve reads as a glitch, the more so once tracking mode
     /// fills it in.
+    ///
+    /// Both controls take the same constant and the same opacity, which is the
+    /// reason the pill is a UIKit subview at all — see ``MapPhotoControlsView``.
     func applySheetTop(on mapView: MKMapView) {
-        guard mapView.bounds.height > 0,
-              let constraint = trackingBottomConstraint
-        else { return }
+        guard mapView.bounds.height > 0 else { return }
         let wanted = sheetTop(in: mapView) - Self.trackingButtonSpacing
         let limit = trackingButtonLimit(in: mapView)
-        constraint.constant = max(wanted, limit)
-        applyTrackingButtonAlpha(
+        let constant = max(wanted, limit)
+        trackingBottomConstraint?.constant = constant
+        photoControlsBottomConstraint?.constant = constant
+        applyControlAlpha(
             encroachment: limit - wanted,
             over: fadeDistance(from: limit, in: mapView)
         )
@@ -161,23 +169,28 @@ extension MapView.Coordinator {
         #endif
     }
 
-    /// Fades the button out as the sheet takes its place, the way Maps does.
+    /// Fades the controls out as the sheet takes their place, the way Maps
+    /// does.
     ///
-    /// `encroachment` is how far past the button the sheet has come: at or
-    /// below zero the button still has its full spacing and is fully opaque.
-    /// No animation of its own — this is driven by the same continuous `topY`
-    /// reports that move the button, which arrive at display rate throughout a
-    /// drag, so the fade tracks the hand directly and an animation would only
-    /// lag behind it.
-    private func applyTrackingButtonAlpha(encroachment: CGFloat, over fadeDistance: CGFloat) {
+    /// `encroachment` is how far past them the sheet has come: at or below
+    /// zero they still have their full spacing and are fully opaque. No
+    /// animation of its own — this is driven by the same continuous `topY`
+    /// reports that move them, which arrive at display rate throughout a drag,
+    /// so the fade tracks the hand directly and an animation would only lag
+    /// behind it.
+    private func applyControlAlpha(encroachment: CGFloat, over fadeDistance: CGFloat) {
         #if canImport(UIKit)
-        guard let trackingButton else { return }
         let alpha = Self.trackingButtonAlpha(
             encroachment: encroachment,
             over: fadeDistance
         )
-        guard trackingButton.alpha != alpha else { return }
-        trackingButton.alpha = alpha
+        if let trackingButton, trackingButton.alpha != alpha {
+            trackingButton.alpha = alpha
+        }
+        // The pill has a second reason to be hidden — there may be no hike to
+        // photograph — so it takes this through the accessor that combines the
+        // two rather than having it written at it directly.
+        applyPhotoControlsAlpha(alpha)
         #endif
     }
 

@@ -302,6 +302,34 @@ final class OpenHikesModel {
         }
     }
 
+    /// Deletes photo files that no hike claims any more.
+    ///
+    /// The companion to ``trimTileCache(in:)``, and run in the same breath:
+    /// photo file deletion is fire-and-forget, so a hike deleted moments
+    /// before the app was killed leaves its pictures on disk with nothing
+    /// pointing at them and no screen that could ever show them again.
+    ///
+    /// A fetch that fails sweeps nothing rather than sweeping with an empty
+    /// claim set — the same rule the tile trim follows, and for the same
+    /// reason: an under-reported claim would delete every photo in the app.
+    func reclaimOrphanedPhotos(
+        in modelContext: ModelContext,
+        store: HikePhotoStore = .shared
+    ) {
+        guard let hikes = try? modelContext.fetch(FetchDescriptor<Hike>()) else { return }
+        var claimed = Set<String>()
+        for photo in hikes.flatMap(\.photos) {
+            claimed.insert(photo.fileName)
+            claimed.insert(photo.thumbnailFileName)
+        }
+        Task(priority: .utility) { await Self.reclaim(claimed, in: store) }
+    }
+
+    @concurrent
+    private static func reclaim(_ claimed: Set<String>, in store: HikePhotoStore) async {
+        store.reclaimOrphans(claimedBy: claimed)
+    }
+
     /// Keeps ``WeatherManager`` current for wherever the walker is, waking on
     /// two things and nothing else: a new position, and the moment
     /// ``WeatherPollState`` would next allow a request for the position it

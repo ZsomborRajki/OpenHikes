@@ -91,3 +91,40 @@ These remain product choices rather than correctness findings:
    leak into ordinary map browsing. Revisit only if a device energy trace shows
    meaningful CPU overhead, and preserve those background semantics if the two
    are ever consolidated.
+
+Bugs
+
+1. Use-after-delete race in  HikePhotoImport.add  ( HikePhotoImport.swift:38-46 )
+ hike.addPhoto(photo)  runs after an  await , with no check that the hike still exists.  attachPickedPhotos  loads up to 10 transferables serially — seconds during which the user can pop back and swipe-delete the hike. Touching an invalidated  PersistentModel  traps, and  discardFiles  has already run so the new file leaks. Guard  !hike.isDeleted  after each await and erase the orphan.
+
+2. Camera pill can be stuck hidden ( MapView.swift:106  vs  :190 )
+ observePhotoControls  runs before  addPhotoControls  creates the view, so  applyPhotoControlsVisibility  early-returns on  guard let photoControls . If  isAvailable  is already true when the map is built, the pill stays  isHidden  until the next availability change. The tests miss this because they call  observePhotoControls  a second time, after the view exists. Apply visibility at the end of  addPhotoControls .
+
+3.  observePhotoControls  isn't idempotent — no  isObserving…  guard like  observeLocation  has, and  observeMapController  explicitly documents this hazard. The tests currently register two observers → duplicate overlapping fade animations.
+
+4. Viewer title likely invisible in light mode ( HikePhotoViewer.swift:56-67 )
+ Color.black.ignoresSafeArea()  +  .toolbarBackground(.hidden, for: .navigationBar)  with no  .toolbarColorScheme(.dark, …) . The title renders in  .label  (black-on-black); toolbar glyphs are tinted so they survive. Worth a visual check.
+
+5.  MapSheet  detent doesn't do what its comment says ( MapSheet.swift:150 ) — popping the viewer always forces  .medium , so a detail screen read at  .large  is silently collapsed.
+
+Incompleteness
+
+• Every failure is silent.  add  returns  nil  for non-image bytes / write failure and both call sites discard it. No success feedback either — and  RecordingView  has no gallery, so a photo taken mid-walk gives zero confirmation.
+• No tests for  HikePhotoImport  — the one file that owns the "app copy first, delete files before the model" ordering its header argues for.
+• No orphan-file reconciliation or storage cap. The delete is a fire-and-forget  Task(.utility) ; if it doesn't finish before termination, files under  HikePhotos/  leak with nothing to reclaim them (contrast  TileOwnership ).  byteCount(of:)  is used only by tests, so photos are invisible to both storage UIs.
+• No UI/accessibility coverage for  photos-section ,  photo-viewer ,  map-camera-button , and no launch-argument hook to seed photos — the feature is unreachable in the simulator (no camera, out-of-process picker).
+• README not updated:  Photos/  missing from the project-layout table and the Features list;  .github/copilot-instructions.md 's domain list too.
+
+Doc/code mismatches
+
+•  ImageDataFormat.jpeg.pathExtension == "jpg" , but captures route through  detect()  →  UTType.jpeg.preferredFilenameExtension == "jpeg"  (verified). So captures are stored  .jpeg , contradicting both that constant's doc and  HikePhoto.pathExtension 's. Harmless, but the constant is effectively unused.
+•  HikePhoto.capturedAt  claims it falls back to the picked asset's date — the import path always uses  .now , which also drives gallery ordering.
+•  HikePhotoLoader 's "cancels the decode" claim: the store calls are synchronous and check no cancellation; only the result is dropped.
+
+• High — Photo picker cannot open ( OpenHikesView.swift:197 ,  PhotoCapturePresentation.swift:64 ): the root already presents the permanent  MapSheet ; the second modal queues forever.
+• High — Camera photos can be silently lost ( OpenHikesView+Photos.swift:38 ,  HikePhotoImport.swift:54 ): encoding/write failures return  nil  without an error, retry, or retained image.
+• High — Metadata and image files can diverge ( HikePhotoImport.swift:39 ,  MapSheet.swift:302 ): fire-and-forget file deletion occurs independently of SwiftData persistence, producing missing images or orphaned files after failures/termination.
+• Medium — Recording photos never receive route coordinates ( RecordingView.swift:68 ): anchoring reads  currentHike.route , which remains empty until recording stops.
+• Medium — Named album handling conflicts with add-only authorization ( PhotoLibraryWriter.swift:44 ): add-only access cannot reliably find an existing “OpenHikes” album, risking duplicates or fallback to Recents.
+• Medium — Camera metadata reflects acceptance time ( CameraPicker.swift:97 ): timestamp and trail position are resolved after the camera review screen, not when the shutter fires.
+• Medium — Viewer toolbar may be unreadable in light mode ( HikePhotoViewer.swift:55 ): dark content is shown beneath a transparent navigation bar without forcing contrasting toolbar/status-bar styling.

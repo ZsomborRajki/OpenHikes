@@ -7,6 +7,7 @@
 //
 
 import OpenHikesShared
+import PhotosUI
 import SwiftData
 import SwiftUI
 import WeatherKit
@@ -50,9 +51,31 @@ struct OpenHikesView: View {
     @State private var sheetMetrics = SheetMetrics()
     @State private var didProcessLaunchFixture = false
 
+    // swiftlint:disable private_swiftui_state
+    /// Which screen a photo would be filed under. Owned here because the map's
+    /// camera pill and the screens that offer it live on opposite sides of the
+    /// sheet; see ``PhotoCaptureController``.
+    ///
+    /// Internal rather than private, along with the presentation state below,
+    /// so the capture actions in `OpenHikesView+Photos.swift` can reach them —
+    /// `private` is file-scoped in Swift, and those actions are long enough to
+    /// have pushed this file past its length limit.
+    @State var photoCapture = PhotoCaptureController()
+    /// Camera and library presentation, driven by the pill's request tokens.
+    /// Both are presented from here rather than from inside the sheet, for the
+    /// reason the GPX importer's alert is — see the `showSheet` note below.
+    @State var photoPresentation = PhotoCaptureState()
+    // swiftlint:enable private_swiftui_state
+
     /// The selected tile provider, persisted by the settings sheet.
     @AppStorage(SettingsKey.tileProviderID)
     private var tileProviderID = TileProvider.default.id
+
+    /// Opt-in second copy of every photo in the system photo library. Off by
+    /// default, and the only reason the app ever asks for photo-library
+    /// access — see ``PhotoLibraryWriter``.
+    @AppStorage(SettingsKey.savePhotosToLibrary)
+    var savePhotosToLibrary = SettingsDefault.savePhotosToLibrary
 
     /// Height of the compact (search-only) sheet detent.
     private static let compactDetentHeight: CGFloat = 80
@@ -132,7 +155,8 @@ struct OpenHikesView: View {
             recordingTrace: appModel.hikeRecorder.trace,
             sheetMetrics: sheetMetrics,
             tileSource: activeTileSource,
-            mapController: mapController
+            mapController: mapController,
+            photoCapture: photoCapture
         )
             .equatable()
             .accessibilityIdentifier("trail-map")
@@ -158,6 +182,7 @@ struct OpenHikesView: View {
                 }
                 if !AppLaunchEnvironment.isUITesting {
                     appModel.trimTileCache(in: modelContext)
+                    appModel.reclaimOrphanedPhotos(in: modelContext)
                 }
             }
             .task {
@@ -174,6 +199,7 @@ struct OpenHikesView: View {
                     path: $navigationPath,
                     highlight: highlight,
                     mapController: mapController,
+                    photoCapture: photoCapture,
                     onImportGPX: importGPX,
                     onImportFailed: { importFailure = .unreadable },
                     onSheetTopChange: { topY in
@@ -191,6 +217,17 @@ struct OpenHikesView: View {
                     }
                     .presentationDragIndicator(.visible)
                     .interactiveDismissDisabled()
+                    // The camera and the library picker are presented from
+                    // here, not from the view that presents this sheet: a view
+                    // can only have one modal up at a time, and this sheet is
+                    // never taken down, so a picker attached alongside it is
+                    // never presented at all. Same reason the GPX importer
+                    // hangs off ``MapSheet``.
+                    .photoCapturePickers(
+                        $photoPresentation,
+                        onCaptured: attachCapturedPhoto,
+                        onPicked: attachPickedPhotos
+                    )
                     // The sheet settles at a new detent: let the map measure
                     // where the middle one rests, so the "my location" button
                     // knows how far it may follow the sheet up.
@@ -225,6 +262,17 @@ struct OpenHikesView: View {
                 )
             }
             .onOpenURL { url in openInboundURL(url) }
+            .photoCaptureAlerts($photoPresentation)
+            // The pill posts a token; presenting is this view's job, because a
+            // picker presented from inside the detented sheet tears it down on
+            // dismissal — the same issue the GPX importer works around above.
+            .onChange(of: photoCapture.cameraRequest) { _, _ in
+                Task { await presentCamera() }
+            }
+            .onChange(of: photoCapture.libraryRequest) { _, _ in
+                photoPresentation.pickedPhotos = []
+                photoPresentation.showLibraryPicker = true
+            }
             // Re-points map styling, auto-save and background route matching
             // at the new selection. A recording draft still styles its route;
             // `OpenHikesModel` filters it out of the rest.
@@ -468,6 +516,10 @@ struct ImportSelectionGate {
         case nil: .root
         case .some(.recording): .recording
         case .some(.hike(let hike)): .hike(hike.id)
+        // A photo viewer is a hike's own screen one push further in: an
+        // import that arrives while it is open is still landing on the hike
+        // the user is looking at.
+        case .some(.photo(let hike, _)): .hike(hike.id)
         }
     }
 }

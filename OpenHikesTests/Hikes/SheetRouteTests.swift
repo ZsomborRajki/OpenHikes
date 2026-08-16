@@ -50,6 +50,40 @@ struct SheetRouteTests {
         #expect(selectedHike?.id == recording.id)
         #expect(path == [.recording])
     }
+
+    @Test("deleting a hike takes its pushed photo viewer with it")
+    func photoRouteBelongsToItsHike() throws {
+        let context = try Fixture.modelContext()
+        let deleted = Fixture.hike(in: context, title: "Ridge Loop")
+        let survivor = Fixture.hike(in: context, title: "Valley Walk")
+        let path: [SheetRoute] = [
+            .hike(deleted),
+            .photo(deleted, UUID()),
+            .hike(survivor),
+        ]
+
+        let remaining = path.filter { !$0.shows(hikeID: deleted.id) }
+
+        #expect(remaining == [.hike(survivor)])
+    }
+
+    @Test("recording is nobody's hike screen")
+    func recordingShowsNoHike() throws {
+        let context = try Fixture.modelContext()
+        let hike = Fixture.hike(in: context)
+
+        #expect(SheetRoute.recording.shows(hikeID: hike.id) == false)
+    }
+
+    @Test("only the photo viewer asks for the whole sheet")
+    func onlyPhotoWantsFullHeight() throws {
+        let context = try Fixture.modelContext()
+        let hike = Fixture.hike(in: context)
+
+        #expect(SheetRoute.photo(hike, UUID()).prefersFullHeight)
+        #expect(SheetRoute.hike(hike).prefersFullHeight == false)
+        #expect(SheetRoute.recording.prefersFullHeight == false)
+    }
 }
 
 @Suite("Import selection gate")

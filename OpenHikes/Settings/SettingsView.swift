@@ -32,6 +32,8 @@ struct SettingsView: View {
     private var backgroundTrackingEnabled = false
     @AppStorage(SettingsKey.cellularTileDownloads)
     private var cellularTileDownloads = SettingsDefault.cellularTileDownloads
+    @AppStorage(SettingsKey.savePhotosToLibrary)
+    private var savePhotosToLibrary = SettingsDefault.savePhotosToLibrary
 
     private static let disabledOpacity: Double = 0.55
 
@@ -54,6 +56,7 @@ struct SettingsView: View {
                 accountSection
                 mapProviderSection
                 dataUseSection
+                photosSection
                 backgroundTrackingSection
                 offlineStorageSection
             }
@@ -179,6 +182,31 @@ struct SettingsView: View {
                 TileCache.shared.setAllowsCellularDownloads(newValue)
             }
         )
+    }
+
+    // MARK: Photos
+
+    /// The one switch behind photo-library access.
+    ///
+    /// Off by default, and flipping it on asks for nothing: the prompt comes
+    /// with the first photo actually saved, where the request is about
+    /// something the user is doing rather than something they might do. The
+    /// app's own copy is written either way, which is what the footer says —
+    /// otherwise "off" reads as "photos aren't kept".
+    private var photosSection: some View {
+        Section {
+            Toggle("Also Save to Photos", isOn: $savePhotosToLibrary)
+                .accessibilityIdentifier("save-photos-to-library-toggle")
+        } header: {
+            Text("Photos")
+        } footer: {
+            Text(
+                "Photos you take on a hike are always kept in OpenHikes and shown"
+                + " with that hike. Turn this on to put a copy in your photo library"
+                + " too, in an album called \"OpenHikes\". You'll be asked for"
+                + " permission the first time one is saved."
+            )
+        }
     }
 
     // MARK: Background tracking

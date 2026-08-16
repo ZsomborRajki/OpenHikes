@@ -13,6 +13,9 @@ import UIKit
 struct RecordingView: View {
     let recorder: HikeRecorder
     var mapController: MapController
+    /// Offers the map's camera pill while a walk is being recorded. Optional
+    /// so previews and tests can build this view without one.
+    var photoCapture: PhotoCaptureController?
     var onSaved: (Hike) -> Void
     var onDiscarded: (UUID?) -> Void
 
@@ -61,6 +64,15 @@ struct RecordingView: View {
         .softScrollEdgeEffect(for: .top)
         .onAppear {
             mapController.followUser()
+        }
+        // Each photo is pinned to the walker's last accepted fix — read at the
+        // shutter, so a picture taken twenty minutes in is pinned twenty
+        // minutes along. The recorder's live fix, not the draft `Hike`'s
+        // `route`: that is only written when the recording stops. A draft only
+        // exists once recording starts, which is why the modifier takes an
+        // optional hike.
+        .photoCaptureSubject(photoCapture, for: recorder.currentHike) {
+            PhotoTrailAnchor.recordingCoordinate(recorder.lastAcceptedPoint)
         }
         // The phase is a coloured dot and a word at the top of a scrolling
         // screen, so a change nobody is looking at is a change nobody hears.

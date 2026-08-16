@@ -161,6 +161,52 @@ nonisolated final class OpenHikesUITests: XCTestCase {
         XCTAssertFalse(directional.isSelected)
     }
 
+    /// The camera pill's presentations have to hang off the sheet, not off the
+    /// view that presents it.
+    ///
+    /// A view can only have one modal up at a time, and this app's sheet is
+    /// never taken down — a `.photosPicker` attached beside it is silently
+    /// never presented. The failure has no symptom other than a button that
+    /// does nothing, which is exactly the kind of thing only automation
+    /// catches. Cancelling again afterwards is the other half of it: the GPX
+    /// importer taught this app that a picker dismissing can take the sheet
+    /// with it.
+    @MainActor
+    func testOpensAndClosesThePhotoLibraryPickerOverTheSheet() {
+        let app = launchApp(
+            arguments: ["--ui-test-import-gpx=\(UITestFixture.gpxName)"]
+        )
+
+        openHikeDetail(in: app)
+
+        let library = element("map-photo-library-button", in: app)
+        XCTAssertTrue(
+            library.waitForExistence(timeout: UITestTimeout.navigation),
+            "opening a hike should offer the pill the picker is reached from"
+        )
+        library.tap()
+
+        // The picker is out of process, so its contents are not the app's to
+        // assert on; its cancel button carries that identifier in every
+        // locale, which is enough to know it is on screen.
+        let cancel = app.buttons["Cancel"]
+        XCTAssertTrue(
+            cancel.waitForExistence(timeout: UITestTimeout.existence),
+            "tapping the library button should present the photo picker"
+        )
+
+        cancel.tap()
+        XCTAssertTrue(
+            element("map-sheet", in: app)
+                .waitForExistence(timeout: UITestTimeout.navigation),
+            "dismissing the picker must leave the app's sheet standing"
+        )
+        XCTAssertTrue(
+            app.navigationBars[UITestFixture.importedHikeTitle].exists,
+            "and must not pop the screen the pill was offered from"
+        )
+    }
+
     @MainActor
     func testLaunchPerformance() {
         let options = XCTMeasureOptions()

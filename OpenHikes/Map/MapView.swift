@@ -57,6 +57,12 @@ struct MapView: MapViewRepresentable, Equatable {
     /// the route without re-rendering any view.
     var mapController: MapController
 
+    /// Whether a photo can be taken right now, and the two requests the camera
+    /// pill raises. Observed directly by the map (not via SwiftUI) so pushing
+    /// or popping a screen that can receive a photo shows or hides the pill
+    /// without an update pass — see ``MapPhotoControlsView``.
+    var photoCapture: PhotoCaptureController
+
     /// Lets `.equatable()` skip `updateUIView` when nothing actually changed —
     /// without it, SwiftUI calls `updateUIView` on every ancestor body pass
     /// that touches this view's transaction (e.g. the sheet's per-frame drag
@@ -75,6 +81,7 @@ struct MapView: MapViewRepresentable, Equatable {
             && lhs.tileSource == rhs.tileSource
             && lhs.mapController === rhs.mapController
             && lhs.locationManager === rhs.locationManager
+            && lhs.photoCapture === rhs.photoCapture
     }
 
     func makeCoordinator() -> Coordinator { Coordinator() }
@@ -101,6 +108,12 @@ struct MapView: MapViewRepresentable, Equatable {
         applyTileSource(to: mapView, coordinator)
 
         addControls(to: mapView, coordinator)
+
+        // After `addControls`, deliberately: the pill's first visibility pass
+        // needs the view to exist, or a screen that is already offering one
+        // when the map is built (a restored selection, a widget deep link)
+        // leaves it hidden until the *next* availability change.
+        coordinator.observePhotoControls(photoCapture)
 
         return mapView
     }
@@ -132,7 +145,8 @@ struct MapView: MapViewRepresentable, Equatable {
     }
 
     /// Enables MapKit's standard controls. Compass and scale are built-in flags;
-    /// the "my location" button has no flag on iOS, so it's added as a subview.
+    /// the "my location" button has no flag on iOS, so it's added as a subview —
+    /// and so is the camera pill facing it across the map.
     private func addControls(to mapView: MKMapView, _ coordinator: Coordinator) {
         mapView.showsCompass = true
         mapView.showsScale = true
@@ -154,14 +168,58 @@ struct MapView: MapViewRepresentable, Equatable {
 
         let guide = mapView.safeAreaLayoutGuide
         NSLayoutConstraint.activate([
-            tracking.trailingAnchor.constraint(equalTo: guide.trailingAnchor, constant: -12),
+            tracking.trailingAnchor.constraint(equalTo: guide.trailingAnchor, constant: -Self.controlInset),
             bottom,
         ])
-        // Replaces the placeholder above with a real position as soon as the
+
+        addPhotoControls(to: mapView, coordinator, alignedTo: guide)
+        // Replaces the placeholders above with real positions as soon as the
         // map has a height to measure against.
         coordinator.applySheetTop(on: mapView)
         #endif
     }
+
+    #if os(iOS)
+    /// The camera pill, on the leading edge opposite the tracking button and
+    /// bottom-pinned to the same driven Y, so the two stay level through every
+    /// sheet drag without either of them re-rendering.
+    private func addPhotoControls(
+        to mapView: MKMapView,
+        _ coordinator: Coordinator,
+        alignedTo guide: UILayoutGuide
+    ) {
+        let controls = MapPhotoControlsView(
+            onCamera: { [photoCapture] in photoCapture.requestCamera() },
+            onLibrary: { [photoCapture] in photoCapture.requestLibrary() }
+        )
+        controls.translatesAutoresizingMaskIntoConstraints = false
+        // Starts out of the way: `observePhotoControls` decides on the first
+        // pass whether there is anything to photograph, and a pill that
+        // flashed in before it answered would be visible on the search screen.
+        controls.isHidden = true
+        controls.alpha = 0
+        mapView.addSubview(controls)
+        coordinator.photoControls = controls
+
+        let initialPhotoControlsY: CGFloat = 400
+        let bottom = controls.bottomAnchor.constraint(
+            equalTo: mapView.topAnchor,
+            constant: initialPhotoControlsY
+        )
+        coordinator.photoControlsBottomConstraint = bottom
+
+        NSLayoutConstraint.activate([
+            controls.leadingAnchor.constraint(
+                equalTo: guide.leadingAnchor,
+                constant: Self.controlInset
+            ),
+            bottom,
+        ])
+    }
+    #endif
+
+    /// How far the map's floating controls sit in from its safe area.
+    private static let controlInset: CGFloat = 12
 
     /// Draws the current route (if any) and fits the map to it. No-op while the
     /// same route is already shown, so unrelated view updates don't re-zoom.

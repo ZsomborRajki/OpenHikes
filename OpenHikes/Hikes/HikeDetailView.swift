@@ -129,6 +129,12 @@ struct HikeDetailView: View {
     /// OSM walking graph behind the surface and difficulty sections. `nil`
     /// disables both — see ``HikeTrailAnalysis``.
     var trailGraphProvider: (any TrailGraphProviding)?
+    /// Offers the map's camera pill while this screen is up, and tells it
+    /// where on the trail a photo taken now belongs. See
+    /// ``PhotoCaptureController``.
+    var photoCapture: PhotoCaptureController?
+    /// Pushes the full-space viewer for a tapped thumbnail.
+    var onOpenPhoto: (HikePhoto) -> Void = { _ in /* no-op default */ }
     /// Collapses the sheet so the map is visible when zooming to the route.
     var onZoomToRoute: () -> Void = { /* no-op default */ }
 
@@ -203,6 +209,7 @@ struct HikeDetailView: View {
                 progressSection
                 header
                 statsGrid
+                photoSection
                 surfaceSection
                 difficultySection
                 if hasMetadata { metadataSection }
@@ -299,6 +306,18 @@ struct HikeDetailView: View {
         }
         .onDisappear {
             invalidateStoredBytesMeasurement()
+        }
+        // Offers the map's camera pill while this screen is up, and tells it
+        // where a photo taken now belongs on this trail. The anchor is
+        // evaluated at the shutter, not published as the chart moves — reading
+        // `tracker` from this body is the one thing ``TrackerState`` exists to
+        // prevent; inside a closure that runs once per photo it costs nothing.
+        .photoCaptureSubject(photoCapture, for: hike) {
+            PhotoTrailAnchor.coordinate(
+                profile: profile,
+                live: tracker.liveTrackerDistance,
+                scrubbed: tracker.trackerDistance
+            )
         }
         .alert("Couldn’t Delete Offline Tiles", isPresented: $storageDeletionFailed) {
             Button("OK", role: .cancel) { /* dismiss */ }
@@ -506,6 +525,14 @@ private extension HikeDetailView {
                 StatTile(label: stat.label, value: stat.value)
             }
         }
+    }
+
+    // MARK: Photos
+
+    /// Renders nothing until there is a photo, so a hike nobody has
+    /// photographed reads exactly as it did before the feature existed.
+    private var photoSection: some View {
+        HikePhotoSection(hike: hike, onOpen: onOpenPhoto)
     }
 
     // MARK: Trail data

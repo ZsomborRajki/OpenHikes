@@ -25,6 +25,8 @@
 	     delivery methods that can't do this still leave behind. -->
 	<key>LSSupportsOpeningDocumentsInPlace</key>
 	<true/>
+	<key>NSCameraUsageDescription</key>
+	<string>OpenHikes uses the camera so you can photograph a hike as you walk it. Photos are kept with that hike, and pinned to the point on the trail you had selected.</string>
 	<key>NSLocationTemporaryUsageDescriptionDictionary</key>
 	<dict>
 		<key>RecordHike</key>
@@ -32,6 +34,12 @@
 	</dict>
 	<key>NSMotionUsageDescription</key>
 	<string>OpenHikes uses motion sensors to improve recorded elevation and infer the trail walked through GPS gaps.</string>
+	<!-- Add-only, and nothing else: the app never reads the photo library.
+	     Importing an existing picture goes through PhotosPicker, which runs
+	     out of process and needs no permission at all, so this key exists
+	     solely for the opt-in "Also Save to Photos" setting. -->
+	<key>NSPhotoLibraryAddUsageDescription</key>
+	<string>Turn on “Also Save to Photos” to keep a copy of each hike photo in your photo library, in an album called “OpenHikes”.</string>
 	<key>UIBackgroundModes</key>
 	<array>
 		<string>location</string>
