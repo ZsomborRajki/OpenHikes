@@ -40,6 +40,11 @@
 	     solely for the opt-in "Also Save to Photos" setting. -->
 	<key>NSPhotoLibraryAddUsageDescription</key>
 	<string>Turn on “Also Save to Photos” to keep a copy of each hike photo in your photo library, in an album called “OpenHikes”.</string>
+	<!-- Declares that the app uses no non-exempt encryption, so App Store
+	     Connect does not prompt for an export compliance questionnaire on
+	     every TestFlight or App Store upload. -->
+	<key>ITSAppUsesNonExemptEncryption</key>
+	<false/>
 	<key>UIBackgroundModes</key>
 	<array>
 		<string>location</string>
