@@ -176,4 +176,23 @@ struct TileProviderTests {
         #expect(url.absoluteString.contains("5685"))
         #expect(url.host() != nil)
     }
+
+    /// `ActiveTileSource` carries `providerID` but not `supportsBulkDownload`,
+    /// so the licensing promise above is dropped at the boundary into
+    /// `OfflineTileDownloader.start(route:source:scale:)` — which is why that
+    /// function cannot, today, enforce the one invariant with consequences
+    /// outside this codebase, and why the only enforcement lives in a view.
+    ///
+    /// This pins the lookup that makes enforcement possible: the flag is
+    /// recoverable from a source alone. If that stops being true, a fix has
+    /// nowhere left to stand.
+    @Test("a tile source can be traced back to its bulk-download policy", arguments: TileProvider.all)
+    func policyIsRecoverableFromASource(provider: TileProvider) {
+        let source = ActiveTileSource(provider)
+
+        #expect(
+            TileProvider.provider(id: source.providerID).supportsBulkDownload
+                == provider.supportsBulkDownload
+        )
+    }
 }

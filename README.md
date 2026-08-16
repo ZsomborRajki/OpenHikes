@@ -182,7 +182,7 @@ domain folders.
 | `OpenHikesUITests/` | iOS Simulator UI automation, location spoofing, and launch metrics. |
 | `ci_scripts/` | Xcode Cloud hooks, run automatically by name. |
 
-See [`.github/copilot-instructions.md`](.github/copilot-instructions.md) for architecture and repository conventions. See [`CODE_REVIEW.md`](CODE_REVIEW.md) for the open code-quality action plan and unresolved design decisions.
+See [`.github/copilot-instructions.md`](.github/copilot-instructions.md) for architecture and repository conventions. See [`CODE_REVIEW.md`](CODE_REVIEW.md) for the open code-quality action plan and unresolved design decisions. See [`SOCIAL.md`](SOCIAL.md) for the client-side plan to add optional trail publishing and discovery without weakening the offline-first guarantees.
 
 ## Current limitations
 

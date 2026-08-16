@@ -250,6 +250,28 @@ struct TileCacheTierTests {
         )
     }
 
+    /// What an empty claim set costs, which is why the caller must never
+    /// produce one by accident. `trimCache` distinguishes a claimed tile from
+    /// an unclaimed one by nothing but that set, so an empty one makes a
+    /// durably saved tile — a hike's offline map, the thing this app exists to
+    /// have when there is no signal — indistinguishable from browsing residue.
+    /// This is the consequence side of `OpenHikesModel.trimTileCache(in:)`
+    /// turning a failed `Hike` fetch into `?? []`.
+    @Test("an empty claim set deletes saved offline tiles, not just residue")
+    func trimWithNoClaimsEvictsDurableTiles() async throws {
+        let saved = makeKey()
+        try sandbox.save(key: saved)
+        try #require(sandbox.isSaved(saved), "precondition: the tile is durably saved")
+
+        let freed = await trimCache(claimedBy: [], limit: 0)
+
+        #expect(freed >= TileStore.tileByteCount)
+        #expect(
+            !sandbox.isSaved(saved),
+            "an unclaimed durable tile is evicted, so an empty claim set is destructive"
+        )
+    }
+
     /// The half of the same pass that must keep working: an expired tile is
     /// gone from disk. Pinned alongside the above so a fix that narrows the
     /// eviction can't accidentally stop evicting.
