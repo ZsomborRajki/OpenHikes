@@ -38,6 +38,8 @@ struct MapSheet: View {
     var onImportGPX: (URL) -> Void = { _ in /* no-op default */ }
     /// The document picker failed to produce a file at all.
     var onImportFailed: () -> Void = { /* no-op default */ }
+    /// A place search reached MapKit and came back with an error.
+    var onSearchFailed: (SearchFailure) -> Void = { _ in /* no-op default */ }
     /// Reports the sheet's top edge (global Y) as it's dragged, so the map can
     /// keep the "my location" button riding just above the sheet.
     var onSheetTopChange: (CGFloat) -> Void = { _ in /* no-op default */ }
@@ -346,7 +348,7 @@ private func select(_ hike: Hike) {
 private func select(_ completion: MKLocalSearchCompletion) {
     searchText = completion.title
     searchFocused = false
-    completer.clear()
+    completer.commit(query: completion.title)
     startSearch(request: .init(completion: completion))
 }
 
@@ -364,11 +366,29 @@ private func performSearch() {
 /// Cancels and invalidates the previous request before starting another.
 /// The explicit cancellation check also protects against a MapKit request
 /// that finishes after cancellation rather than throwing immediately.
+///
+/// A failure is reported rather than swallowed. No network, a rate limit or a
+/// query MapKit cannot resolve all used to produce the same thing — nothing at
+/// all — which reads as a search field that has simply stopped working.
 private func startSearch(request: MKLocalSearch.Request) {
     searchTask?.cancel()
     searchTask = Task {
-        guard let response = try? await MKLocalSearch(request: request).start(),
-              !Task.isCancelled else { return }
+        let response: MKLocalSearch.Response
+        do {
+            response = try await MKLocalSearch(request: request).start()
+        } catch {
+            guard !Task.isCancelled else { return }
+            onSearchFailed(SearchFailure(underlying: error))
+            return
+        }
+        guard !Task.isCancelled else { return }
+        // An empty response is a successful request with nothing in it, and
+        // its `boundingRegion` is not a place — zooming to it would move the
+        // map somewhere the user never asked for.
+        guard !response.mapItems.isEmpty else {
+            onSearchFailed(SearchFailure(reason: .noResults))
+            return
+        }
         mapController.show(response.boundingRegion)
         // Drop to a partial detent so the zoomed map is visible.
         withAnimation { detent = .medium }

@@ -26,17 +26,19 @@ final class WidgetFeedBudgetTests {
     private let container: ModelContainer
     private let context: ModelContext
     private let tracker: BackgroundTrailTracker
+    /// Its own suite, not the host app's — see ``WidgetFeedTests``.
+    private let defaults: UserDefaults
 
     init() throws {
         container = try Fixture.modelContainer()
         context = ModelContext(container)
-        tracker = BackgroundTrailTracker(container: container)
+        defaults = try makeScratchDefaults()
+        tracker = BackgroundTrailTracker(container: container, defaults: defaults)
         SharedStore.clear()
     }
 
     deinit {
         SharedStore.clear()
-        UserDefaults.standard.removeObject(forKey: SettingsKey.lastMatchedDistance)
     }
 
     /// A five-hour recording at 1 Hz — the size of track this app is built to

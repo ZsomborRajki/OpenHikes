@@ -246,17 +246,74 @@ struct OfflineTileEnumerationTests {
 struct OfflineDownloadStateTests {
     /// A source that can't reach anything: enough to drive the state machine
     /// without depending on a tile server (or on being online at all).
+    ///
+    /// Its `providerID` is a real, download-permitting one because `start`
+    /// now refuses a source whose provider forbids bulk downloads and an
+    /// unrecognised id fails closed. Only the id's *policy* is borrowed —
+    /// the template points nowhere and every save is injected, so nothing is
+    /// fetched from or written under the real provider.
     private let unreachable = ActiveTileSource(
-        providerID: "test_unreachable",
+        providerID: TileProvider.stadiaOutdoors.id,
         urlTemplate: "http://127.0.0.1:9/{z}/{x}/{y}.png",
         maximumZ: 10
     )
 
     private let controlled = ActiveTileSource(
-        providerID: "test_controlled",
+        providerID: TileProvider.thunderforestOutdoors.id,
         urlTemplate: "https://example.invalid/{z}/{x}/{y}.png",
         maximumZ: 12
     )
+
+    /// `supportsBulkDownload` is a promise to the tile host rather than a
+    /// feature toggle, and it used to be kept by exactly one `if` in a
+    /// SwiftUI body — `ActiveTileSource` dropped the flag, so the downloader
+    /// could not have enforced it. This pins the domain's own refusal: the
+    /// thing that would do the fetching declines before a single tile is
+    /// planned, let alone requested.
+    @Test("a provider that forbids bulk downloads is refused by the downloader")
+    func refusesAForbiddenProvider() {
+        let downloader = OfflineTileDownloader(
+            isOnline: { true },
+            saveTile: { _, _ in
+                Issue.record("a forbidden provider must not fetch a tile")
+                return false
+            }
+        )
+
+        downloader.start(
+            route: Fixture.ridgeRoute,
+            source: ActiveTileSource(.openStreetMap),
+            scale: 2
+        )
+
+        #expect(downloader.isFailed)
+        #expect(downloader.total == 0, "it must refuse before planning any tiles")
+        #expect(downloader.completed == 0)
+    }
+
+    /// An id no catalog entry matches resolves to the default provider, which
+    /// is OpenStreetMap — so a source the app cannot identify fails closed
+    /// rather than inheriting permission nobody granted it.
+    @Test("an unrecognised source fails closed")
+    func refusesAnUnknownProvider() {
+        let downloader = OfflineTileDownloader(
+            isOnline: { true },
+            saveTile: { _, _ in true }
+        )
+
+        downloader.start(
+            route: Fixture.ridgeRoute,
+            source: ActiveTileSource(
+                providerID: "not_a_provider",
+                urlTemplate: "https://example.invalid/{z}/{x}/{y}.png",
+                maximumZ: 12
+            ),
+            scale: 2
+        )
+
+        #expect(downloader.isFailed)
+        #expect(downloader.total == 0)
+    }
 
     @Test("a route with nothing to draw is refused with a reason")
     func refusesEmptyRoute() {

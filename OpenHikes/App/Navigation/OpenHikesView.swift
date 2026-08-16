@@ -31,6 +31,7 @@ struct OpenHikesView: View {
     /// Set when a picked file couldn't become a hike; drives the alert that
     /// says so. `nil` the rest of the time.
     @State private var importFailure: GPXImport.ImportFailure?
+    @State private var searchFailure: SearchFailure?
     /// Invalidates an import's permission to replace the current selection
     /// when recording or navigation moves on while GPX parsing is off-main.
     @State private var importSelectionGate = ImportSelectionGate()
@@ -125,21 +126,7 @@ struct OpenHikesView: View {
 
     /// `.alert(isPresented:error:)` wants a `Bool`; the message lives in
     /// ``importFailure``, so dismissal clears that rather than a second flag
-    /// the two could disagree on.
-    private var showingImportFailure: Binding<Bool> {
-        Binding(
-            get: { importFailure != nil },
-            set: { if !$0 { importFailure = nil } }
-        )
-    }
-
-    private var showingStorageStartupIssue: Binding<Bool> {
-        Binding(
-            get: { appModel.startupIssue != nil },
-            set: { if !$0 { appModel.startupIssue = nil } }
-        )
-    }
-
+    /// the two could disagree on. See `presenceBinding(for:)`.
     var body: some View {
         // Fires on every re-evaluation of this view's body — the throttled
         // `appModel.locationManager.coordinate` publish (~1/sec while moving)
@@ -180,13 +167,17 @@ struct OpenHikesView: View {
                 if AppLaunchEnvironment.usesLiveLocation {
                     appModel.locationManager.start()
                 }
-                if !AppLaunchEnvironment.isUITesting {
+                // `isRunningTests`, not `isUITesting`: a hosted unit-test run
+                // launches the app against the *real* on-disk store, so the
+                // narrower flag would let a sweep delete a developer's tiles
+                // and photos.
+                if !AppLaunchEnvironment.isRunningTests {
                     appModel.trimTileCache(in: modelContext)
                     appModel.reclaimOrphanedPhotos(in: modelContext)
                 }
             }
             .task {
-                if !AppLaunchEnvironment.isUITesting {
+                if !AppLaunchEnvironment.isRunningTests {
                     await appModel.pollWeather()
                 }
             }
@@ -202,6 +193,7 @@ struct OpenHikesView: View {
                     photoCapture: photoCapture,
                     onImportGPX: importGPX,
                     onImportFailed: { importFailure = .unreadable },
+                    onSearchFailed: { failure in searchFailure = failure },
                     onSheetTopChange: { topY in
                         sheetMetrics.report(topY: topY, atMiddleDetent: sheetDetent == .medium)
                     }
@@ -247,6 +239,11 @@ struct OpenHikesView: View {
             // owned by a view that's being rebuilt at that moment doesn't
             // reliably appear.
             .alert(isPresented: showingImportFailure, error: importFailure) {
+                Button("OK", role: .cancel) { /* dismiss */ }
+            }
+            // Here for the same reason as the import failure above, and
+            // because a silent search is indistinguishable from a broken one.
+            .alert(isPresented: showingSearchFailure, error: searchFailure) {
                 Button("OK", role: .cancel) { /* dismiss */ }
             }
             .alert(
@@ -463,6 +460,32 @@ private struct SelectedHikeState: Equatable {
     let id: UUID
     let isRecording: Bool
     let isRecorderOwned: Bool
+}
+
+private extension OpenHikesView {
+    var showingImportFailure: Binding<Bool> {
+        presenceBinding(for: $importFailure)
+    }
+
+    var showingSearchFailure: Binding<Bool> {
+        presenceBinding(for: $searchFailure)
+    }
+
+    var showingStorageStartupIssue: Binding<Bool> {
+        Binding(
+            get: { appModel.startupIssue != nil },
+            set: { if !$0 { appModel.startupIssue = nil } }
+        )
+    }
+
+    /// Presents while `error` holds something, and clears it on dismissal, so
+    /// there is never a second flag the two could disagree on.
+    func presenceBinding<E>(for error: Binding<E?>) -> Binding<Bool> {
+        Binding(
+            get: { error.wrappedValue != nil },
+            set: { if !$0 { error.wrappedValue = nil } }
+        )
+    }
 }
 
 struct ImportSelectionGate {

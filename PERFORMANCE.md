@@ -122,6 +122,13 @@ each run, suspect the harness before the app.
 
 Seven scenarios, all passing. `PerformanceReports/20260814-200407/`.
 
+> Measured before the photo pipeline landed (`d06ff4b`). Every render,
+> energy and footprint number below is from a build without photo
+> capture, the gallery strip or the map's photo pins, so it is a floor
+> for those screens rather than a current reading. Re-run
+> `Scripts/run-performance-tests.sh` before treating any of it as a
+> regression threshold for a hike that has photos.
+
 ### What is already right
 
 These are the load-bearing claims of the architecture, and they hold.
@@ -596,12 +603,13 @@ Startup: `AppModelInit`, `ModelContainerInit`, `GPXParsed`,
 
 ## Where this stands
 
-Verified on 2026-08-14, iPhone 17 Pro simulator, iOS 26.5, Xcode 26.6:
+Performance measured on 2026-08-14, iPhone 17 Pro simulator, iOS 26.5,
+Xcode 26.6; the test and lint rows re-verified on 2026-08-16:
 
 | Check | Result |
 |---|---|
 | `PerformanceUITests` | **7 of 7 passed** |
-| App and widget unit tests | **658 passed** (639 + 19) |
+| App and widget unit tests | **793 passed** (774 + 19) |
 | `swiftlint --strict` | Clean |
 | Launch, first responsive frame | 1.476 s, RSD 1.68% (n=3) |
 | Idle CPU, 7 s | 0.042 s — 0.6% of one core |

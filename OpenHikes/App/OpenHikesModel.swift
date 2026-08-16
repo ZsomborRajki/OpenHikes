@@ -201,7 +201,7 @@ final class OpenHikesModel {
 
     func sceneDidBecomeActive() {
         autoSaveController.sceneDidBecomeActive()
-        if !AppLaunchEnvironment.isUITesting {
+        if !AppLaunchEnvironment.isRunningTests {
             backgroundTracker.refreshBasemaps()
         }
         hikeRecorder.sceneDidBecomeActive()
@@ -231,7 +231,7 @@ final class OpenHikesModel {
             ) ? nil : selectedHike
         }
         autoSaveController.hikeSelectionChanged(to: finishedHike)
-        if !AppLaunchEnvironment.isUITesting {
+        if !AppLaunchEnvironment.isRunningTests {
             backgroundTracker.hikeSelectionChanged(to: finishedHike)
         }
         defaults.set(
@@ -282,12 +282,18 @@ final class OpenHikesModel {
         return hike
     }
 
+    /// Evicts cached tiles no hike claims any more, down to the cache limit.
+    ///
+    /// A fetch that fails sweeps nothing rather than sweeping with an empty
+    /// claim set: ``TileCache/trimCache(claimedBy:limit:)`` tells a hike's
+    /// downloaded offline map apart from browsing residue by nothing but that
+    /// set, so an empty one makes every durable tile evictable.
     func trimTileCache(in modelContext: ModelContext) {
         // Auto-save can have tiles on disk that no manifest claims yet.
         autoSaveController.flushPendingKeys()
-        let claims = (try? modelContext.fetch(FetchDescriptor<Hike>()))?
-            .filter(\.hasStoredTiles)
-            .map(TileOwnership.init) ?? []
+        guard let claims = try? Self.tileClaims(fetchingHikes: {
+            try modelContext.fetch(FetchDescriptor<Hike>())
+        }) else { return }
 
         TileCache.scheduleMaintenance {
             // A cancelled enumeration trims nothing rather than a partial
@@ -316,12 +322,9 @@ final class OpenHikesModel {
         in modelContext: ModelContext,
         store: HikePhotoStore = .shared
     ) {
-        guard let hikes = try? modelContext.fetch(FetchDescriptor<Hike>()) else { return }
-        var claimed = Set<String>()
-        for photo in hikes.flatMap(\.photos) {
-            claimed.insert(photo.fileName)
-            claimed.insert(photo.thumbnailFileName)
-        }
+        guard let claimed = try? Self.photoClaims(fetchingHikes: {
+            try modelContext.fetch(FetchDescriptor<Hike>())
+        }) else { return }
         Task(priority: .utility) { await Self.reclaim(claimed, in: store) }
     }
 
@@ -378,5 +381,44 @@ final class OpenHikesModel {
         for coordinate: CLLocationCoordinate2D
     ) -> String {
         "\(Int(coordinate.latitude * 100)),\(Int(coordinate.longitude * 100))"
+    }
+}
+
+// MARK: - Launch sweep claims
+
+/// What authorizes the two launch sweeps to delete anything.
+///
+/// Both hand a claim set to code whose whole job is removing what is not in
+/// it, and neither `TileCache.trimCache(claimedBy:)` nor
+/// `HikePhotoStore.reclaimOrphans(claimedBy:)` can tell an honestly empty set
+/// from one a failed fetch produced. So these `throw` rather than returning
+/// an empty set: the distinction is in the type, and the call sites above can
+/// only spend a claim set they actually have.
+///
+/// `static` and closure-driven for the same reason
+/// ``OpenHikesModel/loadContainer(persistent:fallback:)`` is — the branch that
+/// matters is the failing one, and nothing else makes SwiftData throw on
+/// demand.
+extension OpenHikesModel {
+    /// Every hike that is holding tiles, as the ownership records a trim is
+    /// measured against.
+    static func tileClaims(
+        fetchingHikes fetch: () throws -> [Hike]
+    ) rethrows -> [TileOwnership] {
+        try fetch().filter(\.hasStoredTiles).map(TileOwnership.init)
+    }
+
+    /// Every file name any hike's photos occupy — the picture and its
+    /// thumbnail both, since a thumbnail left unclaimed is deleted and
+    /// silently re-rendered.
+    static func photoClaims(
+        fetchingHikes fetch: () throws -> [Hike]
+    ) rethrows -> Set<String> {
+        var claimed = Set<String>()
+        for photo in try fetch().flatMap(\.photos) {
+            claimed.insert(photo.fileName)
+            claimed.insert(photo.thumbnailFileName)
+        }
+        return claimed
     }
 }

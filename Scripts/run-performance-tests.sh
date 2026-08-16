@@ -132,6 +132,10 @@ xcrun simctl privacy booted grant location-always "$app_bundle_id" >/dev/null 2>
 
 status=0
 set +e
+# A machine that has not trusted SwiftLintPlugins' fingerprint — any fresh
+# checkout that has never been opened in Xcode — cannot build the app target
+# without -skipPackagePluginValidation. Same reason Scripts/run-ui-tests.sh and
+# every xcodebuild call in .github/workflows/ci.yml carry it.
 xcodebuild test \
     -project "$project" \
     -scheme "$scheme" \
@@ -139,6 +143,7 @@ xcodebuild test \
     -destination "platform=iOS Simulator,name=$device" \
     -only-testing:"$only_testing" \
     -resultBundlePath "$run_directory/result.xcresult" \
+    -skipPackagePluginValidation \
     2>&1 | tee "$build_log" \
     | grep -E "Test Case|PERF-|measured|error:|TEST (SUCCEEDED|FAILED)"
 status="${PIPESTATUS[0]}"

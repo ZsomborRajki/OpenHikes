@@ -47,6 +47,24 @@ nonisolated struct ElevationSample: Identifiable, Equatable, Sendable {
     let elevation: Double
 }
 
+/// How a fix was moving, where Core Motion judged it was not on foot.
+///
+/// **Collected but not yet read.** ``RecordingModels`` tags a fix
+/// `.nonPedestrian` when Core Motion reports automotive, cycling or an
+/// otherwise non-walking activity, and it is persisted with the route — but no
+/// statistic, chart, breakdown or export consults it today.
+///
+/// That is deliberate rather than an oversight. The intended use is flagging
+/// or excluding vehicle-assisted segments (a chairlift, a shuttle bus, the
+/// drive to a second trailhead), which distorts distance, pace and ascent
+/// figures for anyone whose walk included one. Recording it now means the
+/// feature can be built against hikes people have *already* recorded, where
+/// dropping the field would make every existing route permanently unusable
+/// for it — Core Motion's judgement cannot be reconstructed after the fact.
+///
+/// One `String?` per track point is a cheap option to hold open. Do not remove
+/// it as unused: an unused-symbol sweep is right about the reads and wrong
+/// about the reason.
 nonisolated enum RouteMotion: String, Codable, Hashable, Sendable {
     case nonPedestrian = "nonPedestrian"
 }
@@ -57,6 +75,8 @@ nonisolated struct RouteCoordinate: Codable, Hashable, Sendable {
     var longitude: Double
     var elevation: Double?
     var timestamp: Date?
+    /// Recorded for a future feature, read by nothing today — see
+    /// ``RouteMotion``.
     var motion: RouteMotion?
 
     init(

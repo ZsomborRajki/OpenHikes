@@ -105,7 +105,6 @@ nonisolated struct RecordingPoint: Equatable, Sendable {
 
 nonisolated enum RecordingFixPolicy {
     static let maximumHorizontalAccuracy: CLLocationAccuracy = 50
-    static let preferredHorizontalAccuracy: CLLocationAccuracy = 20
     static let maximumSpeed: CLLocationSpeed = 8
     static let minimumDisplacement: CLLocationDistance = 5
     static let maximumInterval: TimeInterval = 10

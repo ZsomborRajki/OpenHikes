@@ -84,8 +84,17 @@ final class OfflineTileDownloader {
     /// Begins preparing and downloading the tiles covering `route` from
     /// `source`, saving detail down to the provider's deepest real zoom level.
     /// Route conversion and tile enumeration stay off the main actor.
+    ///
+    /// A source whose provider forbids bulk downloads is refused here, not
+    /// only where the button is drawn: ``TileProvider/supportsBulkDownload``
+    /// is a promise to the tile host rather than a UI affordance, so the code
+    /// that would do the fetching has to be the thing that keeps it.
     func start(route: [RouteCoordinate], source: ActiveTileSource, scale: CGFloat) {
         guard phase != .downloading else { return }
+        guard source.permitsBulkDownload else {
+            phase = .failed("This map source doesn't allow offline downloads.")
+            return
+        }
         guard route.count > 1 else {
             phase = .failed("No route to save.")
             return

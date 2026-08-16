@@ -649,7 +649,7 @@ private extension PerformanceUITests {
 
 private extension PerformanceUITests {
     /// Steps the simulator through the measured trace. The generic walker in
-    /// ``UITestSupport`` does the waiting; this only names the trace.
+    /// `UITestSupport.swift` does the waiting; this only names the trace.
     @MainActor
     func walkRecordedTrace(in app: XCUIApplication, points: XCUIElement) {
         walkRecordedTrace(Self.recordedTrace, countedBy: points)

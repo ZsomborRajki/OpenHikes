@@ -11,7 +11,8 @@ OpenHikes is a local-first SwiftUI and SwiftData trail viewer for iPhone. It imp
 - Search across saved hikes and MapKit place suggestions.
 - OpenStreetMap, Stadia Outdoors, and Thunderforest Outdoors tile providers.
 - Live location, trail auto-follow with a progress readout, and current WeatherKit conditions.
-- Photos taken on a walk or picked from the library, pinned to where on the trail they were taken, shown as a gallery strip on the hike and as pins on the map, with an optional copy saved to the photo library.- Passive tile auto-save for browsed areas, plus bulk offline downloads where the provider permits them.
+- Photos taken on a walk or picked from the library, pinned to where on the trail they were taken, shown as a gallery strip on the hike and as pins on the map, with an optional copy saved to the photo library.
+- Passive tile auto-save for browsed areas, plus bulk offline downloads where the provider permits them.
 - An iOS Home Screen widget with trail progress, live-recording takeover, recording deep links, and sparse location anchors that help repair degraded GPS gaps.
 - Local SwiftData and App Group storage; OpenHikes has no backend or account sync.
 
@@ -115,10 +116,24 @@ XCTest/XCUITest because Apple's UI automation and launch-performance metrics
 are not available through Swift Testing. UI-test launches use an in-memory
 SwiftData store and isolated preferences; coverage includes app/settings smoke
 navigation, bundled GPX import, programmatic simulator location, recording
-startup, the record → review → save round trip, and
+startup, the record → review → save round trip, route line pattern selection,
+the photo library picker opening over the permanently presented sheet, and
 `XCTApplicationLaunchMetric`. The bundle's fixtures, launch helpers and
 gestures live in `UITestSupport.swift`, so a new UI test reaches a screen the
 same way the existing ones do.
+
+The app recognises these launch arguments, all of which take effect only
+alongside `--ui-testing`:
+
+| Argument | Effect |
+| --- | --- |
+| `--ui-testing` | In-memory SwiftData store and isolated `UserDefaults`. |
+| `--ui-test-expanded-sheet` | Opens with the map sheet already expanded. |
+| `--ui-test-enable-location` | Uses real simulator Core Location instead of the stub. |
+| `--ui-test-offline` | Empty tile storage root and no network monitor, so every tile is a genuine miss. |
+| `--ui-test-import-gpx=<name>` | Imports a bundled GPX fixture at launch. |
+| `--ui-test-trail-graph=<name>` | Matches against a bundled trail graph instead of Overpass. |
+| `--ui-test-performance-log=<scenario>` | Writes signposts, stalls and samples to `Documents/PerformanceLogs/<scenario>.tsv`. |
 
 `AccessibilityUITests` is the VoiceOver half of that bundle. It runs
 `performAccessibilityAudit` per screen — the sweep catches unnamed controls,

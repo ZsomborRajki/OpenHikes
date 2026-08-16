@@ -178,21 +178,37 @@ struct TileProviderTests {
     }
 
     /// `ActiveTileSource` carries `providerID` but not `supportsBulkDownload`,
-    /// so the licensing promise above is dropped at the boundary into
-    /// `OfflineTileDownloader.start(route:source:scale:)` — which is why that
-    /// function cannot, today, enforce the one invariant with consequences
-    /// outside this codebase, and why the only enforcement lives in a view.
+    /// so the licensing promise above has to be *recovered* at the boundary
+    /// into `OfflineTileDownloader.start(route:source:scale:)` rather than
+    /// travelling with the value. ``ActiveTileSource/permitsBulkDownload`` is
+    /// that lookup, and the downloader's refusal is pinned in
+    /// `OfflineTileDownloaderTests`.
     ///
-    /// This pins the lookup that makes enforcement possible: the flag is
-    /// recoverable from a source alone. If that stops being true, a fix has
-    /// nowhere left to stand.
+    /// This pins the projection itself: a source always reports its own
+    /// provider's policy. If that stops being true, the enforcement above it
+    /// has nowhere left to stand.
     @Test("a tile source can be traced back to its bulk-download policy", arguments: TileProvider.all)
     func policyIsRecoverableFromASource(provider: TileProvider) {
         let source = ActiveTileSource(provider)
 
+        #expect(source.permitsBulkDownload == provider.supportsBulkDownload)
         #expect(
             TileProvider.provider(id: source.providerID).supportsBulkDownload
                 == provider.supportsBulkDownload
         )
+    }
+
+    /// An unknown id resolves to the default provider, and the default is the
+    /// one that forbids bulk downloads — so the failure mode of a source the
+    /// catalog no longer recognises is "no download", not "download anyway".
+    @Test("an unrecognised provider id resolves to a policy that forbids downloads")
+    func unknownProviderFailsClosed() {
+        let source = ActiveTileSource(
+            providerID: "removed_provider",
+            urlTemplate: "https://example.invalid/{z}/{x}/{y}.png",
+            maximumZ: 12
+        )
+
+        #expect(!source.permitsBulkDownload)
     }
 }

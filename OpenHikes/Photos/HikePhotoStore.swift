@@ -76,6 +76,19 @@ nonisolated struct ImageDataFormat: Equatable, Sendable {
 /// thread-safe but not declared `Sendable` by the SDK. Every other stored
 /// property is immutable.
 nonisolated final class HikePhotoStore: @unchecked Sendable {
+    /// The two files one photo occupies, named rather than modelled, so a
+    /// measurement can be taken off the main actor. See
+    /// ``byteCount(of:)-(_)``.
+    struct PhotoFiles: Equatable, Sendable {
+        let fileName: String
+        let thumbnailFileName: String
+
+        init(_ photo: HikePhoto) {
+            fileName = photo.fileName
+            thumbnailFileName = photo.thumbnailFileName
+        }
+    }
+
     static let shared = HikePhotoStore()
 
     static let logger = Logger(subsystem: "OpenHikes", category: "HikePhotos")
@@ -248,6 +261,28 @@ nonisolated final class HikePhotoStore: @unchecked Sendable {
         return photos.reduce(into: Int64(0)) { total, photo in
             total += Self.fileSize(url(for: photo))
             total += Self.fileSize(thumbnailURL(for: photo))
+        }
+    }
+
+    /// The same measurement from a snapshot of the names rather than from the
+    /// models.
+    ///
+    /// ``HikePhoto`` is a SwiftData model and so cannot cross an isolation
+    /// boundary. The one screen that shows this number reads the photos on the
+    /// main actor and measures them off it, which needs something that can —
+    /// exactly what ``TileOwnership`` does for a hike's tiles.
+    func byteCount(of files: [PhotoFiles]) -> Int64 {
+        assertOffMainThread("Photo measurement must stay off the main thread")
+        return files.reduce(into: Int64(0)) { total, file in
+            total += Self.fileSize(
+                directory.appendingPathComponent(file.fileName, isDirectory: false)
+            )
+            total += Self.fileSize(
+                thumbnailDirectory.appendingPathComponent(
+                    file.thumbnailFileName,
+                    isDirectory: false
+                )
+            )
         }
     }
 

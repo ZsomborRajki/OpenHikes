@@ -66,6 +66,14 @@ nonisolated final class AutoSaveTileStore: Sendable {
 
     /// Makes `hikeID` the active auto-save target. Replaces any previously
     /// active hike.
+    ///
+    /// **Test seam.** No production path calls this, and none should: it
+    /// builds the corridor synchronously on the caller's thread, which is the
+    /// work the two-phase ``beginActiveHike(id:knownKeys:acceptsNewClaims:)``
+    /// / ``updateCorridor(_:for:)`` split exists to keep off the main actor —
+    /// see ``AutoSaveController/activate(hike:)``. It survives because a test
+    /// that only needs a store pointed at a route should not have to
+    /// reproduce that sequence.
     func setActiveHike(
         id: UUID,
         route: [CLLocationCoordinate2D],

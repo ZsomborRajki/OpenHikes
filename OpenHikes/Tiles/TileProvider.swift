@@ -107,6 +107,17 @@ struct ActiveTileSource: Equatable {
 }
 
 extension ActiveTileSource {
+    /// Whether the provider behind this source permits pre-downloading tiles.
+    ///
+    /// The source deliberately does not store the flag: it is projected from
+    /// ``TileProvider/supportsBulkDownload`` on every read, so a source can
+    /// never carry a stale `true` for a provider whose policy has since
+    /// changed. An unknown `providerID` resolves to the (keyless, download-
+    /// forbidding) default, which fails closed.
+    var permitsBulkDownload: Bool {
+        TileProvider.provider(id: providerID).supportsBulkDownload
+    }
+
     /// Resolves `provider`'s bundled key into its URL template. Pair with
     /// ``TileProvider/renderable(id:)`` rather than ``TileProvider/provider(id:)``,
     /// so a key-gated provider with no key can't be built into a source that

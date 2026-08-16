@@ -4,7 +4,7 @@
 //
 //  The functional half of this bundle: the app driven the way a hiker drives
 //  it. Fixtures, launch helpers and location plumbing live in
-//  ``UITestSupport``; accessibility-specific assertions live in
+//  `UITestSupport.swift`; accessibility-specific assertions live in
 //  ``AccessibilityUITests``.
 //
 

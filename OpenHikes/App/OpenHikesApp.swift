@@ -26,7 +26,7 @@ struct OpenHikesApp: App {
             MainThreadWatchdog.start()
         }
         #endif
-        if !AppLaunchEnvironment.isUITesting {
+        if !AppLaunchEnvironment.isRunningTests {
             TileCache.scheduleMaintenance {
                 TileCache.shared.removeExpiredTiles()
             }

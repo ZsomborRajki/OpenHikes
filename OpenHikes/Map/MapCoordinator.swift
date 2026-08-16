@@ -342,8 +342,13 @@ extension MapView {
             }
         }
 
-        /// Applies the live recording's immutable chunks plus its bounded tail,
-        /// then re-registers for the next revision.
+        /// Applies the live recording's immutable chunks plus its bounded
+        /// tail, then re-registers for the next revision.
+        ///
+        /// Owns three overlays, not the two the trace itself implies: the
+        /// review segment (``recordingReviewOverlay``) is built, torn down
+        /// and rendered from here too, because it is the same trace seen
+        /// after the matcher has had its say.
         func observeRecordingTrace(_ trace: RecordingTrace, on mapView: MKMapView) {
             observedRecordingTrace = trace
             observedRecordingMapView = mapView

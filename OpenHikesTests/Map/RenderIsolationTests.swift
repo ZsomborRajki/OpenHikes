@@ -667,7 +667,7 @@ struct DownloadProgressTests {
 
         downloader.start(
             route: Fixture.ridgeRoute,
-            source: ActiveTileSource(providerID: "test_stub", urlTemplate: "https://tiles.invalid/{z}/{x}/{y}.png", maximumZ: 14),
+            source: ActiveTileSource(providerID: TileProvider.stadiaOutdoors.id, urlTemplate: "https://tiles.invalid/{z}/{x}/{y}.png", maximumZ: 14),
             scale: 2
         )
         await downloader.waitForPlanning()

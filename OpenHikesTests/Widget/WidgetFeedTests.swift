@@ -30,17 +30,24 @@ final class WidgetFeedTests {
     private let container: ModelContainer
     private let context: ModelContext
     private let tracker: BackgroundTrailTracker
+    /// The tracker's own suite rather than the host app's, which is what
+    /// ``BackgroundTrailTracker/init(container:monitor:defaults:)`` asks for:
+    /// running against `UserDefaults.standard` reads and writes the simulator
+    /// app's real preferences, and leaves cross-suite isolation resting on
+    /// this suite's `.serialized` trait rather than on the state being
+    /// separate.
+    private let defaults: UserDefaults
 
     init() throws {
         container = try Fixture.modelContainer()
         context = ModelContext(container)
-        tracker = BackgroundTrailTracker(container: container)
+        defaults = try makeScratchDefaults()
+        tracker = BackgroundTrailTracker(container: container, defaults: defaults)
         SharedStore.clear()
     }
 
     deinit {
         SharedStore.clear()
-        UserDefaults.standard.removeObject(forKey: SettingsKey.lastMatchedDistance)
     }
 
     private func hike() -> Hike {

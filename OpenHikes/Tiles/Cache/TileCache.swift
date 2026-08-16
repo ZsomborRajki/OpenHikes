@@ -346,11 +346,22 @@ nonisolated extension TileCache {
     ///   what ``TileNetworkPolicy`` weighs against the connection's cost.
     ///   Defaults to `.interactive`, because the only caller that isn't is the
     ///   bulk downloader, and it goes through `saveTileDurably` anyway.
+    ///
+    /// `@concurrent` rather than plain `nonisolated`: everything below the
+    /// first memory hit is synchronous disk work, and an `async` function that
+    /// inherits its caller's isolation would run all of it on the main actor
+    /// for any caller that happens to be there. A render miss must not become
+    /// main-thread I/O, so the hop is in the callee rather than trusted to
+    /// every call site.
+    @concurrent
     @discardableResult func loadTile(
         forKey key: String,
         url: URL,
         purpose: TileFetchPurpose = .interactive
     ) async -> TileImage? {
+        assertOffMainThread(
+            "loadTile(forKey:url:purpose:) stats and reads tile files synchronously — call it off the main thread"
+        )
         let mutationToken = mutationToken(forKey: key)
         if let cached = memoryImage(forKey: key) { return cached }
 
@@ -413,7 +424,14 @@ nonisolated extension TileCache {
     /// coverage that silently isn't there when they're out of signal.
     ///
     /// Returns whether the tile is durably saved once this returns.
+    ///
+    /// `@concurrent` for the same reason as ``loadTile(forKey:url:purpose:)``:
+    /// the move and the write are synchronous, so the hop belongs here.
+    @concurrent
     @discardableResult func saveTileDurably(forKey key: String, url: URL) async -> Bool {
+        assertOffMainThread(
+            "saveTileDurably(forKey:url:) moves and writes tile files synchronously — call it off the main thread"
+        )
         let mutationToken = mutationToken(forKey: key)
         // Already saved by an earlier download or by auto-save, or already
         // browsed and so sitting on disk in the wrong tier: either way, no
@@ -629,7 +647,10 @@ nonisolated extension TileCache {
     /// when it already was, which is what lets a second hike over the same
     /// ground claim tiles the first one saved.
     @discardableResult func promoteCachedTile(forKey key: String) -> Bool {
-        mutationVersions.withLock { _ in
+        assertOffMainThread(
+            "promoteCachedTile(forKey:) stats and moves tile files synchronously — call it off the main thread"
+        )
+        return mutationVersions.withLock { _ in
             let (cached, durable) = filePaths(forKey: key)
             if freshModificationDate(for: durable) != nil {
                 // Already coverage. Any browsing-tier copy is the same bytes

@@ -19,7 +19,7 @@
 //
 //  Both are out-of-process, so nothing here can import the app; screens are
 //  reached with the same launch arguments and helpers the functional tests
-//  use (see ``UITestSupport``).
+//  use (see `UITestSupport.swift`).
 //
 
 import XCTest

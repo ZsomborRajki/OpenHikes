@@ -53,10 +53,10 @@ extension HikeRecorder {
         source.apply(resolvedEnergyProfile())
     }
 
-    /// Re-arms after every change, the same shape ``MapCoordinator`` uses:
-    /// `withObservationTracking` fires once and then forgets, so an observer
-    /// that does not re-register sees exactly one transition and then goes
-    /// quiet for the rest of the hike.
+    /// Re-arms after every change, the same shape ``MapView/Coordinator``
+    /// uses: `withObservationTracking` fires once and then forgets, so an
+    /// observer that does not re-register sees exactly one transition and
+    /// then goes quiet for the rest of the hike.
     func observePowerState() {
         withObservationTracking {
             _ = powerMonitor.state

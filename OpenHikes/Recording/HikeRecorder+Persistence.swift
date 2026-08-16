@@ -439,16 +439,6 @@ extension HikeRecorder {
         publishSharedRecordingSnapshot(force: true)
     }
 
-    func scheduleAndPublishAfterPoint(_ point: RecordingPoint) {
-        let pointToJournal = point
-        enqueueJournalOperation { journal in
-            try await journal.append(pointToJournal)
-        }
-        scheduleJournalFlush()
-        schedulePendingWidgetFixMerge()
-        publishSharedRecordingSnapshot(force: stats.pointCount == 1)
-    }
-
     nonisolated static func normalizedCustomName(
         _ customName: String?
     ) -> String? {

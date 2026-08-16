@@ -113,21 +113,6 @@ extension View {
         #endif
     }
 
-    /// Merges this glass shape with every other carrying the same `id` inside
-    /// the enclosing ``GlassStack``, so a set of controls reads as one pane
-    /// rather than as several tiles that happen to be adjacent.
-    @ViewBuilder
-    func glassUnion(
-        id: some Hashable & Sendable,
-        in namespace: Namespace.ID
-    ) -> some View {
-        #if os(visionOS)
-        self
-        #else
-        glassEffectUnion(id: id, namespace: namespace)
-        #endif
-    }
-
     /// Lets a scroll view's content fade into a progressive blur under the bar
     /// above it, instead of meeting it at a hard line — the backdrop a glass
     /// navigation bar is drawn to sit on.

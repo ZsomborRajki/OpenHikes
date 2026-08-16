@@ -40,6 +40,11 @@ struct SettingsView: View {
     /// Tile bytes on disk, split into offline coverage and browsing residue;
     /// `nil` until measured.
     @State private var usage: TileCache.DiskUsage?
+    /// What the hikes' pictures cost on disk, thumbnails included; `nil` until
+    /// measured. Separate from ``usage`` because it is measured from SwiftData
+    /// rather than by enumerating a tile directory, and because a hike deleted
+    /// while this sheet is open changes it without changing a tile count.
+    @State private var photoBytes: Int64?
     @State private var showDeleteAll = false
 
     /// The provider the map is really drawing with, which is not always the
@@ -70,6 +75,7 @@ struct SettingsView: View {
                 }
             }
             .task { await refreshUsage() }
+            .task { await refreshPhotoBytes() }
         }
         .accessibilityIdentifier("settings-screen")
     }
@@ -266,6 +272,15 @@ struct SettingsView: View {
                 systemImage: "clock.arrow.circlepath",
                 bytes: usage?.unclaimed
             )
+            // Read-only, deliberately: a photo is the one thing in this app
+            // that cannot be re-fetched, so there is no "clear" beside it.
+            // It is here because it was the only sizeable thing the app wrote
+            // to disk with no number anywhere in the UI.
+            usageRow(
+                "Photos",
+                systemImage: "photo.on.rectangle",
+                bytes: photoBytes
+            )
 
             Button("Clear Map Cache", action: clearMapCache)
                 .disabled((usage?.unclaimed ?? 0) == 0)
@@ -297,6 +312,7 @@ struct SettingsView: View {
                 + " The map cache is just what you've recently looked at — it's kept under"
                 + " \(Self.byteText(TileCache.cacheByteLimit)), oldest first,"
                 + " and clearing it costs you nothing offline."
+                + " Photos are only removed when you delete them, or the hike they belong to."
             )
         }
     }
@@ -387,6 +403,21 @@ private extension SettingsView {
 
     func refreshUsage() async {
         usage = await Self.diskUsage(claimedBy: claimSnapshots())
+    }
+
+    /// Measured off the main actor for the same reason the tile numbers are:
+    /// ``HikePhotoStore/byteCount(of:)`` stats two files per photo and asserts
+    /// it is not on the main thread. The photos are snapshotted here, where
+    /// reading SwiftData is legal, and only the array crosses.
+    func refreshPhotoBytes() async {
+        photoBytes = await Self.photoByteCount(
+            of: hikes.flatMap(\.photos).map(HikePhotoStore.PhotoFiles.init)
+        )
+    }
+
+    @concurrent nonisolated
+    static func photoByteCount(of files: [HikePhotoStore.PhotoFiles]) async -> Int64 {
+        HikePhotoStore.shared.byteCount(of: files)
     }
 
     /// Both storage actions below report by re-measuring, never by assuming.
