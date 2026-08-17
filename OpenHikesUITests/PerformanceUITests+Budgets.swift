@@ -68,4 +68,31 @@ extension PerformanceUITests {
             "the main thread stalled \(stalls) times during \(phase)"
         )
     }
+
+    /// A ceiling on the worst main-thread stall the launch produced.
+    ///
+    /// The fifth budget shape, and the one this file's own header warned about
+    /// — so it is worth saying why it earned its place. Every other budget is
+    /// a count taken across a phase, and launch has no phase: it is over
+    /// before the first counter is read, which is exactly why the ~600 ms
+    /// stall the watchdog has recorded in every run since this suite existed
+    /// went un-asserted while being the largest single cost in the document.
+    ///
+    /// Milliseconds rather than a count, because the count is always one and
+    /// the number that matters is how long. Set well above what the app does
+    /// today for the reason every threshold here is: an old device, a cold
+    /// simulator and a busy machine all move this, and a test that fails on a
+    /// loaded laptop is a test that gets deleted.
+    func assertLaunchStall(
+        atMost milliseconds: Double,
+        in counters: PerformanceCounters
+    ) {
+        let worst = counters.maximum(of: "MainThread")
+        XCTAssertLessThanOrEqual(
+            worst,
+            milliseconds,
+            "the longest main-thread stall was \(worst) ms, ceiling \(milliseconds) ms — "
+                + "launch is blocking longer than it used to"
+        )
+    }
 }

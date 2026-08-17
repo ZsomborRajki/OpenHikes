@@ -420,6 +420,20 @@ struct OpenHikesView: View {
             return
         }
         await performImport(from: url)
+        await seedRequestedPhotos()
+    }
+
+    /// Gives the imported hike the photos a walk would have come home with.
+    ///
+    /// After the import rather than inside it, because the selection race
+    /// `performImport` arbitrates is about which hike owns the map — a hike
+    /// that lost it still persisted, and is still the one to photograph.
+    private func seedRequestedPhotos() async {
+        #if DEBUG
+        let count = AppLaunchEnvironment.seededPhotoCount
+        guard count > 0, let hike = selectedHike else { return }
+        await SeededPhotoFixture.attach(count: count, to: hike)
+        #endif
     }
 
     private func performImport(from url: URL) async {

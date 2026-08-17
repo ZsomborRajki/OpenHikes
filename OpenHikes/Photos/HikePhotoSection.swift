@@ -30,44 +30,61 @@ struct HikePhotoSection: View {
     private static let cornerRadius: CGFloat = 12
 
     var body: some View {
-        if hike.hasPhotos {
-            let photos = hike.orderedPhotos
-            VStack(alignment: .leading, spacing: 12) {
-                Text("Photos")
-                    .font(.headline)
-                    .frame(maxWidth: .infinity, alignment: .leading)
-                    .accessibilityAddTraits(.isHeader)
-
-                ScrollView(.horizontal) {
-                    HStack(spacing: Self.tileSpacing) {
-                        ForEach(photos) { photo in
-                            Button {
-                                onOpen(photo)
-                            } label: {
-                                HikePhotoThumbnail(
-                                    photo: photo,
-                                    store: store,
-                                    size: Self.tileSize,
-                                    cornerRadius: Self.cornerRadius
-                                )
-                            }
-                            .buttonStyle(.plain)
-                            .accessibilityLabel(Self.label(for: photo, among: photos))
-                            .accessibilityIdentifier("hike-photo-\(photo.id.uuidString)")
-                        }
-                    }
-                    // Room for the tiles' shadows and for a finger to start a
-                    // scroll from the very edge of the row.
-                    .padding(.vertical, 2)
-                }
-                .scrollIndicators(.hidden)
-                .accessibilityIdentifier("hike-photo-strip")
-
-                Text(footnote(count: photos.count, anchored: photos.count(where: \.isAnchored)))
-                    .font(.caption2)
-                    .foregroundStyle(.secondary)
+        // Taking a photo writes `hike.photos`, and this is the body that
+        // should absorb that write. The mark is how a regression that pushes
+        // it up into `HikeDetailBody` — or a strip that re-renders once per
+        // tile decode — becomes visible in the report rather than being
+        // argued about.
+        RenderSignpost.mark("HikePhotoSectionBody", "\(hike.photos.count) photos")
+        return Group {
+            if hike.hasPhotos {
+                gallery(hike.orderedPhotos)
             }
-            .accessibilityIdentifier("photos-section")
+        }
+    }
+
+    @ViewBuilder
+    private func gallery(_ photos: [HikePhoto]) -> some View {
+        VStack(alignment: .leading, spacing: 12) {
+            Text("Photos")
+                .font(.headline)
+                .frame(maxWidth: .infinity, alignment: .leading)
+                .accessibilityAddTraits(.isHeader)
+
+            ScrollView(.horizontal) {
+                HStack(spacing: Self.tileSpacing) {
+                    ForEach(photos) { photo in
+                        Button {
+                            onOpen(photo)
+                        } label: {
+                            HikePhotoThumbnail(
+                                photo: photo,
+                                store: store,
+                                size: Self.tileSize,
+                                cornerRadius: Self.cornerRadius
+                            )
+                        }
+                        .buttonStyle(.plain)
+                        .accessibilityLabel(Self.label(for: photo, among: photos))
+                        .accessibilityIdentifier("hike-photo-\(photo.id.uuidString)")
+                    }
+                }
+                // Room for the tiles' shadows and for a finger to start a
+                // scroll from the very edge of the row.
+                .padding(.vertical, 2)
+            }
+            .scrollIndicators(.hidden)
+            // On the strip and deliberately not on the `VStack` around it.
+            // SwiftUI pushes a container's identifier down onto every
+            // descendant, so an identifier here *and* one on the stack leaves
+            // the heading, the strip and the footnote all answering to the
+            // stack's name — and the strip unreachable under its own. That is
+            // what it did until a performance scenario went looking for it.
+            .accessibilityIdentifier("hike-photo-strip")
+
+            Text(footnote(count: photos.count, anchored: photos.count(where: \.isAnchored)))
+                .font(.caption2)
+                .foregroundStyle(.secondary)
         }
     }
 

@@ -18,6 +18,10 @@ nonisolated enum AppLaunchEnvironment {
         private static let trailGraphPrefix = "--ui-test-trail-graph="
         private static let performanceLogPrefix = "--ui-test-performance-log="
         private static let offlineArgument = "--ui-test-offline"
+        private static let seedPhotosPrefix = "--ui-test-seed-photos="
+        /// Enough to fill the strip and force it to scroll, and few enough
+        /// that a scenario seeding them does not spend its budget encoding.
+        private static let maximumSeededPhotos = 24
 
         let isUITesting: Bool
         let startsWithExpandedSheet: Bool
@@ -26,6 +30,7 @@ nonisolated enum AppLaunchEnvironment {
         let trailGraphFixtureName: String?
         let performanceLogScenario: String?
         let simulatesOffline: Bool
+        let seededPhotoCount: Int
 
         init(arguments: [String]) {
             isUITesting = arguments.contains(Self.uiTestingArgument)
@@ -50,6 +55,13 @@ nonisolated enum AppLaunchEnvironment {
                 prefix: Self.performanceLogPrefix,
                 isUITesting: isUITesting
             )
+            seededPhotoCount = Self.fixtureName(
+                in: arguments,
+                prefix: Self.seedPhotosPrefix,
+                isUITesting: isUITesting
+            )
+            .flatMap(Int.init)
+            .map { count in min(max(0, count), Self.maximumSeededPhotos) } ?? 0
         }
 
         /// Reads a name out of a launch argument, for a bundled fixture or a
@@ -113,6 +125,19 @@ nonisolated enum AppLaunchEnvironment {
     /// which is what keeps the diagnostics off an ordinary run.
     static let performanceLogScenario =
         configuration.performanceLogScenario
+
+    /// How many synthetic photos to attach to the hike a launch imports.
+    ///
+    /// The photo pipeline is the one part of the app a UI test cannot reach
+    /// on its own: the camera is unavailable on the Simulator and the library
+    /// picker is a system process. Without seeding, every scenario measures a
+    /// hike with an empty gallery — which is how the photo feature shipped
+    /// without appearing in a single performance number.
+    ///
+    /// These go through ``HikePhotoImport``, so what is measured afterwards is
+    /// the real store, the real files on disk and the real decode path; only
+    /// the pixels are invented.
+    static let seededPhotoCount = configuration.seededPhotoCount
 
     /// Whether this launch should behave as though it has no connection at
     /// all, regardless of what the simulator's network is doing.

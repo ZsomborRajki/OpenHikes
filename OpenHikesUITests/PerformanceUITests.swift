@@ -64,6 +64,10 @@ nonisolated final class PerformanceUITests: XCTestCase {
     private static let browsingGestures = 3
     private static let scrubSteps = 9
     private static let launchIterations = 3
+    /// The watchdog has reported 489–711 ms here since this suite existed.
+    /// A tripwire above the noise, not a target — the target is the P1 item
+    /// in `PERFORMANCE.md`.
+    private static let launchStallCeilingMilliseconds: Double = 1200
 
     // MARK: - Idle
 
@@ -92,6 +96,10 @@ nonisolated final class PerformanceUITests: XCTestCase {
         assertNoMoreThan(2, of: "MapSheetHikesBody", in: idle, phase: "idle")
         assertNoMoreThan(0, of: "MapRouteRebuilt", in: idle, phase: "idle")
         assertNoStall(in: idle, phase: "idle")
+        // The launch stall, checked here because `idle` is the cheapest
+        // scenario and every scenario pays the same one. Ceiling rather than
+        // expectation — see `assertLaunchStall`.
+        assertLaunchStall(atMost: Self.launchStallCeilingMilliseconds, in: counters(in: app))
         finish()
     }
 
@@ -288,6 +296,18 @@ nonisolated final class PerformanceUITests: XCTestCase {
             "the recording trace was drawn \(delta.count(of: "MapRecordingTraceApplied")) "
                 + "times for \(fixes) backgrounded fixes — it should be caught up once"
         )
+        // The elapsed readout is a 1 Hz `TimelineView`, and this window is
+        // long enough to have collected a tick a second if the system were
+        // still running it. It is the app's last known per-second wake-up, and
+        // this is the assertion that turns "iOS almost certainly suspends it"
+        // into something a regression can fail.
+        let seconds = Double(Self.recordedTrace.count - 1) * UITestFixture.paceSeconds
+        XCTAssertLessThanOrEqual(
+            delta.count(of: "RecordingClockTick"),
+            transitions,
+            "the elapsed clock ticked \(delta.count(of: "RecordingClockTick")) times over "
+                + "\(seconds) backgrounded seconds — a 1 Hz redraw is running with no screen to draw on"
+        )
         finish()
     }
 
@@ -433,6 +453,20 @@ nonisolated final class PerformanceUITests: XCTestCase {
         assertRatio(atMost: 1.5, of: "OpenHikesViewBody", per: fixes, in: delta)
         assertRatio(atMost: 1.5, of: "MapSheetHikesBody", per: fixes, in: delta)
         assertRatio(atMost: 0.5, of: "MapRouteRebuilt", per: fixes, in: delta)
+        // The elapsed readout has to actually elapse. A `TimelineView` whose
+        // content is a view holding only the recorder is structurally
+        // identical on every tick, so SwiftUI skips its body and the clock
+        // silently freezes — a bug this suite created once and did not catch,
+        // because every other budget here is an upper bound and a frozen clock
+        // scores perfectly against all of them. This is the lower bound that
+        // makes the backgrounded budget mean something.
+        let elapsed = Date().timeIntervalSince1970 - started
+        XCTAssertGreaterThanOrEqual(
+            delta.count(of: "RecordingClockTick"),
+            elapsed / 2,
+            "the elapsed clock redrew \(delta.count(of: "RecordingClockTick")) times in "
+                + "\(Int(elapsed)) foreground seconds — a 1 Hz readout has stopped updating"
+        )
         assertNoStall(in: delta, phase: "recording")
         finish()
     }
@@ -482,7 +516,7 @@ nonisolated final class PerformanceUITests: XCTestCase {
 
 // MARK: - Phases
 
-private extension PerformanceUITests {
+extension PerformanceUITests {
     @MainActor
     func counters(in app: XCUIApplication) -> PerformanceCounters {
         let probe = element(Self.probeIdentifier, in: app)
@@ -607,7 +641,7 @@ private extension PerformanceUITests {
 
 // MARK: - Launching
 
-private extension PerformanceUITests {
+extension PerformanceUITests {
     @MainActor
     func launch(scenario: String, arguments: [String] = []) -> XCUIApplication {
         self.scenario = scenario

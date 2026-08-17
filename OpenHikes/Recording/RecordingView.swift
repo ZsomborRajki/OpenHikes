@@ -201,6 +201,15 @@ private struct RecordingConditionsNotice: View {
 
 private struct RecordingHeader: View {
     let recorder: HikeRecorder
+    /// Read here, on the render path, unlike ``MapView/Coordinator``'s
+    /// notification observers — and for the opposite reason. The coordinator
+    /// gates work that MapKit does off SwiftUI's path entirely; this gates
+    /// whether a `TimelineView` is *in the hierarchy at all*, which is a
+    /// question only SwiftUI can answer. Scene phase changes a handful of
+    /// times per hike, so the redraw it costs is bounded by transitions rather
+    /// than by fixes.
+    @Environment(\.scenePhase)
+    private var scenePhase
 
     var body: some View {
         HStack(spacing: 10) {
@@ -211,15 +220,21 @@ private struct RecordingHeader: View {
             Text(phaseTitle)
                 .font(.headline)
             Spacer()
-            if recorder.sessionStartedAt != nil {
+            // Only while the readout is on screen. A recording keeps running
+            // in the user's pocket for hours, and iOS does *not* suspend a
+            // `TimelineView` in an app held awake by background location — it
+            // was measured redrawing at a steady 1 Hz with the screen off,
+            // which is ~21,600 pointless redraws over a six-hour walk. The
+            // elapsed value is derived from a timestamp, not accumulated, so
+            // nothing is lost by not counting: the readout is correct again on
+            // the first tick after return.
+            if recorder.sessionStartedAt != nil, scenePhase == .active {
                 TimelineView(.periodic(from: .now, by: 1)) { _ in
                     // The tick only says *when* to redraw; the value comes
                     // from ``HikeRecorder/elapsedSeconds()``, which counts
                     // from a monotonic source wherever it has one rather than
                     // from the wall clock.
-                    Text(HikeFormat.duration(recorder.elapsedSeconds()))
-                        .font(.headline.monospacedDigit())
-                        .foregroundStyle(.secondary)
+                    RecordingClock(readout: HikeFormat.duration(recorder.elapsedSeconds()))
                 }
             }
         }
@@ -240,6 +255,29 @@ private struct RecordingHeader: View {
         case .idle: .green
         case .failed: .red
         }
+    }
+}
+
+/// The elapsed-time readout, and the app's last per-second wake-up.
+///
+/// Its own view so the 1 Hz tick redraws a `Text` rather than the header
+/// around it, and so the tick is *countable*: `RecordingClockTick` is what
+/// makes "the system suspends this while backgrounded" a measurement in the
+/// report instead of an assumption in a comment.
+///
+/// It stores the formatted readout rather than the recorder deliberately.
+/// A view holding only a reference is structurally identical on every tick,
+/// so SwiftUI skips its body and the clock freezes — which is exactly what
+/// happened the first time this was extracted, and what the assertion in
+/// `testLiveRecordingCostPerFix` now catches.
+private struct RecordingClock: View {
+    let readout: String
+
+    var body: some View {
+        RenderSignpost.mark("RecordingClockTick")
+        return Text(readout)
+            .font(.headline.monospacedDigit())
+            .foregroundStyle(.secondary)
     }
 }
 

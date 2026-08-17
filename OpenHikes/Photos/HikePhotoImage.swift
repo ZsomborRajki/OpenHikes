@@ -47,7 +47,9 @@ nonisolated enum HikePhotoLoader {
         in store: HikePhotoStore
     ) async -> LoadedPhotoImage? {
         guard !Task.isCancelled else { return nil }
-        return store.thumbnail(for: photo).map(LoadedPhotoImage.init)
+        return RenderSignpost.interval("PhotoThumbnailDecoded") {
+            store.thumbnail(for: photo).map(LoadedPhotoImage.init)
+        }
     }
 
     @concurrent
@@ -56,6 +58,8 @@ nonisolated enum HikePhotoLoader {
         in store: HikePhotoStore
     ) async -> LoadedPhotoImage? {
         guard !Task.isCancelled else { return nil }
-        return store.displayImage(for: photo).map(LoadedPhotoImage.init)
+        return RenderSignpost.interval("PhotoImageDecoded") {
+            store.displayImage(for: photo).map(LoadedPhotoImage.init)
+        }
     }
 }
