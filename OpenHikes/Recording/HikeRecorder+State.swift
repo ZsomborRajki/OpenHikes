@@ -65,6 +65,14 @@ protocol RecordingLocationSource: AnyObject {
     /// with them.
     func apply(_ profile: RecordingEnergyProfile)
     func stopRecordingUpdates()
+    /// Ends a background activity session this app left outstanding when a
+    /// previous launch died without stopping cleanly.
+    ///
+    /// Separate from ``stopRecordingUpdates()`` because the two have nothing
+    /// in common but the word "stop". That one releases a session *this*
+    /// process is holding; this one releases a session that outlived the
+    /// process that made it, which no reference in memory points at any more.
+    func releaseOrphanedBackgroundActivity()
 }
 
 extension RecordingLocationSource {
@@ -72,6 +80,12 @@ extension RecordingLocationSource {
     /// energy profile as well.
     func apply(_ profile: RecordingEnergyProfile) {
         // Nothing to do: the default is to ignore the profile entirely.
+    }
+
+    /// Likewise: a source with no background activity session has none to
+    /// orphan, and nothing to do here.
+    func releaseOrphanedBackgroundActivity() {
+        // Nothing to do: the default source holds no background session.
     }
 }
 
@@ -177,6 +191,35 @@ final class SystemRecordingLocationSource: RecordingLocationSource {
         backgroundSession = nil
         manager.allowsBackgroundLocationUpdates = false
         manager.showsBackgroundLocationIndicator = false
+        #endif
+    }
+
+    /// Reclaims the session a previous launch left outstanding, then ends it.
+    ///
+    /// The two steps are one gesture, not two. A session outlives the process
+    /// that created it on purpose — that is what lets a relaunch pick a hike
+    /// back up — but it also means a launch that *declines* to resume has no
+    /// reference to invalidate, because the object holding it died with the
+    /// previous process. Constructing one reclaims the outstanding session
+    /// rather than opening a second (the same property
+    /// ``startBackgroundActivitySession()`` relies on), so invalidating that
+    /// fresh handle ends the real thing and takes the status indicator with
+    /// it. Without this the walker is left with a tappable location pill for
+    /// a recording the app has already decided not to continue.
+    func releaseOrphanedBackgroundActivity() {
+        #if os(iOS)
+        // A session this process owns belongs to a live recording. Ending it
+        // here would silently stop that recording, so hand it to the code
+        // that also tears down location updates.
+        guard backgroundSession == nil else {
+            stopRecordingUpdates()
+            return
+        }
+        // Reclaiming needs the authorization that created it. Without that,
+        // constructing a session would prompt for location on launch to end
+        // something the system has already ended for us.
+        guard authorization == .authorized else { return }
+        CLBackgroundActivitySession().invalidate()
         #endif
     }
 

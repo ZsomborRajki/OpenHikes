@@ -93,6 +93,7 @@ extension HikeRecorder {
         if wasPaused {
             phase = .paused
             recoveryState = .needsDecision(summary)
+            source.releaseOrphanedBackgroundActivity()
             publishSharedRecordingSnapshot(force: true)
             return
         }
@@ -107,6 +108,11 @@ extension HikeRecorder {
         } else {
             phase = .paused
             recoveryState = .needsDecision(summary)
+            // Nothing here reclaims the activity session this hike was started
+            // with, so without this the location pill would outlive the
+            // decision not to resume — and stay tappable, pointing at a
+            // recording that is sitting paused rather than running.
+            source.releaseOrphanedBackgroundActivity()
         }
         publishSharedRecordingSnapshot(force: true)
     }

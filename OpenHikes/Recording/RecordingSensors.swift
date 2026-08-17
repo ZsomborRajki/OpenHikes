@@ -24,7 +24,11 @@ protocol RecordingElevationSource: AnyObject {
 }
 
 final class SystemRecordingElevationSource: RecordingElevationSource {
-    private static let logger = Logger(
+    /// `nonisolated` so the CoreMotion callback below can log. Under
+    /// `SWIFT_DEFAULT_ACTOR_ISOLATION = MainActor` a static stored property is
+    /// main-actor isolated unless it says otherwise, and this one is read from
+    /// CoreMotion's queue.
+    nonisolated private static let logger = Logger(
         subsystem: "OpenHikes",
         category: "RecordingElevation"
     )
@@ -54,7 +58,18 @@ final class SystemRecordingElevationSource: RecordingElevationSource {
         #if os(iOS) && canImport(CoreMotion)
         guard isAvailable else { return }
         altimeter.stopRelativeAltitudeUpdates()
-        altimeter.startRelativeAltitudeUpdates(to: queue) { data, error in
+        // `@Sendable` is load-bearing, not decoration. The project builds with
+        // `SWIFT_DEFAULT_ACTOR_ISOLATION = MainActor` and `CMAltitudeHandler`
+        // is imported without `@Sendable`, so an unannotated closure here
+        // inherits this method's isolation — which is `@MainActor`, inferred
+        // from the `RecordingElevationSource` requirement it witnesses, even
+        // though the enclosing type does no main-actor work. The compiler then
+        // opens the closure with an executor assertion, CoreMotion invokes it
+        // on `queue` rather than the main thread, and the very first delivery
+        // trips `swift_task_checkIsolated`. That first delivery is whatever
+        // follows the Motion & Fitness prompt, so granting *or* refusing it
+        // crashed the moment a recording started.
+        altimeter.startRelativeAltitudeUpdates(to: queue) { @Sendable data, error in
             if let error {
                 Self.logger.error(
                     "Barometer update failed: \(error.localizedDescription, privacy: .public)"
@@ -120,7 +135,10 @@ final class SystemRecordingMotionSource: RecordingMotionSource {
         #if os(iOS) && canImport(CoreMotion)
         guard isAvailable else { return }
         manager.stopActivityUpdates()
-        manager.startActivityUpdates(to: queue) { activity in
+        // `@Sendable` for the same reason as the altimeter above: without it
+        // this closure inherits the witness's `@MainActor` isolation and traps
+        // when CoreMotion delivers on `queue`.
+        manager.startActivityUpdates(to: queue) { @Sendable activity in
             guard let activity else {
                 handler(.unknown)
                 return

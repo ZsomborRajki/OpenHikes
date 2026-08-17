@@ -78,6 +78,9 @@ extension HikeRecorderTests {
         #expect(recorder.phase == .paused)
         #expect(recorder.currentHike?.isRecording == true)
         #expect(source.startCount == 0)
+        // The previous launch's activity session outlived it, and nothing here
+        // resumes the recording that would reclaim it.
+        #expect(source.releaseOrphanedBackgroundActivityCount == 1)
         guard case .needsDecision = recorder.recoveryState else {
             Issue.record("the recovered pause should be explained to the user")
             return
@@ -106,6 +109,9 @@ extension HikeRecorderTests {
         #expect(recorder.currentHike?.isRecording == true)
         #expect(source.startCount == 1)
         #expect(recorder.stats.pointCount == 1)
+        // Resuming reclaims the outstanding session by starting updates again.
+        // Releasing it here would end the recording it belongs to.
+        #expect(source.releaseOrphanedBackgroundActivityCount == 0)
     }
 
     @Test("a stale open session waits for a recovery decision")
@@ -146,6 +152,7 @@ extension HikeRecorderTests {
         #expect(recorder.currentHike?.id == sessionID)
         #expect(source.startCount == 0)
         #expect(recorder.stats.pointCount == 2)
+        #expect(source.releaseOrphanedBackgroundActivityCount == 1)
         guard case .needsDecision(let summary) = recorder.recoveryState else {
             Issue.record("a stale session should require a recovery decision")
             return

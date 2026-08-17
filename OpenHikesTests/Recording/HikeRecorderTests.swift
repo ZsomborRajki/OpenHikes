@@ -17,6 +17,7 @@ final class StubRecordingLocationSource: RecordingLocationSource {
 
     private(set) var startCount = 0
     private(set) var stopCount = 0
+    private(set) var releaseOrphanedBackgroundActivityCount = 0
     private(set) var authorizationRequests = 0
     private(set) var fullAccuracyRequests = 0
     /// Every profile the recorder pushed, in order, so a test can assert the
@@ -51,6 +52,10 @@ final class StubRecordingLocationSource: RecordingLocationSource {
 
     func stopRecordingUpdates() {
         stopCount += 1
+    }
+
+    func releaseOrphanedBackgroundActivity() {
+        releaseOrphanedBackgroundActivityCount += 1
     }
 
     func deliver(_ location: CLLocation) {
