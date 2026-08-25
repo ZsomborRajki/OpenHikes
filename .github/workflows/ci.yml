@@ -203,11 +203,15 @@ jobs:
             || true
 
       # The same script a developer runs locally, for the same reason as
-      # Scripts/lint.sh above. --suite scopes the run to the accessibility
+      # Scripts/lint.sh above. --suite scopes each run to one accessibility
       # class, so neither PerformanceUITests nor the launch-metric test in
       # OpenHikesUITests can execute here: a measurement taken on a shared
       # runner is noise, and both assert nothing.
-      - name: Run the accessibility suite
+      #
+      # Two classes, run separately so a failure names which half broke: the
+      # audits are a sweep of each screen, the label tests are assertions on
+      # what individual controls promise.
+      - name: Run the accessibility audits
         run: |
           mkdir -p TestResults
           Scripts/run-ui-tests.sh \
@@ -216,12 +220,22 @@ jobs:
             --retry \
             --result-bundle TestResults/AccessibilityUITests.xcresult
 
+      - name: Run the accessibility label assertions
+        run: |
+          Scripts/run-ui-tests.sh \
+            --suite AccessibilityLabelUITests \
+            --all \
+            --retry \
+            --result-bundle TestResults/AccessibilityLabelUITests.xcresult
+
       - name: Upload result bundle
         if: failure()
         uses: actions/upload-artifact@v4
         with:
           name: accessibility-uitests-xcresult
-          path: TestResults/AccessibilityUITests.xcresult
+          path: |
+            TestResults/AccessibilityUITests.xcresult
+            TestResults/AccessibilityLabelUITests.xcresult
           retention-days: 7
 
 # The functional UI automation and the performance suite are deliberately not
@@ -230,11 +244,12 @@ jobs:
 # `PerformanceUITests` additionally produces measurements that are only
 # comparable against the same hardware.
 #
-# `AccessibilityUITests` is the exception above: it is the only automated guard
-# on the VoiceOver contract, a regression in which is invisible to a unit test
-# and to a reviewer. It is also the cheapest half of the bundle to run — ten of
-# its eleven tests are launch, tap and assert against an in-memory store and a
-# bundled GPX, with no location and no measurement.
+# `AccessibilityUITests` and `AccessibilityLabelUITests` are the exception
+# above: together they are the only automated guard on the VoiceOver contract,
+# a regression in which is invisible to a unit test and to a reviewer. They are
+# also the cheapest part of the bundle to run — all but two of their tests are
+# launch, tap and assert against an in-memory store and a bundled GPX, with no
+# location and no measurement.
 #
 #   Scripts/run-ui-tests.sh --all
 #   Scripts/run-performance-tests.sh

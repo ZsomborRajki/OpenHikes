@@ -94,6 +94,10 @@ struct MapView: MapViewRepresentable, Equatable {
         // destroying the representable's identity (e.g. an `.id()` upstream
         // churning), which throws away all MapKit state, not just SwiftUI's.
         RenderSignpost.mark("MapViewCreated")
+        // The launch is over when there is a map, not when there is a frame.
+        // `histogrammedTimeToFirstDraw` stops at the first CA commit, which on
+        // this app is a sheet over an empty map — see `LaunchMeasurement`.
+        LaunchMeasurement.finish()
         let mapView = MKMapView()
         mapView.delegate = coordinator
         mapView.showsUserLocation = true

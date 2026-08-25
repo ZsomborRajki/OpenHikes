@@ -182,6 +182,7 @@ struct OpenHikesView: View {
                 }
             }
             .task { await importRequestedGPXFixture() }
+            .task { await seedRequestedLaunchFixtures() }
             .sheet(isPresented: $showSheet) {
                 MapSheet(
                     searchText: $searchText,
@@ -423,19 +424,6 @@ struct OpenHikesView: View {
         await seedRequestedPhotos()
     }
 
-    /// Gives the imported hike the photos a walk would have come home with.
-    ///
-    /// After the import rather than inside it, because the selection race
-    /// `performImport` arbitrates is about which hike owns the map — a hike
-    /// that lost it still persisted, and is still the one to photograph.
-    private func seedRequestedPhotos() async {
-        #if DEBUG
-        let count = AppLaunchEnvironment.seededPhotoCount
-        guard count > 0, let hike = selectedHike else { return }
-        await SeededPhotoFixture.attach(count: count, to: hike)
-        #endif
-    }
-
     private func performImport(from url: URL) async {
         let selectionToken = importSelectionGate.token(
             selectedHikeID: selectedHike?.id,
@@ -467,6 +455,44 @@ struct OpenHikesView: View {
         selectedHike = importedHike
         // The selection draws the imported route; expanding reveals it.
         withAnimation { sheetDetent = .medium }
+    }
+}
+
+// MARK: - Launch fixtures
+
+/// The bundled stand-ins a UI-testing launch can ask for, held apart from the
+/// view's own body: none of it draws anything, and none of it exists in a
+/// shipping build.
+private extension OpenHikesView {
+    /// Gives the imported hike the photos a walk would have come home with.
+    ///
+    /// After the import rather than inside it, because the selection race
+    /// `performImport` arbitrates is about which hike owns the map — a hike
+    /// that lost it still persisted, and is still the one to photograph.
+    func seedRequestedPhotos() async {
+        #if DEBUG
+        let count = AppLaunchEnvironment.seededPhotoCount
+        guard count > 0, let hike = selectedHike else { return }
+        await SeededPhotoFixture.attach(count: count, to: hike)
+        #endif
+    }
+
+    /// The launch fixtures that belong to no hike: device reports and a
+    /// weather reading.
+    ///
+    /// Separate from the GPX task because neither depends on an import having
+    /// happened — Settings and the badge are reachable from a launch with no
+    /// hikes at all, and making them wait on a fixture they do not use would
+    /// tie two unrelated scenarios together.
+    func seedRequestedLaunchFixtures() async {
+        #if DEBUG
+        if AppLaunchEnvironment.stubsWeather {
+            appModel.weatherManager.applyUITestSnapshot()
+        }
+        await SeededFieldMetricsFixture.seed(
+            count: AppLaunchEnvironment.seededMetricsReportCount
+        )
+        #endif
     }
 }
 
@@ -562,7 +588,7 @@ struct ImportSelectionGate {
 }
 
 private struct WeatherBadge: View {
-    let weather: CurrentWeather
+    let weather: WeatherSnapshot
 
     var body: some View {
         HStack(spacing: 8) {
@@ -586,7 +612,7 @@ private struct WeatherBadge: View {
         .accessibilityLabel("Current weather")
         .accessibilityValue(
             "\(weather.temperature.formatted(.measurement(width: .wide))), "
-                + weather.condition.description
+                + weather.conditionDescription
         )
         .accessibilityIdentifier("weather-badge")
     }

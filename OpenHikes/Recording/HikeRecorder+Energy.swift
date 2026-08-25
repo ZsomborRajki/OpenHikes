@@ -69,3 +69,32 @@ extension HikeRecorder {
         }
     }
 }
+
+// MARK: - Field telemetry
+
+extension HikeRecorder {
+    /// Opens the MetricKit span covering this recording.
+    ///
+    /// The span is the whole session — a pause is inside it deliberately,
+    /// because a paused recording still holds the app alive in the background
+    /// and that is exactly the cost the span exists to attribute. What it
+    /// deliberately excludes is everything after the GPS stops: saving,
+    /// reviewing a matched route, and a walker taking ten minutes to name
+    /// their hike are not GPS duty, and charging them to the recording would
+    /// make an attentive user look like an expensive one.
+    func beginFieldRecordingSpan() {
+        endFieldRecordingSpan()
+        fieldRecordingSpan = FieldSignpost.begin(.recordingSession)
+    }
+
+    /// Idempotent, and called from every path a session can leave by —
+    /// stopping, failing and resetting. A span left open is not merely
+    /// untidy: MetricKit reports nothing at all for an interval it never sees
+    /// closed, so a single missed call site turns the whole measurement into
+    /// silence rather than into a wrong number.
+    func endFieldRecordingSpan() {
+        guard let span = fieldRecordingSpan else { return }
+        fieldRecordingSpan = nil
+        FieldSignpost.end(span)
+    }
+}

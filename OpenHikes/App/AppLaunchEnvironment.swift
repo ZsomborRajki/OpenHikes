@@ -19,9 +19,15 @@ nonisolated enum AppLaunchEnvironment {
         private static let performanceLogPrefix = "--ui-test-performance-log="
         private static let offlineArgument = "--ui-test-offline"
         private static let seedPhotosPrefix = "--ui-test-seed-photos="
+        private static let seedMetricsPrefix = "--ui-test-seed-metrics="
+        private static let failFirstSaveArgument = "--ui-test-fail-first-save"
+        private static let stubWeatherArgument = "--ui-test-weather"
         /// Enough to fill the strip and force it to scroll, and few enough
         /// that a scenario seeding them does not spend its budget encoding.
         private static let maximumSeededPhotos = 24
+        /// One metrics digest and one diagnostic report is already both shapes
+        /// the screen draws; past that a scenario is only re-reading itself.
+        private static let maximumSeededMetricsReports = 8
 
         let isUITesting: Bool
         let startsWithExpandedSheet: Bool
@@ -31,6 +37,9 @@ nonisolated enum AppLaunchEnvironment {
         let performanceLogScenario: String?
         let simulatesOffline: Bool
         let seededPhotoCount: Int
+        let seededMetricsReportCount: Int
+        let failsFirstSave: Bool
+        let stubsWeather: Bool
 
         init(arguments: [String]) {
             isUITesting = arguments.contains(Self.uiTestingArgument)
@@ -55,13 +64,41 @@ nonisolated enum AppLaunchEnvironment {
                 prefix: Self.performanceLogPrefix,
                 isUITesting: isUITesting
             )
-            seededPhotoCount = Self.fixtureName(
+            seededPhotoCount = Self.count(
                 in: arguments,
                 prefix: Self.seedPhotosPrefix,
+                isUITesting: isUITesting,
+                limit: Self.maximumSeededPhotos
+            )
+            seededMetricsReportCount = Self.count(
+                in: arguments,
+                prefix: Self.seedMetricsPrefix,
+                isUITesting: isUITesting,
+                limit: Self.maximumSeededMetricsReports
+            )
+            failsFirstSave = isUITesting
+                && arguments.contains(Self.failFirstSaveArgument)
+            stubsWeather = isUITesting
+                && arguments.contains(Self.stubWeatherArgument)
+        }
+
+        /// A bounded count read out of a `--flag=N` argument. Clamped rather
+        /// than validated: the only caller that should ever set one is the UI
+        /// test runner, and a scenario asking for a thousand of anything is a
+        /// typo, not a request.
+        private static func count(
+            in arguments: [String],
+            prefix: String,
+            isUITesting: Bool,
+            limit: Int
+        ) -> Int {
+            fixtureName(
+                in: arguments,
+                prefix: prefix,
                 isUITesting: isUITesting
             )
             .flatMap(Int.init)
-            .map { count in min(max(0, count), Self.maximumSeededPhotos) } ?? 0
+            .map { count in min(max(0, count), limit) } ?? 0
         }
 
         /// Reads a name out of a launch argument, for a bundled fixture or a
@@ -139,6 +176,40 @@ nonisolated enum AppLaunchEnvironment {
     /// the pixels are invented.
     static let seededPhotoCount = configuration.seededPhotoCount
 
+    /// How many synthetic MetricKit reports to write before Settings is
+    /// opened.
+    ///
+    /// MetricKit reports nothing on a Simulator — `mxSignpost` attaches the
+    /// literal `NO_METRICS` there and no payload is ever delivered — so the
+    /// only state Device Reports could reach in automation was the empty one.
+    /// That left the report screen, the export screen, the share sheet and
+    /// the delete button unreachable: four screens' worth of rows whose whole
+    /// job is to say what a number means, and no way to check that any of
+    /// them says anything at all.
+    ///
+    /// The reports go through the real ``FieldMetricsStore``, so what a test
+    /// reads afterwards is the shipping decode, retention and export path;
+    /// only the numbers are invented.
+    static let seededMetricsReportCount = configuration.seededMetricsReportCount
+
+    /// Whether the first attempt to save a recording should fail.
+    ///
+    /// The retry path is the one branch of the recording screen that a test
+    /// cannot reach by doing anything a walker does: it needs SwiftData to
+    /// refuse a write. The recorder already takes its save as a closure — the
+    /// seam exists for the unit suites — so this is that closure, failing
+    /// once, and everything downstream of it is the shipping state machine.
+    static let failsFirstSave = configuration.failsFirstSave
+
+    /// Whether the weather badge should be drawn from a fixed reading.
+    ///
+    /// WeatherKit needs an entitlement, a network round trip and a working
+    /// token; none of the three is a thing a UI test should be deciding on,
+    /// and `CurrentWeather` cannot be constructed to stand in for them.
+    /// ``WeatherSnapshot`` is what the badge actually draws, and this
+    /// publishes one.
+    static let stubsWeather = configuration.stubsWeather
+
     /// Whether this launch should behave as though it has no connection at
     /// all, regardless of what the simulator's network is doing.
     ///
@@ -193,6 +264,23 @@ nonisolated enum AppLaunchEnvironment {
         return FileManager.default.temporaryDirectory
             .appendingPathComponent(
                 "OpenHikesUITesting-\(ProcessInfo.processInfo.processIdentifier)",
+                isDirectory: true
+            )
+    }
+
+    /// A per-launch directory for seeded MetricKit reports, so automation
+    /// never writes into — or reads — the reports a real device left in
+    /// Application Support.
+    ///
+    /// Per-launch rather than merely separate: a seeded report that outlived
+    /// its scenario would make the *next* run's "no reports yet" assertion
+    /// fail, and the empty state is the one every user sees for their first
+    /// day.
+    static func fieldMetricsDirectory() -> URL? {
+        guard isUITesting else { return nil }
+        return FileManager.default.temporaryDirectory
+            .appendingPathComponent(
+                "OpenHikesUITestingMetrics-\(ProcessInfo.processInfo.processIdentifier)",
                 isDirectory: true
             )
     }

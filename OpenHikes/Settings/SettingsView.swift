@@ -64,6 +64,7 @@ struct SettingsView: View {
                 photosSection
                 backgroundTrackingSection
                 offlineStorageSection
+                FieldMetricsSection()
             }
             .navigationTitle("Settings")
             #if os(iOS)

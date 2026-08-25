@@ -50,7 +50,10 @@ Scripts/run-performance-tests.sh --keep-going
 
 Debug is mandatory, not incidental: `RenderSignpost`, `PerformanceLog` and
 `MainThreadWatchdog` all compile to nothing in Release, so a Release run would
-measure an app that reports nothing at all.
+measure an app that reports nothing at all. The MetricKit integration
+described under [The other half](#the-other-half--metrickit-in-the-field) is
+the exact inverse — it ships in Release and reports nothing here — which is why
+the two coexist rather than compete.
 
 ## How it works
 
@@ -766,6 +769,115 @@ Energy and network: `PowerStateChanged`, `ScenePhaseChanged`,
 Startup and I/O: `AppModelInit`, `ModelContainerInit`, `GPXParsed`,
 `GPXExported`, `HikeDetailPrepared`, `HikeTrailAnalysis` (all intervals).
 
+## The other half — MetricKit in the field
+
+Everything above is a Debug build, on a Simulator, driving synthetic input, on
+one machine. That is the right shape for a regression harness — it is
+deterministic, it fails a pull request, and it can be re-run — but it is the
+wrong shape for four of the questions this document keeps asking, and no amount
+of work on the harness will change that. A Simulator has no battery, no
+thermal state, no cellular radio, no jetsam, and no user.
+
+MetricKit answers exactly those. It is worth being precise about what it did
+and did not do to the harness:
+
+**It replaced nothing.** Not one line of `RenderSignpost`, `PerformanceLog`,
+`MainThreadWatchdog`, `PerformanceCounterProbe` or `PerformanceUITests` became
+redundant. MetricKit reports once every 24 hours, aggregated across a whole
+day, from a Release build, on a device, with no way to attribute a number to a
+gesture. It cannot fail a build, cannot bisect a regression, and cannot tell
+you that `MapSheetHikesBody` rendered four times during a pan. Anyone who reads
+"MetricKit collects launch times" and concludes it supersedes
+`XCTApplicationLaunchMetric` has confused a population statistic with a
+measurement.
+
+**It extended the harness into the gaps the harness is structurally shut out
+of.** Which is a real answer to five open items rather than a new source of
+graphs:
+
+| Open question above | What answers it |
+|---|---|
+| P2 "measure a real hike-length recording's energy" — *"the one measurement this harness structurally cannot make"* | `MXAppRunTimeMetric.cumulativeBackgroundAudioTime`/`cumulativeBackgroundLocationTime` and `MXCPUMetric.cumulativeCPUTime`, plus a `RecordingSession` signpost interval that attributes CPU, memory and writes to one whole walk |
+| Finding E1's leftover — *"the conserving profile has never been exercised anywhere but in unit tests"* | `MXLocationActivityMetric`'s six accuracy buckets, reduced to `LocationAccuracyBreakdown.conservingShare` |
+| P3 *"`XCTHitchMetric` needs a signpost stream the Simulator does not emit"* | `MXAnimationMetric.hitchTimeRatio` (new in iOS 26) and `MXAppResponsivenessMetric.histogrammedApplicationHangTime` |
+| P1 *"~370 ms between the first body and a free main thread"* | `extendLaunchMeasurement(forTaskID: .firstMapFrame)` around exactly that span, reported as `histogrammedExtendedLaunch`, plus `MXAppLaunchDiagnostic` stacks when it goes badly wrong |
+| Finding 2's real worry — a backgrounded recording being jetsammed | `MXAppExitMetric.backgroundExitData`, including `cumulativeSuspendedWithLockedFileExitCount`, which is the SwiftData-sqlite-specific one |
+
+### What was built
+
+`OpenHikes/General/Diagnostics/FieldMetrics/` — and note it is *not* `#if
+DEBUG`, unlike every other file in `Diagnostics/`. A Debug-only MetricKit
+integration would report nothing, since the framework only delivers against
+Release builds in the field. Four files, split along one line: what can be
+tested and what cannot.
+
+- **`FieldMetricsDigest.swift`** holds every judgement the app makes about a
+  payload — the quantile walk, the shares, which exits count as unexpected —
+  and imports no MetricKit at all. `MXMetricPayload` has no initializer and
+  cannot be synthesised, so anything that touched it would be untestable by
+  construction. This is why `FieldMetricsDigestTests` can exist.
+- **`FieldMetricsDigest+MetricKit.swift`** is the adapter, kept deliberately
+  thin: it reads fields and hands them across, and does nothing else.
+- **`FieldMetricsStore.swift`** is an actor over a directory in Application
+  Support, bounded on every write at 16 reports and 4 MB, oldest-first, with
+  the newest never pruned — a crash payload larger than the whole budget is
+  exactly the one worth keeping.
+- **`FieldSignpost.swift`** is the `mxSignpost` wrapper and the launch
+  extension.
+
+Nothing is uploaded. Reports are written locally, shown in **Settings ▸ Device
+Reports**, and leave the device only through an explicit share sheet — the
+position `CODE_REVIEW.md` already took, implemented rather than asserted.
+
+### Why only four signposts
+
+Apple's own guidance: *"To limit on-device overhead, the system will
+automatically limit the number of signposts (emitted using the MetricKit log
+handle) processed. Avoid losing telemetry by limiting usage of signposts to
+critical sections of code."* The failure mode is silent — a fifth span does not
+error, it costs the other four their data.
+
+So the MetricKit set is four coarse, user-initiated spans, and is not the
+`RenderSignpost` list:
+
+| Span | Why |
+|---|---|
+| `RecordingSession` | The headline. One interval per whole walk gives cumulative CPU, average footprint and logical writes attributed to a hike-length recording. This *is* the P2 item |
+| `OfflineDownload` | A bulk tile download is the largest deliberate burst of network and disk the app ever does |
+| `HikeImport` | GPX parse plus trail analysis, on real files rather than fixtures |
+| `TrailGraphPrefetch` | The one unavoidable Overpass round trip, on a real radio |
+
+`TrailMatcherWork` fires roughly two thousand times per hike and
+`TileNetworkFetch` hundreds; both stay `RenderSignpost`-only. `FieldSignpost.Span`
+is `CaseIterable` and `FieldMetricsDigestTests` asserts the count, so a fifth
+has to be added on purpose.
+
+`RecordingSession` ends where `stopLocationSensors()` runs, not where the hike
+is saved — a walker who spends ten minutes naming a hike should not be charged
+for it against the recording.
+
+### Three caveats, all of which matter
+
+**The Simulator emits no MetricKit telemetry.** `MXSignpost_Private.h` branches
+on `TARGET_OS_SIMULATOR`: on a device `mxSignpost` attaches
+`_MXSignpostMetricsSnapshot()`, and on the Simulator it attaches the literal
+string `NO_METRICS`. The call compiles and emits an ordinary `os_signpost`
+either way, so Instruments still works — but every number in this section can
+only ever be gathered on a device. Xcode's **Debug ▸ Simulate MetricKit
+Payloads** is how the parsing and the UI were exercised; it is not how the
+numbers were.
+
+**Delivery is daily, and a span that outlives the period is lost.** MetricKit
+delivers at most once every 24 hours, on its own schedule. An interval still
+open when the aggregation period closes is not reported at all — which for a
+`RecordingSession` means a recording left running overnight produces nothing.
+
+**`extendLaunchMeasurement` must be balanced.** An extended-launch task that is
+never finished stays open for the process lifetime and reports nothing, so
+`LaunchMeasurement.finish()` is idempotent and is called both from `MapView`'s
+creation — the actual thing being measured — and as a backstop from
+`sceneWillResignActive()`, for the launch that never reaches a map at all.
+
 ## TODO
 
 ### P1
@@ -795,7 +907,13 @@ Startup and I/O: `AppModelInit`, `ModelContainerInit`, `GPXParsed`,
       extrapolates from a three-fix scenario. `Scripts/simulate-hike.sh` plus
       the Energy Log instrument over a full GPX is the only way to know whether
       the per-fix cost is flat, and it is the one measurement this harness
-      structurally cannot make.
+      structurally cannot make. **Instrumented on 2026-08-25, not yet
+      answered**: the `RecordingSession` `mxSignpost` interval now attributes
+      cumulative CPU, average footprint and logical writes to one whole walk,
+      and `MXAppRunTimeMetric.cumulativeBackgroundLocationTime` gives the
+      denominator. That turns this from a measurement nobody can take into one
+      that needs a Release build on a device and a day's wait. The instrument
+      is in; the walk has not been taken.
 - [x] ~~Audit the app for any remaining periodic work.~~ Performed by
       inspection on 2026-08-25. `RecordingClockTick` is in fact the only
       periodic path in the shipping app: `RecordingView.swift:232`'s
@@ -857,6 +975,22 @@ Startup and I/O: `AppModelInit`, `ModelContainerInit`, `GPXParsed`,
       anywhere but in unit tests. It is also the only place the E5 finding can
       be confirmed in the form that matters, since the Simulator does not
       suspend apps the way a real device does.
+      **This item now has a second, cheaper half.** The MetricKit integration
+      answers the same three questions without a tethered run —
+      `MXAnimationMetric.hitchTimeRatio` for hitches, the
+      `LocationAccuracyBreakdown.conservingShare` for the conserving profile,
+      and `MXAppExitMetric.backgroundExitData` for suspension — but from a
+      Release build, a day late, aggregated. Neither substitutes for the other:
+      a tethered run says *why*, MetricKit says *whether it happens to anyone*.
+      Do the tethered run to explain a number the field data shows.
+- [ ] **Read the first MetricKit payloads.** The integration is in and tested,
+      but no payload has been read on a device, because the Simulator emits
+      `NO_METRICS` (see above) and delivery is daily. Until a Release build has
+      run on a phone for a day, every claim in "The other half" is about what
+      the API reports, not about what this app does. Check first that
+      `RecordingSession` appears at all — an interval that outlives the
+      24-hour period is dropped silently, and a long walk is exactly the case
+      that risks it.
 - [ ] Give the report generator a `--baseline` flag so a run can be diffed
       against a stored one instead of by hand.
 
@@ -889,6 +1023,11 @@ the two recording scenarios. What remains is the P1 first-render item, the
 long-hike measurement that no simulator scenario can substitute for, the
 periodic-work audit E5 argues for, and the P3 list.
 
+The MetricKit work added on 2026-08-25 is pinned by `FieldMetricsDigestTests`
+and `FieldMetricsStoreTests` (29 cases). Those test the arithmetic and the
+bounded store; they cannot test the payloads, because `MXMetricPayload` cannot
+be constructed. Nothing in that section has been observed on a device yet.
+
 Four caveats for anyone reading a future run. Memory columns from a UI-test run
 describe the harness as much as the app (Finding 2). The per-hike-hour energy
 figures are extrapolations from thirty-second scenarios and should be treated as
@@ -897,5 +1036,6 @@ shapes, not values. Some counters are not stable run to run — Finding 5 report
 evidence that something was fixed. And the suite has never run on a physical
 device, which is the only place `XCTHitchMetric` works, the only place the launch
 number means what a user would experience, the only place thermal throttling has
-ever actually happened, and the only place background suspension behaves as it
-will for a real walker.
+ever actually happened, the only place background suspension behaves as it
+will for a real walker, and — since 2026-08-25 — the only place MetricKit
+reports anything at all.

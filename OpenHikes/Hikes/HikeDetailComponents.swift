@@ -425,6 +425,10 @@ struct OfflineStorageStatus: View {
                 .accessibilityElement(children: .ignore)
                 .accessibilityLabel("Offline tiles")
                 .accessibilityValue(storedBytes.map(Self.byteText) ?? "Measuring")
+                // A caption is 14 points tall, which is too small a region to
+                // land on — including for VoiceOver's own direct-touch
+                // exploration, which is what the hit-region audit measures.
+                .minimumTapTarget()
 
                 Spacer()
 

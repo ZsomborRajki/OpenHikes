@@ -37,6 +37,12 @@ nonisolated extension TrailSurface {
 /// There is no placeholder, no spinner and no error: the analysis runs by
 /// itself when the hike is opened, and a route it can't describe simply has no
 /// surface section rather than an empty one explaining why.
+///
+/// The container deliberately carries no identifier of its own. SwiftUI pushes
+/// one down onto every descendant, which would leave the bar, all three legend
+/// rows and the footnote answering to the same name — and take
+/// ``TrailSurfaceBar``'s own identifier away from the automation that looks
+/// for it.
 struct HikeSurfaceSection: View {
     let hike: Hike
 
@@ -64,7 +70,6 @@ struct HikeSurfaceSection: View {
                     .font(.caption2)
                     .foregroundStyle(.secondary)
             }
-            .accessibilityIdentifier("surface-section")
         }
     }
 

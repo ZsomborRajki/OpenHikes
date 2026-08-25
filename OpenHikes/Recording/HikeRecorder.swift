@@ -98,6 +98,11 @@ final class HikeRecorder: NSObject {
     @ObservationIgnored let sharedStateQueue = SerialAsyncQueue()
     @ObservationIgnored var lastSharedSnapshotAt: Date?
     @ObservationIgnored var lastSharedSnapshotPointCount = 0
+    /// The open MetricKit span covering this recording's GPS duty. See
+    /// ``FieldSignpost`` — this is the app's only way to get CPU, footprint
+    /// and disk writes attributed to a *hike-length* recording rather than to
+    /// the process as a whole.
+    @ObservationIgnored var fieldRecordingSpan: FieldSignpost.Token?
 
     static let sharedSnapshotInterval: TimeInterval = 15 * 60
     nonisolated static let liveMatchingMaximumPoints = 20
@@ -322,6 +327,10 @@ extension HikeRecorder {
             guard let loaded = try await journal.loadSession() else { throw RecordingFailure.storageUnavailable }
             session = loaded
             stopLocationSensors()
+            // The GPS is off as of the line above, which is where this
+            // recording's energy actually ends — not where its `Hike` is
+            // written, and not where a route review is resolved.
+            endFieldRecordingSpan()
         } catch let failure as RecordingFailure {
             fail(failure)
             throw failure

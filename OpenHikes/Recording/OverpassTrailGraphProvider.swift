@@ -165,7 +165,16 @@ actor OverpassTrailGraphProvider: TrailGraphProviding {
         self.clock = clock
         self.transport = transport ?? { request in
             let interval = RenderSignpost.beginInterval("TrailGraphFetch")
-            defer { RenderSignpost.endInterval("TrailGraphFetch", interval) }
+            // Also a MetricKit span, because this is the app's only
+            // unavoidable radio wake-up during a hike and a `RenderSignpost`
+            // interval only ever measures wall time. What the field report
+            // adds is the CPU spent decoding the response and the bytes it
+            // wrote — on a cellular connection the app did not choose.
+            let field = FieldSignpost.begin(.trailGraphPrefetch)
+            defer {
+                FieldSignpost.end(field)
+                RenderSignpost.endInterval("TrailGraphFetch", interval)
+            }
             let (data, urlResponse) = try await URLSession.shared.data(for: request)
             guard let httpResponse = urlResponse as? HTTPURLResponse else {
                 throw TrailGraphProviderError.invalidResponse

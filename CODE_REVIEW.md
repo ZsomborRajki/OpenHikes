@@ -26,7 +26,16 @@ runtimes; normal debug and release builds are warning-free.
 
 - For battery telemetry, prefer native Instruments, signposts, and current
   MetricKit reporting rather than an analytics SDK that adds its own network
-  and background cost.
+  and background cost. **Implemented on 2026-08-25.**
+  `OpenHikes/General/Diagnostics/FieldMetrics/` subscribes to
+  `MXMetricManager` and emits four `mxSignpost` intervals; nothing is uploaded,
+  reports are bounded on disk, and they leave the device only through an
+  explicit share sheet in Settings ▸ Device Reports. No dependency was added —
+  MetricKit is a system framework, and the deployment target of 26.5 means
+  every API used, including the iOS 26 `MXDiskSpaceUsageMetric` and
+  `MXAnimationMetric.hitchTimeRatio`, needs no availability guard. See
+  `PERFORMANCE.md` § "The other half — MetricKit in the field" for what it
+  does and does not replace.
 
 ## Battery validation plan
 
@@ -49,6 +58,15 @@ under `--ui-test-performance-log=`; tile planning
 (`TileCache+StorageManagement.swift`) still need theirs. Compare against the
 same device, route, screen state, and radio conditions rather than using a
 universal percentage-per-hour target.
+
+Scenarios 2, 3 and 5 now also report without a tethered device. A whole
+recording carries a `RecordingSession` MetricKit signpost interval and a bulk
+download carries `OfflineDownload`, so cumulative CPU, average footprint and
+logical writes for each arrive in the next daily payload and can be read in
+Settings ▸ Device Reports. That is aggregated and a day late, so it does not
+replace the tethered run — it establishes whether the tethered run is worth
+scheduling, and it is the only form in which these scenarios get measured on
+anyone else's phone.
 
 ## Validation performed
 
@@ -157,38 +175,55 @@ hierarchy.
 That `UNVERIFIED` item about `waitForSelectionPublish()` is settled: it was
 true, it was worse than described, and it is fixed. See the 2026-08-25 pass.
 
-## 2. The photo screens have almost no functional automation (Medium)
+## 2. The photo screens have almost no functional automation (Resolved)
 
 *Rewritten on 2026-08-25. The previous version of this section was wrong in
-its central claim and stale in half its evidence — see that pass's §B.*
+its central claim and stale in half its evidence — see that pass's §B.
+**Closed on 2026-08-25** by the UI automation pass recorded below.*
 
-The unblocking change this section asked for **exists**: `--ui-test-seed-photos=N`
-(`AppLaunchEnvironment.swift:21`, `SeededPhotoFixture.swift`) seeds a hike with
-up to 24 generated photos, so the gallery, the viewer and the map pins are
-reachable in a simulator that has no camera and no in-process picker.
+The unblocking change this section asked for existed already:
+`--ui-test-seed-photos=N` (`AppLaunchEnvironment.swift`,
+`SeededPhotoFixture.swift`) seeds a hike with up to 24 generated photos, so the
+gallery, the viewer and the map pins are reachable in a simulator that has no
+camera and no in-process picker. What was missing was the functional tests
+downstream of it: its only consumer was `PerformanceUITests+Photos.swift`, a
+*measurement* suite excluded from the test plan and from
+`Scripts/run-ui-tests.sh --all`, so nothing that ran on a normal day exercised
+a photo screen.
 
-What is still missing is the functional tests downstream of it. The hook has
-exactly one consumer, `PerformanceUITests+Photos.swift`, which is a
-*measurement* suite: it is in `skippedTests` for `OpenHikes.xctestplan` and is
-kept out of `Scripts/run-ui-tests.sh --all`, so nothing that runs on a normal
-day exercises a photo screen. `hike-photo-<uuid>` is therefore driven only by a
-suite nobody runs by default, and `photo-viewer`, `hike-photo-strip` and
-`map-camera-button` are driven only by `AccessibilityUITests`. Paging,
-delete-and-dismiss and the show-on-map action have no coverage at all.
+`PhotoUITests` now does: the library picker opening over the permanently
+presented sheet, the seeded strip, the viewer's paging, delete-and-dismiss, and
+the show-on-map action. Three more suites landed with it — `RecordingUITests`,
+`SettingsUITests` and `AccessibilityLabelUITests` — and four launch seams that
+unblocked what they cover: `--ui-test-seed-metrics=N`,
+`--ui-test-fail-first-save`, `--ui-test-weather`, and a per-process field
+metrics directory so a seeded store is never the developer's own.
 
-Cross-referencing all 35 `accessibilityIdentifier`s in the app against the UI
-test bundle, these are defined and driven by nothing:
+Cross-referencing all 39 `accessibilityIdentifier`s in the app against the UI
+test bundle, exactly one is defined and driven by nothing:
 
-`cellular-tiles-toggle`, `delete-offline-tiles-button`, `difficulty-bar`,
-`difficulty-section`, `hike-title-field`, `import-gpx-button`,
-`offline-download-button`, `photo-delete-button`, `photo-show-on-map-button`,
-`recording-retry-save`, `review-next-section`, `review-previous-section`,
-`save-photos-to-library-toggle`, `surface-bar`, `surface-section`,
-`weather-badge`.
+`delete-offline-tiles-button`, which is on a row that renders only once a hike
+*has* stored tiles. Reaching it means panning and zooming a map until auto-save
+has written some, which is a timing-dependent gesture sequence for a button
+whose effect — `TileOwnership`, the trim sweep and the byte count — is already
+pinned by unit tests.
+
+Two identifiers were removed rather than driven. `surface-section` and
+`difficulty-section` sat on the two containers, and SwiftUI pushes a container
+identifier down onto every descendant — so the bar, the legend rows and the
+footnote all answered to it, and `surface-bar`/`difficulty-bar` were
+unreachable. Removing the container identifier is what let
+`testShowsSurfaceAndDifficultyForAMatchedRoute` see the bars at all.
 
 The three interpolated identifiers — `hike-photo-\(uuid)`,
 `provider-row-\(id)`, `route-pattern-\(rawValue)` — are all matched by prefix
-somewhere in the bundle and are *not* part of that list.
+somewhere in the bundle.
+
+The same pass turned up one real accessibility defect, which is what an audit
+over a screen nobody had audited is for: the "Offline tiles · 247 KB" row is a
+14-point-tall caption exposed as its own element, and
+`performAccessibilityAudit` rightly called its hit region too small. It now
+carries `minimumTapTarget()`.
 
 ## 3. No localization catalog exists (Low)
 
@@ -219,6 +254,21 @@ so a future unused-symbol sweep does not delete them.
   publish is still outstanding. Added 2026-08-25 because the bug it now pins
   was invisible from outside: a leaked task handle silences the live widget
   feed, and nothing else in the type's surface says so.
+- The `DEBUG`-only launch seams in `AppLaunchEnvironment`, each of which stands
+  in for something a simulator cannot produce: `SeededPhotoFixture` for a
+  camera, `SeededFieldMetricsFixture` for a walk long enough to fill the
+  metrics store, `OpenHikesModel.uiTestingSave()` for a save that fails once,
+  `WeatherSnapshot.uiTestFixture` for WeatherKit, and
+  `AppLaunchEnvironment.fieldMetricsDirectory()` so a seeded store is written
+  per process rather than over the developer's own.
+- `BundledTrailGraphProvider` and the two graph fixtures behind it.
+  `ThumseeLoopTrails` is tagged so the surface and difficulty breakdowns have
+  something to divide; `ThumseeTwinPaths` carries two candidate ways close
+  enough together that route matching is ambiguous, which is the only way to
+  reach a two-section review. Both are pinned as arithmetic by
+  `TrailTagFixtureTests` and `RouteReviewTests`, so a UI test that cannot find
+  a section is never left standing in for a fixture that stopped covering the
+  route.
 
 ## 5. Nice to have
 

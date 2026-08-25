@@ -365,6 +365,42 @@ extension RouteReviewTests {
         #expect(sections.first?.kind == .snapped)
         #expect(sections.first?.trailName == "Thumsee Ridge Path")
     }
+
+    /// The Previous/Next buttons are disabled with one section, so the test
+    /// that drives them needs a walk that produces two. Which walk that is, is
+    /// arithmetic on the matcher and the run-flushing rule — so it is settled
+    /// here, in seconds, rather than by watching a simulator walk for a minute
+    /// and guessing at why the buttons stayed grey.
+    @Test("the twin-path fixture produces two sections to review")
+    func twinPathFixtureProducesTwoSections() throws {
+        let provider = try #require(
+            BundledTrailGraphProvider(
+                fixtureName: UITestMultiSectionFixture.trailGraphName
+            )
+        )
+        let points = UITestMultiSectionFixture.coordinates.enumerated().map { fix in
+            point(
+                fix.element.latitude,
+                fix.element.longitude,
+                at: TimeInterval(fix.offset) * 5,
+                accuracy: 5
+            )
+        }
+        let graph = try #require(
+            provider.cachedGraph(covering: points.map(\.coordinate))
+        )
+
+        let result = TrailMatcher.match(points: points, graph: graph)
+        let sections = RouteReviewSection.sections(in: result)
+
+        #expect(result.didMoveRoute)
+        #expect(sections.count == 2)
+        #expect(sections.allSatisfy { section in section.kind == .snapped })
+        // One section per trail, in the order they were walked — which is what
+        // makes "Next" a meaningful thing for the UI test to assert on.
+        #expect(sections.first?.trailName == "Thumsee Ridge Path")
+        #expect(sections.last?.trailName == "Seehaus Link")
+    }
 }
 
 /// The route the UI test walks, kept beside the assertion that it still
@@ -381,6 +417,39 @@ enum UITestRecordingFixture {
     static var coordinates: [CLLocationCoordinate2D] {
         [startLatitude, middleLatitude, endLatitude].map { latitude in
             CLLocationCoordinate2D(latitude: latitude, longitude: longitude)
+        }
+    }
+}
+
+/// The longer walk behind the review screen's Previous/Next buttons.
+///
+/// Those buttons only exist when there is more than one section, and one
+/// section is all the fixture above can ever produce. Two need a walk that is
+/// snapped, then left alone for long enough to close the run
+/// (``RouteReviewSection/absorbedUnmovedDistanceMeters``), then snapped again
+/// — which is why this is a second graph with two disconnected trails rather
+/// than a longer trace over the first.
+///
+/// The gap is walked, not skipped: the fixes across it are further than the
+/// matcher's 50 m candidate radius from either trail, so it has nothing to
+/// snap them to and leaves them on the recorded line. That is exactly the
+/// "matching agreed with me here" stretch that separates one decision from
+/// the next.
+enum UITestMultiSectionFixture {
+    static let trailGraphName = "ThumseeTwinPaths"
+    static let longitude = 12.83180
+    static let startLatitude = 47.71840
+    /// 22 m at the four-second pace UI automation walks — a believable stride
+    /// rather than one ``RecordingFixPolicy`` turns down for implied speed.
+    static let latitudeStep = 0.0002
+    static let fixCount = 17
+
+    static var coordinates: [CLLocationCoordinate2D] {
+        (0..<fixCount).map { index in
+            CLLocationCoordinate2D(
+                latitude: startLatitude + latitudeStep * Double(index),
+                longitude: longitude
+            )
         }
     }
 }

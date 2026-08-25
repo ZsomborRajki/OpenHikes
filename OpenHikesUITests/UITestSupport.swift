@@ -74,6 +74,59 @@ nonisolated enum UITestFixture {
     )
 }
 
+/// The two-trail walk behind the review screen's Previous and Next buttons.
+///
+/// Those buttons do nothing with one section, and one is all
+/// ``UITestFixture/reviewableTrace`` can produce. Two need a walk that snaps,
+/// then wanders far enough from any trail for long enough that the matcher
+/// leaves it alone — closing the first run — then snaps onto a second trail.
+///
+/// Mirrors `UITestMultiSectionFixture` in `OpenHikesTests`, which asserts in
+/// milliseconds that these numbers still produce exactly two sections. That
+/// assertion is why this walk can be trusted: proving it in the simulator
+/// means a minute of watching, and a wrong answer arrives as two grey buttons
+/// with no explanation attached.
+nonisolated enum UITestMultiSectionFixture {
+    /// Two disconnected trails, 255 m apart, matched against through
+    /// `--ui-test-trail-graph`.
+    static let trailGraphName = "ThumseeTwinPaths"
+    static let longitude = 12.83180
+    static let startLatitude = 47.71840
+    /// 22 m per step, which at the four-second pace is a walk rather than a
+    /// sprint ``RecordingFixPolicy`` turns down.
+    static let latitudeStep = 0.0002
+    static let fixCount = 17
+
+    static var trace: [CLLocationCoordinate2D] {
+        (0..<fixCount).map { index in
+            CLLocationCoordinate2D(
+                latitude: startLatitude + latitudeStep * Double(index),
+                longitude: longitude
+            )
+        }
+    }
+}
+
+/// The tagged graph behind the hike detail screen's Surface and Difficulty
+/// sections.
+///
+/// Both sections are drawn only once OpenStreetMap has answered for the route,
+/// so without this they are unreachable from a test — Overpass is not
+/// something automation may depend on. The fixture is the imported GPX's own
+/// geometry, tagged in three stretches, which is what makes the shares
+/// something to assert on rather than one solid block.
+///
+/// Mirrors `UITestTrailTagFixture` in `OpenHikesTests`, which pins the
+/// coverage and the shares themselves.
+nonisolated enum UITestTrailTagFixture {
+    static let trailGraphName = "ThumseeLoopTrails"
+    /// The spoken share list the difficulty bar carries as its value. Any one
+    /// of the graded stretches is enough to know the bar is describing real
+    /// tags rather than an empty breakdown.
+    static let spokenDifficulty = "Hiking"
+    static let spokenSurface = "Gravel"
+}
+
 // MARK: - Launching
 
 extension XCTestCase {
@@ -234,6 +287,40 @@ extension XCTestCase {
         return app
     }
 
+    /// Scrolls looking for something that may not be on the screen *yet*.
+    ///
+    /// ``scrollIntoView(_:in:attempts:)`` assumes the target already exists
+    /// somewhere in the scroll view and only has to be reached. A section that
+    /// appears once an off-main analysis finishes is a different problem: it
+    /// can arrive after the search has given up, and it can arrive *above*
+    /// where the search has scrolled to. So this keeps looking until a
+    /// deadline, and reverses every few swipes rather than pinning itself to
+    /// the bottom.
+    @MainActor
+    @discardableResult func scrollUntilVisible(
+        _ target: XCUIElement,
+        in app: XCUIApplication,
+        timeout: TimeInterval = UITestTimeout.existence
+    ) -> Bool {
+        let deadline = Date().addingTimeInterval(timeout)
+        var swipes = 0
+        while Date() < deadline {
+            if target.exists, target.isHittable { return true }
+            let container = scrollContainer(in: app)
+            if swipes % (Self.swipesPerSweep * 2) < Self.swipesPerSweep {
+                container.swipeUp()
+            } else {
+                container.swipeDown()
+            }
+            swipes += 1
+        }
+        return target.exists && target.isHittable
+    }
+
+    /// Far enough to cross a hike's detail screen, short enough that a section
+    /// arriving late is not missed by a search stuck at the far end of it.
+    private static let swipesPerSweep = 4
+
     /// Polls a selection trait rather than sleeping on it: the write goes
     /// through SwiftData and back out through SwiftUI, so "tapped" and
     /// "selected" are not the same instant.
@@ -344,5 +431,84 @@ extension XCTestCase {
             app.navigationBars["Record Hike"]
                 .waitForExistence(timeout: UITestTimeout.navigation)
         )
+    }
+
+    /// Confirms the "Discard this recording?" dialog.
+    ///
+    /// The confirming button carries the same title as the one that raised it,
+    /// so it has to be found inside the presentation rather than by title: a
+    /// plain lookup resolves to whichever the tree happens to list first,
+    /// which on a good day is the button already tapped.
+    @MainActor
+    func confirmDiscard(in app: XCUIApplication) {
+        let title = "Discard Recording"
+        for container in [app.sheets, app.alerts] {
+            let presented = container.firstMatch
+            guard presented.waitForExistence(timeout: UITestTimeout.navigation)
+            else { continue }
+            let confirm = presented.buttons[title]
+            guard confirm.waitForExistence(timeout: UITestTimeout.navigation)
+            else { continue }
+            confirm.tap()
+            return
+        }
+        XCTFail("discarding should ask before throwing a walk away")
+    }
+
+    /// Taps whatever the current screen's back button is.
+    ///
+    /// Addressed by position rather than by title: a back button is labelled
+    /// with the screen behind it, which changes with every push this bundle
+    /// makes and is empty for the map.
+    @MainActor
+    func popScreen(in app: XCUIApplication) {
+        let back = app.navigationBars.buttons.element(boundBy: 0)
+        XCTAssertTrue(
+            back.waitForExistence(timeout: UITestTimeout.navigation),
+            "the pushed screen should offer a way back"
+        )
+        back.tap()
+    }
+
+    /// Confirms an edit through the keyboard's own Done button, falling back
+    /// to a return key.
+    ///
+    /// The toolbar button is the reliable one: it calls the commit directly,
+    /// where a newline depends on the field having a submit action wired to
+    /// it, and lands on whatever has focus if it does not.
+    @MainActor
+    func commitKeyboardEdit(in app: XCUIApplication) {
+        let toolbarDone = app.toolbars.buttons["Done"]
+        if toolbarDone.waitForExistence(timeout: UITestTimeout.navigation) {
+            toolbarDone.tap()
+            return
+        }
+        app.typeText("\n")
+    }
+
+    /// Stops a recording and names it, which is where every walk this bundle
+    /// records either ends or moves on to review.
+    ///
+    /// The name is typed before either happens, so a test that finds it on the
+    /// saved hike afterwards has also proved the review step carried it
+    /// through.
+    @MainActor
+    func stopRecording(named name: String, in app: XCUIApplication) {
+        app.buttons["Stop"].tap()
+        let namePrompt = app.alerts["Name Your Hike"]
+        XCTAssertTrue(
+            namePrompt.waitForExistence(timeout: UITestTimeout.navigation)
+        )
+        let field = namePrompt.textFields.firstMatch
+        XCTAssertTrue(
+            field.waitForExistence(timeout: UITestTimeout.navigation)
+        )
+        field.tap()
+        if let draft = field.value as? String, !draft.isEmpty {
+            field.tap(withNumberOfTaps: 3, numberOfTouches: 1)
+        }
+        field.typeText(name)
+        XCTAssertEqual(field.value as? String, name)
+        namePrompt.buttons["Save"].tap()
     }
 }

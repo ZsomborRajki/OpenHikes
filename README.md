@@ -114,13 +114,26 @@ post-clone script if a workflow builds through Xcode Cloud.
 Unit and integration tests use Swift Testing. `OpenHikesUITests` uses
 XCTest/XCUITest because Apple's UI automation and launch-performance metrics
 are not available through Swift Testing. UI-test launches use an in-memory
-SwiftData store and isolated preferences; coverage includes app/settings smoke
-navigation, bundled GPX import, programmatic simulator location, recording
-startup, the record → review → save round trip, route line pattern selection,
-the photo library picker opening over the permanently presented sheet, and
-`XCTApplicationLaunchMetric`. The bundle's fixtures, launch helpers and
-gestures live in `UITestSupport.swift`, so a new UI test reaches a screen the
-same way the existing ones do.
+SwiftData store and isolated preferences. The bundle is split by subject
+rather than kept in one file, because a suite runs as a unit and the slow,
+location-driven half should not have to run to check a search field:
+
+| Class | Covers |
+| --- | --- |
+| `OpenHikesUITests` | Map and sheet navigation, GPX import, search, rename, delete, route line patterns, the surface and difficulty breakdowns, the weather badge, `XCTApplicationLaunchMetric`. |
+| `RecordingUITests` | Recording start, pause and resume, discard, the record → review → save round trip, walking between review sections, and retrying a save that failed. |
+| `PhotoUITests` | The library picker opening over the permanently presented sheet, the seeded gallery and its viewer, deletion, and showing a photo on the map. |
+| `SettingsUITests` | Provider policy (no bulk download on OpenStreetMap), toggles that must hold their value across a reopen, and the field-report list, export sheet and delete. |
+| `AccessibilityUITests` | `performAccessibilityAudit` per screen. |
+| `AccessibilityLabelUITests` | The labels, values and traits the app promises. |
+| `PerformanceUITests` | Measurement only; excluded from the test plan. |
+
+The bundle's fixtures, launch helpers and gestures live in
+`UITestSupport.swift`, and the audit types, the MapKit filter and the shared
+report formatting live in `AccessibilityAuditSupport.swift`, so a new UI test
+reaches a screen — and reports an audit failure — the same way the existing
+ones do. `Scripts/run-ui-tests.sh` names its functional classes explicitly, so
+a new class has to be added to that list to be reachable through the script.
 
 The app recognises these launch arguments, all of which take effect only
 alongside `--ui-testing`:
@@ -133,12 +146,18 @@ alongside `--ui-testing`:
 | `--ui-test-offline` | Empty tile storage root and no network monitor, so every tile is a genuine miss. |
 | `--ui-test-import-gpx=<name>` | Imports a bundled GPX fixture at launch. |
 | `--ui-test-trail-graph=<name>` | Matches against a bundled trail graph instead of Overpass. |
+| `--ui-test-seed-photos=<count>` | Seeds a hike with generated photos, since the Simulator has no camera. |
+| `--ui-test-seed-metrics=<count>` | Seeds the field-metrics store with reports, since a real one takes a walk to fill. |
+| `--ui-test-fail-first-save` | Fails the first save of a finished recording, so the retry path can be driven. |
+| `--ui-test-weather` | Serves a fixed forecast instead of WeatherKit, which needs a network and a signed entitlement. |
 | `--ui-test-performance-log=<scenario>` | Writes signposts, stalls and samples to `Documents/PerformanceLogs/<scenario>.tsv`. |
 
-`AccessibilityUITests` is the VoiceOver half of that bundle. It runs
-`performAccessibilityAudit` per screen — the sweep catches unnamed controls,
-tap targets below 44pt and elements it cannot reach — and then asserts the
-labels, values and traits this app promises: that a hike row reads as one
+`AccessibilityUITests` and `AccessibilityLabelUITests` are the VoiceOver half
+of that bundle. The first runs `performAccessibilityAudit` per screen — the
+sweep catches unnamed controls, tap targets below 44pt and elements it cannot
+reach — over the map and sheet, a hike's details, settings, the recording
+screen, route review, the photo gallery and the empty state. The second
+asserts the labels, values and traits this app promises: that a hike row reads as one
 element and reports which route the map is drawing, that a stat tile reads as
 a label and a number rather than as spelled-out capitals, that the elevation
 graph is a single adjustable element which speaks the point under the tracker,
@@ -149,10 +168,10 @@ results rather than fixed, since the app does not draw them.
 
 CI runs strict SwiftLint, the shared package suite, the app and widget unit
 tests, warning-free debug/release builds, and the concurrent GPX parser under
-Thread Sanitizer. It also runs `AccessibilityUITests`, because a VoiceOver
-regression is invisible to a unit test and to a reviewer, and because ten of
-its eleven tests are launch, tap and assert against an in-memory store with no
-location and no measurement. That job is `continue-on-error` for now: UI
+Thread Sanitizer. It also runs both accessibility
+classes, because a VoiceOver regression is invisible to a unit test and to a
+reviewer, and because all but one of their tests are launch, tap and assert
+against an in-memory store with no location and no measurement. That job is `continue-on-error` for now: UI
 automation on a shared runner has to demonstrate a flake rate before it is
 allowed to block a merge. The functional UI automation and the performance
 suite stay out — both lean harder on real gestures and timing-sensitive waits.

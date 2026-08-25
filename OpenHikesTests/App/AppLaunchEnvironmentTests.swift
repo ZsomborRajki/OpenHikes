@@ -66,4 +66,62 @@ struct AppLaunchEnvironmentTests {
 
         #expect(configuration.importedGPXFixtureName == nil)
     }
+
+    @Test("seeded counts are read and clamped")
+    func seededCounts() {
+        let configuration = AppLaunchEnvironment.Configuration(
+            arguments: [
+                "OpenHikes",
+                "--ui-testing",
+                "--ui-test-seed-photos=8",
+                "--ui-test-seed-metrics=999",
+            ]
+        )
+
+        #expect(configuration.seededPhotoCount == 8)
+        // Clamped rather than honoured: a scenario asking for a thousand
+        // reports is a typo, and the store would evict all but sixteen anyway.
+        #expect(configuration.seededMetricsReportCount == 8)
+    }
+
+    @Test("the failure and weather seams are opt-in")
+    func failureAndWeatherSeams() {
+        let requested = AppLaunchEnvironment.Configuration(
+            arguments: [
+                "OpenHikes",
+                "--ui-testing",
+                "--ui-test-fail-first-save",
+                "--ui-test-weather",
+            ]
+        )
+        let quiet = AppLaunchEnvironment.Configuration(
+            arguments: ["OpenHikes", "--ui-testing"]
+        )
+
+        #expect(requested.failsFirstSave)
+        #expect(requested.stubsWeather)
+        #expect(!quiet.failsFirstSave)
+        #expect(!quiet.stubsWeather)
+    }
+
+    /// Every test-only option is inert without `--ui-testing`, which is what
+    /// stops a stray argument on a shipping launch from seeding a walker's
+    /// diagnostics screen or faking their weather.
+    @Test("test-only seams stay off on a normal launch")
+    func seamsIgnoredWithoutUITesting() {
+        let configuration = AppLaunchEnvironment.Configuration(
+            arguments: [
+                "OpenHikes",
+                "--ui-test-seed-photos=8",
+                "--ui-test-seed-metrics=2",
+                "--ui-test-fail-first-save",
+                "--ui-test-weather",
+            ]
+        )
+
+        #expect(configuration.seededPhotoCount == 0)
+        #expect(configuration.seededMetricsReportCount == 0)
+        #expect(!configuration.failsFirstSave)
+        #expect(!configuration.stubsWeather)
+    }
 }

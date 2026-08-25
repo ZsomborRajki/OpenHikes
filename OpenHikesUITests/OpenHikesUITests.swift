@@ -2,18 +2,18 @@
 //  OpenHikesUITests.swift
 //  OpenHikesUITests
 //
-//  The functional half of this bundle: the app driven the way a hiker drives
-//  it. Fixtures, launch helpers and location plumbing live in
-//  `UITestSupport.swift`; accessibility-specific assertions live in
-//  ``AccessibilityUITests``.
+//  The map, the sheet and a hike's own screen — the app driven the way
+//  someone browsing their walks drives it. Recording lives in
+//  ``RecordingUITests``, photos in ``PhotoUITests``, settings and diagnostics
+//  in ``SettingsUITests``, and everything spoken in ``AccessibilityUITests``.
+//  Fixtures, launch helpers and location plumbing are shared through
+//  `UITestSupport.swift`.
 //
 
 import CoreLocation
 import XCTest
 
 nonisolated final class OpenHikesUITests: XCTestCase {
-    private static let reviewedHikeName = "Reviewed Route"
-
     @MainActor
     func testLaunchesMapAndOpensSettings() {
         let app = launchApp()
@@ -42,90 +42,169 @@ nonisolated final class OpenHikesUITests: XCTestCase {
         openHikeDetail(in: app)
     }
 
+    /// The GPX importer has to hang off the sheet for the same reason the
+    /// photo picker does, and fails the same silent way if it doesn't.
+    ///
+    /// This is the presentation the rule was learned from: a `.fileImporter`
+    /// attached beside a sheet that is never dismissed is never presented, and
+    /// says nothing about it — the Import button simply stops working. Nothing
+    /// but automation notices that.
     @MainActor
-    func testSimulatedLocationStartsRecording() {
-        let app = makeApp(
-            arguments: [
-                "--ui-test-expanded-sheet",
-                "--ui-test-enable-location",
-            ]
-        )
-        app.resetAuthorizationStatus(for: .location)
-        addLocationPermissionMonitor()
-        setSimulatedLocation(UITestFixture.trailheadCoordinate)
-        defer { XCUIDevice.shared.location = nil }
+    func testOpensAndClosesTheGPXImporterOverTheSheet() {
+        let app = launchApp(arguments: ["--ui-test-expanded-sheet"])
 
-        launch(app)
-        startRecording(in: app)
-
-        setSimulatedLocation(
-            CLLocationCoordinate2D(latitude: 47.718598, longitude: 12.831420)
-        )
-        let phase = element("recording-phase", in: app)
+        let importButton = element("import-gpx-button", in: app)
         XCTAssertTrue(
-            phase.waitForExistence(timeout: UITestTimeout.navigation)
+            importButton.waitForExistence(timeout: UITestTimeout.navigation)
         )
-        expectation(
-            for: NSPredicate(format: "label CONTAINS %@", "Recording"),
-            evaluatedWith: phase
+        importButton.tap()
+
+        // The document browser is another process, so its listing is not the
+        // app's to assert on — that it is up, and that leaving it puts the app
+        // back the way it was, is the whole of the contract being checked.
+        let cancel = app.buttons["Cancel"]
+        XCTAssertTrue(
+            cancel.waitForExistence(timeout: UITestTimeout.existence),
+            "tapping Import GPX should present the document picker"
         )
-        waitForExpectations(timeout: UITestTimeout.navigation)
+
+        cancel.tap()
+        XCTAssertTrue(
+            element("map-sheet", in: app)
+                .waitForExistence(timeout: UITestTimeout.navigation),
+            "dismissing the importer must leave the app's sheet standing"
+        )
+        XCTAssertTrue(
+            element("record-hike-button", in: app).exists,
+            "and the sheet must still be the one that offers its own controls"
+        )
     }
 
-    /// The full recording round trip: walk a trace the matcher can snap onto a
-    /// bundled trail, then decide in review which line the hike keeps.
+    /// Deleting a hike from underneath its own detail view.
+    ///
+    /// The delete does three things that are easy to get wrong separately: it
+    /// removes the row, it clears the selection so the map stops drawing a
+    /// trail that no longer exists, and it pops the detail view so nothing is
+    /// left writing to a detached model. The third is the one with no visible
+    /// symptom until something writes.
     @MainActor
-    func testReviewsSnappedRouteAfterStopping() {
-        let app = makeApp(
+    func testDeletingAHikeClearsItsScreenAndItsRow() {
+        let app = launchApp(
             arguments: [
                 "--ui-test-expanded-sheet",
-                "--ui-test-enable-location",
-                "--ui-test-trail-graph=\(UITestFixture.trailGraphName)",
+                "--ui-test-import-gpx=\(UITestFixture.gpxName)",
             ]
         )
-        app.resetAuthorizationStatus(for: .location)
-        addLocationPermissionMonitor()
-        setSimulatedLocation(UITestFixture.reviewableTrace[0])
-        defer { XCUIDevice.shared.location = nil }
 
-        launch(app)
-        startRecording(in: app)
+        openHikeDetail(in: app)
+        popScreen(in: app)
 
-        let points = element("recording-point-count", in: app)
+        let row = awaitHikeRow(titled: UITestFixture.importedHikeTitle, in: app)
         XCTAssertTrue(
-            points.waitForExistence(timeout: UITestTimeout.existence)
-        )
-        walkRecordedTrace(UITestFixture.reviewableTrace, countedBy: points)
-        stopRecording(in: app)
-
-        XCTAssertTrue(
-            element("review-section-title", in: app)
-                .waitForExistence(timeout: Self.reviewTimeout),
-            "a snapped recording should stop in review"
-        )
-        let keepTrail = element("review-choice-trail", in: app)
-        let useGPS = element("review-choice-gps", in: app)
-        XCTAssertTrue(keepTrail.exists)
-        XCTAssertTrue(useGPS.exists)
-        XCTAssertTrue(
-            keepTrail.isSelected,
-            "the matched trail is the standing choice"
+            waitUntilSelected(row),
+            "opening a hike should leave it the selected one"
         )
 
-        scrollToTap(useGPS, in: app)
+        row.swipeLeft()
+        let delete = app.buttons["Delete"]
         XCTAssertTrue(
-            waitUntilSelected(useGPS),
-            "tapping a choice should move the checkmark to it"
+            delete.waitForExistence(timeout: UITestTimeout.navigation),
+            "swiping a row should reveal its delete action"
         )
-        XCTAssertFalse(keepTrail.isSelected)
+        delete.tap()
 
-        scrollToTap(element("review-save-hike", in: app), in: app)
+        let gone = NSPredicate(format: "exists == false")
+        expectation(for: gone, evaluatedWith: row)
+        waitForExpectations(timeout: UITestTimeout.existence)
+        XCTAssertFalse(
+            app.navigationBars[UITestFixture.importedHikeTitle].exists,
+            "deleting the selected hike must not leave its detail view pushed"
+        )
+    }
+
+    /// Renaming reaches the list, not just the header it was typed into.
+    ///
+    /// The title is stored as a `customName` the row reads back through its
+    /// own combined label, so a rename that draws correctly on the detail
+    /// screen and not in the sheet is a plausible failure with two places to
+    /// look. This checks both from one edit.
+    @MainActor
+    func testRenamingAHikeUpdatesItsRow() {
+        let app = launchApp(
+            arguments: [
+                "--ui-test-expanded-sheet",
+                "--ui-test-import-gpx=\(UITestFixture.gpxName)",
+            ]
+        )
+
+        openHikeDetail(in: app)
+        app.buttons["Rename hike"].tap()
+
+        let field = element("hike-title-field", in: app)
+        XCTAssertTrue(
+            field.waitForExistence(timeout: UITestTimeout.navigation),
+            "the rename button should swap the title for a field"
+        )
+        field.tap()
+        // The field opens holding the current title, so the new name has to
+        // replace it rather than be appended to it.
+        field.tap(withNumberOfTaps: 3, numberOfTouches: 1)
+        field.typeText(Self.renamedHikeName)
+        commitKeyboardEdit(in: app)
 
         XCTAssertTrue(
-            app.navigationBars[Self.reviewedHikeName]
-                .waitForExistence(timeout: Self.saveTimeout),
-            "the reviewed hike should be saved under the name it was given"
+            app.navigationBars[Self.renamedHikeName]
+                .waitForExistence(timeout: UITestTimeout.navigation),
+            "committing the edit should retitle the screen"
         )
+
+        popScreen(in: app)
+        awaitHikeRow(titled: Self.renamedHikeName, in: app)
+        XCTAssertFalse(
+            hikeRow(titled: UITestFixture.importedHikeTitle, in: app).exists,
+            "the old name should not be left behind in the list"
+        )
+    }
+
+    /// Search narrows the app's own hikes before it asks MapKit anything.
+    ///
+    /// The field is a plain `TextField` rather than `.searchable`, so nothing
+    /// about the filtering is the system's: the "Your Hikes" section, its
+    /// ordering ahead of Maps results, and the clear button that puts the list
+    /// back are all this app's, and all only reachable by typing.
+    @MainActor
+    func testSearchFiltersOwnHikesAndClearingRestoresTheList() {
+        let app = launchApp(
+            arguments: [
+                "--ui-test-expanded-sheet",
+                "--ui-test-import-gpx=\(UITestFixture.gpxName)",
+            ]
+        )
+
+        awaitHikeRow(titled: UITestFixture.importedHikeTitle, in: app)
+
+        let search = element("map-search", in: app)
+        XCTAssertTrue(
+            search.waitForExistence(timeout: UITestTimeout.navigation)
+        )
+        search.tap()
+        search.typeText(Self.searchTerm)
+
+        XCTAssertTrue(
+            app.staticTexts["Your Hikes"]
+                .waitForExistence(timeout: UITestTimeout.existence),
+            "a matching hike should be offered above any map suggestion"
+        )
+        awaitHikeRow(titled: UITestFixture.importedHikeTitle, in: app)
+
+        let clear = element("clear-search-button", in: app)
+        XCTAssertTrue(clear.exists, "a non-empty query should offer a way out")
+        clear.tap()
+
+        let cleared = NSPredicate(format: "exists == false")
+        expectation(for: cleared, evaluatedWith: app.staticTexts["Your Hikes"])
+        waitForExpectations(timeout: UITestTimeout.existence)
+        awaitHikeRow(titled: UITestFixture.importedHikeTitle, in: app)
     }
 
     /// A hike's line pattern is picked from five swatches that draw no text,
@@ -161,49 +240,74 @@ nonisolated final class OpenHikesUITests: XCTestCase {
         XCTAssertFalse(directional.isSelected)
     }
 
-    /// The camera pill's presentations have to hang off the sheet, not off the
-    /// view that presents it.
+    /// The Surface and Difficulty sections, which are drawn only once
+    /// OpenStreetMap has answered for a route.
     ///
-    /// A view can only have one modal up at a time, and this app's sheet is
-    /// never taken down — a `.photosPicker` attached beside it is silently
-    /// never presented. The failure has no symptom other than a button that
-    /// does nothing, which is exactly the kind of thing only automation
-    /// catches. Cancelling again afterwards is the other half of it: the GPX
-    /// importer taught this app that a picker dismissing can take the sheet
-    /// with it.
+    /// `--ui-test-trail-graph` supplies that answer from a bundled fixture, so
+    /// what is under test is the app's analysis and its bars rather than
+    /// Overpass's availability. The bars carry their shares as spoken values,
+    /// which is both the assertion and the thing VoiceOver reads.
     @MainActor
-    func testOpensAndClosesThePhotoLibraryPickerOverTheSheet() {
+    func testShowsSurfaceAndDifficultyForAMatchedRoute() {
         let app = launchApp(
-            arguments: ["--ui-test-import-gpx=\(UITestFixture.gpxName)"]
+            arguments: [
+                "--ui-test-expanded-sheet",
+                "--ui-test-import-gpx=\(UITestFixture.gpxName)",
+                "--ui-test-trail-graph="
+                    + UITestTrailTagFixture.trailGraphName,
+            ]
         )
 
         openHikeDetail(in: app)
 
-        let library = element("map-photo-library-button", in: app)
+        // Both sections are built lazily and appear only once the analysis
+        // finishes, so this has to keep looking rather than wait in place.
+        let surface = element("surface-bar", in: app)
         XCTAssertTrue(
-            library.waitForExistence(timeout: UITestTimeout.navigation),
-            "opening a hike should offer the pill the picker is reached from"
+            scrollUntilVisible(surface, in: app, timeout: Self.analysisTimeout),
+            "a route matched against tagged ways should report its surfaces"
         )
-        library.tap()
-
-        // The picker is out of process, so its contents are not the app's to
-        // assert on; its cancel button carries that identifier in every
-        // locale, which is enough to know it is on screen.
-        let cancel = app.buttons["Cancel"]
         XCTAssertTrue(
-            cancel.waitForExistence(timeout: UITestTimeout.existence),
-            "tapping the library button should present the photo picker"
+            (surface.value as? String)?
+                .contains(UITestTrailTagFixture.spokenSurface) ?? false,
+            "the surface bar should speak the shares it draws"
         )
 
-        cancel.tap()
+        let difficulty = element("difficulty-bar", in: app)
         XCTAssertTrue(
-            element("map-sheet", in: app)
-                .waitForExistence(timeout: UITestTimeout.navigation),
-            "dismissing the picker must leave the app's sheet standing"
+            scrollUntilVisible(difficulty, in: app, timeout: Self.analysisTimeout)
         )
         XCTAssertTrue(
-            app.navigationBars[UITestFixture.importedHikeTitle].exists,
-            "and must not pop the screen the pill was offered from"
+            (difficulty.value as? String)?
+                .contains(UITestTrailTagFixture.spokenDifficulty) ?? false,
+            "the difficulty bar should speak its SAC grades"
+        )
+    }
+
+    /// The weather badge, stubbed because WeatherKit needs a network, a
+    /// signed entitlement and real weather to agree with a test.
+    ///
+    /// What the stub replaces is the forecast; the badge, its glass and its
+    /// spoken value are the shipping ones, and the value is where the number
+    /// and the condition are actually put into words.
+    @MainActor
+    func testShowsTheWeatherBadge() {
+        let app = launchApp(arguments: ["--ui-test-weather"])
+
+        let badge = element("weather-badge", in: app)
+        XCTAssertTrue(
+            badge.waitForExistence(timeout: UITestTimeout.existence),
+            "a forecast should be drawn over the map"
+        )
+        XCTAssertEqual(badge.label, "Current weather")
+        let spoken = badge.value as? String
+        XCTAssertTrue(
+            spoken?.contains(Self.stubbedWeatherCondition) ?? false,
+            "the badge should speak the condition beside its temperature"
+        )
+        XCTAssertTrue(
+            spoken?.contains(Self.stubbedWeatherUnit) ?? false,
+            "and should spell the unit out rather than leaving a bare number"
         )
     }
 
@@ -220,31 +324,16 @@ nonisolated final class OpenHikesUITests: XCTestCase {
         }
     }
 
-    /// Matching a trace against the bundled graph is real work on a cold
-    /// simulator, and saving writes the route plus its widget payload.
-    private static let reviewTimeout: TimeInterval = 30
-    private static let saveTimeout: TimeInterval = 20
+    /// Route analysis is off-main and unhurried; a launch measurement wants
+    /// enough iterations to mean something without tripling the suite.
+    private static let analysisTimeout: TimeInterval = 25
     private static let launchIterations = 3
-
-    @MainActor
-    private func stopRecording(in app: XCUIApplication) {
-        app.buttons["Stop"].tap()
-        let namePrompt = app.alerts["Name Your Hike"]
-        XCTAssertTrue(
-            namePrompt.waitForExistence(timeout: UITestTimeout.navigation)
-        )
-        // The name is typed before the review opens, so saving it later also
-        // proves the review step carries it through.
-        let field = namePrompt.textFields.firstMatch
-        XCTAssertTrue(
-            field.waitForExistence(timeout: UITestTimeout.navigation)
-        )
-        field.tap()
-        if let draft = field.value as? String, !draft.isEmpty {
-            field.tap(withNumberOfTaps: 3, numberOfTouches: 1)
-        }
-        field.typeText(Self.reviewedHikeName)
-        XCTAssertEqual(field.value as? String, Self.reviewedHikeName)
-        namePrompt.buttons["Save"].tap()
-    }
+    private static let renamedHikeName = "Renamed Route"
+    private static let searchTerm = "Thumsee"
+    /// `WeatherSnapshot.uiTestFixture`, spelled the way the badge speaks it.
+    /// The unit is checked without its number: the badge draws Celsius, but
+    /// the spoken value is formatted for the device's locale, which may put
+    /// the same reading in Fahrenheit.
+    private static let stubbedWeatherCondition = "Partly Cloudy"
+    private static let stubbedWeatherUnit = "degrees"
 }

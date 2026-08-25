@@ -57,7 +57,6 @@ struct HikeDifficultySection: View {
                     .font(.caption2)
                     .foregroundStyle(.secondary)
             }
-            .accessibilityIdentifier("difficulty-section")
         }
     }
 

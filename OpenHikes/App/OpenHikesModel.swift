@@ -11,6 +11,7 @@ import Foundation
 import Observation
 import os
 import SwiftData
+import Synchronization
 
 nonisolated struct StorageStartupIssue: Equatable, Sendable {
     let underlyingDescription: String
@@ -116,6 +117,7 @@ final class OpenHikesModel {
             autoSaveController: AutoSaveController(),
             hikeRecorder: HikeRecorder(
                 container: testingContainer,
+                saveModelContext: Self.uiTestingSave(),
                 trailGraphProvider: graphProvider,
                 defaults: uiTestingDefaults,
                 journalDirectory:
@@ -197,6 +199,15 @@ final class OpenHikesModel {
         self.trailGraphProvider = trailGraphProvider
         self.defaults = defaults
         self.startupIssue = startupIssue
+        // Behind the test guard for the same reason every other startup writer
+        // is: both unit-test bundles are hosted by the app, and a delivered
+        // payload would write into Application Support underneath a suite that
+        // owns its own store. Nothing arrives during a test run in practice —
+        // MetricKit reports daily and only on a device — but "in practice" is
+        // not a guarantee, and this costs one branch.
+        if !AppLaunchEnvironment.isRunningTests {
+            FieldMetrics.shared.register()
+        }
     }
 
     func sceneDidBecomeActive() {
@@ -209,6 +220,11 @@ final class OpenHikesModel {
 
     func sceneWillResignActive() {
         hikeRecorder.sceneWillResignActive()
+        // Backstop: a launch whose map never appeared — a failed store, an
+        // error screen — would otherwise leave the extended launch task open
+        // for the life of the process, and MetricKit reports nothing for a
+        // measurement that never ends.
+        LaunchMeasurement.finish()
         autoSaveController.sceneWillResignActive {
             try container.mainContext.save()
         }
@@ -258,7 +274,14 @@ final class OpenHikesModel {
         into modelContext: ModelContext
     ) async throws(GPXImport.ImportFailure) -> Hike {
         let scoped = url.startAccessingSecurityScopedResource()
+        // The MetricKit span covers the whole import rather than only the
+        // parse `GPXParsed` already times: what is worth knowing in the field
+        // is what opening somebody's 20,000-point GPX costs end to end,
+        // including the SwiftData insert, and that is not a number a
+        // three-point fixture can produce.
+        let span = FieldSignpost.begin(.hikeImport)
         defer {
+            FieldSignpost.end(span)
             if scoped {
                 url.stopAccessingSecurityScopedResource()
             }
@@ -381,6 +404,53 @@ final class OpenHikesModel {
         for coordinate: CLLocationCoordinate2D
     ) -> String {
         "\(Int(coordinate.latitude * 100)),\(Int(coordinate.longitude * 100))"
+    }
+}
+
+// MARK: - UI-test seams
+
+/// The refusals a UI-testing launch can ask for. Held apart from the model's
+/// own body because none of it exists in a shipping build.
+private extension OpenHikesModel {
+    /// The recorder's save, refused once when the launch asked for it.
+    ///
+    /// The retry path is the only branch of the recording screen no sequence
+    /// of taps can reach: it needs the store to say no. The recorder already
+    /// takes its save as a closure — the seam is what the unit suites drive —
+    /// so a scenario borrows it rather than the app growing a second one, and
+    /// everything the screen does afterwards is the shipping state machine.
+    ///
+    /// Refused once, and only for the save that ends a recording. The recorder
+    /// writes several times before then — the draft hike it inserts when
+    /// recording starts, the orphans it sweeps — and failing one of those
+    /// would put the screen in a state that has nothing to retry
+    /// (``HikeRecorder/canRetrySave`` is false until a prepared save is
+    /// pending). The finalising write is the one that has already flipped
+    /// `isRecording` off, which is what identifies it here.
+    ///
+    /// Once, not always: a retry that could never succeed would prove the
+    /// button exists and nothing about what it does.
+    static func uiTestingSave() -> (ModelContext) throws -> Void {
+        guard AppLaunchEnvironment.failsFirstSave else {
+            return { context in try context.save() }
+        }
+        let hasFailed = Mutex(false)
+        return { context in
+            let finalizesRecording = (
+                context.insertedModelsArray + context.changedModelsArray
+            ).contains { model in
+                (model as? Hike).map { !$0.isRecording } ?? false
+            }
+            let shouldFail = hasFailed.withLock { failed in
+                guard finalizesRecording, !failed else { return false }
+                failed = true
+                return true
+            }
+            guard !shouldFail else {
+                throw CocoaError(.fileWriteUnknown)
+            }
+            try context.save()
+        }
     }
 }
 

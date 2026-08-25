@@ -9,11 +9,18 @@ bundle="OpenHikesUITests"
 # Every functional class in the bundle. PerformanceUITests is deliberately
 # absent: it lives here too, but it is measurement rather than automation and
 # is run through Scripts/run-performance-tests.sh.
-suites=(OpenHikesUITests AccessibilityUITests)
+suites=(
+  OpenHikesUITests
+  RecordingUITests
+  PhotoUITests
+  SettingsUITests
+  AccessibilityUITests
+  AccessibilityLabelUITests
+)
 # Measurement rather than automation, so --all leaves them out: they assert
 # nothing and only cost launches. Naming one explicitly still runs it.
 measurement_tests=(OpenHikesUITests/testLaunchPerformance)
-default_suite="OpenHikesUITests"
+default_suite="RecordingUITests"
 default_test="testReviewsSnappedRouteAfterStopping"
 
 device="${OPENHIKES_SIMULATOR_NAME:-iPhone 17 Pro}"

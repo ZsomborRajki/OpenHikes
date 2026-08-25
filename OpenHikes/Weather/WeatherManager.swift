@@ -136,6 +136,39 @@ nonisolated struct WeatherPollState: Sendable {
     }
 }
 
+/// What the badge over the map actually draws: a symbol, a temperature and a
+/// sentence.
+///
+/// A value type rather than WeatherKit's `CurrentWeather` for two reasons.
+/// `CurrentWeather` has no public initializer, so nothing — a preview, a test,
+/// a UI automation launch — could ever stand one up, which left the badge the
+/// only piece of the interface reachable solely by a live network call against
+/// an entitlement. And the badge reads three fields out of a type with
+/// dozens, so the narrower value says what it depends on.
+nonisolated struct WeatherSnapshot: Equatable, Sendable {
+    let symbolName: String
+    let temperature: Measurement<UnitTemperature>
+    let conditionDescription: String
+
+    init(
+        symbolName: String,
+        temperature: Measurement<UnitTemperature>,
+        conditionDescription: String
+    ) {
+        self.symbolName = symbolName
+        self.temperature = temperature
+        self.conditionDescription = conditionDescription
+    }
+
+    init(_ weather: CurrentWeather) {
+        self.init(
+            symbolName: weather.symbolName,
+            temperature: weather.temperature,
+            conditionDescription: weather.condition.description
+        )
+    }
+}
+
 @Observable
 final class WeatherManager {
     @ObservationIgnored private static let logger = Logger(
@@ -143,9 +176,22 @@ final class WeatherManager {
         category: "Weather"
     )
 
-    private(set) var current: CurrentWeather?
+    /// The reading the badge draws, or `nil` while there has never been one.
+    private(set) var current: WeatherSnapshot?
 
     private let service = WeatherService.shared
+
+    /// Publishes a fixed reading instead of asking WeatherKit.
+    ///
+    /// Only reachable from a `--ui-test-weather` launch: the badge is the one
+    /// control on the first screen whose presence depends on an entitlement, a
+    /// token and a network round trip, so without this it was either absent
+    /// from every automated run or a source of flakes in all of them.
+    #if DEBUG
+    func applyUITestSnapshot(_ snapshot: WeatherSnapshot = .uiTestFixture) {
+        current = snapshot
+    }
+    #endif
 
     /// Fetches current weather for the given coordinate, preserving the last
     /// successful reading when WeatherKit is temporarily unavailable.
@@ -158,7 +204,9 @@ final class WeatherManager {
         let interval = RenderSignpost.beginInterval("WeatherFetch")
         defer { RenderSignpost.endInterval("WeatherFetch", interval) }
         do {
-            current = try await service.weather(for: location, including: .current)
+            current = WeatherSnapshot(
+                try await service.weather(for: location, including: .current)
+            )
             return true
         } catch {
             // The caller only learns "no". WeatherKit's failure modes are the
@@ -174,3 +222,18 @@ final class WeatherManager {
         }
     }
 }
+
+#if DEBUG
+extension WeatherSnapshot {
+    /// The reading `--ui-test-weather` publishes.
+    ///
+    /// Deliberately unmistakable: a temperature no simulator's real location
+    /// is likely to report, so a test that finds this value knows the badge is
+    /// drawing the fixture rather than something that arrived by accident.
+    static let uiTestFixture = Self(
+        symbolName: "cloud.sun.fill",
+        temperature: Measurement(value: 12, unit: UnitTemperature.celsius),
+        conditionDescription: "Partly Cloudy"
+    )
+}
+#endif
