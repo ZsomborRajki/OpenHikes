@@ -158,13 +158,6 @@ nonisolated final class TileCache: @unchecked Sendable {
     var isOnline: Bool { conditions.withLock { $0.isOnline } }
     var networkConditions: TileNetworkConditions { conditions.withLock { $0 } }
 
-    /// Whether the user has allowed map tiles over cellular. Cached here
-    /// rather than read from `UserDefaults` per tile: this is consulted on
-    /// every miss, from a background queue, and a defaults read is a real call
-    /// rather than a field access. ``setAllowsCellularDownloads(_:)`` keeps it
-    /// in step with the settings screen.
-    let cellularAllowed: Mutex<Bool>
-
     /// Reads the device's power state for the fetch policy. See `init`.
     let readPower: @Sendable () -> PowerState
 
@@ -237,15 +230,10 @@ nonisolated final class TileCache: @unchecked Sendable {
         sessionConfiguration: URLSessionConfiguration? = nil,
         monitorsNetwork: Bool = true,
         mutationKeyLimit: Int = TileCache.mutationKeyVersionLimit,
-        defaults: UserDefaults = .standard,
         readPower: @escaping @Sendable () -> PowerState = { .current }
     ) {
         self.readPower = readPower
         mutationVersions = Mutex(MutationVersions(keyLimit: mutationKeyLimit))
-        cellularAllowed = Mutex(
-            defaults.object(forKey: SettingsKey.cellularTileDownloads) as? Bool
-                ?? SettingsDefault.cellularTileDownloads
-        )
         let cacheRoot = storageRoot ?? FileManager.default.urls(for: .cachesDirectory, in: .userDomainMask)[0]
         let appSupportURLs = FileManager.default.urls(
             for: .applicationSupportDirectory, in: .userDomainMask
@@ -288,8 +276,9 @@ nonisolated final class TileCache: @unchecked Sendable {
         // what saves the radio; this makes sure that a path that somehow
         // reaches here still cannot spend a Low Data Mode allowance on a map
         // tile. There is no matching `allowsExpensiveNetworkAccess = false`
-        // because the cellular decision is a user setting that changes while
-        // the session lives, and a configuration is read once.
+        // because cellular is not a blanket refusal: a tile the walker is
+        // looking at still loads over it, and only the reading-ahead the
+        // policy classes as speculative does not.
         config.allowsConstrainedNetworkAccess = false
         return config
     }

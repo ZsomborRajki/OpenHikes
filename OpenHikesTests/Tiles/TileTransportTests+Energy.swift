@@ -19,10 +19,11 @@ import Testing
 
 extension TileTransportTests {
 
-    /// The asymmetry the whole policy exists for. A walker on cellular is
-    /// looking at the map *now*, so the tile under their thumb still loads;
-    /// what stops is the bulk download that would have pulled a region they
-    /// have not asked for over a metered radio.
+    /// The asymmetry the whole policy exists for, and the reason there is no
+    /// setting in front of it. A walker on cellular is looking at the map
+    /// *now*, so the tile under their thumb still loads; what stops is the
+    /// bulk download that would have pulled a region they have not asked for
+    /// over a metered radio.
     @Test("on cellular, browsing still fetches but prefetching does not")
     func cellularAllowsBrowsingAndStopsPrefetching() async {
         let stub = StubbedTileCache()
@@ -46,25 +47,25 @@ extension TileTransportTests {
         #expect(StubTileProtocol.requestCount == 1)
     }
 
-    /// Turning the setting off is the walker saying they are on a plan they
-    /// care about. At that point even the visible map waits for Wi-Fi.
-    @Test("with cellular downloads off, even browsing waits for Wi-Fi")
-    func cellularSettingSuppressesBrowsing() async {
+    /// Metered is a condition, not a mode: nothing latches it and nothing has
+    /// to be reset. Walking back into Wi-Fi range is the whole of what it
+    /// takes for the app to start reading ahead again, which is what makes a
+    /// hands-free app possible without a switch to remember to flip back.
+    @Test("leaving cellular restores prefetching with no relaunch")
+    func prefetchingResumesOffCellular() async {
         let stub = StubbedTileCache()
         defer { stub.tearDown() }
         StubTileProtocol.alwaysRespond(with: .tile())
         stub.cache.setNetworkConditions(
             TileNetworkConditions(isOnline: true, isExpensive: true)
         )
-        stub.cache.setAllowsCellularDownloads(false)
 
-        #expect(await stub.cache.loadTile(forKey: key, url: url()) == nil)
+        #expect(await stub.cache.saveTileDurably(forKey: key, url: url()) == false)
         #expect(StubTileProtocol.requestCount == 0)
 
-        // …and the setting is not a permanent state: back on Wi-Fi the same
-        // tile loads, with no reset or relaunch in between.
         stub.cache.setNetworkConditions(TileNetworkConditions(isOnline: true))
-        #expect(await stub.cache.loadTile(forKey: key, url: url()) != nil)
+        #expect(await stub.cache.saveTileDurably(forKey: key, url: url()))
+        #expect(StubTileProtocol.requestCount == 1)
     }
 
     /// Low Data Mode is the one condition with no override. The user has told

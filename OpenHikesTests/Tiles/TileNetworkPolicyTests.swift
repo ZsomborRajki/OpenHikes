@@ -23,7 +23,6 @@ struct TileNetworkPolicyTests {
         online: Bool = true,
         expensive: Bool = false,
         constrained: Bool = false,
-        allowsCellular: Bool = true,
         power: PowerState = PowerState()
     ) -> TileNetworkDecision {
         TileNetworkPolicy.decide(
@@ -33,7 +32,6 @@ struct TileNetworkPolicyTests {
                 isExpensive: expensive,
                 isConstrained: constrained
             ),
-            allowsCellular: allowsCellular,
             power: power
         )
     }
@@ -50,42 +48,25 @@ struct TileNetworkPolicyTests {
         #expect(decide(.speculative, online: false) == .denied("offline"))
     }
 
-    /// Not gated on any app setting, deliberately. Low Data Mode is a
-    /// per-network instruction the user gave the system, and a map tile is
-    /// optional by construction — there is either a cached one or a blank
-    /// square, and neither is worth overriding them for.
+    /// Not gated on any app setting, deliberately — there are no networking
+    /// settings at all. Low Data Mode is a per-network instruction the user
+    /// gave the system, and a map tile is optional by construction: there is
+    /// either a cached one or a blank square, and neither is worth overriding
+    /// them for.
     @Test("Low Data Mode denies everything, with no setting to override it")
     func constrainedDeniesEverything() {
-        #expect(
-            decide(.interactive, constrained: true, allowsCellular: true)
-                == .denied("low-data-mode")
-        )
-        #expect(
-            decide(.speculative, constrained: true, allowsCellular: true)
-                == .denied("low-data-mode")
-        )
+        #expect(decide(.interactive, constrained: true) == .denied("low-data-mode"))
+        #expect(decide(.speculative, constrained: true) == .denied("low-data-mode"))
     }
 
-    @Test("Cellular is the setting's to decide for a tile on screen")
-    func cellularFollowsTheSetting() {
+    /// The asymmetry the removal of the cellular toggle rests on. A walker on
+    /// a metered connection is looking at the map now, so the tile under their
+    /// thumb loads; what a metered connection costs them is the reading ahead.
+    @Test("Cellular keeps the map drawing and never carries speculative traffic")
+    func cellularCarriesInteractiveTrafficOnly() {
+        #expect(decide(.interactive, expensive: true) == .allowed)
         #expect(
-            decide(.interactive, expensive: true, allowsCellular: false)
-                == .denied("cellular")
-        )
-        #expect(decide(.interactive, expensive: true, allowsCellular: true) == .allowed)
-    }
-
-    /// The asymmetry worth having: allowing cellular means "fill in the map
-    /// I'm looking at", not "spend my data plan reading ahead".
-    @Test("Cellular never carries speculative traffic, setting or not")
-    func cellularNeverCarriesSpeculativeTraffic() {
-        #expect(
-            decide(.speculative, expensive: true, allowsCellular: true)
-                == .denied("cellular-speculative")
-        )
-        #expect(
-            decide(.speculative, expensive: true, allowsCellular: false)
-                == .denied("cellular")
+            decide(.speculative, expensive: true) == .denied("cellular-speculative")
         )
     }
 
@@ -127,7 +108,6 @@ struct TileNetworkPolicyTests {
         let denials = [
             decide(.interactive, online: false),
             decide(.interactive, constrained: true),
-            decide(.interactive, expensive: true, allowsCellular: false),
             decide(.speculative, power: PowerState(isLowPowerModeEnabled: true)),
             decide(.speculative, power: PowerState(thermalState: .critical)),
             decide(.speculative, expensive: true),

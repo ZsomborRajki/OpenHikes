@@ -45,8 +45,13 @@ nonisolated final class SettingsUITests: XCTestCase {
         )
     }
 
-    /// Both settings toggles, flipped and then found still flipped after the
+    /// The settings toggle, flipped and then found still flipped after the
     /// screen has been left and re-entered.
+    ///
+    /// One toggle rather than two since the cellular switch was removed —
+    /// what the app puts on the radio is decided from live conditions now, not
+    /// from a stored preference. Background Trail Tracking is not a substitute
+    /// here: flipping it asks for location authorization.
     ///
     /// Within one launch, deliberately: UI-testing defaults are wiped at
     /// startup, so a relaunch could never show anything but the default and an
@@ -63,20 +68,14 @@ nonisolated final class SettingsUITests: XCTestCase {
                 .waitForExistence(timeout: UITestTimeout.navigation)
         )
 
-        let cellular = toggle("cellular-tiles-toggle", in: app)
         let photos = toggle("save-photos-to-library-toggle", in: app)
-        scrollIntoView(cellular, in: app)
-        let cellularBefore = toggleIsOn(cellular)
-        flip(cellular)
-        XCTAssertTrue(
-            waitUntilToggle(cellular, is: !cellularBefore),
-            "tapping a toggle should flip it"
-        )
-
         scrollIntoView(photos, in: app)
         let photosBefore = toggleIsOn(photos)
         flip(photos)
-        XCTAssertTrue(waitUntilToggle(photos, is: !photosBefore))
+        XCTAssertTrue(
+            waitUntilToggle(photos, is: !photosBefore),
+            "tapping a toggle should flip it"
+        )
 
         app.buttons["Done"].tap()
         element("settings-button", in: app).tap()
@@ -85,14 +84,12 @@ nonisolated final class SettingsUITests: XCTestCase {
                 .waitForExistence(timeout: UITestTimeout.navigation)
         )
 
-        scrollIntoView(cellular, in: app)
+        scrollIntoView(photos, in: app)
         XCTAssertEqual(
-            toggleIsOn(cellular),
-            !cellularBefore,
+            toggleIsOn(photos),
+            !photosBefore,
             "a toggle's value should survive its screen being rebuilt"
         )
-        scrollIntoView(photos, in: app)
-        XCTAssertEqual(toggleIsOn(photos), !photosBefore)
     }
 
     /// The device-report screens, seeded because MetricKit never delivers on a

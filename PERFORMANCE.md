@@ -335,18 +335,27 @@ bulk-download path — fixes it at `.speculative`:
 |---|---|---|
 | Offline | denied | denied |
 | Low Data Mode (`isConstrained`) | denied | denied |
-| Cellular, setting off | denied | denied |
-| Cellular, setting on | **allowed** | denied (`cellular-speculative`) |
+| Cellular (`isExpensive`) | **allowed** | denied (`cellular-speculative`) |
 | Low Power Mode | allowed | denied |
 | Thermal `.serious`+ | allowed | denied |
 
 The asymmetry is the point. A walker looking at the map gets their tile; what
 stops is the app spending a metered, expensive radio on tiles nobody has asked
-to see. Low Data Mode has no override and no setting, because it is an explicit
-per-network instruction from the user and a hiking app is not the exception.
-Cellular has one — **Settings › Data Use › Download Maps on Cellular**, default
-on, so a first-time user on the approach road does not get a blank map and
-conclude the app is broken.
+to see.
+
+None of it is configurable, on purpose. There was briefly a **Settings › Data
+Use › Download Maps on Cellular** switch; it is gone. A switch is a question the
+walker has to answer correctly *before* the walk to get the right behaviour
+during it, and the app is meant to be pocketed and walked with rather than
+configured. The policy instead assumes a connection is available wherever the
+walker is and spends as little of it as it can: everything nobody is waiting for
+is given up the moment the connection turns metered, throttled or constrained,
+and everything the walker is actually looking at still loads. That is exactly
+what the removed switch did in its default position, so no walker who never
+opened Settings sees any change — and none of them can now reach the position
+where a blank map looked like a bug. Low Data Mode remains the one condition
+that reaches interactive traffic, because it is an explicit per-network
+instruction from the user and a hiking app is not the exception.
 
 Every refusal emits `TileFetchSuppressed` with `purpose=` and `reason=`, which
 matters more than it sounds: a tile that silently never loads is the hardest

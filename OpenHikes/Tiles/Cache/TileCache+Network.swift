@@ -24,7 +24,8 @@ nonisolated extension TileCache {
     /// `isExpensive` and `isConstrained` come from the same path update and
     /// cost nothing extra to record — the app simply never asked for them
     /// before, and so spent a hiker's cellular allowance and battery on tiles
-    /// it had no instruction to fetch.
+    /// it had no instruction to fetch. Nothing about them is configurable:
+    /// see ``TileNetworkPolicy``.
     func startMonitoringNetwork() {
         monitor.pathUpdateHandler = { [weak self] path in
             self?.applyPath(
@@ -56,16 +57,8 @@ nonisolated extension TileCache {
         TileNetworkPolicy.decide(
             purpose,
             conditions: networkConditions,
-            allowsCellular: cellularAllowed.withLock { $0 },
             power: readPower()
         )
-    }
-
-    /// Called by the settings screen when the cellular toggle moves. Pushed
-    /// rather than observed so the cache does not have to wake for every
-    /// unrelated `UserDefaults` change the app makes.
-    func setAllowsCellularDownloads(_ allowed: Bool) {
-        cellularAllowed.withLock { $0 = allowed }
     }
 
     #if DEBUG

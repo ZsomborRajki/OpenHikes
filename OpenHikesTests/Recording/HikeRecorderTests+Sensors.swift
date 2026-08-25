@@ -273,7 +273,7 @@ extension HikeRecorderTests {
         // takes further closures after this one, so a trailing closure
         // would land on the wrong parameter.
         let denySpeculative: @Sendable (TileFetchPurpose) -> TileNetworkDecision = { purpose in
-            purpose == .speculative ? .denied("cellular") : .allowed
+            purpose == .speculative ? .denied("cellular-speculative") : .allowed
         }
         let recorder = makeRecorder(
             trailGraphProvider: provider,

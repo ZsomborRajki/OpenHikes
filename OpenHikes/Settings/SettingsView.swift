@@ -3,9 +3,14 @@
 //  OpenHikes
 //
 //  The profile/settings sheet reached from the button next to the search bar.
-//  Hosts a (future) Apple sign-in, the map tile-provider selector, the
-//  cellular-download and background-tracking switches, and the offline tile
-//  storage readout.
+//  Hosts a (future) Apple sign-in, the map tile-provider selector, the photo
+//  and background-tracking switches, and the offline tile storage readout.
+//
+//  There is deliberately no data-use section. The app is meant to be walked
+//  with rather than configured, so the choice between cellular and Wi-Fi is
+//  made automatically by ``TileNetworkPolicy`` from conditions the system
+//  already publishes — see its notes for why that is both cheaper and less
+//  wrong than a switch the walker has to set before setting off.
 //
 
 import SwiftData
@@ -30,8 +35,6 @@ struct SettingsView: View {
     private var tileProviderID = TileProvider.default.id
     @AppStorage(SettingsKey.backgroundTrackingEnabled)
     private var backgroundTrackingEnabled = false
-    @AppStorage(SettingsKey.cellularTileDownloads)
-    private var cellularTileDownloads = SettingsDefault.cellularTileDownloads
     @AppStorage(SettingsKey.savePhotosToLibrary)
     private var savePhotosToLibrary = SettingsDefault.savePhotosToLibrary
 
@@ -60,7 +63,6 @@ struct SettingsView: View {
             Form {
                 accountSection
                 mapProviderSection
-                dataUseSection
                 photosSection
                 backgroundTrackingSection
                 offlineStorageSection
@@ -150,45 +152,6 @@ struct SettingsView: View {
                 }
             }
         }
-    }
-
-    // MARK: Data use
-
-    /// The one energy control worth exposing. Everything else the app does
-    /// about battery — backing the GPS off in Low Power Mode, dropping
-    /// speculative tile traffic when the device is throttling — follows a
-    /// system signal the user has already given somewhere else, and a second
-    /// switch for it here would only be a way to contradict them.
-    ///
-    /// Low Data Mode is deliberately not represented: it is honoured
-    /// unconditionally by ``TileNetworkPolicy``, and a toggle implying it
-    /// could be overridden would be a lie.
-    private var dataUseSection: some View {
-        Section {
-            Toggle("Download Maps on Cellular", isOn: cellularTileBinding)
-                .accessibilityIdentifier("cellular-tiles-toggle")
-        } header: {
-            Text("Data Use")
-        } footer: {
-            Text(
-                "Turning this off keeps map tiles coming from what's already saved on"
-                + " your device while you're on cellular, which is the cheapest thing"
-                + " a hike can do for its battery. Downloads resume on Wi-Fi."
-            )
-        }
-    }
-
-    private var cellularTileBinding: Binding<Bool> {
-        Binding(
-            get: { cellularTileDownloads },
-            set: { newValue in
-                cellularTileDownloads = newValue
-                // Pushed as well as stored: `TileCache` reads this per tile
-                // miss from a background queue and caches it, so the write
-                // above alone would not reach it until the next launch.
-                TileCache.shared.setAllowsCellularDownloads(newValue)
-            }
-        )
     }
 
     // MARK: Photos

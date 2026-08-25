@@ -401,6 +401,14 @@ nonisolated enum SocialNetworkPolicy {
 }
 ```
 
+`allowsCellular` is the one place this diverges from tiles, and it is worth
+saying why. Tiles have no such parameter: the map is the app's whole purpose,
+a tile the walker is looking at is worth a metered radio, and asking them to
+decide that in Settings before they set off is a question with one sensible
+answer. A feed is not that. Uploading a walk's photos over cellular is a real
+cost the user should get to refuse, so this stays a setting where the tile
+equivalent was deliberately removed.
+
 Decision order, and why:
 
 1. `isRecording && purpose == .background` → `.denied("recording")`. **First,
@@ -428,8 +436,9 @@ static let socialCellularSync   = "settings.socialCellularSync"    // default fa
 static let socialAutoRefresh    = "settings.socialAutoRefresh"     // default false
 ```
 
-Both default off. Tiles default cellular *on* because a blank map is a bug
-report; a stale feed is not.
+Both default off, and both would be the app's only networking settings — tiles
+have none. A map that fills in on cellular is the app doing its job; a feed that
+syncs on cellular is the app spending an allowance on something nobody opened.
 
 ---
 

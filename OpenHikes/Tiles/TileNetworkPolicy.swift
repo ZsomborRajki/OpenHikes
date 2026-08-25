@@ -17,14 +17,23 @@
 //
 //  * `isConstrained` — Low Data Mode. An explicit, per-network instruction
 //    from the user to stop doing optional networking. Nothing here overrides
-//    it, and there is no setting to; a tile is by definition optional when a
-//    cached one exists and a blank square when one doesn't.
-//  * `isExpensive` — cellular (or a personal hotspot). Gated on a setting,
-//    because a hiker on the approach road may well want the map to fill in,
-//    and silently refusing would look like a bug rather than a saving.
+//    it; a tile is by definition optional when a cached one exists and a
+//    blank square when one doesn't.
+//  * `isExpensive` — cellular (or a personal hotspot). Stops *speculative*
+//    traffic only. A hiker on the approach road still gets the map they are
+//    looking at, because refusing that would look like a bug rather than a
+//    saving; what they do not get is the app reading ahead on their data plan.
 //  * Low Power Mode and thermal pressure, via ``PowerState/current``. These
-//    stop *speculative* traffic only. A map the walker is looking at still
-//    loads; what stops is the app fetching tiles nobody asked to see yet.
+//    also stop *speculative* traffic only.
+//
+//  There is deliberately no setting behind any of this. The app is meant to
+//  be used hands-free — pocket, glance, walk on — and every question it asks
+//  in Settings about Wi-Fi versus cellular is a question the walker has to
+//  answer correctly *before* the walk to get the right behaviour during it.
+//  So the policy assumes a connection is available wherever the walker is and
+//  spends as little of it as it can: everything nobody is waiting for is
+//  given up the moment the connection becomes metered, throttled or
+//  constrained, and everything the walker is actually looking at still loads.
 //
 //  Split by purpose rather than by caller: what the policy weighs is whether
 //  anyone is waiting for the tile. ``TileCache/loadTile(forKey:url:purpose:)``
@@ -37,8 +46,8 @@ import Foundation
 
 nonisolated enum TileFetchPurpose: String, Sendable {
     /// The map is trying to draw this tile now. Refusing shows the walker a
-    /// blank square, so only an unambiguous instruction — offline, Low Data
-    /// Mode, cellular with the setting off — is allowed to.
+    /// blank square, so only an unambiguous instruction — offline, or Low Data
+    /// Mode — is allowed to.
     case interactive = "interactive"
     /// A bulk download, or anything else fetching a tile ahead of it being
     /// needed. Always the first thing to give up.
@@ -76,25 +85,22 @@ nonisolated enum TileNetworkPolicy {
     static func decide(
         _ purpose: TileFetchPurpose,
         conditions: TileNetworkConditions,
-        allowsCellular: Bool,
         power: PowerState = .current
     ) -> TileNetworkDecision {
         guard conditions.isOnline else { return .denied("offline") }
-        // Checked before the cellular setting because Low Data Mode is the
-        // stronger statement of the two, and a walker who has turned it on for
-        // their carrier's network should not have to find a second toggle in
-        // this app to be taken at their word.
+        // The one condition that reaches interactive traffic, because it is
+        // the only one where the user has already said, per network and in
+        // the system's own words, that optional networking should stop. The
+        // app has nothing to add to that and no toggle that contradicts it.
         if conditions.isConstrained { return .denied("low-data-mode") }
-        if conditions.isExpensive, !allowsCellular { return .denied("cellular") }
         guard purpose == .speculative else { return .allowed }
         if power.isLowPowerModeEnabled { return .denied("low-power-mode") }
         if RecordingEnergyPolicy.conserves(power.thermalState) { return .denied("thermal") }
-        // Speculative traffic over cellular costs the same radio as
-        // interactive traffic and buys nothing the walker is waiting for, so
-        // it needs the setting even when the setting has been granted for
-        // interactive use — which it has, or the check above would have
-        // returned already. Left explicit rather than folded upward so the
-        // asymmetry is visible.
+        // Cellular costs the same radio as Wi-Fi for a tile the walker is
+        // waiting on, and buys nothing for one they are not. Reading ahead is
+        // therefore the whole of what a metered connection gives up: the map
+        // in front of them still fills in, and the app stops spending their
+        // allowance on ground they may never walk.
         if conditions.isExpensive { return .denied("cellular-speculative") }
         return .allowed
     }
