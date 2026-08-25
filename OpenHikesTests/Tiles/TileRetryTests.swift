@@ -202,20 +202,74 @@ struct TileRetryTests {
     @Test("the soonest retry is the one the renderer waits for")
     func earliestRetryIsTheSoonestDeadline() {
         var log = log()
-        #expect(log.earliestRetry() == nil, "nothing has failed, so there's nothing to wake up for")
+        #expect(log.earliestRetry(after: start) == nil, "nothing has failed, so there's nothing to wake up for")
 
         // `other` has failed twice (15 s) and `key` once (5 s).
         log.recordFailure(other, at: start)
         log.recordFailure(other, at: start)
         log.recordFailure(key, at: start)
 
-        #expect(log.earliestRetry() == start.advanced(by: .seconds(5)))
+        #expect(log.earliestRetry(after: start) == start.advanced(by: .seconds(5)))
 
         log.recordSuccess(key)
-        #expect(log.earliestRetry() == start.advanced(by: .seconds(15)), "with it gone, the next one is due")
+        #expect(
+            log.earliestRetry(after: start) == start.advanced(by: .seconds(15)),
+            "with it gone, the next one is due"
+        )
 
         log.recordSuccess(other)
-        #expect(log.earliestRetry() == nil)
+        #expect(log.earliestRetry(after: start) == nil)
+    }
+
+    /// The renderer arms this from the end of every draw pass, which means it
+    /// asks while the tiles that just came due are still in flight. Answering
+    /// with a deadline already in the past would schedule a wake for a moment
+    /// that has been and gone: it fires at once, redraws, finds the same past
+    /// deadline, and arms again — one redraw per draw, which is the loop the
+    /// backoff exists to prevent.
+    @Test("a deadline that has already passed is not something to wake up for")
+    func pastDeadlinesAreExcluded() {
+        var log = log()
+        log.recordFailure(key, at: start)
+        log.recordFailure(other, at: start)
+        log.recordFailure(other, at: start)
+
+        let afterTheFirstIsDue = start.advanced(by: .seconds(10))
+        #expect(
+            log.earliestRetry(after: afterTheFirstIsDue) == start.advanced(by: .seconds(15)),
+            "the 5 s tile is being attempted now; the 15 s one is what still needs a timer"
+        )
+
+        let afterBothAreDue = start.advanced(by: .seconds(20))
+        #expect(
+            log.earliestRetry(after: afterBothAreDue) == nil,
+            "nothing is left waiting, so the draw pass covers it"
+        )
+    }
+
+    /// The failure that this suite's renderer counterpart got wrong: a tile
+    /// deep in its backoff has to keep its deadline when a shallower one
+    /// succeeds. The renderer used to re-arm its wake-up only from the failure
+    /// branch, so the timer that fired for `key` cleared itself, `key` loaded
+    /// and left the log, and `other`'s five-minute deadline had nothing behind
+    /// it — a hole that healed only if the user panned or the network dropped.
+    @Test("a surviving deadline outlives the tile whose wake-up exposed it")
+    func aDeepBackoffKeepsItsDeadlineWhenAShallowOneSucceeds() {
+        var log = log(delays: [.seconds(5), .seconds(300)])
+        log.recordFailure(key, at: start)
+        log.recordFailure(other, at: start)
+        log.recordFailure(other, at: start)
+
+        // The wake fires for `key`, the draw pass attempts it, and it loads.
+        let whenKeyIsDue = start.advanced(by: .seconds(5))
+        #expect(log.mayAttempt(key, at: whenKeyIsDue, isOnline: true))
+        #expect(!log.mayAttempt(other, at: whenKeyIsDue, isOnline: true))
+        log.recordSuccess(key)
+
+        #expect(
+            log.earliestRetry(after: whenKeyIsDue) == start.advanced(by: .seconds(300)),
+            "the pass that ends here still has something to arm"
+        )
     }
 
     // MARK: The shipped policy

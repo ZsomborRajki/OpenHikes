@@ -161,6 +161,17 @@ with no performance number attached to it at all. It is also the run that found
 the app's last per-second wake-up still running with the screen off — see
 Finding E5, which is the most consequential thing in this document.
 
+> **Two changes have landed since this baseline that it does not reflect.**
+> Neither invalidates a number below, because neither is on a path these
+> scenarios measure, but both change what a re-run should be expected to show.
+> The photo thumbnail cache is now bounded at 32 MB of decoded bytes rather
+> than at a count of 200, so a long strip evicts where it previously did not
+> (see the P3 gallery item under TODO). And the tile renderer now re-arms its
+> retry timer at the end of every draw pass rather than only on a failure,
+> which adds one `ContinuousClock` deadline comparison per pass and removes a
+> class of permanently-missing tile. Both are described in `CODE_REVIEW.md`'s
+> 2026-08-25 pass.
+
 ### What is already right
 
 These are the load-bearing claims of the architecture, and they hold.
@@ -601,11 +612,25 @@ anything — no `ElevationChartBody`, and none of the `OpenHikesViewBody`,
 pixels produces 19 chart bodies and nothing above them.
 
 So the render cost of this is gone, and what is left is the behavioural half:
-a tap does not scrub. The gesture is drag-only, and a tap that lands on the
-chart is simply discarded. Still low priority — nobody taps a chart repeatedly
-— but it remains the place where a scrub's start/stop edges would show a
-regression first, and it is worth knowing that the phase still burns 1.99 CPU-s
-while evaluating nothing, all of it XCUITest hit-testing thirteen times.
+a tap does not scrub.
+
+**The cause stated here was wrong and is now unknown.** This said "the gesture
+is drag-only". There is no hand-written gesture involved: scrubbing is
+`.chartXSelection(value:)` (`ElevationChartView.swift:94`), and Swift Charts
+documents that as handling taps as well as drags. Grepping the tree for
+`DragGesture` returns nothing, in this file or anywhere else in the app — the
+explanation appears to have been written from an assumption about how chart
+scrubbing is usually built rather than from this implementation. Corrected on
+2026-08-25; see `CODE_REVIEW.md`'s pass of that date, §B.
+
+The symptom is real and reproduced by the measurement above; only the diagnosis
+is retracted. Settling it needs a run against the actual view, not another
+reading — the candidates are the chart's hit area, an overlay above it, or the
+selection resolving and being immediately discarded. Still low priority —
+nobody taps a chart repeatedly — but it remains the place where a scrub's
+start/stop edges would show a regression first, and it is worth knowing that
+the phase still burns 1.99 CPU-s while evaluating nothing, all of it XCUITest
+hit-testing thirteen times.
 
 ### Finding 5 — panning re-renders the hike list (P2, variable)
 
@@ -771,12 +796,19 @@ Startup and I/O: `AppModelInit`, `ModelContainerInit`, `GPXParsed`,
       the Energy Log instrument over a full GPX is the only way to know whether
       the per-fix cost is flat, and it is the one measurement this harness
       structurally cannot make.
-- [ ] **Audit the app for any remaining periodic work.** E5 was found by
-      instrumenting one known timer and discovering the assumption about it was
-      wrong. `RecordingClockTick` is the only 1 Hz path anyone had written down;
-      whether it is the only one that exists is not yet a measurement. Anything
-      that polls, animates or refreshes on a schedule needs the same
-      foreground gate and the same pair of assertions.
+- [x] ~~Audit the app for any remaining periodic work.~~ Performed by
+      inspection on 2026-08-25. `RecordingClockTick` is in fact the only
+      periodic path in the shipping app: `RecordingView.swift:232`'s
+      `TimelineView` is the one E5 gated, and the only other repeating timer in
+      the tree is `PerformanceLog`'s own 1 Hz sampler, which is `#if DEBUG` and
+      exists to take these measurements. Three things that look periodic and
+      are not, checked individually so the next sweep does not re-flag them:
+      `AutoSaveController`'s drain is signal-driven and its own comment records
+      that it used to poll every 2 s and no longer does;
+      `CachingTileOverlayRenderer`'s retry wake is a one-shot armed from a
+      backoff deadline; and `HikeRecorder+Helpers`' scheduling is event-driven.
+      This was a reading, not a measurement — an Energy Log over a full hike
+      would still be the thing that proves it, and that is the item above.
 - [ ] **Consider `isIdleTimerDisabled` deliberately.** The app never sets it,
       which is the right default — but a walker navigating a junction with the
       screen dimming every 30 s will reach for the power button repeatedly, and
@@ -808,6 +840,15 @@ Startup and I/O: `AppModelInit`, `ModelContainerInit`, `GPXParsed`,
       the strip re-decodes nothing, but not enough to show whether a hike with
       two hundred photos evicts thumbnails and re-decodes them on the way back.
       `--ui-test-seed-photos` caps at 24 today for run-time reasons.
+      **The expected answer changed on 2026-08-25**, so this is worth doing
+      sooner: the thumbnail tier used to be bounded only by a count of 200 —
+      an effective ceiling near 150 MB of decoded bitmaps, which is why the
+      question above was phrased around two hundred photos. It is now bounded
+      at 32 MB of decoded bytes, roughly 42 thumbnails, so eviction is a
+      routine event on any long strip rather than a pathological one, and the
+      20.4 ms re-decode measured above is the cost being paid for it. Whether
+      that trade is sized right is now a measurement rather than a guess. See
+      `CODE_REVIEW.md`'s 2026-08-25 pass, §A.4.
 - [ ] Run the suite on a device once. `XCTHitchMetric` needs a signpost stream
       the Simulator does not emit — it raises inside `harvestData` rather than
       degrading — so frame-level hitch data is the one thing this harness cannot

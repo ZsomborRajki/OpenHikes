@@ -9,6 +9,7 @@ import CoreLocation
 import Foundation
 import Observation
 import OrderedCollections
+import os
 import WeatherKit
 
 nonisolated struct WeatherPollingPolicy: Sendable {
@@ -137,6 +138,11 @@ nonisolated struct WeatherPollState: Sendable {
 
 @Observable
 final class WeatherManager {
+    @ObservationIgnored private static let logger = Logger(
+        subsystem: "OpenHikes",
+        category: "Weather"
+    )
+
     private(set) var current: CurrentWeather?
 
     private let service = WeatherService.shared
@@ -154,6 +160,17 @@ final class WeatherManager {
         do {
             current = try await service.weather(for: location, including: .current)
             return true
-        } catch { return false }
+        } catch {
+            // The caller only learns "no". WeatherKit's failure modes are the
+            // opaque ones — a missing entitlement, a token fetch that failed, a
+            // rate limit, an unsupported region — and they are indistinguishable
+            // from a walker simply being out of signal, which is the one the
+            // backoff is designed for. Without this there is no signal anywhere
+            // that tells the two apart.
+            Self.logger.error(
+                "Weather update failed: \(error.localizedDescription, privacy: .public)"
+            )
+            return false
+        }
     }
 }

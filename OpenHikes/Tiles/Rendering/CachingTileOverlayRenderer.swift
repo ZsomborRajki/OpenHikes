@@ -125,11 +125,21 @@ nonisolated final class CachingTileOverlayRenderer: MKOverlayRenderer, TileCache
     /// many tiles failed, and each tile's own deadline grows 5 s → 15 s →
     /// 45 s → 2 min → 5 min, so a genuinely absent tile settles at one redraw
     /// every five minutes rather than one per draw pass.
+    ///
+    /// Called from the end of every draw pass as well as from a failure,
+    /// because a wake-up clears itself when it fires and the pass it triggers
+    /// need not record a new failure to re-arm it. A tile five failures deep
+    /// waits five minutes; a tile that came due in the same pass and *loaded*
+    /// removes itself from the log. Re-arming only on failure left the deep
+    /// one with no timer behind it, healing only if the user panned or the
+    /// network reconnected — which is the situation this exists to fix.
     private func scheduleRetryWake() {
         // Offline, `TileFailureLog` holds every failed tile indefinitely and
         // the reconnect notification is what releases them — so there is
         // nothing for a timer to make eligible.
-        guard cache.isOnline, let due = failures.withLock({ $0.earliestRetry() }) else { return }
+        guard cache.isOnline,
+              let due = failures.withLock({ $0.earliestRetry(after: .now) })
+        else { return }
 
         retryWake.withLock { wake in
             // A wake-up already scheduled at or before this deadline covers it.
@@ -202,6 +212,15 @@ nonisolated final class CachingTileOverlayRenderer: MKOverlayRenderer, TileCache
                 }
             }
         }
+
+        // Every exit from `loadTileIfNeeded` above can leave a tile waiting on
+        // a deadline with no wake-up behind it — a tile skipped for still
+        // being inside its backoff, or one that loaded and cleared the failure
+        // whose wake happened to be the timer everything else was riding on.
+        // Re-arming here makes it one call per pass rather than one per tile,
+        // and makes the invariant unconditional: after any draw, the soonest
+        // surviving deadline has a timer on it.
+        scheduleRetryWake()
     }
 
     // MARK: Loading

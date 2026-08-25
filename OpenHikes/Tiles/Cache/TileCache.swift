@@ -171,7 +171,7 @@ nonisolated final class TileCache: @unchecked Sendable {
     /// Network fetches currently in flight, keyed by cache key.
     ///
     /// The map and the bulk downloader reach the network through different
-    /// entry points — ``loadTile(forKey:url:)`` and
+    /// entry points — ``loadTile(forKey:url:purpose:)`` and
     /// ``saveTileDurably(forKey:url:)`` — so downloading the area you're
     /// looking at had both asking the provider for every tile independently.
     /// That doubles the request load on servers whose usage policies are the
@@ -417,7 +417,7 @@ nonisolated extension TileCache {
 
     /// Fetches a tile straight into durable storage — the bulk-download path.
     ///
-    /// The counterpart to ``loadTile(forKey:url:)``: same network fetch, but the
+    /// The counterpart to ``loadTile(forKey:url:purpose:)``: same network fetch, but the
     /// bytes land where the OS can't reclaim them. A download is coverage the
     /// user explicitly asked for, and `Caches` is the first thing purged under
     /// storage pressure — a tile evicted from under a saved hike is offline
@@ -635,7 +635,7 @@ nonisolated extension TileCache {
     /// Moves the browsing cache's copy of a tile into durable storage, keeping
     /// the bytes exactly as the tile server sent them. Used by
     /// ``AutoSaveTileStore`` for tiles the user has already viewed, and so
-    /// already fetched through ``loadTile(forKey:url:)``, which is what put that
+    /// already fetched through ``loadTile(forKey:url:purpose:)``, which is what put that
     /// cached copy there.
     ///
     /// A move, not a re-encode. Providers serve PNG, which is already both a

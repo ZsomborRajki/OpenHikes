@@ -117,7 +117,7 @@ struct ElevationChartView: View, Equatable {
             }
         }
         .frame(height: Self.chartHeight)
-        // The graph is a drag target with no leaves of its own, so without
+        // The graph is a selection target with no leaves of its own, so without
         // this it is invisible to VoiceOver and its scrub is unreachable. One
         // element with an adjustable action is the same interaction in the
         // rotor: swipe up/down steps the tracker along the trail and speaks
@@ -125,9 +125,10 @@ struct ElevationChartView: View, Equatable {
         // it, since it replaces the subtree it wraps — including any
         // identifier hung underneath.
         .accessibilityElement()
-        // Kept on the same view as the gesture: UI automation scrubs the plot
-        // area by coordinate, and there is no leaf inside a chart to hang this
-        // on.
+        // Kept on the same view as the selection, which Swift Charts installs
+        // through `.chartXSelection` above rather than as a gesture of ours:
+        // UI automation scrubs the plot area by coordinate, and there is no
+        // leaf inside a chart to hang this on.
         .accessibilityIdentifier("elevation-chart")
         .accessibilityLabel("Elevation profile")
         .accessibilityValue(Self.description(of: trackerSample, in: profile))

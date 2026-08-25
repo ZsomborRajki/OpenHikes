@@ -239,21 +239,31 @@ final class BackgroundTrailTracker: NSObject {
         selectionPublishTask?.cancel()
 
         guard let hike, hike.pointCount > 1 else {
+            // Not necessarily `nil`: a hike with one point or none is also
+            // nothing to draw, and it is still the selection. Comparing
+            // against the id captured here rather than against `nil` is what
+            // lets that case finish — guarding on `trackedHikeID == nil`
+            // returned early for it, leaving the widget on the *previous*
+            // trail (cleared from the store but never reloaded), the old
+            // basemaps un-invalidated, and `selectionPublishTask` non-nil,
+            // which shuts off `publishLiveFix` for as long as it is selected.
+            let clearedSelectionID = hike?.id
             selectionPublishTask = Task { [weak self] in
+                defer { self?.finishSelectionPublish(revision: revision) }
                 guard let self,
                       await selectionWriter.clear(ifCurrent: revision),
                       selectionRevision == revision,
-                      trackedHikeID == nil
+                      trackedHikeID == clearedSelectionID
                 else { return }
                 await TrailBasemapRenderer.shared.invalidate()
                 guard selectionRevision == revision else { return }
                 WidgetCenter.shared.reloadTimelines(ofKind: TrailWidgetKind.id)
-                selectionPublishTask = nil
             }
             return
         }
         let input = SnapshotInput(hike: hike)
         selectionPublishTask = Task { [weak self] in
+            defer { self?.finishSelectionPublish(revision: revision) }
             guard !Task.isCancelled else { return }
             let snapshot = await Self.buildSnapshotOffMain(from: input, liveFix: nil)
             guard let snapshot,
@@ -267,15 +277,50 @@ final class BackgroundTrailTracker: NSObject {
             else { return }
             WidgetCenter.shared.reloadTimelines(ofKind: TrailWidgetKind.id)
             refreshBasemaps(for: snapshot)
-            selectionPublishTask = nil
         }
     }
+
+    /// Releases the in-flight handle once a publication ends, whichever way it
+    /// ended.
+    ///
+    /// It has to be every exit, not just the successful one: `publishLiveFix`
+    /// reads this property as "a snapshot is still being written, don't race
+    /// it", so a publication that returned through one of its guards without
+    /// clearing it would silently stop the live feed until the next selection.
+    /// Revision-guarded because a *newer* selection has already stored its own
+    /// task here, and clearing that would hand the same window to the feed.
+    private func finishSelectionPublish(revision: UInt64) {
+        guard selectionRevision == revision else { return }
+        selectionPublishTask = nil
+    }
+
+    /// Whether a selection publication is still in flight.
+    ///
+    /// A test seam. The property it reports gates `publishLiveFix`, and the
+    /// failure it exists to catch — a publication ending without releasing it —
+    /// is invisible from the outside: the store looks right and the feed is
+    /// simply dead.
+    var isPublishingSelection: Bool { selectionPublishTask != nil }
 
     /// Waits for the latest selection publication. The detail view uses this
     /// before starting its live-fix loop so the first fix cannot race and be
     /// overwritten by the trail's initial snapshot.
+    ///
+    /// Loops rather than awaiting once, because "the latest" can change while
+    /// this is suspended: a selection arriving mid-wait cancels the task being
+    /// awaited, and a cancelled task returns through its guards almost at once.
+    /// Awaiting once would therefore resolve *earlier* than a quiet wait would,
+    /// and hand the caller a store still holding the previous trail.
+    ///
+    /// The revision also bounds the loop, so a handle left behind by some
+    /// future path that forgets to release it is a stale flag rather than a
+    /// spin: an already-finished task at an unchanged revision ends the wait.
     func waitForSelectionPublish() async {
-        await selectionPublishTask?.value
+        var awaitedRevision: UInt64?
+        while let task = selectionPublishTask, awaitedRevision != selectionRevision {
+            awaitedRevision = selectionRevision
+            await task.value
+        }
     }
 
     // MARK: Widget basemaps

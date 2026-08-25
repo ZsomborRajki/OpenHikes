@@ -216,8 +216,8 @@ nonisolated struct RecordingElevationFilter: Sendable {
         guard let relativeAltitude = latestRelativeAltitude else { return gpsAltitude }
 
         guard let relativeAnchor else {
-            relativeAnchor = relativeAltitude
             if let elevationAnchor {
+                relativeAnchor = relativeAltitude
                 guard let gpsAltitude else { return elevationAnchor }
                 let corrected = elevationAnchor
                     + (gpsAltitude - elevationAnchor)
@@ -225,7 +225,18 @@ nonisolated struct RecordingElevationFilter: Sendable {
                 self.elevationAnchor = corrected
                 return corrected
             }
+            // Nothing to anchor the barometer against yet: with no elevation
+            // carried in from a previous leg, only a trusted GPS altitude can
+            // seed one. Leaving `relativeAnchor` unset here is the whole point.
+            // Committing it before this guard meant a first fix with loose
+            // vertical accuracy — routine for a cold start — left the anchor
+            // set and the elevation anchor `nil`, so every later fix took the
+            // `guard let elevationAnchor` exit below, which never assigns one.
+            // Barometric fusion was then off for the rest of the recording,
+            // silently, and `resume()` re-entered the same state because it
+            // restarts from a `nil` elevation.
             guard let gpsAltitude else { return nil }
+            relativeAnchor = relativeAltitude
             elevationAnchor = gpsAltitude
             return gpsAltitude
         }

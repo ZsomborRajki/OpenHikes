@@ -386,10 +386,11 @@ extension HikeRecorder {
     func dismissFailure() {
         guard case .failed = phase else { return }
         guard !canRetrySave else { return }
+        // Past that guard `pendingReviewSave` is necessarily nil — it is one of
+        // the two things `canRetrySave` reports — so there is no review to
+        // return to and the session goes back to being merely paused.
         if sessionID == nil {
             resetSession()
-        } else if pendingReviewSave != nil {
-            phase = .reviewing
         } else {
             phase = .paused
         }

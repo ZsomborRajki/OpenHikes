@@ -78,7 +78,7 @@ nonisolated struct ImageDataFormat: Equatable, Sendable {
 nonisolated final class HikePhotoStore: @unchecked Sendable {
     /// The two files one photo occupies, named rather than modelled, so a
     /// measurement can be taken off the main actor. See
-    /// ``byteCount(of:)-(_)``.
+    /// `byteCount(of: [PhotoFiles])`.
     struct PhotoFiles: Equatable, Sendable {
         let fileName: String
         let thumbnailFileName: String
@@ -108,6 +108,23 @@ nonisolated final class HikePhotoStore: @unchecked Sendable {
     /// original at roughly a third of the bytes, which on a long walk is the
     /// difference between a hike costing megabytes and costing tens of them.
     private static let captureQuality = 0.9
+    /// Ceiling on the decoded bytes the thumbnail tier holds.
+    ///
+    /// The number that binds. A thumbnail is decoded at
+    /// ``thumbnailMaxPixelSize`` with `kCGImageSourceShouldCacheImmediately`,
+    /// so it is held as an uncompressed bitmap of roughly 0.75 MB, not as the
+    /// JPEG it came from — and this tier used to be bounded only by a count of
+    /// 200, an effective ceiling near 150 MB sitting alongside `TileCache`'s
+    /// own memory tier. That is the same argument ``TileCache/memoryByteLimit``
+    /// makes: a limit expressed in images says nothing about the resource being
+    /// spent, and leaves the app relying on the system noticing.
+    ///
+    /// Sized for a long strip — about 42 thumbnails — rather than for a whole
+    /// gallery, because the strip is what scrolls and a re-decode off screen
+    /// costs 20 ms on a background executor rather than a dropped frame.
+    private static let thumbnailByteLimit = 32 * 1024 * 1024
+    /// A secondary backstop for the pathological case of very small images.
+    /// The byte limit is what binds at any real thumbnail size.
     private static let thumbnailCountLimit = 200
 
     /// Where the full-size files live. Internal so a test can point a store at
@@ -134,6 +151,7 @@ nonisolated final class HikePhotoStore: @unchecked Sendable {
             Self.thumbnailDirectoryName,
             isDirectory: true
         )
+        thumbnails.totalCostLimit = Self.thumbnailByteLimit
         thumbnails.countLimit = Self.thumbnailCountLimit
     }
 
@@ -228,7 +246,7 @@ nonisolated final class HikePhotoStore: @unchecked Sendable {
 
         let stored = thumbnailURL(for: photo)
         if let image = Self.decode(stored, maxPixelSize: Self.thumbnailMaxPixelSize) {
-            thumbnails.setObject(image, forKey: key)
+            cacheThumbnail(image, forKey: key)
             return image
         }
 
@@ -237,9 +255,22 @@ nonisolated final class HikePhotoStore: @unchecked Sendable {
             maxPixelSize: Self.thumbnailMaxPixelSize
         ) else { return nil }
         writeThumbnail(image, to: stored)
-        thumbnails.setObject(image, forKey: key)
+        cacheThumbnail(image, forKey: key)
         return image
     }
+
+    // swiftlint:disable legacy_objc_type
+    /// The single insertion point on purpose: `setObject(_:forKey:)` without a
+    /// cost is free as far as `NSCache` is concerned, so one call site that
+    /// forgot it would exempt its entries from ``thumbnailByteLimit`` entirely.
+    /// The measurement is ``TileCache/decodedByteCost(of:)`` rather than a
+    /// second copy of it — `PhotoImage` and `TileImage` are the same type, and
+    /// two hand-written versions of "how big is this bitmap" would agree until
+    /// one of them was tuned.
+    private func cacheThumbnail(_ image: PhotoImage, forKey key: NSString) {
+        thumbnails.setObject(image, forKey: key, cost: TileCache.decodedByteCost(of: image))
+    }
+    // swiftlint:enable legacy_objc_type
 
     /// The viewer's image: the full picture, decoded no larger than a screen
     /// can show.

@@ -57,27 +57,25 @@ struct HikeDeletionTests {
     /// hike from `path` unconditionally — a widget deep link pushes onto that
     /// path directly, so "pushed" and "selected" need not be the same hike.
     ///
-    /// Mirrors `delete(_:among:)` rather than calling it — it's a private
-    /// method on a `View`, wired to `@Query`, bindings and the tile cache — so
-    /// it's the established pattern in this suite and in
-    /// `StorageAccountingTests`, with the same caveat: it pins the *rule*, not
-    /// the call site.
+    /// Calls `SheetRoute.removeHike` — the rule `MapSheet.delete(_:among:)`
+    /// itself calls. It used to be re-implemented here, because it lived
+    /// inside that private view method; a mirrored rule pins the reasoning but
+    /// cannot fail when the call site drifts away from it.
     @Test("deleting a hike takes it out of the navigation stack too")
     func deletionClearsTheNavigationPath() throws {
         let context = try Fixture.modelContext()
         let hike = Fixture.hike(in: context)
 
-        // The state `OpenHikesView` holds, with the path simplified to `[Hike]`.
+        // The state `OpenHikesView` holds and `MapSheet` is handed.
         var selectedHike: Hike? = hike
-        var navigationPath: [Hike] = [hike]
+        var path: [SheetRoute] = [.hike(hike)]
 
-        // `MapSheet.delete(_:among:)`, in the order it does it.
-        if hike.id == selectedHike?.id { selectedHike = nil }
-        navigationPath.removeAll { $0.id == hike.id }
+        let wasSelected = SheetRoute.removeHike(hike.id, selectedHike: &selectedHike, from: &path)
         context.delete(hike)
 
+        #expect(wasSelected, "so the caller knows to clear the map highlight")
         #expect(selectedHike == nil, "the map stops drawing it")
-        #expect(navigationPath.isEmpty, "and the detail view showing it is popped")
+        #expect(path.isEmpty, "and the detail view showing it is popped")
     }
 
     /// Deleting one hike must not pop a different one. A deep link can push a
@@ -89,11 +87,37 @@ struct HikeDeletionTests {
         let doomed = Fixture.hike(in: context)
         let survivor = Fixture.hike(in: context, title: "Survivor", route: Fixture.loopRoute)
 
-        var navigationPath: [Hike] = [survivor, doomed]
-        navigationPath.removeAll { $0.id == doomed.id }
+        var selectedHike: Hike? = survivor
+        var path: [SheetRoute] = [.hike(survivor), .hike(doomed)]
+
+        let wasSelected = SheetRoute.removeHike(doomed.id, selectedHike: &selectedHike, from: &path)
         context.delete(doomed)
 
-        #expect(navigationPath.map(\.id) == [survivor.id])
+        #expect(!wasSelected, "a different hike was selected, so the highlight stays")
+        #expect(selectedHike?.id == survivor.id)
+        #expect(path == [.hike(survivor)])
+    }
+
+    /// The unconditional half of the rule: a widget deep link pushes a trail
+    /// without selecting it, so a deletion has to pop by identity rather than
+    /// by "was it selected".
+    @Test("deleting an unselected hike still pops the screen showing it")
+    func deletionPopsAnUnselectedButPushedHike() throws {
+        let context = try Fixture.modelContext()
+        let deepLinked = Fixture.hike(in: context, title: "Deep linked")
+        let selected = Fixture.hike(in: context, title: "Selected", route: Fixture.loopRoute)
+
+        var selectedHike: Hike? = selected
+        // A pushed photo viewer goes with it — the gallery it pages through
+        // belongs to the hike being deleted.
+        var path: [SheetRoute] = [.hike(deepLinked), .photo(deepLinked, UUID())]
+
+        let wasSelected = SheetRoute.removeHike(deepLinked.id, selectedHike: &selectedHike, from: &path)
+        context.delete(deepLinked)
+
+        #expect(!wasSelected)
+        #expect(selectedHike?.id == selected.id, "an unrelated selection is untouched")
+        #expect(path.isEmpty, "both the detail view and its gallery are popped")
     }
 
     /// The persisted "what was selected" pointer. `OpenHikesModel` writes it from

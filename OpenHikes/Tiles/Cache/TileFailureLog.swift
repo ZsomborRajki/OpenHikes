@@ -113,10 +113,18 @@ nonisolated struct TileFailureLog: Sendable {
         return cleared
     }
 
-    /// When the soonest-eligible tile becomes eligible, so the renderer can
-    /// arrange to redraw then instead of waiting for the user to pan.
-    func earliestRetry() -> ContinuousClock.Instant? {
-        entries.values.lazy.map(\.retryAt).min()
+    /// When the soonest tile still waiting on its backoff becomes eligible, so
+    /// the renderer can arrange to redraw then instead of waiting for the user
+    /// to pan.
+    ///
+    /// Deadlines at or before `now` are excluded, and that exclusion is what
+    /// makes the wake-up safe to arm from a draw pass. A tile past its deadline
+    /// is already being attempted — it is in flight, or the pass that is asking
+    /// just started it — so a timer for it would fire immediately, redraw, find
+    /// the same past deadline and arm again: the redraw-per-draw loop the
+    /// backoff exists to prevent.
+    func earliestRetry(after now: ContinuousClock.Instant) -> ContinuousClock.Instant? {
+        entries.values.lazy.map(\.retryAt).filter { $0 > now }.min()
     }
 
     /// Test seam: when `key` may next be attempted, if it has failed at all.

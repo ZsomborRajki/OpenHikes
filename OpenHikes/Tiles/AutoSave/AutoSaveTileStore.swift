@@ -71,7 +71,7 @@ nonisolated final class AutoSaveTileStore: Sendable {
     /// builds the corridor synchronously on the caller's thread, which is the
     /// work the two-phase ``beginActiveHike(id:knownKeys:acceptsNewClaims:)``
     /// / ``updateCorridor(_:for:)`` split exists to keep off the main actor —
-    /// see ``AutoSaveController/activate(hike:)``. It survives because a test
+    /// see `AutoSaveController.activate(_:)`. It survives because a test
     /// that only needs a store pointed at a route should not have to
     /// reproduce that sequence.
     func setActiveHike(

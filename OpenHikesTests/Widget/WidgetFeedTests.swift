@@ -102,6 +102,46 @@ final class WidgetFeedTests {
         tracker.hikeSelectionChanged(to: stub)
         await tracker.waitForSelectionPublish()
         #expect(SharedStore.load() == nil)
+        // The clear has to *finish*, not merely write. A one-point hike is
+        // still a selection, so a publication that checked "is nothing
+        // selected?" returned early here: the store was erased but the widget
+        // was never reloaded onto the erasure, the previous trail's rendered
+        // basemaps were never invalidated, and the in-flight handle below —
+        // which `publishLiveFix` reads as "don't race the snapshot" — was left
+        // set, switching the live feed off for as long as the stub stayed
+        // selected.
+        #expect(!tracker.isPublishingSelection)
+    }
+
+    /// The wait exists so the detail view's first fix cannot be overwritten by
+    /// the trail snapshot still being written. A selection that lands *during*
+    /// that wait has to extend it: the task being awaited is cancelled, and a
+    /// cancelled task returns through its guards immediately, so awaiting it
+    /// once would resolve sooner than an undisturbed wait and hand the caller
+    /// a store holding the trail that was just replaced.
+    @Test("waiting spans a selection that arrives mid-wait")
+    func waitSpansASelectionArrivingMidWait() async throws {
+        let first = hike()
+        let second = Fixture.hike(in: context, title: "Second", route: Fixture.loopRoute)
+
+        tracker.hikeSelectionChanged(to: first)
+        // Asked from inside the waiter, because asked from outside the answer
+        // would depend on whether the race below actually happened on this run.
+        let waiter = Task { @MainActor in
+            await tracker.waitForSelectionPublish()
+            return tracker.isPublishingSelection
+        }
+        // Not a settle: nothing is being waited *for*. It only offers the
+        // waiter the executor so it can reach its suspension point before the
+        // second selection replaces the task it is holding. The assertion
+        // below holds either way — this just makes the interesting ordering
+        // the likely one.
+        await Task.yield()
+        tracker.hikeSelectionChanged(to: second)
+
+        #expect(await waiter.value == false, "the wait resolved on a superseded selection")
+        await tracker.waitForSelectionPublish()
+        #expect(try #require(SharedStore.load()).hikeID == second.id)
     }
 
     // MARK: The live fix

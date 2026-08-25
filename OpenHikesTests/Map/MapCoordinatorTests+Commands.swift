@@ -97,10 +97,28 @@ extension MapCoordinatorTests {
     /// And the commands stay independent under coalescing too: a run of
     /// `followUser()` must not also re-fit the route, which would throw away a
     /// viewport the user had panned to.
+    ///
+    /// The route is deliberately in the Alps rather than the fixture's usual
+    /// Cupertino ridge. This asserts an *absence* — that no route fit
+    /// happened — and the map's centre is not evidence of that on its own,
+    /// because `.follow` moves the map to the user by definition, and the
+    /// simulator's user is in San Francisco, 0.45° from the Cupertino fixture.
+    /// The test used to read "centre is still where I put it", which held only
+    /// while the location fix hadn't arrived yet: adding five tests elsewhere
+    /// in the bundle was enough to lose that race and land the centre on San
+    /// Francisco. Putting the route 10° away makes the two causes separable,
+    /// so the assertion means what it says regardless of load.
     @Test("a run of one command leaves the others alone")
     func coalescingDoesNotCrossCommands() async {
+        let alpineRoute = Self.route(coordinates: (0..<6).map { step in
+            RouteCoordinate(
+                latitude: 47.63 + Double(step) * 0.01,
+                longitude: 12.86,
+                elevation: 600 + Double(step) * 20
+            )
+        })
         let coordinator = MapView.Coordinator()
-        let view = mapView(route: Self.route())
+        let view = mapView(route: alpineRoute)
         let map = makeMap(view, coordinator)
         defer { detach(map) }
         view.update(map, coordinator)
@@ -115,11 +133,15 @@ extension MapCoordinatorTests {
 
         mapController.followUser()
         mapController.followUser()
-        await settle()
+        // Waiting on the command's own visible effect rather than on a number
+        // of scheduler turns, so the region is read at a defined moment.
+        await settle(until: "the follow command reaches the map") {
+            map.userTrackingMode == .follow
+        }
 
         #expect(map.userTrackingMode == .follow)
         #expect(
-            abs(map.region.center.latitude - 40.71) < 0.5,
+            abs(map.region.center.latitude - 47.63) > 0.5,
             "following the user must not have re-fitted the route"
         )
     }

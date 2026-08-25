@@ -291,24 +291,16 @@ private func delete(_ hike: Hike, among hikes: [Hike]) {
     // by a hike that no longer exists.
     autoSave.hikeWillBeDeleted(hike)
 
-    if hike.id == selectedHike?.id {
-        selectedHike = nil
+    // Clearing the selection stops the *map* drawing a deleted trail; clearing
+    // the path stops its detail view staying pushed, showing a hike that no
+    // longer exists — stats, elevation chart, and live Offline/Auto-Save
+    // controls writing to a detached object nothing will persist. SwiftData
+    // detaches rather than invalidates, so it's a stale screen rather than a
+    // crash. `SheetRoute.removeHike` owns both, including why the path is
+    // cleared unconditionally where the selection is not.
+    if SheetRoute.removeHike(hike.id, selectedHike: &selectedHike, from: &path) {
         highlight.move(to: nil)
     }
-
-    // The same treatment for the navigation stack, which drives
-    // `navigationDestination(for: SheetRoute.self)` off this very array. Clearing
-    // the selection stops the *map* drawing a deleted trail; without this
-    // its detail view stays pushed, showing a hike that no longer exists —
-    // stats, elevation chart, and live Offline/Auto-Save controls writing
-    // to a detached object nothing will persist. SwiftData detaches rather
-    // than invalidates, so it's a stale screen rather than a crash.
-    //
-    // Unconditional, unlike the selection check above: a widget deep link
-    // pushes onto this path directly, so "pushed" and "selected" aren't
-    // guaranteed to be the same hike. A pushed photo viewer goes with it —
-    // the gallery it pages through belongs to the hike being deleted.
-    path.removeAll { $0.shows(hikeID: hike.id) }
 
     // The photos' own files, while the hike can still be asked which ones
     // they are — a deleted `@Model` has nothing left to enumerate. Unlike

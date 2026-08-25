@@ -38,6 +38,32 @@ enum SheetRoute: Hashable {
         }
     }
 
+    /// Takes a deleted hike out of the sheet's selection and navigation stack,
+    /// reporting whether the selection was the one deleted.
+    ///
+    /// Extracted from `MapSheet.delete(_:among:)` so a test can call the rule
+    /// rather than restate it. While it lived inside that private view method
+    /// the only way to cover it was to re-implement it in the test, which pins
+    /// the reasoning but cannot fail when the call site drifts away from it —
+    /// and the call site is the half that has a deleted hike in front of it.
+    ///
+    /// The path is cleared unconditionally where the selection is not: a
+    /// widget deep link pushes a trail directly, so "pushed" and "selected"
+    /// are not guaranteed to be the same hike.
+    ///
+    /// - Returns: `true` when the deleted hike was the selected one, so the
+    ///   caller knows to clear the map highlight with it.
+    @discardableResult static func removeHike(
+        _ hikeID: UUID,
+        selectedHike: inout Hike?,
+        from path: inout [Self]
+    ) -> Bool {
+        let wasSelected = selectedHike?.id == hikeID
+        if wasSelected { selectedHike = nil }
+        path.removeAll { $0.shows(hikeID: hikeID) }
+        return wasSelected
+    }
+
     /// Whether this route wants the whole sheet. The photo viewer does: it
     /// draws one picture and nothing else, and a picture in the medium detent
     /// is a stamp.

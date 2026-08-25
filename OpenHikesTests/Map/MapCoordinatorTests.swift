@@ -116,8 +116,23 @@ struct MapCoordinatorTests {
 
     /// Lets the `Task { @MainActor in … }` hop each observation re-registers
     /// through actually run — the same hop the app pays for a scrub or a drag.
-    func settle() async {
-        await settleDelegateHop()
+    ///
+    /// Name the effect whenever the test has one. Without a condition this is
+    /// a fixed number of scheduler turns again, which is the thing
+    /// ``settleDelegateHop(until:sourceLocation:condition:)`` exists to
+    /// replace: it buys an amount of progress that depends on how many other
+    /// suites are contending for the one main actor, so it passes in isolation
+    /// and fails in a full run.
+    func settle(
+        until description: Comment? = nil,
+        sourceLocation: SourceLocation = #_sourceLocation,
+        condition: (@MainActor () -> Bool)? = nil
+    ) async {
+        await settleDelegateHop(
+            until: description,
+            sourceLocation: sourceLocation,
+            condition: condition
+        )
     }
 }
 
