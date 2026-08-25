@@ -165,9 +165,26 @@ private extension RecordingRouteReviewControls {
 
     func prompt(for section: RouteReviewSection) -> String {
         switch section.kind {
-        case .snapped: "The highlighted section was moved onto a mapped trail."
-        case .ambiguous: "The highlighted section has more than one plausible route."
+        case .snapped:
+            return "The highlighted section was moved onto a mapped trail."
+        case .ambiguous:
+            return Self.unobservedPrefix(section)
+                + "The highlighted section has more than one plausible route."
+        case .gap:
+            return Self.unobservedPrefix(section) + (
+                section.isBridged
+                    ? "The highlighted line follows a mapped trail across the gap."
+                    : "No mapped route fits the gap, so the line is drawn straight across it."
+            )
         }
+    }
+
+    /// Leads with the fact the hiker has no other way of learning: that the
+    /// recording stopped producing fixes here, and for how long. Everything
+    /// after it is about what the app did with that.
+    static func unobservedPrefix(_ section: RouteReviewSection) -> String {
+        guard let duration = section.unobservedDuration else { return "" }
+        return "No position was recorded for \(HikeFormat.duration(duration)). "
     }
 
     func title(
@@ -176,7 +193,7 @@ private extension RecordingRouteReviewControls {
     ) -> String {
         switch choice {
         case .matched: section.trailName.map { "Use \($0)" } ?? "Use the mapped trail"
-        case .gps: "Use GPS only"
+        case .gps: section.kind == .gap ? "Draw a straight line" : "Use GPS only"
         case .alternative(let alternativeID): "Option \(Self.optionLabel(alternativeID))"
         }
     }
@@ -187,7 +204,11 @@ private extension RecordingRouteReviewControls {
     ) -> String {
         switch choice {
         case .matched: "Snapped to the trail · " + Self.formatted(section.matchedDistanceMeters)
-        case .gps: "Keep the recorded line · " + Self.formatted(section.rawDistanceMeters)
+        case .gps: (
+            section.kind == .gap
+                ? "Straight across the gap · "
+                : "Keep the recorded line · "
+        ) + Self.formatted(section.rawDistanceMeters)
         case .alternative(let alternativeID): section.alternatives
             .first { $0.id == alternativeID }
             .map(Self.alternativeSubtitle) ?? ""

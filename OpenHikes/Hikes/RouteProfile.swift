@@ -68,6 +68,15 @@ nonisolated struct RouteProfile: Sendable {
     /// for what that keeps; in particular the route's true high and low points
     /// always survive, so ``elevationRange`` is exact however long the track is.
     let samples: [ElevationSample]
+    /// What the route's *undownsampled* elevations add up to.
+    ///
+    /// Distinct from ``elevationRange``, which is derived from the plotted
+    /// samples and is the right answer for the chart's y-scale — the chart
+    /// must be scaled to what it draws. This is the right answer for anything
+    /// describing the trail itself, and it is the only source of the climb and
+    /// descent totals, which a downsampled series cannot produce: dropping
+    /// points removes the little rises they spanned.
+    let elevation: RouteElevationSummary
 
     private let sampleDistances: [Double]
 
@@ -102,11 +111,13 @@ nonisolated struct RouteProfile: Sendable {
     private init(
         coordinates: [CLLocationCoordinate2D],
         distances: [Double],
-        samples: [ElevationSample]
+        samples: [ElevationSample],
+        elevation: RouteElevationSummary
     ) {
         self.coordinates = coordinates
         self.distances = distances
         self.samples = samples
+        self.elevation = elevation
         sampleDistances = samples.map(\.distanceMeters)
     }
 
@@ -118,6 +129,7 @@ nonisolated struct RouteProfile: Sendable {
         var routeCoordinates: [CLLocationCoordinate2D] = []
         var routeDistances: [Double] = []
         var routeSamples: [ElevationSample] = []
+        var elevations = ElevationAccumulator()
         routeCoordinates.reserveCapacity(route.count)
         routeDistances.reserveCapacity(route.count)
 
@@ -134,8 +146,9 @@ nonisolated struct RouteProfile: Sendable {
             previous = coordinate
             routeCoordinates.append(coordinate)
             routeDistances.append(cumulative)
-            if let elevation = point.elevation {
-                routeSamples.append(ElevationSample(distanceMeters: cumulative, elevation: elevation))
+            elevations.record(point.elevation)
+            if let pointElevation = point.elevation {
+                routeSamples.append(ElevationSample(distanceMeters: cumulative, elevation: pointElevation))
             }
             onPoint(point, segment)
         }
@@ -144,7 +157,8 @@ nonisolated struct RouteProfile: Sendable {
         return Self(
             coordinates: routeCoordinates,
             distances: routeDistances,
-            samples: plotted
+            samples: plotted,
+            elevation: RouteElevationSummary(elevations)
         )
     }
 

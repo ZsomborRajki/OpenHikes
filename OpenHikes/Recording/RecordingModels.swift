@@ -29,6 +29,18 @@ nonisolated struct RecordingPointFlags: OptionSet, Codable, Hashable, Sendable {
     static let widgetSourced = Self(rawValue: 1 << 2)
     static let motionStationary = Self(rawValue: 1 << 3)
     static let nonPedestrian = Self(rawValue: 1 << 4)
+    /// The stretch of route *leading to* this point was reasoned about rather
+    /// than walked under observation: the recording crossed it without
+    /// producing a fix, and the geometry is whatever ``TrailMatcher`` could
+    /// justify — a mapped trail it bridged the gap with, or a straight line
+    /// where it could not.
+    ///
+    /// A property of the segment, carried on that segment's end point. That is
+    /// what lets a two-coordinate straight line across a gap be marked at all,
+    /// and it survives the `dropFirst()` join between legs because the shared
+    /// anchor is kept from the earlier leg. Never set on a fix as it arrives
+    /// from Core Location or the widget.
+    static let inferred = Self(rawValue: 1 << 5)
 }
 
 nonisolated struct RecordingPoint: Equatable, Sendable {
@@ -98,7 +110,8 @@ nonisolated struct RecordingPoint: Equatable, Sendable {
             timestamp: timestamp,
             motion: flags.contains(.nonPedestrian)
                 ? .nonPedestrian
-                : nil
+                : nil,
+            provenance: flags.contains(.inferred) ? .inferred : nil
         )
     }
 }

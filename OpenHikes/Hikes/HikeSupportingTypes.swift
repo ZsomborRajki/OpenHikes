@@ -69,6 +69,28 @@ nonisolated enum RouteMotion: String, Codable, Hashable, Sendable {
     case nonPedestrian = "nonPedestrian"
 }
 
+/// Where a track point's position came from, where it was not a measurement.
+///
+/// A recording that loses its fixes — a phone in a pack, a wooded valley, a
+/// suspended app — comes back with stretches nothing was observed across. The
+/// route still has to be drawn through them, either along the mapped trail
+/// ``TrailMatcher`` bridged the gap with or, failing that, as a straight line.
+/// Both are inferences, and a route that does not say so reports a guess with
+/// the same authority as a measurement.
+///
+/// Like ``RecordingPointFlags/inferred``, which is what writes it, this
+/// describes the stretch *leading to* the point that carries it rather than
+/// the point itself — the segment property has to live on one of its two ends,
+/// and the end is the one that survives joining consecutive legs.
+///
+/// `nil` means measured, which is the overwhelming majority of points and the
+/// only thing a route recorded before this existed can decode to. That is
+/// deliberate: absence is the safe reading, since a point that fails to admit
+/// it was inferred is a smaller error than one that wrongly claims to be.
+nonisolated enum RouteProvenance: String, Codable, Hashable, Sendable {
+    case inferred = "inferred"
+}
+
 /// A single Codable track point. Stored inline by SwiftData as part of ``Hike/route``.
 nonisolated struct RouteCoordinate: Codable, Hashable, Sendable {
     var latitude: Double
@@ -78,30 +100,38 @@ nonisolated struct RouteCoordinate: Codable, Hashable, Sendable {
     /// Recorded for a future feature, read by nothing today — see
     /// ``RouteMotion``.
     var motion: RouteMotion?
+    /// `nil` for a measured point — see ``RouteProvenance``.
+    var provenance: RouteProvenance?
 
     init(
         latitude: Double,
         longitude: Double,
         elevation: Double? = nil,
         timestamp: Date? = nil,
-        motion: RouteMotion? = nil
+        motion: RouteMotion? = nil,
+        provenance: RouteProvenance? = nil
     ) {
         self.latitude = latitude
         self.longitude = longitude
         self.elevation = elevation
         self.timestamp = timestamp
         self.motion = motion
+        self.provenance = provenance
     }
 
     init(_ coordinate: CLLocationCoordinate2D) {
         latitude = coordinate.latitude
         longitude = coordinate.longitude
         motion = nil
+        provenance = nil
     }
 
     var clCoordinate: CLLocationCoordinate2D {
         CLLocationCoordinate2D(latitude: latitude, longitude: longitude)
     }
+
+    /// Whether this point's position was reasoned about rather than measured.
+    var isInferred: Bool { provenance == .inferred }
 }
 
 nonisolated enum RouteGeometry {

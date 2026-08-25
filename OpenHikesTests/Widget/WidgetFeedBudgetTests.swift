@@ -185,7 +185,7 @@ final class WidgetFeedBudgetTests {
             )
         }
         let profile = RouteProfile(route: suppliedRoute)
-        #expect(profile.elevationRange != RouteProfile(route: hike.route).elevationRange)
+        #expect(profile.elevation != RouteProfile(route: hike.route).elevation)
         let match = try #require(profile.nearestPoint(to: profile.coordinates[9000]))
 
         tracker.hikeSelectionChanged(to: hike)
@@ -198,8 +198,9 @@ final class WidgetFeedBudgetTests {
 
         let snapshot = try #require(SharedStore.load())
         #expect(snapshot.liveFix != nil, "precondition: it really did publish")
-        #expect(snapshot.elevationLowMeters == profile.elevationRange?.lowerBound)
-        #expect(snapshot.elevationHighMeters == profile.elevationRange?.upperBound)
+        #expect(snapshot.elevationLowMeters == profile.elevation.lowMeters)
+        #expect(snapshot.elevationHighMeters == profile.elevation.highMeters)
+        #expect(snapshot.elevationGainMeters == profile.elevation.gainMeters)
     }
     }
 }

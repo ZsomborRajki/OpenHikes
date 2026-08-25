@@ -236,6 +236,10 @@ struct MapView: MapViewRepresentable, Equatable {
             mapView.removeOverlay(existing)
             coordinator.routeOverlay = nil
         }
+        if !coordinator.inferredRouteOverlays.isEmpty {
+            mapView.removeOverlays(coordinator.inferredRouteOverlays)
+            coordinator.inferredRouteOverlays = []
+        }
 
         guard let route, route.coordinates.count > 1 else { return }
 
@@ -249,8 +253,32 @@ struct MapView: MapViewRepresentable, Equatable {
         } else {
             mapView.addOverlay(polyline, level: .aboveLabels)
         }
+        addInferredOverlays(route, on: mapView, coordinator, above: polyline)
 
         coordinator.fitToCurrentRoute(mapView, animated: true)
+    }
+
+    /// Overlays the stretches that were inferred rather than measured, on top
+    /// of the solid line they belong to.
+    ///
+    /// Drawn over rather than instead of the route: the solid line stays
+    /// continuous underneath, so the dashes read as a qualification of the
+    /// route rather than as a hole in it, and nothing has to be spliced out of
+    /// the geometry the rest of the map is fitted and scrubbed against.
+    private func addInferredOverlays(
+        _ route: DisplayedRoute,
+        on mapView: MKMapView,
+        _ coordinator: Coordinator,
+        above base: MKPolyline
+    ) {
+        guard !route.inferredSegments.isEmpty else { return }
+        let overlays = route.inferredSegments.map { segment in
+            MKPolyline(coordinates: segment, count: segment.count)
+        }
+        coordinator.inferredRouteOverlays = overlays
+        for overlay in overlays {
+            mapView.insertOverlay(overlay, above: base)
+        }
     }
 
     func update(_ mapView: MKMapView, _ coordinator: Coordinator) {

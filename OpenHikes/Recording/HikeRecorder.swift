@@ -59,6 +59,16 @@ final class HikeRecorder: NSObject {
     @ObservationIgnored let trailGraphRetryPolicy: TrailGraphPrefetchRetryPolicy
     @ObservationIgnored let trailGraphRetryJitter: @Sendable () -> Double
     @ObservationIgnored let distanceEvidenceSource: (any RecordingDistanceEvidenceSource)?
+    /// Whether the radio may be used for a trail graph, and why not when it
+    /// may not.
+    ///
+    /// Injected rather than reached for, so a suite exercising gap recovery
+    /// isn't deciding against the host app's live connection — and so the
+    /// composition root stays the only place that knows the answer comes from
+    /// ``TileCache``. Defaults to allowing, which is what a provider stub
+    /// wants and what a recorder built without an opinion should do.
+    @ObservationIgnored let trailGraphNetworkDecision:
+        @Sendable (TileFetchPurpose) -> TileNetworkDecision
     @ObservationIgnored let defaults: UserDefaults
     @ObservationIgnored let sharedStateStore: (any RecordingSharedStateStoring)?
     @ObservationIgnored let journal: TrackJournal?
@@ -82,6 +92,11 @@ final class HikeRecorder: NSObject {
         [TrailGraphRegion: TrailGraphPrefetchState] = [:]
     @ObservationIgnored var trailGraphPrefetchTasks:
         [TrailGraphRegion: (id: UUID, task: Task<Void, Never>)] = [:]
+    /// The speculative fetch of the regions around the one just loaded. One at
+    /// a time, and replaced rather than accumulated: entering a new region is
+    /// hours of walking apart, and the neighbours of the region left behind
+    /// are no longer the ones worth having.
+    @ObservationIgnored var neighbourPrefetchTask: Task<Void, Never>?
     @ObservationIgnored var startRequested = false
     @ObservationIgnored var isActivating = false
     @ObservationIgnored var pendingResumeFlag = false
@@ -107,6 +122,11 @@ final class HikeRecorder: NSObject {
     static let sharedSnapshotInterval: TimeInterval = 15 * 60
     nonisolated static let liveMatchingMaximumPoints = 20
     nonisolated static let liveMatchingDuration: TimeInterval = 60
+    /// How long a stop will wait for the trail-graph regions its gaps need.
+    /// Long enough for a handful of Overpass queries on a working connection,
+    /// short enough that a walker who finished in a valley with no signal
+    /// still gets their hike saved promptly.
+    nonisolated static let gapGraphDownloadBudget: Duration = .seconds(20)
 
     var isActive: Bool {
         switch phase {
@@ -177,6 +197,9 @@ final class HikeRecorder: NSObject {
             Double.random(in: 0...1)
         },
         distanceEvidenceSource: (any RecordingDistanceEvidenceSource)? = nil,
+        trailGraphNetworkDecision: (
+            @Sendable (TileFetchPurpose) -> TileNetworkDecision
+        )? = nil,
         defaults: UserDefaults = .standard,
         powerMonitor: PowerStateMonitor? = nil,
         sharedStateStore: (any RecordingSharedStateStoring)? = nil,
@@ -201,6 +224,8 @@ final class HikeRecorder: NSObject {
         self.trailGraphRetryPolicy = trailGraphRetryPolicy
         self.trailGraphRetryJitter = trailGraphRetryJitter
         self.distanceEvidenceSource = distanceEvidenceSource
+        self.trailGraphNetworkDecision = trailGraphNetworkDecision
+            ?? { _ in .allowed }
         self.defaults = defaults
         self.powerMonitor = powerMonitor ?? PowerStateMonitor()
         self.sharedStateStore = sharedStateStore

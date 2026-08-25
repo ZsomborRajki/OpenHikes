@@ -74,14 +74,10 @@ final class OpenHikesModel {
                 defaults: launchDefaults
             ),
             autoSaveController: AutoSaveController(),
-            hikeRecorder: HikeRecorder(
+            hikeRecorder: Self.makeRecorder(
                 container: load.container,
-                elevationSource: SystemRecordingElevationSource(),
-                motionSource: SystemRecordingMotionSource(),
                 trailGraphProvider: graphProvider,
-                distanceEvidenceSource: SystemPedometerDistanceSource(),
-                defaults: launchDefaults,
-                sharedStateStore: AppGroupRecordingSharedStateStore()
+                defaults: launchDefaults
             ),
             locationManager: LocationManager(),
             weatherManager: WeatherManager(),
@@ -411,7 +407,7 @@ final class OpenHikesModel {
 
 /// The refusals a UI-testing launch can ask for. Held apart from the model's
 /// own body because none of it exists in a shipping build.
-private extension OpenHikesModel {
+extension OpenHikesModel {
     /// The recorder's save, refused once when the launch asked for it.
     ///
     /// The retry path is the only branch of the recording screen no sequence
@@ -490,5 +486,40 @@ extension OpenHikesModel {
             claimed.insert(photo.thumbnailFileName)
         }
         return claimed
+    }
+}
+
+// MARK: - Recording composition
+
+private extension OpenHikesModel {
+    /// The app's real recorder, with its system-backed sensors and the live
+    /// tile network policy wired in.
+    ///
+    /// Assembled here rather than inline in `init` because every one of these
+    /// arguments is a *choice about the environment* — a real pedometer, a
+    /// real barometer, the user's actual cellular and Low Power Mode
+    /// settings — and each has a test double behind the same parameter. This
+    /// is the one place the production ones are named.
+    static func makeRecorder(
+        container: ModelContainer,
+        trailGraphProvider: any TrailGraphProviding,
+        defaults: UserDefaults
+    ) -> HikeRecorder {
+        HikeRecorder(
+            container: container,
+            elevationSource: SystemRecordingElevationSource(),
+            motionSource: SystemRecordingMotionSource(),
+            trailGraphProvider: trailGraphProvider,
+            distanceEvidenceSource: SystemPedometerDistanceSource(),
+            // Downloading a walking graph for ground the recording never saw
+            // is a tile-sized fetch on the same connection, so it answers to
+            // the same cellular, Low Power Mode and thermal rules the tiles
+            // do — see ``TileNetworkPolicy``.
+            trailGraphNetworkDecision: { purpose in
+                TileCache.shared.networkDecision(for: purpose)
+            },
+            defaults: defaults,
+            sharedStateStore: AppGroupRecordingSharedStateStore()
+        )
     }
 }

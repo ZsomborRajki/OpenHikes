@@ -268,6 +268,9 @@ final class HikeRecorderTests {
         trailGraphRetryJitter: @escaping @Sendable () -> Double = {
             Double.random(in: 0...1)
         },
+        trailGraphNetworkDecision: @escaping @Sendable (
+            TileFetchPurpose
+        ) -> TileNetworkDecision = { _ in .allowed },
         sharedStateStore: (any RecordingSharedStateStoring)? = nil,
         automaticallyRecovers: Bool = false,
         powerMonitor: PowerStateMonitor? = nil,
@@ -289,6 +292,7 @@ final class HikeRecorderTests {
             trailGraphProvider: trailGraphProvider,
             trailGraphRetryPolicy: trailGraphRetryPolicy,
             trailGraphRetryJitter: trailGraphRetryJitter,
+            trailGraphNetworkDecision: trailGraphNetworkDecision,
             defaults: defaults,
             powerMonitor: powerMonitor
                 // Never the default one in a test: it registers for

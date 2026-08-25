@@ -40,6 +40,37 @@ nonisolated struct TrailMatchLeg: Sendable {
     /// Names of the trails the matched geometry runs along, empty when the
     /// matcher abstained.
     let trailNames: [String]
+    /// Whether the ground this leg spans went unobserved, so every choice
+    /// offered for it is an inference rather than a measurement.
+    let isInferred: Bool
+    /// How long the recording went without a fix across this leg. `nil` unless
+    /// ``isInferred``.
+    let unobservedDuration: TimeInterval?
+    /// Whether the matcher actually found a mapped route across the leg. A
+    /// leg that is `isInferred` but not bridged is the silent case worth
+    /// surfacing: a straight line drawn through a stretch nothing is known
+    /// about.
+    let isBridged: Bool
+
+    init(
+        index: Int,
+        defaultPoints: [RecordingPoint],
+        rawPoints: [RecordingPoint],
+        alternatives: [TrailMatchAlternative],
+        trailNames: [String],
+        isInferred: Bool = false,
+        unobservedDuration: TimeInterval? = nil,
+        isBridged: Bool = false
+    ) {
+        self.index = index
+        self.defaultPoints = defaultPoints
+        self.rawPoints = rawPoints
+        self.alternatives = alternatives
+        self.trailNames = trailNames
+        self.isInferred = isInferred
+        self.unobservedDuration = unobservedDuration
+        self.isBridged = isBridged
+    }
 }
 
 nonisolated struct TrailMatchResult: Sendable {

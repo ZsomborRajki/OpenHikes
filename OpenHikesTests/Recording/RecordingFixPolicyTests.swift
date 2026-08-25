@@ -410,6 +410,78 @@ struct RecordingDistanceTests {
         )
         #expect(accumulator.isStationary)
     }
+
+    // MARK: The climb the widget publishes
+
+    /// Cumulative, not the difference between the highest and lowest fix: a
+    /// walk that goes up 40 m, back down 40 m and up 40 m again has climbed
+    /// 80 m, and reporting the 40 m span would understate every undulating
+    /// walk there is.
+    @Test("climb is summed over every rise, not measured between extremes")
+    func climbIsCumulative() throws {
+        var accumulator = RecordingDistanceAccumulator()
+        for (step, elevation) in [500.0, 540, 500, 540].enumerated() {
+            accumulator.append(walkingPoint(step: step, elevation: elevation))
+        }
+
+        #expect(try #require(accumulator.elevationGainMeters) == 80)
+    }
+
+    /// One height is a position, not a change. Claiming "0 m climbed" from a
+    /// single fix would put a chip on the widget the data can't support.
+    @Test("a single altitude is not yet a climb")
+    func oneAltitudeIsNotAClimb() {
+        var accumulator = RecordingDistanceAccumulator()
+        accumulator.append(walkingPoint(step: 0, elevation: 500))
+
+        #expect(accumulator.elevationGainMeters == nil)
+    }
+
+    /// A recording indoors, or on a phone whose altitude never passes the
+    /// filter, reports no climb rather than a flat zero.
+    @Test("fixes without altitudes report no climb")
+    func noAltitudesMeansNoClimb() {
+        var accumulator = RecordingDistanceAccumulator()
+        for step in 0..<5 {
+            accumulator.append(walkingPoint(step: step, elevation: nil))
+        }
+
+        #expect(accumulator.elevationGainMeters == nil)
+    }
+
+    /// Distance is retracted when GPS wanders in place; climb is not. The
+    /// altitude filter has already smoothed the vertical, and subtracting a
+    /// rise the walker's legs may genuinely have made is the larger error.
+    @Test("a stationary window retracts distance but keeps the climb")
+    func stationaryWindowKeepsTheClimb() throws {
+        var accumulator = RecordingDistanceAccumulator()
+        for step in 0...60 {
+            let offsetMeters = Double((step % 3) - 1) * 3
+            accumulator.append(
+                RecordingPoint(
+                    latitude: 47.63 + offsetMeters / 111_000,
+                    longitude: 12.86,
+                    timestamp: start.addingTimeInterval(Double(step) * 10),
+                    horizontalAccuracy: 8,
+                    elevation: 500 + Double(step)
+                )
+            )
+        }
+
+        #expect(accumulator.isStationary)
+        #expect(accumulator.distanceMeters < 5)
+        #expect(try #require(accumulator.elevationGainMeters) == 60)
+    }
+
+    private func walkingPoint(step: Int, elevation: Double?) -> RecordingPoint {
+        RecordingPoint(
+            latitude: 47.63 + Double(step) * 100 / 111_000,
+            longitude: 12.86,
+            timestamp: start.addingTimeInterval(Double(step) * 60),
+            horizontalAccuracy: 8,
+            elevation: elevation
+        )
+    }
 }
 
 @Suite("Recording preparation")

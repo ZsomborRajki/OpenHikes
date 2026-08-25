@@ -229,6 +229,7 @@ extension HikeRecorder {
         stats.pointCount += 1
         stats.horizontalAccuracy = accepted.horizontalAccuracy
         stats.averageSpeedMetersPerSecond = accumulator.averageSpeedMetersPerSecond
+        stats.elevationGainMeters = accumulator.elevationGainMeters
         // Explicitly conditional, not `phase = .recording`. `@Observable`'s
         // expansion happens to skip a write that compares equal, so the
         // unconditional form is quiet *today* — but only because `Phase` is
@@ -321,6 +322,7 @@ extension HikeRecorder {
                       !Task.isCancelled,
                       sessionID == expectedSessionID else { return }
                 trailGraphPrefetchStates[region] = .loaded
+                prefetchNeighbouringTrailGraphRegions(around: coordinate)
             } catch is CancellationError {
                 return
             } catch {
@@ -371,6 +373,51 @@ extension HikeRecorder {
         }
         trailGraphPrefetchTasks.removeAll()
         trailGraphPrefetchStates.removeAll()
+        neighbourPrefetchTask?.cancel()
+        neighbourPrefetchTask = nil
+    }
+
+    /// Downloads the regions around the one that just landed, so the graph is
+    /// on disk before the walker reaches them — or before the connection that
+    /// would have fetched them is gone.
+    ///
+    /// Serial, and deliberately so: these are guesses, and Overpass is a
+    /// shared service that rate-limits. Eight parallel queries for regions the
+    /// walker may never enter is exactly the burst that earns a 429 for the
+    /// region they are standing in. Speculative under
+    /// ``TileNetworkPolicy`` for the same reason it exists there — nobody is
+    /// waiting for these, so they are the first thing to give up on cellular,
+    /// in Low Power Mode, or on a warm device.
+    ///
+    /// Failures are not recorded. A miss here must not put the *arrival* at
+    /// that region into backoff, because by then it will be the one fetch
+    /// somebody is actually waiting for.
+    func prefetchNeighbouringTrailGraphRegions(
+        around coordinate: CLLocationCoordinate2D
+    ) {
+        guard let trailGraphProvider,
+              trailGraphNetworkDecision(.speculative).isAllowed else { return }
+        let neighbours = trailGraphProvider
+            .neighbouringRegionCoordinates(around: coordinate)
+            .filter { neighbour in
+                guard let region = trailGraphProvider.region(
+                    containing: neighbour
+                ) else { return false }
+                return trailGraphPrefetchStates[region] == nil
+            }
+        guard !neighbours.isEmpty else { return }
+        neighbourPrefetchTask?.cancel()
+        let expectedSessionID = sessionID
+        neighbourPrefetchTask = Task { [weak self] in
+            for neighbour in neighbours {
+                guard !Task.isCancelled else { return }
+                try? await trailGraphProvider.prefetch(around: neighbour)
+            }
+            guard let self,
+                  !Task.isCancelled,
+                  sessionID == expectedSessionID else { return }
+            neighbourPrefetchTask = nil
+        }
     }
 
     // MARK: Recovery helpers

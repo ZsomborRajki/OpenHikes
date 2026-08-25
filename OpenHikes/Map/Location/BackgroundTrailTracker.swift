@@ -391,7 +391,8 @@ final class BackgroundTrailTracker: NSObject {
                 coordinate: .init(latitude: coordinate.latitude, longitude: coordinate.longitude),
                 distanceAlongRouteMeters: match.distanceAlongRoute,
                 offRouteMeters: match.offRouteMeters,
-                timestamp: .now
+                timestamp: .now,
+                elevationMeters: profile.sample(atDistance: match.distanceAlongRoute)?.elevation
             ),
             hike: hike,
             profile: profile
@@ -438,7 +439,8 @@ final class BackgroundTrailTracker: NSObject {
                 coordinate: .init(latitude: coordinate.latitude, longitude: coordinate.longitude),
                 distanceAlongRouteMeters: match.distanceAlongRoute,
                 offRouteMeters: match.offRouteMeters,
-                timestamp: location.timestamp
+                timestamp: location.timestamp,
+                elevationMeters: profile.sample(atDistance: match.distanceAlongRoute)?.elevation
             ),
             hike: hike,
             profile: profile
@@ -460,7 +462,7 @@ final class BackgroundTrailTracker: NSObject {
         if isNewTrail {
             snapshot = Self.buildSnapshot(
                 from: SnapshotInput(hike: hike),
-                elevationRange: profile.elevationRange,
+                elevation: profile.elevation,
                 liveFix: nil
             )
         }
@@ -472,22 +474,6 @@ final class BackgroundTrailTracker: NSObject {
         // Only when the trail itself changed. A moving position needs no new
         // basemap — that's the whole reason images are affordable here.
         if isNewTrail { refreshBasemaps(for: snapshot) }
-    }
-
-    nonisolated private struct SnapshotInput: Sendable {
-        let hikeID: UUID
-        let title: String
-        let tintHex: String
-        let totalDistanceMeters: Double
-        let route: [RouteCoordinate]
-
-        init(hike: Hike) {
-            hikeID = hike.id
-            title = hike.title
-            tintHex = hike.tintHex
-            totalDistanceMeters = hike.distanceMeters
-            route = hike.route
-        }
     }
 
     /// The revision of the current selection, shared between the main-actor
@@ -533,6 +519,27 @@ final class BackgroundTrailTracker: NSObject {
             return generation.matches(revision)
         }
     }
+}
+
+/// Preparing what the widget stores, kept out of the tracker's own body:
+/// none of it touches the tracker's state, and all of it runs off the main
+/// thread.
+extension BackgroundTrailTracker {
+    nonisolated private struct SnapshotInput: Sendable {
+        let hikeID: UUID
+        let title: String
+        let tintHex: String
+        let totalDistanceMeters: Double
+        let route: [RouteCoordinate]
+
+        init(hike: Hike) {
+            hikeID = hike.id
+            title = hike.title
+            tintHex = hike.tintHex
+            totalDistanceMeters = hike.distanceMeters
+            route = hike.route
+        }
+    }
 
     /// `@concurrent` rather than a detached task: the build stays inside
     /// `selectionPublishTask`, so cancelling that task reaches the
@@ -559,14 +566,14 @@ final class BackgroundTrailTracker: NSObject {
         guard !Task.isCancelled else { return nil }
         return buildSnapshot(
             from: input,
-            elevationRange: profile.elevationRange,
+            elevation: profile.elevation,
             liveFix: liveFix
         )
     }
 
     nonisolated private static func buildSnapshot(
         from input: SnapshotInput,
-        elevationRange: ClosedRange<Double>?,
+        elevation: RouteElevationSummary,
         liveFix: SharedTrailSnapshot.LiveFix?
     ) -> SharedTrailSnapshot? {
         guard !Task.isCancelled else { return nil }
@@ -578,8 +585,10 @@ final class BackgroundTrailTracker: NSObject {
             polyline: decimate(input.route) { coordinate in
                 SharedTrailSnapshot.CodableCoordinate(latitude: coordinate.latitude, longitude: coordinate.longitude)
             },
-            elevationLowMeters: elevationRange?.lowerBound,
-            elevationHighMeters: elevationRange?.upperBound,
+            elevationLowMeters: elevation.lowMeters,
+            elevationHighMeters: elevation.highMeters,
+            elevationGainMeters: elevation.gainMeters,
+            elevationLossMeters: elevation.lossMeters,
             liveFix: liveFix
         )
     }

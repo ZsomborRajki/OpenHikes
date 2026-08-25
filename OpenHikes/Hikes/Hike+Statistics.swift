@@ -8,17 +8,75 @@
 import CoreLocation
 import Foundation
 
+/// Running elevation totals over a sequence of points: the extremes reached,
+/// and the climb and descent accumulated between consecutive points that carry
+/// a height.
+///
+/// Separate from the statistics that use it because three callers want exactly
+/// this and nothing else — a hike's detail stats, the widget snapshot's summary
+/// of a saved trail, and a recording's live gain — and "climbed" has to mean the
+/// same thing in all three.
+nonisolated struct ElevationAccumulator: Sendable {
+    private(set) var count = 0
+    private(set) var minimumMeters: Double?
+    private(set) var maximumMeters: Double?
+    private(set) var gainMeters = 0.0
+    private(set) var lossMeters = 0.0
+    private var previous: Double?
+
+    /// Feeds one point's elevation in. A point without one is skipped rather
+    /// than read as sea level, and it doesn't break the chain: the next height
+    /// is compared against the last one that existed.
+    mutating func record(_ elevation: Double?) {
+        guard let elevation else { return }
+        count += 1
+        minimumMeters = min(minimumMeters ?? elevation, elevation)
+        maximumMeters = max(maximumMeters ?? elevation, elevation)
+        if let previous {
+            let delta = elevation - previous
+            if delta > 0 {
+                gainMeters += delta
+            } else if delta < 0 {
+                lossMeters -= delta
+            }
+        }
+        previous = elevation
+    }
+
+    /// Whether gain and loss mean anything yet. A single height is a position,
+    /// not a change, and reporting "0 m climbed" for it would be a claim the
+    /// data does not support.
+    var hasChange: Bool { count > 1 }
+
+    var range: ClosedRange<Double>? {
+        guard let minimumMeters, let maximumMeters else { return nil }
+        return minimumMeters...maximumMeters
+    }
+}
+
+/// What a route's elevations add up to, in the shape the widget snapshot
+/// carries them.
+nonisolated struct RouteElevationSummary: Sendable, Equatable {
+    var lowMeters: Double?
+    var highMeters: Double?
+    var gainMeters: Double?
+    var lossMeters: Double?
+
+    init(_ accumulator: ElevationAccumulator) {
+        lowMeters = accumulator.minimumMeters
+        highMeters = accumulator.maximumMeters
+        gainMeters = accumulator.hasChange ? accumulator.gainMeters : nil
+        lossMeters = accumulator.hasChange ? accumulator.lossMeters : nil
+    }
+}
+
 nonisolated struct HikeRouteStatistics: Sendable {
     private struct Accumulator {
         var firstTimestamp: Date?
         var lastTimestamp: Date?
-        var previousElevation: Double?
-        var elevationCount = 0
-        var minimumElevation: Double?
-        var maximumElevation: Double?
-        var gainMeters = 0.0
-        var lossMeters = 0.0
+        var elevation = ElevationAccumulator()
         var fastestMetersPerSecond = 0.0
+        var inferredMeters = 0.0
         var previousPoint: RouteCoordinate?
 
         var duration: TimeInterval? {
@@ -37,9 +95,20 @@ nonisolated struct HikeRouteStatistics: Sendable {
             _ point: RouteCoordinate,
             segmentMeters: () -> Double
         ) {
+            // Two consumers now want the same number, and for the caller that
+            // doesn't have it lying around it costs trigonometry — so the
+            // first one to ask pays and the second one doesn't.
+            var measured: Double?
+            let meters = {
+                if let measured { return measured }
+                let value = segmentMeters()
+                measured = value
+                return value
+            }
             record(timestamp: point.timestamp)
-            record(elevation: point.elevation)
-            recordSpeed(to: point, segmentMeters: segmentMeters)
+            elevation.record(point.elevation)
+            recordSpeed(to: point, segmentMeters: meters)
+            recordInferred(to: point, segmentMeters: meters)
             previousPoint = point
         }
 
@@ -49,22 +118,6 @@ nonisolated struct HikeRouteStatistics: Sendable {
                 firstTimestamp = timestamp
             }
             lastTimestamp = timestamp
-        }
-
-        private mutating func record(elevation: Double?) {
-            guard let elevation else { return }
-            elevationCount += 1
-            minimumElevation = min(minimumElevation ?? elevation, elevation)
-            maximumElevation = max(maximumElevation ?? elevation, elevation)
-            if let previousElevation {
-                let delta = elevation - previousElevation
-                if delta > 0 {
-                    gainMeters += delta
-                } else if delta < 0 {
-                    lossMeters -= delta
-                }
-            }
-            previousElevation = elevation
         }
 
         private mutating func recordSpeed(
@@ -81,6 +134,18 @@ nonisolated struct HikeRouteStatistics: Sendable {
                 segmentMeters() / elapsed
             )
         }
+
+        /// How much of the walked length crosses ground the recording never
+        /// observed. ``RouteProvenance`` marks the segment arriving at a
+        /// point, so the first point — which arrives from nowhere — is
+        /// excluded by requiring a predecessor.
+        private mutating func recordInferred(
+            to point: RouteCoordinate,
+            segmentMeters: () -> Double
+        ) {
+            guard previousPoint != nil, point.isInferred else { return }
+            inferredMeters += segmentMeters()
+        }
     }
 
     let pointCount: Int
@@ -93,6 +158,9 @@ nonisolated struct HikeRouteStatistics: Sendable {
     let elevationLoss: Measurement<UnitLength>?
     let averageSpeed: Measurement<UnitSpeed>?
     let maxSpeed: Measurement<UnitSpeed>?
+    /// The part of the route that was reasoned about rather than measured, or
+    /// `nil` when every segment came from a fix. See ``RouteProvenance``.
+    let inferredDistance: Measurement<UnitLength>?
 
     /// Feeds the accumulator one point at a time, so a caller that is already
     /// walking the route can produce these statistics from that same pass.
@@ -162,19 +230,19 @@ nonisolated struct HikeRouteStatistics: Sendable {
         startDate = accumulator.firstTimestamp
         endDate = accumulator.lastTimestamp
         duration = accumulator.duration
-        maxElevation = accumulator.maximumElevation.map { meters in
+        maxElevation = accumulator.elevation.maximumMeters.map { meters in
             Measurement(value: meters, unit: .meters)
         }
-        minElevation = accumulator.minimumElevation.map { meters in
+        minElevation = accumulator.elevation.minimumMeters.map { meters in
             Measurement(value: meters, unit: .meters)
         }
-        if accumulator.elevationCount > 1 {
+        if accumulator.elevation.hasChange {
             elevationGain = Measurement(
-                value: accumulator.gainMeters,
+                value: accumulator.elevation.gainMeters,
                 unit: .meters
             )
             elevationLoss = Measurement(
-                value: accumulator.lossMeters,
+                value: accumulator.elevation.lossMeters,
                 unit: .meters
             )
         } else {
@@ -192,6 +260,9 @@ nonisolated struct HikeRouteStatistics: Sendable {
                 value: accumulator.fastestMetersPerSecond,
                 unit: .metersPerSecond
             )
+            : nil
+        inferredDistance = accumulator.inferredMeters > 0
+            ? Measurement(value: accumulator.inferredMeters, unit: .meters)
             : nil
     }
 }

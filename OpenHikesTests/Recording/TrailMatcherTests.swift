@@ -27,6 +27,22 @@ struct TrailMatcherTests {
         )
     }
 
+    /// The same points with the provenance marking stripped, for the
+    /// assertions that are about geometry.
+    ///
+    /// A leg the matcher abstained across still hands back the raw fixes — but
+    /// when nothing was observed between them, the straight line joining them
+    /// is an inference and is marked as one. That marking is asserted on its
+    /// own; comparing it here would only make every geometry expectation also
+    /// an expectation about ``TrailMatcher/isGap(from:to:)``.
+    private func measured(_ points: [RecordingPoint]) -> [RecordingPoint] {
+        points.map { point in
+            var stripped = point
+            stripped.flags.remove(.inferred)
+            return stripped
+        }
+    }
+
     private func graph(
         nodes: [(Int64, Double, Double)],
         ways: [(Int64, [Int64], String?)]
@@ -163,7 +179,8 @@ extension TrailMatcherTests {
         #expect(result.ambiguousLegCount == 1)
         #expect(result.currentTrailName == nil)
         #expect(!result.didMoveRoute)
-        #expect(result.points == points)
+        #expect(measured(result.points) == points)
+        #expect(result.points.last?.flags.contains(.inferred) == true)
         let ambiguity = try #require(result.ambiguities.first)
         #expect(ambiguity.alternatives.count >= 2)
         let alternative = try #require(ambiguity.alternatives.first)
@@ -178,8 +195,10 @@ extension TrailMatcherTests {
         #expect(resolved.last?.coordinate.latitude == points.last?.latitude)
         #expect(resolved.last?.coordinate.longitude == points.last?.longitude)
         #expect(
-            result.points(
-                resolving: [ambiguity.id: .gps]
+            measured(
+                result.points(
+                    resolving: [ambiguity.id: .gps]
+                )
             ) == points
         )
     }
@@ -207,7 +226,7 @@ extension TrailMatcherTests {
 
         #expect(result.matchedLegCount == 0)
         #expect(result.ambiguousLegCount == 1)
-        #expect(result.points == points)
+        #expect(measured(result.points) == points)
     }
 
     @Test("disconnected sparse candidates do not invent a reviewable ambiguity")
@@ -234,7 +253,7 @@ extension TrailMatcherTests {
         #expect(result.ambiguousLegCount == 0)
         #expect(result.ambiguities.isEmpty)
         #expect(result.ambiguousLegCount == result.ambiguities.count)
-        #expect(result.points == points)
+        #expect(measured(result.points) == points)
     }
 
     @Test("pedometer evidence can select a same-edge turnaround")
@@ -295,6 +314,104 @@ extension TrailMatcherTests {
 
         #expect(result.matchedLegCount == 1)
         #expect(result.points.allSatisfy { abs($0.longitude) > 170 })
+    }
+
+    // MARK: Unobserved stretches
+
+    @Test("a deliberate pause is not an unobserved gap")
+    func resumedLegIsNotAGap() {
+        let before = point(47.6300, 12.8600, at: 0)
+        var after = point(47.6300, 12.8640, at: 3600)
+        after.flags.insert(.resumed)
+
+        #expect(!TrailMatcher.isGap(from: before, to: after))
+        #expect(TrailMatcher.isGap(from: before, to: point(47.6300, 12.8640, at: 3600)))
+    }
+
+    @Test("a stretch shorter than the gap thresholds is still a measurement")
+    func shortLegIsNotAGap() {
+        let before = point(47.6300, 12.8600, at: 0)
+        let after = point(47.6300, 12.8610, at: 120)
+
+        #expect(!TrailMatcher.isGap(from: before, to: after))
+    }
+
+    @Test("a trail bridged across a gap is drawn but marked as inferred")
+    func bridgedGapIsMarkedInferred() {
+        let graph = graph(
+            nodes: [
+                (1, 47.6300, 12.8600),
+                (2, 47.6300, 12.8640),
+            ],
+            ways: [(10, [1, 2], "Ridge Path")]
+        )
+        let points = [
+            point(47.6300, 12.8600, at: 0, accuracy: 5),
+            point(47.6300, 12.8640, at: 900, accuracy: 5),
+        ]
+
+        let result = TrailMatcher.match(points: points, graph: graph)
+
+        #expect(result.matchedLegCount == 1)
+        let leg = result.legs.first
+        #expect(leg?.isInferred == true)
+        #expect(leg?.isBridged == true)
+        #expect(leg?.unobservedDuration == 900)
+        // The anchor the leg starts from was measured; everything drawn from
+        // there to the far fix was not.
+        #expect(result.points.first?.flags.contains(.inferred) == false)
+        #expect(result.points.dropFirst().allSatisfy { point in
+            point.flags.contains(.inferred)
+        })
+    }
+
+    @Test("choosing GPS across a gap is still reported as inferred")
+    func rawChoiceAcrossAGapStaysInferred() throws {
+        let fixture = forkedGraph()
+        let points = [
+            point(47.6300, 12.8600, at: 0, accuracy: 5),
+            point(47.6300, 12.8640, at: 720, accuracy: 5),
+        ]
+
+        let result = TrailMatcher.match(points: points, graph: fixture.graph)
+        let leg = try #require(result.legs.first)
+
+        #expect(leg.isInferred)
+        #expect(!leg.isBridged)
+        #expect(leg.rawPoints.last?.flags.contains(.inferred) == true)
+        #expect(leg.rawPoints.first?.flags.contains(.inferred) == false)
+    }
+
+    @Test("an unevidenced gap wider than the bridge cap is not routed")
+    func unevidencedGapBeyondTheCapAbstains() {
+        // A trail that does connect the two fixes, but only over roughly
+        // 11 km — past what a shortest path can claim without evidence.
+        let graph = graph(
+            nodes: [
+                (1, 47.6300, 12.8600),
+                (2, 47.7300, 12.8600),
+            ],
+            ways: [(10, [1, 2], "Long Valley Trail")]
+        )
+        let points = [
+            point(47.6300, 12.8600, at: 0, accuracy: 5),
+            point(47.7300, 12.8600, at: 7200, accuracy: 5),
+        ]
+
+        let unevidenced = TrailMatcher.match(points: points, graph: graph)
+        #expect(unevidenced.matchedLegCount == 0)
+        #expect(unevidenced.legs.first?.isBridged == false)
+
+        // The pedometer vouching for the length is what makes the same search
+        // worth doing.
+        let evidenced = TrailMatcher.match(
+            points: points,
+            graph: graph,
+            gapDistances: [1: 11_100]
+        )
+        #expect(evidenced.matchedLegCount == 1)
+        #expect(evidenced.legs.first?.isInferred == true)
+        #expect(evidenced.legs.first?.isBridged == true)
     }
 
     // MARK: Candidate search

@@ -21,6 +21,11 @@ extension MapView {
         private var isObservingLocation = false
         var routeID: UUID?
         var routeOverlay: MKPolyline?
+        /// The stretches of the drawn route that were inferred rather than
+        /// measured. Separate overlays because MapKit styles a polyline as a
+        /// whole, and this is the one part of the line that has to be drawn
+        /// differently from the rest of it — see ``RouteProvenance``.
+        var inferredRouteOverlays: [MKPolyline] = []
         var recordingChunkOverlays: [MKPolyline] = []
         var recordingTailOverlay: MKPolyline?
         var recordingReviewOverlay: MKPolyline?
@@ -124,6 +129,13 @@ extension MapView {
         private static let initialCenterMeters: CLLocationDistance = 2000
         private static let recordingAlpha: CGFloat = 0.9
         private static let overlapFadedAlpha: CGFloat = 0.25
+        /// Faded, but well clear of the basemap: a stretch the app is less
+        /// sure about still has to be followable on a printed-looking map.
+        private static let inferredRouteAlpha: CGFloat = 0.55
+        /// The dashed line is drawn a little wider than the solid one so that
+        /// fading it doesn't also make it thinner to the eye.
+        private static let inferredRouteWidthFactor: CGFloat = 1.35
+        private static let inferredRouteDashPattern: [Int] = [2, 7]
 
         /// Edge padding used whenever the map is fitted to the route.
         #if os(macOS)
@@ -319,6 +331,15 @@ extension MapView {
             RenderSignpost.mark("MapRouteRestyled")
             if let renderer = routeRenderer {
                 applyStyle(to: renderer)
+                renderer.setNeedsDisplay()
+            }
+            // The inferred stretches follow the same tint and width, so a
+            // colour drag has to reach them too — otherwise they keep the
+            // previous hue until the selection changes and rebuilds them.
+            for overlay in inferredRouteOverlays {
+                guard let renderer = mapView.renderer(for: overlay)
+                    as? MKPolylineRenderer else { continue }
+                applyInferredStyle(to: renderer)
                 renderer.setNeedsDisplay()
             }
             // The dot mirrors the tint (opaque); only refresh it when the color moves.
@@ -649,11 +670,49 @@ extension MapView.Coordinator {
                 renderer.lineCap = .round
                 return renderer
             }
+            if inferredRouteOverlays.contains(where: { $0 === polyline }) {
+                return inferredRouteRenderer(for: polyline)
+            }
             let renderer = DirectionalPolylineRenderer(polyline: polyline)
             applyStyle(to: renderer)
             routeRenderer = renderer
             return renderer
         }
         return MKOverlayRenderer(overlay: overlay)
+    }
+
+    /// The route's own tint, drawn dashed and faded.
+    ///
+    /// Deliberately the same colour rather than a warning one: this stretch is
+    /// still the hiker's route, and the app's claim about it is weaker, not
+    /// alarming. The dash is what carries the meaning — a broken line for the
+    /// part of the walk the recording didn't see — and keeping the tint means
+    /// a hike recoloured by its owner stays recoloured throughout.
+    ///
+    /// Left as a plain `MKPolylineRenderer`: the directional chevrons state a
+    /// travel direction along the line, which is exactly what isn't known here.
+    private func inferredRouteRenderer(
+        for polyline: MKPolyline
+    ) -> MKPolylineRenderer {
+        let renderer = MKPolylineRenderer(polyline: polyline)
+        applyInferredStyle(to: renderer)
+        return renderer
+    }
+
+    /// Applies the inferred-stretch appearance, derived from the route's
+    /// current tint and width so the two never drift apart.
+    func applyInferredStyle(to renderer: MKPolylineRenderer) {
+        #if os(macOS)
+        renderer.strokeColor = NSColor(routeTint)
+            .withAlphaComponent(Self.inferredRouteAlpha)
+        #else
+        renderer.strokeColor = UIColor(routeTint)
+            .withAlphaComponent(Self.inferredRouteAlpha)
+        #endif
+        renderer.lineWidth = CGFloat(routeWidth) * Self.inferredRouteWidthFactor
+        // swiftlint:disable:next legacy_objc_type
+        renderer.lineDashPattern = Self.inferredRouteDashPattern.map { NSNumber(value: $0) }
+        renderer.lineJoin = .round
+        renderer.lineCap = .butt
     }
 }

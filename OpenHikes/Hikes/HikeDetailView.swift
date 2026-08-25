@@ -94,6 +94,12 @@ nonisolated enum HikeDetailPreparation {
                 "Track Points",
                 statistics.pointCount.formatted()
             ),
+            statistics.inferredDistance.map { inferred in
+                // Named for what it is rather than hidden in the distance:
+                // the total already includes it, so the honest thing is to say
+                // how much of that total the app worked out rather than saw.
+                Stat("Inferred Path", HikeFormat.length(inferred))
+            },
             statistics.startDate.map { date in
                 Stat("Start", formatted(date))
             },

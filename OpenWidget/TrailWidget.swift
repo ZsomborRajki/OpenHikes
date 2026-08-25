@@ -298,52 +298,6 @@ struct TrailWidgetProvider: TimelineProvider {
             completedRequest?.completion()
         }
     }
-
-    private enum Placeholder {
-        static let totalDistanceMeters: Double = 4200
-        static let lat0: Double = 37.3349
-        static let lon0: Double = -122.0140
-        static let lat1: Double = 37.3372
-        static let lon1: Double = -122.0098
-        static let lat2: Double = 37.3358
-        static let lon2: Double = -122.0050
-        static let lat3: Double = 37.3400
-        static let lon3: Double = -122.0020
-        static let lat4: Double = 37.3440
-        static let lon4: Double = -122.0060
-    }
-
-    /// A generic loop shown in the widget gallery / as a redacted placeholder
-    /// — never real trail data.
-    static let placeholderSnapshot = SharedTrailSnapshot(
-        hikeID: UUID(),
-        title: "Trail",
-        tintHex: "#34C759",
-        totalDistanceMeters: Placeholder.totalDistanceMeters,
-        polyline: [
-            .init(latitude: Placeholder.lat0, longitude: Placeholder.lon0),
-            .init(latitude: Placeholder.lat1, longitude: Placeholder.lon1),
-            .init(latitude: Placeholder.lat2, longitude: Placeholder.lon2),
-            .init(latitude: Placeholder.lat3, longitude: Placeholder.lon3),
-            .init(latitude: Placeholder.lat4, longitude: Placeholder.lon4),
-        ]
-    )
-}
-
-/// The size-dependent decisions the widget draws with, pulled out of the view
-/// so they can be checked for every family without rendering one.
-struct TrailWidgetLayout: Equatable {
-    /// The small family has no room for a title above the stat line.
-    let showsTitle: Bool
-    let routeLineWidth: Double
-    let padding: Double
-
-    init(family: WidgetFamily) {
-        let isSmall = family == .systemSmall
-        showsTitle = !isSmall
-        routeLineWidth = isSmall ? 3 : 4
-        padding = isSmall ? 12 : 14
-    }
 }
 
 struct TrailWidgetEntryView: View {
@@ -372,8 +326,24 @@ struct TrailWidgetEntryView: View {
         let snapshot: SharedRecordingSnapshot
         let family: WidgetFamily
 
+        private static let stackSpacing: Double = 4
+
         private var layout: TrailWidgetLayout {
             TrailWidgetLayout(family: family)
+        }
+
+        private var metrics: [TrailWidgetMetric] {
+            snapshot.metrics(limit: layout.metricLimit)
+        }
+
+        /// The recording map is the raw trace over a plain fill, never a
+        /// rendered basemap, so the text is on a light surface and takes the
+        /// standard label colors.
+        private var accessibilityValue: String {
+            let spoken = snapshot.metricsAccessibilityText(limit: layout.metricLimit)
+            return spoken.isEmpty
+                ? snapshot.statusText
+                : "\(snapshot.statusText), \(spoken)"
         }
 
         var body: some View {
@@ -395,13 +365,16 @@ struct TrailWidgetEntryView: View {
 
                 Spacer(minLength: 0)
 
-                Text(snapshot.statusText)
-                    .font(
-                        family == .systemSmall
-                            ? .caption.weight(.semibold)
-                            : .caption
-                    )
-                    .foregroundStyle(.secondary)
+                VStack(alignment: .leading, spacing: Self.stackSpacing) {
+                    TrailWidgetMetricRow(metrics: metrics, onMap: false)
+                    Text(snapshot.statusText)
+                        .font(
+                            family == .systemSmall
+                                ? .caption.weight(.semibold)
+                                : .caption
+                        )
+                        .foregroundStyle(.secondary)
+                }
             }
             .padding(layout.padding)
             // The whole widget is one tap target, so it is read as one thing:
@@ -409,7 +382,7 @@ struct TrailWidgetEntryView: View {
             // behind it is a drawing of the same facts.
             .accessibilityElement(children: .ignore)
             .accessibilityLabel(snapshot.title)
-            .accessibilityValue(snapshot.statusText)
+            .accessibilityValue(accessibilityValue)
             .containerBackground(for: .widget) {
                 ZStack {
                     Rectangle().fill(.fill.tertiary)
@@ -457,12 +430,22 @@ private struct TrailWidgetContent: View {
         static let topOpacity: Double = 0.45
         static let topClearLocation: Double = 0.3
         static let bottomClearLocation: Double = 0.6
+        /// The stat chips and the progress hairline push the text band taller,
+        /// so the darkened part starts higher when they are drawn — otherwise
+        /// the top chip sits on undimmed map.
+        static let bottomClearLocationWithMetrics: Double = 0.48
         static let bottomOpacity: Double = 0.55
+    }
+
+    private enum Stack {
+        static let spacing: Double = 4
+        static let progressTopPadding: Double = 1
     }
 
     private var layout: TrailWidgetLayout { TrailWidgetLayout(family: family) }
     private var tint: Color { Color(hex: snapshot.tintHex) ?? .green }
     private var showsTitle: Bool { layout.showsTitle }
+    private var metrics: [TrailWidgetMetric] { snapshot.metrics(limit: layout.metricLimit) }
 
     /// Whether a rendered map is actually behind the text, which is what
     /// decides between light-on-map and standard label colors.
@@ -475,6 +458,14 @@ private struct TrailWidgetContent: View {
     /// is drawn anyway and the text stays legible against it.
     private var hasMap: Bool { !(basemaps?.images.isEmpty ?? true) }
 
+    /// Everything the one accessibility element says after the trail's name:
+    /// how far along it the walker is, then each chip in words. The glyphs
+    /// themselves are hidden, so this is the only place the numbers are said.
+    private var accessibilityValue: String {
+        let spoken = snapshot.metricsAccessibilityText(limit: layout.metricLimit)
+        return spoken.isEmpty ? snapshot.statusText : "\(snapshot.statusText), \(spoken)"
+    }
+
     var body: some View {
         VStack(alignment: .leading, spacing: 0) {
             if showsTitle {
@@ -486,7 +477,14 @@ private struct TrailWidgetContent: View {
 
             Spacer(minLength: 0)
 
-            statLine
+            VStack(alignment: .leading, spacing: Stack.spacing) {
+                TrailWidgetMetricRow(metrics: metrics, onMap: hasMap)
+                statLine
+                if let fraction = snapshot.fractionComplete {
+                    TrailWidgetProgressBar(fraction: fraction, tint: tint, onMap: hasMap)
+                        .padding(.top, Stack.progressTopPadding)
+                }
+            }
         }
         .shadow(color: .black.opacity(hasMap ? MapTextStyle.shadowOpacity : 0), radius: 2, y: 1)
         .padding(layout.padding)
@@ -494,7 +492,7 @@ private struct TrailWidgetContent: View {
         // family, including the small one that has no room to draw it.
         .accessibilityElement(children: .ignore)
         .accessibilityLabel(snapshot.title)
-        .accessibilityValue(snapshot.statusText)
+        .accessibilityValue(accessibilityValue)
         // The map is the widget's background rather than a subview, so it
         // runs edge to edge under the text and the system rounds it to the
         // widget's own corner radius. It also means the system can drop it
@@ -523,11 +521,14 @@ private struct TrailWidgetContent: View {
     /// where the trail is — keeps its own contrast. The top band is dropped
     /// entirely on sizes with no title to darken it for.
     private var scrim: some View {
-        LinearGradient(
+        let bottomClear = metrics.isEmpty
+            ? Scrim.bottomClearLocation
+            : Scrim.bottomClearLocationWithMetrics
+        return LinearGradient(
             stops: [
                 .init(color: .black.opacity(showsTitle ? Scrim.topOpacity : 0), location: 0),
                 .init(color: .clear, location: showsTitle ? Scrim.topClearLocation : 0),
-                .init(color: .clear, location: Scrim.bottomClearLocation),
+                .init(color: .clear, location: bottomClear),
                 .init(color: .black.opacity(Scrim.bottomOpacity), location: 1),
             ],
             startPoint: .top,
@@ -582,8 +583,16 @@ struct TrailWidget: Widget {
             startedAt: .now.addingTimeInterval(-1200),
             distanceMeters: 1400,
             pointCount: 320,
-            polyline: TrailWidgetProvider.placeholderSnapshot.polyline
+            polyline: TrailWidgetProvider.placeholderSnapshot.polyline,
+            elevationGainMeters: 180,
+            averageSpeedMetersPerSecond: 1.2
         )
     )
     TrailWidgetEntry(date: .now, snapshot: nil)
+}
+
+#Preview("Following a trail", as: .systemMedium) {
+    TrailWidget()
+} timeline: {
+    TrailWidgetEntry(date: .now, snapshot: TrailWidgetProvider.followedPlaceholderSnapshot)
 }

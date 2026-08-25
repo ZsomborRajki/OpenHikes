@@ -13,7 +13,7 @@ OpenHikes is a local-first SwiftUI and SwiftData trail viewer for iPhone. It imp
 - Live location, trail auto-follow with a progress readout, and current WeatherKit conditions.
 - Photos taken on a walk or picked from the library, pinned to where on the trail they were taken, shown as a gallery strip on the hike and as pins on the map, with an optional copy saved to the photo library.
 - Passive tile auto-save for browsed areas, plus bulk offline downloads where the provider permits them.
-- An iOS Home Screen widget with trail progress, live-recording takeover, recording deep links, and sparse location anchors that help repair degraded GPS gaps.
+- An iOS Home Screen widget with trail progress, a climb/descent/high-point stat line, live-recording takeover, recording deep links, and sparse location anchors that help repair degraded GPS gaps.
 - Local SwiftData and App Group storage; OpenHikes has no backend or account sync.
 
 ## Requirements

@@ -239,20 +239,78 @@ extension HikeRecorderTests {
         let recorder = makeRecorder(trailGraphProvider: provider)
         await recorder.start()
 
-        source.deliver(fix(latitude: 47.63, longitude: 12.86))
+        let first = fix(latitude: 47.63, longitude: 12.86)
+        source.deliver(first)
         await settleDelegateHop()
-        clock.advance(by: 1000)
-        source.deliver(fix(latitude: 47.63, longitude: 12.96))
+        // Far enough to be a different region, slow enough that
+        // ``RecordingFixPolicy`` accepts it. The clock has to move before the
+        // fix is built: ``fix(latitude:longitude:accuracy:speed:)`` stamps it
+        // with ``clock/now``, and a displacement in no time is rejected.
+        clock.advance(by: 4000)
+        let second = fix(latitude: 47.63, longitude: 12.96)
+        source.deliver(second)
         await settleDelegateHop()
 
-        for _ in 0..<100 {
-            if await provider.prefetches().count == 2 { break }
-            await Task.yield()
+        // Each fix also seeds its eight neighbours (see
+        // ``HikeRecorder/prefetchNeighbouringTrailGraphRegions(around:)``), so
+        // the assertion is that the two regions walked through were fetched —
+        // not that nothing else was.
+        let walked = [first, second].compactMap { location in
+            provider.region(containing: location.coordinate)
+        }
+        let regions = await settle(provider) { fetched in
+            walked.allSatisfy(fetched.contains)
         }
 
-        let regions = await provider.prefetches()
-        #expect(regions.count == 2)
-        #expect(Set(regions).count == 2)
+        #expect(walked.count == 2)
+        #expect(walked.allSatisfy(regions.contains))
+    }
+
+    @Test("speculative neighbour prefetch is skipped when the policy denies it")
+    func neighbourPrefetchRespectsNetworkPolicy() async {
+        let provider = StubTrailGraphProvider(graph: .empty)
+        // Bound to a constant rather than written inline: `makeRecorder`
+        // takes further closures after this one, so a trailing closure
+        // would land on the wrong parameter.
+        let denySpeculative: @Sendable (TileFetchPurpose) -> TileNetworkDecision = { purpose in
+            purpose == .speculative ? .denied("cellular") : .allowed
+        }
+        let recorder = makeRecorder(
+            trailGraphProvider: provider,
+            trailGraphNetworkDecision: denySpeculative
+        )
+        await recorder.start()
+
+        let only = fix(latitude: 47.63, longitude: 12.86)
+        source.deliver(only)
+        await settleDelegateHop()
+
+        let region = provider.region(containing: only.coordinate)
+        var regions = await settle(provider) { fetched in
+            fetched.contains { $0 == region }
+        }
+        // Give a neighbour sweep every chance to have happened anyway.
+        try? await Task.sleep(for: .milliseconds(100))
+        regions = Set(await provider.prefetches())
+
+        #expect(regions == Set([region].compactMap(\.self)))
+    }
+
+    /// Waits for a provider's prefetch log to satisfy `condition`, then returns
+    /// it. Real sleeps rather than `Task.yield()`: the work being waited for
+    /// runs on an actor off the main one, and yielding the main actor buys an
+    /// amount of that progress that depends on machine load.
+    private func settle(
+        _ provider: StubTrailGraphProvider,
+        until condition: (Set<TrailGraphRegion>) -> Bool
+    ) async -> Set<TrailGraphRegion> {
+        let deadline = ContinuousClock.now + .seconds(5)
+        var fetched = Set(await provider.prefetches())
+        while !condition(fetched), ContinuousClock.now < deadline {
+            try? await Task.sleep(for: .milliseconds(5))
+            fetched = Set(await provider.prefetches())
+        }
+        return fetched
     }
 
     @Test("trail graph prefetch is cancelled when the recording is discarded")

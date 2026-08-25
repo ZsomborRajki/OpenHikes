@@ -17,6 +17,12 @@ nonisolated struct RouteReviewSection: Identifiable, Sendable {
         case snapped
         /// More than one plausible route fits the gap.
         case ambiguous
+        /// The recording lost its fixes across this stretch. Whatever is drawn
+        /// there — a mapped trail the matcher bridged the gap with, or a
+        /// straight line where it found none — is an inference, and until this
+        /// existed the second case produced no section at all: a straight line
+        /// through unobserved ground, presented exactly like walked ground.
+        case gap
     }
 
     /// How far the matched line has to sit from the recorded fix before the
@@ -37,12 +43,48 @@ nonisolated struct RouteReviewSection: Identifiable, Sendable {
     let rawPoints: [RecordingPoint]
     let alternatives: [TrailMatchAlternative]
     let trailNames: [String]
+    /// How long the recording went without a fix across this section, when
+    /// that is what made it reviewable. `nil` for a section that spans ground
+    /// the recording watched continuously.
+    let unobservedDuration: TimeInterval?
+    /// Whether the matcher found a mapped route across an unobserved stretch.
+    /// Always `true` for a section that isn't a gap — there was nothing to
+    /// bridge.
+    let isBridged: Bool
+
+    init(
+        id: Int,
+        kind: Kind,
+        legIndices: [Int],
+        matchedPoints: [RecordingPoint],
+        rawPoints: [RecordingPoint],
+        alternatives: [TrailMatchAlternative],
+        trailNames: [String],
+        unobservedDuration: TimeInterval? = nil,
+        isBridged: Bool = true
+    ) {
+        self.id = id
+        self.kind = kind
+        self.legIndices = legIndices
+        self.matchedPoints = matchedPoints
+        self.rawPoints = rawPoints
+        self.alternatives = alternatives
+        self.trailNames = trailNames
+        self.unobservedDuration = unobservedDuration
+        self.isBridged = isBridged
+    }
 
     /// What the section is saved as until the hiker says otherwise: an
     /// ambiguous stretch keeps the measurement, a confident one keeps the
-    /// trail the matcher found.
+    /// trail the matcher found, and a gap keeps the mapped route when there
+    /// was one — a bridged trail is a better answer than a straight line
+    /// through the same unobserved ground, and the hiker can still say no.
     var defaultChoice: TrailRouteChoice {
-        kind == .ambiguous ? .gps : .matched
+        switch kind {
+        case .ambiguous: .gps
+        case .snapped: .matched
+        case .gap: isBridged ? .matched : .gps
+        }
     }
 
     var trailName: String? {
@@ -68,10 +110,15 @@ nonisolated struct RouteReviewSection: Identifiable, Sendable {
     }
 
     /// Every choice this section can offer, in the order the review shows them.
+    ///
+    /// A gap the matcher could not bridge offers exactly one, which makes the
+    /// section a notice rather than a question — that it says so at all is the
+    /// point, since the alternative is drawing through it in silence.
     var availableChoices: [TrailRouteChoice] {
         switch kind {
         case .snapped: [.matched, .gps]
         case .ambiguous: [.gps] + alternatives.map { .alternative($0.id) }
+        case .gap: isBridged ? [.matched, .gps] : [.gps]
         }
     }
 
@@ -104,7 +151,10 @@ nonisolated extension RouteReviewSection {
 
     /// Groups the legs matching actually changed into reviewable sections.
     /// Legs the matcher left on the recorded line offer no choice, so they
-    /// never become a section of their own.
+    /// never become a section of their own — with one exception: a leg that
+    /// spans unobserved ground is always its own section even when its
+    /// geometry is unremarkable, because "nothing was recorded here" is the
+    /// fact worth surfacing and a straight line is exactly how it hides.
     static func sections(in result: TrailMatchResult) -> [Self] {
         var sections: [Self] = []
         var run = Run()
@@ -127,7 +177,29 @@ nonisolated extension RouteReviewSection {
                         matchedPoints: leg.defaultPoints,
                         rawPoints: leg.rawPoints,
                         alternatives: leg.alternatives,
-                        trailNames: leg.trailNames
+                        trailNames: leg.trailNames,
+                        unobservedDuration: leg.unobservedDuration
+                    )
+                )
+                continue
+            }
+            if leg.isInferred {
+                // Never folded into a neighbouring run. A gap absorbed into a
+                // `.snapped` section would be described as having been moved
+                // onto a mapped trail, which says nothing about the half hour
+                // of walking nobody recorded.
+                flush()
+                sections.append(
+                    Self(
+                        id: sections.count,
+                        kind: .gap,
+                        legIndices: [leg.index],
+                        matchedPoints: leg.defaultPoints,
+                        rawPoints: leg.rawPoints,
+                        alternatives: [],
+                        trailNames: leg.trailNames,
+                        unobservedDuration: leg.unobservedDuration,
+                        isBridged: leg.isBridged
                     )
                 )
                 continue

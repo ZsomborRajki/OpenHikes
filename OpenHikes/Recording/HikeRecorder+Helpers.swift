@@ -393,6 +393,8 @@ extension HikeRecorder {
             distanceMeters: stats.distanceMeters,
             pointCount: stats.pointCount,
             polyline: trace.widgetPolyline(),
+            elevationGainMeters: stats.elevationGainMeters,
+            averageSpeedMetersPerSecond: stats.averageSpeedMetersPerSecond,
             isCapturingFixes: isCapturingFixes,
             updatedAt: now
         )
@@ -447,6 +449,7 @@ extension HikeRecorder {
         stats.pointCount = points.count
         stats.horizontalAccuracy = points.last?.horizontalAccuracy
         stats.averageSpeedMetersPerSecond = accumulator.averageSpeedMetersPerSecond
+        stats.elevationGainMeters = accumulator.elevationGainMeters
         if trailGraphProvider != nil, !points.isEmpty {
             let windowStart = Self.liveWindowRetainedStart(in: points)
             liveMatchWindow = Array(points[windowStart...])

@@ -58,11 +58,28 @@ nonisolated extension TrailMatcher {
         let evidenceBound = evidenceDistance.map { dist in
             dist * evidenceDistanceMarginFactor + accuracyAllowance
         } ?? 0
-        let maximumDistance = max(
-            minimumTransitionDistanceMeters,
+        // Capped, not merely floored. The reachability bound grows without
+        // limit in `interval`, and a multi-hour silence turns it into a search
+        // radius no amount of Viterbi makes meaningful — see
+        // ``maximumBridgeDistanceMeters``.
+        //
+        // Distance evidence lifts the cap to whatever it vouches for, because
+        // it is the thing that makes a longer search meaningful: it narrows
+        // the question from "anywhere reachable" to "a path about this long".
+        // The absolute ceiling still applies, so a pedometer that reports a
+        // continent cannot ask for one.
+        let ceiling = min(
+            absoluteBridgeDistanceMeters,
+            max(maximumBridgeDistanceMeters, evidenceBound)
+        )
+        let maximumDistance = min(
+            ceiling,
             max(
-                interval * maximumSpeed + accuracyAllowance,
-                evidenceBound
+                minimumTransitionDistanceMeters,
+                max(
+                    interval * maximumSpeed + accuracyAllowance,
+                    evidenceBound
+                )
             )
         )
         return TrailMatcherTransitionParameters(

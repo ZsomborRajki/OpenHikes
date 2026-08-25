@@ -23,6 +23,12 @@ public struct SharedTrailSnapshot: Codable, Sendable, Equatable {
     public var totalDistanceMeters: Double
     public var elevationLowMeters: Double?
     public var elevationHighMeters: Double?
+    /// Cumulative climb over the whole route, summed between consecutive
+    /// points that carry an elevation — not `high - low`, which a rolling
+    /// trail understates by every descent it makes on the way up.
+    public var elevationGainMeters: Double?
+    /// Cumulative descent, the companion to ``elevationGainMeters``.
+    public var elevationLossMeters: Double?
     /// Decimated route, in order — enough points to draw the trail's shape,
     /// not the full track. See ``decimate(_:maxPoints:)``.
     public var polyline: [CodableCoordinate]
@@ -37,6 +43,8 @@ public struct SharedTrailSnapshot: Codable, Sendable, Equatable {
         polyline: [CodableCoordinate],
         elevationLowMeters: Double? = nil,
         elevationHighMeters: Double? = nil,
+        elevationGainMeters: Double? = nil,
+        elevationLossMeters: Double? = nil,
         liveFix: LiveFix? = nil,
         updatedAt: Date = .now
     ) {
@@ -46,6 +54,8 @@ public struct SharedTrailSnapshot: Codable, Sendable, Equatable {
         self.totalDistanceMeters = totalDistanceMeters
         self.elevationLowMeters = elevationLowMeters
         self.elevationHighMeters = elevationHighMeters
+        self.elevationGainMeters = elevationGainMeters
+        self.elevationLossMeters = elevationLossMeters
         self.polyline = polyline
         self.liveFix = liveFix
         self.updatedAt = updatedAt
@@ -55,17 +65,24 @@ public struct SharedTrailSnapshot: Codable, Sendable, Equatable {
         public var coordinate: CodableCoordinate
         public var distanceAlongRouteMeters: Double
         public var offRouteMeters: Double
+        /// The *trail's* elevation where the walker was matched, not the
+        /// altitude their receiver reported. Read off the same profile the
+        /// match came from, so the number agrees with the elevation chart in
+        /// the app rather than with GPS vertical noise.
+        public var elevationMeters: Double?
         public var timestamp: Date
 
         public init(
             coordinate: CodableCoordinate,
             distanceAlongRouteMeters: Double,
             offRouteMeters: Double,
-            timestamp: Date
+            timestamp: Date,
+            elevationMeters: Double? = nil
         ) {
             self.coordinate = coordinate
             self.distanceAlongRouteMeters = distanceAlongRouteMeters
             self.offRouteMeters = offRouteMeters
+            self.elevationMeters = elevationMeters
             self.timestamp = timestamp
         }
     }
@@ -99,13 +116,9 @@ public struct SharedTrailSnapshot: Codable, Sendable, Equatable {
     /// extension cannot drift out of sync.
     public var statusText: String {
         guard let fractionComplete, let remainingDistanceMeters
-        else { return Self.formattedLength(totalDistanceMeters) }
-        return "\(Int((fractionComplete * 100).rounded()))% · \(Self.formattedLength(remainingDistanceMeters)) left"
-    }
-
-    private static func formattedLength(_ meters: Double) -> String {
-        Measurement(value: meters, unit: UnitLength.meters)
-            .formatted(.measurement(width: .abbreviated, usage: .road))
+        else { return WidgetFormat.length(meters: totalDistanceMeters) }
+        let remaining = WidgetFormat.length(meters: remainingDistanceMeters)
+        return "\(Int((fractionComplete * 100).rounded()))% · \(remaining) left"
     }
 }
 

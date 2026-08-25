@@ -453,3 +453,109 @@ enum UITestMultiSectionFixture {
         }
     }
 }
+
+// MARK: - Unobserved stretches
+
+extension RouteReviewTests {
+    /// A named trail that does connect the two fixes, walked with a
+    /// quarter-hour of silence in the middle — the shape of a phone that went
+    /// into a pack.
+    private func gapFixture() -> (
+        result: TrailMatchResult,
+        points: [RecordingPoint]
+    ) {
+        let start = 47.6300
+        let end = 47.6320
+        let trail = 12.8600
+        // The fixes sit a few metres east of the trail, as real ones do.
+        let walked = 12.86010
+        let graph = graph(
+            nodes: [(1, start, trail), (2, end, trail)],
+            ways: [(10, [1, 2], "Ridge Path")]
+        )
+        let points = [
+            point(start, walked, at: 0, accuracy: 5),
+            point(end, walked, at: 900, accuracy: 5),
+        ]
+        return (TrailMatcher.match(points: points, graph: graph), points)
+    }
+
+    @Test("an unobserved stretch is reviewed as its own gap section")
+    func gapLegBecomesItsOwnSection() throws {
+        let fixture = gapFixture()
+
+        let sections = RouteReviewSection.sections(in: fixture.result)
+
+        #expect(sections.count == 1)
+        let section = try #require(sections.first)
+        #expect(section.kind == .gap)
+        #expect(section.unobservedDuration == 900)
+        #expect(section.isBridged)
+        // A trail was found, so following it beats a straight line — but the
+        // hiker can still say otherwise.
+        #expect(section.defaultChoice == .matched)
+        #expect(section.availableChoices == [.matched, .gps])
+    }
+
+    @Test("a gap nothing could bridge offers only the straight line")
+    func unbridgedGapOffersOnlyGPS() {
+        let points = [
+            point(47.6300, 12.8600, at: 0, accuracy: 5),
+            point(47.7300, 12.8600, at: 7200, accuracy: 5),
+        ]
+
+        let result = TrailMatcher.match(points: points, graph: .empty)
+        // Nothing to match against, so the matcher reports the leg without
+        // producing one — there is no section to review.
+        #expect(result.legs.isEmpty)
+        #expect(RouteReviewSection.sections(in: result).isEmpty)
+    }
+
+    @Test("a gap is never folded into a neighbouring snapped run")
+    func gapIsNotAbsorbedByASnappedRun() throws {
+        let graph = graph(
+            nodes: [
+                (1, 47.6300, 12.8600),
+                (2, 47.6306, 12.8600),
+                (3, 47.6330, 12.8600),
+                (4, 47.6336, 12.8600),
+            ],
+            ways: [(10, [1, 2, 3, 4], "Ridge Path")]
+        )
+        let points = [
+            point(47.6300, 12.86010, at: 0, accuracy: 5),
+            point(47.6302, 12.86010, at: 10, accuracy: 5),
+            // A quarter hour of nothing, then the walk resumes further up.
+            point(47.6330, 12.86010, at: 910, accuracy: 5),
+            point(47.6332, 12.86010, at: 920, accuracy: 5),
+        ]
+
+        let result = TrailMatcher.match(points: points, graph: graph)
+        let sections = RouteReviewSection.sections(in: result)
+
+        let unobserved = sections.filter { $0.legIndices.contains(1) }
+        #expect(unobserved.count == 1)
+        let section = try #require(unobserved.first)
+        // Its own section, holding nothing but the unrecorded leg, and saying
+        // how long the recording was silent — whichever kind it ends up being.
+        #expect(section.legIndices == [1])
+        #expect(section.unobservedDuration == 900)
+        #expect(section.kind != .snapped)
+    }
+
+    @Test("a gap the matcher could not decide is reviewed as an ambiguity")
+    func ambiguousGapKeepsItsUnobservedDuration() throws {
+        let fixture = ambiguousFixture()
+
+        let section = try #require(
+            RouteReviewSection.sections(in: fixture.result).first
+        )
+
+        // Alternatives win the classification: offering the walker two mapped
+        // routes is strictly more useful than telling them a gap exists, and
+        // the silence is reported alongside either way.
+        #expect(section.kind == .ambiguous)
+        #expect(section.unobservedDuration == 720)
+        #expect(section.alternatives.count >= 2)
+    }
+}

@@ -171,6 +171,8 @@ struct TrailWidgetTests {
             ],
             elevationLowMeters: 600,
             elevationHighMeters: 900,
+            elevationGainMeters: 480,
+            elevationLossMeters: 460,
             liveFix: liveFix
         )
     }
@@ -443,6 +445,7 @@ struct TrailWidgetTests {
             #expect(layout.showsTitle == (family != .systemSmall), "\(family)")
             #expect(layout.routeLineWidth > 0, "\(family)")
             #expect(layout.padding > 0, "\(family)")
+            #expect(layout.metricLimit > 0, "\(family)")
         }
     }
 
@@ -455,7 +458,41 @@ struct TrailWidgetTests {
             let larger = TrailWidgetLayout(family: family)
             #expect(small.routeLineWidth < larger.routeLineWidth, "\(family)")
             #expect(small.padding < larger.padding, "\(family)")
-            #expect(larger == TrailWidgetLayout(family: .systemMedium), "the larger sizes are drawn alike")
+            #expect(small.metricLimit < larger.metricLimit, "\(family)")
+            #expect(
+                larger.routeLineWidth == TrailWidgetLayout(family: .systemMedium).routeLineWidth,
+                "the larger sizes draw the same trail"
+            )
+        }
+    }
+
+    /// Chips are ordered most-useful-first and truncated to the width, so the
+    /// limit is what decides which facts a size gives up — a square 155 pt
+    /// widget cannot carry the four a large one can.
+    @Test("wider families carry more stat chips than narrower ones")
+    func widerFamiliesCarryMoreChips() {
+        let limits = [WidgetFamily.systemSmall, .systemMedium, .systemLarge]
+            .map { family in TrailWidgetLayout(family: family).metricLimit }
+
+        #expect(limits == limits.sorted())
+        #expect(limits.first != limits.last, "otherwise the size makes no difference")
+        #expect(
+            TrailWidgetLayout(family: .systemExtraLarge).metricLimit
+                == TrailWidgetLayout(family: .systemLarge).metricLimit,
+            "there is nothing further to add past four"
+        )
+    }
+
+    /// The chips are the widget's only elevation reporting; the map behind
+    /// them draws a shape, not a height.
+    @Test("a trail with elevations draws elevation chips on every family")
+    func elevationsAreDrawnOnEveryFamily() throws {
+        let stored = Self.snapshot()
+        for family in TrailWidget.supportedFamilies {
+            let limit = TrailWidgetLayout(family: family).metricLimit
+            let metrics = stored.metrics(limit: limit)
+            #expect(try #require(metrics.first).kind == .ascent, "\(family)")
+            #expect(metrics.count <= limit, "\(family)")
         }
     }
 
@@ -471,5 +508,32 @@ struct TrailWidgetTests {
         let url = try #require(TrailWidgetProvider.currentEntry().deepLinkURL)
 
         #expect(TrailWidgetDeepLink.hikeID(from: url) == stored.hikeID)
+    }
+
+    // MARK: The stats the entry carries
+
+    /// The widget recomputes nothing — the app precomputes every figure and
+    /// writes it — so a stat that doesn't survive the App Group is a stat the
+    /// widget can never draw.
+    @Test("the elevation figures survive the trip through the App Group")
+    func elevationsSurviveTheStore() throws {
+        let stored = Self.snapshot()
+        SharedStore.save(stored)
+
+        let loaded = try #require(TrailWidgetProvider.currentEntry().snapshot)
+
+        #expect(loaded.elevationGainMeters == stored.elevationGainMeters)
+        #expect(loaded.elevationLossMeters == stored.elevationLossMeters)
+        #expect(loaded.elevationHighMeters == stored.elevationHighMeters)
+        #expect(loaded.metrics(limit: 4) == stored.metrics(limit: 4))
+    }
+
+    /// The gallery is where a widget is chosen. A placeholder drawn emptier
+    /// than the real thing undersells it.
+    @Test("the gallery placeholder shows the chips a real trail would")
+    func placeholderIsRepresentative() {
+        let metrics = TrailWidgetProvider.placeholderEntry().snapshot?.metrics(limit: 4) ?? []
+        #expect(metrics.contains { metric in metric.kind == .ascent })
+        #expect(metrics.count > 1)
     }
 }

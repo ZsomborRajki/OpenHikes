@@ -7,6 +7,7 @@
 //  file-length limit.
 //
 
+import CoreLocation
 import Foundation
 import Observation
 import OpenHikesShared
@@ -84,24 +85,80 @@ extension HikeRecorder {
     ) {
         let normalized = await RecordingPreparation
             .normalizedPointsOffMain(session.points)
-
-        let graph: TrailGraph?
-        if let trailGraphProvider {
-            do {
-                graph = try await trailGraphProvider.cachedGraph(
-                    covering: normalized.map(\.coordinate)
-                )
-            } catch {
-                Self.logger.error(
-                    "Cached trail graph could not be loaded: \(error.localizedDescription, privacy: .public)"
-                )
-                graph = nil
-            }
-        } else {
-            graph = nil
-        }
+        let graph = await trailGraph(covering: normalized)
         let gapEvidence = await gapDistances(for: normalized)
         return (normalized, graph, gapEvidence)
+    }
+
+    /// The trail graph this recording is matched against.
+    ///
+    /// A finished recording is the one moment where reaching the network for a
+    /// graph earns its cost. Prefetching during the walk can only name regions
+    /// a fix arrived in, so the stretches that lost their fixes — the ones
+    /// that most need a mapped route to be reconstructed from — are precisely
+    /// the ones no region was ever requested for. Left at the cached graph,
+    /// the matcher arrives at the gap with nothing to route through and draws
+    /// a straight line.
+    ///
+    /// Bounded on both sides: nothing is downloaded for a recording without
+    /// gaps, and the download as a whole is abandoned after
+    /// ``gapGraphDownloadBudget`` so a stop on a dead connection isn't held
+    /// open by per-region timeouts. Whatever landed inside the budget is used
+    /// and the rest of the route keeps its GPS geometry, which is the same
+    /// partial answer this pipeline gives everywhere else.
+    private func trailGraph(
+        covering points: [RecordingPoint]
+    ) async -> TrailGraph? {
+        guard let trailGraphProvider else { return nil }
+        let corridor = TrailGraphCorridor.coordinates(bridging: points)
+        if !corridor.isEmpty {
+            await downloadTrailGraph(
+                corridor: corridor,
+                provider: trailGraphProvider
+            )
+        }
+        do {
+            return try await trailGraphProvider.cachedGraph(
+                covering: points.map(\.coordinate) + corridor
+            )
+        } catch {
+            Self.logger.error(
+                "Cached trail graph could not be loaded: \(error.localizedDescription, privacy: .public)"
+            )
+            return nil
+        }
+    }
+
+    private func downloadTrailGraph(
+        corridor: [CLLocationCoordinate2D],
+        provider: any TrailGraphProviding
+    ) async {
+        guard trailGraphNetworkDecision(.interactive).isAllowed else { return }
+        let coordinates = TrailGraphCorridor.prefetchCoordinates(
+            for: corridor,
+            provider: provider
+        )
+        guard !coordinates.isEmpty else { return }
+        Self.logger.debug(
+            "Downloading \(coordinates.count, privacy: .public) trail graph region(s) to close recording gaps"
+        )
+        let budget = Self.gapGraphDownloadBudget
+        // A race rather than a per-request timeout: the budget covers the
+        // whole run, so eight regions that each take three seconds still fit
+        // while one region on a dead connection cannot consume it alone.
+        await withTaskGroup(of: Void.self) { group in
+            group.addTask {
+                try? await Task.sleep(for: budget)
+            }
+            group.addTask {
+                for coordinate in coordinates {
+                    guard !Task.isCancelled else { return }
+                    try? await provider.prefetch(around: coordinate)
+                }
+            }
+            await group.next()
+            group.cancelAll()
+        }
     }
 
     // MARK: Persistence

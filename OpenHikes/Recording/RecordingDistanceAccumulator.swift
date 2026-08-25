@@ -9,6 +9,12 @@ import OpenHikesShared
 
 /// Distance accumulation that can retract a short window of GPS wander when
 /// the walker has remained within one small area for long enough.
+///
+/// It also keeps the recording's running elevation totals. Not because climb
+/// and distance belong together, but because this is the one place every
+/// accepted point passes through exactly once — on the live path and on the
+/// replay that rebuilds state from the journal — so a total kept here cannot
+/// be left behind by a reset that only half the paths know about.
 nonisolated struct RecordingDistanceAccumulator: Sendable {
     private(set) var distanceMeters = 0.0
     private(set) var isStationary = false
@@ -18,6 +24,7 @@ nonisolated struct RecordingDistanceAccumulator: Sendable {
     /// walk the recorder wasn't even watching.
     private(set) var recordedDuration = 0.0
 
+    private var elevation = ElevationAccumulator()
     private var previous: RecordingPoint?
     private var movementWindowStart: RecordingPoint?
     private var movementWindowDistance = 0.0
@@ -32,7 +39,19 @@ nonisolated struct RecordingDistanceAccumulator: Sendable {
         recordedDuration > 0 ? distanceMeters / recordedDuration : nil
     }
 
+    /// Metres climbed so far, or `nil` until two points have carried a
+    /// trusted altitude — see ``ElevationAccumulator/hasChange``.
+    ///
+    /// Unlike distance, this is never retracted. A stationary window is GPS
+    /// wandering across the ground, which the altitude filter has already
+    /// smoothed vertically; subtracting a climb that the walker's own legs
+    /// may well have made would be the larger error.
+    var elevationGainMeters: Double? {
+        elevation.hasChange ? elevation.gainMeters : nil
+    }
+
     @discardableResult mutating func append(_ point: RecordingPoint) -> Double {
+        elevation.record(point.elevation)
         guard let previous else {
             previous = point
             movementWindowStart = point

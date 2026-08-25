@@ -18,12 +18,16 @@ nonisolated extension TrailMatcher {
         let start: RecordingPoint
         let end: RecordingPoint
         let carriesNonPedestrianMotion: Bool
+        /// Whether this whole segment spans ground the recording never
+        /// observed — see ``RecordingPointFlags/inferred``.
+        let isInferred: Bool
     }
 
     static func recordingPoints(
         along rawCoordinates: [CLLocationCoordinate2D],
         from start: RecordingPoint,
-        to end: RecordingPoint
+        to end: RecordingPoint,
+        inferred: Bool = false
     ) -> [RecordingPoint] {
         var coordinates: [CLLocationCoordinate2D] = []
         for coordinate in [start.coordinate] + rawCoordinates + [end.coordinate] {
@@ -52,7 +56,8 @@ nonisolated extension TrailMatcher {
             start: start,
             end: end,
             carriesNonPedestrianMotion: start.flags.contains(.nonPedestrian)
-                || end.flags.contains(.nonPedestrian)
+                || end.flags.contains(.nonPedestrian),
+            isInferred: inferred
         )
         return coordinates.indices.map { index in
             interpolatedPoint(at: index, context: ctx)
@@ -80,6 +85,12 @@ nonisolated extension TrailMatcher {
         var flags: RecordingPointFlags = context.carriesNonPedestrianMotion
             ? [.nonPedestrian]
             : []
+        // From index 1 onward, never on index 0: the flag describes the
+        // stretch arriving at a point, and index 0 is the anchor the *previous*
+        // leg's stretch already arrived at.
+        if context.isInferred, index > 0 {
+            flags.formUnion(.inferred)
+        }
         if index == 0 {
             flags.formUnion(context.start.flags)
         } else if index == context.coordinates.count - 1 {

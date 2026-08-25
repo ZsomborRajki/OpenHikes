@@ -83,6 +83,46 @@ final class WidgetFeedTests {
         #expect(snapshot.elevationHighMeters == 260)
     }
 
+    /// The widget's ascent chip is what a walker reads to decide whether a
+    /// trail is a stroll or a climb, and it is the one figure the drawn map
+    /// cannot show. It is also not `high - low`: the ridge fixture climbs
+    /// 100→150→220→180→260→240, so it gains 200 m over a 160 m span, and
+    /// publishing the span would understate every rolling trail there is.
+    @Test("the published climb is cumulative, not the height of the summit")
+    func selectionPublishesCumulativeClimb() async throws {
+        tracker.hikeSelectionChanged(to: hike())
+        await tracker.waitForSelectionPublish()
+
+        let snapshot = try #require(SharedStore.load())
+        #expect(try #require(snapshot.elevationGainMeters) == 200)
+        #expect(try #require(snapshot.elevationLossMeters) == 60)
+        #expect(
+            snapshot.elevationGainMeters != (snapshot.elevationHighMeters ?? 0) - (snapshot.elevationLowMeters ?? 0),
+            "a span would have been the easy wrong answer"
+        )
+        #expect(snapshot.metrics(limit: 4).map(\.kind) == [.ascent, .highPoint, .descent])
+    }
+
+    /// A GPX with no heights must publish no heights. The chips are dropped
+    /// rather than drawn as zeroes — see the widget's metric builder.
+    @Test("a route without elevations publishes none")
+    func selectionWithoutElevationsPublishesNone() async throws {
+        let flat = Fixture.hike(
+            in: context,
+            title: "Towpath",
+            route: Fixture.ridgeRoute.map { point in
+                RouteCoordinate(latitude: point.latitude, longitude: point.longitude, timestamp: point.timestamp)
+            }
+        )
+        tracker.hikeSelectionChanged(to: flat)
+        await tracker.waitForSelectionPublish()
+
+        let snapshot = try #require(SharedStore.load())
+        #expect(snapshot.elevationGainMeters == nil)
+        #expect(snapshot.elevationHighMeters == nil)
+        #expect(snapshot.metrics(limit: 4).isEmpty)
+    }
+
     @Test("deselecting clears the trail rather than leaving a stale one")
     func deselectionClears() async {
         tracker.hikeSelectionChanged(to: hike())
@@ -166,6 +206,27 @@ final class WidgetFeedTests {
         #expect(snapshot.statusText.contains("%"))
         let remaining = try #require(snapshot.remainingDistanceMeters)
         #expect(abs(remaining - (hike.distanceMeters - fix.distanceAlongRouteMeters)) < 1)
+    }
+
+    /// The walker's height comes off the same profile the match came from, so
+    /// the widget and the app's elevation chart cannot disagree about the
+    /// ground underfoot — and it is a trail elevation rather than the
+    /// receiver's own altitude, which is the noisiest thing a phone reports.
+    @Test("an on-route fix carries the trail's height at that point")
+    func liveFixCarriesItsElevation() async throws {
+        let hike = hike()
+        let profile = RouteProfile(route: hike.route)
+        tracker.hikeSelectionChanged(to: hike)
+        await tracker.waitForSelectionPublish()
+
+        let match = try #require(profile.nearestPoint(to: profile.coordinates[3]))
+        tracker.publishLiveFix(hike: hike, profile: profile, match: match)
+
+        let snapshot = try #require(SharedStore.load())
+        let elevation = try #require(snapshot.liveFix?.elevationMeters)
+        #expect(abs(elevation - (Fixture.ridgeRoute[3].elevation ?? 0)) < 1)
+        // And the walker's own height then displaces the summit in the chips.
+        #expect(snapshot.metrics(limit: 2).map(\.kind) == [.ascent, .currentElevation])
     }
 
     /// A fix too far from the trail isn't progress — the widget shows the

@@ -18,6 +18,9 @@ final class RecordingStats {
     var horizontalAccuracy: Double?
     var matchedTrailName: String?
     var averageSpeedMetersPerSecond: Double?
+    /// Metres climbed so far, `nil` until the recording has two trusted
+    /// altitudes to subtract. Published to the widget alongside distance.
+    var elevationGainMeters: Double?
 
     func reset() {
         distanceMeters = 0
@@ -25,6 +28,7 @@ final class RecordingStats {
         horizontalAccuracy = nil
         matchedTrailName = nil
         averageSpeedMetersPerSecond = nil
+        elevationGainMeters = nil
     }
 }
 

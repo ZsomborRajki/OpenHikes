@@ -20,8 +20,8 @@ nonisolated enum TrailMatcher {
     typealias TransitionParameters = TrailMatcherTransitionParameters
 
     static let minimumSigmaMeters = 4.0
-    private static let confidenceRatio = 1.15
-    private static let confidenceLogMargin = log(confidenceRatio)
+    static let confidenceRatio = 1.15
+    static let confidenceLogMargin = log(confidenceRatio)
     static let sparseInterval: TimeInterval = 90
     static let sparseDisplacement: CLLocationDistance = 200
     static let sparseMaximumSpeedMPS = 2.5
@@ -29,6 +29,39 @@ nonisolated enum TrailMatcher {
     static let minimumTransitionDistanceMeters = 75.0
     static let evidenceDistanceMarginFactor = 1.2
     static let widgetSourcedAccuracyWeight = 1.5
+
+    /// When a leg stops being a stretch the matcher has to think harder about
+    /// and becomes one it has no evidence across at all.
+    ///
+    /// Deliberately well above ``sparseInterval``. A sparse leg still has
+    /// fixes close enough on either side that the ground between them is
+    /// bounded; past these thresholds the recording simply stopped observing —
+    /// a phone in a pack, a suspended app, a wooded valley — and whatever gets
+    /// drawn there is an inference rather than a measurement.
+    static let gapInterval: TimeInterval = 240
+    static let gapDisplacement: CLLocationDistance = 400
+
+    /// Hard ceiling on how far the matcher will route between two consecutive
+    /// fixes, however long the silence between them.
+    ///
+    /// Without it the bound is `interval * sparseMaximumSpeedMPS`, which is
+    /// reasonable for a minute and absurd for an afternoon: a phone that spent
+    /// two hours in a pack asks for an 18 km Dijkstra radius with Yen's
+    /// k-shortest paths layered on top, inside a save the walker is waiting
+    /// on. Past this distance a shortest path is not weak evidence, it is
+    /// none — there are far too many ways to walk that far — so the matcher
+    /// abstains and the leg is reported as the gap it is.
+    static let maximumBridgeDistanceMeters: CLLocationDistance = 3000
+
+    /// The same ceiling when the pedometer can say how far the walk across the
+    /// gap actually was.
+    ///
+    /// Step-derived distance narrows the question from "anywhere you could
+    /// have reached" to "a path about this long", so the evidence itself is
+    /// what bounds the search and this only has to stop a broken reading. A
+    /// pedometer in a pack under-reports rather than over-reports, so the
+    /// number it has to survive is an implausible large one.
+    static let absoluteBridgeDistanceMeters: CLLocationDistance = 20_000
 
     static func needsDistanceEvidence(
         from previous: RecordingPoint,
@@ -41,6 +74,25 @@ nonisolated enum TrailMatcher {
                 from: previous.coordinate,
                 to: current.coordinate
             ) > sparseDisplacement
+    }
+
+    /// Whether the ground between two consecutive fixes went unobserved.
+    ///
+    /// A deliberate pause is not a gap: the walker chose to stop recording, so
+    /// nothing is missing and nothing should be inferred across it. That is
+    /// the same `.resumed` guard ``needsDistanceEvidence(from:to:)`` uses, and
+    /// for the same reason.
+    static func isGap(
+        from previous: RecordingPoint,
+        to current: RecordingPoint
+    ) -> Bool {
+        guard !current.flags.contains(.resumed) else { return false }
+        return current.timestamp.timeIntervalSince(previous.timestamp)
+            > gapInterval
+            || RouteGeometry.distanceMeters(
+                from: previous.coordinate,
+                to: current.coordinate
+            ) > gapDisplacement
     }
 
     /// Matches without occupying the main actor.
@@ -80,11 +132,14 @@ nonisolated enum TrailMatcher {
             gapDistances: gapDistances,
             index: &index
         )
-        let legsResult = buildMatchingLegs(
-            points: points,
+        let selection = ViterbiSelection(
             selected: selected,
             scoreMargins: scoreMargins,
-            blockIDs: blockIDs,
+            blockIDs: blockIDs
+        )
+        let legsResult = buildMatchingLegs(
+            points: points,
+            selection: selection,
             gapDistances: gapDistances,
             index: &index
         )
@@ -123,13 +178,22 @@ nonisolated enum TrailMatcher {
     }
 }
 
-// MARK: - Private types
+// MARK: - Leg types
+//
+// Internal rather than file-private: the leg and output building that consumes
+// them lives in `TrailMatcherLegs.swift`, and they are the vocabulary the two
+// files share. Nothing outside the matcher constructs them.
 
-nonisolated private extension TrailMatcher {
+nonisolated extension TrailMatcher {
     struct MatchLeg {
         let transition: Transition?
         let isConfident: Bool
         let isSparse: Bool
+        /// Whether the ground this leg spans went unobserved — see
+        /// ``TrailMatcher/isGap(from:to:)``. Independent of confidence: a gap
+        /// the matcher bridged along a mapped trail is still a gap, and what
+        /// it drew across it is still an inference.
+        let isGap: Bool
     }
 
     struct MatchingLegsResult {
@@ -140,11 +204,31 @@ nonisolated private extension TrailMatcher {
         let didMoveRoute: Bool
     }
 
+    /// The run-wide totals ``buildMatchingLegs`` accumulates while it walks,
+    /// grouped so the per-leg work can take one `inout` rather than four.
+    struct LegStats {
+        var matchedCount = 0
+        var ambiguousCount = 0
+        var trailNameCounts: [String: Int] = [:]
+        var didMoveRoute = false
+    }
+
     struct ViterbiUpdate {
         let pointIndex: Int
         let candidate: Candidate
         let scoreMargin: Double
         let blockID: Int
+    }
+
+    /// Everything the Viterbi pass decided, per fix: the state it settled on,
+    /// how much better that state was than its runner-up, and which contiguous
+    /// run of fixes it belongs to. Carried together because the leg building
+    /// reads all three at the same two indices and would otherwise take three
+    /// parallel arrays everywhere.
+    struct ViterbiSelection {
+        let selected: [Candidate?]
+        let scoreMargins: [Double]
+        let blockIDs: [Int?]
     }
 }
 
@@ -286,179 +370,5 @@ nonisolated private extension TrailMatcher {
             }
         }
         return updates
-    }
-}
-
-// MARK: - Match leg and output building
-
-nonisolated private extension TrailMatcher {
-    static func buildMatchingLegs(
-        points: [RecordingPoint],
-        selected: [Candidate?],
-        scoreMargins: [Double],
-        blockIDs: [Int?],
-        gapDistances: [Int: Double],
-        index: inout GraphIndex
-    ) -> MatchingLegsResult {
-        var legs: [MatchLeg] = []
-        var matchedLegCount = 0
-        var ambiguousLegCount = 0
-        var trailNameCounts: [String: Int] = [:]
-        var didMoveRoute = false
-        for indexInPoints in 1..<points.count {
-            let previousIndex = indexInPoints - 1
-            guard let previous = selected[previousIndex],
-                  let current = selected[indexInPoints],
-                  blockIDs[previousIndex] == blockIDs[indexInPoints],
-                  !points[indexInPoints].flags.contains(.resumed)
-            else {
-                legs.append(MatchLeg(transition: nil, isConfident: false, isSparse: false))
-                continue
-            }
-            let parameters = transitionParameters(
-                from: points[previousIndex],
-                to: points[indexInPoints],
-                evidenceDistance: gapDistances[indexInPoints]
-            )
-            guard let transition = index.transition(
-                from: previous,
-                to: current,
-                parameters: parameters
-            ) else {
-                legs.append(MatchLeg(transition: nil, isConfident: false, isSparse: parameters.isSparse))
-                continue
-            }
-            let confident =
-                scoreMargins[previousIndex] >= confidenceLogMargin
-                && scoreMargins[indexInPoints] >= confidenceLogMargin
-                && (!parameters.isSparse || transition.likelihoodMargin >= confidenceLogMargin)
-            legs.append(MatchLeg(
-                transition: transition,
-                isConfident: confident,
-                isSparse: parameters.isSparse
-            ))
-            if confident {
-                matchedLegCount += 1
-                updateConfidentLegStats(
-                    from: previous,
-                    to: current,
-                    transition: transition,
-                    trailNameCounts: &trailNameCounts,
-                    didMoveRoute: &didMoveRoute
-                )
-            } else if parameters.isSparse {
-                ambiguousLegCount += 1
-            }
-        }
-        return MatchingLegsResult(
-            legs: legs,
-            matchedCount: matchedLegCount,
-            ambiguousCount: ambiguousLegCount,
-            trailNameCounts: trailNameCounts,
-            didMoveRoute: didMoveRoute
-        )
-    }
-
-    static func buildAnchoredPoints(
-        points: [RecordingPoint],
-        legs: [MatchLeg],
-        selected: [Candidate?]
-    ) -> [RecordingPoint] {
-        var usesMatchedAnchor = [Bool](repeating: false, count: points.count)
-        for (indexInLegs, leg) in legs.enumerated() where leg.isConfident {
-            usesMatchedAnchor[indexInLegs] = true
-            usesMatchedAnchor[indexInLegs + 1] = true
-        }
-        return zip(points, zip(usesMatchedAnchor, selected))
-            .map { rawPoint, anchorState -> RecordingPoint in
-                let (isAnchored, candidate) = anchorState
-                guard isAnchored, let candidate else { return rawPoint }
-                return point(rawPoint, movedTo: candidate.projectedCoordinate)
-            }
-    }
-
-    static func buildOutputSegments(
-        points: [RecordingPoint],
-        legs: [MatchLeg],
-        anchors: [RecordingPoint]
-    ) -> (
-        output: [RecordingPoint],
-        matchLegs: [TrailMatchLeg],
-        ambiguities: [TrailMatchAmbiguity]
-    ) {
-        var output: [RecordingPoint] = []
-        var matchLegs: [TrailMatchLeg] = []
-        var ambiguities: [TrailMatchAmbiguity] = []
-        for indexInPoints in 1..<points.count {
-            let previousIndex = indexInPoints - 1
-            let coordinates: [CLLocationCoordinate2D]
-            let trailNames: [String]
-            if legs[previousIndex].isConfident,
-               let transition = legs[previousIndex].transition {
-                coordinates = transition.coordinates
-                trailNames = transition.trailNames
-            } else {
-                coordinates = [
-                    anchors[previousIndex].coordinate,
-                    anchors[indexInPoints].coordinate,
-                ]
-                trailNames = []
-            }
-            let segment = recordingPoints(
-                along: coordinates,
-                from: anchors[previousIndex],
-                to: anchors[indexInPoints]
-            )
-            let alternatives = buildAlternatives(
-                legIndex: previousIndex,
-                legs: legs,
-                fromAnchor: anchors[previousIndex],
-                toAnchor: anchors[indexInPoints]
-            )
-            matchLegs.append(TrailMatchLeg(
-                index: previousIndex,
-                defaultPoints: segment,
-                rawPoints: [points[previousIndex], points[indexInPoints]],
-                alternatives: alternatives,
-                trailNames: trailNames
-            ))
-            if !alternatives.isEmpty {
-                ambiguities.append(TrailMatchAmbiguity(
-                    id: previousIndex,
-                    gpsPoints: segment,
-                    alternatives: alternatives
-                ))
-            }
-            if output.isEmpty {
-                output.append(contentsOf: segment)
-            } else {
-                output.append(contentsOf: segment.dropFirst())
-            }
-        }
-        return (output, matchLegs, ambiguities)
-    }
-
-    static func buildAlternatives(
-        legIndex: Int,
-        legs: [MatchLeg],
-        fromAnchor: RecordingPoint,
-        toAnchor: RecordingPoint
-    ) -> [TrailMatchAlternative] {
-        guard !legs[legIndex].isConfident,
-              legs[legIndex].isSparse,
-              let transition = legs[legIndex].transition
-        else { return [] }
-        return transition.alternatives.enumerated().map { alternativeIndex, alternative in
-            TrailMatchAlternative(
-                id: alternativeIndex,
-                points: recordingPoints(
-                    along: alternative.coordinates,
-                    from: fromAnchor,
-                    to: toAnchor
-                ),
-                distanceMeters: alternative.distanceMeters,
-                trailNames: alternative.trailNames
-            )
-        }
     }
 }
