@@ -22,10 +22,11 @@ import Testing
 extension OfflineDownloadStateTests {
     /// Deep enough that the route enumerates comfortably more tiles than the
     /// window holds; otherwise "the window refilled" and "there was nothing
-    /// left to add" look identical. Thunderforest for its download policy
-    /// alone — the template points nowhere and every save is injected.
+    /// left to add" look identical. Stadia for its download policy alone — it
+    /// is the one source whose terms permit a bulk download — and the template
+    /// points nowhere while every save is injected.
     private static let deepSource = ActiveTileSource(
-        providerID: TileProvider.thunderforestOutdoors.id,
+        providerID: TileProvider.stadiaOutdoors.id,
         urlTemplate: "https://example.invalid/{z}/{x}/{y}.png",
         maximumZ: 16
     )

@@ -30,7 +30,101 @@ struct TileProviderTests {
         #expect(!provider.id.isEmpty)
         #expect(!provider.name.isEmpty)
         #expect(!provider.summary.isEmpty)
-        #expect(!provider.attribution.isEmpty)
+        #expect(!provider.attribution.credits.isEmpty)
+        #expect(!provider.attribution.plainText.isEmpty)
+    }
+
+    /// The credits an ``ActiveTileSource`` reports are the provider's own, and
+    /// they are what ``MapAttributionView`` draws on the map. Projected rather
+    /// than stored — a source built before a catalog change must not go on
+    /// crediting the wrong party.
+    @Test("an active source carries its provider's credits", arguments: TileProvider.rasterSources)
+    func sourceAttributionMatchesProvider(provider: TileProvider) {
+        let source = ActiveTileSource(
+            providerID: provider.id,
+            urlTemplate: "https://example.invalid/{z}/{x}/{y}.png",
+            maximumZ: provider.maximumZ
+        )
+        #expect(source.attribution == provider.attribution)
+    }
+
+    /// An unknown id resolves to the default provider, so a source restored
+    /// from an older install credits OpenStreetMap rather than nobody.
+    @Test("an unknown source still credits somebody")
+    func unknownSourceStillAttributes() {
+        let source = ActiveTileSource(
+            providerID: "not-a-provider",
+            urlTemplate: "https://example.invalid/{z}/{x}/{y}.png",
+            maximumZ: 18
+        )
+        #expect(source.attribution == TileProvider.default.attribution)
+        #expect(source.attribution.hasLinks)
+    }
+
+    /// Thunderforest and OpenStreetMap both require *working links*, not just
+    /// the words — "Absolutely no bulk-downloading" is not the only clause in
+    /// those terms with teeth. Apple's is the exception: MapKit draws its own
+    /// Legal link and the app must not duplicate it.
+    @Test("every raster source's attribution links out", arguments: TileProvider.rasterSources)
+    func attributionLinksOut(provider: TileProvider) {
+        #expect(provider.attribution.hasLinks)
+        for credit in provider.attribution.credits {
+            #expect(credit.url?.scheme == "https")
+        }
+    }
+
+    /// The commercial sources are the paid ones, and the two that cost nothing
+    /// to serve must never become paid. OpenStreetMap in particular: gating it
+    /// would put a paid feature on donated infrastructure, which its usage
+    /// policy exists to prevent.
+    @Test("only the commercial sources are gated")
+    func paidSources() {
+        #expect(!TileProvider.openStreetMap.requiresPaidAccess)
+        #expect(!TileProvider.appleMaps.requiresPaidAccess)
+        #expect(TileProvider.stadiaOutdoors.requiresPaidAccess)
+        #expect(TileProvider.thunderforestOutdoors.requiresPaidAccess)
+        #expect(!TileProvider.default.requiresPaidAccess)
+    }
+
+    /// Thunderforest's terms forbid "bulk-downloading, scraping,
+    /// pre-downloading, pre-caching or anything similar without an appropriate
+    /// plan". Like the OpenStreetMap check above, a change that flips this is
+    /// a licensing problem rather than a UI one.
+    @Test("Thunderforest is never bulk-downloadable")
+    func thunderforestForbidsBulkDownload() {
+        #expect(!TileProvider.thunderforestOutdoors.supportsBulkDownload)
+    }
+
+    /// Stadia permits offline caching only up to "100MB cached at a time per
+    /// device", and it is the only source with a ceiling. A limit that grew
+    /// past that figure, or spread to a source whose terms don't set one,
+    /// would both be wrong.
+    @Test("only Stadia caps durable storage, at 100 MB")
+    func durableCeilings() {
+        // Hoisted rather than written inline: `#expect` decomposes the
+        // comparison, and a literal arithmetic chain on the right of one is
+        // inferred separately from the `Int64?` on the left — which made this
+        // fail while printing two identical numbers.
+        let hundredMegabytes: Int64 = 100 * 1024 * 1024
+        #expect(TileProvider.stadiaDurableByteLimit == hundredMegabytes)
+        #expect(TileProvider.stadiaOutdoors.durableByteLimit == hundredMegabytes)
+        for provider in TileProvider.all where provider.id != TileProvider.stadiaOutdoors.id {
+            #expect(provider.durableByteLimit == nil)
+        }
+    }
+
+    /// A capped provider's download budget has to fit under its ceiling, or
+    /// every full download would plan more tiles than it could ever save.
+    @Test("a capped provider's tile budget fits its ceiling", arguments: TileProvider.rasterSources)
+    func budgetFitsCeiling(provider: TileProvider) {
+        let budget = OfflineTileDownloader.tileBudget(forProviderID: provider.id)
+        #expect(budget > 0)
+        #expect(budget <= OfflineTileDownloader.tileBudget)
+        if let limit = provider.durableByteLimit {
+            #expect(Int64(budget) * TileCache.estimatedTileBytes <= limit)
+        } else {
+            #expect(budget == OfflineTileDownloader.tileBudget)
+        }
     }
 
     /// The half of the description only a real tile source has. Split from the

@@ -71,6 +71,11 @@ struct MapView: MapViewRepresentable, Equatable {
     /// without an update pass — see ``MapPhotoControlsView``.
     var photoCapture: PhotoCaptureController
 
+    /// Where the open hike's photos were taken. Observed directly by the map
+    /// (not via SwiftUI) so taking, importing or deleting one redraws MapKit's
+    /// annotations rather than this view — see ``PhotoMapPinController``.
+    var photoPins: PhotoMapPinController
+
     /// Lets `.equatable()` skip `updateUIView` when nothing actually changed —
     /// without it, SwiftUI calls `updateUIView` on every ancestor body pass
     /// that touches this view's transaction (e.g. the sheet's per-frame drag
@@ -90,6 +95,7 @@ struct MapView: MapViewRepresentable, Equatable {
             && lhs.mapController === rhs.mapController
             && lhs.locationManager === rhs.locationManager
             && lhs.photoCapture === rhs.photoCapture
+            && lhs.photoPins === rhs.photoPins
     }
 
     func makeCoordinator() -> Coordinator { Coordinator() }
@@ -115,6 +121,7 @@ struct MapView: MapViewRepresentable, Equatable {
         coordinator.observeSheetMetrics(sheetMetrics, on: mapView)
         coordinator.observeMapController(mapController, on: mapView)
         coordinator.observeRouteStyle(routeStyle, on: mapView)
+        coordinator.observePhotoPins(photoPins, on: mapView)
 
         // Raster tiles from the selected provider, replacing Apple's base map.
         applyTileSource(to: mapView, coordinator)
@@ -140,6 +147,14 @@ struct MapView: MapViewRepresentable, Equatable {
         guard coordinator.tileSourceKey != key else { return }
         coordinator.tileSourceKey = key
         RenderSignpost.mark("MapTileSourceRebuilt", key)
+
+        // Before the early return below: the system base map is a change of
+        // credit too — MapKit draws its own **Legal** link, so ours has to go
+        // away rather than keep crediting a provider that is no longer drawn.
+        #if os(iOS)
+        coordinator.attributionView?.update(with: tileSource?.attribution)
+        coordinator.applySheetTop(on: mapView)
+        #endif
 
         if let existing = coordinator.tileOverlay {
             mapView.removeOverlay(existing)
@@ -201,11 +216,52 @@ struct MapView: MapViewRepresentable, Equatable {
         ])
 
         addPhotoControls(to: mapView, coordinator, alignedTo: guide)
+        addAttribution(to: mapView, coordinator, alignedTo: guide)
         // Replaces the placeholders above with real positions as soon as the
         // map has a height to measure against.
         coordinator.applySheetTop(on: mapView)
         #endif
     }
+
+    #if os(iOS)
+    /// The credit line, on the leading edge below the two controls and hugging
+    /// the sheet — the bottom-most piece of map chrome, which is where a map's
+    /// attribution conventionally sits and where these providers' terms
+    /// require it to be. See ``MapAttributionView``.
+    private func addAttribution(
+        to mapView: MKMapView,
+        _ coordinator: Coordinator,
+        alignedTo guide: UILayoutGuide
+    ) {
+        let attribution = MapAttributionView()
+        attribution.translatesAutoresizingMaskIntoConstraints = false
+        mapView.addSubview(attribution)
+        coordinator.attributionView = attribution
+
+        let initialAttributionY: CGFloat = 400
+        let bottom = attribution.bottomAnchor.constraint(
+            equalTo: mapView.topAnchor,
+            constant: initialAttributionY
+        )
+        coordinator.attributionBottomConstraint = bottom
+
+        NSLayoutConstraint.activate([
+            attribution.leadingAnchor.constraint(
+                equalTo: guide.leadingAnchor,
+                constant: Self.controlInset
+            ),
+            // A ceiling rather than a width: the line is as wide as its credits
+            // need and no wider, but a provider that names three parties must
+            // still wrap inside the map rather than run off it.
+            attribution.trailingAnchor.constraint(
+                lessThanOrEqualTo: guide.trailingAnchor,
+                constant: -Self.controlInset
+            ),
+            bottom,
+        ])
+        attribution.update(with: tileSource?.attribution)
+    }
+    #endif
 
     #if os(iOS)
     /// The camera pill, on the leading edge opposite the tracking button and

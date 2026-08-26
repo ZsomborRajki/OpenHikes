@@ -18,7 +18,26 @@ final class OfflineTileDownloader {
     /// main actor.
     nonisolated private static let logger = Logger(subsystem: "OpenHikes", category: "OfflineDownload")
 
-    enum Phase: Equatable { case idle, downloading, finished, failed(String) }
+    enum Phase: Equatable {
+        case idle
+        case downloading
+        /// Planned, but the provider's durable ceiling has no room for it.
+        /// Waits for the user to approve freeing space — see
+        /// ``confirmReclaimingSpace()`` — or to cancel. Nothing has been
+        /// fetched or deleted at this point.
+        case needsSpace(SpaceShortfall)
+        case finished
+        case failed(String)
+    }
+
+    /// A plan held while the user decides whether to free space for it.
+    struct PendingRun {
+        let tiles: [Tile]
+        let source: ActiveTileSource
+        let scale: CGFloat
+        let shortfall: SpaceShortfall
+        let generation: Int
+    }
 
     /// What one tile's task carries back out of the group. `nonisolated`, like
     /// ``Tile``, because it crosses out of a child task.
@@ -68,6 +87,10 @@ final class OfflineTileDownloader {
     /// whatever else happened to be loading tiles at the time.
     private let gate: TileLoadGate
     private let saveTile: @Sendable (String, URL) async -> Bool
+    let quota: QuotaBroker
+    /// A plan waiting on the space confirmation. Cleared by every path that
+    /// leaves ``Phase/needsSpace(_:)``.
+    var pendingRun: PendingRun?
 
     /// The shallowest zoom to save (whole-route overview). `nonisolated`: a
     /// plain constant read from the `nonisolated` tile-enumeration functions.
@@ -75,6 +98,7 @@ final class OfflineTileDownloader {
     /// Soft cap on tiles — deeper zoom levels are dropped once exceeded, so a huge
     /// route doesn't try to fetch hundreds of thousands of tiles.
     nonisolated static let tileBudget = 4000
+
     /// How many tiles are kept in flight in the task group at once — a
     /// pipelining window, not a concurrency cap. What actually limits
     /// simultaneous blocking work is ``TileLoadGate``, shared with the map's
@@ -86,12 +110,14 @@ final class OfflineTileDownloader {
     init(
         gate: TileLoadGate = .shared,
         isOnline: @escaping @Sendable () -> Bool = { TileCache.shared.isOnline },
+        quota: QuotaBroker = .standard,
         saveTile: @escaping @Sendable (String, URL) async -> Bool = { key, url in
             await TileCache.shared.saveTileDurably(forKey: key, url: url)
         }
     ) {
         self.gate = gate
         self.isOnline = isOnline
+        self.quota = quota
         self.saveTile = saveTile
     }
 
@@ -123,6 +149,7 @@ final class OfflineTileDownloader {
         completed = 0
         total = 0
         completedRecord = nil
+        pendingRun = nil
         phase = .downloading
         let maxZoom = max(source.maximumZ, Self.minZoom)
         // Bracketed for MetricKit rather than for `RenderSignpost`: what a
@@ -152,6 +179,7 @@ final class OfflineTileDownloader {
         completed = 0
         total = 0
         completedRecord = nil
+        pendingRun = nil
         finishPlanning()
     }
 
@@ -162,6 +190,7 @@ final class OfflineTileDownloader {
         completed = 0
         total = 0
         completedRecord = nil
+        pendingRun = nil
     }
 
     private func prepareAndRun(
@@ -173,7 +202,11 @@ final class OfflineTileDownloader {
     ) async {
         let tiles: [Tile]
         do throws(CancellationError) {
-            tiles = try await Self.plannedTiles(for: route, maxZoom: maxZoom)
+            tiles = try await Self.plannedTiles(
+                for: route,
+                maxZoom: maxZoom,
+                providerID: source.providerID
+            )
         } catch {
             // Planning was cancelled. `cancel()` already moved the phase to
             // `.idle`; anything else that cancelled the task would otherwise
@@ -194,12 +227,61 @@ final class OfflineTileDownloader {
         }
         total = tiles.count
         finishPlanning()
+
+        // A provider whose terms cap durable storage may not have room for
+        // this. Asked before a single tile is fetched, so a user who declines
+        // has cost nothing and lost nothing.
+        if let shortfall = await spaceShortfall(tiles: tiles, source: source, scale: scale) {
+            guard generation == self.generation, !Task.isCancelled else { return }
+            pendingRun = PendingRun(
+                tiles: tiles,
+                source: source,
+                scale: scale,
+                shortfall: shortfall,
+                generation: generation
+            )
+            phase = .needsSpace(shortfall)
+            return
+        }
+
         await run(
             tiles: tiles,
             source: source,
             scale: scale,
             generation: generation
         )
+    }
+
+    /// Frees the space the pending download needs and starts it.
+    ///
+    /// The only caller is the confirmation raised by ``Phase/needsSpace(_:)``,
+    /// and it is the only thing in the app that authorizes deleting offline
+    /// coverage a hike still claims.
+    func confirmReclaimingSpace() {
+        guard case .needsSpace = phase, let pending = pendingRun else { return }
+        pendingRun = nil
+        phase = .downloading
+        task = Task { [weak self] in
+            guard let self else { return }
+            let plannedKeys = Set(
+                pending.tiles.map { tile in
+                    tile.cacheKey(providerID: pending.source.providerID, scale: pending.scale)
+                }
+            )
+            _ = await quota.reclaim(
+                pending.source.providerID,
+                plannedKeys,
+                pending.shortfall.bytesToFree
+            )
+            guard pending.generation == generation, !Task.isCancelled else { return }
+            await run(
+                tiles: pending.tiles,
+                source: pending.source,
+                scale: pending.scale,
+                generation: pending.generation
+            )
+        }
+        lastRun = task
     }
 
     /// Leaves a stale generation alone — a newer `start()` owns the phase — but
@@ -257,7 +339,7 @@ final class OfflineTileDownloader {
             }
         }
 
-        finalize(savedKeys: savedKeys, tiles: tiles, source: source, scale: scale, generation: generation)
+        await finalize(savedKeys: savedKeys, tiles: tiles, source: source, scale: scale, generation: generation)
     }
 
     /// One tile, fetched straight into durable storage. `nonisolated static`
@@ -302,7 +384,7 @@ final class OfflineTileDownloader {
         source: ActiveTileSource,
         scale: CGFloat,
         generation: Int
-    ) {
+    ) async {
         guard generation == self.generation else { return }
         guard !Task.isCancelled else {
             phase = .idle
@@ -327,9 +409,11 @@ final class OfflineTileDownloader {
                 )
             }
             phase = .failed(
-                sortedKeys.isEmpty
-                    ? "Couldn't save any tiles. Check your connection and try again."
-                    : "Saved \(sortedKeys.count) of \(tiles.count) tiles. Try again to finish the download."
+                await failureMessage(
+                    savedCount: sortedKeys.count,
+                    plannedCount: tiles.count,
+                    source: source
+                )
             )
         }
     }

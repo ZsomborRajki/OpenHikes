@@ -49,6 +49,11 @@ final class OpenHikesModel {
     ///
     /// Deliberately does *not* carry tiles: see ``HikeSyncPayload``.
     let cloudSync: CloudSyncCoordinator
+    /// Whether the two commercial map sources are unlocked, and the paywall's
+    /// backing store. Built here rather than per-view because the answer has to
+    /// outlive Settings: ``MapEntitlement`` is read on every provider
+    /// resolution, including from off-main auto-save.
+    let entitlement: MapEntitlementStore
     var startupIssue: StorageStartupIssue?
 
     let defaults: UserDefaults
@@ -211,6 +216,20 @@ final class OpenHikesModel {
             storageIsDurable: startupIssue == nil
         )
         cloudSync.start()
+        // A UI test cannot buy anything, and a suite that hosts the app must
+        // not reach the App Store at all — so both take a stubbed answer and
+        // only a real launch starts StoreKit.
+        if AppLaunchEnvironment.isRunningTests {
+            let stub = MapEntitlementStore(
+                currentEntitlements: { AppLaunchEnvironment.grantsPaidMaps }
+            )
+            entitlement = stub
+            Task { await stub.refresh() }
+        } else {
+            let store = MapEntitlementStore()
+            entitlement = store
+            store.start()
+        }
         // Behind the test guard for the same reason every other startup writer
         // is: both unit-test bundles are hosted by the app, and a delivered
         // payload would write into Application Support underneath a suite that
@@ -229,6 +248,7 @@ final class OpenHikesModel {
         }
         hikeRecorder.sceneDidBecomeActive()
         cloudSync.sceneDidBecomeActive()
+        entitlement.sceneDidBecomeActive()
     }
 
     func sceneWillResignActive() {

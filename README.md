@@ -9,10 +9,10 @@ OpenHikes is a local-first SwiftUI and SwiftData trail viewer for iPhone. It imp
 - Live hike recording with balanced location accuracy, background location, pause/resume, crash-safe recovery, motion-aware fix handling, barometric elevation fusion, and one-time SwiftData save.
 - Bounded live trail matching from an extending cached OpenStreetMap walking graph, and a post-recording review where every section the matcher moved or found ambiguous can be kept as the mapped trail, handed back to the raw GPS trace, or swapped for an alternative route; unavailable matches preserve the GPS trace.
 - Search across saved hikes and MapKit place suggestions.
-- OpenStreetMap, Stadia Outdoors, and Thunderforest Outdoors tile providers, plus an Apple Maps option that draws MapKit's own base map and starts none of the tile pipeline — no fetching, no caching, no auto-save, no bulk download.
+- OpenStreetMap, Stadia Outdoors, and Thunderforest Outdoors tile providers, plus an Apple Maps option that draws MapKit's own base map and starts none of the tile pipeline — no fetching, no caching, no auto-save, no bulk download. Stadia and Thunderforest are commercial sources behind a yearly subscription with a free trial; OpenStreetMap is the default and stays free.
 - Live location, trail auto-follow with a progress readout, and current WeatherKit conditions.
 - Photos taken on a walk or picked from the library, pinned to where on the trail they were taken, shown as a gallery strip on the hike and as pins on the map, with an optional copy saved to the photo library.
-- Passive tile auto-save for browsed areas, plus bulk offline downloads where the provider permits them.
+- Passive tile auto-save for browsed areas, plus bulk offline downloads where the provider's terms permit them — today OpenStreetMap and Stadia, the latter under the 100 MB per-device ceiling its licence sets.
 - An iOS Home Screen widget with trail progress, a climb/descent/high-point stat line, live-recording takeover, recording deep links, and sparse location anchors that help repair degraded GPS gaps.
 - Hikes and their photos sync across the walker's own devices through their private iCloud database, with the tile cache deliberately left out of it.
 - Local SwiftData and App Group storage; OpenHikes has no backend and no account of its own.
@@ -25,7 +25,14 @@ OpenHikes is a local-first SwiftUI and SwiftData trail viewer for iPhone. It imp
   no iPad, Mac or visionOS destination is built or tested.
 - An Apple development team that can sign the WeatherKit entitlement, the shared App Group, the iCloud container and the push entitlement.
 
-OpenStreetMap is the keyless default, and Apple Maps needs no key either. Stadia and Thunderforest require build-time API keys.
+OpenStreetMap is the keyless default, and Apple Maps needs no key either. Stadia
+and Thunderforest require build-time API keys *and* a paid subscription with
+each vendor: both are commercial sources whose terms forbid using them
+free-of-charge in a shipping app. In OpenHikes they sit behind a yearly
+subscription, which is what pays for them — a subscription rather than a single
+payment because the vendors bill per map view, every month, for as long as
+anyone keeps using them. A build without keys simply shows them
+locked, and OpenStreetMap keeps working.
 
 ## Setup
 
@@ -41,7 +48,37 @@ OpenStreetMap is the keyless default, and Apple Maps needs no key either. Stadia
 
    Add your keys to the copied file. `OpenHikes/Secrets.plist` is gitignored and must never be committed; unavailable providers remain disabled in Settings.
 
-6. Build and run. For simulated location features, use Xcode's location controls or the recording demo below.
+6. The paid maps also need a purchase to unlock them. `OpenHikes.storekit` at the
+   repository root describes that purchase, and the shared `OpenHikes` scheme
+   already points its Run action at it — so a local build has a working paywall
+   with no Apple account involved. Nothing has to be configured to build or
+   test; the rest of this step is only for shipping.
+
+   Selling it for real needs an **auto-renewable subscription** in App Store
+   Connect (Monetization → Subscriptions) in a group named `Pro Maps`, with a
+   yearly duration, a 1-week free-trial introductory offer, and a product ID
+   exactly equal to `MapEntitlementStore.productID`. It also needs an active
+   Paid Apps agreement under Business → Agreements, Tax, and Banking — without
+   one, `Product.products(for:)` returns nothing and the paywall's buy button
+   stays disabled. No entitlement or capability is needed; iOS App IDs carry
+   In-App Purchase by default.
+
+   Two more things App Review checks. `MapPurchaseLinks.privacyPolicy` has to
+   resolve to a real page before submission — it is linked from the paywall
+   because Guideline 3.1.2(a) requires it, and a 404 there fails the whole
+   binary. And the paywall must keep stating the price, the period and the
+   renewal; `MapSubscriptionTermsTests` is what holds that wording in place.
+
+   That product ID is written into every past purchase, so it can never change
+   without stranding every existing customer's entitlement — the same rule the
+   App Group, CloudKit container and widget kind follow. It appears in three
+   places — the constant, `OpenHikes.storekit`, and App Store Connect — and all
+   three have to agree.
+
+   `--ui-test-entitled` grants the unlock without StoreKit, which is how the
+   tests reach the paid providers.
+
+7. Build and run. For simulated location features, use Xcode's location controls or the recording demo below.
 
 ## Recording demo
 
@@ -124,8 +161,8 @@ location-driven half should not have to run to check a search field:
 | --- | --- |
 | `OpenHikesUITests` | Map and sheet navigation, GPX import, search, rename, delete, route line patterns, the surface and difficulty breakdowns, the weather badge, `XCTApplicationLaunchMetric`. |
 | `RecordingUITests` | Recording start, pause and resume, discard, the record → review → save round trip, walking between review sections, and retrying a save that failed. |
-| `PhotoUITests` | The library picker opening over the permanently presented sheet, the seeded gallery and its viewer, deletion, and showing a photo on the map. |
-| `SettingsUITests` | Provider policy (no bulk download on OpenStreetMap, no tile controls at all on Apple Maps), toggles that must hold their value across a reopen, and the field-report list, export sheet and delete. |
+| `PhotoUITests` | The library picker opening over the permanently presented sheet, the camera pill leaving with the screen that offered it, the seeded gallery and its viewer, deletion, showing a photo on the map, and reopening the gallery from the pin's callout. |
+| `SettingsUITests` | Provider policy (no bulk download on OpenStreetMap or Thunderforest, no tile controls at all on Apple Maps), toggles that must hold their value across a reopen, and the field-report list, export sheet and delete. |
 | `AccessibilityUITests` | `performAccessibilityAudit` per screen. |
 | `AccessibilityLabelUITests` | The labels, values and traits the app promises. |
 | `PerformanceUITests` | Measurement only; excluded from the test plan. |
@@ -152,6 +189,7 @@ alongside `--ui-testing`:
 | `--ui-test-seed-metrics=<count>` | Seeds the field-metrics store with reports, since a real one takes a walk to fill. |
 | `--ui-test-fail-first-save` | Fails the first save of a finished recording, so the retry path can be driven. |
 | `--ui-test-weather` | Serves a fixed forecast instead of WeatherKit, which needs a network and a signed entitlement. |
+| `--ui-test-entitled` | Grants the paid map sources without StoreKit, which has no purchase to make in a test. |
 | `--ui-test-performance-log=<scenario>` | Writes signposts, stalls and samples to `Documents/PerformanceLogs/<scenario>.tsv`. |
 
 `AccessibilityUITests` and `AccessibilityLabelUITests` are the VoiceOver half
@@ -209,7 +247,7 @@ domain folders.
 | `OpenHikes/Recording/` | Live recording, recovery journal, sensors, trail matching, and recording UI. |
 | `OpenHikes/Map/` | MapKit bridge, map state, search, location tracking, and map rendering. |
 | `OpenHikes/Tiles/` | Tile provider policy, cache, auto-save, offline downloads, and overlay rendering. |
-| `OpenHikes/Photos/` | Photo capture and import, the file store behind them, trail anchoring, and the gallery and viewer. |
+| `OpenHikes/Photos/` | Photo capture and import, the file store behind them, trail anchoring, the gallery and viewer, and the pins they draw on the map. |
 | `OpenHikes/Sync/` | CloudKit sync engine, record mapping, and the settings key-value mirror. |
 | `OpenHikes/Weather/` | WeatherKit polling and presentation state. |
 | `OpenHikes/Settings/` | User-facing app, recording, map, and storage settings. |
@@ -281,3 +319,8 @@ and lost.
 - The Simulator cannot receive CloudKit push notifications, so a second simulator only picks up changes when it is brought to the foreground.
 - The SwiftData store is not migrated across schema changes.
 - Third-party tile keys can only be supplied at build time.
+
+## Contact
+
+For feedback and suggestions, email [zsombor.rajki@gmail.com](mailto:zsombor.rajki@gmail.com)
+or visit the [OpenHikes project on GitHub](https://github.com/ZsomborRajki/OpenHikes).

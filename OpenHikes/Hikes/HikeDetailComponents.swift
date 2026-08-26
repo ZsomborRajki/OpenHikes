@@ -317,6 +317,7 @@ struct OfflineDownloadButton: View {
             downloader.progress.formatted(.percent.precision(.fractionLength(0)))
         case .finished: "Saved"
         case .failed: "Failed"
+        case .needsSpace: "Needs space"
         case .idle: "Not saved"
         }
     }
@@ -361,6 +362,9 @@ struct OfflineDownloadStatus: View {
         case .downloading: downloader.total == 0
             ? "Preparing offline tiles…"
             : "Saving \(downloader.total) tiles…"
+        // The confirmation carries the detail; this only has to stop the row
+        // reading as idle while a dialog is up behind it.
+        case .needsSpace: "Waiting for space to be freed…"
         case .idle: idleNote
         }
     }

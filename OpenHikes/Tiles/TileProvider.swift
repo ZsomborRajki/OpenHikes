@@ -24,10 +24,27 @@ nonisolated struct TileProvider: Identifiable, Hashable, Sendable {
     let urlTemplate: String
     /// Highest real zoom level the source serves. Deeper zooms are overzoomed.
     let maximumZ: Int
-    /// Required attribution string, shown wherever the source is displayed.
-    let attribution: String
+    /// Required credits, shown wherever the source is displayed. Every link
+    /// here is a term of use rather than a convenience — see ``TileAttribution``.
+    let attribution: TileAttribution
     /// Whether the provider's usage policy permits pre-downloading tiles for offline use.
     let supportsBulkDownload: Bool
+    /// Device-wide ceiling on this provider's *durably* stored tiles, where its
+    /// terms impose one. `nil` means the provider sets no such limit.
+    ///
+    /// Not a storage preference. Stadia's terms permit offline caching only
+    /// "not to exceed 100MB cached at a time per device", so this is the same
+    /// kind of promise ``supportsBulkDownload`` is: exceeding it is a licensing
+    /// problem, not a full disk. Enforced by ``TileCache`` at every durable
+    /// write, because that is the one place both write paths meet.
+    let durableByteLimit: Int64?
+    /// Whether selecting this source requires the paid Pro unlock.
+    ///
+    /// The app is usable, and fully offline-capable, without ever paying: the
+    /// two keyless sources carry no flag here. What the unlock buys is access
+    /// to the two commercial sources, whose own plans the app pays for per
+    /// tile served — which is the reason a gate exists at all.
+    let requiresPaidAccess: Bool
     /// `Secrets.plist` key holding this provider's API key, for providers that need one. `nil` if keyless.
     let apiKeyPlistKey: String?
     /// Whether this entry draws MapKit's own base map instead of raster tiles.
@@ -59,6 +76,17 @@ nonisolated struct TileProvider: Identifiable, Hashable, Sendable {
 }
 
 nonisolated extension TileProvider {
+    /// Stadia's terms of service, §8.4: bulk downloading is prohibited "except
+    /// for the purpose of caching small amounts of data for offline use in a
+    /// mobile application, **not to exceed 100MB cached at a time per device**".
+    ///
+    /// Device-wide and provider-wide — not per hike — which is why it is
+    /// enforced against a running total of everything Stadia has durably on
+    /// disk rather than against any one download.
+    static let stadiaDurableByteLimit: Int64 = 100 * 1024 * 1024
+}
+
+nonisolated extension TileProvider {
     private static let osmMaximumZ = 19
     private static let thunderforestMaximumZ = 22
 
@@ -70,8 +98,10 @@ nonisolated extension TileProvider {
             "so viewed tiles are auto-saved for offline use instead.",
         urlTemplate: "https://tile.openstreetmap.org/{z}/{x}/{y}.png",
         maximumZ: osmMaximumZ,
-        attribution: "© OpenStreetMap contributors",
+        attribution: TileAttribution([.openStreetMap]),
         supportsBulkDownload: false,
+        durableByteLimit: nil,
+        requiresPaidAccess: false,
         apiKeyPlistKey: nil,
         usesSystemBaseMap: false
     )
@@ -95,34 +125,52 @@ nonisolated extension TileProvider {
             + "so it uses the least battery and data.",
         urlTemplate: "",
         maximumZ: 0,
-        attribution: "Map data © Apple",
+        attribution: TileAttribution([.apple]),
         supportsBulkDownload: false,
+        durableByteLimit: nil,
+        requiresPaidAccess: false,
         apiKeyPlistKey: nil,
         usesSystemBaseMap: true
     )
 
-    /// A topographic source tuned for hiking that permits offline downloads.
+    /// A topographic source tuned for hiking that permits offline downloads,
+    /// within the 100 MB per-device ceiling its terms set.
     static let stadiaOutdoors = TileProvider(
         id: "stadia_outdoors",
         name: "Stadia Outdoors",
-        summary: "Topographic map tuned for hiking. Permits offline downloads.",
+        summary: "Topographic map tuned for hiking. Offline downloads are allowed, "
+            + "up to 100 MB of saved tiles on this device.",
         urlTemplate: "https://tiles.stadiamaps.com/tiles/outdoors/{z}/{x}/{y}.png?api_key={key}",
         maximumZ: 20,
-        attribution: "© Stadia Maps, © OpenMapTiles, © OpenStreetMap contributors",
+        attribution: TileAttribution([.stadiaMaps, .openMapTiles, .openStreetMap]),
         supportsBulkDownload: true,
+        durableByteLimit: stadiaDurableByteLimit,
+        requiresPaidAccess: true,
         apiKeyPlistKey: "StadiaAPIKey",
         usesSystemBaseMap: false
     )
 
     /// A hiking-focused source with deep native zoom, so close-in views stay sharp.
+    ///
+    /// Bulk download is off, and that is a licensing fact rather than a missing
+    /// feature: Thunderforest's terms open with "Absolutely no bulk-downloading
+    /// scraping, pre-downloading, pre-caching or anything similar without an
+    /// appropriate plan", and reserve prefetching for their Small Business plan
+    /// and above. The same terms do allow what auto-save does — "Tiles may be
+    /// cached in-browser and on-device for offline use" — so browsing a route
+    /// still builds offline coverage for it, exactly as OpenStreetMap does.
+    /// Restoring the flag means buying that plan first.
     static let thunderforestOutdoors = TileProvider(
         id: "thunderforest_outdoors",
         name: "Thunderforest Outdoors",
-        summary: "Topographic map with deep zoom for sharp close-up detail. Permits offline downloads.",
+        summary: "Topographic map with deep zoom for sharp close-up detail. Its plan "
+            + "disallows bulk downloads, so viewed tiles are auto-saved for offline use instead.",
         urlTemplate: "https://tile.thunderforest.com/outdoors/{z}/{x}/{y}.png?apikey={key}",
         maximumZ: thunderforestMaximumZ,
-        attribution: "Maps © Thunderforest, Data © OpenStreetMap contributors",
-        supportsBulkDownload: true,
+        attribution: TileAttribution([.thunderforest, .openStreetMapData]),
+        supportsBulkDownload: false,
+        durableByteLimit: nil,
+        requiresPaidAccess: true,
         apiKeyPlistKey: "ThunderforestAPIKey",
         usesSystemBaseMap: false
     )
@@ -162,6 +210,13 @@ extension ActiveTileSource {
         TileProvider.provider(id: providerID).supportsBulkDownload
     }
 
+    /// The credits this source must display, projected from the catalog for
+    /// the same reason ``permitsBulkDownload`` is: a licence term is never
+    /// carried in a value that could go stale.
+    var attribution: TileAttribution {
+        TileProvider.provider(id: providerID).attribution
+    }
+
     /// Resolves `provider`'s bundled key into its URL template. Pair with
     /// ``TileProvider/renderable(id:)`` rather than ``TileProvider/provider(id:)``,
     /// so a key-gated provider with no key can't be built into a source that
@@ -181,19 +236,33 @@ extension ActiveTileSource {
 
 nonisolated extension TileProvider {
     /// The provider to actually render with for a stored `id`: the stored one,
-    /// unless it's key-gated and no key resolves on this build, in which case
-    /// the (keyless) default.
+    /// unless it's key-gated and no key resolves on this build, or it's a paid
+    /// source this device isn't entitled to — in either case the (keyless,
+    /// free) default.
     ///
     /// Settings won't let such a provider be *selected* — see `providerRow` —
     /// but a build that once had a `Secrets.plist` can leave the id behind in
-    /// `UserDefaults` after the key is gone, and a blank map is the worst
-    /// possible answer to that. Everything user-facing has to agree on one
-    /// provider (the tiles, the attribution shown for them, whether a bulk
-    /// download is even offered), so the fallback lives here rather than at
-    /// each call site.
-    static func renderable(id: String?) -> TileProvider {
+    /// `UserDefaults` after the key is gone, and a lapsed subscription (or a
+    /// choice synced from a device that still has one) leaves a paid id behind
+    /// the same way. A blank map is the worst possible answer to either, so the
+    /// fallback lives here rather than at each call site. Everything
+    /// user-facing has to agree on one provider — the tiles, the attribution
+    /// shown for them, whether a bulk download is even offered.
+    ///
+    /// The stored id is deliberately *not* rewritten to match. It travels
+    /// through iCloud (see ``SyncedSetting``), so overwriting it on an
+    /// unentitled device would push that downgrade to the entitled one and
+    /// silently undo a choice made there.
+    ///
+    /// - Parameter entitlement: passed explicitly by tests, which must not
+    ///   touch the process-wide value — suites run in parallel and share it.
+    static func renderable(
+        id: String?,
+        entitlement: MapEntitlementState = MapEntitlement.current
+    ) -> TileProvider {
         let stored = provider(id: id)
-        return Secrets.canLoadTiles(stored) ? stored : .default
+        guard Secrets.canLoadTiles(stored), entitlement.allows(stored) else { return .default }
+        return stored
     }
 
     /// The provider the map is currently drawing with, read from `defaults`.
@@ -201,8 +270,14 @@ nonisolated extension TileProvider {
     /// The one lookup for callers outside SwiftUI — ``AutoSaveController`` and
     /// ``OpenHikesModel`` — so "which map is selected" is answered the same way
     /// there as it is by the `@AppStorage` bindings in the views.
-    static func selected(in defaults: UserDefaults) -> TileProvider {
-        renderable(id: defaults.string(forKey: SettingsKey.tileProviderID))
+    static func selected(
+        in defaults: UserDefaults,
+        entitlement: MapEntitlementState = MapEntitlement.current
+    ) -> TileProvider {
+        renderable(
+            id: defaults.string(forKey: SettingsKey.tileProviderID),
+            entitlement: entitlement
+        )
     }
 }
 

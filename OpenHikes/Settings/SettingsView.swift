@@ -13,6 +13,7 @@
 //  wrong than a switch the walker has to set before setting off.
 //
 
+import StoreKit
 import SwiftData
 import SwiftUI
 #if os(iOS)
@@ -31,6 +32,7 @@ struct SettingsView: View {
     let autoSave: AutoSaveController
     let backgroundTracker: BackgroundTrailTracker
     let cloudSync: CloudSyncCoordinator
+    let entitlement: MapEntitlementStore
 
     @AppStorage(SettingsKey.tileProviderID)
     private var tileProviderID = TileProvider.default.id
@@ -40,6 +42,9 @@ struct SettingsView: View {
     private var savePhotosToLibrary = SettingsDefault.savePhotosToLibrary
 
     private static let disabledOpacity: Double = 0.55
+    private static let badgeHorizontalPadding: CGFloat = 7
+    private static let badgeVerticalPadding: CGFloat = 3
+    private static let badgeTintOpacity: Double = 0.15
 
     /// Tile bytes on disk, split into offline coverage and browsing residue;
     /// `nil` until measured.
@@ -50,13 +55,18 @@ struct SettingsView: View {
     /// while this sheet is open changes it without changing a tile count.
     @State private var photoBytes: Int64?
     @State private var showDeleteAll = false
+    @State private var showPaywall = false
+    @State private var showManageSubscription = false
 
     /// The provider the map is really drawing with, which is not always the
-    /// stored one — see ``TileProvider/renderable(id:)``. The attribution and
-    /// the checkmark both follow this: showing Stadia's attribution over
-    /// OpenStreetMap tiles would be wrong twice over.
+    /// stored one — see ``TileProvider/renderable(id:entitlement:)``. The
+    /// attribution and the checkmark both follow this: showing Stadia's
+    /// attribution over OpenStreetMap tiles would be wrong twice over.
+    ///
+    /// Reads `entitlement.state` rather than letting `renderable` default to
+    /// the process-wide answer, so this recomputes when StoreKit resolves.
     private var selectedProvider: TileProvider {
-        TileProvider.renderable(id: tileProviderID)
+        TileProvider.renderable(id: tileProviderID, entitlement: entitlement.state)
     }
 
     var body: some View {
@@ -68,6 +78,7 @@ struct SettingsView: View {
                 backgroundTrackingSection
                 offlineStorageSection
                 FieldMetricsSection()
+                contactSection
             }
             .navigationTitle("Settings")
             #if os(iOS)
@@ -80,6 +91,12 @@ struct SettingsView: View {
             }
             .task { await refreshUsage() }
             .task { await refreshPhotoBytes() }
+            // Presented from inside this sheet, which is itself presented from
+            // inside `MapSheet` — the repository's rule about where a modal
+            // has to live applies at every level.
+            .sheet(isPresented: $showPaywall) {
+                MapPaywallView(store: entitlement)
+            }
         }
         .accessibilityIdentifier("settings-screen")
     }
@@ -91,11 +108,14 @@ struct SettingsView: View {
             ForEach(TileProvider.all) { provider in
                 providerRow(provider)
             }
+            if entitlement.isEntitled {
+                manageSubscriptionRow
+            }
         } header: {
             Text("Map Tiles")
         } footer: {
             VStack(alignment: .leading, spacing: 6) {
-                Text(selectedProvider.attribution)
+                TileAttributionView(attribution: selectedProvider.attribution)
                 if selectedProvider.usesSystemBaseMap {
                     Text(
                         "OpenHikes downloads, caches and auto-saves no map tiles while this is"
@@ -110,8 +130,35 @@ struct SettingsView: View {
                         + " Adding one is a build-time step — see Secrets.example.plist in the project."
                     )
                 }
+                if !entitlement.isEntitled,
+                   TileProvider.all.contains(where: \.requiresPaidAccess) {
+                    Text(
+                        "Sources marked \u{201C}Pro\u{201D} are commercial map services that bill"
+                        + " OpenHikes for every map view, every month. Subscribing pays for that,"
+                        + " and keeps the free OpenStreetMap option free."
+                    )
+                }
             }
         }
+    }
+
+    /// The way out, shown to a subscriber in the section their money unlocks.
+    ///
+    /// Apple already offers this in the system Settings app, but a
+    /// subscription the app will not help you leave is both a support burden
+    /// and a bad-faith one. `manageSubscriptionsSheet` opens the App Store's
+    /// own sheet, so nothing here can misreport what is actually being billed.
+    private var manageSubscriptionRow: some View {
+        Button {
+            showManageSubscription = true
+        } label: {
+            LabeledContent("Pro Maps", value: "Subscribed")
+        }
+        .accessibilityIdentifier("manage-subscription-row")
+        .accessibilityHint("Opens the App Store subscription settings.")
+        #if os(iOS)
+        .manageSubscriptionsSheet(isPresented: $showManageSubscription)
+        #endif
     }
 
     // MARK: Photos
@@ -231,13 +278,52 @@ struct SettingsView: View {
         } header: {
             Text("Offline Storage")
         } footer: {
-            Text(
-                "Saved tiles keep your hikes usable without a signal, and are never removed automatically."
-                + " The map cache is just what you've recently looked at — it's kept under"
-                + " \(Self.byteText(TileCache.cacheByteLimit)), oldest first,"
-                + " and clearing it costs you nothing offline."
-                + " Photos are only removed when you delete them, or the hike they belong to."
-            )
+            VStack(alignment: .leading, spacing: 6) {
+                Text(
+                    "Saved tiles keep your hikes usable without a signal. The map cache is just"
+                    + " what you've recently looked at — it's kept under"
+                    + " \(Self.byteText(TileCache.cacheByteLimit)), oldest first,"
+                    + " and clearing it costs you nothing offline."
+                    + " Photos are only removed when you delete them, or the hike they belong to."
+                )
+                if let capped = Self.cappedProviders.first {
+                    // Named rather than described in general terms: a ceiling
+                    // that isn't the phone's free space needs to say whose it
+                    // is, or it reads as a bug.
+                    Text(
+                        "\(capped.name)'s licence allows"
+                        + " \(Self.byteText(capped.durableByteLimit ?? 0)) of saved tiles on this"
+                        + " device. Once that's used, saving a new route asks before replacing"
+                        + " your least-recently-used saved tiles. Other sources are unlimited."
+                    )
+                }
+            }
+        }
+    }
+
+    /// The sources whose terms cap durable storage. A tuple of `TileProvider`
+    /// rather than a `Bool`, so the footer can name the one it means.
+    private static var cappedProviders: [TileProvider] {
+        TileProvider.all.filter { $0.durableByteLimit != nil }
+    }
+
+    // MARK: Contact
+
+    private var contactSection: some View {
+        Section {
+            Link(destination: URL(string: "https://github.com/ZsomborRajki/OpenHikes")!) {
+                Label("Project on GitHub", systemImage: "chevron.left.forwardslash.chevron.right")
+            }
+            .accessibilityIdentifier("project-github-link")
+
+            Link(destination: URL(string: "mailto:zsombor.rajki@gmail.com")!) {
+                Label("Email Feedback and Suggestions", systemImage: "envelope")
+            }
+            .accessibilityIdentifier("contact-email-link")
+        } header: {
+            Text("Contact & Feedback")
+        } footer: {
+            Text("Share feedback, suggestions, or report an issue on GitHub.")
         }
     }
 
@@ -259,13 +345,26 @@ struct SettingsView: View {
     /// only ever draw a blank map, and the previous behaviour — letting it be
     /// picked and leaving the user staring at nothing — gave no hint that a
     /// missing key was the reason.
+    ///
+    /// A locked commercial source is shown for the opposite reason: it *is*
+    /// available, just not yet bought, so tapping it opens the paywall rather
+    /// than doing nothing. Locking waits for `entitlement.state.isResolved`,
+    /// so a paying user's row never flips from unlocked to locked under their
+    /// finger while StoreKit is still answering.
     private func providerRow(_ provider: TileProvider) -> some View {
         let isUsable = Secrets.canLoadTiles(provider)
+        let isLocked = provider.requiresPaidAccess
+            && entitlement.state.isResolved
+            && !entitlement.isEntitled
         // Against the *effective* provider, so a stored id that has since lost
         // its key doesn't leave a checkmark on a row the map is ignoring.
         let isSelected = provider.id == selectedProvider.id
         return Button {
-            tileProviderID = provider.id
+            if isLocked {
+                showPaywall = true
+            } else {
+                tileProviderID = provider.id
+            }
         } label: {
             HStack(alignment: .top, spacing: 12) {
                 Image(systemName: isSelected ? "checkmark.circle.fill" : "circle")
@@ -278,12 +377,9 @@ struct SettingsView: View {
                         Text(provider.name)
                             .font(.body.weight(.medium))
                         if !isUsable {
-                            Text("Needs API key")
-                                .font(.caption2.weight(.medium))
-                                .foregroundStyle(.secondary)
-                                .padding(.horizontal, 7)
-                                .padding(.vertical, 3)
-                                .background(.quaternary, in: Capsule())
+                            badge("Needs API key")
+                        } else if isLocked {
+                            badge("Pro", tinted: true)
                         }
                     }
                     Text(provider.summary)
@@ -304,7 +400,25 @@ struct SettingsView: View {
         // and that checkmark is hidden from VoiceOver as decoration — so the
         // selection was unreadable without it.
         .accessibilityAddTraits(isSelected ? [.isSelected] : [])
+        // The badge is a `Text` inside a composite row, so it is spoken only
+        // if the row says it: "Pro" alone would also not explain that the
+        // tap opens a purchase screen rather than switching the map.
+        .accessibilityHint(isLocked ? "Requires OpenHikes Pro. Opens the unlock screen." : "")
         .accessibilityIdentifier("provider-row-\(provider.id)")
+    }
+
+    private func badge(_ title: String, tinted: Bool = false) -> some View {
+        Text(title)
+            .font(.caption2.weight(.medium))
+            .foregroundStyle(tinted ? AnyShapeStyle(.tint) : AnyShapeStyle(.secondary))
+            .padding(.horizontal, Self.badgeHorizontalPadding)
+            .padding(.vertical, Self.badgeVerticalPadding)
+            .background(
+                tinted
+                    ? AnyShapeStyle(.tint.opacity(Self.badgeTintOpacity))
+                    : AnyShapeStyle(.quaternary),
+                in: Capsule()
+            )
     }
 }
 
@@ -448,6 +562,7 @@ private extension SettingsView {
     return SettingsView(
         autoSave: AutoSaveController(),
         backgroundTracker: BackgroundTrailTracker(container: container),
-        cloudSync: CloudSyncCoordinator(container: container, defaults: .standard)
+        cloudSync: CloudSyncCoordinator(container: container, defaults: .standard),
+        entitlement: MapEntitlementStore(currentEntitlements: { false })
     )
 }

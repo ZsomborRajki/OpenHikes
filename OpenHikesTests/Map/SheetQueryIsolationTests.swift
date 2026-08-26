@@ -171,7 +171,8 @@ struct SheetQueryIsolationTests {
             path: .constant([]),
             highlight: RouteHighlight(),
             mapController: MapController(),
-            photoCapture: PhotoCaptureController()
+            photoCapture: PhotoCaptureController(),
+            photoPins: PhotoMapPinController()
         )
         #expect(
             !declaresQuery(sheet),

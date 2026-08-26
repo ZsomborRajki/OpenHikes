@@ -37,7 +37,8 @@ nonisolated extension OfflineTileDownloader {
     @concurrent
     static func plannedTiles(
         for route: [RouteCoordinate],
-        maxZoom: Int
+        maxZoom: Int,
+        providerID: String
     ) async throws(CancellationError) -> [Tile] {
         assertOffMainThread(
             "Offline-download planning must stay off the main thread"
@@ -57,7 +58,7 @@ nonisolated extension OfflineTileDownloader {
             covering: coordinates,
             minZoom: minZoom,
             maxZoom: maxZoom,
-            budget: tileBudget
+            budget: tileBudget(forProviderID: providerID)
         )
         guard !Task.isCancelled else { throw CancellationError() }
         RenderSignpost.mark(
@@ -83,7 +84,7 @@ nonisolated extension OfflineTileDownloader {
             covering: route,
             minZoom: minZoom,
             maxZoom: clamped,
-            budget: tileBudget
+            budget: tileBudget(forProviderID: providerID)
         ).map { tile in
             tile.cacheKey(providerID: providerID, scale: scale)
         }

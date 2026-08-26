@@ -28,6 +28,10 @@ struct HikePhotoViewer: View {
     let startID: UUID
     var highlight: RouteHighlight
     var mapController: MapController
+    /// Told just before this screen dismisses itself to show a photo's place
+    /// on the map, so the sheet can get out of the way rather than snapping
+    /// back over the coordinate it was asked to reveal.
+    var onShowOnMap: () -> Void = { /* no-op default */ }
     var store: HikePhotoStore = .shared
 
     @Environment(\.dismiss)
@@ -217,6 +221,12 @@ struct HikePhotoViewer: View {
     /// than re-fitted to the whole route: the point of the button is to see
     /// where one photo was taken, and a route-wide fit would put it back in
     /// the middle of everything.
+    ///
+    /// "Out of the way" is the whole sheet, not just this screen. Popping
+    /// alone restores the height the hike was being read at, which on a screen
+    /// that had been at `.large` is a sheet closing straight back over the
+    /// pin — so the sheet is asked to collapse first, and the pop then finds
+    /// that decision already made.
     private func show(_ coordinate: CLLocationCoordinate2D) {
         highlight.move(to: coordinate)
         mapController.show(
@@ -226,6 +236,7 @@ struct HikePhotoViewer: View {
                 longitudinalMeters: Self.photoRegionMeters
             )
         )
+        onShowOnMap()
         dismiss()
     }
 

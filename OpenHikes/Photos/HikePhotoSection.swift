@@ -22,6 +22,9 @@ import SwiftUI
 struct HikePhotoSection: View {
     let hike: Hike
     var store: HikePhotoStore = .shared
+    /// Draws these photos on the map for as long as this strip is on screen.
+    /// `nil` in a preview, and in a test that has no map.
+    var mapPins: PhotoMapPinController?
     /// Opens the viewer at a photo.
     var onOpen: (HikePhoto) -> Void
 
@@ -85,6 +88,19 @@ struct HikePhotoSection: View {
             Text(footnote(count: photos.count, anchored: photos.count(where: \.isAnchored)))
                 .font(.caption2)
                 .foregroundStyle(.secondary)
+        }
+        // Published from here rather than from `HikeDetailView`, because this
+        // is already the body that reads `hike.photos` — the whole reason this
+        // section is its own view. Attaching it a level up would put a photo
+        // capture through the elevation chart, the stats grid and the action
+        // bar to reach the map.
+        //
+        // Inside the `if` above it, deliberately: deleting the last photo
+        // takes this view down, and its `onDisappear` is what clears the pins
+        // that were standing for it.
+        .photoMapPins(mapPins, photos: photos) { photoID in
+            guard let photo = hike.photos.first(where: { $0.id == photoID }) else { return }
+            onOpen(photo)
         }
     }
 

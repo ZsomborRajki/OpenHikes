@@ -139,6 +139,9 @@ struct HikeDetailView: View {
     /// where on the trail a photo taken now belongs. See
     /// ``PhotoCaptureController``.
     var photoCapture: PhotoCaptureController?
+    /// Draws this hike's anchored photos on the map while this screen is up.
+    /// See ``PhotoMapPinController``.
+    var photoPins: PhotoMapPinController?
     /// Pushes the full-space viewer for a tapped thumbnail.
     var onOpenPhoto: (HikePhoto) -> Void = { _ in /* no-op default */ }
     /// Collapses the sheet so the map is visible when zooming to the route.
@@ -325,11 +328,10 @@ struct HikeDetailView: View {
                 scrubbed: tracker.trackerDistance
             )
         }
-        .alert("Couldn’t Delete Offline Tiles", isPresented: $storageDeletionFailed) {
-            Button("OK", role: .cancel) { /* dismiss */ }
-        } message: {
-            Text("OpenHikes couldn’t read the other hikes’ offline coverage. No tiles were deleted.")
-        }
+        .offlineStorageAlerts(
+            downloader: downloader,
+            deletionFailed: $storageDeletionFailed
+        )
     }
 }
 
@@ -542,7 +544,7 @@ private extension HikeDetailView {
     /// Renders nothing until there is a photo, so a hike nobody has
     /// photographed reads exactly as it did before the feature existed.
     private var photoSection: some View {
-        HikePhotoSection(hike: hike, onOpen: onOpenPhoto)
+        HikePhotoSection(hike: hike, mapPins: photoPins, onOpen: onOpenPhoto)
     }
 
     // MARK: Trail data

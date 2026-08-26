@@ -259,7 +259,7 @@ struct OfflineDownloadStateTests {
     )
 
     private let controlled = ActiveTileSource(
-        providerID: TileProvider.thunderforestOutdoors.id,
+        providerID: TileProvider.stadiaOutdoors.id,
         urlTemplate: "https://example.invalid/{z}/{x}/{y}.png",
         maximumZ: 12
     )

@@ -193,6 +193,18 @@ nonisolated final class TileCache: @unchecked Sendable {
     let monitor = NWPathMonitor()
     private let monitorsNetwork: Bool
 
+    /// Durable bytes held per provider id, for the providers whose terms cap
+    /// them. Measured lazily by one directory walk and maintained
+    /// incrementally after; see `TileCache+DurableQuota.swift`.
+    ///
+    /// Its own lock rather than a field under `mutationVersions`: the walk that
+    /// fills it must not happen with that lock held, for the same reason
+    /// `trimCache` does not enumerate under it. Where both are taken,
+    /// `mutationVersions` is the outer one — never the reverse.
+    let durableProviderBytes = Mutex<[String: Int64]>([:])
+    /// See the `durableByteLimitScale` parameter on ``init``.
+    let durableByteLimitScale: Double
+
     /// OSM's tile usage policy requires an identifying User-Agent. Named so a
     /// test can assert on the header the app really sends rather than on a
     /// copy of the string.
@@ -225,14 +237,22 @@ nonisolated final class TileCache: @unchecked Sendable {
     ///     directly because that snapshot is process-wide: a suite that
     ///     published a Low Power Mode reading would otherwise change what
     ///     every other suite running beside it decided about the network.
+    ///   - durableByteLimitScale: shrinks every provider's durable ceiling by
+    ///     this factor. `1` — the app — enforces the real figure the terms
+    ///     set; a test passes something tiny so it can reach the ceiling with
+    ///     a handful of tiles instead of a hundred megabytes. Scaled rather
+    ///     than replaced, so a provider whose terms set no ceiling still has
+    ///     none.
     init(
         storageRoot: URL? = nil,
         sessionConfiguration: URLSessionConfiguration? = nil,
         monitorsNetwork: Bool = true,
         mutationKeyLimit: Int = TileCache.mutationKeyVersionLimit,
+        durableByteLimitScale: Double = 1,
         readPower: @escaping @Sendable () -> PowerState = { .current }
     ) {
         self.readPower = readPower
+        self.durableByteLimitScale = durableByteLimitScale
         mutationVersions = Mutex(MutationVersions(keyLimit: mutationKeyLimit))
         let cacheRoot = storageRoot ?? FileManager.default.urls(for: .cachesDirectory, in: .userDomainMask)[0]
         let appSupportURLs = FileManager.default.urls(
@@ -427,6 +447,16 @@ nonisolated extension TileCache {
         // reason to ask the tile server for a second copy.
         if promoteCachedTile(forKey: key) { return true }
 
+        // At the provider's durable ceiling the fetch below could only be
+        // thrown away again, so stop before it reaches the network rather than
+        // after. Without this a download at the cap would fetch every one of
+        // its remaining tiles and discard each — the exact traffic the
+        // provider's limit exists to prevent.
+        guard !isDurableLimitReached(forKey: key) else {
+            RenderSignpost.mark("TileDurableLimitReached", "key=\(key)")
+            return false
+        }
+
         let decision = networkDecision(for: .speculative)
         guard decision.isAllowed else {
             RenderSignpost.mark(
@@ -558,7 +588,11 @@ nonisolated extension TileCache {
         forKey key: String,
         token: MutationToken
     ) -> Bool {
-        mutationVersions.withLock { versions in
+        let byteCount = Int64(fetched.data.count)
+        // Outside the lock, since taking the provider's first measurement
+        // walks the durable directory.
+        guard reserveDurableBytes(forKey: key, byteCount: byteCount) else { return false }
+        let stored = mutationVersions.withLock { versions in
             guard token == MutationToken(
                 global: versions.global,
                 key: versions.keys[key, default: 0]
@@ -566,6 +600,8 @@ nonisolated extension TileCache {
             cacheInMemory(fetched.image, storedAt: Date(), forKey: key)
             return writeDurable(fetched.data, forKey: key)
         }
+        if !stored { releaseDurableBytes(forKey: key, byteCount: byteCount) }
+        return stored
     }
 
     private static let httpSuccessRange = 100 * 2..<100 * 3
@@ -635,34 +671,62 @@ nonisolated extension TileCache {
     /// Returns whether the tile is durably stored once this returns — including
     /// when it already was, which is what lets a second hike over the same
     /// ground claim tiles the first one saved.
+    ///
+    /// Refuses when the provider is at its ``TileProvider/durableByteLimit``.
+    /// The tile keeps its browsing-tier copy and still draws; it simply isn't
+    /// promoted to coverage. ``AutoSaveTileStore`` treats that refusal exactly
+    /// as it treats a missing cached copy — the claim is given back, so the
+    /// tile is reconsidered rather than recorded as saved.
     @discardableResult func promoteCachedTile(forKey key: String) -> Bool {
         assertOffMainThread(
             "promoteCachedTile(forKey:) stats and moves tile files synchronously — call it off the main thread"
         )
-        return mutationVersions.withLock { _ in
-            let (cached, durable) = filePaths(forKey: key)
-            if freshModificationDate(for: durable) != nil {
-                // Already coverage. Any browsing-tier copy is the same bytes
-                // over again.
+        let paths = filePaths(forKey: key)
+        // Bytes already durable are already counted against the ceiling, so
+        // this case must not reserve any. Checked before the lock so the
+        // reservation below — which may walk the durable directory to take its
+        // first measurement — is never taken with `mutationVersions` held.
+        if freshModificationDate(for: paths.durable) != nil {
+            return mutationVersions.withLock { _ in
                 discardRedundantCachedCopy(forKey: key)
                 return true
             }
-            guard freshModificationDate(for: cached) != nil else { return false }
+        }
+        guard freshModificationDate(for: paths.cached) != nil else { return false }
+
+        let byteCount = fileSize(paths.cached)
+        guard reserveDurableBytes(forKey: key, byteCount: byteCount) else { return false }
+
+        // `alreadyDurable` exists so the reservation this call took is given
+        // back: another writer's bytes are already counted, and counting them
+        // twice would spend the ceiling on one tile.
+        enum Outcome { case alreadyDurable, failed, stored }
+
+        let outcome = mutationVersions.withLock { _ -> Outcome in
+            // Re-checked under the lock. The pre-lock check above is only an
+            // optimisation — it keeps the measurement walk out of the lock —
+            // and two writers racing one key can both pass it. Without this,
+            // the destination clear below would delete the durable tile the
+            // other writer just wrote, and then report that nothing was saved.
+            if freshModificationDate(for: paths.durable) != nil {
+                discardRedundantCachedCopy(forKey: key)
+                return .alreadyDurable
+            }
             do {
                 // `moveItem` refuses to overwrite, so clear the destination
                 // first. A missing destination is the expected case.
                 _ = removeItemIgnoringNotFound(
-                    at: durable,
+                    at: paths.durable,
                     operation: "replace durable tile"
                 )
-                try FileManager.default.moveItem(at: cached, to: durable)
-                return true
+                try FileManager.default.moveItem(at: paths.cached, to: paths.durable)
+                return .stored
             } catch {
                 // Another writer may have produced the durable copy after the
                 // checks above. That is still a successful save.
-                if freshModificationDate(for: durable) != nil {
+                if freshModificationDate(for: paths.durable) != nil {
                     discardRedundantCachedCopy(forKey: key)
-                    return true
+                    return .alreadyDurable
                 }
                 #if DEBUG
                 Self.logger.debug(
@@ -670,8 +734,19 @@ nonisolated extension TileCache {
                     "No cached tile to save for \(key, privacy: .public): \(error.localizedDescription, privacy: .public)"
                 )
                 #endif
-                return false
+                return .failed
             }
+        }
+
+        switch outcome {
+        case .stored:
+            return true
+        case .alreadyDurable:
+            releaseDurableBytes(forKey: key, byteCount: byteCount)
+            return true
+        case .failed:
+            releaseDurableBytes(forKey: key, byteCount: byteCount)
+            return false
         }
     }
 
@@ -764,6 +839,7 @@ nonisolated extension TileCache {
             }
         }
 
+        if removed > 0 { invalidateDurableMeasurements() }
         return removed
     }
 

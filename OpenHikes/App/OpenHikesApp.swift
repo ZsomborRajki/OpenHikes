@@ -37,6 +37,12 @@ struct OpenHikesApp: App {
         if !AppLaunchEnvironment.isRunningTests {
             TileCache.scheduleMaintenance {
                 TileCache.shared.removeExpiredTiles()
+                // After the TTL sweep, so a store only counts tiles it is
+                // actually still keeping. This normally frees nothing — the
+                // reservation on the write path is what holds the line — but it
+                // is what brings an install saved before the ceiling existed
+                // back under a provider's terms.
+                TileCache.shared.enforceDurableByteLimits()
             }
         }
 

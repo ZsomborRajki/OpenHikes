@@ -50,6 +50,10 @@ struct OpenHikesView: View {
     /// The sheet's live top edge, observed directly by the map so dragging the
     /// sheet never re-renders this view or the sheet's contents.
     @State private var sheetMetrics = SheetMetrics()
+    /// Where the open hike's photos were taken, observed directly by the map.
+    /// Owned here for the same reason ``photoCapture`` is: the pins are drawn
+    /// on the map and the photos live on a screen inside the sheet.
+    @State private var photoPins = PhotoMapPinController()
     @State private var didProcessLaunchFixture = false
 
     // swiftlint:disable private_swiftui_state
@@ -148,7 +152,8 @@ struct OpenHikesView: View {
             sheetMetrics: sheetMetrics,
             tileSource: activeTileSource,
             mapController: mapController,
-            photoCapture: photoCapture
+            photoCapture: photoCapture,
+            photoPins: photoPins
         )
             .equatable()
             .accessibilityIdentifier("trail-map")
@@ -204,6 +209,7 @@ struct OpenHikesView: View {
                     highlight: highlight,
                     mapController: mapController,
                     photoCapture: photoCapture,
+                    photoPins: photoPins,
                     onImportGPX: importGPX,
                     onImportFailed: { importFailure = .unreadable },
                     onSearchFailed: { failure in searchFailure = failure },

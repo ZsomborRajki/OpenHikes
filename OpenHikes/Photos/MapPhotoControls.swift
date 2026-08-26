@@ -190,6 +190,11 @@ extension MapView.Coordinator {
         // Hidden as well as transparent: a control that is invisible but still
         // in the hierarchy answers hit tests, and this one sits over the map
         // the user is panning.
+        //
+        // Interaction goes at once rather than when the fade lands, for the
+        // same reason: a pill on its way out is still a tap target for the
+        // whole quarter-second it takes to leave.
+        photoControls.isUserInteractionEnabled = visible
         if visible { photoControls.isHidden = false }
         let target = visible ? photoControlsSheetAlpha : 0
         guard animated else {

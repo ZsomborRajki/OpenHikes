@@ -110,11 +110,33 @@ extension MapView {
         weak var photoControls: MapPhotoControlsView?
         #endif
 
+        // MARK: Attribution
+        // Stored state for `MapAttributionView.swift`. The credit line rides
+        // the sheet one row above the two controls, driven by the same
+        // `applySheetTop(on:)` arithmetic.
+
+        var attributionBottomConstraint: NSLayoutConstraint?
+
+        #if canImport(UIKit)
+        weak var attributionView: MapAttributionView?
+        #endif
+
         weak var photoCaptureController: PhotoCaptureController?
         /// Guards `observePhotoControls` the same way `isObservingLocation`
         /// guards the location loop: a second registration would run a second
         /// fade animation over the first one's view.
         var isObservingPhotoControls = false
+
+        // MARK: Photo pins
+        // Stored state for `MapPhotoAnnotations.swift`, which owns everything
+        // that reads it: the markers standing where this hike's photos were
+        // taken, and the picture in each one's callout.
+
+        var photoAnnotations: [PhotoMapAnnotation] = []
+        weak var photoPinController: PhotoMapPinController?
+        /// Guards `observePhotoPins` for the same reason the two flags above
+        /// guard theirs — a second registration can never be cancelled.
+        var isObservingPhotoPins = false
         /// The opacity the sheet's position alone calls for, remembered so a
         /// fade-in triggered by navigation mid-drag lands on it rather than on
         /// full opacity.
@@ -128,7 +150,9 @@ extension MapView {
         private static let routeInsetTop: CGFloat = 80
         private static let initialCenterMeters: CLLocationDistance = 2000
         private static let recordingAlpha: CGFloat = 0.9
-        private static let overlapFadedAlpha: CGFloat = 0.25
+        /// Internal alongside the threshold above, so the dot's own file can
+        /// read them — see `MapCoordinator+Highlight.swift`.
+        static let overlapFadedAlpha: CGFloat = 0.25
         /// Faded, but well clear of the basemap: a stretch the app is less
         /// sure about still has to be followable on a printed-looking map.
         private static let inferredRouteAlpha: CGFloat = 0.55
@@ -342,8 +366,12 @@ extension MapView {
                 applyInferredStyle(to: renderer)
                 renderer.setNeedsDisplay()
             }
-            // The dot mirrors the tint (opaque); only refresh it when the color moves.
-            if tintChanged { refreshHighlightColor(on: mapView) }
+            // The dot and the photo markers mirror the tint (opaque); only
+            // refresh them when the color moves.
+            if tintChanged {
+                refreshHighlightColor(on: mapView)
+                refreshPhotoPinColor(on: mapView)
+            }
         }
 
         /// Observes `highlight.coordinate` and applies changes imperatively, then
@@ -529,63 +557,14 @@ private extension MapView.Coordinator {
     }
 }
 
-// MARK: - Highlight annotation
-
-private extension MapView.Coordinator {
-    /// Adds/moves/removes the single highlight annotation. O(1).
-    func applyHighlight(_ coordinate: CLLocationCoordinate2D?, on mapView: MKMapView) {
-        guard let coordinate else {
-            if let annotation = highlightAnnotation {
-                mapView.removeAnnotation(annotation)
-                highlightAnnotation = nil
-            }
-            return
-        }
-        if let annotation = highlightAnnotation {
-            if annotation.coordinate.latitude != coordinate.latitude
-                || annotation.coordinate.longitude != coordinate.longitude {
-                annotation.coordinate = coordinate
-            }
-        } else {
-            let annotation = MKPointAnnotation()
-            annotation.coordinate = coordinate
-            highlightAnnotation = annotation
-            mapView.addAnnotation(annotation)
-        }
-        updateHighlightOpacity(on: mapView)
-    }
-
-    /// Fades the selection dot when it visually coincides with the "my location"
-    /// puck, so the two don't blend into an ambiguous blob and the user's real
-    /// position stays the one that reads clearly. zPriority doesn't help here —
-    /// MKUserLocationView isn't ordered against custom annotations the normal way.
-    func updateHighlightOpacity(on mapView: MKMapView) {
-        guard let annotation = highlightAnnotation,
-              let view = mapView.view(for: annotation) else { return }
-        guard let userCoordinate = mapView.userLocation.location?.coordinate else {
-            setAlpha(1, on: view)
-            return
-        }
-        let selectionPoint = mapView.convert(annotation.coordinate, toPointTo: mapView)
-        let userPoint = mapView.convert(userCoordinate, toPointTo: mapView)
-        let distance = hypot(selectionPoint.x - userPoint.x, selectionPoint.y - userPoint.y)
-        setAlpha(distance < Self.overlapThresholdPoints ? Self.overlapFadedAlpha : 1, on: view)
-    }
-
-    func setAlpha(_ alpha: CGFloat, on view: MKAnnotationView) {
-        #if os(macOS)
-        view.alphaValue = alpha
-        #else
-        view.alpha = alpha
-        #endif
-    }
-}
-
 // MARK: - MKMapViewDelegate
 
 extension MapView.Coordinator {
     func mapView(_ mapView: MKMapView, viewFor annotation: MKAnnotation) -> MKAnnotationView? {
         guard !(annotation is MKUserLocation) else { return nil }
+        if let photoAnnotation = annotation as? PhotoMapAnnotation {
+            return photoAnnotationView(for: photoAnnotation, on: mapView)
+        }
 
         let identifier = "routeHighlight"
         let view = mapView.dequeueReusableAnnotationView(withIdentifier: identifier)

@@ -62,6 +62,45 @@ nonisolated final class PhotoUITests: XCTestCase {
         )
     }
 
+    /// The pill belongs to the pushed screen, and has to leave with it.
+    ///
+    /// A pushed screen's `onDisappear` arrives only once SwiftUI has finished
+    /// the pop, so the claim on its own left the pill over the map — opaque and
+    /// tappable — for the whole of a back navigation, and a picker opened from
+    /// it had nothing left to file into by the time a photo was chosen. The
+    /// sheet reports the state of its path instead, which is also why the
+    /// second half of this test matters: a rule that withdrew the pill on a pop
+    /// *event* would never give it back.
+    @MainActor
+    func testWithdrawsTheCameraPillWhenLeavingAHike() {
+        let app = launchApp(
+            arguments: ["--ui-test-import-gpx=\(UITestFixture.gpxName)"]
+        )
+
+        openHikeDetail(in: app)
+        let camera = element("map-camera-button", in: app)
+        XCTAssertTrue(
+            camera.waitForExistence(timeout: UITestTimeout.navigation),
+            "opening a hike should offer the pill"
+        )
+
+        popScreen(in: app)
+        let gone = NSPredicate(format: "exists == false")
+        expectation(for: gone, evaluatedWith: camera)
+        waitForExpectations(timeout: UITestTimeout.existence)
+        XCTAssertFalse(
+            element("map-photo-library-button", in: app).exists,
+            "the library button goes with the camera one"
+        )
+
+        openHikeDetail(in: app)
+        XCTAssertTrue(
+            element("map-camera-button", in: app)
+                .waitForExistence(timeout: UITestTimeout.navigation),
+            "and reopening the hike must offer the pill again"
+        )
+    }
+
     /// The photo gallery, seeded because the Simulator has no camera and the
     /// library picker is a system process automation may not drive.
     ///
@@ -155,7 +194,103 @@ nonisolated final class PhotoUITests: XCTestCase {
                 .waitForExistence(timeout: UITestTimeout.navigation),
             "showing a photo on the map should take the user back to the map"
         )
+
+        // The camera moved to the photo's coordinate, so the sheet has to get
+        // out of the way of it. Returning to the expanded height the viewer
+        // was opened from would put the sheet over the very place the map was
+        // just told to show.
+        XCTAssertTrue(
+            waitForCollapsedSheet(in: app),
+            "showing a photo on the map should drop the sheet to its lowest detent"
+        )
+        XCTAssertTrue(
+            element("photo-pin", in: app).exists,
+            "an anchored photo should stand on the map where it was taken"
+        )
     }
+
+    /// The way back in: a pin on the map opens the gallery the user came from.
+    ///
+    /// Seeded with one photo rather than two so the assertion can name a
+    /// page — with a single pin there is no question which photo a tap meant.
+    /// Which photo a *shared* point speaks for is decided in `PhotoMapPin`
+    /// and asserted there, where it can be checked without a simulator.
+    @MainActor
+    func testOpensTheGalleryFromAPhotoPinOnTheMap() {
+        let app = launchApp(
+            arguments: [
+                "--ui-test-expanded-sheet",
+                "--ui-test-import-gpx=\(UITestFixture.gpxName)",
+                "--ui-test-seed-photos=1",
+            ]
+        )
+
+        openHikeDetail(in: app)
+        XCTAssertTrue(
+            scrollIntoView(element("hike-photo-strip", in: app), in: app)
+        )
+        photoTile(at: 1, of: 1, in: app).tap()
+
+        let viewer = element("photo-viewer", in: app)
+        XCTAssertTrue(
+            viewer.waitForExistence(timeout: UITestTimeout.navigation)
+        )
+        element("photo-show-on-map-button", in: app).tap()
+        XCTAssertTrue(waitForCollapsedSheet(in: app))
+
+        let pin = element("photo-pin", in: app)
+        XCTAssertTrue(
+            pin.waitForExistence(timeout: UITestTimeout.navigation),
+            "the photo the map was sent to should be standing on it"
+        )
+        pin.tap()
+
+        // MapKit's own callout, with the photo in its detail accessory.
+        let preview = element("photo-pin-preview", in: app)
+        XCTAssertTrue(
+            preview.waitForExistence(timeout: UITestTimeout.existence),
+            "selecting a photo pin should open a callout previewing the photo"
+        )
+        preview.tap()
+
+        XCTAssertTrue(
+            viewer.waitForExistence(timeout: UITestTimeout.navigation),
+            "tapping a pin's preview should reopen the gallery viewer"
+        )
+        XCTAssertTrue(
+            app.navigationBars["1 of 1"].exists,
+            "the viewer should be paged to the photo whose pin was tapped"
+        )
+    }
+
+    /// Waits for the sheet to be sitting at its lowest detent.
+    ///
+    /// Measured rather than named, because a detent is not something XCUITest
+    /// can read: the compact height is a small fraction of the screen, so a
+    /// sheet whose top edge is down in the bottom fifth is at it and a sheet
+    /// at any other detent is not.
+    @MainActor
+    private func waitForCollapsedSheet(in app: XCUIApplication) -> Bool {
+        let sheet = element("map-sheet", in: app)
+        guard sheet.waitForExistence(timeout: UITestTimeout.navigation) else {
+            return false
+        }
+        let collapsed = NSPredicate { _, _ in
+            sheet.frame.minY > app.frame.height * Self.collapsedSheetFraction
+        }
+        let settled = expectation(for: collapsed, evaluatedWith: sheet)
+        return XCTWaiter.wait(
+            for: [settled],
+            timeout: UITestTimeout.navigation
+        ) == .completed
+    }
+
+    /// How far down the screen the collapsed sheet's top edge has to be.
+    ///
+    /// The compact detent is 80 points tall against a screen of over 800, so
+    /// anything below four fifths is unambiguously it while leaving room for
+    /// the home indicator and for a taller device.
+    private static let collapsedSheetFraction: CGFloat = 0.8
 
     /// A photo tile, found by the position it reports rather than by the
     /// identifier it carries — that identifier is the photo's UUID, which is

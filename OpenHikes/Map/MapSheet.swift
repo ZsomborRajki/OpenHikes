@@ -33,6 +33,9 @@ struct MapSheet: View {
     /// Handed down so a pushed screen can offer the map's camera pill, and
     /// taken away again when it goes. See ``PhotoCaptureController``.
     var photoCapture: PhotoCaptureController
+    /// Handed down so a pushed hike can draw its photos on the map, and a
+    /// tapped pin can push the gallery back. See ``PhotoMapPinController``.
+    var photoPins: PhotoMapPinController
 
     var onImportGPX: (URL) -> Void = { _ in /* no-op default */ }
     /// The document picker failed to produce a file at all.
@@ -132,7 +135,8 @@ struct MapSheet: View {
             SettingsView(
                 autoSave: appModel.autoSaveController,
                 backgroundTracker: appModel.backgroundTracker,
-                cloudSync: appModel.cloudSync
+                cloudSync: appModel.cloudSync,
+                entitlement: appModel.entitlement
             )
         }
         // Focusing the search field expands the sheet to full height.
@@ -164,6 +168,17 @@ struct MapSheet: View {
             }
             detentBeforeFullHeight = detent
             withAnimation { detent = .large }
+        }
+        // The map's photo controls belong to whatever screen is pushed, and a
+        // pushed screen's `onDisappear` arrives only once the pop animation has
+        // finished — which left the camera pill and this hike's photo pins over
+        // the map, fully opaque and answering taps, for the whole of a back
+        // navigation. Reported here as a function of the path rather than as a
+        // pop event, so an abandoned back-swipe recomputes to the same answer
+        // rather than withdrawing them for good.
+        .onChange(of: path.isEmpty, initial: true) { _, isEmpty in
+            photoCapture.setHostScreenPresent(!isEmpty)
+            photoPins.setHostScreenPresent(!isEmpty)
         }
         // Track the sheet's top edge continuously (including during interactive
         // drags) and hand it to the map so it can position the location button.
@@ -250,6 +265,7 @@ struct MapSheet: View {
                 backgroundTracker: appModel.backgroundTracker,
                 trailGraphProvider: appModel.trailGraphProvider,
                 photoCapture: photoCapture,
+                photoPins: photoPins,
                 onOpenPhoto: { photo in path.append(.photo(hike, photo.id)) },
                 onZoomToRoute: { withAnimation { detent = .medium } }
             )
@@ -266,11 +282,24 @@ struct MapSheet: View {
                 hike: hike,
                 startID: photoID,
                 highlight: highlight,
-                mapController: mapController
+                mapController: mapController,
+                onShowOnMap: collapseWhenFullHeightPops
             )
         }
     }
 
+    /// Sends the sheet to its smallest detent when the photo viewer pops,
+    /// rather than back to the height the hike was being read at.
+    ///
+    /// Called by the viewer's "show on map" button and by nothing else. That
+    /// button dismisses the picture *because* the user asked where it was
+    /// taken, and the restore above — which exists so a reader who was at
+    /// `.large` is put back there — would answer by covering the very thing
+    /// they asked to see. Overwriting the remembered height is enough: the pop
+    /// runs the same restore, and finds the sheet is wanted out of the way.
+    private func collapseWhenFullHeightPops() {
+        detentBeforeFullHeight = .height(Self.compactDetentHeight)
+    }
 }
 
 // MARK: - Actions

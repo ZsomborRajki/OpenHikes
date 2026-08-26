@@ -108,6 +108,9 @@ nonisolated extension TileCache {
             }
             return files.count
         }
+        // Every provider's total is now zero, but "unmeasured" gets there
+        // without assuming this deleted everything it enumerated.
+        invalidateDurableMeasurements()
         RenderSignpost.mark("TileCacheCleared", "files=\(cleared)")
     }
 
@@ -139,6 +142,7 @@ nonisolated extension TileCache {
             }
             return removed
         }
+        invalidateDurableMeasurements()
         RenderSignpost.mark("TileUnclaimedSwept", "removed=\(removed) claimed=\(claimedNames.count)")
     }
 
@@ -233,6 +237,7 @@ nonisolated extension TileCache {
         let freedStr = "Trimmed \(freed) bytes unclaimed (was \(total))"
         Self.logger.debug("\(freedStr, privacy: .public)")
         #endif
+        invalidateDurableMeasurements()
         return freed
     }
 
@@ -261,5 +266,6 @@ nonisolated extension TileCache {
                 )
             }
         }
+        invalidateDurableMeasurements()
     }
 }

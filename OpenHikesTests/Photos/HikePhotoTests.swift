@@ -201,8 +201,10 @@ struct PhotoCaptureControllerTests {
     }
 
     @Test("each tap is a distinct request")
-    func requestsAdvanceTokens() {
+    func requestsAdvanceTokens() throws {
+        let context = try Fixture.modelContext()
         let controller = PhotoCaptureController()
+        controller.attach(to: Fixture.hike(in: context)) { nil }
         let camera = controller.cameraRequest
         let library = controller.libraryRequest
 
@@ -211,6 +213,69 @@ struct PhotoCaptureControllerTests {
 
         #expect(controller.cameraRequest != camera)
         #expect(controller.libraryRequest != library)
+    }
+
+    /// The last line of the defence the two tests below describe.
+    ///
+    /// A tap can only land on a pill that is on screen, but it can land on the
+    /// same frame the pill is withdrawn in — and a picker opened by one has
+    /// nothing to file into by the time the user has chosen a photo, which is
+    /// a modal that appears and then does nothing at all.
+    @Test("a tap with no screen behind it raises no request")
+    func requestsAreRefusedWithoutASubject() {
+        let controller = PhotoCaptureController()
+        let camera = controller.cameraRequest
+        let library = controller.libraryRequest
+
+        controller.requestCamera()
+        controller.requestLibrary()
+
+        #expect(controller.cameraRequest == camera)
+        #expect(controller.libraryRequest == library)
+    }
+
+    /// The bug this rule exists for: SwiftUI runs the pop animation first and
+    /// calls the leaving screen's `onDisappear` after it, so the claim alone
+    /// leaves the pill over the map — opaque and tappable — for the whole of a
+    /// back navigation out of a hike.
+    @Test("emptying the sheet's stack withdraws the pill before the claim does")
+    func anEmptyStackWithdrawsThePill() throws {
+        let context = try Fixture.modelContext()
+        let controller = PhotoCaptureController()
+        controller.attach(to: Fixture.hike(in: context)) { nil }
+
+        controller.setHostScreenPresent(false)
+
+        #expect(controller.isAvailable == false, "the pop has started; the pill goes now")
+        controller.requestLibrary()
+        #expect(controller.libraryRequest == 0, "and it cannot be tapped on the way out")
+    }
+
+    /// Which is why the sheet reports the *state* of its path rather than the
+    /// pop as an event: a back-swipe the user changes their mind about never
+    /// disappears the screen, so an event would withdraw the pill for good.
+    @Test("a back-swipe that is abandoned brings the pill back")
+    func anAbandonedPopRestoresThePill() throws {
+        let context = try Fixture.modelContext()
+        let controller = PhotoCaptureController()
+        controller.attach(to: Fixture.hike(in: context)) { nil }
+
+        controller.setHostScreenPresent(false)
+        controller.setHostScreenPresent(true)
+
+        #expect(controller.isAvailable)
+        #expect(controller.currentSubject() != nil)
+    }
+
+    @Test("a screen that arrives while the stack is reported empty stays hidden")
+    func aClaimCannotOverrideAnEmptyStack() throws {
+        let context = try Fixture.modelContext()
+        let controller = PhotoCaptureController()
+
+        controller.setHostScreenPresent(false)
+        controller.attach(to: Fixture.hike(in: context)) { nil }
+
+        #expect(controller.isAvailable == false)
     }
 }
 

@@ -202,6 +202,40 @@ extension MapCoordinatorTests {
         #endif
     }
 
+    /// The half of the withdrawal the fade cannot do.
+    ///
+    /// `isHidden` is only set once the animation lands, because taking the view
+    /// out of the hierarchy mid-fade would make the pill vanish rather than
+    /// leave — which left it a tap target over the map for the whole
+    /// quarter-second it was on its way out. A tap there opened a picker with
+    /// nothing behind it: by the time the user had chosen a photo the screen it
+    /// would have been filed under was gone, and the button read as doing
+    /// nothing at all. So interaction is switched outside the animation block,
+    /// where the fade's own timing cannot reach it.
+    @Test("a pill on its way out stops answering taps")
+    func photoControlsStopAnsweringTapsImmediately() async throws {
+        #if os(iOS)
+        let coordinator = MapView.Coordinator()
+        let map = makeMap(mapView(), coordinator)
+        defer { detach(map) }
+        let controls = try #require(coordinator.photoControls)
+        let context = try Fixture.modelContext()
+        let hike = Fixture.hike(in: context)
+
+        let token = photoCapture.attach(to: hike) { nil }
+        await settleDelegateHop(until: "the camera pill to take taps") {
+            controls.isUserInteractionEnabled
+        }
+
+        photoCapture.detach(token: token)
+        await settleDelegateHop(until: "the camera pill to stop taking taps") {
+            !controls.isUserInteractionEnabled
+        }
+
+        #expect(!controls.isUserInteractionEnabled)
+        #endif
+    }
+
     /// Puts the sheet at rest at the middle detent — a run of reports, a gap,
     /// then one more. Mirrors the private helper in the sheet-inset suite;
     /// duplicated rather than shared because making that one internal would

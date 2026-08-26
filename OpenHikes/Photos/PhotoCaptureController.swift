@@ -54,6 +54,9 @@ final class PhotoCaptureController {
 
     @ObservationIgnored private(set) var subject: Subject?
     @ObservationIgnored private var nextToken = 0
+    /// Whether the sheet still has a screen pushed that a photo could be filed
+    /// under. See ``setHostScreenPresent(_:)``.
+    @ObservationIgnored private var hasHostScreen = true
 
     /// Offers the camera pill for `hike`, and returns the token that has to be
     /// handed back to withdraw it.
@@ -69,7 +72,7 @@ final class PhotoCaptureController {
     ) -> Int {
         nextToken += 1
         subject = Subject(token: nextToken, hike: hike, anchor: anchor)
-        isAvailable = true
+        refreshAvailability()
         return nextToken
     }
 
@@ -77,11 +80,46 @@ final class PhotoCaptureController {
     func detach(token: Int) {
         guard subject?.token == token else { return }
         subject = nil
-        isAvailable = false
+        refreshAvailability()
     }
 
-    func requestCamera() { cameraRequest &+= 1 }
-    func requestLibrary() { libraryRequest &+= 1 }
+    /// Reports whether the sheet has any screen pushed that could receive a
+    /// photo, which withdraws the pill for as long as it has not.
+    ///
+    /// The claim above cannot do this on its own, because it arrives too late.
+    /// SwiftUI runs a pop animation first and calls the leaving screen's
+    /// `onDisappear` after it, so a back navigation out of a hike left the pill
+    /// standing over the map — fully opaque and answering taps — for the whole
+    /// transition. A picker opened from it then had nothing left to file into
+    /// by the time the user chose a photo, which reads as a button that does
+    /// nothing.
+    ///
+    /// Written by ``MapSheet`` as a function of its navigation path rather than
+    /// as a pop event, so a back-swipe that is abandoned recomputes to the same
+    /// answer instead of leaving the pill withdrawn for good.
+    func setHostScreenPresent(_ present: Bool) {
+        guard hasHostScreen != present else { return }
+        hasHostScreen = present
+        refreshAvailability()
+    }
+
+    /// Both requests are refused when the pill isn't available, so a tap that
+    /// races the withdrawal above cannot open a picker with nothing behind it.
+    func requestCamera() {
+        guard isAvailable else { return }
+        cameraRequest &+= 1
+    }
+
+    func requestLibrary() {
+        guard isAvailable else { return }
+        libraryRequest &+= 1
+    }
+
+    private func refreshAvailability() {
+        let available = subject != nil && hasHostScreen
+        guard isAvailable != available else { return }
+        isAvailable = available
+    }
 
     /// The hike a photo taken now belongs to, and where to pin it.
     ///

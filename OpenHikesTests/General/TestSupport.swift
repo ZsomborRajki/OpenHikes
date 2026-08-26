@@ -306,11 +306,14 @@ nonisolated final class TileSandbox: Sendable {
     ///   - power: the power state the fetch policy sees. Fixed rather than
     ///     read from the process, so a suite that publishes Low Power Mode
     ///     cannot change what a tile suite running beside it decides.
+    ///   - durableByteLimitScale: shrinks the licensed per-provider durable
+    ///     ceilings so a quota test can reach one with a handful of tiles.
     init(
         reachable: Bool = true,
         sessionConfiguration: URLSessionConfiguration? = nil,
         mutationKeyLimit: Int = TileCache.mutationKeyVersionLimit,
-        power: PowerState = PowerState()
+        power: PowerState = PowerState(),
+        durableByteLimitScale: Double = 1
     ) {
         root = FileManager.default.temporaryDirectory
             .appendingPathComponent("tilesandbox-\(UUID().uuidString)", isDirectory: true)
@@ -318,7 +321,8 @@ nonisolated final class TileSandbox: Sendable {
             storageRoot: root,
             sessionConfiguration: sessionConfiguration,
             monitorsNetwork: false,
-            mutationKeyLimit: mutationKeyLimit
+            mutationKeyLimit: mutationKeyLimit,
+            durableByteLimitScale: durableByteLimitScale
         ) { power }
         store = AutoSaveTileStore(tileCache: cache)
         if !reachable { cache.setReachable(false) }

@@ -31,6 +31,7 @@ nonisolated enum AppLaunchEnvironment {
         let seededMetricsReportCount: Int
         let failsFirstSave: Bool
         let stubsWeather: Bool
+        let grantsPaidMaps: Bool
 
         /// What every shipping launch gets, and what a debug launch with no
         /// arguments parses to.
@@ -48,6 +49,7 @@ nonisolated enum AppLaunchEnvironment {
             seededMetricsReportCount = 0
             failsFirstSave = false
             stubsWeather = false
+            grantsPaidMaps = false
         }
 
         #if DEBUG
@@ -62,6 +64,7 @@ nonisolated enum AppLaunchEnvironment {
         private static let seedMetricsPrefix = "--ui-test-seed-metrics="
         private static let failFirstSaveArgument = "--ui-test-fail-first-save"
         private static let stubWeatherArgument = "--ui-test-weather"
+        private static let entitledArgument = "--ui-test-entitled"
         /// Enough to fill the strip and force it to scroll, and few enough
         /// that a scenario seeding them does not spend its budget encoding.
         private static let maximumSeededPhotos = 24
@@ -108,6 +111,8 @@ nonisolated enum AppLaunchEnvironment {
                 && arguments.contains(Self.failFirstSaveArgument)
             stubsWeather = isUITesting
                 && arguments.contains(Self.stubWeatherArgument)
+            grantsPaidMaps = isUITesting
+                && arguments.contains(Self.entitledArgument)
         }
 
         /// A bounded count read out of a `--flag=N` argument. Clamped rather
@@ -254,6 +259,19 @@ nonisolated enum AppLaunchEnvironment {
     /// on the device — and any tile traffic at all is a failure rather than a
     /// number to interpret.
     static let simulatesOffline = configuration.simulatesOffline
+
+    /// Whether this launch should behave as though the Pro maps unlock has
+    /// been purchased.
+    ///
+    /// A UI test cannot buy anything: `Product.purchase()` needs a StoreKit
+    /// configuration and a sandbox account, and a test that had one would be
+    /// testing the App Store rather than this app. This grants the entitlement
+    /// directly, so a scenario can check that a paid source becomes selectable
+    /// and that the paywall stops being offered — the two things the gate is
+    /// actually for. Without it the app resolves the real entitlement, which
+    /// on a fresh simulator is always "not entitled", so the locked path is
+    /// the default a test gets for free.
+    static let grantsPaidMaps = configuration.grantsPaidMaps
 
     /// A per-launch, empty pair of tile directories for the offline scenario.
     ///
