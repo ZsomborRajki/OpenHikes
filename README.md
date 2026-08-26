@@ -12,6 +12,7 @@ OpenHikes is a local-first SwiftUI and SwiftData trail viewer for iPhone. It imp
 - OpenStreetMap, Stadia Outdoors, and Thunderforest Outdoors tile providers, plus an Apple Maps option that draws MapKit's own base map and starts none of the tile pipeline — no fetching, no caching, no auto-save, no bulk download. Stadia and Thunderforest are commercial sources behind a yearly subscription with a free trial; OpenStreetMap is the default and stays free.
 - Live location, trail auto-follow with a progress readout, and current WeatherKit conditions.
 - Photos taken on a walk or picked from the library, pinned to where on the trail they were taken, shown as a gallery strip on the hike and as pins on the map, with an optional copy saved to the photo library.
+- Pictures taken with the system camera during a recorded hike found afterwards from the photo library and pinned to the point of the trail the walker was on at that moment, matched against the recording's own timestamps and corroborated by the photograph's own location where it has one.
 - Passive tile auto-save for browsed areas, plus bulk offline downloads where the provider's terms permit them — today OpenStreetMap and Stadia, the latter under the 100 MB per-device ceiling its licence sets.
 - An iOS Home Screen widget with trail progress, a climb/descent/high-point stat line, live-recording takeover, recording deep links, and sparse location anchors that help repair degraded GPS gaps.
 - Hikes and their photos sync across the walker's own devices through their private iCloud database, with the tile cache deliberately left out of it.
@@ -186,6 +187,7 @@ alongside `--ui-testing`:
 | `--ui-test-import-gpx=<name>` | Imports a bundled GPX fixture at launch. |
 | `--ui-test-trail-graph=<name>` | Matches against a bundled trail graph instead of Overpass. |
 | `--ui-test-seed-photos=<count>` | Seeds a hike with generated photos, since the Simulator has no camera. |
+| `--ui-test-photo-library=<count>` | Reads a stub photo library of that many pictures instead of the real one. Absent means the real library; `0` is a real answer — a library with nothing in it. |
 | `--ui-test-seed-metrics=<count>` | Seeds the field-metrics store with reports, since a real one takes a walk to fill. |
 | `--ui-test-fail-first-save` | Fails the first save of a finished recording, so the retry path can be driven. |
 | `--ui-test-weather` | Serves a fixed forecast instead of WeatherKit, which needs a network and a signed entitlement. |
@@ -247,7 +249,7 @@ domain folders.
 | `OpenHikes/Recording/` | Live recording, recovery journal, sensors, trail matching, and recording UI. |
 | `OpenHikes/Map/` | MapKit bridge, map state, search, location tracking, and map rendering. |
 | `OpenHikes/Tiles/` | Tile provider policy, cache, auto-save, offline downloads, and overlay rendering. |
-| `OpenHikes/Photos/` | Photo capture and import, the file store behind them, trail anchoring, the gallery and viewer, and the pins they draw on the map. |
+| `OpenHikes/Photos/` | Photo capture and import, library discovery and time-to-place matching, the file store behind them, trail anchoring, the gallery and viewer, and the pins they draw on the map. |
 | `OpenHikes/Sync/` | CloudKit sync engine, record mapping, and the settings key-value mirror. |
 | `OpenHikes/Weather/` | WeatherKit polling and presentation state. |
 | `OpenHikes/Settings/` | User-facing app, recording, map, and storage settings. |

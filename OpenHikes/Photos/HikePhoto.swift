@@ -15,6 +15,32 @@
 import CoreLocation
 import Foundation
 
+/// What placed a photo on the trail, when the app itself did not know where
+/// the camera was.
+///
+/// `nil` — the absence of this value — is every photo OpenHikes took or
+/// imported itself: the elevation graph's selection or the recording's last
+/// accepted fix, both of which are the app's own answer to "where am I" and
+/// need no explaining. A value means the photo came out of the system photo
+/// library through ``LibraryPhotoMatch``, and says which of the two things the
+/// asset carried was used to place it.
+///
+/// Stored so the gallery can be honest about the difference. A pin the app
+/// watched the walker stand on and a pin worked out from a clock four minutes
+/// off the nearest fix are not the same claim, and a screen that draws them
+/// identically is making the weaker one silently.
+nonisolated enum PhotoMatchEvidence: String, Codable, Hashable, Sendable {
+    /// The asset's own recorded position, snapped onto the route. Used when
+    /// the walk had no fix close enough in time to place the photo by clock —
+    /// a stretch that was walked through a GPS gap.
+    case place = "place"
+    /// The moment the photo was taken, against the route's own timestamps.
+    /// The asset carried no position of its own.
+    case time = "time"
+    /// Both, and they agreed: the strongest of the three.
+    case timeAndPlace = "timeAndPlace"
+}
+
 /// One photo attached to a hike.
 ///
 /// The trail coordinate is optional and deliberately so — see
@@ -46,17 +72,41 @@ nonisolated struct HikePhoto: Codable, Hashable, Identifiable, Sendable {
     var latitude: Double?
     var longitude: Double?
 
+    /// The `PHAsset` this photo was copied out of, for a photo found in the
+    /// system photo library rather than taken or picked in the app.
+    ///
+    /// Recorded for one job: a second scan of the library must offer only what
+    /// the first one did not take. Matching on the moment instead would be
+    /// wrong twice over — two frames of a burst share a second, and a photo
+    /// the user imported and then deliberately deleted from the hike would be
+    /// offered again forever.
+    ///
+    /// Optional because most photos have no library asset behind them at all:
+    /// a capture exists only inside OpenHikes unless the user opted into the
+    /// mirror, and a `PhotosPicker` import deliberately never learns the
+    /// asset's identity — that would be a photo-library read, which the picker
+    /// path exists to avoid.
+    var assetLocalIdentifier: String?
+
+    /// How this photo came to be pinned where it is, for a photo the app did
+    /// not watch being taken. See ``PhotoMatchEvidence``.
+    var matchEvidence: PhotoMatchEvidence?
+
     init(
         id: UUID = UUID(),
         capturedAt: Date = .now,
         pathExtension: String = ImageDataFormat.jpeg.pathExtension,
-        coordinate: CLLocationCoordinate2D? = nil
+        coordinate: CLLocationCoordinate2D? = nil,
+        assetLocalIdentifier: String? = nil,
+        matchEvidence: PhotoMatchEvidence? = nil
     ) {
         self.id = id
         self.capturedAt = capturedAt
         self.pathExtension = pathExtension
         latitude = coordinate?.latitude
         longitude = coordinate?.longitude
+        self.assetLocalIdentifier = assetLocalIdentifier
+        self.matchEvidence = matchEvidence
     }
 
     /// The trail position this photo was anchored to, if any.

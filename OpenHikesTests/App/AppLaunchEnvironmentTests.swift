@@ -84,6 +84,37 @@ struct AppLaunchEnvironmentTests {
         #expect(configuration.seededMetricsReportCount == 8)
     }
 
+    /// Absent and zero are different answers here, which is the whole reason
+    /// this one is optional while the seeded counts are not: a scenario has to
+    /// be able to ask for a library with nothing in it, and that is not the
+    /// same as asking for the real one.
+    @Test("an absent photo library argument is not an empty library")
+    func stubbedLibraryDistinguishesAbsentFromEmpty() {
+        let absent = AppLaunchEnvironment.Configuration(
+            arguments: ["OpenHikes", "--ui-testing"]
+        )
+        let empty = AppLaunchEnvironment.Configuration(
+            arguments: ["OpenHikes", "--ui-testing", "--ui-test-photo-library=0"]
+        )
+        let filled = AppLaunchEnvironment.Configuration(
+            arguments: ["OpenHikes", "--ui-testing", "--ui-test-photo-library=4"]
+        )
+        let absurd = AppLaunchEnvironment.Configuration(
+            arguments: ["OpenHikes", "--ui-testing", "--ui-test-photo-library=999"]
+        )
+        let unrequested = AppLaunchEnvironment.Configuration(
+            arguments: ["OpenHikes", "--ui-test-photo-library=4"]
+        )
+
+        #expect(absent.stubbedLibraryPhotoCount == nil)
+        #expect(empty.stubbedLibraryPhotoCount == 0)
+        #expect(filled.stubbedLibraryPhotoCount == 4)
+        #expect(absurd.stubbedLibraryPhotoCount == 24)
+        // Without `--ui-testing` the stub is not reachable at all, so a stray
+        // argument on a shipping launch still reads the walker's own library.
+        #expect(unrequested.stubbedLibraryPhotoCount == nil)
+    }
+
     @Test("the failure and weather seams are opt-in")
     func failureAndWeatherSeams() {
         let requested = AppLaunchEnvironment.Configuration(

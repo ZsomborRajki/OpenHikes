@@ -166,7 +166,9 @@ nonisolated final class HikePhotoStore: @unchecked Sendable {
     func store(
         _ data: Data,
         capturedAt: Date,
-        coordinate: CLLocationCoordinate2D?
+        coordinate: CLLocationCoordinate2D?,
+        assetLocalIdentifier: String? = nil,
+        matchEvidence: PhotoMatchEvidence? = nil
     ) -> HikePhoto? {
         assertOffMainThread("Photo storage must stay off the main thread")
         guard let format = ImageDataFormat.detect(in: data) else {
@@ -176,7 +178,9 @@ nonisolated final class HikePhotoStore: @unchecked Sendable {
         let photo = HikePhoto(
             capturedAt: capturedAt,
             pathExtension: format.pathExtension,
-            coordinate: coordinate
+            coordinate: coordinate,
+            assetLocalIdentifier: assetLocalIdentifier,
+            matchEvidence: matchEvidence
         )
         do {
             try createDirectories()

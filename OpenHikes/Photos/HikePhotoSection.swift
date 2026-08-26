@@ -28,6 +28,15 @@ struct HikePhotoSection: View {
     /// Opens the viewer at a photo.
     var onOpen: (HikePhoto) -> Void
 
+    @State private var isDiscovering = false
+    /// Created once per screen rather than per presentation, so the sheet can
+    /// be reopened without losing what a scan already found. Its reader is
+    /// resolved by ``PhotoLibrarySource``, which is what lets UI automation
+    /// drive this without a photo library or a permission prompt.
+    @State private var discovery = PhotoDiscoveryController(
+        reader: PhotoLibrarySource.reader()
+    )
+
     private static let tileSize: CGFloat = 76
     private static let tileSpacing: CGFloat = 8
     private static let cornerRadius: CGFloat = 12
@@ -42,8 +51,64 @@ struct HikePhotoSection: View {
         return Group {
             if hike.hasPhotos {
                 gallery(hike.orderedPhotos)
+            } else if hike.canMatchLibraryPhotos {
+                placeholder
             }
         }
+        // Inside the sheet, like every other modal this app presents: the
+        // bottom sheet is never taken down, and a view can only have one
+        // presentation at a time, so a `.sheet` attached beside it would never
+        // appear at all. This view is already inside it.
+        .sheet(isPresented: $isDiscovering) {
+            PhotoDiscoverySheet(hike: hike, controller: discovery)
+        }
+    }
+
+    /// What a hike with no photos shows: the offer to go and find some.
+    ///
+    /// The screen used to render nothing at all here, which was right while
+    /// the only way to get a photo onto a hike was to have had OpenHikes open
+    /// at the time. It isn't any more — most people's pictures of a walk are
+    /// taken with the system camera — and a feature nobody can see is a
+    /// feature nobody has.
+    ///
+    /// Shown only when the route carries timestamps, because that is the whole
+    /// basis of the match: on a GPX exported without them there is nothing to
+    /// look up, and a button that could only ever report failure is worse than
+    /// no button.
+    private var placeholder: some View {
+        VStack(alignment: .leading, spacing: 8) {
+            Text("Photos")
+                .font(.headline)
+                .frame(maxWidth: .infinity, alignment: .leading)
+                .accessibilityAddTraits(.isHeader)
+
+            discoverButton
+
+            Text(
+                """
+                OpenHikes can look through your photo library for pictures \
+                taken while you walked this hike, and pin each one to the \
+                point of the trail you were on.
+                """
+            )
+            .font(.caption2)
+            .foregroundStyle(.secondary)
+        }
+    }
+
+    private var discoverButton: some View {
+        Button {
+            isDiscovering = true
+        } label: {
+            Label("Find Photos of This Hike", systemImage: "sparkle.magnifyingglass")
+                .font(.subheadline)
+        }
+        .buttonStyle(.bordered)
+        // Deliberately not prefixed `hike-photo-`: the performance suite
+        // counts the gallery's tiles by that prefix, and a button that is not
+        // a photo answering to it would be counted as one.
+        .accessibilityIdentifier("photo-discovery-button")
     }
 
     @ViewBuilder
@@ -88,6 +153,14 @@ struct HikePhotoSection: View {
             Text(footnote(count: photos.count, anchored: photos.count(where: \.isAnchored)))
                 .font(.caption2)
                 .foregroundStyle(.secondary)
+
+            // Offered here as well as on the empty placeholder: a walk almost
+            // never produces all its pictures through one route, and somebody
+            // who took two photos in the app still has the other twenty on
+            // their camera roll.
+            if hike.canMatchLibraryPhotos {
+                discoverButton
+            }
         }
         // Published from here rather than from `HikeDetailView`, because this
         // is already the body that reads `hike.photos` — the whole reason this

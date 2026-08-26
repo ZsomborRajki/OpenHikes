@@ -32,6 +32,9 @@ nonisolated enum AppLaunchEnvironment {
         let failsFirstSave: Bool
         let stubsWeather: Bool
         let grantsPaidMaps: Bool
+        /// `nil` when the real photo library should be read — see
+        /// ``AppLaunchEnvironment/stubbedLibraryPhotoCount``.
+        let stubbedLibraryPhotoCount: Int?
 
         /// What every shipping launch gets, and what a debug launch with no
         /// arguments parses to.
@@ -50,6 +53,7 @@ nonisolated enum AppLaunchEnvironment {
             failsFirstSave = false
             stubsWeather = false
             grantsPaidMaps = false
+            stubbedLibraryPhotoCount = nil
         }
 
         #if DEBUG
@@ -65,6 +69,9 @@ nonisolated enum AppLaunchEnvironment {
         private static let failFirstSaveArgument = "--ui-test-fail-first-save"
         private static let stubWeatherArgument = "--ui-test-weather"
         private static let entitledArgument = "--ui-test-entitled"
+        private static let photoLibraryPrefix = "--ui-test-photo-library="
+        /// Enough to fill the review grid and force it to scroll.
+        private static let maximumStubbedLibraryPhotos = 24
         /// Enough to fill the strip and force it to scroll, and few enough
         /// that a scenario seeding them does not spend its budget encoding.
         private static let maximumSeededPhotos = 24
@@ -113,6 +120,19 @@ nonisolated enum AppLaunchEnvironment {
                 && arguments.contains(Self.stubWeatherArgument)
             grantsPaidMaps = isUITesting
                 && arguments.contains(Self.entitledArgument)
+            // `nil` rather than 0 when absent: zero is a real answer — a
+            // library with nothing in it — and the empty state is one of the
+            // things a scenario needs to be able to ask for.
+            stubbedLibraryPhotoCount = isUITesting && arguments.contains(where: { argument in
+                argument.hasPrefix(Self.photoLibraryPrefix)
+            })
+                ? Self.count(
+                    in: arguments,
+                    prefix: Self.photoLibraryPrefix,
+                    isUITesting: isUITesting,
+                    limit: Self.maximumStubbedLibraryPhotos
+                )
+                : nil
         }
 
         /// A bounded count read out of a `--flag=N` argument. Clamped rather
@@ -272,6 +292,20 @@ nonisolated enum AppLaunchEnvironment {
     /// on a fresh simulator is always "not entitled", so the locked path is
     /// the default a test gets for free.
     static let grantsPaidMaps = configuration.grantsPaidMaps
+
+    /// How many photographs a stubbed photo library should hold, or `nil` when
+    /// the real one should be read.
+    ///
+    /// The photo library is the one dependency of this app that automation
+    /// must not touch at all: reading it means a system permission alert about
+    /// somebody's private data, and what is behind that alert is whatever the
+    /// last person to use the Simulator left there. Neither is a thing a test
+    /// should be deciding. See ``PhotoLibrarySource`` for what stands in.
+    ///
+    /// Zero is a real value and distinct from absent — it is the library with
+    /// nothing in it, which is the empty state the review sheet has to be able
+    /// to draw.
+    static let stubbedLibraryPhotoCount = configuration.stubbedLibraryPhotoCount
 
     /// A per-launch, empty pair of tile directories for the offline scenario.
     ///

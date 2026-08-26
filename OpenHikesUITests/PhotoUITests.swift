@@ -263,6 +263,117 @@ nonisolated final class PhotoUITests: XCTestCase {
         )
     }
 
+    /// The whole of the library-discovery flow, from the placeholder on a hike
+    /// with no photos to tiles in the strip.
+    ///
+    /// Only the library is faked. The window the stub answers is the one the
+    /// real timeline asked for, the matching is the shipping matcher against
+    /// the fixture GPX's own timestamps, and the import is the shipping
+    /// importer writing real files — so watching the strip appear afterwards
+    /// is watching the actual pipeline run end to end.
+    ///
+    /// Reopening the sheet at the end is the half that regressed most easily
+    /// in development: a photo already imported must not be offered a second
+    /// time, or every visit to the sheet duplicates the walk's gallery.
+    @MainActor
+    func testMatchesLibraryPhotosToAHikeAndImportsThem() {
+        let app = launchApp(
+            arguments: [
+                "--ui-test-expanded-sheet",
+                "--ui-test-import-gpx=\(UITestFixture.gpxName)",
+                "--ui-test-photo-library=3",
+            ]
+        )
+
+        openHikeDetail(in: app)
+
+        let discover = element("photo-discovery-button", in: app)
+        XCTAssertTrue(
+            scrollIntoView(discover, in: app),
+            "a hike with a timed route should offer to look for photos of it"
+        )
+        discover.tap()
+
+        let grid = element("photo-discovery-grid", in: app)
+        XCTAssertTrue(
+            grid.waitForExistence(timeout: UITestTimeout.existence),
+            "photos taken during the walk should be offered for review"
+        )
+        XCTAssertTrue(
+            element("discovered-photo-0", in: app).exists,
+            "and each of them should be a reviewable tile"
+        )
+
+        element("photo-discovery-add-button", in: app).tap()
+
+        let strip = element("hike-photo-strip", in: app)
+        XCTAssertTrue(
+            strip.waitForExistence(timeout: UITestTimeout.existence),
+            "adding the matches should close the sheet and file them into the "
+                + "hike's gallery"
+        )
+        XCTAssertTrue(
+            photoTile(at: 1, of: 3, in: app).waitForExistence(
+                timeout: UITestTimeout.navigation
+            ),
+            "and each one should be placed at its own point on the walk"
+        )
+
+        let again = element("photo-discovery-button", in: app)
+        XCTAssertTrue(
+            scrollIntoView(again, in: app),
+            "the offer should still stand for photos taken later"
+        )
+        again.tap()
+        XCTAssertTrue(
+            element("photo-discovery-empty", in: app)
+                .waitForExistence(timeout: UITestTimeout.existence),
+            "a second look should find nothing: they are already imported"
+        )
+        element("photo-discovery-done-button", in: app).tap()
+        XCTAssertTrue(
+            app.navigationBars[UITestFixture.importedHikeTitle]
+                .waitForExistence(timeout: UITestTimeout.navigation),
+            "and dismissing it should leave the hike standing"
+        )
+    }
+
+    /// The answer nobody wants but everybody gets first: a library with nothing
+    /// taken during this walk in it.
+    ///
+    /// Worth its own scenario because it is the state a real first run lands
+    /// in, and because an empty result is easy to draw as a blank sheet — which
+    /// reads as a hang rather than as an answer.
+    @MainActor
+    func testExplainsWhenNoLibraryPhotosMatchTheHike() {
+        let app = launchApp(
+            arguments: [
+                "--ui-test-expanded-sheet",
+                "--ui-test-import-gpx=\(UITestFixture.gpxName)",
+                "--ui-test-photo-library=0",
+            ]
+        )
+
+        openHikeDetail(in: app)
+
+        let discover = element("photo-discovery-button", in: app)
+        XCTAssertTrue(
+            scrollIntoView(discover, in: app),
+            "the offer stands whether or not the library has anything in it"
+        )
+        discover.tap()
+
+        XCTAssertTrue(
+            element("photo-discovery-empty", in: app)
+                .waitForExistence(timeout: UITestTimeout.existence),
+            "an empty library should be explained rather than left blank"
+        )
+        XCTAssertFalse(
+            element("photo-discovery-add-button", in: app).exists,
+            "and nothing should be offered to add"
+        )
+    }
+
     /// Waits for the sheet to be sitting at its lowest detent.
     ///
     /// Measured rather than named, because a detent is not something XCUITest

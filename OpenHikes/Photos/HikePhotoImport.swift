@@ -26,6 +26,11 @@ nonisolated enum HikePhotoImport {
     /// - Parameter savesToPhotoLibrary: The user's opt-in — see
     ///   ``SettingsKey/savePhotosToLibrary``. Off by default, and the reason
     ///   the library permission prompt appears here rather than at launch.
+    /// - Parameter assetLocalIdentifier: The library asset these bytes were
+    ///   copied out of, for a photo found by ``LibraryPhotoMatcher``. Recorded
+    ///   so a later scan doesn't offer the same picture twice.
+    /// - Parameter matchEvidence: How the coordinate above was arrived at, for
+    ///   the same case. `nil` for every photo the app itself placed.
     /// - Returns: The stored photo, or `nil` when the bytes were not an image,
     ///   could not be written, or the hike went away while they were being
     ///   written.
@@ -36,12 +41,16 @@ nonisolated enum HikePhotoImport {
         coordinate: CLLocationCoordinate2D?,
         savesToPhotoLibrary: Bool,
         capturedAt: Date = .now,
+        assetLocalIdentifier: String? = nil,
+        matchEvidence: PhotoMatchEvidence? = nil,
         store: HikePhotoStore = .shared
     ) async -> HikePhoto? {
         guard let photo = await stored(
             data,
             capturedAt: capturedAt,
             coordinate: coordinate,
+            assetLocalIdentifier: assetLocalIdentifier,
+            matchEvidence: matchEvidence,
             in: store
         ) else { return nil }
         // The write above is an `await`, and an import can spend seconds in it
@@ -121,9 +130,17 @@ nonisolated enum HikePhotoImport {
         _ data: Data,
         capturedAt: Date,
         coordinate: CLLocationCoordinate2D?,
+        assetLocalIdentifier: String?,
+        matchEvidence: PhotoMatchEvidence?,
         in store: HikePhotoStore
     ) async -> HikePhoto? {
-        store.store(data, capturedAt: capturedAt, coordinate: coordinate)
+        store.store(
+            data,
+            capturedAt: capturedAt,
+            coordinate: coordinate,
+            assetLocalIdentifier: assetLocalIdentifier,
+            matchEvidence: matchEvidence
+        )
     }
 
     @concurrent

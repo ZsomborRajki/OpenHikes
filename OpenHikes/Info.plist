@@ -40,6 +40,13 @@
 	     solely for the opt-in "Also Save to Photos" setting. -->
 	<key>NSPhotoLibraryAddUsageDescription</key>
 	<string>Turn on “Also Save to Photos” to keep a copy of each hike photo in your photo library, in an album called “OpenHikes”.</string>
+	<!-- Read access, asked for at the moment "Find Photos of This Hike" is
+	     tapped and at no other time. The scan asks the library only for assets
+	     created between the first and last point of the hike being viewed; it
+	     never browses, never uploads, and never leaves the device. Limited
+	     access works exactly as well, which is often the right answer here. -->
+	<key>NSPhotoLibraryUsageDescription</key>
+	<string>OpenHikes looks through your photo library for pictures you took while walking a hike, so it can pin each one to the point on the trail you were standing on. It only reads photos taken during that hike.</string>
 	<!-- Declares that the app uses no non-exempt encryption, so App Store
 	     Connect does not prompt for an export compliance questionnaire on
 	     every TestFlight or App Store upload. -->
