@@ -585,10 +585,11 @@ deserves to know that first.
 | `TrailMatcherWork` | 1.0 |
 
 Reproduced identically across every run. The cause is visible in the event
-timeline and is *by design*: `receive(_:)` calls
-`trace.append(coordinate, provisional: true)` so the raw fix draws immediately,
-then the live match returns and `applyLiveMatch(…)` replaces the provisional
-tail with the snapped geometry. Two genuine state changes, two revisions, two
+timeline and is *by design*: `accept(_:)` calls
+`trace.append(accepted.coordinate, provisional: liveMatchingEnabled)` so the raw
+fix draws immediately, then the live match returns and `applyLiveMatch(…)`
+replaces the provisional tail with the snapped geometry. Two genuine state
+changes, two revisions, two
 overlay rebuilds — 0.7–4.7 ms apart, inside the same frame. The intermediate
 state is never presented to anyone.
 
@@ -598,7 +599,7 @@ only moves the provisional tail — the common case — costs the provisional
 remainder instead of the whole tail. It also compares the rebuilt remainder
 against the previous one and publishes a revision only when the geometry
 actually moved, which matters because a stationary recorder produces the same
-matched geometry repeatedly. `MapCoordinator` takes separate
+matched geometry repeatedly. `MapView.Coordinator` takes separate
 `tailRevision`/`reviewRevision` tokens, so a revision that moved one overlay no
 longer rebuilds the other.
 
@@ -817,7 +818,7 @@ graphs:
 `OpenHikes/General/Diagnostics/FieldMetrics/` — and note it is *not* `#if
 DEBUG`, unlike every other file in `Diagnostics/`. A Debug-only MetricKit
 integration would report nothing, since the framework only delivers against
-Release builds in the field. Four files, split along one line: what can be
+Release builds in the field. Six files, split along one line: what can be
 tested and what cannot.
 
 - **`FieldMetricsDigest.swift`** holds every judgement the app makes about a
@@ -833,6 +834,13 @@ tested and what cannot.
   exactly the one worth keeping.
 - **`FieldSignpost.swift`** is the `mxSignpost` wrapper and the launch
   extension.
+- **`FieldMetrics.swift`** is the `MXMetricManagerSubscriber`, and the only
+  thing in the app that talks to `MXMetricManager`. Not `#if DEBUG` — it is
+  the bridge from the above to the framework that actually delivers payloads.
+- **`SeededFieldMetricsFixture.swift`** is `#if DEBUG` and wires up
+  `--ui-test-seed-metrics=N`: it writes synthetic reports through the real
+  `FieldMetricsStore` so Settings ▸ Device Reports and its downstream screens
+  are reachable by automation on a Simulator that never receives a live payload.
 
 Nothing is uploaded. Reports are written locally, shown in **Settings ▸ Device
 Reports**, and leave the device only through an explicit share sheet — the

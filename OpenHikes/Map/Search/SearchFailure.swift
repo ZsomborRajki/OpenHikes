@@ -24,7 +24,9 @@ nonisolated struct SearchFailure: LocalizedError, Equatable, Sendable {
         case noResults
         /// The request never left the device usefully — no route to a server.
         case offline
-        /// The server asked us to slow down.
+        /// The server answered, but not with results: it asked us to slow down
+        /// (`MKError.loadingThrottled`) or failed on its own side
+        /// (`MKError.serverFailure`). Both mean "the service is busy, retry".
         case throttled
         /// Anything else, including errors MapKit does not document.
         case unavailable

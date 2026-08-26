@@ -80,7 +80,7 @@ nonisolated enum AccessibilityAudit {
     /// carry no identifier, and the map itself is the only element of ours they
     /// can be attributed to.
     ///
-    /// The third clause covers the map's *tiles* rather than its subviews.
+    /// The second clause covers the map's *tiles* rather than its subviews.
     /// Element detection reads rendered pixels, and an OpenStreetMap raster
     /// tile has town and road names drawn into it — text with no element
     /// behind it anywhere, because it is a picture of text. While the map is

@@ -255,8 +255,10 @@ struct TileCacheTierTests {
     /// an unclaimed one by nothing but that set, so an empty one makes a
     /// durably saved tile — a hike's offline map, the thing this app exists to
     /// have when there is no signal — indistinguishable from browsing residue.
-    /// This is the consequence side of `OpenHikesModel.trimTileCache(in:)`
-    /// turning a failed `Hike` fetch into `?? []`.
+    /// This is the consequence side of the rule
+    /// `OpenHikesModel.trimTileCache(in:)` keeps: a failed `Hike` fetch, or a
+    /// cancelled claim enumeration, returns without trimming rather than
+    /// trimming against an empty set.
     @Test("an empty claim set deletes saved offline tiles, not just residue")
     func trimWithNoClaimsEvictsDurableTiles() async throws {
         let saved = makeKey()

@@ -82,9 +82,9 @@ struct ColorHexTests {
     }
 
     /// The tint the widget ships in its own placeholder snapshot
-    /// (`OpenWidget/TrailWidget.swift`), which is the one string this parser
-    /// is guaranteed to be handed on a fresh install — before any hike has
-    /// been selected and before `SharedStore` holds anything.
+    /// (`OpenWidget/TrailWidgetPlaceholder.swift`), which is the one string
+    /// this parser is guaranteed to be handed on a fresh install — before any
+    /// hike has been selected and before `SharedStore` holds anything.
     @Test("the widget's placeholder tint parses")
     func parsesWidgetPlaceholderTint() {
         #expect(Color(hex: "#34C759") != nil)

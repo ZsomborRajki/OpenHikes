@@ -106,9 +106,9 @@ nonisolated enum HikePhotoImport {
     /// and there is no screen where waiting for it would tell the user
     /// anything.
     @MainActor
-    private static func discardFiles(
+    static func discardFiles(
         _ photos: [HikePhoto],
-        from store: HikePhotoStore
+        from store: HikePhotoStore = .shared
     ) {
         guard !photos.isEmpty else { return }
         Task(priority: .utility) { await erase(photos, in: store) }

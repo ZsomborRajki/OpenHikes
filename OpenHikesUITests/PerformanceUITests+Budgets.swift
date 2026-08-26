@@ -4,10 +4,11 @@
 //
 //  How a budget is stated, and what a violated one says.
 //
-//  Kept apart from the scenarios because these four are the whole vocabulary
-//  the suite has: a ceiling, a floor, a per-fix ratio, and a stall. A new
-//  scenario should be expressible in them, and a scenario that needs a fifth
-//  is usually measuring something it has not finished thinking about.
+//  Kept apart from the scenarios because these five are the whole vocabulary
+//  the suite has: a ceiling, a floor, a per-fix ratio, a stall count, and a
+//  worst-case stall length. A new scenario should be expressible in them, and
+//  one that needs a sixth is usually measuring something it has not finished
+//  thinking about.
 //
 
 import XCTest
@@ -71,9 +72,9 @@ extension PerformanceUITests {
 
     /// A ceiling on the worst main-thread stall the launch produced.
     ///
-    /// The fifth budget shape, and the one this file's own header warned about
-    /// — so it is worth saying why it earned its place. Every other budget is
-    /// a count taken across a phase, and launch has no phase: it is over
+    /// The one budget that is a duration rather than a count, so it is worth
+    /// saying why it earned its place. Every other budget is a count taken
+    /// across a phase, and launch has no phase: it is over
     /// before the first counter is read, which is exactly why the ~600 ms
     /// stall the watchdog has recorded in every run since this suite existed
     /// went un-asserted while being the largest single cost in the document.

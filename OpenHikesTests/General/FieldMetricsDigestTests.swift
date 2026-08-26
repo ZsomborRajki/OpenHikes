@@ -186,7 +186,7 @@ nonisolated struct FieldMetricsDigestTests {
         #expect(digest.cpuSecondsPerActiveHour == nil)
     }
 
-    @Test("the pocket share is background GPS against all background time")
+    @Test("the pocket share is background GPS against the app's whole lifetime")
     func backgroundLocationShare() {
         // "Time in a pocket": screen off, recording running. Finding 4's
         // 0.9% duty cycle is a Simulator figure; this is the field twin.
@@ -197,7 +197,7 @@ nonisolated struct FieldMetricsDigestTests {
         #expect(digest.backgroundLocationShare == 0.75)
     }
 
-    @Test("the pocket share is absent when the app never ran in the background")
+    @Test("the pocket share is absent when the app was never alive at all")
     func backgroundLocationShareWithoutBackground() {
         let digest = FieldMetricsDigest(backgroundLocationSeconds: 10)
         #expect(digest.backgroundLocationShare == nil)

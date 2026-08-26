@@ -219,6 +219,40 @@ nonisolated final class HikePhotoStore: @unchecked Sendable {
         #endif
     }
 
+    /// Writes bytes whose identity was decided elsewhere — a photo arriving
+    /// from another device, which has to land under the file name the device
+    /// that took it gave it, or the metadata that travelled with it would
+    /// point at nothing.
+    ///
+    /// Unlike ``store(_:capturedAt:coordinate:)`` this neither invents an id
+    /// nor sniffs the format: both already came over with the record, and
+    /// deriving them again here is how the two devices would end up disagreeing
+    /// about a file name.
+    @discardableResult func install(_ data: Data, as photo: HikePhoto) -> Bool {
+        assertOffMainThread("Photo storage must stay off the main thread")
+        do {
+            try createDirectories()
+            try data.write(to: url(for: photo), options: .atomic)
+        } catch {
+            Self.logger.error(
+                """
+                Could not install a synced photo: \
+                \(error.localizedDescription, privacy: .public)
+                """
+            )
+            return false
+        }
+        return true
+    }
+
+    /// Whether this photo's pixels are already on this device.
+    ///
+    /// Read before a sync re-download so that a hike arriving with twenty
+    /// pictures the device already has doesn't fetch twenty assets again.
+    func hasImage(for photo: HikePhoto) -> Bool {
+        FileManager.default.fileExists(atPath: url(for: photo).path)
+    }
+
     // MARK: - Reading
 
     func url(for photo: HikePhoto) -> URL {

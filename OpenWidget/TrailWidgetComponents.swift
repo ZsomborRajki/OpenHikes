@@ -41,9 +41,10 @@ struct TrailWidgetLayout: Equatable {
 /// A single stat chip: a glyph and a number, sized to sit in the widget's
 /// bottom band without competing with the status line above it.
 ///
-/// Both the glyph and the text are `.accessibilityHidden` by omission — every
-/// widget body that uses this collapses to one accessibility element and
-/// speaks ``TrailWidgetMetric/accessibilityPhrase`` instead, because a row of
+/// Both the glyph and the text are hidden from VoiceOver by the
+/// `.accessibilityHidden(true)` below — every widget body that uses this
+/// collapses to one accessibility element and speaks
+/// ``TrailWidgetMetric/accessibilityPhrase`` instead, because a row of
 /// unlabelled arrows read out one at a time says nothing.
 struct TrailWidgetMetricRow: View {
     let metrics: [TrailWidgetMetric]

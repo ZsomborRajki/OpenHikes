@@ -41,6 +41,14 @@ final class OpenHikesModel {
     /// instance would keep its own copy of all three and double the request
     /// rate against a volunteer-run API.
     let trailGraphProvider: (any TrailGraphProviding)?
+    /// Mirrors hikes and their photos through the user's private iCloud
+    /// database. Built here because it needs the same `ModelContainer` every
+    /// other writer uses — a second container would mean a second store, and
+    /// the whole point is that a fetched hike lands in the list the user is
+    /// looking at.
+    ///
+    /// Deliberately does *not* carry tiles: see ``HikeSyncPayload``.
+    let cloudSync: CloudSyncCoordinator
     var startupIssue: StorageStartupIssue?
 
     let defaults: UserDefaults
@@ -94,9 +102,7 @@ final class OpenHikesModel {
             () throws(Swift.Error) in
             try ModelContainer(
                 for: Hike.self,
-                configurations: ModelConfiguration(
-                    isStoredInMemoryOnly: true
-                )
+                configurations: .openHikes(isStoredInMemoryOnly: true)
             )
         }
         let graphProvider = AppLaunchEnvironment
@@ -133,15 +139,16 @@ final class OpenHikesModel {
                 persistent: {
                     try RenderSignpost.interval("ModelContainerInit") {
                         () throws(Swift.Error) in
-                        try ModelContainer(for: Hike.self)
+                        try ModelContainer(
+                            for: Hike.self,
+                            configurations: .openHikes()
+                        )
                     }
                 },
                 fallback: {
                     try ModelContainer(
                         for: Hike.self,
-                        configurations: ModelConfiguration(
-                            isStoredInMemoryOnly: true
-                        )
+                        configurations: .openHikes(isStoredInMemoryOnly: true)
                     )
                 }
             )
@@ -195,6 +202,15 @@ final class OpenHikesModel {
         self.trailGraphProvider = trailGraphProvider
         self.defaults = defaults
         self.startupIssue = startupIssue
+        // `storageIsDurable` is the whole of what a failed store means to
+        // sync, and the coordinator holds it rather than this call site
+        // because `sceneDidBecomeActive()` would otherwise start it anyway.
+        cloudSync = CloudSyncCoordinator(
+            container: container,
+            defaults: defaults,
+            storageIsDurable: startupIssue == nil
+        )
+        cloudSync.start()
         // Behind the test guard for the same reason every other startup writer
         // is: both unit-test bundles are hosted by the app, and a delivered
         // payload would write into Application Support underneath a suite that
@@ -212,6 +228,7 @@ final class OpenHikesModel {
             backgroundTracker.refreshBasemaps()
         }
         hikeRecorder.sceneDidBecomeActive()
+        cloudSync.sceneDidBecomeActive()
     }
 
     func sceneWillResignActive() {
@@ -301,57 +318,6 @@ final class OpenHikesModel {
         return hike
     }
 
-    /// Evicts cached tiles no hike claims any more, down to the cache limit.
-    ///
-    /// A fetch that fails sweeps nothing rather than sweeping with an empty
-    /// claim set: ``TileCache/trimCache(claimedBy:limit:)`` tells a hike's
-    /// downloaded offline map apart from browsing residue by nothing but that
-    /// set, so an empty one makes every durable tile evictable.
-    func trimTileCache(in modelContext: ModelContext) {
-        // Auto-save can have tiles on disk that no manifest claims yet.
-        autoSaveController.flushPendingKeys()
-        guard let claims = try? Self.tileClaims(fetchingHikes: {
-            try modelContext.fetch(FetchDescriptor<Hike>())
-        }) else { return }
-
-        TileCache.scheduleMaintenance {
-            // A cancelled enumeration trims nothing rather than a partial
-            // claim set: an under-reported claim is indistinguishable from an
-            // unclaimed tile, and would evict a hike's saved map.
-            var keys = Set<String>()
-            for ownership in claims {
-                guard let claimed = try? ownership.tileKeys() else { return }
-                keys.formUnion(claimed)
-            }
-            TileCache.shared.trimCache(claimedBy: keys)
-        }
-    }
-
-    /// Deletes photo files that no hike claims any more.
-    ///
-    /// The companion to ``trimTileCache(in:)``, and run in the same breath:
-    /// photo file deletion is fire-and-forget, so a hike deleted moments
-    /// before the app was killed leaves its pictures on disk with nothing
-    /// pointing at them and no screen that could ever show them again.
-    ///
-    /// A fetch that fails sweeps nothing rather than sweeping with an empty
-    /// claim set — the same rule the tile trim follows, and for the same
-    /// reason: an under-reported claim would delete every photo in the app.
-    func reclaimOrphanedPhotos(
-        in modelContext: ModelContext,
-        store: HikePhotoStore = .shared
-    ) {
-        guard let claimed = try? Self.photoClaims(fetchingHikes: {
-            try modelContext.fetch(FetchDescriptor<Hike>())
-        }) else { return }
-        Task(priority: .utility) { await Self.reclaim(claimed, in: store) }
-    }
-
-    @concurrent
-    private static func reclaim(_ claimed: Set<String>, in store: HikePhotoStore) async {
-        store.reclaimOrphans(claimedBy: claimed)
-    }
-
     /// Keeps ``WeatherManager`` current for wherever the walker is, waking on
     /// two things and nothing else: a new position, and the moment
     /// ``WeatherPollState`` would next allow a request for the position it
@@ -406,7 +372,9 @@ final class OpenHikesModel {
 // MARK: - UI-test seams
 
 /// The refusals a UI-testing launch can ask for. Held apart from the model's
-/// own body because none of it exists in a shipping build.
+/// own body because none of it runs outside a `--ui-testing` launch: the only
+/// caller is the UI-testing initializer, and it is reached only when
+/// ``AppLaunchEnvironment/isUITesting`` is true.
 extension OpenHikesModel {
     /// The recorder's save, refused once when the launch asked for it.
     ///
@@ -486,6 +454,69 @@ extension OpenHikesModel {
             claimed.insert(photo.thumbnailFileName)
         }
         return claimed
+    }
+}
+
+// MARK: - Launch-time sweeps
+
+/// Split out of the class body only for length; both are part of it.
+extension OpenHikesModel {
+    /// Evicts cached tiles no hike claims any more, down to the cache limit.
+    ///
+    /// A fetch that fails sweeps nothing rather than sweeping with an empty
+    /// claim set: ``TileCache/trimCache(claimedBy:limit:)`` tells a hike's
+    /// downloaded offline map apart from browsing residue by nothing but that
+    /// set, so an empty one makes every durable tile evictable.
+    func trimTileCache(in modelContext: ModelContext) {
+        // Auto-save can have tiles on disk that no manifest claims yet.
+        autoSaveController.flushPendingKeys()
+        guard let claims = try? Self.tileClaims(fetchingHikes: {
+            try modelContext.fetch(FetchDescriptor<Hike>())
+        }) else { return }
+
+        TileCache.scheduleMaintenance {
+            // A cancelled enumeration trims nothing rather than a partial
+            // claim set: an under-reported claim is indistinguishable from an
+            // unclaimed tile, and would evict a hike's saved map.
+            var keys = Set<String>()
+            for ownership in claims {
+                guard let claimed = try? ownership.tileKeys() else { return }
+                keys.formUnion(claimed)
+            }
+            TileCache.shared.trimCache(claimedBy: keys)
+        }
+    }
+
+    /// Deletes photo files that no hike claims any more.
+    ///
+    /// The companion to ``trimTileCache(in:)``, and run in the same breath:
+    /// photo file deletion is fire-and-forget, so a hike deleted moments
+    /// before the app was killed leaves its pictures on disk with nothing
+    /// pointing at them and no screen that could ever show them again.
+    ///
+    /// A fetch that fails sweeps nothing rather than sweeping with an empty
+    /// claim set — the same rule the tile trim follows, and for the same
+    /// reason: an under-reported claim would delete every photo in the app.
+    func reclaimOrphanedPhotos(
+        in modelContext: ModelContext,
+        store: HikePhotoStore = .shared
+    ) {
+        guard let claimed = try? Self.photoClaims(fetchingHikes: {
+            try modelContext.fetch(FetchDescriptor<Hike>())
+        }) else { return }
+        // Photos fetched from iCloud whose hike hasn't arrived yet have their
+        // pixels on disk and nothing pointing at them, which is precisely what
+        // an orphan looks like. They belong in the claim set for the same
+        // reason the grace period exists: a file with no claim is also what an
+        // arrival in flight looks like.
+        Task(priority: .utility) { [cloudSync] in
+            await Self.reclaim(claimed.union(await cloudSync.deferredPhotoClaims()), in: store)
+        }
+    }
+
+    @concurrent
+    private static func reclaim(_ claimed: Set<String>, in store: HikePhotoStore) async {
+        store.reclaimOrphans(claimedBy: claimed)
     }
 }
 

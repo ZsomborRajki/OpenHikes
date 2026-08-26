@@ -14,7 +14,6 @@ import UniformTypeIdentifiers
 struct MapSheet: View {
     private static let compactDetentHeight: CGFloat = 80
     private static let topPadding: CGFloat = 18
-    private static let selectedHikeHighlightOpacity: Double = 0.15
     /// How close the search field and the settings button have to come before
     /// their glass merges. Slightly under the 10pt gap between them, so they
     /// stay two shapes at rest and blend as the layout tightens.
@@ -132,7 +131,8 @@ struct MapSheet: View {
         .sheet(isPresented: $showSettings) {
             SettingsView(
                 autoSave: appModel.autoSaveController,
-                backgroundTracker: appModel.backgroundTracker
+                backgroundTracker: appModel.backgroundTracker,
+                cloudSync: appModel.cloudSync
             )
         }
         // Focusing the search field expands the sheet to full height.
@@ -290,6 +290,11 @@ private func delete(_ hike: Hike, among hikes: [Hike]) {
     // closes the window where a tile still in flight lands on disk claimed
     // by a hike that no longer exists.
     autoSave.hikeWillBeDeleted(hike)
+
+    // Same ordering, same reason: the record and its photo records have to be
+    // named while the hike can still name them. Queued rather than sent, so a
+    // deletion made in a tunnel still reaches iCloud once there is a signal.
+    appModel.cloudSync.hikeWillBeDeleted(hike)
 
     // Clearing the selection stops the *map* drawing a deleted trail; clearing
     // the path stops its detail view staying pushed, showing a hike that no

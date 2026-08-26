@@ -14,7 +14,8 @@ OpenHikes is a local-first SwiftUI and SwiftData trail viewer for iPhone. It imp
 - Photos taken on a walk or picked from the library, pinned to where on the trail they were taken, shown as a gallery strip on the hike and as pins on the map, with an optional copy saved to the photo library.
 - Passive tile auto-save for browsed areas, plus bulk offline downloads where the provider permits them.
 - An iOS Home Screen widget with trail progress, a climb/descent/high-point stat line, live-recording takeover, recording deep links, and sparse location anchors that help repair degraded GPS gaps.
-- Local SwiftData and App Group storage; OpenHikes has no backend or account sync.
+- Hikes and their photos sync across the walker's own devices through their private iCloud database, with the tile cache deliberately left out of it.
+- Local SwiftData and App Group storage; OpenHikes has no backend and no account of its own.
 
 ## Requirements
 
@@ -22,7 +23,7 @@ OpenHikes is a local-first SwiftUI and SwiftData trail viewer for iPhone. It imp
 - iOS 26.5. Every target ships iPhone-only (`TARGETED_DEVICE_FAMILY = 1`); the
   sources still carry their `canImport(AppKit)` and `#if os(iOS)` guards, but
   no iPad, Mac or visionOS destination is built or tested.
-- An Apple development team that can sign the WeatherKit entitlement and the shared App Group.
+- An Apple development team that can sign the WeatherKit entitlement, the shared App Group, the iCloud container and the push entitlement.
 
 OpenStreetMap is the keyless default. Stadia and Thunderforest require build-time API keys.
 
@@ -31,7 +32,8 @@ OpenStreetMap is the keyless default. Stadia and Thunderforest require build-tim
 1. Open `OpenHikes.xcodeproj`.
 2. Set your development team for `OpenHikes` and `OpenWidgetExtension`.
 3. If your team cannot use `group.tappium.com.OpenHikes`, replace it in both entitlement files and in `SharedStore.appGroupID`.
-4. Optionally enable Stadia or Thunderforest:
+4. iCloud sync needs a CloudKit container. Xcode creates `iCloud.tappium.com.OpenHikes` on the first signed build; if your team cannot use that identifier, replace it in `OpenHikes/OpenHikes.entitlements` and in `CloudSyncSchema.containerIdentifier`. The app creates its own record types on first write, so there is nothing to configure in the CloudKit dashboard for development.
+5. Optionally enable Stadia or Thunderforest:
 
    ```sh
    cp Secrets.example.plist OpenHikes/Secrets.plist
@@ -39,7 +41,7 @@ OpenStreetMap is the keyless default. Stadia and Thunderforest require build-tim
 
    Add your keys to the copied file. `OpenHikes/Secrets.plist` is gitignored and must never be committed; unavailable providers remain disabled in Settings.
 
-5. Build and run. For simulated location features, use Xcode's location controls or the recording demo below.
+6. Build and run. For simulated location features, use Xcode's location controls or the recording demo below.
 
 ## Recording demo
 
@@ -170,7 +172,7 @@ CI runs strict SwiftLint, the shared package suite, the app and widget unit
 tests, warning-free debug/release builds, and the concurrent GPX parser under
 Thread Sanitizer. It also runs both accessibility
 classes, because a VoiceOver regression is invisible to a unit test and to a
-reviewer, and because all but one of their tests are launch, tap and assert
+reviewer, and because all but two of their tests are launch, tap and assert
 against an in-memory store with no location and no measurement. That job is `continue-on-error` for now: UI
 automation on a shared runner has to demonstrate a flake rate before it is
 allowed to block a merge. The functional UI automation and the performance
@@ -180,7 +182,9 @@ Run those locally with `Scripts/run-ui-tests.sh` and
 map, or render isolation.
 
 `PerformanceUITests` measures rather than asserts correctness: it drives the app
-through idle, map-browsing, chart-scrub and live-recording scenarios while the
+through eight scenarios — idle, map-browsing, offline browsing, chart-scrub,
+live and backgrounded recording, the photo gallery, and launch and steady-state
+resources — while the
 app writes every render signpost, main-thread stall and a 1 Hz CPU/memory sample
 to a TSV in its container. `Scripts/run-performance-tests.sh` runs the suite,
 pulls those logs off the simulator, and turns them into a markdown report.
@@ -206,6 +210,7 @@ domain folders.
 | `OpenHikes/Map/` | MapKit bridge, map state, search, location tracking, and map rendering. |
 | `OpenHikes/Tiles/` | Tile provider policy, cache, auto-save, offline downloads, and overlay rendering. |
 | `OpenHikes/Photos/` | Photo capture and import, the file store behind them, trail anchoring, and the gallery and viewer. |
+| `OpenHikes/Sync/` | CloudKit sync engine, record mapping, and the settings key-value mirror. |
 | `OpenHikes/Weather/` | WeatherKit polling and presentation state. |
 | `OpenHikes/Settings/` | User-facing app, recording, map, and storage settings. |
 | `OpenHikes/General/` | Cross-domain extensions and diagnostics. |
@@ -218,8 +223,61 @@ domain folders.
 
 See [`.github/copilot-instructions.md`](.github/copilot-instructions.md) for architecture and repository conventions. See [`CODE_REVIEW.md`](CODE_REVIEW.md) for the open code-quality action plan and unresolved design decisions. See [`SOCIAL.md`](SOCIAL.md) for the client-side plan to add optional trail publishing and discovery without weakening the offline-first guarantees.
 
+## iCloud sync
+
+Hikes follow the walker rather than the phone. There is no OpenHikes account
+and no server: everything travels through the user's own private CloudKit
+database, so the app never sees it and nobody has to sign up for anything.
+
+| Travels | Stays on the device |
+|---|---|
+| Hike title, custom name, date, distance, style, symbol, auto-follow and GPX metadata | Auto-saved and offline tiles, and the download records that describe them |
+| The matched route and the raw GPS trace | Whether tile auto-save is on for a hike |
+| Surface and difficulty breakdowns | A recording in progress |
+| Photos — pixels and trail anchor alike | Whether Background Trail Tracking is on |
+| Map tile provider, and the save-to-photo-library switch | Which hike this device has selected, and where it is along it |
+
+Tiles are the reason this uses `CKSyncEngine` rather than SwiftData's CloudKit
+mirroring. Mirroring syncs a whole row with no way to hold a column back, and
+half of `Hike` describes files in *this* device's Application Support — a
+second device restoring them would believe it holds offline maps it never
+downloaded, bill the user for phantom bytes on the storage screen, and free
+nothing when they deleted them. `HikeSyncPayload` is the single readable list
+of what leaves the device. SwiftData's own mirroring is switched off
+explicitly, in `ModelConfiguration+OpenHikes.swift`, because the iCloud
+entitlement would otherwise turn it on by itself.
+
+Settings ride separately, on `NSUbiquitousKeyValueStore`, because two
+preferences do not need a record type and a conflict policy. The list is an
+allowlist: a setting that describes *this* device — a granted location
+permission, where this phone is in the app — deliberately does not travel.
+
+Sync is on by default and can be turned off in Settings, where the same section
+says what it is doing and, when it isn't, why. Turning it off stops the engine
+and forgets its change token; it never deletes a hike. Neither does a zone
+deleted from iCloud settings: the library is simply uploaded again.
+
+Photos travel as their own records, keyed by photo, so adding one picture does
+not re-upload the other twenty. Routes travel compressed, inline under 400 KB
+and as a `CKAsset` above it.
+
+Two kinds of local change cannot be re-derived by looking at the device later,
+so both are written down the moment they happen rather than only queued with
+the engine. A **deletion** leaves nothing behind that a later scan could notice
+is missing, while iCloud still holds a copy that the next fetch would bring
+back — so its tombstone even outlives turning sync off, which is what stops a
+hike deleted in that state from reappearing when it is turned on again. An
+**edit** to a hike iCloud already knows about is invisible to reconciliation,
+which only asks whether a record exists. Both matter because the engine is not
+up for the first moments of a launch: it waits on an iCloud account check
+first. Going the other way, a fetched change is offered exactly once, so one
+whose write to SwiftData fails is held on disk and retried rather than logged
+and lost.
+
 ## Current limitations
 
 - Offline trail matching is limited to Overpass graph regions that were cached previously; prebuilt regional graph bundles are not shipped.
-- Sign in with Apple is a disabled placeholder, and hikes do not sync between devices.
+- iCloud sync carries hikes, their metadata and their photos; downloaded map tiles stay on the device that downloaded them, by design.
+- The Simulator cannot receive CloudKit push notifications, so a second simulator only picks up changes when it is brought to the foreground.
+- The SwiftData store is not migrated across schema changes.
 - Third-party tile keys can only be supplied at build time.

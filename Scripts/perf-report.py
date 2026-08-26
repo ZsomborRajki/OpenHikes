@@ -197,6 +197,8 @@ def resource_section(scenario: Scenario) -> list[str]:
     if not samples:
         return ["_No resource samples were recorded._", ""]
     footprints = [event.value for event in samples if event.value is not None]
+    if not footprints:
+        return ["_No resource samples were recorded._", ""]
     cpu = []
     for event in samples:
         seconds = detail_fields(event.detail).get("cpu_s")

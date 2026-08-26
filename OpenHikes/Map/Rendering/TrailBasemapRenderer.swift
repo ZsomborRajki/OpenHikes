@@ -103,7 +103,13 @@ actor TrailBasemapRenderer {
             // judge, and its own prune reclaims ours along with any others.
             // Naming our files rather than pruning to a keep-set is what makes
             // this safe to do while another pass is writing.
-            if !published, inFlight == nil, !written.isEmpty {
+            //
+            // `inFlight` is still *this* request here — `defer`s run in
+            // reverse order, so the one that clears it hasn't run yet — so
+            // "nothing else is rendering" means nil or our own request, not
+            // nil alone.
+            let supersededByAnotherPass = inFlight != nil && inFlight != request
+            if !published, !supersededByAnotherPass, !written.isEmpty {
                 SharedStore.removeBasemapImages(named: written)
             }
         }

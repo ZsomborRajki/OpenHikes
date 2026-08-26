@@ -175,6 +175,4 @@ nonisolated final class PhotoUITests: XCTestCase {
             )
             .firstMatch
     }
-
-    /// A SwiftUI `Toggle` reports its state as the string "0" or "1".
 }

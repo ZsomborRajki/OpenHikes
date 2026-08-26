@@ -12,7 +12,7 @@
 //  and keeps the visionOS path a build away rather than a rewrite away.
 //
 //  For a glass *surface* rather than a glass control — a badge, a floating
-//  callout, a tile — see ``LiquidGlass.swift``.
+//  callout, a tile — see `LiquidGlass.swift`.
 //
 
 import SwiftUI

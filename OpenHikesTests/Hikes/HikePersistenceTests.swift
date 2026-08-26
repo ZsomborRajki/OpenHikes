@@ -83,14 +83,14 @@ struct HikePersistenceTests {
     private func openContainer() throws -> ModelContainer {
         try ModelContainer(
             for: Hike.self,
-            configurations: ModelConfiguration(url: storeURL)
+            configurations: .openHikes(url: storeURL)
         )
     }
 
     private func openLegacyContainer() throws -> ModelContainer {
         try ModelContainer(
             for: HikeSchemaBeforeAutoSave.Hike.self,
-            configurations: ModelConfiguration(url: storeURL)
+            configurations: .openHikes(url: storeURL)
         )
     }
 

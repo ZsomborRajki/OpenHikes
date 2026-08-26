@@ -3,7 +3,7 @@
 //  OpenHikes
 //
 //  The profile/settings sheet reached from the button next to the search bar.
-//  Hosts a (future) Apple sign-in, the map tile-provider selector, the photo
+//  Hosts the iCloud sync section, the map tile-provider selector, the photo
 //  and background-tracking switches, and the offline tile storage readout.
 //
 //  There is deliberately no data-use section. The app is meant to be walked
@@ -30,6 +30,7 @@ struct SettingsView: View {
     /// here reads the manifests — this screen both measures and deletes by them.
     let autoSave: AutoSaveController
     let backgroundTracker: BackgroundTrailTracker
+    let cloudSync: CloudSyncCoordinator
 
     @AppStorage(SettingsKey.tileProviderID)
     private var tileProviderID = TileProvider.default.id
@@ -61,7 +62,7 @@ struct SettingsView: View {
     var body: some View {
         NavigationStack {
             Form {
-                accountSection
+                CloudSyncSection(sync: cloudSync)
                 mapProviderSection
                 photosSection
                 backgroundTrackingSection
@@ -81,55 +82,6 @@ struct SettingsView: View {
             .task { await refreshPhotoBytes() }
         }
         .accessibilityIdentifier("settings-screen")
-    }
-
-    // MARK: Account
-
-    private var accountSection: some View {
-        Section {
-            HStack(spacing: 14) {
-                Image(systemName: "person.crop.circle.fill")
-                    .font(.system(size: 44))
-                    .foregroundStyle(.secondary)
-                    .accessibilityHidden(true)
-                VStack(alignment: .leading, spacing: 2) {
-                    Text("Not signed in")
-                        .font(.headline)
-                    Text("Sign in to sync your hikes across devices.")
-                        .font(.subheadline)
-                        .foregroundStyle(.secondary)
-                }
-            }
-            .padding(.vertical, 4)
-            .accessibilityElement(children: .combine)
-
-            appleSignInPlaceholder
-        } header: {
-            Text("Account")
-        }
-    }
-
-    /// A disabled preview of Sign in with Apple — wired up in a future release.
-    private var appleSignInPlaceholder: some View {
-        HStack {
-            Label("Sign in with Apple", systemImage: "apple.logo")
-                .font(.body.weight(.medium))
-            Spacer()
-            Text("Coming soon")
-                .font(.caption)
-                .foregroundStyle(.secondary)
-                .padding(.horizontal, 8)
-                .padding(.vertical, 4)
-                .background(.quaternary, in: Capsule())
-        }
-        .foregroundStyle(.primary)
-        .opacity(Self.disabledOpacity)
-        .allowsHitTesting(false)
-        // Faded and un-tappable is a visual-only "not yet"; the badge has to
-        // be read out alongside the row it disables.
-        .accessibilityElement(children: .ignore)
-        .accessibilityLabel("Sign in with Apple")
-        .accessibilityValue("Coming soon")
     }
 
     // MARK: Map tiles
@@ -487,6 +439,7 @@ private extension SettingsView {
     }
     return SettingsView(
         autoSave: AutoSaveController(),
-        backgroundTracker: BackgroundTrailTracker(container: container)
+        backgroundTracker: BackgroundTrailTracker(container: container),
+        cloudSync: CloudSyncCoordinator(container: container, defaults: .standard)
     )
 }

@@ -108,7 +108,7 @@ struct HikeRenameTests {
     func customNamePersists() throws {
         let container = try ModelContainer(
             for: Hike.self,
-            configurations: ModelConfiguration(isStoredInMemoryOnly: true)
+            configurations: .openHikes(isStoredInMemoryOnly: true)
         )
         let context = ModelContext(container)
         let id = UUID()
@@ -128,7 +128,7 @@ struct HikeRenameTests {
     func nilCustomNamePersists() throws {
         let container = try ModelContainer(
             for: Hike.self,
-            configurations: ModelConfiguration(isStoredInMemoryOnly: true)
+            configurations: .openHikes(isStoredInMemoryOnly: true)
         )
         let context = ModelContext(container)
         let id = UUID()

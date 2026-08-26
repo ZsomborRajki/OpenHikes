@@ -63,8 +63,10 @@ struct OpenHikesView: View {
     /// have pushed this file past its length limit.
     @State var photoCapture = PhotoCaptureController()
     /// Camera and library presentation, driven by the pill's request tokens.
-    /// Both are presented from here rather than from inside the sheet, for the
-    /// reason the GPX importer's alert is — see the `showSheet` note below.
+    /// Owned here because the pill and the screens that offer it sit on
+    /// opposite sides of the sheet, but *presented* from inside `MapSheet` —
+    /// a modal attached beside a sheet that is never dismissed is never
+    /// presented at all. See the `.photoCapturePickers` call below.
     @State var photoPresentation = PhotoCaptureState()
     // swiftlint:enable private_swiftui_state
 
@@ -124,14 +126,15 @@ struct OpenHikesView: View {
         ActiveTileSource(TileProvider.renderable(id: tileProviderID))
     }
 
-    /// `.alert(isPresented:error:)` wants a `Bool`; the message lives in
-    /// ``importFailure``, so dismissal clears that rather than a second flag
-    /// the two could disagree on. See `presenceBinding(for:)`.
     var body: some View {
-        // Fires on every re-evaluation of this view's body — the throttled
-        // `appModel.locationManager.coordinate` publish (~1/sec while moving)
-        // is the most likely repeat offender; compare its rate here against
-        // the `MapUpdateCalled` mark in MapView and `MapCentered` in
+        // Fires on every re-evaluation of this view's body. The observable
+        // inputs here are `appModel.weatherManager.current` (~15 min) and
+        // `appModel.hikeRecorder.currentHike` (start/stop) — everything
+        // high-frequency is passed by reference and read inside MapKit
+        // instead. `locationManager.coordinate` in particular is deliberately
+        // *not* an input, so a rate here that tracks the ~1 Hz fix rate means
+        // something upstream has started reading it. Compare against the
+        // `MapUpdateCalled` mark in MapView and `MapCentered` in
         // MapCoordinator.
         RenderSignpost.mark("OpenHikesViewBody")
         return MapView(
@@ -171,7 +174,14 @@ struct OpenHikesView: View {
                 // launches the app against the *real* on-disk store, so the
                 // narrower flag would let a sweep delete a developer's tiles
                 // and photos.
-                if !AppLaunchEnvironment.isRunningTests {
+                //
+                // `startupIssue` is the same argument for the same reason. A
+                // launch on the in-memory fallback fetches zero hikes
+                // *successfully*, so the "a failed fetch sweeps nothing" rule
+                // never fires — the claim set is legitimately empty and every
+                // photo past the grace period is deleted, permanently, even
+                // though the persistent store may open again next launch.
+                if !AppLaunchEnvironment.isRunningTests, appModel.startupIssue == nil {
                     appModel.trimTileCache(in: modelContext)
                     appModel.reclaimOrphanedPhotos(in: modelContext)
                 }
@@ -261,9 +271,10 @@ struct OpenHikesView: View {
             }
             .onOpenURL { url in openInboundURL(url) }
             .photoCaptureAlerts($photoPresentation)
-            // The pill posts a token; presenting is this view's job, because a
-            // picker presented from inside the detented sheet tears it down on
-            // dismissal — the same issue the GPX importer works around above.
+            // The pill posts a token; flipping the presentation flags is this
+            // view's job because it owns `photoPresentation`. The pickers
+            // themselves hang off `MapSheet` above — a modal attached beside a
+            // sheet that is never dismissed is never presented at all.
             .onChange(of: photoCapture.cameraRequest) { _, _ in
                 Task { await presentCamera() }
             }
@@ -503,6 +514,9 @@ private struct SelectedHikeState: Equatable {
 }
 
 private extension OpenHikesView {
+    /// `.alert(isPresented:error:)` wants a `Bool`; the message lives in
+    /// ``importFailure``, so dismissal clears that rather than a second flag
+    /// the two could disagree on. See `presenceBinding(for:)`.
     var showingImportFailure: Binding<Bool> {
         presenceBinding(for: $importFailure)
     }

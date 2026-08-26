@@ -8,7 +8,7 @@ import Foundation
 /// A sorted timestamp index optimized for proximity checks. Tolerance
 /// boundaries are inclusive.
 public struct TimestampIndex: Sendable {
-    private var timestamps: [Date]
+    private let timestamps: [Date]
 
     public init<S: Sequence>(_ timestamps: S) where S.Element == Date {
         self.timestamps = timestamps.sorted()

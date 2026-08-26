@@ -14,7 +14,9 @@ nonisolated struct TrailMatchAlternative: Equatable, Sendable {
 
 nonisolated struct TrailMatchAmbiguity: Equatable, Identifiable, Sendable {
     let id: Int
-    let gpsPoints: [RecordingPoint]
+    /// The geometry this leg drew by default — the same points as the
+    /// corresponding ``TrailMatchLeg/defaultPoints``, not the raw fixes.
+    let defaultPoints: [RecordingPoint]
     let alternatives: [TrailMatchAlternative]
 }
 

@@ -179,7 +179,7 @@ enum Fixture {
     static func modelContainer() throws -> ModelContainer {
         try ModelContainer(
             for: Hike.self,
-            configurations: ModelConfiguration(isStoredInMemoryOnly: true)
+            configurations: .openHikes(isStoredInMemoryOnly: true)
         )
     }
 

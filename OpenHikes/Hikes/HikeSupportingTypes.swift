@@ -49,8 +49,8 @@ nonisolated struct ElevationSample: Identifiable, Equatable, Sendable {
 
 /// How a fix was moving, where Core Motion judged it was not on foot.
 ///
-/// **Collected but not yet read.** ``RecordingModels`` tags a fix
-/// `.nonPedestrian` when Core Motion reports automotive, cycling or an
+/// **Collected but not yet read.** ``RecordingPoint/routeCoordinate`` tags a
+/// fix `.nonPedestrian` when Core Motion reports automotive, cycling or an
 /// otherwise non-walking activity, and it is persisted with the route — but no
 /// statistic, chart, breakdown or export consults it today.
 ///

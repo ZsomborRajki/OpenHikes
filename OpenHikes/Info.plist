@@ -48,6 +48,7 @@
 	<key>UIBackgroundModes</key>
 	<array>
 		<string>location</string>
+		<string>remote-notification</string>
 	</array>
 	<!-- GPX has no system-declared type, so the app imports topografix's.
 	     Imported rather than exported because OpenHikes reads the format but

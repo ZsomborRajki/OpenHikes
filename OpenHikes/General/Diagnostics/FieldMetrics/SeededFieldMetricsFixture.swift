@@ -47,24 +47,30 @@ nonisolated enum SeededFieldMetricsFixture {
     private static let totalDiskUsedBytes = 511_705_088.0
     private static let averageSuspendedMemoryBytes = 62_914_560.0
     private static let peakMemoryBytes = 176_160_768.0
-    private static let hangSeconds = 0.31
+    private static let hangMilliseconds = 310.0
     private static let diagnosticHangSeconds = 1.42
     private static let recordingSpanCPUSeconds = 310.0
     private static let recordingSpanMemoryBytes = 88_080_384.0
     private static let recordingSpanWriteBytes = 201_326_592.0
     private static let downloadSpanCPUSeconds = 22.0
     private static let downloadSpanWriteBytes = 67_108_864.0
-    private static let recordingSpanSeconds = 5400.0
-    private static let downloadSpanSeconds = 48.0
+    private static let recordingSpanMilliseconds = 5_400_000.0
+    private static let downloadSpanMilliseconds = 48_000.0
     private static let bestFixSeconds = 1200.0
     private static let tenMeterFixSeconds = 12_600.0
     private static let hundredMeterFixSeconds = 2400.0
     /// The typical value each histogram is built around; the two longer
     /// buckets are derived from it below.
-    private static let firstDrawSeconds = 0.24
-    private static let optimizedFirstDrawSeconds = 0.19
-    private static let extendedLaunchSeconds = 0.41
-    private static let resumeSeconds = 0.11
+    ///
+    /// Milliseconds, not seconds: every duration histogram in
+    /// ``FieldMetricsDigest`` is stored in milliseconds — that is the unit
+    /// ``HistogramSummary/init(_:convertedTo:)`` is handed for all of them —
+    /// and the screen renders them with no fractional digits, so a value
+    /// expressed in seconds would draw as "0 ms".
+    private static let firstDrawMilliseconds = 240.0
+    private static let optimizedFirstDrawMilliseconds = 190.0
+    private static let extendedLaunchMilliseconds = 410.0
+    private static let resumeMilliseconds = 110.0
     private static let cellularBars = 1.0
 
     /// Writes `count` reports, newest first.
@@ -125,11 +131,11 @@ nonisolated enum SeededFieldMetricsFixture {
                 kilometerSeconds: 0,
                 threeKilometersSeconds: 0
             ),
-            timeToFirstDraw: histogram(around: firstDrawSeconds),
-            optimizedTimeToFirstDraw: histogram(around: optimizedFirstDrawSeconds),
-            extendedLaunch: histogram(around: extendedLaunchSeconds),
-            resumeTime: histogram(around: resumeSeconds),
-            applicationHangTime: histogram(around: hangSeconds),
+            timeToFirstDraw: histogram(around: firstDrawMilliseconds),
+            optimizedTimeToFirstDraw: histogram(around: optimizedFirstDrawMilliseconds),
+            extendedLaunch: histogram(around: extendedLaunchMilliseconds),
+            resumeTime: histogram(around: resumeMilliseconds),
+            applicationHangTime: histogram(around: hangMilliseconds),
             hitchTimeRatio: hitchTimeRatio,
             scrollHitchTimeRatio: scrollHitchTimeRatio,
             cellularConditionBars: histogram(around: cellularBars),
@@ -172,7 +178,7 @@ nonisolated enum SeededFieldMetricsFixture {
                 name: FieldSignpost.Span.recordingSession.rawValue,
                 category: FieldSignpost.category,
                 count: 2,
-                duration: histogram(around: recordingSpanSeconds),
+                duration: histogram(around: recordingSpanMilliseconds),
                 cpuSeconds: recordingSpanCPUSeconds,
                 averageMemoryBytes: recordingSpanMemoryBytes,
                 logicalWriteBytes: recordingSpanWriteBytes
@@ -181,7 +187,7 @@ nonisolated enum SeededFieldMetricsFixture {
                 name: FieldSignpost.Span.offlineDownload.rawValue,
                 category: FieldSignpost.category,
                 count: 1,
-                duration: histogram(around: downloadSpanSeconds),
+                duration: histogram(around: downloadSpanMilliseconds),
                 cpuSeconds: downloadSpanCPUSeconds,
                 logicalWriteBytes: downloadSpanWriteBytes
             ),

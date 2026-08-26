@@ -5,10 +5,10 @@
 //  The `UserDefaults` / `@AppStorage` keys the app persists across launches,
 //  and the defaults for the ones where "absent" and "false" are different
 //  answers. Collected here rather than beside whichever feature happens to
-//  read them first: the keys span selection, background tracking, tiles and
-//  photos, and several are written by one subsystem and read by another. The
-//  string values are a storage contract — changing one silently drops the
-//  stored setting on the next launch.
+//  read them first: the keys span selection, background tracking, tiles,
+//  photos and iCloud sync, and several are written by one subsystem and read
+//  by another. The string values are a storage contract — changing one
+//  silently drops the stored setting on the next launch.
 //
 //  Nothing here configures networking. What the app puts on the radio is
 //  decided from live conditions by ``TileNetworkPolicy``, not from a switch
@@ -40,6 +40,11 @@ nonisolated enum SettingsKey {
     /// ever asks for photo-library access, which it does on the first save
     /// after the switch is flipped rather than when it is flipped.
     static let savePhotosToLibrary = "settings.savePhotosToLibrary"
+    /// Whether hikes and their photos are mirrored through the user's private
+    /// iCloud database. Read by ``CloudSyncCoordinator`` at launch, and the
+    /// only one of the three reasons sync might be idle that the app decides
+    /// for itself — the other two are the Apple Account and the test guard.
+    static let cloudSyncEnabled = "settings.cloudSyncEnabled"
 }
 
 /// Defaults for keys where "absent" and "false" are different answers, so the
@@ -51,4 +56,10 @@ nonisolated enum SettingsDefault {
     /// the only thing that would make the app ask for photo-library access at
     /// all. The app's own copy is the one the hike depends on either way.
     static let savePhotosToLibrary = false
+    /// On. Unlike the photo-library switch this costs the user nothing they
+    /// did not already have — it is their own private iCloud storage, holding
+    /// data they created, readable by nobody else — and the failure it
+    /// prevents is the one people notice: a replaced phone that opens to an
+    /// empty hikes list because a switch was never found.
+    static let cloudSyncEnabled = true
 }

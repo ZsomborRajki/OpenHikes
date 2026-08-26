@@ -12,8 +12,9 @@ assumes but does not design the backend.
 
 ## 1. The premise, and the one rule everything else bends around
 
-OpenHikes today has no backend, no account, and no network dependency for
-anything a hiker does on a trail. That is not an accident of scope — it is the
+OpenHikes today has no backend of its own, no account, and no network dependency
+for anything a hiker does on a trail — hikes follow the walker through their own
+private iCloud database, which needs neither. That is not an accident of scope — it is the
 product. A hiker in a valley with one bar has the map, the route, the recording,
 the photos and the widget, and the app has an entire subsystem
 ([`TileNetworkPolicy`](OpenHikes/Tiles/TileNetworkPolicy.swift)) whose only job
@@ -46,8 +47,11 @@ wrong.
 
 Five capabilities, in the order they should ship:
 
-1. **Account** — Sign in with Apple, which today is a disabled placeholder in
-   [`SettingsView.swift:104`](OpenHikes/Settings/SettingsView.swift). Optional,
+1. **Account** — Sign in with Apple. Nothing of it exists today: the settings
+   section that once held a faded placeholder is now
+   [`CloudSyncSection`](OpenHikes/Settings/CloudSyncSection.swift), which
+   answers a different question — private cross-device sync needs no account —
+   and a social identity would be a new section beside it. Optional,
    revocable, and deletable.
 2. **Publish** — from a hike's detail view: choose visibility, choose a privacy
    radius, choose which photos come along, publish. Queues offline.
@@ -104,7 +108,7 @@ OpenHikes/Social/
 └── UI/
     ├── PublishSheet.swift
     ├── ProfileView.swift
-    ├── SocialAccountSection.swift     // replaces the Settings placeholder
+    ├── SocialAccountSection.swift     // new Settings section, beside CloudSyncSection
     └── SocialRow.swift                // one accessibility element per row
 ```
 
@@ -172,11 +176,14 @@ real connection, or the host app's settings.
 
 ### 4.1 Sign in with Apple, for real
 
-[`SettingsView.swift:103–124`](OpenHikes/Settings/SettingsView.swift) already
-draws the row, faded, un-tappable, with a "Coming soon" accessibility value. It
-becomes `SocialAccountSection`, which renders one of three states: signed out
-(the button), signing in (progress), signed in (handle, avatar, sign-out,
-delete-account).
+A new `SocialAccountSection` in the settings form, rendering one of three
+states: signed out (the button), signing in (progress), signed in (handle,
+avatar, sign-out, delete-account). It sits beside
+[`CloudSyncSection`](OpenHikes/Settings/CloudSyncSection.swift) rather than
+replacing it: iCloud sync is the walker's own hikes following them between
+their own devices, and publishing is a different decision with a different
+audience. Conflating the two switches would make signing out of a social
+account look like it might take a private library with it.
 
 Requirements:
 
@@ -639,8 +646,10 @@ object.
 
 ### 10.3 Accessibility is not a follow-up
 
-The convention is enforced by a CI job: a composite row is one accessibility
-element, not four, and `AccessibilityUITests` fails when it is not.
+The convention is checked by a CI job — reporting rather than gating, since
+`accessibility-ui-tests` is `continue-on-error` for now: a composite row is one
+accessibility element, not four, and `AccessibilityUITests` fails when it is
+not.
 
 - `SocialRow`, feed rows and profile rows hide their decoration and expose a
   single label/value pair, like `HikeRow`, `StatTile` and `DetailRow`.
@@ -665,8 +674,8 @@ enough that social attaches at the edges.
 | File | Change | Why |
 |---|---|---|
 | [`OpenHikesModel.swift`](OpenHikes/App/OpenHikesModel.swift) | Add `socialAccount`, `publicationSyncEngine`, `communityFeed` to both initialisers; add the `RemoteMediaStore` sweep beside `reclaimOrphanedPhotos`; one line in `sceneDidBecomeActive()` | Composition root; the orphan-sweep rule |
-| `ModelContainer(for: Hike.self)` (two call sites in the same file) | → `Hike.self, TrailPublication.self, CachedRemoteTrail.self` | The one schema change; ship it once |
-| [`SettingsView.swift`](OpenHikes/Settings/SettingsView.swift) | Replace `appleSignInPlaceholder` with `SocialAccountSection`; add cellular-sync and auto-refresh toggles; add community-cache size to the storage section | The placeholder is already drawn and already has its accessibility contract |
+| `ModelContainer(for: Hike.self)` (three call sites in the same file) | → `Hike.self, TrailPublication.self, CachedRemoteTrail.self`, keeping `.openHikes()` so SwiftData's own CloudKit mirroring stays off | The one schema change; ship it once |
+| [`SettingsView.swift`](OpenHikes/Settings/SettingsView.swift) | Add `SocialAccountSection` above `CloudSyncSection`; add cellular-sync and auto-refresh toggles; add community-cache size to the storage section | `CloudSyncSection` is the pattern to copy: a status row plus a switch, one accessibility element per row |
 | [`SettingsKey.swift`](OpenHikes/App/Configuration/SettingsKey.swift) | Add `socialCellularSync`, `socialAutoRefresh` + their `SettingsDefault` entries | Key strings are a storage contract; they are collected in one place on purpose |
 | [`SheetRoute.swift`](OpenHikes/App/Navigation/SheetRoute.swift) | New cases; extend `shows(hikeID:)` and `prefersFullHeight` | Navigation cleanup on delete is already the file's job |
 | [`MapSheet.swift`](OpenHikes/Map/MapSheet.swift) | Host the publish/share/report modals; add a Community entry point | Modals must be presented from inside the sheet |
@@ -867,7 +876,8 @@ change. `Social/` domain folder, `SocialTransport` protocol with a stub-only
 implementation, `SocialNetworkPolicy` and its complete test suite. No UI, no
 network, nothing user-visible. This is the phase that de-risks everything else.
 
-**Phase 2 — Identity.** Sign in with Apple replaces the placeholder. Entitlement,
+**Phase 2 — Identity.** Sign in with Apple lands in a new settings section beside
+`CloudSyncSection`. Entitlement,
 Keychain, revocation handling, sign-out, account deletion. Still no content.
 Verify the signed-out path is untouched.
 

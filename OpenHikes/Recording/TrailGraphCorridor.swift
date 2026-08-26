@@ -24,8 +24,9 @@ nonisolated enum TrailGraphCorridor {
     /// A cache region is a z12 tile: about 9.8 km across at the equator,
     /// narrowing with latitude to roughly 4.9 km at 60°N and 3.3 km at 70°N.
     /// Sampling has to be fine enough that a straight line cannot step over a
-    /// region without landing inside it, so this sits below half the narrowest
-    /// tile a hike is plausibly recorded in.
+    /// region without landing inside it, so this keeps a half-tile margin
+    /// through 60°N and still sits well inside a whole tile past the Arctic
+    /// Circle.
     static let samplingIntervalMeters: CLLocationDistance = 2000
 
     /// Ceiling on the samples one stretch contributes, so a corrupt pair of

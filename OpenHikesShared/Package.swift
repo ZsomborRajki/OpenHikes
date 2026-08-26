@@ -37,12 +37,27 @@ extension [SwiftSetting] {
     /// in the project: a member is only visible when its module is imported
     /// directly, rather than leaking in through some other module's import.
     ///
+    /// `NonisolatedNonsendingByDefault` (SE-0461) is the one part of
+    /// `SWIFT_APPROACHABLE_CONCURRENCY = YES` the Swift 6 language mode does
+    /// not already imply — the other three that setting expands to
+    /// (`InferSendableFromCaptures`, `GlobalActorIsolatedTypesUsability`,
+    /// `DisableOutwardActorInference`) are on as of Swift 6 and warn if named
+    /// again. Without it a `nonisolated` `async` function hops to the global
+    /// executor; with it the function runs on the caller's actor unless it
+    /// opts back out with `@concurrent`. The package has no `async` code
+    /// today, so enabling it changes nothing now — it means the first one
+    /// added here behaves the way the same code would in the app rather than
+    /// the opposite way.
+    ///
     /// Deliberately *not* `defaultIsolation(MainActor.self)`, which the app
     /// does set. This package is read by the widget extension off the main
     /// actor — `TrailBasemap` projection and `SharedStore` decoding both run
     /// there — so main-actor-by-default would be the wrong default here and
     /// does not compile.
     static var shared: Self {
-        [.enableUpcomingFeature("MemberImportVisibility")]
+        [
+            .enableUpcomingFeature("MemberImportVisibility"),
+            .enableUpcomingFeature("NonisolatedNonsendingByDefault")
+        ]
     }
 }

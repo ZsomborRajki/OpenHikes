@@ -190,7 +190,7 @@ extension Hike {
     /// object — at which point `modelContext` is what is nil. A check that
     /// asked only the first question would let a write through to a detached
     /// model, which is the quiet failure: it succeeds, and nothing persists
-    /// it. `HikePhotoDeletionSemanticsTests` pins the behaviour this reads.
+    /// it. `HikeAttachmentTests` pins the behaviour this reads.
     var isAttached: Bool { !isDeleted && modelContext != nil }
 
     /// The persisted flag covers normal recording and recovery. The recorder's

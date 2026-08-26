@@ -178,7 +178,7 @@ nonisolated extension TrailMatcher {
             if !alternatives.isEmpty {
                 ambiguities.append(TrailMatchAmbiguity(
                     id: previousIndex,
-                    gpsPoints: segment,
+                    defaultPoints: segment,
                     alternatives: alternatives
                 ))
             }

@@ -70,15 +70,15 @@ anyone else's phone.
 
 ## Validation performed
 
-Re-run on 2026-08-25 unless the row says otherwise. Rows marked *not re-run*
-were last measured on the earlier pass and their numbers are no longer
-trustworthy — the tree has grown by a whole feature domain since.
+Re-run on 2026-08-26 where the row says so, otherwise on 2026-08-25. Rows
+marked *not re-run* were last measured on an earlier pass and their numbers are
+no longer trustworthy — the tree has grown by a whole feature domain since.
 
 | Validation | Result |
 |---|---|
-| Strict SwiftLint | Passed (0.65.0, `--strict`) |
-| Shared package tests | 57 tests in 9 suites passed |
-| App and widget unit tests | 779 tests in 91 suites plus 19 widget tests in 3 suites passed, and the app bundle run four times over to confirm a flake was gone rather than hiding |
+| Strict SwiftLint | Passed (0.65.0, `--strict`) — re-run 2026-08-26 |
+| Shared package tests | 76 tests in 12 suites passed — re-run 2026-08-26 |
+| App and widget unit tests | 913 tests in 103 suites plus 23 widget tests in 3 suites passed — re-run 2026-08-26 |
 | iOS debug build | Passed with first-party Swift warnings treated as errors |
 | iOS release build | Not re-run |
 | macOS compile | Not re-run |
@@ -594,3 +594,497 @@ out of CI by design, and no claim above rests on either.
 What was run, four times over for the app bundle to distinguish a fix from a
 coincidence: 779 app tests in 91 suites, 19 widget tests in 3 suites, 57
 shared-package tests in 9 suites, and strict SwiftLint. All green.
+
+---
+
+# Review pass — 2026-08-26
+
+Scope: the whole tree, with two deliberate biases. First, **every code comment
+was treated as an unverified AI-generated claim** and checked against the code
+it describes. Second, **the uncommitted CloudKit sync work** (`OpenHikes/Sync/`,
+`CloudSyncSection.swift`, `ModelConfiguration+OpenHikes.swift`,
+`OpenHikesTests/Sync/`) got the heaviest scrutiny, because it is the least
+reviewed code in the tree and is not yet committed.
+
+Method: five delegated domain reviews, none of whose findings were written here
+until the cited code had been read directly. That mattered — **three candidate
+findings were demoted after checking**, and they are recorded in §E rather than
+deleted, because "we looked and it was fine" is worth as much as a finding.
+
+## A. Major findings — not fixed
+
+### A1. An overzoomed map redraws forever, on an idle phone (High)
+
+`Tiles/Rendering/CachingTileOverlayRenderer.swift:204-211`, `:228-274`.
+
+`draw` looks a tile up under the **screen** zoom, but `loadTileIfNeeded`
+rewrites anything past `overlay.maximumZ` to `path.ancestor(atZoom:)` (`:231`)
+and `TileOverlay.cacheTile` files the bytes under that **ancestor** key
+(`TileOverlay.swift:59-61`). So above `maximumZ` the two keys can never agree,
+and every pass takes the `else` branch: draw the cropped ancestor, then call
+`loadTileIfNeeded` unconditionally. That spawns a `Task`, takes
+`TileLoadGate.acquire(.interactive)`, hits memory, returns `true`, and
+`loaded == true` runs `setNeedsDisplay(tileRect)` (`:262`) — which re-enters
+`draw`. `inFlight` cannot damp it: the key is removed (`:259`) *before* the
+`if loaded` branch.
+
+Verified reachable rather than theoretical: `zoomLevel(for:tileWidth:)`
+(`:334-336`) clamps only with `max(0, …)` and has no upper bound, and OSM — the
+keyless default — sets `maximumZ = 19` (`TileProvider.swift:50`, applied at
+`MapView.swift:142`). A pinch past z19 is enough. The cost is one `Task`, two
+gate hops, two `Mutex` acquisitions and a full main-thread redraw *per visible
+tile per cycle*, continuously, while the device sits still.
+
+The failure branch already carries the diagnosis — *"redrawing on failure is
+what spun the request loop"* (`:264-266`). The success branch has the same
+shape whenever the drawn and cached keys differ.
+
+Suggested fix, at `:231`:
+
+```swift
+let fetchPath = path.z > overlay.maximumZ ? path.ancestor(atZoom: overlay.maximumZ) : path
+// An overzoomed tile is drawn from a crop of its ancestor; if that ancestor is
+// already in memory there is nothing to fetch and nothing to invalidate.
+guard fetchPath.z == path.z || overlay.cachedImage(at: fetchPath) == nil else { return }
+```
+
+No test covers it. `TileOverzoomTests` exercises only the pure index arithmetic
+(`parent`, `ancestor(atZoom:)`, `cacheKey`, `cropRect`, `scaledImageRect`), all
+of which are correct. A regression test wants a fake overlay whose
+`cacheTile` records call counts, asserting a second `draw` at the same
+overzoomed path issues no new load.
+
+### A2. A failed fetch duplicates every incoming hike (High, sync)
+
+`Sync/HikeSyncApplier.swift:315-317`.
+
+```swift
+private func hikesByID() -> [UUID: Hike] {
+    guard let hikes = try? context.fetch(FetchDescriptor<Hike>()) else { return [:] }
+```
+
+`apply(hikes:skipping:)` reads "absent from `existing`" as "never seen" and
+calls `context.insert(payload.makeHike())` (`:200`). If that fetch throws,
+`existing` is empty and **every** payload is inserted afresh under an id that
+already exists. `Hike.swift:29` deliberately declares `#Index`, not
+`@Attribute(.unique)`, so SwiftData will not collapse them — the user sees
+duplicate rows, which are then re-uploaded.
+
+The rule is already known two functions away: `applyDeletions` (`:250-253`)
+uses a throwing fetch under the comment *"Not `try?`. A failed fetch here would
+look exactly like 'nothing matched'"*, and `allHikeIDs()` (`:311`) throws for
+the same reason. `hikesByID()` is the one place it was missed.
+
+Fix: make it `throws` and let `apply(hikes:)` — already `throws`, already
+wrapping its body in `try applyingRemoteChanges` — propagate. The engine
+defers and retries on throw (`HikeSyncEngine+Delegate.swift:252`), so the
+failure path costs nothing.
+
+### A3. Transient CloudKit errors are shown to the user, and atomic-batch failures are dropped (High, sync)
+
+`Sync/HikeSyncEngine+Delegate.swift:373`, the `default:` arm of
+`handleFailedSaves`.
+
+Two distinct problems land in that one branch.
+
+**It reports what it should ignore.** The doc at `:346` and the identical claim
+at `CloudSyncStatus.swift:42` both state that transient failures *"are retried
+by `CKSyncEngine` and never reach here."* They do reach here. Apple's own
+sync-engine sample handles `.networkFailure`, `.networkUnavailable`,
+`.zoneBusy`, `.serviceUnavailable`, `.notAuthenticated` and
+`.operationCancelled` precisely because they are delivered, and WWDC23-10188
+says you receive them "for your awareness" without needing to act. A walk out
+of signal currently raises **"Sync Problem"** with a raw `localizedDescription`.
+
+**It silently drops the rest of an atomic batch.** Custom zones are atomic, so
+one `serverRecordChanged` in a 250-record batch rolls the other 249 back, each
+delivered as `.batchRequestFailed`. The `default:` arm does not append to
+`retryRecords`, and `CKSyncEngine` consumes a pending change on send whatever
+the outcome — so those saves are gone until `reconcile()` recovers them at the
+*next launch*. `.assetFileNotFound` and `.assetFileModified` share the fate,
+which matters because staged route assets live in Caches
+(`CloudSyncStateStore.swift:184`) and iOS may purge them between staging and
+send.
+
+Fix: add `case .networkFailure, .networkUnavailable, .zoneBusy,
+.serviceUnavailable, .notAuthenticated, .operationCancelled,
+.requestRateLimited, .accountTemporarilyUnavailable:` logging at debug, and
+`case .batchRequestFailed, .assetFileNotFound, .assetFileModified:` appending
+`.saveRecord(recordID)` to `retryRecords`. The two prose claims above should be
+corrected in the same change and not before it — fixing the comment alone would
+bless the bug.
+
+### A4. Sync failures are overwritten, and "last synced" lies (Medium, sync)
+
+`Sync/CloudSyncStatus.swift:111-114`.
+
+```swift
+func finished() { activity = .idle; lastSyncedAt = .now }
+```
+
+`.sentRecordZoneChanges` / `.fetchedRecordZoneChanges` are always followed by
+`.didSendChanges` / `.didFetchChanges`, which call `finished()`. So any
+`.failed` raised earlier in the same pass is erased a moment later, and
+`lastSyncedAt` is stamped even when the pass failed. The "Sync Problem"
+headline, its detail line, and `CloudSyncSection`'s
+`exclamationmark.icloud.fill` are effectively unreachable outside the
+`fetchChanges()` throw path.
+
+Fix: do not lower a `.failed` activity in `finished()` (clear it at
+`willSendChanges` instead), and stamp `lastSyncedAt` only when the pass raised
+nothing.
+
+### A5. Launch does six synchronous file reads on the main thread (Medium, performance)
+
+`OpenHikesModel.init` builds `CloudSyncCoordinator` unconditionally — even when
+`startupIssue != nil` — which evaluates `CloudSyncStateStore()` as a **default
+argument**, on the main actor. That initializer (`CloudSyncStateStore.swift:186-216`)
+synchronously reads `server-records.plist`, `record-index.json`,
+`pending-deletions.json` and three deferred files. `server-records.plist` holds
+one archived `CKRecord` per hike *and per photo*, so it is megabytes for a real
+library.
+
+This is on the path `PERFORMANCE.md` measures with `XCTApplicationLaunchMetric`,
+and the sync work has not been re-measured against that baseline. Fix: load
+lazily inside the actor on first use.
+
+Two adjacent ones in the same file, both cheap to fix and both O(n²)-shaped
+across a first sync: `HikeSyncApplier.uploads(for:)` (`:100`) and `hikesByID()`
+(`:316`) fetch **every** `Hike` — materialising every route array — once per
+250-record batch, where `#Index<Hike>([\.id])` already exists to support a
+predicate; and `CloudSyncStateStore.writeRecords()` (`:310`, `:358`) re-encodes
+the whole record dictionary per batch inside a callback the engine is awaiting.
+
+### A6. `RENDER_SIGNPOST_LOG=1` is set for every unit-test run (Medium, test performance)
+
+`OpenHikes.xctestplan:9-15` puts it in `defaultOptions.environmentVariableEntries`,
+so it applies to the whole plan. Both unit bundles are app-hosted, so the app
+reads it and `RenderSignpost.consoleLoggingEnabled` is `true` for every run —
+each `mark`/`interval` then takes a `Mutex`, builds an allocation-heavy
+`Duration.formatted(.units(…))`, and calls `logger.debug`. It belongs on the
+`OpenHikesUI` scheme and the performance runs, which are the only things that
+read the output.
+
+### A7. The "DEBUG-only" launch-flag contract is documentation, not code (Medium)
+
+`App/AppLaunchEnvironment.swift` contains **zero** `#if DEBUG`. README and
+`.github/copilot-instructions.md` both state that every `--ui-test-*` flag is
+DEBUG-only; in fact the parsing and its consumers compile into Release —
+`TileCache.swift:50-53, 258` (forces offline, redirects the tile root),
+`FieldMetricsStore.swift:132`, `OpenHikesModel.swift:126, 398`,
+`OpenHikesView.swift:90, 170, 425`.
+
+What *is* in place: every flag is `isUITesting && …` in `Configuration.init`
+(`:46-56`), so all of them are inert without `--ui-testing`, and a
+Store-installed app cannot be handed custom launch arguments. So this is a
+contract defect rather than a live vulnerability. Fix one of the two: wrap the
+`Configuration` body in `#if DEBUG` with a release stub returning defaults, or
+correct both documents. Left alone because it is a cross-cutting decision.
+
+### A8. Three location delegates each allocate a `Task` per GPS fix (Medium, performance)
+
+`HikeRecorder+Lifecycle.swift:466`, `LocationManager.swift` and
+`BackgroundTrailTracker.swift` all shape their `didUpdateLocations` the same
+way — `nonisolated`, then `Task { @MainActor in … }`, all three capturing
+`self` strongly. During a recording all three are live (this document's
+own finding 20 established that both foreground managers keep receiving), so a
+single fix costs up to three heap-allocated tasks and three actor hops.
+
+Two things follow. The smaller: every `CLLocationManager` here is created on the
+main actor — `SWIFT_DEFAULT_ACTOR_ISOLATION = MainActor` and
+`SystemRecordingLocationSource.manager` is a stored property
+(`HikeRecorder+State.swift:98`) — so the callbacks already arrive on the main
+thread and the hop buys nothing but the allocation. The larger: ordering
+between two *separate* unstructured `Task`s on the same actor is not guaranteed
+by the language, and `HikeRecorder` sorts within a batch
+(`+Lifecycle.swift:465`) only to give that guarantee up across batches. A
+reordered pair meets `guard interval > 0 else { return false }`
+(`RecordingModels.swift:148`) and the older fix is dropped silently.
+
+This is deliberate — `.github/copilot-instructions.md` states the hop as a
+convention — so it is a design decision to revisit rather than an oversight.
+`MainActor.assumeIsolated` would remove both problems and is sound given the
+isolation above, but it changes a documented rule and should be a considered
+change, with `[weak self]` added either way.
+
+### A9. Smaller sync defects worth fixing before this ships (Low–Medium)
+
+- `CloudSyncStateStore.swift:256` — `NSKeyedUnarchiver(forReadingFrom:)` keeps
+  the default `.raiseException` failure policy, so a corrupt
+  `server-records.plist` raises an ObjC exception Swift cannot catch. Set
+  `.setErrorAndReturn`. `requiresSecureCoding = true` is also assigned after
+  construction, too late to affect that initializer's own validation.
+- `CloudSyncStateStore.readDeferredPhotos` (`:595`) collapses an unreadable
+  `deferred-photos.json` to `[]`, so an incomplete claim set is
+  indistinguishable from an empty one — the exact ambiguity the tile and photo
+  sweeps exist to avoid, and the change token will have moved past those
+  pixels. Return `Set<String>?` and skip the sweep on `nil`.
+- `HikeSyncEngine+Delegate.swift:250` — `writeHikes` remembers only records
+  present in `batch.hikeRecords`, so a payload deferred on an earlier pass
+  never gets a change tag and `reconcile()` queues it for **upload**. `:266`
+  has the mirror defect: `writePhotos` remembers *all* photo records including
+  ones `apply(photos:)` handed back unmatched, which is the thing `:243`'s doc
+  says must not happen.
+- `handleFailedDeletes` (`:391`) re-queues on every non-`unknownItem` failure,
+  including transient ones `CKSyncEngine` is already retrying.
+- `SyncedSetting.all` syncs `SettingsKey.tileProviderID`. A device with a
+  Stadia or Thunderforest key in `Secrets.plist` will push a provider a
+  keyless device cannot authenticate against.
+
+### A10. `removeExpiredTiles` is TOCTOU against a concurrent promote (Low)
+
+`TileCache.swift:695-740` stats a durable file for staleness and then unlinks
+it, two syscalls with no lock — and unlike its siblings it never takes
+`mutationVersions`, so `promoteCachedTile`'s holding of that lock buys nothing
+here. If a promote lands between the stat and the unlink, the sweep deletes
+freshly-promoted bytes while the key stays in the hike's manifest: a silent
+hole in a claimed hike's offline coverage. It needs the tile to be durable,
+over seven days stale, and re-viewed inside a launch sweep's window, and it
+self-heals on the next draw (`AutoSaveTileTests.refreshesExpiredKnownTile`
+pins that recovery). Fix by wrapping the per-file stat-and-unlink pair — not
+the enumeration — in `mutationVersions.withLock`.
+
+## B. Fixed on this pass
+
+Behaviour:
+
+- **`Map/Rendering/TrailBasemapRenderer.swift:106`** — orphaned-file cleanup
+  was dead code. Two `defer`s in one scope run LIFO, so the cleanup block ran
+  while `inFlight` was still this request, making its `inFlight == nil` test
+  permanently false. Every abandoned render pass — offline, superseded, or a
+  partial write of the four variant×appearance JPEGs — leaked App Group images
+  that only a *later* successful render would reclaim. Now tests "superseded by
+  another pass" the way its own comment always said it did.
+- **`General/Diagnostics/FieldMetrics/SeededFieldMetricsFixture.swift`** — seven
+  constants were written in seconds into histogram fields the real decode path
+  fills in milliseconds (`FieldMetricsDigest+MetricKit.swift:94, 116-132`, all
+  `convertedTo: UnitDuration.milliseconds`). The screen renders them with no
+  fractional digits, so `--ui-test-seed-metrics` drew "≤ 0 ms median · ≤ 0 ms
+  p90" for every launch and hang histogram, and a 90-minute recording span as
+  "≤ 5400 ms". Renamed `…Seconds` → `…Milliseconds` and scaled.
+  `diagnosticHangSeconds` is genuinely seconds and was left alone.
+- **`Sync/HikeSyncApplier.swift:274`** — the remote-delete path called
+  `HikePhotoImport.discardFiles(orphaned)`, falling through to
+  `HikePhotoStore.shared` despite the type holding an injectable `photoStore`
+  (`:51`) it uses elsewhere (`:110`). Under an app-hosted test that deletes
+  from the developer's real Application Support directory.
+- **`Scripts/perf-report.py:198`** — `samples` was guarded for emptiness but
+  `footprints` was not, so an all-`None` column raised `IndexError`/`ValueError`
+  instead of reporting no samples.
+- **`Scripts/simulate-hike.sh:131`** — `--speed 0.0` and `--interval 00` passed
+  both the regex and a textual `== "0"` check and reached the playback loop as
+  a zero step. Now a numeric test.
+- **`OpenHikesShared/Package.swift`** — the manifest claimed it matched the
+  Xcode targets' language settings while enabling only
+  `MemberImportVisibility`. The app also sets `SWIFT_APPROACHABLE_CONCURRENCY =
+  YES`, whose one component the Swift 6 mode does not already imply is
+  `NonisolatedNonsendingByDefault` (SE-0461). The package has no `async` code,
+  so nothing changes today — but the first `async` function added there would
+  have hopped to the global executor while the identical code in the app ran on
+  the caller's actor. Now enabled, and the comment says why. (The other three
+  features that setting expands to are on as of Swift 6 and warn if named
+  again; that is recorded in the comment so the next reader does not re-add
+  them.)
+
+Comments and documentation — the ones that were wrong about behaviour, not
+merely stale:
+
+- `Navigation/OpenHikesView.swift:64-69` and `:274-277` both claimed the photo
+  pickers are presented from the root "rather than from inside the sheet". They
+  are attached to `MapSheet` inside the `.sheet` closure (`:229`) — as the
+  comment 150 lines further down (`:225-228`) correctly said, and as this
+  document's own architecture rule requires. Corrected to match the code and
+  the reason.
+- `OpenHikesView.swift:133-141` named `locationManager.coordinate`'s ~1 Hz
+  publish as the body's "most likely repeat offender". The body never reads it:
+  `locationManager` is a `let`, `@Observable` does not instrument `let`,
+  `MapView` compares it `===`, and `MapCoordinator` reads it under
+  `withObservationTracking`. That is the whole render-isolation design, and the
+  comment described its opposite. Now names the real inputs
+  (`weatherManager.current`, `hikeRecorder.currentHike`).
+- `OpenHikesModel.swift:374` claimed the UI-testing seam "does not exist in a
+  shipping build". It compiles into Release; only its *effects* are gated. See
+  A7.
+- `Sync/SyncedSettings.swift:106` documented `isMirroring` as the thing that
+  breaks the write-notification loop. It is dead: both observers register with
+  `queue: .main`, so the notification arrives a runloop turn after the `defer`
+  lowered the flag — a hazard the author documents correctly at
+  `CloudSyncCoordinator.swift:154`. What actually terminates the loop is the
+  `where current[key] != value` guard.
+- `Sync/HikeSyncApplier.swift:68` claimed a failed fetch reconciles nothing
+  "rather than reconciling with an empty set" — it returns exactly an empty
+  set; the safety comes from the deletion half throwing instead.
+- `Hikes/Hike.swift:193` cited `HikePhotoDeletionSemanticsTests`, which does not
+  exist; the suite is `HikeAttachmentTests`.
+- Three DocC links resolved to nothing tree-wide and now resolve:
+  ``RecordingModels`` (a file, not a type → `RecordingPoint/routeCoordinate`),
+  ``LiquidGlass.swift`` (a file in symbol-link syntax), and
+  ``drainPendingChanges()`` in the new sync engine (the function is
+  `pendingChanges()`).
+- `PerformanceUITests+Budgets.swift:7` said "these four are the whole
+  vocabulary" of a file defining five, while `assertLaunchStall`'s own doc
+  called itself "the fifth". `AccessibilityAuditSupport.swift:83` miscounted
+  which clause covers the map. `TrailGraphCorridor.swift:27` claimed a
+  half-tile sampling margin its own quoted arithmetic contradicts past ~60°N.
+  `TrailMatcherModels.swift:17` called a field `gpsPoints` when it holds the
+  *matched* geometry — renamed `defaultPoints`, safe because it had no readers.
+- Markdown: `MapCoordinator` does not exist as a type — it is
+  `MapView.Coordinator`, and the name survived in `copilot-instructions.md` ×2
+  and `PERFORMANCE.md` ×1 because the *file* is `MapCoordinator.swift`.
+  `PERFORMANCE.md` also described a `receive(_:)` that exists nowhere and a
+  `provisional: true` argument that is `liveMatchingEnabled`. Counts were
+  corrected in four places (one→two location-dependent accessibility tests,
+  four→six `FieldMetrics/` files, four→eight performance scenarios). `SOCIAL.md`
+  still opened on "no backend, no account", which the CloudKit work makes
+  false, and twice described a Settings placeholder that `CloudSyncSection`
+  now occupies. `copilot-instructions.md` was missing `Sync/` from the domain
+  list and CloudKit from the stable-identifier rule.
+
+## C. Concurrency: the honest assessment
+
+The tree is already modern — **53 `@concurrent` annotations and 10 `actor`
+declarations**, with `SWIFT_DEFAULT_ACTOR_ISOLATION = MainActor`,
+`SWIFT_APPROACHABLE_CONCURRENCY = YES` and `SWIFT_STRICT_CONCURRENCY = complete`
+on every target. Under SE-0461 a bare `nonisolated async` function inherits the
+caller's actor, which is exactly why the off-main boundaries carry
+`@concurrent` rather than plain `nonisolated`. Those annotations sit at the
+right boundaries; there is no general "use more concurrency" finding to make.
+
+**Where an actor would be worse, and why — so this is not re-proposed:**
+
+- `TileCache`. `MKOverlayRenderer.draw` is synchronous and cannot `await`, so
+  `memoryImage(forKey:)` must answer in-call. An actor forces either an
+  impossible `await` in `draw` or a split into a synchronous memory tier plus
+  an actor disk tier — which is what `NSCache` + `Mutex` already is, minus a
+  second isolation domain and a new consistency hazard. The
+  `Mutex<MutationVersions>` also makes bump-then-delete atomic against
+  check-then-write; an actor's suspension points reintroduce the interleavings
+  it exists to forbid.
+- `HikePhotoStore`. Its only mutable state is one `NSCache`, already
+  thread-safe. An actor would serialise thumbnail decodes that today run in
+  parallel across gallery tiles on the global pool. The `assertOffMainThread`
+  contract at each entry point is what enforces correctness, and it holds.
+- `SerialAsyncQueue`. An actor gives mutual exclusion but explicitly not FIFO
+  ordering across suspensions, and offers no barrier — both of which
+  `mergePendingWidgetFixes`' "every fix accepted before now is on disk once the
+  queue drains" invariant depends on.
+- `SharedStore`. Its hazard is cross-process (app ↔ widget), which in-process
+  isolation cannot address; `options: .atomic` is the right answer and is used
+  on every write.
+- `RecordingStats` / `RecordingTrace`. Read synchronously by
+  `MapView.Coordinator` inside `withObservationTracking`. Isolation here would
+  put an `await` in the MapKit render path — the precise thing render isolation
+  exists to prevent.
+- `PendingRecordingFixStore.withExclusiveLock`. The `flock()` is cross-process;
+  an actor cannot express it. (It does need an `EINTR` retry loop —
+  `SharedRecordingFix.swift:307` turns a signal during lock acquisition into a
+  thrown `.io`.)
+
+**Where modernisation genuinely helps, ranked:**
+
+1. `PowerStateMonitor.swift:98-102` — `nonisolated(unsafe) var tokens` exists
+   solely so a `nonisolated deinit` can unregister observers. `isolated deinit`
+   (SE-0371) is available on this toolchain and deletes the escape hatch
+   outright. The same shape at `LocationManager.swift:107` and
+   `RecordingObservables.swift:37` is already correct — those deinits are empty.
+2. `HikeRecorder+Helpers.swift:210-226` — `gapDistances(for:)` awaits
+   `distanceEvidenceSource.distance(from:to:)` (a `CMPedometer` query on an
+   actor) **sequentially, once per gap leg**, on the Stop path while the walker
+   waits. A `withTaskGroup` collapses n serial CoreMotion round-trips into one.
+   This is the clearest single win in the recording module.
+3. `HikeSyncEngine.reconcile()` / `enqueue(photosByHike:)` (`:260`, `:265`,
+   `:196`) do one actor hop *per record* — 2 200 sequential suspensions for a
+   200-hike, 2 000-photo library. Replace the `lastKnownRecord(id:) == nil`
+   loop with a single batched `knownRecordNames() -> Set<String>`.
+4. `HikeRecorder+Persistence.swift:353` — `updateReviewPreview()` resolves the
+   entire route on the main actor on every review tap, while
+   `RecordingPreparation` and `RouteReviewSection` already have `…OffMain`
+   siblings for exactly this. One call site that did not adopt an established
+   pattern.
+5. `OfflineTileDownloader.run`'s hand-rolled `inFlightWindow = 5` is correct but
+   would read better as `withDiscardingTaskGroup`, and would get cooperative
+   cancellation free.
+
+Style note: `@concurrent nonisolated` (`SettingsView`, `AutoSaveController`)
+and bare `@concurrent` (`OpenHikesModel:374`, `HikeSyncEngine+Delegate:293`)
+are both used and both correct — static members of an actor are implicitly
+nonisolated — but the codebase should pick one spelling.
+
+## D. Fixed-or-not decisions that are product calls
+
+- `RecordingView.swift:469` pre-fills `stopNameDraft` with the hike's default
+  title, while the alert says *"leave it blank to keep the default"* and the
+  `TextField` prompt already shows that default. Tapping Stop → Save without
+  typing therefore writes `customName`, permanently marking the hike
+  user-named. Either the pre-fill is wrong or the copy is; not guessed.
+- `FieldMetricsDigest.swift:384` — `backgroundLocationShare` divides background
+  location time by fg+bg lifetime, which MetricKit accounts separately, so
+  values above 1.0 are representable and would render as "112%". Clamping is a
+  behaviour change to a shipped metric.
+- `OpenWidgetExtension` is the one target with no `SUPPORTED_PLATFORMS`; it
+  stays iPhone-only through `SDKROOT` and `TARGETED_DEVICE_FAMILY = 1`. Adding
+  it is a pbxproj edit with more blast radius than the defect.
+
+## E. Candidates that did not survive checking
+
+Recorded so they are not re-raised.
+
+1. **"A trim can delete a tile a concurrent auto-save just promoted."** Not
+   reachable. `trimCache` skips claimed names outright, and a tile promoted
+   after the claim snapshot keeps its fetch-time mtime, so it sorts *last* in
+   the oldest-first deletion order — reaching it requires
+   `size(tile) > 0.8 × 500 MB`. The safety is arithmetic and undocumented,
+   which is the only residual risk: lowering the trim target fraction toward
+   zero would make it reachable with nothing to catch it.
+2. **"A cancelled trail-graph prefetch strands its region in `.fetching`
+   forever."** Latent, not live. The cancellation paths
+   (`HikeRecorder+Lifecycle.swift:321-331`) do return without restoring state,
+   but the only caller of `cancel()` is `cancelTrailGraphPrefetches()`
+   (`:370`), which also does `trailGraphPrefetchStates.removeAll()`. It becomes
+   real only if a provider throws `CancellationError` of its own accord; today's
+   `OverpassTrailGraphProvider.prefetch` has no `Task.sleep` and no
+   `checkCancellation`.
+3. **"`RouteMotion` is claimed unread but two call sites read it."** The two
+   call sites read `RecordingMotionState` and `RecordingPointFlags.nonPedestrian`,
+   which are different types. `RouteMotion` really is written by
+   `RecordingPoint.routeCoordinate` and read by nothing but tests, exactly as
+   the 2026-08-16 pass decided. Only its DocC link was wrong.
+
+Also checked and found clean, so not worth re-deriving: every DocC symbol link
+in all 281 first-party Swift files now resolves (three did not, all fixed);
+every `.swift` path referenced from a comment exists; the App Group identifier
+agrees across both entitlements files and `SharedStore.appGroupID`; every
+`xcodebuild` call in `ci.yml` and `run-ui-tests.sh` carries
+`-skipPackagePluginValidation`; `ci_post_clone.sh` sets both `IDESkip…` keys;
+all 11 `--ui-test-*` flags match `AppLaunchEnvironment` in both directions; and
+`ModelConfiguration+OpenHikes.swift` pins `cloudKitDatabase: .none` on every
+store, with no other `ModelConfiguration(` literal anywhere — which is what
+keeps `Hike`'s non-optional columns and its `Codable` `photos` array legal.
+
+## F. Coverage and honesty about this pass
+
+Read directly: all of `Recording/`, `Tiles/`, `Map/`, `Hikes/`, `Photos/`,
+`Sync/`, `Settings/`, `Weather/`, `App/`, `General/`, the widget, the shared
+package, the UI-test bundle, the scripts, CI, the test plan and the four
+markdown documents. Derived mechanically rather than by eye: the DocC symbol
+cross-reference over the whole tree, the comment file-path cross-reference, and
+the build-settings extraction.
+
+**Not verified:** whether MapKit re-enters `draw` after every
+`setNeedsDisplay(_ mapRect:)` — A1's loop closes on it, and the renderer's own
+failure-branch comment asserts it from experience, but it was reasoned about
+rather than observed. Whether `--ui-test-performance-log` output changes under
+A6. Whether iOS purges the Caches-backed staging directory between staging and
+send in practice.
+
+**Not run:** UI automation, the performance suite, and any physical-device
+measurement — the first two need a booted simulator and stable hardware and are
+out of CI by design, and no claim above rests on either. A1, A5 and A6 are all
+statements about work performed, and all three deserve a measurement before and
+after any fix.
+
+What was run: 913 app tests in 103 suites, 23 widget tests in 3 suites, 76
+shared-package tests in 12 suites, a clean debug build of the app and the
+embedded widget, and strict SwiftLint. All green — including on the four lint
+violations the uncommitted `CloudSyncStateStoreTests.swift` carried when this
+pass started.

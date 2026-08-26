@@ -132,11 +132,16 @@ if [[ ! -f "$route" ]]; then
     echo "GPX route not found: $route" >&2
     exit 1
 fi
-if [[ ! "$speed" =~ ^[0-9]+([.][0-9]+)?$ ]] || [[ "$speed" == "0" ]]; then
+# The zero test has to be numeric: a textual `== "0"` lets "0.0" and "00"
+# through, and both divide by zero when the playback loop derives its step.
+is_positive() {
+    awk -v value="$1" 'BEGIN { exit !(value > 0) }'
+}
+if [[ ! "$speed" =~ ^[0-9]+([.][0-9]+)?$ ]] || ! is_positive "$speed"; then
     echo "--speed must be a positive number." >&2
     exit 2
 fi
-if [[ ! "$interval" =~ ^[0-9]+([.][0-9]+)?$ ]] || [[ "$interval" == "0" ]]; then
+if [[ ! "$interval" =~ ^[0-9]+([.][0-9]+)?$ ]] || ! is_positive "$interval"; then
     echo "--interval must be a positive number." >&2
     exit 2
 fi
