@@ -448,9 +448,6 @@ struct OfflineStorageStatus: View {
     }
 
     private static func byteText(_ bytes: Int64) -> String {
-        ByteCountFormatter.string(
-            fromByteCount: bytes,
-            countStyle: .file
-        )
+        bytes.formatted(.byteCount(style: .file))
     }
 }

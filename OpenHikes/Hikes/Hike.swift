@@ -10,6 +10,30 @@ import SwiftData
 
 @Model
 final class Hike {
+    /// Backs the three shapes of query this model actually receives, so none
+    /// of them is a table scan:
+    ///
+    /// - `\.id` — the identity lookup. `OpenHikesView.restoreLastSelectedHike()`,
+    ///   `BackgroundTrailTracker` and `HikeRecorder.existingHike(sessionID:)`
+    ///   all fetch a single row by it.
+    /// - `\.date` — the hikes list, which is `@Query(sort: \Hike.date, order:
+    ///   .reverse)` and is re-sorted on every insert.
+    /// - `\.isRecording` — `deleteOrphanedRecordingHikes()`, which runs at
+    ///   launch and has to find the drafts among every hike ever saved.
+    ///
+    /// Separate single-column indexes rather than one compound: these are
+    /// three unrelated questions, and a compound index only serves a prefix of
+    /// its own columns.
+    ///
+    /// Deliberately no `#Unique<Hike>([\.id])`, though the column is one. A
+    /// uniqueness constraint turns inserting an existing id into a silent
+    /// upsert, which would convert a duplicate-id bug from two visible rows
+    /// into one row and lost data — and it is the kind of constraint that can
+    /// refuse to open a store that already violates it, which for this app
+    /// means the user reinstalls and loses every saved hike. The code already
+    /// treats the id as unique by looking a hike up before creating one.
+    #Index<Hike>([\.id], [\.date], [\.isRecording])
+
     /// Stable identity, also used to key the route drawn on the map.
     var id: UUID
     var title: String

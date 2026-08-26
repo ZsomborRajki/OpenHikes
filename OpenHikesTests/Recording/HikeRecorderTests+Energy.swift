@@ -68,7 +68,16 @@ extension HikeRecorderTests {
 
         reading.withLock { $0 = PowerState(isLowPowerModeEnabled: true) }
         monitor.refresh()
-        await settleDelegateHop()
+        // Named rather than best-effort: `observePowerState()` is an
+        // `Observations` loop, so the effect lands a few scheduler hops after
+        // `refresh()` — monitor notices, sequence yields, loop resumes,
+        // profile is applied. A fixed number of round trips buys an amount of
+        // progress that depends on how loaded the machine is, which is the
+        // flake `SettleSupport` exists to remove.
+        await settleDelegateHop(until: "the conserving profile to be applied") {
+            self.source.currentProfile?.desiredAccuracy
+                == RecordingEnergyPolicy.conservingAccuracy
+        }
 
         #expect(
             source.currentProfile?.desiredAccuracy

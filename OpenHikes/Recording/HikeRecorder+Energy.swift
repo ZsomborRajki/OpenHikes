@@ -53,18 +53,35 @@ extension HikeRecorder {
         source.apply(resolvedEnergyProfile())
     }
 
-    /// Re-arms after every change, the same shape ``MapView/Coordinator``
-    /// uses: `withObservationTracking` fires once and then forgets, so an
-    /// observer that does not re-register sees exactly one transition and
-    /// then goes quiet for the rest of the hike.
+    /// Re-evaluates the profile for the rest of the recorder's life, once per
+    /// power-state change.
+    ///
+    /// An `Observations` sequence rather than the fire-once
+    /// `withObservationTracking` + re-arm recursion this used to be — and that
+    /// ``MapView/Coordinator`` still uses deliberately, because there the
+    /// point is to stay synchronous and off SwiftUI's render path.
+    ///
+    /// Three things the loop gets that the recursion did not. The re-arm can't
+    /// be forgotten: with `withObservationTracking`, an `onChange` that fails
+    /// to re-register sees exactly one transition and then goes quiet for the
+    /// rest of the hike, and nothing reports that it has. Cancellation is a
+    /// real handle instead of a dropped closure. And the value has settled by
+    /// the time it arrives — `onChange` fires *before* the write lands, which
+    /// is why the old body had to hop through `Task { @MainActor in … }` to
+    /// read anything true.
+    ///
+    /// `dropFirst()` because `Observations` opens by emitting the value it
+    /// starts tracking, and this is a change subscription. Re-evaluating on
+    /// arrival would be harmless — the session isn't capturing fixes yet at
+    /// `init`, and ``updateEnergyProfile()`` returns early — but "only on a
+    /// change" is what the rest of this file promises.
     func observePowerState() {
-        withObservationTracking {
-            _ = powerMonitor.state
-        } onChange: { [weak self] in
-            Task { @MainActor [weak self] in
+        powerStateObservation?.cancel()
+        let monitor = powerMonitor
+        powerStateObservation = Task { [weak self] in
+            for await _ in Observations({ monitor.state }).dropFirst() {
                 guard let self else { return }
                 updateEnergyProfile()
-                observePowerState()
             }
         }
     }

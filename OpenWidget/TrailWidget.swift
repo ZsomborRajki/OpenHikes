@@ -8,8 +8,10 @@
 //  displayed state still comes from SharedStore (see OpenHikesShared).
 //
 
+import AppIntents
 import CoreLocation
 import OpenHikesShared
+import RelevanceKit
 import SwiftUI
 import WidgetKit
 
@@ -84,7 +86,26 @@ final class WidgetRecordingRequest {
     }
 }
 
-struct TrailWidgetProvider: TimelineProvider {
+/// The widget's configuration, which is deliberately empty.
+///
+/// There is nothing for a walker to choose here: the widget shows whatever
+/// hike the app has selected, and an active recording always wins. Picking a
+/// hike in two places would be one place too many.
+///
+/// It exists because `AppIntentConfiguration` is what gives
+/// ``TrailWidgetProvider`` an `async` timeline and a `relevance()` the Smart
+/// Stack reads — see the provider. Migrating from `StaticConfiguration` keeps
+/// widgets already on a home screen exactly where they are, because
+/// ``TrailWidgetKind/id`` is unchanged; that identifier is the migration, so
+/// it must stay stable.
+struct TrailWidgetConfiguration: WidgetConfigurationIntent {
+    static let title: LocalizedStringResource = "Trail"
+    static let description = IntentDescription(
+        "Shows your selected trail or a hike currently being recorded."
+    )
+}
+
+struct TrailWidgetProvider: AppIntentTimelineProvider {
     /// How far ahead the timeline schedules its self-healing reload.
     ///
     /// Freshness is driven by the app's explicit `reloadTimelines` calls
@@ -100,28 +121,64 @@ struct TrailWidgetProvider: TimelineProvider {
         Self.placeholderEntry()
     }
 
-    func getSnapshot(in context: Context, completion: @Sendable (TrailWidgetEntry) -> Void) {
-        completion(context.isPreview ? Self.placeholderEntry() : Self.currentEntry())
+    /// `async` with nothing to await, because the protocol says so and both
+    /// answers are already in memory — hence the inline disable rather than a
+    /// contrived suspension.
+    func snapshot(
+        for configuration: TrailWidgetConfiguration,
+        in context: Context
+    ) async -> TrailWidgetEntry { // swiftlint:disable:this async_without_await
+        context.isPreview ? Self.placeholderEntry() : Self.currentEntry()
     }
 
-    // `@Sendable` on the completion matches WidgetKit's own declaration. The
-    // requirement is `@preconcurrency`, so dropping it compiled — and then the
-    // recording branch below, which hands the closure to a `@MainActor` task,
-    // was sending a non-`Sendable` closure across an isolation boundary.
-    func getTimeline(in context: Context, completion: @escaping @Sendable (Timeline<TrailWidgetEntry>) -> Void) {
+    /// An `async` requirement rather than the completion-handler pair
+    /// `TimelineProvider` declares. That protocol has no async form, which is
+    /// most of why this widget is `AppIntentTimelineProvider`: the recording
+    /// branch below has to reach a `@MainActor` sampler and wait for a fix, so
+    /// under the old shape the escaping completion was handed into a
+    /// `Task { @MainActor in … }` and had to be `@Sendable` to survive
+    /// crossing the isolation boundary — a constraint the code carried a
+    /// comment to explain. Awaiting is the same thing without the boundary.
+    func timeline(
+        for configuration: TrailWidgetConfiguration,
+        in context: Context
+    ) async -> Timeline<TrailWidgetEntry> {
         let entry = Self.currentEntry()
         guard let recording = entry.recordingSnapshot,
               recording.isCapturingFixes else {
-            completion(Self.currentTimeline())
-            return
+            return Self.currentTimeline()
         }
-        Task { @MainActor in
-            WidgetRecordingLocationSampler.shared.requestFix(
-                for: recording.sessionID
-            ) {
-                completion(Self.currentTimeline())
-            }
+        // Best-effort: the sampler answers whether or not it got a fix, and a
+        // timeline is owed either way. Whatever it managed to write is picked
+        // up by re-reading the store below.
+        await WidgetRecordingLocationSampler.shared.fix(for: recording.sessionID)
+        return Self.currentTimeline()
+    }
+
+    /// What the Smart Stack ranks this widget by.
+    ///
+    /// A recording in progress is the one moment this widget is the most
+    /// useful thing on the stack — the walker is outdoors, moving, and looking
+    /// at a wrist or a lock screen rather than unlocking the phone.
+    /// `.fitness(.workoutActive)` is exactly that condition, and the system
+    /// already knows when it holds.
+    ///
+    /// No attributes otherwise: a trail sitting selected for a fortnight is
+    /// not a reason to promote anything, and claiming relevance the user
+    /// doesn't feel is how a widget gets removed from the stack for good.
+    ///
+    /// `async` for the protocol's sake; reading the shared store is a file
+    /// read on the calling thread, as everywhere else in this provider.
+    func relevance() async -> WidgetRelevance<TrailWidgetConfiguration> { // swiftlint:disable:this async_without_await
+        guard Self.currentEntry().recordingSnapshot?.isCapturingFixes == true else {
+            return WidgetRelevance([])
         }
+        return WidgetRelevance([
+            WidgetRelevanceAttribute(
+                configuration: TrailWidgetConfiguration(),
+                context: .fitness(.workoutActive)
+            ),
+        ])
     }
 
     // The three below take the date rather than reading the clock, and are
@@ -191,6 +248,16 @@ struct TrailWidgetProvider: TimelineProvider {
             super.init()
             manager.delegate = self
             manager.desiredAccuracy = kCLLocationAccuracyHundredMeters
+        }
+
+        /// `requestFix` as an `await`. The callback is invoked exactly once on
+        /// every path — `WidgetRecordingRequest.consume()` is what guarantees
+        /// it for the two that race (a fix arriving and the timeout firing) —
+        /// which is the precondition a checked continuation needs.
+        func fix(for sessionID: UUID) async {
+            await withCheckedContinuation { continuation in
+                requestFix(for: sessionID) { continuation.resume() }
+            }
         }
 
         func requestFix(for sessionID: UUID, completion: @escaping () -> Void) {
@@ -562,7 +629,13 @@ struct TrailWidget: Widget {
     static let supportedFamilies: [WidgetFamily] = [.systemSmall, .systemMedium, .systemLarge, .systemExtraLarge]
 
     var body: some WidgetConfiguration {
-        StaticConfiguration(kind: TrailWidgetKind.id, provider: TrailWidgetProvider()) { entry in
+        // `AppIntentConfiguration`, not `StaticConfiguration` — the kind is
+        // unchanged, which is what carries already-placed widgets across.
+        AppIntentConfiguration(
+            kind: TrailWidgetKind.id,
+            intent: TrailWidgetConfiguration.self,
+            provider: TrailWidgetProvider()
+        ) { entry in
             TrailWidgetEntryView(entry: entry)
         }
         .configurationDisplayName("Trail")

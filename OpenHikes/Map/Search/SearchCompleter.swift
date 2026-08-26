@@ -11,7 +11,7 @@ import Observation
 import os
 
 @Observable
-final class SearchCompleter: NSObject, @preconcurrency MKLocalSearchCompleterDelegate {
+final class SearchCompleter: NSObject, MKLocalSearchCompleterDelegate {
     @ObservationIgnored private static let logger = Logger(
         subsystem: "OpenHikes",
         category: "Search"
@@ -62,13 +62,13 @@ final class SearchCompleter: NSObject, @preconcurrency MKLocalSearchCompleterDel
         suggestions = []
     }
 
-    // MapKit calls these on the main thread, which is what the `@preconcurrency`
-    // conformance above asserts: the requirements are declared `nonisolated`,
-    // so satisfying them with main-actor methods installs a runtime check
-    // instead of the hand-written `MainActor.assumeIsolated` this used to
-    // carry. That matters beyond tidiness — sending a non-`Sendable`
-    // `MKLocalSearchCompleter` (and its results) across the closure boundary
-    // was itself a data-race diagnostic under strict concurrency.
+    // MapKit calls these on the main thread, and as of the iOS 26 SDK it also
+    // says so: `MKLocalSearchCompleterDelegate` is `@MainActor`, so a
+    // main-actor method satisfies the requirement outright. This conformance
+    // used to need `@preconcurrency` to bridge a `nonisolated` requirement,
+    // which cost a runtime isolation check on every callback; before that it
+    // was a hand-written `MainActor.assumeIsolated`. Both are now unnecessary
+    // — the compiler proves statically what they asserted dynamically.
     func completerDidUpdateResults(_ completer: MKLocalSearchCompleter) {
         suggestions = completer.results
     }

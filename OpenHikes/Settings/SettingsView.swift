@@ -474,7 +474,7 @@ private extension SettingsView {
     /// which (unlike a closure literal) doesn't inherit the view's actor
     /// isolation. Doesn't touch any actor-isolated state, so this is safe.
     nonisolated static func byteText(_ bytes: Int64) -> String {
-        ByteCountFormatter.string(fromByteCount: bytes, countStyle: .file)
+        bytes.formatted(.byteCount(style: .file))
     }
 }
 

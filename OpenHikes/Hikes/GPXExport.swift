@@ -39,10 +39,27 @@ nonisolated enum GPXExport {
     /// resolves — and fixed-point, which matters: `Double`'s own description
     /// reaches for scientific notation near the prime meridian or the equator,
     /// and `xsd:decimal` has no way to express it.
-    private static let coordinateFormat = "%.7f"
+    ///
+    /// A `FormatStyle` rather than `String(format: "%.7f", …)`: this runs
+    /// three times per track point, and the C-variadic path builds an
+    /// `NSString` and re-parses the format string on each one. The style is a
+    /// `Sendable` value resolved once here.
+    ///
+    /// `.grouping(.never)` and the POSIX locale are load-bearing, not
+    /// decoration — GPX is `xsd:decimal`, so a thousands separator or a comma
+    /// decimal mark from the user's locale would make the file invalid. This
+    /// is the one behaviour `String(format:)` gave for free, by never
+    /// consulting a locale at all.
+    private static let coordinateStyle = FloatingPointFormatStyle<Double>()
+        .precision(.fractionLength(7))
+        .grouping(.never)
+        .locale(Locale(identifier: "en_US_POSIX"))
     /// Centimetres. Barometric elevation carries fractions worth keeping, but
     /// not more than this.
-    private static let elevationFormat = "%.2f"
+    private static let elevationStyle = FloatingPointFormatStyle<Double>()
+        .precision(.fractionLength(2))
+        .grouping(.never)
+        .locale(Locale(identifier: "en_US_POSIX"))
 
     /// Fractional seconds because a recording samples faster than 1 Hz and its
     /// fixes don't land on whole seconds; ``GPXImport`` parses them back
@@ -134,8 +151,8 @@ nonisolated private extension GPXExport {
     /// on a route imported from a planner that is every one of them, and the
     /// pair of tags it saves is most of the file.
     static func appendPoint(_ point: RouteCoordinate, to xml: inout String) {
-        let latitude = String(format: coordinateFormat, point.latitude)
-        let longitude = String(format: coordinateFormat, point.longitude)
+        let latitude = point.latitude.formatted(coordinateStyle)
+        let longitude = point.longitude.formatted(coordinateStyle)
         let attributes = "lat=\"\(latitude)\" lon=\"\(longitude)\""
         guard point.elevation != nil || point.timestamp != nil else {
             xml += "      <trkpt \(attributes)/>\n"
@@ -143,7 +160,7 @@ nonisolated private extension GPXExport {
         }
         xml += "      <trkpt \(attributes)>\n"
         if let elevation = point.elevation {
-            xml += "        <ele>\(String(format: elevationFormat, elevation))</ele>\n"
+            xml += "        <ele>\(elevation.formatted(elevationStyle))</ele>\n"
         }
         if let timestamp = point.timestamp {
             xml += "        <time>\(timeStyle.format(timestamp))</time>\n"

@@ -39,7 +39,14 @@ final class HikeRecorder: NSObject {
         case needsDecision(RecordingRecoverySummary)
     }
 
-    nonisolated deinit { /* intentionally ignored */ }
+    /// Nothing else here needs unwinding: every other task this recorder owns
+    /// is either tied to a session that has already ended or is cancelled on
+    /// the path that started it. ``powerStateObservation`` is the exception —
+    /// it is deliberately lifetime-scoped rather than session-scoped, so this
+    /// is the only place that ends it. Without this the loop would sit on its
+    /// `PowerStateMonitor` until the next power-state change woke it up to
+    /// discover its recorder was gone.
+    nonisolated deinit { powerStateObservation?.cancel() }
 
     var phase: Phase = .idle
     var recoveryState: RecoveryState = .absent
@@ -97,6 +104,9 @@ final class HikeRecorder: NSObject {
     /// hours of walking apart, and the neighbours of the region left behind
     /// are no longer the ones worth having.
     @ObservationIgnored var neighbourPrefetchTask: Task<Void, Never>?
+    /// The live subscription to ``PowerStateMonitor/state``. Held so it can be
+    /// cancelled — see ``observePowerState()``.
+    @ObservationIgnored var powerStateObservation: Task<Void, Never>?
     @ObservationIgnored var startRequested = false
     @ObservationIgnored var isActivating = false
     @ObservationIgnored var pendingResumeFlag = false

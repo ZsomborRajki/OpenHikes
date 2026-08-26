@@ -455,11 +455,18 @@ extension HikeRecorder {
         default: timeOfDay = "Hike"
         }
 
-        let formatter = DateFormatter()
-        formatter.dateStyle = .medium
-        formatter.timeStyle = .none
-        formatter.calendar = calendar
-        return "\(timeOfDay) – \(formatter.string(from: date))"
+        // `Date.FormatStyle` rather than `DateFormatter`: the old formatter is
+        // an `NSObject` that had to be built and configured on every call, and
+        // this runs once per saved recording. A format style is a `Sendable`
+        // value, which is also what lets this stay `nonisolated` without
+        // parking a shared mutable formatter somewhere.
+        //
+        // `.abbreviated` is `DateFormatter`'s `.medium`. Locale and time zone
+        // stay at the system's, as they were.
+        let dateText = date.formatted(
+            Date.FormatStyle(date: .abbreviated, time: .omitted, calendar: calendar)
+        )
+        return "\(timeOfDay) – \(dateText)"
     }
 
     // MARK: Session lifecycle helpers
