@@ -7,6 +7,7 @@
 	objects = {
 
 /* Begin PBXBuildFile section */
+		A84425B0303F710A0052FB84 /* OpenHikes.storekit in Resources */ = {isa = PBXBuildFile; fileRef = A84425AF303F710A0052FB84 /* OpenHikes.storekit */; };
 		A8838AE7302A232300FAEEEE /* WidgetKit.framework in Frameworks */ = {isa = PBXBuildFile; fileRef = A8838AE6302A232300FAEEEE /* WidgetKit.framework */; };
 		A8838AE9302A232300FAEEEE /* SwiftUI.framework in Frameworks */ = {isa = PBXBuildFile; fileRef = A8838AE8302A232300FAEEEE /* SwiftUI.framework */; };
 		A8838AF6302A232400FAEEEE /* OpenWidgetExtension.appex in Embed Foundation Extensions */ = {isa = PBXBuildFile; fileRef = A8838AE4302A232300FAEEEE /* OpenWidgetExtension.appex */; platformFilter = ios; settings = {ATTRIBUTES = (RemoveHeadersOnCopy, ); }; };
@@ -67,6 +68,7 @@
 /* End PBXCopyFilesBuildPhase section */
 
 /* Begin PBXFileReference section */
+		A84425AF303F710A0052FB84 /* OpenHikes.storekit */ = {isa = PBXFileReference; lastKnownFileType = text; path = OpenHikes.storekit; sourceTree = "<group>"; };
 		A85E854D2FE3EBF500558639 /* OpenHikes.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = OpenHikes.app; sourceTree = BUILT_PRODUCTS_DIR; };
 		A8838AE4302A232300FAEEEE /* OpenWidgetExtension.appex */ = {isa = PBXFileReference; explicitFileType = "wrapper.app-extension"; includeInIndex = 0; path = OpenWidgetExtension.appex; sourceTree = BUILT_PRODUCTS_DIR; };
 		A8838AE6302A232300FAEEEE /* WidgetKit.framework */ = {isa = PBXFileReference; lastKnownFileType = wrapper.framework; name = WidgetKit.framework; path = System/Library/Frameworks/WidgetKit.framework; sourceTree = SDKROOT; };
@@ -191,6 +193,7 @@
 		A85E85442FE3EBF500558639 = {
 			isa = PBXGroup;
 			children = (
+				A84425AF303F710A0052FB84 /* OpenHikes.storekit */,
 				F904328F302E65CC00D840D2 /* OpenHikes.xctestplan */,
 				A8838B99302A30FA00FAEEEE /* OpenWidgetExtension.entitlements */,
 				A85E854F2FE3EBF500558639 /* OpenHikes */,
@@ -421,6 +424,7 @@
 			isa = PBXResourcesBuildPhase;
 			buildActionMask = 2147483647;
 			files = (
+				A84425B0303F710A0052FB84 /* OpenHikes.storekit in Resources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
@@ -660,7 +664,7 @@
 				ASSETCATALOG_COMPILER_GLOBAL_ACCENT_COLOR_NAME = AccentColor;
 				CODE_SIGN_ENTITLEMENTS = OpenHikes/OpenHikes.entitlements;
 				CODE_SIGN_STYLE = Automatic;
-				CURRENT_PROJECT_VERSION = 8;
+				CURRENT_PROJECT_VERSION = 10;
 				DEAD_CODE_STRIPPING = YES;
 				DEVELOPMENT_TEAM = 697EW27G9U;
 				ENABLE_APP_SANDBOX = YES;
@@ -713,7 +717,7 @@
 				ASSETCATALOG_COMPILER_GLOBAL_ACCENT_COLOR_NAME = AccentColor;
 				CODE_SIGN_ENTITLEMENTS = OpenHikes/OpenHikes.entitlements;
 				CODE_SIGN_STYLE = Automatic;
-				CURRENT_PROJECT_VERSION = 8;
+				CURRENT_PROJECT_VERSION = 10;
 				DEAD_CODE_STRIPPING = YES;
 				DEVELOPMENT_TEAM = 697EW27G9U;
 				ENABLE_APP_SANDBOX = YES;
@@ -766,7 +770,7 @@
 				ASSETCATALOG_COMPILER_WIDGET_BACKGROUND_COLOR_NAME = WidgetBackground;
 				CODE_SIGN_ENTITLEMENTS = OpenWidgetExtension.entitlements;
 				CODE_SIGN_STYLE = Automatic;
-				CURRENT_PROJECT_VERSION = 8;
+				CURRENT_PROJECT_VERSION = 10;
 				DEVELOPMENT_TEAM = 697EW27G9U;
 				GENERATE_INFOPLIST_FILE = YES;
 				INFOPLIST_FILE = OpenWidget/Info.plist;
@@ -802,7 +806,7 @@
 				ASSETCATALOG_COMPILER_WIDGET_BACKGROUND_COLOR_NAME = WidgetBackground;
 				CODE_SIGN_ENTITLEMENTS = OpenWidgetExtension.entitlements;
 				CODE_SIGN_STYLE = Automatic;
-				CURRENT_PROJECT_VERSION = 8;
+				CURRENT_PROJECT_VERSION = 10;
 				DEVELOPMENT_TEAM = 697EW27G9U;
 				GENERATE_INFOPLIST_FILE = YES;
 				INFOPLIST_FILE = OpenWidget/Info.plist;

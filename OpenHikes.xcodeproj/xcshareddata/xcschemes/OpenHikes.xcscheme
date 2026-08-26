@@ -96,7 +96,7 @@
          </EnvironmentVariable>
       </EnvironmentVariables>
       <StoreKitConfigurationFileReference
-         identifier = "../../../OpenHikes.storekit">
+         identifier = "../../OpenHikes.storekit">
       </StoreKitConfigurationFileReference>
    </LaunchAction>
    <ProfileAction

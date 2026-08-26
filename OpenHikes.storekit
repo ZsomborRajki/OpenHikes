@@ -1,5 +1,15 @@
 {
-  "identifier" : "6F2B9C41-08D7-4E5A-9C3B-2A7E14D6F0B8",
+  "appPolicies" : {
+    "eula" : "",
+    "policies" : [
+      {
+        "locale" : "en_US",
+        "policyText" : "",
+        "policyURL" : ""
+      }
+    ]
+  },
+  "identifier" : "4C1F8A73",
   "nonRenewingSubscriptions" : [
 
   ],
@@ -7,16 +17,22 @@
 
   ],
   "settings" : {
+    "_askToBuyEnabled" : false,
+    "_billingGracePeriodEnabled" : false,
+    "_billingIssuesEnabled" : false,
+    "_disableDialogs" : false,
     "_failTransactionsEnabled" : false,
     "_locale" : "en_US",
+    "_renewalBillingIssuesEnabled" : false,
+    "_storefront" : "USA",
     "_storeKitErrors" : [
 
     ],
-    "_storefront" : "USA"
+    "_timeRate" : 0
   },
   "subscriptionGroups" : [
     {
-      "id" : "0B4E7A19-52C6-4D38-8F71-A3D95C60E2B4",
+      "id" : "21005E64",
       "localizations" : [
 
       ],
@@ -26,18 +42,38 @@
           "adHocOffers" : [
 
           ],
+          "billingPlans" : [
+            {
+              "billingPlanType" : "BILLED_UPFRONT",
+              "commitmentDisplayPrice" : "19.99",
+              "displayPrice" : "19.99",
+              "internalID" : "9525B511",
+              "isEnabled" : true
+            }
+          ],
           "codeOffers" : [
 
           ],
           "displayPrice" : "19.99",
           "familyShareable" : false,
           "groupNumber" : 1,
-          "internalID" : "3D8A5E17-6B24-4C90-A1F5-9E0C7B3D42A6",
+          "internalID" : "7B93D0A5",
           "introductoryOffer" : {
-            "internalID" : "C5719A02-8E4D-4B63-9F28-6D01A7E3C85F",
+            "billingPlanType" : "BILLED_UPFRONT",
+            "internalID" : "E20C4F18",
+            "numberOfPeriods" : 1,
             "paymentMode" : "free",
-            "subscriptionPeriod" : "P1W"
+            "subscriptionPeriod" : "P1M"
           },
+          "introductoryOffers" : [
+            {
+              "billingPlanType" : "BILLED_UPFRONT",
+              "internalID" : "E20C4F18",
+              "numberOfPeriods" : 1,
+              "paymentMode" : "free",
+              "subscriptionPeriod" : "P1M"
+            }
+          ],
           "localizations" : [
             {
               "description" : "Unlock the Stadia Outdoors and Thunderforest Outdoors map styles, with contour lines, marked trails and hillshading.",
@@ -48,7 +84,7 @@
           "productID" : "tappium.com.OpenHikes.pro.maps.yearly",
           "recurringSubscriptionPeriod" : "P1Y",
           "referenceName" : "Pro Maps (Yearly)",
-          "subscriptionGroupID" : "0B4E7A19-52C6-4D38-8F71-A3D95C60E2B4",
+          "subscriptionGroupID" : "21005E64",
           "type" : "RecurringSubscription",
           "winbackOffers" : [
 
@@ -58,7 +94,7 @@
     }
   ],
   "version" : {
-    "major" : 4,
+    "major" : 5,
     "minor" : 0
   }
 }

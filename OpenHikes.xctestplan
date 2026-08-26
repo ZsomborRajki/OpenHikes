@@ -1,44 +1,46 @@
 {
-  "configurations": [
+  "configurations" : [
     {
-      "id": "5ECF0865-9A5F-46A8-AF5B-1FC4FAC75D3F",
-      "name": "Test Scheme Action",
-      "options": {}
+      "id" : "5ECF0865-9A5F-46A8-AF5B-1FC4FAC75D3F",
+      "name" : "Test Scheme Action",
+      "options" : {
+
+      }
     }
   ],
-  "defaultOptions": {
-    "performanceAntipatternCheckerEnabled": true,
-    "targetForVariableExpansion": {
-      "containerPath": "container:OpenHikes.xcodeproj",
-      "identifier": "A85E854C2FE3EBF500558639",
-      "name": "OpenHikes"
+  "defaultOptions" : {
+    "performanceAntipatternCheckerEnabled" : true,
+    "targetForVariableExpansion" : {
+      "containerPath" : "container:OpenHikes.xcodeproj",
+      "identifier" : "A85E854C2FE3EBF500558639",
+      "name" : "OpenHikes"
     }
   },
-  "testTargets": [
+  "testTargets" : [
     {
-      "target": {
-        "containerPath": "container:OpenHikes.xcodeproj",
-        "identifier": "AB0000000000000000000001",
-        "name": "OpenHikesTests"
+      "target" : {
+        "containerPath" : "container:OpenHikes.xcodeproj",
+        "identifier" : "AB0000000000000000000001",
+        "name" : "OpenHikesTests"
       }
     },
     {
-      "target": {
-        "containerPath": "container:OpenHikes.xcodeproj",
-        "identifier": "AC0000000000000000000001",
-        "name": "OpenWidgetTests"
+      "target" : {
+        "containerPath" : "container:OpenHikes.xcodeproj",
+        "identifier" : "AC0000000000000000000001",
+        "name" : "OpenWidgetTests"
       }
     },
     {
-      "skippedTests": [
+      "skippedTests" : [
         "PerformanceUITests"
       ],
-      "target": {
-        "containerPath": "container:OpenHikes.xcodeproj",
-        "identifier": "AE0000000000000000000001",
-        "name": "OpenHikesUITests"
+      "target" : {
+        "containerPath" : "container:OpenHikes.xcodeproj",
+        "identifier" : "AE0000000000000000000001",
+        "name" : "OpenHikesUITests"
       }
     }
   ],
-  "version": 1
+  "version" : 1
 }
