@@ -122,8 +122,10 @@ struct OpenHikesView: View {
     }
 
     /// Resolves the selected provider (with API key substituted) for the map.
-    private var activeTileSource: ActiveTileSource {
-        ActiveTileSource(TileProvider.renderable(id: tileProviderID))
+    /// `nil` when the selection draws MapKit's own base map, which installs no
+    /// overlay and starts none of the tile pipeline.
+    private var activeTileSource: ActiveTileSource? {
+        TileProvider.renderable(id: tileProviderID).renderedSource
     }
 
     var body: some View {
@@ -296,6 +298,14 @@ struct OpenHikesView: View {
                 // so nothing here becomes a dependency of this view.
                 routeStyle.follow(selectedHike)
                 appModel.selectedHikeDidChange(to: selectedHike)
+            }
+            // Switching to (or away from) the system base map turns the tile
+            // pipeline off (or back on) for whatever is already selected.
+            // Without this, picking Apple Maps would leave auto-save running
+            // for a map that draws no tiles, and picking a tile source back
+            // again would leave it off until the selection changed.
+            .onChange(of: tileProviderID) { _, _ in
+                appModel.tileProviderDidChange(selectedHike: selectedHike)
             }
             .onChange(of: navigationPath) { _, _ in
                 importSelectionGate.invalidate()

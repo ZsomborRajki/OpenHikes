@@ -45,6 +45,42 @@ nonisolated final class SettingsUITests: XCTestCase {
         )
     }
 
+    /// The Apple Maps option's whole promise is negative: with it selected
+    /// there is no bulk download to press and no auto-save to switch on,
+    /// because nothing draws a tile that either could act on. Asserted on the
+    /// screen a user would reach for them, for the same reason the OSM policy
+    /// above is — the flags behind both are pinned in `TileProviderTests`, but
+    /// a control left on screen is what a user would actually experience.
+    @MainActor
+    func testSystemBaseMapOffersNoTileControls() {
+        let app = launchApp(
+            arguments: [
+                "--ui-test-expanded-sheet",
+                "--ui-test-import-gpx=\(UITestFixture.gpxName)",
+            ]
+        )
+
+        element("settings-button", in: app).tap()
+        let appleMaps = element("provider-row-apple_maps", in: app)
+        XCTAssertTrue(
+            appleMaps.waitForExistence(timeout: UITestTimeout.navigation)
+        )
+        appleMaps.tap()
+        XCTAssertTrue(appleMaps.isSelected, "the tapped source should become the selected one")
+        app.buttons["Done"].tap()
+
+        openHikeDetail(in: app)
+        scrollIntoView(element("route-width-slider", in: app), in: app)
+        XCTAssertFalse(
+            element("offline-download-button", in: app).exists,
+            "a map that fetches no tiles has nothing to download"
+        )
+        XCTAssertFalse(
+            app.switches["Auto-Save Tiles"].exists,
+            "a map that fetches no tiles has nothing to auto-save"
+        )
+    }
+
     /// The settings toggle, flipped and then found still flipped after the
     /// screen has been left and re-entered.
     ///
@@ -69,7 +105,10 @@ nonisolated final class SettingsUITests: XCTestCase {
         )
 
         let photos = toggle("save-photos-to-library-toggle", in: app)
-        scrollIntoView(photos, in: app)
+        XCTAssertTrue(
+            scrollIntoView(photos, in: app),
+            "the toggle has to be fully on screen before it can be aimed at"
+        )
         let photosBefore = toggleIsOn(photos)
         flip(photos)
         XCTAssertTrue(
@@ -84,7 +123,7 @@ nonisolated final class SettingsUITests: XCTestCase {
                 .waitForExistence(timeout: UITestTimeout.navigation)
         )
 
-        scrollIntoView(photos, in: app)
+        XCTAssertTrue(scrollIntoView(photos, in: app))
         XCTAssertEqual(
             toggleIsOn(photos),
             !photosBefore,

@@ -2,8 +2,10 @@
 //  TileProvider.swift
 //  OpenHikes
 //
-//  The selectable raster tile sources the map can render. The settings keys
-//  that persist the user's choice live in `App/Configuration/SettingsKey.swift`.
+//  The selectable raster tile sources the map can render, plus the one entry
+//  that renders none of them and leaves MapKit's own base map in place. The
+//  settings keys that persist the user's choice live in
+//  `App/Configuration/SettingsKey.swift`.
 //
 
 import Foundation
@@ -28,6 +30,16 @@ nonisolated struct TileProvider: Identifiable, Hashable, Sendable {
     let supportsBulkDownload: Bool
     /// `Secrets.plist` key holding this provider's API key, for providers that need one. `nil` if keyless.
     let apiKeyPlistKey: String?
+    /// Whether this entry draws MapKit's own base map instead of raster tiles.
+    ///
+    /// The one such entry isn't a tile source at all — it has no template, no
+    /// zoom ceiling and nothing to fetch — but it is still a *choice of map*,
+    /// so it lives in the same catalog the settings screen lists and the same
+    /// `UserDefaults` key it persists. Everything downstream reads this flag
+    /// rather than testing the id: it decides whether an overlay is installed
+    /// (``TileProvider/renderedSource``), whether auto-save runs, and whether
+    /// the offline controls are offered at all.
+    let usesSystemBaseMap: Bool
 
     /// The template with `{key}` replaced by `apiKey`. Keyless providers ignore it.
     func resolvedTemplate(apiKey: String) -> String {
@@ -60,7 +72,33 @@ nonisolated extension TileProvider {
         maximumZ: osmMaximumZ,
         attribution: "© OpenStreetMap contributors",
         supportsBulkDownload: false,
-        apiKeyPlistKey: nil
+        apiKeyPlistKey: nil,
+        usesSystemBaseMap: false
+    )
+
+    /// MapKit's own base map: no raster tiles, and therefore no tile pipeline.
+    ///
+    /// Second in the list rather than last because it is the cheapest thing the
+    /// app can draw, not a fallback. Nothing is fetched, nothing is written to
+    /// disk, nothing is auto-saved and nothing can be bulk-downloaded — the map
+    /// data is already on the device, served by the system's own cache. It is
+    /// the option to pick when battery and data matter more than a topographic
+    /// rendering, and the only one whose entire storage cost is zero.
+    ///
+    /// `maximumZ` is 0 because it is meaningless here: MapKit chooses its own
+    /// levels of detail, and no code path reads this value for a provider that
+    /// installs no overlay.
+    static let appleMaps = TileProvider(
+        id: "apple_maps",
+        name: "Apple Maps",
+        summary: "The system's built-in map. Downloads no tiles and saves nothing to disk, "
+            + "so it uses the least battery and data.",
+        urlTemplate: "",
+        maximumZ: 0,
+        attribution: "Map data © Apple",
+        supportsBulkDownload: false,
+        apiKeyPlistKey: nil,
+        usesSystemBaseMap: true
     )
 
     /// A topographic source tuned for hiking that permits offline downloads.
@@ -72,7 +110,8 @@ nonisolated extension TileProvider {
         maximumZ: 20,
         attribution: "© Stadia Maps, © OpenMapTiles, © OpenStreetMap contributors",
         supportsBulkDownload: true,
-        apiKeyPlistKey: "StadiaAPIKey"
+        apiKeyPlistKey: "StadiaAPIKey",
+        usesSystemBaseMap: false
     )
 
     /// A hiking-focused source with deep native zoom, so close-in views stay sharp.
@@ -84,11 +123,16 @@ nonisolated extension TileProvider {
         maximumZ: thunderforestMaximumZ,
         attribution: "Maps © Thunderforest, Data © OpenStreetMap contributors",
         supportsBulkDownload: true,
-        apiKeyPlistKey: "ThunderforestAPIKey"
+        apiKeyPlistKey: "ThunderforestAPIKey",
+        usesSystemBaseMap: false
     )
 
     /// All selectable providers, in display order.
-    static let all: [TileProvider] = [openStreetMap, stadiaOutdoors, thunderforestOutdoors]
+    static let all: [TileProvider] = [openStreetMap, appleMaps, stadiaOutdoors, thunderforestOutdoors]
+
+    /// The entries that actually fetch raster tiles. Everything that reasons
+    /// about templates, zoom ceilings, cache keys or downloads means these.
+    static let rasterSources: [TileProvider] = all.filter { !$0.usesSystemBaseMap }
 
     static let `default` = openStreetMap
 
@@ -122,6 +166,10 @@ extension ActiveTileSource {
     /// ``TileProvider/renderable(id:)`` rather than ``TileProvider/provider(id:)``,
     /// so a key-gated provider with no key can't be built into a source that
     /// only ever 401s.
+    ///
+    /// Not the entry point for deciding what the map draws: a provider that
+    /// uses the system base map has no template to resolve. Go through
+    /// ``TileProvider/renderedSource``, which answers `nil` for it.
     init(_ provider: TileProvider) {
         self.init(
             providerID: provider.id,
@@ -146,5 +194,32 @@ nonisolated extension TileProvider {
     static func renderable(id: String?) -> TileProvider {
         let stored = provider(id: id)
         return Secrets.canLoadTiles(stored) ? stored : .default
+    }
+
+    /// The provider the map is currently drawing with, read from `defaults`.
+    ///
+    /// The one lookup for callers outside SwiftUI — ``AutoSaveController`` and
+    /// ``OpenHikesModel`` — so "which map is selected" is answered the same way
+    /// there as it is by the `@AppStorage` bindings in the views.
+    static func selected(in defaults: UserDefaults) -> TileProvider {
+        renderable(id: defaults.string(forKey: SettingsKey.tileProviderID))
+    }
+}
+
+extension TileProvider {
+    /// The overlay source to draw this provider with, or `nil` when it draws no
+    /// raster tiles at all.
+    ///
+    /// `nil` is not an error and not a fallback: it is the instruction to leave
+    /// MapKit's own base map in place and start none of the tile pipeline. It
+    /// is returned instead of an ``ActiveTileSource`` with an empty template so
+    /// there is no value in the system that an overlay could be built from by
+    /// accident.
+    ///
+    /// Main-actor, unlike the rest of the catalog: it builds an
+    /// ``ActiveTileSource``, and only the views that decide what the map draws
+    /// ever need one.
+    var renderedSource: ActiveTileSource? {
+        usesSystemBaseMap ? nil : ActiveTileSource(self)
     }
 }

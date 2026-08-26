@@ -23,19 +23,60 @@ struct TileProviderTests {
         #expect(TileProvider.default.id == TileProvider.openStreetMap.id)
     }
 
-    /// Every provider has to carry its attribution — it's displayed wherever
-    /// the tiles are, and all three sources require it.
+    /// Every entry has to carry its attribution — it's displayed wherever the
+    /// map is, and every source requires it, Apple's included.
     @Test("every provider is fully described", arguments: TileProvider.all)
     func catalogIsComplete(provider: TileProvider) {
         #expect(!provider.id.isEmpty)
         #expect(!provider.name.isEmpty)
         #expect(!provider.summary.isEmpty)
         #expect(!provider.attribution.isEmpty)
+    }
+
+    /// The half of the description only a real tile source has. Split from the
+    /// check above because the system base map has no template to fill and no
+    /// zoom ceiling to respect — it installs no overlay at all.
+    @Test("every raster source has a usable template", arguments: TileProvider.rasterSources)
+    func rasterCatalogIsComplete(provider: TileProvider) {
         #expect(provider.maximumZ >= OfflineTileDownloader.minZoom)
         #expect(provider.urlTemplate.contains("{z}"))
         #expect(provider.urlTemplate.contains("{x}"))
         #expect(provider.urlTemplate.contains("{y}"))
         #expect(provider.urlTemplate.hasPrefix("https://"))
+    }
+
+    /// The whole point of the option: nothing about it can reach the network.
+    /// A template would be enough to build an overlay from by accident, and an
+    /// overlay is what fetches, caches and auto-saves — so the absence of one
+    /// is the mechanism, not a detail of it.
+    @Test("the system base map fetches nothing")
+    func systemBaseMapHasNoTilePipeline() {
+        let apple = TileProvider.appleMaps
+        #expect(apple.usesSystemBaseMap)
+        #expect(apple.urlTemplate.isEmpty)
+        #expect(apple.apiKeyPlistKey == nil)
+        #expect(!apple.supportsBulkDownload)
+        #expect(apple.renderedSource == nil)
+        #expect(!TileProvider.rasterSources.contains(apple))
+    }
+
+    /// Every real tile source still resolves to something the map can draw —
+    /// the `nil` above has exactly one origin.
+    @Test("only the system base map has no rendered source", arguments: TileProvider.rasterSources)
+    func rasterSourcesRender(provider: TileProvider) {
+        #expect(provider.renderedSource != nil)
+        #expect(provider.renderedSource?.providerID == provider.id)
+    }
+
+    /// Its position is a product decision — the cheapest map sits directly
+    /// under the default rather than at the bottom of the list — and its id is
+    /// a storage contract, like every other one here.
+    @Test("the system base map is the second choice, under a stable id")
+    func systemBaseMapPlacement() {
+        #expect(TileProvider.appleMaps.id == "apple_maps")
+        #expect(TileProvider.all.count >= 2)
+        #expect(TileProvider.all[1].id == TileProvider.appleMaps.id)
+        #expect(TileProvider.all.first?.id == TileProvider.default.id)
     }
 
     /// Cache keys are namespaced by provider id, so a duplicate id would make
@@ -167,7 +208,7 @@ struct TileProviderTests {
 
     /// Filling a template has to produce a URL that actually parses — the
     /// downloader silently skips any tile whose URL doesn't.
-    @Test("a filled template produces a usable tile URL", arguments: TileProvider.all)
+    @Test("a filled template produces a usable tile URL", arguments: TileProvider.rasterSources)
     func tileURLs(provider: TileProvider) throws {
         let tile = OfflineTileDownloader.Tile(z: 14, x: 8723, y: 5685)
         let url = try #require(tile.url(from: provider.resolvedTemplate(apiKey: "K")))

@@ -698,6 +698,13 @@ nonisolated extension TileCache {
         )
 
         func isStale(_ file: URL) -> Bool {
+            // A fresh stat, not the one `allTileFiles` prefetched. Enumerating
+            // with `includingPropertiesForKeys:` caches the modification date
+            // on the URL, and `resourceValues` hands that cached value back —
+            // which would defeat the lock below by answering with a date read
+            // before the lock was taken.
+            var file = file
+            file.removeAllCachedResourceValues()
             let modified: Date?
             do {
                 modified = try file.resourceValues(
@@ -727,18 +734,34 @@ nonisolated extension TileCache {
         // Durable first, so what survives here is known while walking the
         // browsing tier — where a copy of a surviving durable tile is a
         // duplicate rather than a tile in its own right.
+        //
+        // Each stat-and-unlink pair is taken under `mutationVersions`, and
+        // deliberately not the enumeration, which would hold the lock for a
+        // full directory walk. ``promoteCachedTile(forKey:)`` moves a
+        // browsing-tier file into durable storage while holding the same lock,
+        // so unlocked these were two syscalls a promote could land between:
+        // the sweep stats a seven-day-stale tile, the user re-views it, the
+        // promote writes fresh bytes, and the sweep then unlinks them while
+        // the key stays in the hike's manifest — a silent hole in a claimed
+        // hike's offline coverage. It self-heals on the next draw, which is
+        // why this is low rather than high, but nothing else here is holding
+        // that lock for show.
         var keptDurableNames = Set<String>()
         for file in allTileFiles(in: durableDirectory) {
-            if isStale(file) {
+            let isKept = mutationVersions.withLock { _ -> Bool in
+                guard isStale(file) else { return true }
                 if remove(file) { removed += 1 }
-            } else {
-                keptDurableNames.insert(file.lastPathComponent)
+                return false
             }
+            if isKept { keptDurableNames.insert(file.lastPathComponent) }
         }
 
-        for file in allTileFiles(in: directory)
-        where isStale(file) || keptDurableNames.contains(file.lastPathComponent) {
-            if remove(file) { removed += 1 }
+        for file in allTileFiles(in: directory) {
+            mutationVersions.withLock { _ in
+                guard isStale(file) || keptDurableNames.contains(file.lastPathComponent)
+                else { return }
+                if remove(file) { removed += 1 }
+            }
         }
 
         return removed

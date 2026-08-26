@@ -34,6 +34,22 @@ final class AutoSaveController {
     /// with its own active hike and its own tile directories rather than the
     /// process-wide singleton the app uses.
     @ObservationIgnored private let store: AutoSaveTileStore
+    /// Whether the selected map draws raster tiles at all.
+    ///
+    /// Auto-save is a promise about *drawn* tiles, so the code that arms it has
+    /// to keep that promise rather than relying on the toggle being hidden.
+    /// With the system base map selected nothing is ever fetched, so activating
+    /// would buy a route-sized ``TileCorridor`` build and a live store entry
+    /// for a hike that can never claim a tile — which is exactly the work that
+    /// option exists to avoid.
+    ///
+    /// A closure, like ``OfflineTileDownloader``'s reachability, rather than a
+    /// `UserDefaults` read: both unit-test bundles are hosted by the app, so a
+    /// controller that looked the setting up itself would make every auto-save
+    /// suite depend on the map the developer last picked. The default answers
+    /// "tiles are drawn", which is what a test that never mentions a provider
+    /// means.
+    @ObservationIgnored private let mapRendersTiles: () -> Bool
 
     /// How long a burst of newly-saved tiles is allowed to gather before it is
     /// folded into the active hike's manifest.
@@ -52,8 +68,13 @@ final class AutoSaveController {
     /// those tests can sit behind the main actor for longer than the window,
     /// at which point the drain folds the very keys the test is about to
     /// inspect. Tests that want the fold call ``flushPendingKeys()`` directly.
-    init(store: AutoSaveTileStore = .shared, drainInterval: Duration? = .seconds(2)) {
+    init(
+        store: AutoSaveTileStore = .shared,
+        drainInterval: Duration? = .seconds(2),
+        mapRendersTiles: @escaping () -> Bool = { true }
+    ) {
         self.store = store
+        self.mapRendersTiles = mapRendersTiles
         guard let drainInterval else { return }
         drainTask = Task { [weak self, store] in
             for await _ in store.pendingKeySignals() {
@@ -69,11 +90,12 @@ final class AutoSaveController {
         activationTask?.cancel()
     }
 
-    /// Called whenever the map's selected hike changes, so auto-save follows
-    /// whatever is actually on screen.
+    /// Called whenever the map's selected hike changes — or whenever the
+    /// selected map source changes — so auto-save follows whatever is actually
+    /// being drawn on screen.
     func hikeSelectionChanged(to hike: Hike?) {
         let eligibleHike = hike.flatMap { candidateHike in
-            candidateHike.autoSaveTilesEnabled && candidateHike.pointCount > 1 ? candidateHike : nil
+            isEligible(candidateHike) ? candidateHike : nil
         }
         guard !isSuspended else {
             deferredHike = eligibleHike
@@ -86,16 +108,26 @@ final class AutoSaveController {
     /// Toggled from the hike detail view's Auto-Save control.
     func setEnabled(_ enabled: Bool, for hike: Hike) {
         hike.autoSaveTilesEnabled = enabled
+        // The per-hike preference is recorded either way. Turning it on while
+        // the system base map is selected is a stored intention, not a reason
+        // to start saving tiles nothing is drawing.
+        let shouldRun = enabled && isEligible(hike)
         if isSuspended {
-            deferredHike = enabled && hike.pointCount > 1 ? hike : nil
+            deferredHike = shouldRun ? hike : nil
             hasDeferredSelectionChange = true
             return
         }
-        if enabled, hike.pointCount > 1 {
+        if shouldRun {
             activate(hike)
         } else if activeHike?.id == hike.id {
             deactivate()
         }
+    }
+
+    /// Whether `hike` should be auto-saving right now: it has to want to, have
+    /// a route worth a corridor, and be drawn on a map that fetches tiles.
+    private func isEligible(_ hike: Hike) -> Bool {
+        hike.autoSaveTilesEnabled && hike.pointCount > 1 && mapRendersTiles()
     }
 
     func isCapReached(for hike: Hike) -> Bool {

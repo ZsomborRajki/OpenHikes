@@ -9,7 +9,7 @@ OpenHikes is a local-first SwiftUI and SwiftData trail viewer for iPhone. It imp
 - Live hike recording with balanced location accuracy, background location, pause/resume, crash-safe recovery, motion-aware fix handling, barometric elevation fusion, and one-time SwiftData save.
 - Bounded live trail matching from an extending cached OpenStreetMap walking graph, and a post-recording review where every section the matcher moved or found ambiguous can be kept as the mapped trail, handed back to the raw GPS trace, or swapped for an alternative route; unavailable matches preserve the GPS trace.
 - Search across saved hikes and MapKit place suggestions.
-- OpenStreetMap, Stadia Outdoors, and Thunderforest Outdoors tile providers.
+- OpenStreetMap, Stadia Outdoors, and Thunderforest Outdoors tile providers, plus an Apple Maps option that draws MapKit's own base map and starts none of the tile pipeline — no fetching, no caching, no auto-save, no bulk download.
 - Live location, trail auto-follow with a progress readout, and current WeatherKit conditions.
 - Photos taken on a walk or picked from the library, pinned to where on the trail they were taken, shown as a gallery strip on the hike and as pins on the map, with an optional copy saved to the photo library.
 - Passive tile auto-save for browsed areas, plus bulk offline downloads where the provider permits them.
@@ -25,7 +25,7 @@ OpenHikes is a local-first SwiftUI and SwiftData trail viewer for iPhone. It imp
   no iPad, Mac or visionOS destination is built or tested.
 - An Apple development team that can sign the WeatherKit entitlement, the shared App Group, the iCloud container and the push entitlement.
 
-OpenStreetMap is the keyless default. Stadia and Thunderforest require build-time API keys.
+OpenStreetMap is the keyless default, and Apple Maps needs no key either. Stadia and Thunderforest require build-time API keys.
 
 ## Setup
 
@@ -125,7 +125,7 @@ location-driven half should not have to run to check a search field:
 | `OpenHikesUITests` | Map and sheet navigation, GPX import, search, rename, delete, route line patterns, the surface and difficulty breakdowns, the weather badge, `XCTApplicationLaunchMetric`. |
 | `RecordingUITests` | Recording start, pause and resume, discard, the record → review → save round trip, walking between review sections, and retrying a save that failed. |
 | `PhotoUITests` | The library picker opening over the permanently presented sheet, the seeded gallery and its viewer, deletion, and showing a photo on the map. |
-| `SettingsUITests` | Provider policy (no bulk download on OpenStreetMap), toggles that must hold their value across a reopen, and the field-report list, export sheet and delete. |
+| `SettingsUITests` | Provider policy (no bulk download on OpenStreetMap, no tile controls at all on Apple Maps), toggles that must hold their value across a reopen, and the field-report list, export sheet and delete. |
 | `AccessibilityUITests` | `performAccessibilityAudit` per screen. |
 | `AccessibilityLabelUITests` | The labels, values and traits the app promises. |
 | `PerformanceUITests` | Measurement only; excluded from the test plan. |

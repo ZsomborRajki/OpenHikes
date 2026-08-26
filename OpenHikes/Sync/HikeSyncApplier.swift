@@ -97,15 +97,33 @@ final class HikeSyncApplier {
     func uploads(for recordNames: Set<String>) throws -> [String: PendingUpload] {
         let ids = Set(recordNames.compactMap(UUID.init(uuidString:)))
         guard !ids.isEmpty else { return [:] }
-        let hikes = try context.fetch(FetchDescriptor<Hike>())
+
+        // Hikes by index. ``Hike`` declares `#Index<Hike>([\.id])` for exactly
+        // this, and reading a hike materialises its whole route array — so
+        // fetching the library and filtering in memory made a one-hike rename
+        // pay for every walk on the device, once per batch, inside a callback
+        // the sync engine is awaiting.
+        let wanted = Array(ids)
+        let named = try context.fetch(
+            FetchDescriptor<Hike>(predicate: #Predicate { wanted.contains($0.id) })
+        )
 
         var uploads: [String: PendingUpload] = [:]
-        for hike in hikes {
-            if ids.contains(hike.id), let payload = HikeSyncPayload(hike: hike) {
-                uploads[hike.id.uuidString] = .hike(payload)
-            }
-            guard !hike.isRecording else { continue }
-            for photo in hike.photos where ids.contains(photo.id) {
+        for hike in named {
+            guard let payload = HikeSyncPayload(hike: hike) else { continue }
+            uploads[hike.id.uuidString] = .hike(payload)
+        }
+
+        // Photos cannot be asked for the same way: ``Hike/photos`` is a
+        // `Codable` array rather than a relationship, so there is no column to
+        // predicate on and no index to reach for. The scan is kept, but only
+        // for a batch that names something no hike answered to — which every
+        // edit after the first sync avoids entirely.
+        let unresolved = ids.subtracting(named.map(\.id))
+        guard !unresolved.isEmpty else { return uploads }
+
+        for hike in try context.fetch(FetchDescriptor<Hike>()) where !hike.isRecording {
+            for photo in hike.photos where unresolved.contains(photo.id) {
                 uploads[photo.id.uuidString] = .photo(
                     HikePhotoSyncPayload(hikeID: hike.id, photo: photo),
                     imageURL: photoStore.url(for: photo)
@@ -194,7 +212,7 @@ final class HikeSyncApplier {
         let applicable = payloads.filter { !pending.contains($0.id) }
         guard !applicable.isEmpty else { return [] }
         return try applyingRemoteChanges {
-            let existing = hikesByID()
+            let existing = try hikesByID()
             for payload in applicable {
                 guard let hike = existing[payload.id] else {
                     context.insert(payload.makeHike())
@@ -218,7 +236,7 @@ final class HikeSyncApplier {
     func apply(photos payloads: [HikePhotoSyncPayload]) throws -> [HikePhotoSyncPayload] {
         guard !payloads.isEmpty else { return [] }
         return try applyingRemoteChanges {
-            let existing = hikesByID()
+            let existing = try hikesByID()
             var unmatched: [HikePhotoSyncPayload] = []
             for payload in payloads {
                 guard let hike = existing[payload.hikeID] else {
@@ -312,8 +330,16 @@ final class HikeSyncApplier {
         Set(try context.fetch(FetchDescriptor<Hike>()).map(\.id))
     }
 
-    private func hikesByID() -> [UUID: Hike] {
-        guard let hikes = try? context.fetch(FetchDescriptor<Hike>()) else { return [:] }
+    private func hikesByID() throws -> [UUID: Hike] {
+        // Not `try?`, for the reason ``applyDeletions(recordNames:)`` and
+        // ``allHikeIDs()`` both give: an empty result here is indistinguishable
+        // from "this device has never seen any of these", and the callers read
+        // that as an instruction to insert. ``Hike`` declares `#Index`, not
+        // `@Attribute(.unique)`, so SwiftData will not collapse the result —
+        // one failed fetch duplicates every hike in the batch, and the
+        // duplicates are then uploaded. The engine defers and retries the
+        // whole write on a throw, so failing costs a pass.
+        let hikes = try context.fetch(FetchDescriptor<Hike>())
         return Dictionary(hikes.map { ($0.id, $0) }) { first, _ in first }
     }
 }

@@ -10,7 +10,47 @@
 import Foundation
 
 nonisolated enum AppLaunchEnvironment {
+    /// Everything a `--ui-test-*` argument can say about a launch.
+    ///
+    /// The parsing below is compiled **only into `DEBUG` builds**. That was
+    /// documented long before it was true: the flags were all inert without
+    /// `--ui-testing`, and a Store-installed app cannot be handed launch
+    /// arguments, so nothing was reachable — but "there is no way in" is a
+    /// weaker statement than "the door is not built", and the two documents
+    /// describing this made the stronger one. A release build now gets
+    /// ``production`` and never looks at `ProcessInfo.arguments` at all.
     struct Configuration: Equatable, Sendable {
+        let isUITesting: Bool
+        let startsWithExpandedSheet: Bool
+        let usesLiveLocation: Bool
+        let importedGPXFixtureName: String?
+        let trailGraphFixtureName: String?
+        let performanceLogScenario: String?
+        let simulatesOffline: Bool
+        let seededPhotoCount: Int
+        let seededMetricsReportCount: Int
+        let failsFirstSave: Bool
+        let stubsWeather: Bool
+
+        /// What every shipping launch gets, and what a debug launch with no
+        /// arguments parses to.
+        static let production = Self()
+
+        private init() {
+            isUITesting = false
+            startsWithExpandedSheet = false
+            usesLiveLocation = true
+            importedGPXFixtureName = nil
+            trailGraphFixtureName = nil
+            performanceLogScenario = nil
+            simulatesOffline = false
+            seededPhotoCount = 0
+            seededMetricsReportCount = 0
+            failsFirstSave = false
+            stubsWeather = false
+        }
+
+        #if DEBUG
         private static let uiTestingArgument = "--ui-testing"
         private static let expandedSheetArgument = "--ui-test-expanded-sheet"
         private static let liveLocationArgument = "--ui-test-enable-location"
@@ -28,18 +68,6 @@ nonisolated enum AppLaunchEnvironment {
         /// One metrics digest and one diagnostic report is already both shapes
         /// the screen draws; past that a scenario is only re-reading itself.
         private static let maximumSeededMetricsReports = 8
-
-        let isUITesting: Bool
-        let startsWithExpandedSheet: Bool
-        let usesLiveLocation: Bool
-        let importedGPXFixtureName: String?
-        let trailGraphFixtureName: String?
-        let performanceLogScenario: String?
-        let simulatesOffline: Bool
-        let seededPhotoCount: Int
-        let seededMetricsReportCount: Int
-        let failsFirstSave: Bool
-        let stubsWeather: Bool
 
         init(arguments: [String]) {
             isUITesting = arguments.contains(Self.uiTestingArgument)
@@ -122,11 +150,16 @@ nonisolated enum AppLaunchEnvironment {
                 ? nil
                 : name
         }
+        #endif
     }
 
-    private static let configuration = Configuration(
-        arguments: ProcessInfo.processInfo.arguments
-    )
+    private static let configuration: Configuration = {
+        #if DEBUG
+        Configuration(arguments: ProcessInfo.processInfo.arguments)
+        #else
+        .production
+        #endif
+    }()
     private static let uiTestingDefaultsSuite =
         "tappium.com.OpenHikes.UITesting"
 

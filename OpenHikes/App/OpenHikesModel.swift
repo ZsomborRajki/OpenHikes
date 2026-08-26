@@ -81,7 +81,7 @@ final class OpenHikesModel {
                 container: load.container,
                 defaults: launchDefaults
             ),
-            autoSaveController: AutoSaveController(),
+            autoSaveController: Self.makeAutoSaveController(defaults: launchDefaults),
             hikeRecorder: Self.makeRecorder(
                 container: load.container,
                 trailGraphProvider: graphProvider,
@@ -116,7 +116,7 @@ final class OpenHikesModel {
                 container: testingContainer,
                 defaults: uiTestingDefaults
             ),
-            autoSaveController: AutoSaveController(),
+            autoSaveController: Self.makeAutoSaveController(defaults: uiTestingDefaults),
             hikeRecorder: HikeRecorder(
                 container: testingContainer,
                 saveModelContext: Self.uiTestingSave(),
@@ -250,15 +250,7 @@ final class OpenHikesModel {
     }
 
     func selectedHikeDidChange(to hike: Hike?) {
-        // An active recording is selected in the list, but it is not a
-        // finished route to browse, auto-save for, or match background fixes
-        // against. The recorder owns its live trace and widget state.
-        let currentRecordingHikeID = hikeRecorder.currentHike?.id
-        let finishedHike = hike.flatMap { selectedHike in
-            selectedHike.belongsToActiveRecording(
-                currentHikeID: currentRecordingHikeID
-            ) ? nil : selectedHike
-        }
+        let finishedHike = browsableHike(hike)
         autoSaveController.hikeSelectionChanged(to: finishedHike)
         if !AppLaunchEnvironment.isRunningTests {
             backgroundTracker.hikeSelectionChanged(to: finishedHike)
@@ -267,6 +259,27 @@ final class OpenHikesModel {
             finishedHike?.id.uuidString,
             forKey: SettingsKey.lastSelectedHikeID
         )
+    }
+
+    /// Re-evaluates tile auto-save after the map source changed.
+    ///
+    /// Only auto-save: the widget's background matching and the stored
+    /// selection have nothing to do with which map is drawn, and republishing
+    /// them here would spend a widget reload on a settings tap.
+    func tileProviderDidChange(selectedHike hike: Hike?) {
+        autoSaveController.hikeSelectionChanged(to: browsableHike(hike))
+    }
+
+    /// An active recording is selected in the list, but it is not a finished
+    /// route to browse, auto-save for, or match background fixes against. The
+    /// recorder owns its live trace and widget state.
+    private func browsableHike(_ hike: Hike?) -> Hike? {
+        let currentRecordingHikeID = hikeRecorder.currentHike?.id
+        return hike.flatMap { selectedHike in
+            selectedHike.belongsToActiveRecording(
+                currentHikeID: currentRecordingHikeID
+            ) ? nil : selectedHike
+        }
     }
 
     func restoreLastSelectedHike(in modelContext: ModelContext) -> Hike? {
@@ -508,9 +521,12 @@ extension OpenHikesModel {
         // pixels on disk and nothing pointing at them, which is precisely what
         // an orphan looks like. They belong in the claim set for the same
         // reason the grace period exists: a file with no claim is also what an
-        // arrival in flight looks like.
+        // arrival in flight looks like. A `nil` answer means sync cannot
+        // enumerate them this launch, and sweeps nothing — the same rule the
+        // fetch above follows.
         Task(priority: .utility) { [cloudSync] in
-            await Self.reclaim(claimed.union(await cloudSync.deferredPhotoClaims()), in: store)
+            guard let deferred = await cloudSync.deferredPhotoClaims() else { return }
+            await Self.reclaim(claimed.union(deferred), in: store)
         }
     }
 
@@ -552,5 +568,19 @@ private extension OpenHikesModel {
             defaults: defaults,
             sharedStateStore: AppGroupRecordingSharedStateStore()
         )
+    }
+
+    /// The auto-save controller wired to the real selected map source.
+    ///
+    /// Same argument as ``makeRecorder(container:trailGraphProvider:defaults:)``:
+    /// "which map the user picked" is a choice about the environment, and the
+    /// controller takes it as a closure so a suite can decide it outright
+    /// instead of inheriting whatever the host app has stored. Read on each
+    /// call rather than captured once, so a change made in Settings takes
+    /// effect on the next selection without rebuilding anything.
+    static func makeAutoSaveController(defaults: UserDefaults) -> AutoSaveController {
+        AutoSaveController {
+            !TileProvider.selected(in: defaults).usesSystemBaseMap
+        }
     }
 }

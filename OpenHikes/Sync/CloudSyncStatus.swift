@@ -38,9 +38,12 @@ nonisolated enum CloudAccountStatus: Equatable, Sendable {
 
 /// What sync is doing right now.
 nonisolated enum CloudSyncActivity: Equatable, Sendable {
-    /// Something went wrong that isn't going to fix itself by waiting — the
-    /// transient failures (no signal, rate limiting, a busy zone) are retried
-    /// by ``CKSyncEngine`` and never reach here.
+    /// Something went wrong that isn't going to fix itself by waiting.
+    ///
+    /// The transient failures — no signal, rate limiting, a busy zone — *do*
+    /// reach the delegate; ``CloudSyncFailure`` is what keeps them from
+    /// reaching here. ``CKSyncEngine`` retries those itself, so they are
+    /// logged rather than turned into a headline nobody can act on.
     case failed(String)
     case idle
     /// Sync is off, or there is no Apple Account signed in on this device.
@@ -54,6 +57,18 @@ final class CloudSyncStatus {
     var account: CloudAccountStatus = .unknown
     var activity: CloudSyncActivity = .paused
     var lastSyncedAt: Date?
+
+    /// Whether the pass currently running has raised anything.
+    ///
+    /// A pass is one `willFetch`/`willSend` … `didFetch`/`didSend` bracket,
+    /// and `didSendChanges` always follows `sentRecordZoneChanges`. Without
+    /// this, ``finished()`` had no way to tell a clean pass from one that
+    /// failed a moment earlier, so every failure raised during a send was
+    /// erased by the event immediately after it: "Sync Problem", its detail
+    /// line and ``CloudSyncSection``'s warning icon were unreachable outside
+    /// one throw path, and ``lastSyncedAt`` was stamped for passes that had
+    /// just failed.
+    private var passRaisedAFailure = false
 
     /// The headline the settings row shows.
     var title: String {
@@ -104,20 +119,29 @@ final class CloudSyncStatus {
         }
     }
 
+    /// Starts a pass. Clearing the flag here rather than in ``finished()`` is
+    /// what lets a failure outlive the pass that raised it while still being
+    /// cleared by the next attempt.
     func began() {
+        passRaisedAFailure = false
         activity = .working
     }
 
+    /// Ends a pass. One that raised something goes on saying so, and does not
+    /// claim a sync time it did not earn.
     func finished() {
+        guard !passRaisedAFailure else { return }
         activity = .idle
         lastSyncedAt = .now
     }
 
     func failed(_ reason: String) {
+        passRaisedAFailure = true
         activity = .failed(reason)
     }
 
     func paused() {
+        passRaisedAFailure = false
         activity = .paused
     }
 }

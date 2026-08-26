@@ -96,6 +96,14 @@ struct SettingsView: View {
         } footer: {
             VStack(alignment: .leading, spacing: 6) {
                 Text(selectedProvider.attribution)
+                if selectedProvider.usesSystemBaseMap {
+                    Text(
+                        "OpenHikes downloads, caches and auto-saves no map tiles while this is"
+                        + " selected, so it uses the least battery and data — but the map needs"
+                        + " a signal where the system hasn't already cached it."
+                        + " Tiles already saved by other sources are kept, and listed below."
+                    )
+                }
                 if TileProvider.all.contains(where: { !Secrets.canLoadTiles($0) }) {
                     Text(
                         "Sources marked \u{201C}Needs API key\u{201D} aren't available in this build."

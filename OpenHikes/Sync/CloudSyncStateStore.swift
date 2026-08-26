@@ -97,6 +97,21 @@ nonisolated struct CloudAssetStaging: Sendable {
         try? FileManager.default.removeItem(at: directory)
     }
 }
+/// A fetched payload this device could not write yet, together with the
+/// system fields of the record it arrived in.
+///
+/// The record travels with it because the change tag is only worth having
+/// once the write lands. Remembering it at the moment of deferral would
+/// leave ``RecordIndex/hikeRecordNames`` naming a hike with nothing local
+/// behind it — which reconciliation reads as a deletion that never went,
+/// and answers by deleting the record out of iCloud. Dropping it instead,
+/// which is what happened, leaves the write with no tag: ``reconcile()``
+/// then reads "no server record" as "never uploaded" and sends back to
+/// iCloud the hike it had just downloaded from it.
+nonisolated struct Deferred<Payload: Codable & Sendable>: Codable, Sendable {
+    var payload: Payload
+    var systemFields: Data?
+}
 
 /// Everything sync remembers between launches.
 ///
@@ -128,10 +143,20 @@ actor CloudSyncStateStore {
 
     private let directory: URL
     private var serverRecords: [String: Data]
-    private var deferredPhotos: [HikePhotoSyncPayload]
-    private var deferredHikes: [HikeSyncPayload]
+    private var deferredPhotos: [Deferred<HikePhotoSyncPayload>]
+    private var deferredHikes: [Deferred<HikeSyncPayload>]
     private var deferredDeletions: [String]
     private var index: RecordIndex
+
+    /// False when `deferred-photos.json` existed and could not be read.
+    ///
+    /// An unreadable file is not an empty one, and the difference decides
+    /// whether the launch photo sweep may run: a deferred photo's pixels are
+    /// on disk with no `Hike` pointing at them yet, so an under-reported claim
+    /// set deletes bytes whose change token the server has already moved past.
+    /// This is the same distinction ``OpenHikesModel/photoClaims(fetchingHikes:)``
+    /// is built around; it was the one place it had collapsed into `[]`.
+    private let deferredPhotosAreComplete: Bool
     /// Records this device wants gone from iCloud but hasn't managed to send.
     ///
     /// Ordered oldest-first so the cap drops the least recent.
@@ -194,13 +219,15 @@ actor CloudSyncStateStore {
                 .appendingPathComponent(Self.directoryName, isDirectory: true)
                 .appendingPathComponent(Self.recordsFileName, isDirectory: false)
         )
-        deferredPhotos = Self.readDeferredPhotos(
+        let readPhotos = Self.readDeferredPhotos(
             at: support
                 .appendingPathComponent(Self.directoryName, isDirectory: true)
                 .appendingPathComponent(Self.deferredPhotosFileName, isDirectory: false)
         )
+        deferredPhotos = readPhotos ?? []
+        deferredPhotosAreComplete = readPhotos != nil
         deferredHikes = Self.read(
-            [HikeSyncPayload].self,
+            [Deferred<HikeSyncPayload>].self,
             at: support
                 .appendingPathComponent(Self.directoryName, isDirectory: true)
                 .appendingPathComponent(Self.deferredHikesFileName, isDirectory: false)
@@ -253,13 +280,52 @@ actor CloudSyncStateStore {
     /// merge rather than a replay of whatever was up there before.
     func lastKnownRecord(id: CKRecord.ID) -> CKRecord? {
         guard let data = serverRecords[id.recordName] else { return nil }
+        return Self.record(fromSystemFields: data)
+    }
+
+    /// Which of `ids` the server has never acknowledged.
+    ///
+    /// The batched form of `lastKnownRecord(id:) == nil`, and the one
+    /// reconciliation uses. Asked one id at a time, each question is its own
+    /// hop onto this actor — for a 200-hike, 2 000-photo library that is 2 200
+    /// sequential suspensions of a caller with nothing else to do, on the
+    /// launch path. One call answers the lot, and answers it identically: a
+    /// name whose archived bytes no longer parse still counts as never
+    /// acknowledged, so a corrupt cache re-uploads rather than going quiet.
+    func unacknowledged(_ ids: [CKRecord.ID]) -> [CKRecord.ID] {
+        ids.filter { lastKnownRecord(id: $0) == nil }
+    }
+
+    /// Rebuilds a record from archived system fields, or `nil`.
+    ///
+    /// The failure policy is the point. `NSKeyedUnarchiver`'s default is
+    /// `.raiseException`, and `CKRecord(coder:)` decodes enough structure to
+    /// reach it — so a truncated `server-records.plist`, from a process killed
+    /// mid-write or a restored backup, took the app down with an Objective-C
+    /// exception Swift cannot catch, on a launch that only needed to forget a
+    /// change tag. Answering `nil` turns the same corruption into one
+    /// re-upload.
+    static func record(fromSystemFields data: Data) -> CKRecord? {
         guard let unarchiver = try? NSKeyedUnarchiver(forReadingFrom: data) else {
             return nil
         }
-        unarchiver.requiresSecureCoding = true
+        unarchiver.decodingFailurePolicy = .setErrorAndReturn
         let record = CKRecord(coder: unarchiver)
         unarchiver.finishDecoding()
+        guard unarchiver.error == nil else {
+            logger.error("Discarded an unreadable archived server record.")
+            return nil
+        }
         return record
+    }
+
+    /// The archived system fields of a record — identity, change tag,
+    /// timestamps, and no user data.
+    static func systemFields(of record: CKRecord) -> Data {
+        let archiver = NSKeyedArchiver(requiringSecureCoding: true)
+        record.encodeSystemFields(with: archiver)
+        archiver.finishEncoding()
+        return archiver.encodedData
     }
 
     func remember(_ record: CKRecord) {
@@ -290,11 +356,8 @@ actor CloudSyncStateStore {
         guard !records.isEmpty else { return }
         var touchedIndex = false
         for record in records {
-            let archiver = NSKeyedArchiver(requiringSecureCoding: true)
-            record.encodeSystemFields(with: archiver)
-            archiver.finishEncoding()
             let name = record.recordID.recordName
-            serverRecords[name] = archiver.encodedData
+            serverRecords[name] = Self.systemFields(of: record)
             switch record.recordType {
             case CloudSyncSchema.RecordType.photo:
                 guard let owner = record[CloudSyncSchema.PhotoField.hikeID] as? String
@@ -320,6 +383,25 @@ actor CloudSyncStateStore {
         return index.photoOwners.compactMap { name, value in
             value == owner ? name : nil
         }
+    }
+
+    /// The same, for several hikes at once.
+    ///
+    /// ``photoRecordNames(ownedBy:)`` scans every owner entry in the index, so
+    /// asking it once per changed hike is quadratic in the library's photo
+    /// count — and a first sync changes every hike. One pass builds the whole
+    /// answer, in one hop.
+    func photoRecordNames(
+        ownedByAnyOf hikeIDs: some Sequence<UUID> & Sendable
+    ) -> [UUID: [String]] {
+        let owners = Set(hikeIDs.map(\.uuidString))
+        var names: [UUID: [String]] = [:]
+        for (name, owner) in index.photoOwners
+        where owners.contains(owner) {
+            guard let id = UUID(uuidString: owner) else { continue }
+            names[id, default: []].append(name)
+        }
+        return names
     }
 
     /// Hike records iCloud still holds that this device no longer has a hike
@@ -437,20 +519,26 @@ actor CloudSyncStateStore {
     /// same batch. Its pixels are written immediately (CloudKit deletes its own
     /// staged copy moments after the delegate returns), and the metadata waits
     /// here until there is something to attach it to.
-    func deferPhoto(_ photo: HikePhotoSyncPayload) {
-        deferredPhotos.removeAll { $0.id == photo.id }
-        deferredPhotos.append(photo)
+    func deferPhoto(_ photo: HikePhotoSyncPayload, from record: CKRecord? = nil) {
+        deferredPhotos.removeAll { $0.payload.id == photo.id }
+        deferredPhotos.append(
+            Deferred(
+                payload: photo,
+                systemFields: record.map(Self.systemFields(of:))
+            )
+        )
         writeDeferredPhotos()
     }
 
-    func takeDeferredPhotos() -> [HikePhotoSyncPayload] {
+    func takeDeferredPhotos() -> [Deferred<HikePhotoSyncPayload>] {
         let photos = deferredPhotos
         deferredPhotos = []
         writeDeferredPhotos()
         return photos
     }
 
-    /// The files a deferred photo's pixels are sitting in.
+    /// The files a deferred photo's pixels are sitting in, or `nil` when this
+    /// launch cannot say.
     ///
     /// Handed to the launch-time orphan sweep. Those bytes are written the
     /// moment they arrive — CloudKit reclaims its own staged copy immediately
@@ -459,11 +547,17 @@ actor CloudSyncStateStore {
     /// ``HikePhotoStore/reclaimOrphans(claimedBy:youngerThan:now:)`` they look
     /// exactly like a file nothing points at. Without this the sweep deletes
     /// pixels the server will never send again.
-    func deferredPhotoFileNames() -> Set<String> {
+    ///
+    /// `nil` rather than an empty set when the file could not be read: the
+    /// caller must skip the sweep entirely, for the reason
+    /// ``deferredPhotosAreComplete`` gives. That distinction is the whole
+    /// point, so `discouraged_optional_collection` is waived here.
+    func deferredPhotoFileNames() -> Set<String>? { // swiftlint:disable:this discouraged_optional_collection
+        guard deferredPhotosAreComplete else { return nil }
         var names = Set<String>()
-        for payload in deferredPhotos {
-            names.insert(payload.photo.fileName)
-            names.insert(payload.photo.thumbnailFileName)
+        for entry in deferredPhotos {
+            names.insert(entry.payload.photo.fileName)
+            names.insert(entry.payload.photo.thumbnailFileName)
         }
         return names
     }
@@ -477,15 +571,28 @@ actor CloudSyncStateStore {
     /// again. So a save that throws — a full disk, a store that won't open —
     /// has to leave the payload somewhere durable rather than a log line, or
     /// the two devices quietly disagree forever.
-    func deferHikes(_ hikes: [HikeSyncPayload]) {
+    /// Duplicate ids among `hikes` collapse to the last one, so the queue holds
+    /// at most one entry per hike however the caller assembled its batch —
+    /// which is what `takeDeferredHikes()`'s consumers assume when they key a
+    /// dictionary by id.
+    func deferHikes(_ hikes: [HikeSyncPayload], records: [String: CKRecord] = [:]) {
         guard !hikes.isEmpty else { return }
         let arriving = Set(hikes.map(\.id))
-        deferredHikes.removeAll { arriving.contains($0.id) }
-        deferredHikes.append(contentsOf: hikes)
+        deferredHikes.removeAll { arriving.contains($0.payload.id) }
+        var byID: [UUID: Deferred<HikeSyncPayload>] = [:]
+        var order: [UUID] = []
+        for payload in hikes {
+            if byID[payload.id] == nil { order.append(payload.id) }
+            byID[payload.id] = Deferred(
+                payload: payload,
+                systemFields: records[payload.id.uuidString].map(Self.systemFields(of:))
+            )
+        }
+        deferredHikes.append(contentsOf: order.compactMap { byID[$0] })
         writeDeferredHikes()
     }
 
-    func takeDeferredHikes() -> [HikeSyncPayload] {
+    func takeDeferredHikes() -> [Deferred<HikeSyncPayload>] {
         let hikes = deferredHikes
         deferredHikes = []
         writeDeferredHikes()
@@ -592,8 +699,15 @@ extension CloudSyncStateStore {
         return (try? PropertyListDecoder().decode([String: Data].self, from: data)) ?? [:]
     }
 
-    private static func readDeferredPhotos(at url: URL) -> [HikePhotoSyncPayload] {
-        guard let data = try? Data(contentsOf: url) else { return [] }
-        return (try? JSONDecoder().decode([HikePhotoSyncPayload].self, from: data)) ?? []
+    /// `nil` when a file is there and cannot be read, which is a different
+    /// statement from "nothing is deferred" — see ``deferredPhotosAreComplete``.
+    private static func readDeferredPhotos(
+        at url: URL
+    ) -> [Deferred<HikePhotoSyncPayload>]? { // swiftlint:disable:this discouraged_optional_collection
+        guard FileManager.default.fileExists(atPath: url.path(percentEncoded: false)) else {
+            return []
+        }
+        guard let data = try? Data(contentsOf: url) else { return nil }
+        return try? JSONDecoder().decode([Deferred<HikePhotoSyncPayload>].self, from: data)
     }
 }

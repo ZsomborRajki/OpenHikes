@@ -96,4 +96,83 @@ struct TileOverzoomTests {
         )
         #expect(imageRect == CGRect(x: -246, y: 20, width: 512, height: 512))
     }
+
+    // MARK: Not asking for a tile that is already here
+
+    /// The arithmetic above is only half of overzoom. The other half is
+    /// knowing when *not* to fetch, and getting it wrong does not show the
+    /// wrong ground — it burns the battery of a phone sitting on a table.
+    ///
+    /// Below `maximumZ` the drawn key and the fetched key are the same, so a
+    /// cache hit is resolved by `draw` before this is ever consulted and the
+    /// answer is simply "fetch it".
+    @Test("a tile within the provider's zoom range is fetched as itself")
+    func withinRangeFetchesItself() {
+        let path = MKTileOverlayPath(x: 8723, y: 5685, z: 14, contentScaleFactor: 2)
+        let fetch = CachingTileOverlayRenderer.fetchPath(
+            drawing: path,
+            maximumZ: 19
+        ) { _ in
+            Issue.record("nothing above maximumZ, so nothing to ask about")
+            return false
+        }
+        #expect(fetch?.z == 14)
+        #expect(fetch?.x == path.x)
+        #expect(fetch?.y == path.y)
+    }
+
+    /// Past `maximumZ` with a cold cache: fetch the ancestor the bytes will
+    /// be filed under, not the screen path, which no server has.
+    @Test("an overzoomed tile with nothing cached fetches its deepest real ancestor")
+    func overzoomedColdFetchesAncestor() {
+        let path = MKTileOverlayPath(x: 34_892, y: 22_740, z: 21, contentScaleFactor: 2)
+        let fetch = CachingTileOverlayRenderer.fetchPath(
+            drawing: path,
+            maximumZ: 19
+        ) { _ in false }
+        #expect(fetch?.z == 19)
+        #expect(fetch?.x == path.x >> 2)
+        #expect(fetch?.y == path.y >> 2)
+    }
+
+    /// The headline, and the whole reason this seam exists.
+    ///
+    /// `draw` looks a tile up under the *screen* path while the bytes are
+    /// filed under the ancestor, so above `maximumZ` the lookup misses on
+    /// every pass however warm the cache is. Answering with a path there makes
+    /// the load hit memory, report success, and redraw — which misses again:
+    /// one task, two gate hops and a main-thread redraw per visible tile,
+    /// forever, on an idle device. A pinch past z19 on OpenStreetMap, the
+    /// keyless default, is enough to reach it.
+    @Test("an overzoomed tile whose ancestor is already in memory is not fetched")
+    func overzoomedWarmDoesNotFetch() {
+        let path = MKTileOverlayPath(x: 34_892, y: 22_740, z: 21, contentScaleFactor: 2)
+        let ancestor = path.ancestor(atZoom: 19)
+
+        var asked: [String] = []
+        let fetch = CachingTileOverlayRenderer.fetchPath(
+            drawing: path,
+            maximumZ: 19
+        ) { candidate in
+            asked.append(candidate.cacheKey)
+            return candidate.cacheKey == ancestor.cacheKey
+        }
+
+        #expect(fetch == nil, "the bytes are already in memory — there is nothing to fetch or invalidate")
+        #expect(asked == [ancestor.cacheKey], "asked about the key the bytes are filed under, not the drawn one")
+    }
+
+    /// And the tile is still requested once. A warm *screen* path proves
+    /// nothing above `maximumZ` — nothing ever files bytes there — so the
+    /// question has to be asked about the ancestor or an overzoomed region
+    /// would never load at all.
+    @Test("an overzoomed tile is fetched when only the drawn path looks cached")
+    func overzoomedIgnoresTheDrawnPath() {
+        let path = MKTileOverlayPath(x: 34_892, y: 22_740, z: 21, contentScaleFactor: 2)
+        let fetch = CachingTileOverlayRenderer.fetchPath(
+            drawing: path,
+            maximumZ: 19
+        ) { $0.cacheKey == path.cacheKey }
+        #expect(fetch?.z == 19)
+    }
 }

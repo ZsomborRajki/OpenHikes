@@ -270,10 +270,29 @@ extension XCTestCase {
     ) -> Bool {
         let container = scrollContainer(in: app)
         for _ in 0..<attempts {
-            if target.exists, target.isHittable { return true }
+            if isReachable(target, in: app) { return true }
             container.swipeUp()
         }
-        return target.exists && target.isHittable
+        return isReachable(target, in: app)
+    }
+
+    /// Whether `target` can actually be aimed at, rather than merely touched.
+    ///
+    /// `isHittable` alone is not that question. XCUITest clamps an element's
+    /// hit point into whatever part of it is on screen, so a row hanging off
+    /// the bottom edge by all but a few points still answers yes — and a
+    /// `coordinate(withNormalizedOffset:)` tap, which is computed from the
+    /// *unclamped* frame, then lands outside the window and silently does
+    /// nothing. That is exactly how the settings toggle test failed: the
+    /// collection view had rendered the row at the fold, the search returned
+    /// on its first iteration without swiping at all, and the trailing-edge
+    /// tap went nowhere. Requiring the centre to be on screen is what makes
+    /// the two agree.
+    @MainActor
+    func isReachable(_ target: XCUIElement, in app: XCUIApplication) -> Bool {
+        guard target.exists, target.isHittable else { return false }
+        let frame = target.frame
+        return app.frame.contains(CGPoint(x: frame.midX, y: frame.midY))
     }
 
     /// The screen's scrolling container, whichever kind SwiftUI built it from.
@@ -305,7 +324,7 @@ extension XCTestCase {
         let deadline = Date().addingTimeInterval(timeout)
         var swipes = 0
         while Date() < deadline {
-            if target.exists, target.isHittable { return true }
+            if isReachable(target, in: app) { return true }
             let container = scrollContainer(in: app)
             if swipes % (Self.swipesPerSweep * 2) < Self.swipesPerSweep {
                 container.swipeUp()
@@ -314,7 +333,7 @@ extension XCTestCase {
             }
             swipes += 1
         }
-        return target.exists && target.isHittable
+        return isReachable(target, in: app)
     }
 
     /// Far enough to cross a hike's detail screen, short enough that a section

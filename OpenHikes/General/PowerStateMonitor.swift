@@ -95,11 +95,11 @@ final class PowerStateMonitor {
     /// which a simulator can produce on demand.
     @ObservationIgnored private let read: @Sendable () -> PowerState
     @ObservationIgnored nonisolated private let center: NotificationCenter
-    /// `nonisolated(unsafe)` so the `nonisolated deinit` below can unregister.
-    /// Written only during `init`, on the main actor, and read only from
-    /// `deinit`, which by definition runs after the last reference is gone —
-    /// so the two can never overlap.
-    @ObservationIgnored nonisolated(unsafe) private var tokens: [NSObjectProtocol] = []
+    /// Unregistered by the `isolated deinit` below, which is what lets this be
+    /// a plain isolated property: the last release may happen anywhere, but
+    /// SE-0371 hops the deinit back to this object's actor before it runs, so
+    /// `tokens` is only ever touched from the actor that wrote it.
+    @ObservationIgnored private var tokens: [NSObjectProtocol] = []
 
     init(
         read: @escaping @Sendable () -> PowerState = { PowerState.reported() },
@@ -116,7 +116,7 @@ final class PowerStateMonitor {
         observe(ProcessInfo.thermalStateDidChangeNotification)
     }
 
-    nonisolated deinit {
+    isolated deinit {
         for token in tokens { center.removeObserver(token) }
     }
 

@@ -65,7 +65,7 @@ struct MapCoordinatorTests {
 
     func mapView(
         route: DisplayedRoute? = nil,
-        tileSource: ActiveTileSource = osm
+        tileSource: ActiveTileSource? = osm
     ) -> MapView {
         MapView(
             locationManager: locationManager,
@@ -199,6 +199,47 @@ extension MapCoordinatorTests {
         #expect(second.providerID == Self.other.providerID)
         #expect(map.overlays.filter { $0 is TileOverlay }.count == 1, "the previous provider must be removed")
         #expect(!map.overlays.contains { $0 === first })
+    }
+
+    /// Picking the system base map has to take the overlay *off*, not install
+    /// an empty one: `canReplaceMapContent` is what hides Apple's cartography,
+    /// so an overlay that stayed would leave a blank map, and — the point of
+    /// the option — an overlay is also what fetches, caches and auto-saves.
+    /// Nothing installed is nothing requested.
+    @Test("selecting the system base map removes the tile overlay entirely")
+    func systemBaseMapRemovesTheOverlay() throws {
+        let coordinator = MapView.Coordinator()
+        let map = makeMap(mapView(), coordinator)
+        defer { detach(map) }
+        let installed = try #require(coordinator.tileOverlay)
+
+        mapView(tileSource: nil).update(map, coordinator)
+
+        #expect(coordinator.tileOverlay == nil)
+        #expect(map.overlays.isEmpty)
+        #expect(!map.overlays.contains { $0 === installed })
+    }
+
+    /// And back again, because a walker who tries Apple Maps and returns to a
+    /// topographic source must get their tiles back without relaunching.
+    @Test("returning to a tile source reinstalls the overlay under the route")
+    func returningFromSystemBaseMapReinstallsTheOverlay() throws {
+        let coordinator = MapView.Coordinator()
+        let view = mapView(route: Self.route())
+        let map = makeMap(view, coordinator)
+        defer { detach(map) }
+        view.update(map, coordinator)
+
+        mapView(route: Self.route(), tileSource: nil).update(map, coordinator)
+        #expect(coordinator.tileOverlay == nil)
+
+        let restored = mapView(route: Self.route(), tileSource: Self.other)
+        restored.update(map, coordinator)
+
+        let overlay = try #require(coordinator.tileOverlay)
+        #expect(overlay.providerID == Self.other.providerID)
+        #expect(map.overlays.filter { $0 is TileOverlay }.count == 1)
+        #expect(map.overlays.first === overlay, "tiles must stay under the route line")
     }
 
     /// The same guard for the route line, which is the expensive one: an

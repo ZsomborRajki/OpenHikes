@@ -53,8 +53,15 @@ nonisolated final class CachingTileOverlayRenderer: MKOverlayRenderer, TileCache
     /// How many zoom levels to walk up looking for a tile to crop for overzoom.
     private let maxFallbackDepth = 8
 
-    /// Keys of tiles currently being fetched, to avoid duplicate requests.
-    private let inFlight = Mutex(Set<String>())
+    /// Tiles currently being fetched, each holding the screen rects waiting on
+    /// it, so a duplicate request is avoided without leaving the tiles that
+    /// were folded into it with nothing to redraw them.
+    ///
+    /// Overzoomed tiles share one ancestor: sixteen screen tiles at z21 all
+    /// want the same z19 bytes. Only the first asks, and if the arrival
+    /// invalidated only the asker's rect, the other fifteen would stay blank
+    /// until an unrelated pan or zoom happened to redraw them.
+    private let inFlight = Mutex([String: [MKMapRect]]())
 
     /// Tiles that failed to load (offline, 500, timeout, undecodable, 404),
     /// and when each may be asked for again. Skipping them is what stops a
@@ -200,7 +207,8 @@ nonisolated final class CachingTileOverlayRenderer: MKOverlayRenderer, TileCache
                 if let image = overlay.cachedImage(at: path) {
                     drawImage(image, in: drawRect, context: context)
                 } else {
-                    if let fallback = fallback(for: path, in: overlay) {
+                    let fallback = fallback(for: path, in: overlay)
+                    if let fallback {
                         drawImage(
                             fallback.image,
                             in: drawRect,
@@ -208,7 +216,12 @@ nonisolated final class CachingTileOverlayRenderer: MKOverlayRenderer, TileCache
                             sourceRect: fallback.sourceRect
                         )
                     }
-                    loadTileIfNeeded(for: path, in: tileRect, overlay: overlay)
+                    loadTileIfNeeded(
+                        for: path,
+                        in: tileRect,
+                        overlay: overlay,
+                        drewSomething: fallback != nil
+                    )
                 }
             }
         }
@@ -225,10 +238,61 @@ nonisolated final class CachingTileOverlayRenderer: MKOverlayRenderer, TileCache
 
     // MARK: Loading
 
-    private func loadTileIfNeeded(for path: MKTileOverlayPath, in tileRect: MKMapRect, overlay: TileOverlay) {
-        // Beyond the source's max zoom no real tile exists, so fetch the deepest
-        // real ancestor instead — the fallback step will crop it for overzoom.
-        let fetchPath = path.z > overlay.maximumZ ? path.ancestor(atZoom: overlay.maximumZ) : path
+    /// Which tile to actually fetch for a path the draw pass missed on, or
+    /// `nil` when asking would achieve nothing.
+    ///
+    /// Beyond the source's maximum zoom no real tile exists, so the bytes come
+    /// from the deepest real ancestor and the fallback step crops them. But
+    /// they are also *filed* under that ancestor's key, while `draw` looks up
+    /// the screen path — so above `maximumZ` the two keys can never agree, the
+    /// lookup misses on every pass, and this runs unconditionally however warm
+    /// the cache is.
+    ///
+    /// Answering with the ancestor anyway is what closed the loop: the load
+    /// finds it in the memory tier, returns `true`, and the caller redraws —
+    /// which misses again. That is the request/redraw cycle the failure branch
+    /// below is written to avoid, reached through the success branch instead,
+    /// and it spins one task, two gate hops and a full main-thread redraw per
+    /// visible tile for as long as the map stays overzoomed, on a device
+    /// nobody is touching. `nil` says the ancestor is already in memory, so
+    /// there is nothing to fetch and nothing to invalidate.
+    static func fetchPath(
+        drawing path: MKTileOverlayPath,
+        maximumZ: Int,
+        isCached: (MKTileOverlayPath) -> Bool
+    ) -> MKTileOverlayPath? {
+        guard path.z > maximumZ else { return path }
+        let ancestor = path.ancestor(atZoom: maximumZ)
+        return isCached(ancestor) ? nil : ancestor
+    }
+
+    private func loadTileIfNeeded(
+        for path: MKTileOverlayPath,
+        in tileRect: MKMapRect,
+        overlay: TileOverlay,
+        drewSomething: Bool
+    ) {
+        guard let fetchPath = Self.fetchPath(
+            drawing: path,
+            maximumZ: overlay.maximumZ,
+            isCached: { overlay.cachedImage(at: $0) != nil }
+        ) else {
+            // The ancestor is in memory, so there is nothing to fetch — but
+            // this pass may still have drawn nothing from it. Several
+            // overzoomed screen tiles share one ancestor, and a sibling's load
+            // can land between this pass's fallback lookup and this one,
+            // leaving a blank tile with no invalidation behind it.
+            //
+            // Re-asking before invalidating is what keeps that from becoming
+            // the redraw loop this guard exists to prevent: the redraw is
+            // issued only when the fallback can now find something, and once
+            // it can, the next pass draws it and reports `drewSomething`.
+            if !drewSomething, fallback(for: path, in: overlay) != nil {
+                Task { @MainActor [weak self] in self?.setNeedsDisplay(tileRect) }
+            }
+            return
+        }
+
         let key = fetchPath.cacheKey
 
         // Skip tiles we already know we can't get — until their backoff runs
@@ -237,7 +301,20 @@ nonisolated final class CachingTileOverlayRenderer: MKOverlayRenderer, TileCache
         let isOnline = cache.isOnline
         guard failures.withLock({ $0.mayAttempt(key, at: now, isOnline: isOnline) }) else { return }
 
-        let isNew = inFlight.withLock { $0.insert(key).inserted }
+        let isNew = inFlight.withLock { pending -> Bool in
+            guard pending[key] == nil else {
+                // A stalled fetch can be drawn over more than once. Redrawing
+                // a rect already waiting achieves nothing, and skipping it is
+                // what keeps this list the size of the screen rather than the
+                // size of however long the network took.
+                if pending[key]?.contains(where: { MKMapRectEqualToRect($0, tileRect) }) == false {
+                    pending[key]?.append(tileRect)
+                }
+                return false
+            }
+            pending[key] = [tileRect]
+            return true
+        }
         guard isNew else { return }
 
         // Deliberately *not* @MainActor: `cacheTile` does network I/O, disk
@@ -250,16 +327,19 @@ nonisolated final class CachingTileOverlayRenderer: MKOverlayRenderer, TileCache
             let loaded = await overlay.cacheTile(at: fetchPath)
             await TileLoadGate.shared.release(.interactive)
             guard let self else { return }
-            inFlight.withLock { _ = $0.remove(key) }
+            let waiting = inFlight.withLock { $0.removeValue(forKey: key) ?? [tileRect] }
             if loaded {
                 // A tile that loads clears its own failure history, so a later
                 // failure starts its backoff fresh rather than inheriting the
                 // last run of bad luck.
                 failures.withLock { $0.recordSuccess(key) }
-                // Redraw only the tile that arrived. `setNeedsDisplay` must run
-                // on the main thread (MapKit/UIKit requirement that isn't
-                // statically enforced), hence the explicit hop here.
-                await MainActor.run { self.setNeedsDisplay(tileRect) }
+                // Redraw every rect these bytes cover — the asker, plus any
+                // overzoomed sibling whose request was folded into it.
+                // `setNeedsDisplay` must run on the main thread (a MapKit/UIKit
+                // requirement that isn't statically enforced), hence the hop.
+                await MainActor.run {
+                    for rect in waiting { self.setNeedsDisplay(rect) }
+                }
             } else {
                 // Deliberately no redraw here: redrawing *on* failure is what
                 // spun the request loop. The retry instead rides a wake-up

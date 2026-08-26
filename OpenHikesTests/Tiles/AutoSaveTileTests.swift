@@ -348,6 +348,54 @@ struct ControllerTests {
         #expect(controller.isCapReached(for: hike), "turning it back on should resume from the same manifest")
     }
 
+    /// The system base map draws no tiles, so there is nothing to auto-save
+    /// for. Activating anyway would build a route-sized corridor and hold a
+    /// live store entry for a hike that can never claim a tile — which is
+    /// precisely the work that option exists to avoid. The refusal lives in
+    /// the controller rather than only where the toggle is drawn, for the same
+    /// reason ``OfflineTileDownloader`` refuses a download it isn't offered.
+    @Test("no hike is activated while the map draws no tiles")
+    func systemBaseMapNeverActivates() {
+        let controller = AutoSaveController(store: sandbox.store, drainInterval: nil) { false }
+        let hike = fullHike()
+
+        controller.hikeSelectionChanged(to: hike)
+        #expect(controller.currentHike == nil)
+        #expect(!controller.isCapReached(for: hike))
+    }
+
+    /// The per-hike preference is still the user's to set; it just doesn't
+    /// start anything while nothing is being drawn. Flipping it would be a
+    /// silent change to a setting they'd find switched off next time they
+    /// picked a tile source.
+    @Test("the toggle still records the preference while the map draws no tiles")
+    func systemBaseMapKeepsThePreference() {
+        let controller = AutoSaveController(store: sandbox.store, drainInterval: nil) { false }
+        let hike = fullHike { $0.autoSaveTilesEnabled = false }
+
+        controller.setEnabled(true, for: hike)
+        #expect(hike.autoSaveTilesEnabled, "the hike's own preference is recorded either way")
+        #expect(controller.currentHike == nil, "but nothing is armed for a map that fetches nothing")
+    }
+
+    /// Picking a tile source again has to arm auto-save for whatever is
+    /// already selected — `OpenHikesView` re-announces the selection through
+    /// ``OpenHikesModel/tileProviderDidChange(selectedHike:)`` for this.
+    @Test("re-announcing the selection arms auto-save once the map draws tiles again")
+    func selectionIsRearmedWhenTilesReturn() {
+        nonisolated(unsafe) var rendersTiles = false
+        let controller = AutoSaveController(store: sandbox.store, drainInterval: nil) { rendersTiles }
+        let hike = fullHike()
+
+        controller.hikeSelectionChanged(to: hike)
+        #expect(controller.currentHike == nil)
+
+        rendersTiles = true
+        controller.hikeSelectionChanged(to: hike)
+        #expect(controller.currentHike?.id == hike.id)
+        #expect(controller.isCapReached(for: hike))
+    }
+
     @Test("a long route's corridor is prepared before it accepts tiles")
     func longRouteActivationCompletesOffMain() async throws {
         let route = (0..<18_000).map { index in

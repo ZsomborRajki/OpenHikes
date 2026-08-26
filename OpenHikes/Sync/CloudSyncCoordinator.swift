@@ -178,7 +178,10 @@ final class CloudSyncCoordinator {
     /// Handed to the launch-time orphan sweep, which would otherwise delete
     /// the pixels of a photo still waiting for its hike — see
     /// ``CloudSyncStateStore/deferredPhotoFileNames()``.
-    func deferredPhotoClaims() async -> Set<String> {
+    ///
+    /// `nil` means "this launch cannot enumerate them", which must skip the
+    /// sweep rather than shrink the claim set.
+    func deferredPhotoClaims() async -> Set<String>? { // swiftlint:disable:this discouraged_optional_collection
         await engine.deferredPhotoClaims()
     }
 

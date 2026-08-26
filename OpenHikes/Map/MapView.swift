@@ -3,7 +3,8 @@
 //  OpenHikes
 //
 //  A full-screen MKMapView that renders raster tiles from the selected
-//  provider and shows the user's location.
+//  provider — or, when the selection is the system base map, MapKit's own
+//  cartography with no overlay at all — and shows the user's location.
 //
 
 import MapKit
@@ -18,6 +19,12 @@ typealias MapViewRepresentable = UIViewRepresentable
 
 struct MapView: MapViewRepresentable, Equatable {
     private static let logger = Logger(subsystem: "OpenHikes", category: "MapView")
+
+    /// The `tileSourceKey` standing for "no overlay". A sentinel rather than
+    /// `nil` so the coordinator can tell "the system base map is installed"
+    /// apart from "nothing has been applied yet", which is what stops the very
+    /// first update pass from removing an overlay it never added.
+    private static let systemBaseMapKey = "system-base-map"
 
     /// Source of the user's live location. Observed directly by the map (not
     /// via SwiftUI), the same technique `highlight`/`sheetMetrics` use, so the
@@ -49,9 +56,10 @@ struct MapView: MapViewRepresentable, Equatable {
     /// repositions the "my location" button without re-rendering any view.
     var sheetMetrics: SheetMetrics
 
-    /// The selected tile source (provider + resolved template). Changing it
-    /// rebuilds the overlay on the next update.
-    var tileSource: ActiveTileSource
+    /// The selected tile source (provider + resolved template), or `nil` when
+    /// the selected map draws no raster tiles and MapKit's own base map is left
+    /// in place. Changing it rebuilds (or removes) the overlay on the next update.
+    var tileSource: ActiveTileSource?
 
     /// Observed directly by the map so the detail view's Zoom button can re-fit
     /// the route without re-rendering any view.
@@ -122,16 +130,32 @@ struct MapView: MapViewRepresentable, Equatable {
         return mapView
     }
 
-    /// Rebuilds the tile overlay when the selected provider changes. No-op while
-    /// the same source is already installed, so unrelated updates don't churn it.
+    /// Rebuilds the tile overlay when the selected provider changes, and removes
+    /// it entirely when the selection is the system base map. No-op while the
+    /// same source is already installed, so unrelated updates don't churn it.
     private func applyTileSource(to mapView: MKMapView, _ coordinator: Coordinator) {
-        let key = "\(tileSource.providerID)|\(tileSource.urlTemplate)|\(tileSource.maximumZ)"
+        let key = tileSource.map { source in
+            "\(source.providerID)|\(source.urlTemplate)|\(source.maximumZ)"
+        } ?? Self.systemBaseMapKey
         guard coordinator.tileSourceKey != key else { return }
         coordinator.tileSourceKey = key
         RenderSignpost.mark("MapTileSourceRebuilt", key)
 
         if let existing = coordinator.tileOverlay {
             mapView.removeOverlay(existing)
+            coordinator.tileOverlay = nil
+        }
+
+        // No overlay at all, rather than an empty one: `canReplaceMapContent`
+        // is what hides Apple's base map, so simply leaving it off is what
+        // shows it — and with nothing installed, no tile is ever requested,
+        // fetched, decoded, cached or auto-saved. That is the whole of the
+        // saving this option exists for.
+        guard let tileSource else {
+            #if DEBUG
+            Self.logger.debug("Removed tile overlay; drawing the system base map")
+            #endif
+            return
         }
 
         let overlay = TileOverlay(providerID: tileSource.providerID, urlTemplate: tileSource.urlTemplate)

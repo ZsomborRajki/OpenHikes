@@ -204,7 +204,7 @@ extension HikeSyncEngine {
         var hikes: [HikeSyncPayload] = []
         var photos: [HikePhotoSyncPayload] = []
         var hikeRecords: [String: CKRecord] = [:]
-        var photoRecords: [CKRecord] = []
+        var photoRecords: [String: CKRecord] = [:]
     }
 
     private func decode(_ record: CKRecord, into batch: inout FetchedBatch) async {
@@ -226,7 +226,7 @@ extension HikeSyncEngine {
             guard let payload = HikePhotoCloudRecord.decode(record) else { return }
             await installPixels(of: payload, from: record)
             batch.photos.append(payload)
-            batch.photoRecords.append(record)
+            batch.photoRecords[payload.id.uuidString] = record
         default:
             return
         }
@@ -237,19 +237,48 @@ extension HikeSyncEngine {
     /// Remembering first would hand this device a change tag for a hike it
     /// never wrote, and the change token has already moved past that record —
     /// the server will not offer it again. A failure therefore has to leave
-    /// the payloads somewhere durable instead.
+    /// the payloads somewhere durable instead, together with their records:
+    /// see ``Deferred``.
+    /// Collapses payloads naming the same record, keeping the later one.
+    ///
+    /// `waiting + batch` can carry an id twice: something deferred on an
+    /// earlier pass that has since changed again arrives in both halves. Left
+    /// alone, a failed write defers both copies, and the next launch builds a
+    /// record lookup from them with `Dictionary(uniqueKeysWithValues:)` —
+    /// which traps, *after* `takeDeferredHikes()` has already written the
+    /// emptied queue to disk. A crash and the loss of the very payloads the
+    /// deferral existed to protect. The batch half is the fresher of the two,
+    /// which is why later wins.
+    private static func deduplicated<Payload>(
+        _ payloads: [Payload],
+        by id: (Payload) -> UUID
+    ) -> [Payload] {
+        var seen = Set<UUID>()
+        var newestFirst: [Payload] = []
+        newestFirst.reserveCapacity(payloads.count)
+        for payload in payloads.reversed() where seen.insert(id(payload)).inserted {
+            newestFirst.append(payload)
+        }
+        return newestFirst.reversed()
+    }
+
     private func writeHikes(in batch: FetchedBatch) async {
         let waiting = await store.takeDeferredHikes()
-        let payloads = waiting + batch.hikes
+        var records = batch.hikeRecords
+        for entry in waiting where records[entry.payload.id.uuidString] == nil {
+            records[entry.payload.id.uuidString] = entry.systemFields
+                .flatMap(CloudSyncStateStore.record(fromSystemFields:))
+        }
+        let payloads = Self.deduplicated(waiting.map(\.payload) + batch.hikes, by: \.id)
         guard !payloads.isEmpty else { return }
         do {
             let written = try await applier.apply(
                 hikes: payloads,
                 skipping: locallyPendingHikeIDs()
             )
-            await store.remember(written.compactMap { batch.hikeRecords[$0.id.uuidString] })
+            await store.remember(written.compactMap { records[$0.id.uuidString] })
         } catch {
-            await store.deferHikes(payloads)
+            await store.deferHikes(payloads, records: records)
             await report(error, whileDoing: "writing hikes fetched from iCloud")
         }
     }
@@ -259,17 +288,40 @@ extension HikeSyncEngine {
     /// in *this* batch.
     private func writePhotos(in batch: FetchedBatch) async {
         let waiting = await store.takeDeferredPhotos()
-        let payloads = waiting + batch.photos
+        var records = batch.photoRecords
+        for entry in waiting where records[entry.payload.id.uuidString] == nil {
+            guard let record = entry.systemFields
+                .flatMap(CloudSyncStateStore.record(fromSystemFields:)) else { continue }
+            // System fields carry identity and change tag, and no user data —
+            // but ``CloudSyncStateStore/remember(_:)`` reads this one field to
+            // index which hike owns the photo. Without it a deferred photo
+            // lands with a change tag and no owner, and removing it later
+            // never queues the iCloud deletion, so it survives on every other
+            // device.
+            record[CloudSyncSchema.PhotoField.hikeID] = entry.payload.hikeID.uuidString
+            records[entry.payload.id.uuidString] = record
+        }
+        let payloads = Self.deduplicated(waiting.map(\.payload) + batch.photos, by: \.id)
         guard !payloads.isEmpty else { return }
         do {
             let unmatched = try await applier.apply(photos: payloads)
-            await store.remember(batch.photoRecords)
+            // Only the ones that were actually attached. Remembering a record
+            // for a photo handed back unmatched is the very thing this
+            // method's counterpart above refuses to do: a change tag for data
+            // this device never wrote, against a token the server has already
+            // moved past.
+            let deferred = Set(unmatched.map(\.id))
+            await store.remember(
+                payloads
+                    .filter { !deferred.contains($0.id) }
+                    .compactMap { records[$0.id.uuidString] }
+            )
             for photo in unmatched {
-                await store.deferPhoto(photo)
+                await store.deferPhoto(photo, from: records[photo.id.uuidString])
             }
         } catch {
             for photo in payloads {
-                await store.deferPhoto(photo)
+                await store.deferPhoto(photo, from: records[photo.id.uuidString])
             }
             await report(error, whileDoing: "writing photos fetched from iCloud")
         }
@@ -305,10 +357,14 @@ extension HikeSyncEngine {
     /// Records what the server accepted, and decides what to do about what it
     /// didn't.
     ///
-    /// Only the failures needing app-specific knowledge appear here.
-    /// ``CKSyncEngine`` retries the transient ones itself — no signal, rate
-    /// limiting, a busy zone — which is precisely why a failure that reaches
-    /// this method is worth showing the user rather than swallowing.
+    /// Three kinds of failure arrive here, and only the first is worth telling
+    /// anyone about. The ones needing app-specific knowledge — a record
+    /// somebody else edited first, a zone that no longer exists — are named
+    /// below. The rest are classified by ``CloudSyncFailure``: the transient
+    /// ones ``CKSyncEngine`` is already retrying are logged and left alone,
+    /// and the ones that failed through no fault of their own are queued
+    /// again. A failure being *delivered* here says nothing about whether it
+    /// is the user's problem.
     func handleSent(
         _ sent: CKSyncEngine.Event.SentRecordZoneChanges,
         syncEngine: CKSyncEngine
@@ -371,7 +427,22 @@ extension HikeSyncEngine {
                 await store.forgetRecord(id: recordID)
                 retryRecords.append(.saveRecord(recordID))
             default:
-                await report(failure.error, whileDoing: "saving a record")
+                switch CloudSyncFailure.response(to: failure.error.code) {
+                case .ignore:
+                    Self.logger.debug(
+                        """
+                        \(recordID.recordName, privacy: .public) will be retried by the sync engine: \
+                        \(failure.error.localizedDescription, privacy: .public)
+                        """
+                    )
+                case .retry:
+                    // Not reported, and above all not dropped: the engine has
+                    // already consumed the pending change, so without this the
+                    // save waits for the next launch to replay it.
+                    retryRecords.append(.saveRecord(recordID))
+                case .report:
+                    await report(failure.error, whileDoing: "saving a record")
+                }
             }
         }
     }
@@ -392,8 +463,23 @@ extension HikeSyncEngine {
                 // Queued again rather than dropped: a deletion that is not
                 // re-sent leaves the record in iCloud to be downloaded back
                 // onto every device, which reads as the hike undeleting itself.
-                await report(failure.value, whileDoing: "deleting a record")
-                retryRecords.append(.deleteRecord(recordID))
+                // The exception is a failure the engine is already retrying,
+                // where the pending change is still its own and re-adding it
+                // would only trade one alert the user cannot act on for two.
+                switch CloudSyncFailure.response(to: failure.value.code) {
+                case .ignore:
+                    Self.logger.debug(
+                        """
+                        Deleting \(recordID.recordName, privacy: .public) will be retried by the sync engine: \
+                        \(failure.value.localizedDescription, privacy: .public)
+                        """
+                    )
+                case .retry:
+                    retryRecords.append(.deleteRecord(recordID))
+                case .report:
+                    await report(failure.value, whileDoing: "deleting a record")
+                    retryRecords.append(.deleteRecord(recordID))
+                }
             }
         }
     }

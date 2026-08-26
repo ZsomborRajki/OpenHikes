@@ -29,22 +29,46 @@ actor HikeSyncEngine {
 
     let applier: HikeSyncApplier
     let status: CloudSyncStatus
-    let store: CloudSyncStateStore
+
+    /// Built on this actor, the first time anything asks for it.
+    ///
+    /// It used to be a `let` with `CloudSyncStateStore()` as its default
+    /// argument — and a default argument is evaluated at the *call site*,
+    /// which is ``CloudSyncCoordinator``'s initializer, which is
+    /// ``OpenHikesModel/init`` on the main actor. That store's own
+    /// initializer reads six files synchronously, one of them holding an
+    /// archived `CKRecord` per hike *and* per photo, so a real library paid
+    /// megabytes of main-thread I/O on the launch path `PERFORMANCE.md`
+    /// measures — including on the launches where sync never runs at all,
+    /// because the persistent store would not open or the user has the switch
+    /// off. Every caller below is already `async` and already isolated here,
+    /// so deferring it costs nothing.
+    private var loadedStore: CloudSyncStateStore?
+
+    var store: CloudSyncStateStore {
+        if let loadedStore { return loadedStore }
+        let created = CloudSyncStateStore()
+        loadedStore = created
+        return created
+    }
 
     private let cloudContainer: CKContainer
     private var engine: CKSyncEngine?
 
+    /// - Parameter store: Injectable so a suite gets its own directories
+    ///   rather than the app's. `nil` — the app's case — builds one lazily;
+    ///   see ``store``.
     init(
         applier: HikeSyncApplier,
         status: CloudSyncStatus,
-        store: CloudSyncStateStore = CloudSyncStateStore(),
+        store: CloudSyncStateStore? = nil,
         cloudContainer: CKContainer = CKContainer(
             identifier: CloudSyncSchema.containerIdentifier
         )
     ) {
         self.applier = applier
         self.status = status
-        self.store = store
+        loadedStore = store
         self.cloudContainer = cloudContainer
     }
 
@@ -119,10 +143,25 @@ actor HikeSyncEngine {
     private func retryDeferredWrites() async {
         let waiting = await store.takeDeferredHikes()
         guard !waiting.isEmpty else { return }
+        // `merging` rather than `uniqueKeysWithValues`: the queue is written by
+        // a path that already collapses duplicates, but this one runs at
+        // launch against whatever is on disk, and trapping here would take the
+        // app down after `takeDeferredHikes()` had emptied the file.
+        let archives = Dictionary(
+            waiting.map { entry in (entry.payload.id.uuidString, entry.systemFields) }
+        ) { _, later in later }
+        let records = archives.compactMapValues { fields in
+            fields.flatMap(CloudSyncStateStore.record(fromSystemFields:))
+        }
+        let payloads = waiting.map(\.payload)
         do {
-            _ = try await applier.apply(hikes: waiting, skipping: locallyPendingHikeIDs())
+            let written = try await applier.apply(
+                hikes: payloads,
+                skipping: locallyPendingHikeIDs()
+            )
+            await store.remember(written.compactMap { records[$0.id.uuidString] })
         } catch {
-            await store.deferHikes(waiting)
+            await store.deferHikes(payloads, records: records)
             await report(error, whileDoing: "writing hikes fetched from iCloud")
         }
     }
@@ -184,20 +223,22 @@ actor HikeSyncEngine {
     ///   were all removed, which is a different statement from a hike that is
     ///   absent.
     func enqueue(photosByHike: [UUID: [UUID]]) async {
-        var saves: [CKRecord.ID] = []
         var deletions: [CKRecord.ID] = []
+        var saves = photosByHike.keys.map(CloudSyncSchema.hikeRecordID)
 
+        // Two batched questions rather than one per photo and one per hike:
+        // both of these are actor hops, and a first sync asks them about the
+        // whole library.
+        let candidates = photosByHike.values.joined()
+            .map(CloudSyncSchema.photoRecordID)
+        saves.append(contentsOf: await store.unacknowledged(Array(candidates)))
+
+        let known = await store.photoRecordNames(
+            ownedByAnyOf: Array(photosByHike.keys)
+        )
         for (hikeID, photoIDs) in photosByHike {
-            saves.append(CloudSyncSchema.hikeRecordID(hikeID))
-
             let current = Set(photoIDs.map(\.uuidString))
-            for id in photoIDs {
-                let recordID = CloudSyncSchema.photoRecordID(id)
-                guard await store.lastKnownRecord(id: recordID) == nil else { continue }
-                saves.append(recordID)
-            }
-            for name in await store.photoRecordNames(ownedBy: hikeID)
-            where !current.contains(name) {
+            for name in known[hikeID] ?? [] where !current.contains(name) {
                 deletions.append(
                     CKRecord.ID(recordName: name, zoneID: CloudSyncSchema.zoneID)
                 )
@@ -248,23 +289,17 @@ actor HikeSyncEngine {
     /// This is what makes a first sync upload an existing library, and what
     /// picks up a hike recorded while sync was switched off. It asks the
     /// question the cheap way — "is there a server record for this?" — rather
-    /// than by comparing contents, so a launch with nothing new to say costs
-    /// one dictionary lookup per hike.
+    /// than by comparing contents, and asks it about the whole library in one
+    /// hop, so a launch with nothing new to say costs one dictionary lookup
+    /// per hike and two suspensions in total.
     func reconcile() async {
         guard let engine else { return }
-        var changes: [CKSyncEngine.PendingRecordZoneChange] = []
 
         let identifiers = await applier.syncableIdentifiers()
-        for id in identifiers.hikeIDs {
-            let recordID = CloudSyncSchema.hikeRecordID(id)
-            guard await store.lastKnownRecord(id: recordID) == nil else { continue }
-            changes.append(.saveRecord(recordID))
-        }
-        for id in identifiers.photoIDs {
-            let recordID = CloudSyncSchema.photoRecordID(id)
-            guard await store.lastKnownRecord(id: recordID) == nil else { continue }
-            changes.append(.saveRecord(recordID))
-        }
+        let candidates = identifiers.hikeIDs.map(CloudSyncSchema.hikeRecordID)
+            + identifiers.photoIDs.map(CloudSyncSchema.photoRecordID)
+        var changes = await store.unacknowledged(candidates)
+            .map(CKSyncEngine.PendingRecordZoneChange.saveRecord)
 
         changes.append(contentsOf: await orphanedRecordDeletions())
 
@@ -326,7 +361,11 @@ actor HikeSyncEngine {
 
     /// The photo files held for a hike that hasn't arrived yet, so the
     /// launch-time orphan sweep doesn't mistake them for abandoned bytes.
-    func deferredPhotoClaims() async -> Set<String> {
+    ///
+    /// `nil` when the deferred-photo file could not be read, which authorizes
+    /// no sweep at all — the rule the tile and photo claim sets already
+    /// follow, and for the same reason.
+    func deferredPhotoClaims() async -> Set<String>? { // swiftlint:disable:this discouraged_optional_collection
         await store.deferredPhotoFileNames()
     }
 

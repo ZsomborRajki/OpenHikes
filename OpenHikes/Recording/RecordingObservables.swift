@@ -65,6 +65,11 @@ final class RecordingTrace {
     /// Scratch for comparing the provisional remainder across a rebuild.
     /// Held rather than allocated per call because this runs once per fix.
     @ObservationIgnored private var previousProvisional: [CLLocationCoordinate2D] = []
+    /// The route last handed to ``showReview(route:highlightedSegment:)``, held
+    /// to compare the next one against. Cleared by ``replace(stable:provisional:)``
+    /// and ``reset()``, which is every way in and out of a review — `append`
+    /// and `applyLiveMatch` cannot run against a stopped recorder.
+    @ObservationIgnored private var reviewRoute: [CLLocationCoordinate2D] = []
     private(set) var revision = 0
 
     func append(
@@ -94,6 +99,7 @@ final class RecordingTrace {
     ) {
         generation &+= 1
         committedChunks = []
+        reviewRoute = []
         _ = clearReviewSegment()
         clearTails()
         guard !stableCoordinates.isEmpty
@@ -136,7 +142,21 @@ final class RecordingTrace {
         route: [CLLocationCoordinate2D],
         highlightedSegment: [CLLocationCoordinate2D] = []
     ) {
-        replace(with: route)
+        // Change detection, because every caller is a tap handler and
+        // `replace(with:)` has none of its own. Re-tapping the already-selected
+        // review option, or stepping to a section whose alternatives resolve to
+        // the same line, rebuilt both `MKPolyline`s to draw exactly what was
+        // already on screen — and on a long hike that is the whole route. Every
+        // other mutator here moves a token only on a real change; this was the
+        // one path that did not.
+        let routeChanged = !Self.isSame(reviewRoute, route[...])
+        let highlightChanged = !Self.isSame(reviewSegment, highlightedSegment[...])
+        guard routeChanged || highlightChanged else { return }
+
+        if routeChanged {
+            replace(with: route)
+            reviewRoute = route
+        }
         reviewSegment = highlightedSegment
         reviewRevision &+= 1
         revision &+= 1
@@ -145,6 +165,7 @@ final class RecordingTrace {
     func reset() {
         generation &+= 1
         committedChunks = []
+        reviewRoute = []
         _ = clearReviewSegment()
         clearTails()
         revision &+= 1

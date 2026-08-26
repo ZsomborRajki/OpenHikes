@@ -119,6 +119,23 @@ struct CloudSyncStateStoreTests {
         #expect(owned == [mine.uuidString])
     }
 
+    /// `encodeSystemFields` writes identity and change tag and nothing else,
+    /// so a record rebuilt from a deferred photo's archive carries no owner.
+    /// ``photoOwnershipIsRemembered`` reads that field, so the delegate has to
+    /// put it back before remembering a retried photo — otherwise the photo is
+    /// filed with a change tag and no hike behind it, and deleting it locally
+    /// never queues the iCloud deletion, so it returns on every other device.
+    @Test("A record rebuilt from system fields no longer names its hike")
+    func systemFieldsCarryNoOwnership() {
+        let record = Self.photoRecord(id: UUID(), hikeID: UUID())
+        let rebuilt = CloudSyncStateStore.record(
+            fromSystemFields: CloudSyncStateStore.systemFields(of: record)
+        )
+
+        #expect(rebuilt?.recordID == record.recordID)
+        #expect(rebuilt?[CloudSyncSchema.PhotoField.hikeID] as String? == nil)
+    }
+
     @Test("Forgetting a photo record drops its ownership too")
     func forgettingClearsOwnership() async {
         let sandbox = Sandbox()
@@ -144,7 +161,7 @@ struct CloudSyncStateStoreTests {
         await sandbox.store.deferPhoto(payload)
 
         let next = sandbox.relaunched()
-        #expect(await next.takeDeferredPhotos() == [payload])
+        #expect(await next.takeDeferredPhotos().map(\.payload) == [payload])
         #expect(await next.takeDeferredPhotos().isEmpty)
     }
 
@@ -410,8 +427,25 @@ extension CloudSyncStateStoreTests {
         await sandbox.store.deferHikes([payload])
 
         let next = sandbox.relaunched()
-        #expect(await next.takeDeferredHikes() == [payload])
+        #expect(await next.takeDeferredHikes().map(\.payload) == [payload])
         #expect(await next.takeDeferredHikes().isEmpty)
+    }
+
+    /// Two entries for one hike is not hypothetical: a hike deferred on an
+    /// earlier pass that has since changed again arrives in both halves of
+    /// `waiting + batch`. The consumer keys a dictionary by id, so a duplicate
+    /// used to trap — after `takeDeferredHikes()` had already emptied the file,
+    /// taking the payloads down with it.
+    @Test("Deferring one hike twice in a batch holds the later copy once")
+    func duplicateDeferredHikesCollapse() async {
+        let sandbox = Sandbox()
+        defer { sandbox.removeAll() }
+        let id = UUID()
+        var later = Self.hikePayload(id: id)
+        later.title = "Later"
+        await sandbox.store.deferHikes([Self.hikePayload(id: id), later])
+
+        #expect(await sandbox.relaunched().takeDeferredHikes().map(\.payload) == [later])
     }
 
     /// Those pixels are on disk with nothing claiming them, which is exactly
@@ -426,8 +460,30 @@ extension CloudSyncStateStoreTests {
         )
 
         let claims = await sandbox.store.deferredPhotoFileNames()
-        #expect(claims.contains(photo.fileName))
-        #expect(claims.contains(photo.thumbnailFileName))
+        #expect(claims?.contains(photo.fileName) == true)
+        #expect(claims?.contains(photo.thumbnailFileName) == true)
+    }
+
+    /// The sweep deletes every photo file no claim names, so an unreadable
+    /// deferred-photo file must not read as "nothing is deferred" — that is a
+    /// complete claim set with a hole in it, and the hole is deleted. `nil`
+    /// says "ask again next launch" instead.
+    @Test("An unreadable deferred-photo file claims nothing rather than everything")
+    func unreadableDeferredPhotosRefuseToClaim() async {
+        let sandbox = Sandbox()
+        defer { sandbox.removeAll() }
+        await sandbox.store.deferPhoto(
+            HikePhotoSyncPayload(hikeID: UUID(), photo: HikePhoto())
+        )
+
+        try? Data("not json".utf8).write(
+            to: sandbox.root
+                .appending(path: "support")
+                .appending(path: "CloudSync")
+                .appending(path: "deferred-photos.json")
+        )
+
+        #expect(await sandbox.relaunched().deferredPhotoFileNames() == nil)
     }
 
     private static func hikePayload(id: UUID) -> HikeSyncPayload {

@@ -207,22 +207,46 @@ extension HikeRecorder {
 
     // MARK: Gap distances
 
+    /// The pedometer distance for each leg that needs corroborating, gathered
+    /// concurrently.
+    ///
+    /// `distanceEvidenceSource` is an actor wrapping `CMPedometer`, and a query
+    /// is a real round-trip to the motion daemon. Asked one leg at a time this
+    /// was n serial suspensions on the Stop path, with the walker watching a
+    /// spinner for the sum of them; a task group makes it the slowest one. The
+    /// results are keyed by index, so the group's arbitrary completion order
+    /// does not matter.
     func gapDistances(for points: [RecordingPoint]) async -> [Int: Double] {
         guard let distanceEvidenceSource, points.count > 1 else { return [:] }
-        var distances: [Int: Double] = [:]
-        for index in 1..<points.count
-        where TrailMatcher.needsDistanceEvidence(
-            from: points[index - 1],
-            to: points[index]
-        ) {
-            if let distance = await distanceEvidenceSource.distance(
-                from: points[index - 1].timestamp,
-                to: points[index].timestamp
-            ), distance.isFinite, distance >= 0 {
-                distances[index] = distance
-            }
+        let legs = (1..<points.count).filter { index in
+            TrailMatcher.needsDistanceEvidence(
+                from: points[index - 1],
+                to: points[index]
+            )
         }
-        return distances
+        guard !legs.isEmpty else { return [:] }
+
+        return await withTaskGroup(
+            of: (Int, Double)?.self,
+            returning: [Int: Double].self
+        ) { group in
+            for index in legs {
+                let from = points[index - 1].timestamp
+                let to = points[index].timestamp
+                group.addTask {
+                    guard let distance = await distanceEvidenceSource.distance(
+                        from: from,
+                        to: to
+                    ), distance.isFinite, distance >= 0 else { return nil }
+                    return (index, distance)
+                }
+            }
+            var distances: [Int: Double] = [:]
+            for await result in group {
+                if let result { distances[result.0] = result.1 }
+            }
+            return distances
+        }
     }
 
     // MARK: Sensors

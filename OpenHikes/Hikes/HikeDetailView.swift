@@ -344,20 +344,23 @@ private extension HikeDetailView {
         VStack(spacing: 12) {
             RouteAppearanceControls(hike: hike) {
                 zoomButton
-                if activeProvider.supportsBulkDownload {
+                if let source = activeTileSource, activeProvider.supportsBulkDownload {
                     OfflineDownloadButton(
                         downloader: downloader,
                         canDownload: canDownload
                     ) {
                         downloader.start(
                             route: hike.route,
-                            source: activeTileSource,
+                            source: source,
                             scale: displayScale
                         )
                     }
                 }
             } middleControls: {
-                autoSaveToggle
+                // No toggle at all rather than a disabled one: there is nothing
+                // to save from a map that fetches no tiles, and
+                // `OfflineStorageStatus` says so where the note goes.
+                if !activeProvider.usesSystemBaseMap { autoSaveToggle }
                 autoFollowToggle
             }
             OfflineStorageStatus(
@@ -365,6 +368,7 @@ private extension HikeDetailView {
                 autoSave: autoSave,
                 downloader: downloader,
                 storedBytes: storedBytes,
+                mapRendersTiles: !activeProvider.usesSystemBaseMap,
                 scheduleStoredBytesRefresh: scheduleStoredBytesRefresh,
                 deleteStoredTiles: deleteStoredTiles
             )
@@ -418,9 +422,7 @@ private extension HikeDetailView {
         )
     }
 
-    private var canDownload: Bool {
-        activeProvider.supportsBulkDownload && hike.pointCount > 1
-    }
+    private var canDownload: Bool { activeProvider.supportsBulkDownload && hike.pointCount > 1 }
 
     private func actionTile(icon: String, title: String, tint: Color = .accentColor) -> some View {
         ActionTile(tint: tint) {
@@ -435,7 +437,9 @@ private extension HikeDetailView {
     /// offered at all, so it has to name the source the map is really drawing.
     private var activeProvider: TileProvider { .renderable(id: tileProviderID) }
 
-    private var activeTileSource: ActiveTileSource { ActiveTileSource(activeProvider) }
+    /// `nil` when the selected map draws no raster tiles, which is also when
+    /// there is nothing a download could fetch.
+    private var activeTileSource: ActiveTileSource? { activeProvider.renderedSource }
 
     // MARK: Header
 
