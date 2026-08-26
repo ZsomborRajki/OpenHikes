@@ -117,6 +117,11 @@ final class HikeRecorder: NSObject {
     @ObservationIgnored var liveMatchNeedsRun = false
     @ObservationIgnored var pendingReviewSave: PendingReviewSave?
     @ObservationIgnored var pendingPreparedSave: PendingPreparedSave?
+    /// The in-flight resolution of the review preview. One at a time and
+    /// replaced rather than accumulated: scrubbing through sections issues one
+    /// of these per tap, and only the newest answer is worth drawing.
+    @ObservationIgnored var reviewPreviewTask: Task<Void, Never>?
+    @ObservationIgnored var reviewPreviewTaskID: UUID?
     @ObservationIgnored let journalQueue = SerialAsyncQueue()
     @ObservationIgnored var journalFlushTask: Task<Void, Never>?
     @ObservationIgnored var pendingFixMergeTask: Task<Void, Never>?

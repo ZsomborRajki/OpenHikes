@@ -120,10 +120,6 @@ actor OverpassTrailGraphProvider: TrailGraphProviding {
     private static let defaultRetryDelay: TimeInterval = 60
     private static let httpSuccessRange = 200..<300
     private static let httpRateLimitCode = 429
-    private static let allowedHighways: Set<String> = [
-        "path", "footway", "track", "bridleway", "steps", "cycleway",
-        "via_ferrata",
-    ]
 
     private struct CachedGraph: Codable, Sendable {
         let fetchedAt: Date
@@ -137,12 +133,19 @@ actor OverpassTrailGraphProvider: TrailGraphProviding {
         let east: Double
     }
 
+    /// One shared download, plus the callers currently waiting on it.
+    private struct InFlightFetch {
+        let id: UUID
+        let task: Task<TrailGraph, Error>
+        var waiters: Set<UUID>
+    }
+
     private let directory: URL
     private let endpoint: URL
     private let transport: Transport
     private let clock: @Sendable () -> Date
     private var memory: [TrailGraphRegion: CachedGraph] = [:]
-    private var inFlight: [TrailGraphRegion: Task<TrailGraph, Error>] = [:]
+    private var inFlight: [TrailGraphRegion: InFlightFetch] = [:]
     private var retryAfter: Date?
 
     init(
@@ -205,45 +208,139 @@ actor OverpassTrailGraphProvider: TrailGraphProviding {
     func prefetch(around coordinate: CLLocationCoordinate2D) async throws {
         guard let key = region(containing: coordinate) else { return }
         if try cachedGraph(for: key, allowExpired: false) != nil { return }
-        if let task = inFlight[key] {
-            _ = try await task.value
-            return
-        }
-        if let retryAfter, retryAfter > clock() {
-            throw TrailGraphProviderError.rateLimited(
-                retryAfter: retryAfter.timeIntervalSince(clock())
-            )
+        try Task.checkCancellation()
+        _ = try await joinFetch(for: key, startingIfNeeded: true)
+    }
+
+    // MARK: In-flight fetches
+
+    /// Awaits the fetch for `key`, starting one if nobody else has.
+    ///
+    /// The caller is registered as a waiter for as long as it is suspended
+    /// here, and the fetch is cancelled the moment its *last* waiter goes
+    /// away. That is what makes `cancelTrailGraphPrefetches()` actually stop
+    /// the radio: an unstructured `Task` does not inherit cancellation, so
+    /// awaiting `task.value` alone left the request — and the file write and
+    /// cache trim behind it — running after the user stopped recording.
+    ///
+    /// Reference counted rather than cancelled outright because `inFlight`
+    /// exists to deduplicate: a live recording and a route measurement can be
+    /// waiting on the same region, and one giving up must not cancel the
+    /// other's download.
+    private func joinFetch(
+        for key: TrailGraphRegion,
+        startingIfNeeded: Bool
+    ) async throws -> TrailGraph? {
+        let fetch: InFlightFetch
+        if let existing = inFlight[key] {
+            fetch = existing
+        } else {
+            guard startingIfNeeded else { return nil }
+            if let retryAfter, retryAfter > clock() {
+                throw TrailGraphProviderError.rateLimited(
+                    retryAfter: retryAfter.timeIntervalSince(clock())
+                )
+            }
+            fetch = beginFetch(for: key)
         }
 
+        let waiterID = UUID()
+        inFlight[key]?.waiters.insert(waiterID)
+        // Idempotent by construction — `waiters` is a set keyed on this
+        // caller — so the cancellation handler and this `defer` can both fire
+        // without double-releasing somebody else's claim.
+        defer { releaseWaiter(waiterID, from: key, fetchID: fetch.id) }
+
+        return try await withTaskCancellationHandler {
+            try await fetch.task.value
+        } onCancel: {
+            // Runs synchronously wherever cancellation happened, so it cannot
+            // touch actor state; the hop is one task per cancellation rather
+            // than one per fetch. Dropping the last waiter here is what makes
+            // `task.value` above resume at all.
+            Task { await self.releaseWaiter(waiterID, from: key, fetchID: fetch.id) }
+        }
+    }
+
+    private func beginFetch(for key: TrailGraphRegion) -> InFlightFetch {
+        let fetchID = UUID()
         let capturedEndpoint = endpoint
         let capturedTransport = transport
-        let task = Task {
-            try await Self.fetchGraph(
-                for: key,
-                endpoint: capturedEndpoint,
-                transport: capturedTransport
-            )
-        }
-        inFlight[key] = task
-
-        do {
-            let graph = try await task.value
-            inFlight[key] = nil
-            let cached = CachedGraph(fetchedAt: clock(), graph: graph)
-            memory[key] = cached
-            try write(cached, for: key)
-            trimCache()
-        } catch let error as TrailGraphProviderError {
-            inFlight[key] = nil
-            if case .rateLimited(let delay) = error {
-                let candidate = clock().addingTimeInterval(delay)
-                retryAfter = max(retryAfter ?? .distantPast, candidate)
+        let task = Task { [weak self] () throws -> TrailGraph in
+            do {
+                let graph = try await Self.fetchGraph(
+                    for: key,
+                    endpoint: capturedEndpoint,
+                    transport: capturedTransport
+                )
+                try Task.checkCancellation()
+                try await self?.finishFetch(of: graph, for: key, fetchID: fetchID)
+                return graph
+            } catch {
+                await self?.failFetch(with: error, for: key, fetchID: fetchID)
+                throw error
             }
-            throw error
-        } catch {
-            inFlight[key] = nil
-            throw error
         }
+        let fetch = InFlightFetch(id: fetchID, task: task, waiters: [])
+        inFlight[key] = fetch
+        return fetch
+    }
+
+    /// Caching lives in the task rather than in the awaiting path, so a region
+    /// downloaded for a caller that has since gone away is still recorded once
+    /// — and once only, however many waiters there were.
+    private func finishFetch(
+        of graph: TrailGraph,
+        for key: TrailGraphRegion,
+        fetchID: UUID
+    ) throws {
+        clearFetch(key, fetchID: fetchID)
+        let cached = CachedGraph(fetchedAt: clock(), graph: graph)
+        memory[key] = cached
+        try write(cached, for: key)
+        trimCache()
+    }
+
+    private func failFetch(
+        with error: any Error,
+        for key: TrailGraphRegion,
+        fetchID: UUID
+    ) {
+        clearFetch(key, fetchID: fetchID)
+        guard let providerError = error as? TrailGraphProviderError,
+              case .rateLimited(let delay) = providerError else { return }
+        let candidate = clock().addingTimeInterval(delay)
+        retryAfter = max(retryAfter ?? .distantPast, candidate)
+    }
+
+    private func clearFetch(_ key: TrailGraphRegion, fetchID: UUID) {
+        guard inFlight[key]?.id == fetchID else { return }
+        inFlight[key] = nil
+    }
+
+    private func releaseWaiter(
+        _ waiterID: UUID,
+        from key: TrailGraphRegion,
+        fetchID: UUID
+    ) {
+        guard var fetch = inFlight[key], fetch.id == fetchID else { return }
+        fetch.waiters.remove(waiterID)
+        guard fetch.waiters.isEmpty else {
+            inFlight[key] = fetch
+            return
+        }
+        inFlight[key] = nil
+        fetch.task.cancel()
+    }
+
+    /// How many callers are currently waiting on the download for `region`.
+    ///
+    /// A test seam, like the injectable transport and clock above: the
+    /// reference counting is the whole reason one caller's cancellation does
+    /// not stop another's download, and it is otherwise unobservable. Nothing
+    /// in the app reads it.
+    func waiterCount(for region: TrailGraphRegion) -> Int {
+        inFlight[region]?.waiters.count ?? 0
     }
 
     func cachedGraph(
@@ -260,9 +357,17 @@ actor OverpassTrailGraphProvider: TrailGraphProviding {
                 allowExpired: false
             ) {
                 resolvedGraph = cached.graph
-            } else if let task = inFlight[key] {
+            } else if inFlight[key] != nil {
                 do {
-                    resolvedGraph = try await task.value
+                    // Joins as a waiter rather than awaiting the task
+                    // directly: a measurement reading the cache and a
+                    // recording prefetching the same region share one
+                    // download, and the recording stopping must not cancel it
+                    // out from under the measurement.
+                    resolvedGraph = try await joinFetch(
+                        for: key,
+                        startingIfNeeded: false
+                    )
                 } catch {
                     if let expired = try cachedGraph(
                         for: key,
@@ -376,38 +481,6 @@ actor OverpassTrailGraphProvider: TrailGraphProviding {
     }
 }
 
-// MARK: - Static helpers
-
-extension OverpassTrailGraphProvider {
-    nonisolated static func decodeGraph(from data: Data) throws -> TrailGraph {
-        let response: OverpassResponse
-        do {
-            response = try JSONDecoder().decode(OverpassResponse.self, from: data)
-        } catch {
-            throw TrailGraphProviderError.malformedGraph(
-                error.localizedDescription
-            )
-        }
-
-        let elementsByKey = buildElementIndex(from: response.elements)
-        let nodeCoordinates = extractNodeCoordinates(from: response.elements)
-        let hikingRouteNames = extractHikingRouteNames(from: elementsByKey)
-        let (graphNodes, edges) = buildGraphEdges(
-            from: elementsByKey,
-            nodeCoordinates: nodeCoordinates,
-            hikingRouteNames: hikingRouteNames
-        )
-
-        return TrailGraph(
-            nodes: graphNodes.values.sorted { lhs, rhs in lhs.id < rhs.id },
-            edges: edges.sorted { lhs, rhs in
-                if lhs.id.wayID == rhs.id.wayID { return lhs.id.segmentIndex < rhs.id.segmentIndex }
-                return lhs.id.wayID < rhs.id.wayID
-            }
-        )
-    }
-}
-
 private extension OverpassTrailGraphProvider {
     nonisolated static func regionKey(
         for coordinate: CLLocationCoordinate2D
@@ -473,102 +546,5 @@ private extension OverpassTrailGraphProvider {
         (.trails;.routes;.trailNodes;);
         out body;
         """
-    }
-
-    nonisolated static func buildElementIndex(
-        from elements: [OverpassElement]
-    ) -> [String: OverpassElement] {
-        var index: [String: OverpassElement] = [:]
-        for element in elements {
-            index["\(element.type)/\(element.id)"] = element
-        }
-        return index
-    }
-
-    nonisolated static func extractNodeCoordinates(
-        from elements: [OverpassElement]
-    ) -> [Int64: CLLocationCoordinate2D] {
-        var nodeCoordinates: [Int64: CLLocationCoordinate2D] = [:]
-        for element in elements where element.type == "node" {
-            guard let lat = element.lat,
-                  let lon = element.lon,
-                  Mercator.isRepresentable(latitude: lat, longitude: lon) else { continue }
-            nodeCoordinates[element.id] = CLLocationCoordinate2D(
-                latitude: lat,
-                longitude: lon
-            )
-        }
-        return nodeCoordinates
-    }
-
-    nonisolated static func extractHikingRouteNames(
-        from elementsByKey: [String: OverpassElement]
-    ) -> [Int64: String] {
-        var hikingRouteNames: [Int64: String] = [:]
-        for element in elementsByKey.values where element.type == "relation" {
-            guard element.tags["route"] == "hiking",
-                  let name = element.tags["name"] ?? element.tags["ref"] else { continue }
-            for member in element.members where member.type == "way" {
-                if let existing = hikingRouteNames[member.ref] {
-                    hikingRouteNames[member.ref] = min(existing, name)
-                } else {
-                    hikingRouteNames[member.ref] = name
-                }
-            }
-        }
-        return hikingRouteNames
-    }
-
-    nonisolated static func buildGraphEdges(
-        from elementsByKey: [String: OverpassElement],
-        nodeCoordinates: [Int64: CLLocationCoordinate2D],
-        hikingRouteNames: [Int64: String]
-    ) -> (nodes: [Int64: TrailGraphNode], edges: [TrailGraphEdge]) {
-        var graphNodes: [Int64: TrailGraphNode] = [:]
-        var edges: [TrailGraphEdge] = []
-        for element in elementsByKey.values where element.type == "way" {
-            guard let highway = element.tags["highway"],
-                  allowedHighways.contains(highway),
-                  element.nodes.count > 1,
-                  permitsWalking(element.tags) else { continue }
-
-            let nodeIDs = element.nodes
-            for index in 0..<(nodeIDs.count - 1) {
-                let fromID = nodeIDs[index]
-                let toID = nodeIDs[index + 1]
-                guard fromID != toID,
-                      let from = nodeCoordinates[fromID],
-                      let to = nodeCoordinates[toID] else { continue }
-                let length = RouteGeometry.distanceMeters(from: from, to: to)
-                guard length.isFinite, length > 0 else { continue }
-                graphNodes[fromID] = TrailGraphNode(id: fromID, coordinate: from)
-                graphNodes[toID] = TrailGraphNode(id: toID, coordinate: to)
-                edges.append(
-                    TrailGraphEdge(
-                        id: TrailGraphEdgeID(wayID: element.id, segmentIndex: index),
-                        fromNodeID: fromID,
-                        toNodeID: toID,
-                        lengthMeters: length,
-                        name: element.tags["name"],
-                        hikingRouteName: hikingRouteNames[element.id],
-                        sacScale: element.tags["sac_scale"],
-                        trailVisibility: element.tags["trail_visibility"],
-                        access: element.tags["access"],
-                        surface: element.tags["surface"],
-                        tracktype: element.tags["tracktype"]
-                    )
-                )
-            }
-        }
-        return (graphNodes, edges)
-    }
-
-    nonisolated static func permitsWalking(
-        _ tags: [String: String]
-    ) -> Bool {
-        if let foot = tags["foot"], foot == "no" || foot == "private" { return false }
-        guard let access = tags["access"],
-              access == "no" || access == "private" else { return true }
-        return ["yes", "designated", "permissive"].contains(tags["foot"])
     }
 }

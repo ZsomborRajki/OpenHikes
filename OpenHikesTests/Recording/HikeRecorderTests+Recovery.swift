@@ -2,6 +2,12 @@
 //  HikeRecorderTests.swift
 //  OpenHikesTests
 //
+//  `source.deliver(…)` needs no settle: the recorder's `nonisolated` delegate
+//  callback reaches main-actor state through `onMainActor`, which runs its
+//  body synchronously when the caller is already on the main actor — and a
+//  main-actor-isolated test always is. Whatever the callback then schedules
+//  for later is waited for by name, at the call site that depends on it.
+//
 
 import CoreLocation
 import Foundation
@@ -18,8 +24,7 @@ extension HikeRecorderTests {
         let journal = TrackJournal(directory: directory, clock: clock.read)
         try await journal.start(
             sessionID: sessionID,
-            startedAt: clock.now,
-            recordingOptions: .defaults
+            startedAt: clock.now
         )
         try await journal.append(
             RecordingPoint(
@@ -120,8 +125,7 @@ extension HikeRecorderTests {
         let journal = TrackJournal(directory: directory, clock: clock.read)
         try await journal.start(
             sessionID: sessionID,
-            startedAt: clock.now,
-            recordingOptions: .defaults
+            startedAt: clock.now
         )
         try await journal.append(
             RecordingPoint(
@@ -180,8 +184,11 @@ extension HikeRecorderTests {
         #expect(recorder.phase == .recovering)
         #expect(recorder.isActive)
         await recorder.start()
-        for _ in 0..<100 where recorder.phase == .recovering {
-            try await Task.sleep(for: .milliseconds(10))
+        // The claim is released asynchronously, so name what Start is waiting
+        // on rather than counting sleeps: a hundred 10 ms turns is a budget
+        // that shrinks with machine load, and this one guards four assertions.
+        await settleDelegateHop(until: "the claimed journal to finish recovering") {
+            recorder.phase != .recovering
         }
 
         #expect(recorder.phase == .recording)
@@ -202,14 +209,14 @@ extension HikeRecorderTests {
         )
         await recorder.start()
         source.deliver(fix(latitude: 47.63))
-        await settleDelegateHop()
         clock.advance(by: 10)
         source.deliver(fix(latitude: 47.6302))
-        await settleDelegateHop()
 
         let firstStop = Task { try await recorder.stop() }
-        while recorder.phase != .saving {
-            await Task.yield()
+        // A bare `while … { await Task.yield() }` has no deadline: if the
+        // phase never arrives the test hangs instead of failing.
+        await settleDelegateHop(until: "the first Stop to reach saving") {
+            recorder.phase == .saving
         }
         do {
             _ = try await recorder.stop()
@@ -236,10 +243,8 @@ extension HikeRecorderTests {
         let recorder = makeRecorder(saveModelContext: saver.save)
         await recorder.start()
         source.deliver(fix(latitude: 47.63))
-        await settleDelegateHop()
         clock.advance(by: 10)
         source.deliver(fix(latitude: 47.6302))
-        await settleDelegateHop()
 
         do {
             _ = try await recorder.stop(

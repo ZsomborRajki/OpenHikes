@@ -63,7 +63,6 @@ extension HikeRecorderTests {
         let hikeRecorder = makeRecorder(powerMonitor: monitor)
         await hikeRecorder.start()
         source.deliver(fix(latitude: 47.63))
-        await settleDelegateHop()
         #expect(source.currentProfile == .precise)
 
         reading.withLock { $0 = PowerState(isLowPowerModeEnabled: true) }
@@ -87,6 +86,10 @@ extension HikeRecorderTests {
 
     /// Re-evaluated on every accepted fix, so a walk at steady conditions has
     /// to resolve to one configuration rather than flipping between profiles.
+    ///
+    /// Nothing to settle for: a fix is applied to the profile inside
+    /// ``HikeRecorder/accept(_:)``, which `onMainActor` runs synchronously
+    /// while `deliver` is still on the stack.
     @Test("An unchanged profile is not re-applied")
     func unchangedProfileIsNotReapplied() async {
         let hikeRecorder = makeRecorder()
@@ -95,7 +98,6 @@ extension HikeRecorderTests {
         for step in 0..<4 {
             clock.advance(by: 10)
             source.deliver(fix(latitude: 47.63 + Double(step) * 0.0004))
-            await settleDelegateHop()
         }
 
         #expect(hikeRecorder.stats.pointCount > 1, "the fixes have to have landed")

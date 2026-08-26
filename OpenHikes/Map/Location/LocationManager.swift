@@ -237,13 +237,13 @@ extension LocationManager: CLLocationManagerDelegate {
         // still a fix the GPS spent energy producing, which is what the
         // distance filter, not the throttle, is there to prevent.
         RenderSignpost.mark("LocationFixDelivered")
-        Task { @MainActor in publish(location) }
+        onMainActor { [weak self] in self?.publish(location) }
     }
 
     nonisolated func locationManagerDidChangeAuthorization(_ manager: CLLocationManager) {
-        Task { @MainActor in
-            let status = self.manager.foregroundAuthorizationStatus
-            guard updatesRequested, Self.isAuthorized(status) else { return }
+        onMainActor { [weak self] in
+            guard let self, updatesRequested,
+                  Self.isAuthorized(self.manager.foregroundAuthorizationStatus) else { return }
             self.manager.startUpdatingLocation()
         }
     }

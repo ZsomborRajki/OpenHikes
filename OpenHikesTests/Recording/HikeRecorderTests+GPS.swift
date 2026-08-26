@@ -2,6 +2,13 @@
 //  HikeRecorderTests+GPS.swift
 //  OpenHikesTests
 //
+//  `source.deliver(…)` needs no settle: the recorder's `nonisolated` delegate
+//  callback reaches main-actor state through `onMainActor`, which runs its
+//  body synchronously when the caller is already on the main actor — and a
+//  main-actor-isolated test always is. Whatever the callback then schedules
+//  for later — a journal flush, an authorization branch that has to suspend —
+//  is waited for by name, at the call site that depends on it.
+//
 
 import CoreLocation
 import Foundation
@@ -22,10 +29,8 @@ extension HikeRecorderTests {
         #expect(try context.fetch(FetchDescriptor<Hike>()).count == 1)
 
         source.deliver(fix(latitude: 47.63))
-        await settleDelegateHop()
         clock.advance(by: 10)
         source.deliver(fix(latitude: 47.6302))
-        await settleDelegateHop()
 
         #expect(
             draft.route.isEmpty,
@@ -53,10 +58,8 @@ extension HikeRecorderTests {
         let hikeRecorder = makeRecorder(sharedStateStore: sharedStore)
         await hikeRecorder.start()
         source.deliver(fix(latitude: 47.63))
-        await settleDelegateHop()
         clock.advance(by: 10)
         source.deliver(fix(latitude: 47.6302))
-        await settleDelegateHop()
 
         let stop = Task { try await hikeRecorder.stop() }
         await sharedStore.waitForClearToStart()
@@ -153,7 +156,6 @@ extension HikeRecorderTests {
 
         await hikeRecorder.start()
         source.deliver(locations)
-        await settleDelegateHop()
 
         let acceptedPointCount = hikeRecorder.stats.pointCount
         let hike = try savedHike(from: await hikeRecorder.stop())
@@ -216,7 +218,6 @@ extension HikeRecorderTests {
         let hikeRecorder = makeRecorder()
         await hikeRecorder.start()
         source.deliver(fix(latitude: 47.63))
-        await settleDelegateHop()
         #expect(hikeRecorder.isCapturingFixes)
 
         hikeRecorder.pause()
@@ -255,7 +256,6 @@ extension HikeRecorderTests {
         let second = fix(latitude: 47.6302)
 
         source.deliver([second, first])
-        await settleDelegateHop()
 
         #expect(hikeRecorder.stats.pointCount == 2)
     }
@@ -272,7 +272,6 @@ extension HikeRecorderTests {
                     RecordingFixPolicy.maximumHorizontalAccuracy + 450
             )
         )
-        await settleDelegateHop()
 
         #expect(
             hikeRecorder.stats.horizontalAccuracy
@@ -287,12 +286,26 @@ extension HikeRecorderTests {
         let hikeRecorder = makeRecorder()
         await hikeRecorder.start()
         source.deliver(fix(latitude: 47.63))
-        await settleDelegateHop()
-        for _ in 0..<16 { await Task.yield() }
 
+        // The append and the flush behind it are the recorder's own queued
+        // work, and seeing either takes an `await` — which a settle condition,
+        // being synchronous, cannot make. So poll the file against a real
+        // deadline rather than against a number of scheduler turns: sixteen
+        // yields bought whatever progress the machine happened to be idle
+        // enough to give.
         let journal = TrackJournal(directory: directory)
-        let session = try #require(try await journal.loadSession())
-        #expect(session.points.count == 1)
+        var session = try await journal.loadSession()
+        let deadline = ContinuousClock.now + .seconds(5)
+        while session?.points.isEmpty ?? true, ContinuousClock.now < deadline {
+            try await Task.sleep(for: .milliseconds(5))
+            session = try await journal.loadSession()
+        }
+
+        let flushed = try #require(
+            session,
+            "the accepted fix never reached the journal file"
+        )
+        #expect(flushed.points.count == 1)
     }
 
     @Test("pause and resume do not add the distance crossed while paused")
@@ -300,19 +313,15 @@ extension HikeRecorderTests {
         let hikeRecorder = makeRecorder()
         await hikeRecorder.start()
         source.deliver(fix(latitude: 47.63))
-        await settleDelegateHop()
         clock.advance(by: 60)
         source.deliver(fix(latitude: 47.631))
-        await settleDelegateHop()
 
         hikeRecorder.pause()
         clock.advance(by: 300)
         await hikeRecorder.resume()
         source.deliver(fix(latitude: 47.64))
-        await settleDelegateHop()
         clock.advance(by: 60)
         source.deliver(fix(latitude: 47.641))
-        await settleDelegateHop()
 
         let hike = try savedHike(from: await hikeRecorder.stop())
         #expect(abs(hike.distanceMeters - 222) < 5)
@@ -338,7 +347,11 @@ extension HikeRecorderTests {
         source.hasFullAccuracy = false
 
         hikeRecorder.locationManagerDidChangeAuthorization(CLLocationManager())
-        await settleDelegateHop()
+        // Still a hop, unlike a delivered fix: the authorization callback's
+        // authorized branch awaits, so it stayed a `Task { @MainActor in … }`.
+        await settleDelegateHop(until: "the revoked precision to fail the recording") {
+            hikeRecorder.phase == .failed(.preciseLocationRequired)
+        }
 
         #expect(hikeRecorder.phase == .failed(.preciseLocationRequired))
         #expect(source.stopCount == 1)
@@ -352,7 +365,11 @@ extension HikeRecorderTests {
         source.authorization = .denied
 
         hikeRecorder.locationManagerDidChangeAuthorization(CLLocationManager())
-        await settleDelegateHop()
+        // `fail(_:endLocationUpdates:)` stops the sensors before it publishes
+        // the phase, so the two counts below are settled once this holds.
+        await settleDelegateHop(until: "the denied authorization to fail the recording") {
+            hikeRecorder.phase == .failed(.locationDenied)
+        }
 
         #expect(hikeRecorder.phase == .failed(.locationDenied))
         #expect(source.stopCount == 1)

@@ -32,23 +32,6 @@ nonisolated private func recordingLocation(
     )
 }
 
-@Suite("Recording settings")
-struct RecordingSettingsTests {
-    @Test("defaults load without reading UserDefaults")
-    func defaults() {
-        let suite = "recording-settings-\(UUID().uuidString)"
-        guard let defaults = UserDefaults(suiteName: suite) else {
-            Issue.record("Failed to create UserDefaults with suite \(suite)")
-            return
-        }
-        defer { defaults.removePersistentDomain(forName: suite) }
-
-        let options = RecordingSessionOptions.load(from: defaults)
-
-        #expect(options == .defaults)
-    }
-}
-
 @Suite("Recording fix policy")
 struct RecordingFixPolicyTests {
     private let start = Date(timeIntervalSince1970: 1_750_000_000)

@@ -35,6 +35,11 @@ extension HikeSyncEngine: CKSyncEngineDelegate {
         case .willFetchChanges, .willSendChanges:
             await status.began()
         case .didFetchChanges, .didSendChanges:
+            // The engine is idle, which is the natural end of a burst of
+            // acknowledgements: everything remembered since the last one is
+            // written here rather than once per 250-record batch. See
+            // ``CloudSyncStateStore/flush()``.
+            await store.flush()
             await status.finished()
         default:
             break

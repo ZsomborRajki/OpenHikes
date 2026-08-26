@@ -102,3 +102,43 @@ actor ScriptedTrailGraphProvider: TrailGraphProviding {
         attempts
     }
 }
+
+/// Throws `CancellationError` of its own accord, without the calling task ever
+/// being cancelled.
+///
+/// That is the one shape in which a cancelled prefetch can strand its region:
+/// `cancelTrailGraphPrefetches()` clears every state right after cancelling, so
+/// its own cancellations are always tidied up, and only a provider that
+/// reports cancellation unprompted reaches the `catch is CancellationError`
+/// path with the recorder's bookkeeping still live.
+actor CancellingTrailGraphProvider: TrailGraphProviding {
+    private var attempts = 0
+
+    nonisolated func region(
+        containing coordinate: CLLocationCoordinate2D
+    ) -> TrailGraphRegion? {
+        TrailGraphRegion(zoom: 12, x: 1, y: 1)
+    }
+
+    func prefetch(around coordinate: CLLocationCoordinate2D) async throws {
+        attempts += 1
+        await Task.yield()
+        throw CancellationError()
+    }
+
+    func cachedGraph(
+        covering coordinates: [CLLocationCoordinate2D]
+    ) -> TrailGraph? {
+        nil
+    }
+
+    func hasCompleteCachedGraph(
+        covering coordinates: [CLLocationCoordinate2D]
+    ) -> Bool {
+        false
+    }
+
+    func attemptCount() -> Int {
+        attempts
+    }
+}

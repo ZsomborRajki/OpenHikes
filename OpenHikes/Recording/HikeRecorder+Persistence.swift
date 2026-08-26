@@ -350,19 +350,77 @@ extension HikeRecorder {
 
     // MARK: Route review
 
+    /// Rebuilds the previewed route from the current per-section choices and
+    /// publishes it.
+    ///
+    /// The resolution walks every leg of the whole recording, so it is
+    /// proportional to the length of the hike rather than to the section being
+    /// looked at — which is why it does not run on the main actor even though
+    /// it is triggered by a tap. Superseded rather than queued: a hiker
+    /// scrubbing through sections issues one of these per tap, and an older
+    /// answer arriving after a newer one would draw the wrong section.
     func updateReviewPreview() {
         guard let pendingReviewSave, let routeReview else { return }
-        let points = pendingReviewSave.matchResult.points(
-            resolving: routeReview.legChoices
+        let request = ReviewPreviewRequest(
+            matchResult: pendingReviewSave.matchResult,
+            legChoices: routeReview.legChoices,
+            section: routeReview.current,
+            sectionChoice: routeReview.current.map(routeReview.choice(for:))
         )
-        let highlighted = routeReview.current.map { section in
-            section.points(for: routeReview.choice(for: section))
-                .map(\.coordinate)
+
+        reviewPreviewTask?.cancel()
+        let taskID = UUID()
+        reviewPreviewTask = Task { [weak self] in
+            let preview = await Self.resolveReviewPreview(request)
+            guard let self, !Task.isCancelled else { return }
+            trace.showReview(
+                route: preview.route,
+                highlightedSegment: preview.highlightedSegment
+            )
+            if reviewPreviewTaskID == taskID { reviewPreviewTask = nil }
         }
-        trace.showReview(
-            route: points.map(\.coordinate),
-            highlightedSegment: highlighted ?? []
+        reviewPreviewTaskID = taskID
+    }
+
+    func cancelReviewPreview() {
+        reviewPreviewTask?.cancel()
+        reviewPreviewTask = nil
+        reviewPreviewTaskID = nil
+    }
+
+    nonisolated struct ReviewPreviewRequest: Sendable {
+        let matchResult: TrailMatchResult
+        let legChoices: [Int: TrailRouteChoice]
+        let section: RouteReviewSection?
+        let sectionChoice: TrailRouteChoice?
+    }
+
+    nonisolated struct ReviewPreview: Sendable {
+        let route: [CLLocationCoordinate2D]
+        let highlightedSegment: [CLLocationCoordinate2D]
+    }
+
+    /// `@concurrent` rather than a detached task, for the same reason
+    /// ``RouteReviewSection/sectionsOffMain(in:)`` is: the work stays in the
+    /// caller's task, so cancelling the tap cancels this, and it runs at the
+    /// tap's own priority rather than at a default one.
+    @concurrent
+    nonisolated static func resolveReviewPreview(
+        _ request: ReviewPreviewRequest
+    ) async -> ReviewPreview {
+        assertOffMainThread(
+            "Review preview resolution must stay off the main thread"
         )
+        let route = request.matchResult
+            .points(resolving: request.legChoices)
+            .map(\.coordinate)
+        let highlighted: [CLLocationCoordinate2D]
+        if let section = request.section, let choice = request.sectionChoice {
+            highlighted = section.points(for: choice).map(\.coordinate)
+        } else {
+            highlighted = []
+        }
+        return ReviewPreview(route: route, highlightedSegment: highlighted)
     }
 
     func finishSavedSession(
@@ -428,6 +486,7 @@ extension HikeRecorder {
         liveMatchingTask = nil
         liveMatchingTaskID = nil
         liveMatchNeedsRun = false
+        cancelReviewPreview()
         journalFlushTask?.cancel()
         journalFlushTask = nil
         pendingFixMergeTask?.cancel()

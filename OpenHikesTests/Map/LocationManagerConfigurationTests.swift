@@ -48,10 +48,6 @@ struct LocationManagerConfigurationTests {
         manager = LocationManager(manager: source)
     }
 
-    private func settleAuthorizationHop() async {
-        await settleDelegateHop()
-    }
-
     @Test("uses nearest-ten-meters accuracy and a distance filter")
     func usesBatteryConsciousDefaults() {
         #expect(source.desiredAccuracy == kCLLocationAccuracyNearestTenMeters)
@@ -78,10 +74,13 @@ struct LocationManagerConfigurationTests {
         #expect(source.startUpdatingLocationCalls == 1)
     }
 
+    /// No settle between the callback and the assertion: `onMainActor`
+    /// delivers synchronously when the caller is already on the main actor,
+    /// which a main-actor-isolated test always is, so the whole authorization
+    /// branch has run by the time `simulateAuthorizationChange` returns.
     @Test("authorization changes start updates only after start was requested")
-    func authorizationCallbackHonorsStartLifecycle() async {
+    func authorizationCallbackHonorsStartLifecycle() {
         source.simulateAuthorizationChange(to: .authorizedWhenInUse)
-        await settleAuthorizationHop()
         #expect(source.startUpdatingLocationCalls == 0)
 
         source.foregroundAuthorizationStatus = .notDetermined
@@ -89,7 +88,6 @@ struct LocationManagerConfigurationTests {
         #expect(source.requestWhenInUseAuthorizationCalls == 1)
 
         source.simulateAuthorizationChange(to: .authorizedWhenInUse)
-        await settleAuthorizationHop()
         #expect(source.startUpdatingLocationCalls == 1)
     }
 }

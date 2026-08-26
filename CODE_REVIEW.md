@@ -1,7 +1,7 @@
 # OpenHikes code review
 
-The tree holds 164 first-party Swift files and 36,800 lines of shipping code,
-plus 118 test files, project and package configuration, scripts, entitlements
+The tree holds 166 first-party Swift files and 37,400 lines of shipping code,
+plus 122 test files, project and package configuration, scripts, entitlements
 and documentation. Review focuses on correctness, concurrency, maintainability,
 current API use, and especially battery, radio, CPU and disk activity during a
 hike.
@@ -15,116 +15,28 @@ checked so it is not re-raised.
 
 ## Open findings
 
-### 1. A cancelled trail-graph prefetch keeps running (Medium)
+### 1. Two absence assertions still wait on a fixed sleep (Low)
 
-`Recording/HikeRecorder+Lifecycle.swift:370-378`,
-`Recording/OverpassTrailGraphProvider.swift:205-240`.
+`OpenHikesTests/Recording/HikeRecorderTests+Sensors.swift:208`,
+`OpenHikesTests/Recording/HikeRecorderTests+Sensors.swift:286`
 
-`cancelTrailGraphPrefetches()` cancels the recorder's wrapper tasks, but each
-wrapper awaits `OverpassTrailGraphProvider.prefetch(around:)`, which awaits
-`task.value` on an **unstructured** `Task` stored in `inFlight` (`:220-230`).
-Unstructured tasks do not inherit cancellation, so the network fetch continues,
-and the `write` and `trimCache` that follow it run after the user stopped
-recording. The entry also stays in `inFlight`, because the cleanup lives in the
-awaiting path (`:231`, `:237`) rather than in the task.
+Every other wait in the app-hosted bundles is now either synchronous or a
+`settleDelegateHop(until:)` naming the effect it expects. These two are not,
+because they assert an *absence* — that a widget fix arriving during review is
+not merged, and that a neighbour sweep does not happen — and there is no state
+transition to wait for. A sleep is the wrong tool anyway: it makes the suite
+slower on every green run and still cannot prove the thing never happens, only
+that it had not happened yet.
 
-Not a drive-by fix: `inFlight` exists to deduplicate, so a second caller may
-legitimately be awaiting the same key, and cancelling on one caller's behalf
-would break the other. Doing it properly needs reference counting, or a
-provider-level cancellation entry point that the protocol and both other
-providers would have to gain.
+The fix is a read counter on `StubRecordingSharedStateStore` and
+`StubTrailGraphProvider` (`OpenHikesTests/Recording/HikeRecorderTests.swift`,
+`OpenHikesTests/Recording/TrailGraphProviderStubs.swift`): wait for the
+*positive* barrier that must happen after the thing being denied, then assert
+the counter never moved. That converts both from "wait and hope" to a real
+ordering guarantee.
 
-Note for whoever takes it: `trailGraphPrefetchStopsWithRecording` passes today
-only because the test stub awaits cancellably. It does not cover the real
-provider.
-
-### 2. Three location delegates each allocate a `Task` per GPS fix (Medium)
-
-`Recording/HikeRecorder+Lifecycle.swift:464`, `Map/LocationManager.swift` and
-`Map/BackgroundTrailTracker.swift` all shape their `didUpdateLocations` the
-same way — `nonisolated`, then `Task { @MainActor in … }`, all three capturing
-`self` strongly. During a recording all three are live (see "Two foreground
-location managers" below), so one fix costs up to three heap-allocated tasks
-and three actor hops.
-
-Two things follow. The smaller: every `CLLocationManager` here is created on the
-main actor — `SWIFT_DEFAULT_ACTOR_ISOLATION = MainActor`, and
-`SystemRecordingLocationSource.manager` is a stored property
-(`HikeRecorder+State.swift:98`) — so the callbacks already arrive on the main
-thread and the hop buys nothing but the allocation. The larger: ordering
-between two *separate* unstructured `Task`s on the same actor is not guaranteed
-by the language, and `HikeRecorder` sorts within a batch
-(`+Lifecycle.swift:466`) only to give that guarantee up across batches. A
-reordered pair meets `guard interval > 0 else { return false }`
-(`RecordingModels.swift:148`) and the older fix is dropped silently.
-
-This is deliberate — `.github/copilot-instructions.md` states the hop as a
-convention — so it is a design decision to revisit rather than an oversight.
-`MainActor.assumeIsolated` would remove both problems and is sound given the
-isolation above, but it changes a documented rule and should be a considered
-change, with `[weak self]` added either way.
-
-### 3. `CloudSyncStateStore.writeRecords()` re-encodes everything per batch (Low)
-
-`Sync/CloudSyncStateStore.swift:657-665` encodes the whole `serverRecords`
-dictionary — one archived `CKRecord` per hike *and* per photo — and rewrites
-the file. `remember(_:)` calls it once per batch, inside a callback
-`CKSyncEngine` is awaiting, so a first sync of a large library pays it every
-250 records. Binary plist keeps the constant down but not the shape. A write
-coalesced behind a short debounce, or a per-record sidecar, would both fix it;
-neither is a two-line change, and the file has to stay crash-safe either way.
-
-### 4. Two hot paths still carry no signposts (Low)
-
-`Tiles/Offline/OfflineTileDownloader+Planning.swift` and
-`Tiles/Cache/TileCache+StorageManagement.swift` have none — the whole `Tiles/`
-tree has them only in `TileCache.swift`. Both are exactly the kind of work the
-battery plan below wants to see in a trace: planning runs before a bulk
-download, and storage measurement enumerates directories. `RenderSignpost` is
-already the mechanism.
-
-### 5. Sixty-seven bare `settle()` calls remain (Low)
-
-`settleDelegateHop()` without a condition is documented as best-effort, and
-`OpenHikesTests/General/SettleSupport.swift` names the failure mode: a yield
-count buys an amount of progress that depends on machine load, which is how two
-suites went red on CI while passing locally. The condition-less form is still
-used 67 times — `HikeRecorderTests+Sensors.swift` (25), `+GPS.swift` (15),
-`Map/BackgroundTrackingTests.swift` (12), `+Review.swift` (6),
-`+Recovery.swift` (4), `+Energy.swift` (2), and one each in
-`RenderIsolationTests`, `LocationManagerConfigurationTests` and
-`LocationFixStreamTests`. They pass today. Converting them needs a per-call-site
-judgement about which effect to name, and a wrong condition is worse than none,
-so this is listed rather than done in bulk.
-
-### 6. `updateReviewPreview()` resolves the whole route on the main actor (Low)
-
-`Recording/HikeRecorder+Persistence.swift:353`. `RecordingPreparation` and
-`RouteReviewSection` already have `…OffMain` siblings for exactly this; one call
-site did not adopt the pattern. Less pressing than it was —
-`RecordingTrace.showReview` now compares before it publishes, so a tap that
-changes nothing costs nothing — but a tap that *does* change the selection
-still resolves every point on the main actor.
-
-### 7. `OfflineTileDownloader.run`'s hand-rolled concurrency window (Low)
-
-`OfflineTileDownloader.swift:72` — `inFlightWindow = 5` is correct, but
-`withDiscardingTaskGroup` says the same thing in less code and brings
-cooperative cancellation with it.
-
-### 8. `RecordingSessionOptions` is a placeholder with tautological tests (Low)
-
-`Recording/RecordingModels.swift:16-22` is an **empty struct** whose
-`load(from defaults: UserDefaults)` ignores its parameter and returns `Self()`.
-It is written into every journal file as `TrackJournalMetadata.recordingOptions`
-and read by nothing. `RecordingSettingsTests.defaults` and `TrackJournalTests`'
-round-trip assertion both compare an empty struct to an empty struct.
-
-Not removed, because it is a persisted `Codable` field and a placeholder for
-intended work is a product decision rather than dead code. The decision is:
-give it a field and a real `load`, or delete it and the two tests with it.
-Leaving it as an empty struct with a parameter it ignores is the only option
-that is wrong.
+`ObservationCounter.settle()` in `RenderIsolationTests.swift` is deliberately
+left bare and is not part of this — see "Checked and deliberately left alone".
 
 ## Test and project hygiene
 
@@ -153,11 +65,11 @@ Run these scenarios on a physical device with a fixed route:
 
 Capture Energy Log/Power Profiler, Location activity, Network, CPU wakeups,
 thermal state and disk writes. Live matching, GPX parsing, location publication,
-recording-trace rebuilds and Overpass graph prefetch carry signposts, and
-`PerformanceLog` writes them to a TSV alongside CPU and footprint samples under
-`--ui-test-performance-log=`; the two gaps are finding 4 above. Compare against
-the same device, route, screen state and radio conditions rather than against a
-universal percentage-per-hour target.
+recording-trace rebuilds, Overpass graph prefetch, offline download planning and
+every tile storage scan carry signposts, and `PerformanceLog` writes them to a
+TSV alongside CPU and footprint samples under `--ui-test-performance-log=`.
+Compare against the same device, route, screen state and radio conditions rather
+than against a universal percentage-per-hour target.
 
 Scenarios 2, 3 and 5 also report without a tethered device. A whole recording
 carries a `RecordingSession` MetricKit signpost interval and a bulk download
@@ -184,10 +96,12 @@ means every API used, including `MXDiskSpaceUsageMetric` and
 |---|---|
 | Strict SwiftLint | Passed (`Scripts/lint.sh`, 0.65.0, `--strict`) |
 | Shared package tests | 76 tests in 12 suites passed |
-| App and widget unit tests | 940 tests in 105 suites, plus 23 widget tests in 3 suites, passed |
+| App and widget unit tests | 955 tests in 106 suites, plus 23 widget tests in 3 suites, passed |
+| Full-bundle repeat runs | Passed 3× consecutively. Run in a batch on purpose: the parallel-suite load is what exposed a flake that a targeted run could not, and a cancellation test that only passes alone is not passing |
 | iOS debug build | Passed, app and embedded widget, Swift warnings as errors |
 | iOS release build | Passed. This is what validates the `#if DEBUG` wrap around every `--ui-test-*` flag: the parsing and its argument names do not compile into a shipping binary at all |
-| UI automation | `Scripts/run-ui-tests.sh --all` passed, 39 tests in 6 classes |
+| Mutation checks | Two fixes were verified by reverting them and confirming the new test fails: the offline download window, and the stranded trail-graph region. A test that passes against the unfixed code is not evidence |
+| UI automation | Not re-run. No `--ui-test-*` flag, launch path or accessibility surface changed |
 | Render and resource performance suite | Not run. The `PERFORMANCE.md` baseline predates the Photos and Sync domains |
 | GPX Thread Sanitizer suite | Not re-run; previously passed, including concurrent timestamp parsing |
 | macOS compile | Not run; the `canImport` aliases and `#if os(iOS)` guards are unbuilt, not supported |
@@ -213,9 +127,10 @@ These are product choices rather than correctness findings.
    for `kCLLocationAccuracyBest` with a 10 m filter against the foreground
    manager's ten-meter/25 m baseline. iOS coalesces same-process location demand
    to the most demanding request, so this does not imply twice the GPS hardware
-   power; what it duplicates is delegate dispatch, authorization handling and
-   actor hops — which is finding 2 above. The separation is kept deliberately:
-   the recording source owns background semantics
+   power; what it duplicates is delegate dispatch and authorization handling.
+   Both delegates now deliver through `onMainActor`, so the duplication no
+   longer costs a `Task` allocation per fix. The separation is kept
+   deliberately: the recording source owns background semantics
    (`allowsBackgroundLocationUpdates`, a `CLBackgroundActivitySession`, and no
    automatic pausing) that must not leak into ordinary map browsing. Revisit
    only if a device energy trace shows meaningful CPU overhead, and preserve
@@ -266,10 +181,17 @@ Recorded so none of it is re-raised as a finding.
 
 `OverpassTrailGraphProvider`'s injectable transport and clock,
 `BackgroundTrailTracker`'s injectable location source and defaults,
-`OfflineTileDownloader`'s injectable transport, `LocationManager`'s injectable
-defaults, and `TileSandbox`'s parallel `TileCache` directories all exist so
-suites can run in parallel without touching the app's singletons, the network,
-or wall-clock time.
+`OfflineTileDownloader`'s injectable transport and `TileLoadGate`,
+`CloudSyncStateStore`'s injectable coalescing window and `didWriteFile` hook,
+`LocationManager`'s injectable defaults, and `TileSandbox`'s parallel
+`TileCache` directories all exist so suites can run in parallel without
+touching the app's singletons, the network, or wall-clock time.
+
+`ObservationCounter.settle()` in `RenderIsolationTests.swift` stays a bare
+settle on purpose, with the argument written next to it. It asserts that an
+observation did *not* fire, and unlike the two sleeps in finding 1 there is no
+later barrier to hang it on: the whole point is that nothing downstream
+happens. Its budget is spent once per counter, not per assertion.
 
 ### Claims that were investigated and found false
 
@@ -281,13 +203,16 @@ or wall-clock time.
   is the only residual risk: lowering the trim target fraction toward zero would
   make it reachable with nothing to catch it.
 - **"A cancelled trail-graph prefetch strands its region in `.fetching`
-  forever."** Latent, not live. The cancellation paths
-  (`HikeRecorder+Lifecycle.swift:321-331`) do return without restoring state,
-  but the only caller of `cancel()` is `cancelTrailGraphPrefetches()`, which
-  also does `trailGraphPrefetchStates.removeAll()`. It becomes real only if a
-  provider throws `CancellationError` of its own accord; today's
-  `OverpassTrailGraphProvider.prefetch` has no `Task.sleep` and no
-  `checkCancellation`.
+  forever."** Was true, and is fixed. It used to be latent — the only caller of
+  `cancel()` was `cancelTrailGraphPrefetches()`, which clears every state
+  immediately afterwards, and `OverpassTrailGraphProvider.prefetch` never threw
+  `CancellationError` of its own accord. Making a cancelled prefetch actually
+  stop turned the second half of that into a live path, so
+  `HikeRecorder+Lifecycle.swift`'s `catch is CancellationError` now clears the
+  region's `.fetching` entry, guarded on the task id and session so it cannot
+  clear a newer one. `selfCancellingPrefetchDoesNotStrandRegion` covers it, and
+  fails without the fix — a stranded region reads as already-handled, so no
+  later fix retries it.
 - **"`RouteMotion` is claimed unread but two call sites read it."** Those call
   sites read `RecordingMotionState` and `RecordingPointFlags.nonPedestrian`,
   which are different types. `RouteMotion` really is written by
@@ -306,7 +231,8 @@ exists; the App Group identifier agrees across both entitlements files and
 `SharedStore.appGroupID`; every `xcodebuild` call in `ci.yml` and
 `run-ui-tests.sh` carries `-skipPackagePluginValidation`; `ci_post_clone.sh`
 sets both `IDESkip…` keys; every `--ui-test-*` flag matches
-`AppLaunchEnvironment` and the README table in both directions; and
+`AppLaunchEnvironment` and the README table in both directions;
+`@concurrent` is spelled one way throughout; and
 `ModelConfiguration+OpenHikes.swift` pins `cloudKitDatabase: .none` on every
 store, with no other `ModelConfiguration(` literal anywhere — which is what
 keeps `Hike`'s non-optional columns and its `Codable` `photos` array legal.
@@ -327,9 +253,3 @@ tested; neither the loop nor the blank tile was measured.
 Whether iOS purges the Caches-backed asset staging directory between staging and
 send is likewise assumed rather than measured; `CloudSyncFailure` treats
 `.assetFileNotFound` as retryable on that assumption.
-
-A style point rather than an assumption: `@concurrent nonisolated`
-(`SettingsView`, `AutoSaveController`) and bare `@concurrent`
-(`OpenHikesModel`, `HikeSyncEngine+Delegate`) are both used and both correct —
-static members of an actor are implicitly nonisolated — but the codebase should
-pick one spelling.

@@ -27,7 +27,6 @@ nonisolated struct TrackJournalMetadata: Codable, Equatable, Sendable {
     var lastUpdatedAt: Date
     var pausedIntervals: [RecordingPauseInterval]
     var title: String?
-    var recordingOptions: RecordingSessionOptions?
 }
 
 nonisolated struct TrackJournalSession: Equatable, Sendable {
@@ -85,8 +84,7 @@ actor TrackJournal {
     func start(
         sessionID: UUID,
         startedAt: Date,
-        title: String? = nil,
-        recordingOptions: RecordingSessionOptions? = nil
+        title: String? = nil
     ) throws {
         assertOffMainThread("Track journal creation must stay off the main thread")
         try closeHandle()
@@ -110,8 +108,7 @@ actor TrackJournal {
                 endedAt: nil,
                 lastUpdatedAt: clock(),
                 pausedIntervals: [],
-                title: title,
-                recordingOptions: recordingOptions
+                title: title
             )
             metadata = newMetadata
             pending = []

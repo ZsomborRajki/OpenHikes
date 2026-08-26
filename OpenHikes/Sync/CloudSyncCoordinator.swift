@@ -59,7 +59,12 @@ final class CloudSyncCoordinator {
     @ObservationIgnored private let cloudContainer: CKContainer
     @ObservationIgnored private var saveObserver: (any NSObjectProtocol)?
     @ObservationIgnored private var accountObserver: (any NSObjectProtocol)?
+    @ObservationIgnored private var lifecycleObservers: [any NSObjectProtocol] = []
     @ObservationIgnored private var stateTask: Task<Void, Never>?
+
+    #if canImport(UIKit)
+    @ObservationIgnored private var flushAssertion = UIBackgroundTaskIdentifier.invalid
+    #endif
 
     /// - Parameter storageIsDurable: False when ``OpenHikesModel`` fell back
     ///   to its in-memory container because the persistent store would not
@@ -119,6 +124,7 @@ final class CloudSyncCoordinator {
         }
         observeAccountChanges()
         observeSaves()
+        observeAppLifecycle()
         requestState(resetting: false)
     }
 
@@ -227,6 +233,62 @@ final class CloudSyncCoordinator {
                 self?.requestState(resetting: false)
             }
         }
+    }
+
+    /// Gets the sync bookkeeping the engine is holding onto disk before the
+    /// process stops running.
+    ///
+    /// The record cache and the record index are coalesced — see
+    /// ``CloudSyncStateStore/flush()`` — so the last acknowledgements of a
+    /// session are still in memory when the app leaves the foreground.
+    /// `willTerminate` is only delivered to a foreground app, which is why
+    /// backgrounding is the hook that matters: a suspended process is killed
+    /// without being told.
+    private func observeAppLifecycle() {
+        #if canImport(UIKit)
+        guard lifecycleObservers.isEmpty else { return }
+        let center = NotificationCenter.default
+        lifecycleObservers = [
+            UIApplication.didEnterBackgroundNotification,
+            UIApplication.willTerminateNotification,
+        ].map { name in
+            center.addObserver(forName: name, object: nil, queue: .main) { [weak self] _ in
+                MainActor.assumeIsolated { self?.flushSyncState() }
+            }
+        }
+        #endif
+    }
+
+    private func flushSyncState() {
+        beginFlushAssertion()
+        Task { [weak self, engine] in
+            await engine.flushState()
+            self?.endFlushAssertion()
+        }
+    }
+
+    /// Keeps the process alive for the length of one flush.
+    ///
+    /// The write is an actor hop away and a process the system has just
+    /// suspended does not get to finish one — which would leave the coalesced
+    /// half of the state waiting for a launch that reads it back stale.
+    private func beginFlushAssertion() {
+        #if canImport(UIKit)
+        guard flushAssertion == .invalid else { return }
+        flushAssertion = UIApplication.shared.beginBackgroundTask(
+            withName: "CloudSyncStateFlush"
+        ) { [weak self] in
+            MainActor.assumeIsolated { self?.endFlushAssertion() }
+        }
+        #endif
+    }
+
+    private func endFlushAssertion() {
+        #if canImport(UIKit)
+        guard flushAssertion != .invalid else { return }
+        UIApplication.shared.endBackgroundTask(flushAssertion)
+        flushAssertion = .invalid
+        #endif
     }
 
     nonisolated private static func changedIdentifiers(

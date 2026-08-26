@@ -46,6 +46,47 @@ private actor ConsecutiveRateLimitTransport {
     }
 }
 
+/// The Overpass payload both Overpass suites decode: two ways sharing a node,
+/// one of them `access=private`, and a hiking relation naming the first. Shared
+/// rather than duplicated so a change to the shape reaches both suites.
+enum OverpassGraphFixture {
+    nonisolated static let alpineRoute = """
+    {
+        "elements": [
+            {"type":"node","id":1,"lat":47.6300,"lon":12.8600},
+            {"type":"node","id":2,"lat":47.6310,"lon":12.8600},
+            {"type":"node","id":3,"lat":47.6320,"lon":12.8600},
+            {
+                "type":"way",
+                "id":10,
+                "nodes":[1,2],
+                "tags":{
+                    "highway":"path",
+                    "name":"Local Path",
+                    "surface":"gravel",
+                    "tracktype":"grade2"
+                }
+            },
+            {
+                "type":"way",
+                "id":11,
+                "nodes":[2,3],
+                "tags":{
+                    "highway":"path",
+                    "access":"private"
+                }
+            },
+            {
+                "type":"relation",
+                "id":100,
+                "members":[{"type":"way","ref":10,"role":""}],
+                "tags":{"route":"hiking","name":"Alpine Route"}
+            }
+        ]
+    }
+    """
+}
+
 @Suite("Overpass trail graph")
 struct OverpassTrailGraphProviderTests {
     @Test("region identity changes exactly at the cache-tile boundary")
@@ -78,7 +119,7 @@ struct OverpassTrailGraphProviderTests {
     @Test("OSM ways become junction edges with hiking relation names")
     func decodesGraph() throws {
         let graph = try OverpassTrailGraphProvider.decodeGraph(
-            from: Data(Self.fixture.utf8)
+            from: Data(OverpassGraphFixture.alpineRoute.utf8)
         )
 
         #expect(graph.nodes.count == 2)
@@ -107,7 +148,7 @@ struct OverpassTrailGraphProviderTests {
         ) { request in
             await recorder.record(request)
             return OverpassHTTPResponse(
-                data: Data(Self.fixture.utf8),
+                data: Data(OverpassGraphFixture.alpineRoute.utf8),
                 statusCode: 200,
                 headers: [:]
             )
@@ -156,7 +197,7 @@ struct OverpassTrailGraphProviderTests {
             await recorder.record(request)
             try await Task.sleep(for: .milliseconds(50))
             return OverpassHTTPResponse(
-                data: Data(Self.fixture.utf8),
+                data: Data(OverpassGraphFixture.alpineRoute.utf8),
                 statusCode: 200,
                 headers: [:]
             )
@@ -209,7 +250,7 @@ struct OverpassTrailGraphProviderTests {
                 )
             }
             return OverpassHTTPResponse(
-                data: Data(Self.fixture.utf8),
+                data: Data(OverpassGraphFixture.alpineRoute.utf8),
                 statusCode: 200,
                 headers: [:]
             )
@@ -316,39 +357,4 @@ struct OverpassTrailGraphProviderTests {
         #expect(!query.contains(">>"))
     }
 
-    nonisolated private static let fixture = """
-        {
-            "elements": [
-                {"type":"node","id":1,"lat":47.6300,"lon":12.8600},
-                {"type":"node","id":2,"lat":47.6310,"lon":12.8600},
-                {"type":"node","id":3,"lat":47.6320,"lon":12.8600},
-                {
-                    "type":"way",
-                    "id":10,
-                    "nodes":[1,2],
-                    "tags":{
-                        "highway":"path",
-                        "name":"Local Path",
-                        "surface":"gravel",
-                        "tracktype":"grade2"
-                    }
-                },
-                {
-                    "type":"way",
-                    "id":11,
-                    "nodes":[2,3],
-                    "tags":{
-                        "highway":"path",
-                        "access":"private"
-                    }
-                },
-                {
-                    "type":"relation",
-                    "id":100,
-                    "members":[{"type":"way","ref":10,"role":""}],
-                    "tags":{"route":"hiking","name":"Alpine Route"}
-                }
-            ]
-        }
-        """
 }

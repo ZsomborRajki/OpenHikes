@@ -170,7 +170,20 @@ actor HikeSyncEngine {
     /// from the same change token rather than re-downloading the world.
     func stop() async {
         engine = nil
+        await flushState()
         await status.paused()
+    }
+
+    /// Writes anything the state store is holding behind its coalescing
+    /// window.
+    ///
+    /// Deliberately does not build the store: a launch on which sync never ran
+    /// has nothing to flush, and paying that initializer's file reads to
+    /// discover it is the cost ``store`` exists to defer. Called from the
+    /// engine's own idle events and from ``CloudSyncCoordinator``'s
+    /// background and termination hooks.
+    func flushState() async {
+        await loadedStore?.flush()
     }
 
     /// Stops syncing *and* forgets where it had got to.

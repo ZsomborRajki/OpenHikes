@@ -45,11 +45,9 @@ struct TrackJournalTests {
         let journal = TrackJournal(directory: directory, clock: clock.read)
         let sessionID = UUID()
 
-        let options = RecordingSessionOptions()
         try await journal.start(
             sessionID: sessionID,
-            startedAt: start,
-            recordingOptions: options
+            startedAt: start
         )
         for index in 0..<12 {
             clock.advance(by: 1)
@@ -59,7 +57,6 @@ struct TrackJournalTests {
 
         let session = try #require(try await journal.loadSession())
         #expect(session.metadata.sessionID == sessionID)
-        #expect(session.metadata.recordingOptions == options)
         #expect(session.points.count == 12)
         #expect(abs(session.points[7].latitude - point(7).latitude) < 1e-12)
         #expect(session.points[5].flags.contains(.resumed))

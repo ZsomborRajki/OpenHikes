@@ -240,7 +240,7 @@ final class AutoSaveController {
     /// Converts the persisted route and builds its corridor on the concurrent
     /// executor. `@concurrent` keeps this inside `activationTask`, so
     /// ``cancelPendingActivation()`` stops it without a detached worker.
-    @concurrent nonisolated
+    @concurrent
     private static func preparedCorridor(
         for route: [RouteCoordinate]
     ) async throws(CancellationError) -> TileCorridor {

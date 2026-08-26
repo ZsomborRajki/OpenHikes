@@ -597,14 +597,14 @@ extension BackgroundTrailTracker {
 extension BackgroundTrailTracker: CLLocationManagerDelegate {
     nonisolated func locationManager(_ manager: CLLocationManager, didUpdateLocations locations: [CLLocation]) {
         guard let location = locations.last else { return }
-        Task { @MainActor in handleBackgroundFix(location) }
+        onMainActor { [weak self] in self?.handleBackgroundFix(location) }
     }
 
     nonisolated func locationManagerDidChangeAuthorization(_ manager: CLLocationManager) {
         // Read back from the injected monitor rather than from the manager
         // handed in: they are the same object in the app, and only the former
         // is something a test can decide the answer for.
-        Task { @MainActor in authorizationChanged() }
+        onMainActor { [weak self] in self?.authorizationChanged() }
     }
 
     /// Arms monitoring the moment Always is granted — the grant arrives long

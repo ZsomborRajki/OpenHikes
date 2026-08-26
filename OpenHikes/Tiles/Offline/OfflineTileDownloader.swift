@@ -20,6 +20,13 @@ final class OfflineTileDownloader {
 
     enum Phase: Equatable { case idle, downloading, finished, failed(String) }
 
+    /// What one tile's task carries back out of the group. `nonisolated`, like
+    /// ``Tile``, because it crosses out of a child task.
+    nonisolated private struct SaveResult: Sendable {
+        let key: String
+        let saved: Bool
+    }
+
     private(set) var phase: Phase = .idle
     /// Tiles actually saved so far — not tiles attempted.
     ///
@@ -55,6 +62,11 @@ final class OfflineTileDownloader {
     /// state that now belongs to a newer download.
     private var generation = 0
     private let isOnline: @Sendable () -> Bool
+    /// Injectable for the same reason the transport is: the app's gate is a
+    /// singleton shared with the map, and a suite that measured this
+    /// downloader's own in-flight window through it would be measuring
+    /// whatever else happened to be loading tiles at the time.
+    private let gate: TileLoadGate
     private let saveTile: @Sendable (String, URL) async -> Bool
 
     /// The shallowest zoom to save (whole-route overview). `nonisolated`: a
@@ -69,14 +81,16 @@ final class OfflineTileDownloader {
     /// own tile loads; tasks beyond its background share simply park on it.
     /// Keeping this a little wider than that share means there's always one
     /// ready to go the moment a slot frees.
-    private let inFlightWindow = 5
+    nonisolated static let inFlightWindow = 5
 
     init(
+        gate: TileLoadGate = .shared,
         isOnline: @escaping @Sendable () -> Bool = { TileCache.shared.isOnline },
         saveTile: @escaping @Sendable (String, URL) async -> Bool = { key, url in
             await TileCache.shared.saveTileDurably(forKey: key, url: url)
         }
     ) {
+        self.gate = gate
         self.isOnline = isOnline
         self.saveTile = saveTile
     }
@@ -196,50 +210,34 @@ final class OfflineTileDownloader {
     }
 
     private func run(tiles: [Tile], source: ActiveTileSource, scale: CGFloat, generation: Int) async {
-        struct SaveResult: Sendable {
-            let key: String
-            let saved: Bool
-        }
-
         let saveTileCallback = saveTile
-        var index = 0
+        let loadGate = gate
         var savedKeys = Set<String>()
 
         await withTaskGroup(of: SaveResult.self) { group in
-            var active = 0
+            var pending = tiles.makeIterator()
 
+            // The window is one task in for every result out, rather than an
+            // in-flight tally kept by hand. `withDiscardingTaskGroup` would be
+            // shorter still, but it has no `next()` to hang the refill off, and
+            // an unbounded `addTask` loop would put the whole tile budget on
+            // the host at once.
             func addNext() {
-                guard index < tiles.count else { return }
-                let tile = tiles[index]
-                index += 1
-                active += 1
+                guard let tile = pending.next() else { return }
                 group.addTask {
-                    let key = tile.cacheKey(providerID: source.providerID, scale: scale)
-                    guard let url = tile.url(from: source.urlTemplate)
-                    else { return SaveResult(key: key, saved: false) }
-                    // Shared with the map's own tile loads, at `.background`:
-                    // nobody minds a download taking a minute longer, and
-                    // everybody minds the map stalling while it runs.
-                    await TileLoadGate.shared.acquire(.background)
-                    // Durably, not through `loadTile`: the point of a download is
-                    // that the tiles are still there when the user is out of
-                    // signal, which rules out the OS-reclaimable cache.
-                    let saved = await saveTileCallback(key, url)
-                    await TileLoadGate.shared.release(.background)
-                    #if DEBUG
-                    if saved {
-                        Self.logger.debug("Bulk-saved tile \(key, privacy: .public)")
-                    }
-                    #endif
-                    return SaveResult(key: key, saved: saved)
+                    await Self.save(
+                        tile,
+                        from: source,
+                        scale: scale,
+                        through: loadGate,
+                        using: saveTileCallback
+                    )
                 }
             }
 
-            for _ in 0..<min(inFlightWindow, tiles.count) { addNext() }
+            for _ in 0..<Self.inFlightWindow { addNext() }
 
-            while active > 0 {
-                guard let result = await group.next() else { break }
-                active -= 1
+            for await result in group {
                 // A newer download has started since this task began — stop touching
                 // its state and let the group drain/cancel our remaining children.
                 guard generation == self.generation else {
@@ -260,6 +258,42 @@ final class OfflineTileDownloader {
         }
 
         finalize(savedKeys: savedKeys, tiles: tiles, source: source, scale: scale, generation: generation)
+    }
+
+    /// One tile, fetched straight into durable storage. `nonisolated static`
+    /// because it is the body of a task-group child: it runs off the main
+    /// actor, and taking everything it needs as parameters is what keeps it
+    /// from capturing the observable downloader along with them.
+    nonisolated private static func save(
+        _ tile: Tile,
+        from source: ActiveTileSource,
+        scale: CGFloat,
+        through gate: TileLoadGate,
+        using saveTile: @Sendable (String, URL) async -> Bool
+    ) async -> SaveResult {
+        let key = tile.cacheKey(providerID: source.providerID, scale: scale)
+        guard let url = tile.url(from: source.urlTemplate) else { return SaveResult(key: key, saved: false) }
+        // Shared with the map's own tile loads, at `.background`: nobody minds
+        // a download taking a minute longer, and everybody minds the map
+        // stalling while it runs.
+        await gate.acquire(.background)
+        // Re-checked on the far side of the gate, which is where a tile can
+        // sit for a while behind the map: a download the user stopped in the
+        // meantime must not still put its queued requests on the wire.
+        var saved = false
+        if !Task.isCancelled {
+            // Durably, not through `loadTile`: the point of a download is that
+            // the tiles are still there when the user is out of signal, which
+            // rules out the OS-reclaimable cache.
+            saved = await saveTile(key, url)
+        }
+        await gate.release(.background)
+        #if DEBUG
+        if saved {
+            Self.logger.debug("Bulk-saved tile \(key, privacy: .public)")
+        }
+        #endif
+        return SaveResult(key: key, saved: saved)
     }
 
     private func finalize(

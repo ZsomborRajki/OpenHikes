@@ -46,34 +46,57 @@ struct LocationFixStreamTests {
         manager = LocationManager(clock: clock.read)
     }
 
-    private func publish(latitude: Double, longitude: Double = 12.86) async {
+    /// Delivers a fix the way CoreLocation does.
+    ///
+    /// Synchronous, and no longer settled for: `onMainActor` runs the publish
+    /// inline when the caller is already on the main actor — which a
+    /// main-actor-isolated test always is — so `coordinate` has its answer by
+    /// the time this returns. What is still asynchronous is the *consumer*:
+    /// Observation wakes it and it appends, which is what ``settle(_:untilCount:sourceLocation:)``
+    /// waits for.
+    private func publish(latitude: Double, longitude: Double = 12.86) {
         manager.locationManager(
             CLLocationManager(),
             didUpdateLocations: [
                 CLLocation(latitude: latitude, longitude: longitude)
             ]
         )
-        await settle()
     }
 
-    /// The delegate callback hops to the main actor, Observation then wakes
-    /// the consumer task, and the consumer appends — three scheduling steps,
-    /// none of which involves a real clock.
-    private func settle() async {
-        await settleDelegateHop()
+    /// Waits until `log` holds at least `count` elements.
+    ///
+    /// `>=` rather than `==` deliberately: an over-delivery must not hang here
+    /// but be reported by the caller's assertion on the log's contents, which
+    /// is where a spurious element is legible.
+    @MainActor
+    private func settle(
+        _ log: FixLog,
+        untilCount count: Int,
+        sourceLocation: SourceLocation = #_sourceLocation
+    ) async {
+        await settleDelegateHop(
+            until: Comment(rawValue: "the consumer to have received \(count) element(s)"),
+            sourceLocation: sourceLocation
+        ) {
+            log.count >= count
+        }
     }
 
     /// Starts a consumer and returns its log plus the task holding it, so the
     /// caller can cancel it and keep the sequence from outliving the test.
     @MainActor
-    private func startConsumer() async -> (log: FixLog, task: Task<Void, Never>) {
+    private func startConsumer(
+        sourceLocation: SourceLocation = #_sourceLocation
+    ) async -> (log: FixLog, task: Task<Void, Never>) {
         let log = FixLog()
         let task = Task { @MainActor in
             for await coordinate in manager.fixes {
                 log.append(coordinate)
             }
         }
-        await settle()
+        // `Observations` opens by emitting the value it starts tracking, so
+        // every started consumer has exactly one element owed to it.
+        await settle(log, untilCount: 1, sourceLocation: sourceLocation)
         return (log, task)
     }
 
@@ -83,7 +106,7 @@ struct LocationFixStreamTests {
     /// the chart blank for as long as the walker stayed put.
     @Test("iterating starts from the fix that is already current")
     func currentFixArrivesFirst() async {
-        await publish(latitude: 47.63)
+        publish(latitude: 47.63)
         #expect(manager.coordinate?.latitude == 47.63, "precondition: the fix was published")
 
         let consumer = await startConsumer()
@@ -101,7 +124,8 @@ struct LocationFixStreamTests {
         defer { consumer.task.cancel() }
         #expect(consumer.log.latitudes == [nil], "no fix yet, and the sequence says so")
 
-        await publish(latitude: 47.63)
+        publish(latitude: 47.63)
+        await settle(consumer.log, untilCount: 2)
 
         #expect(consumer.log.latitudes == [nil, 47.63])
     }
@@ -111,29 +135,40 @@ struct LocationFixStreamTests {
     /// repeat the last coordinate — so nothing downstream wakes at all.
     @Test("standing still wakes nobody")
     func repeatedFixesDoNotWake() async {
-        await publish(latitude: 47.63)
+        publish(latitude: 47.63)
         let consumer = await startConsumer()
         defer { consumer.task.cancel() }
         #expect(consumer.log.count == 1)
 
         clock.advance(by: 5)
-        await publish(latitude: 47.63)
+        publish(latitude: 47.63)
         clock.advance(by: 5)
-        await publish(latitude: 47.63)
+        publish(latitude: 47.63)
+        // An element that never arrives is not something a condition can wait
+        // for. So wait for one that must: a fix that really moved can only be
+        // the consumer's *second* element if the two repeats above woke it
+        // for nothing.
+        clock.advance(by: 5)
+        publish(latitude: 47.64)
+        await settle(consumer.log, untilCount: 2)
 
-        #expect(consumer.log.count == 1, "three fixes at one spot, one element")
+        #expect(
+            consumer.log.latitudes == [47.63, 47.64],
+            "three fixes at one spot, and not one element between them"
+        )
     }
 
     /// …and a step really does wake it, so the previous test is measuring the
     /// duplicate filter rather than a sequence that never delivers.
     @Test("moving on wakes the consumer again")
     func movementWakesConsumer() async {
-        await publish(latitude: 47.63)
+        publish(latitude: 47.63)
         let consumer = await startConsumer()
         defer { consumer.task.cancel() }
 
         clock.advance(by: 1.1)
-        await publish(latitude: 47.64)
+        publish(latitude: 47.64)
+        await settle(consumer.log, untilCount: 2)
 
         #expect(consumer.log.latitudes == [47.63, 47.64])
     }
@@ -144,7 +179,7 @@ struct LocationFixStreamTests {
     /// one asked first.
     @Test("every consumer sees every fix")
     func fanOutReachesEveryConsumer() async {
-        await publish(latitude: 47.63)
+        publish(latitude: 47.63)
         let weather = await startConsumer()
         let follow = await startConsumer()
         defer {
@@ -153,7 +188,9 @@ struct LocationFixStreamTests {
         }
 
         clock.advance(by: 1.1)
-        await publish(latitude: 47.64)
+        publish(latitude: 47.64)
+        await settle(weather.log, untilCount: 2)
+        await settle(follow.log, untilCount: 2)
 
         #expect(weather.log.latitudes == [47.63, 47.64])
         #expect(follow.log.latitudes == [47.63, 47.64])
@@ -178,8 +215,15 @@ struct LocationFixStreamTests {
                 ),
             ]
         )
-        await settle()
+        // Same barrier as `repeatedFixesDoNotWake`: nothing arriving is not a
+        // condition, so wait for a fix that is accepted and check that the
+        // rejected one didn't get in ahead of it.
+        publish(latitude: 47.64)
+        await settle(consumer.log, untilCount: 2)
 
-        #expect(consumer.log.latitudes == [nil], "too old to publish, so nothing to wake on")
+        #expect(
+            consumer.log.latitudes == [nil, 47.64],
+            "too old to publish, so nothing to wake on"
+        )
     }
 }

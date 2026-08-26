@@ -2,6 +2,15 @@
 //  HikeRecorderTests.swift
 //  OpenHikesTests
 //
+//  `source.deliver(…)`, `elevation.deliver(…)` and `motion.deliver(…)` need no
+//  settle: the recorder's `nonisolated` callbacks reach main-actor state
+//  through `onMainActor`, which runs its body synchronously when the caller is
+//  already on the main actor — and a main-actor-isolated test always is. That
+//  also fixes their order against each other, which is what lets a barometric
+//  reading below be delivered immediately before the fix it belongs to. What
+//  the callbacks queue for later — live matching, the journal, the widget
+//  snapshot, a trail-graph prefetch — is waited for by name.
+//
 
 import CoreLocation
 import Foundation
@@ -21,11 +30,9 @@ extension HikeRecorderTests {
 
         elevation.deliver(0)
         source.deliver(fix(latitude: 47.63))
-        await settleDelegateHop()
         clock.advance(by: 10)
         elevation.deliver(10)
         source.deliver(fix(latitude: 47.6302))
-        await settleDelegateHop()
 
         let hike = try savedHike(from: await recorder.stop())
 
@@ -41,10 +48,8 @@ extension HikeRecorderTests {
         let recorder = makeRecorder(motionSource: motion)
         await recorder.start()
         motion.deliver(.nonPedestrian)
-        await settleDelegateHop()
 
         source.deliver(fix(latitude: 47.63, speed: 1))
-        await settleDelegateHop()
         clock.advance(by: 5)
         source.deliver(
             fix(
@@ -52,7 +57,6 @@ extension HikeRecorderTests {
                 speed: 1
             )
         )
-        await settleDelegateHop()
 
         #expect(recorder.stats.pointCount == 2)
         let hike = try savedHike(from: await recorder.stop())
@@ -68,14 +72,11 @@ extension HikeRecorderTests {
         )
         await recorder.start()
         source.deliver(fix(latitude: 47.63))
-        await settleDelegateHop()
         clock.advance(by: 10)
         source.deliver(fix(latitude: 47.6302))
-        await settleDelegateHop()
 
-        for _ in 0..<100 {
-            if recorder.stats.matchedTrailName == "Matched Path" { break }
-            try await Task.sleep(for: .milliseconds(10))
+        await settleDelegateHop(until: "the live match to name the trail") {
+            recorder.stats.matchedTrailName == "Matched Path"
         }
         #expect(recorder.stats.matchedTrailName == "Matched Path")
         #expect(recorder.trace.tail.allSatisfy { coord in
@@ -101,7 +102,7 @@ extension HikeRecorderTests {
     }
 
     @Test("live trail name clears when the current leg cannot be matched")
-    func liveTrailNameClearsForAnUnmatchedTail() async throws {
+    func liveTrailNameClearsForAnUnmatchedTail() async {
         let recorder = makeRecorder(
             trailGraphProvider: StubTrailGraphProvider(
                 graph: liveMatchingGraph()
@@ -109,23 +110,20 @@ extension HikeRecorderTests {
         )
         await recorder.start()
         source.deliver(fix(latitude: 47.63))
-        await settleDelegateHop()
         clock.advance(by: 10)
         source.deliver(fix(latitude: 47.6302))
-        await settleDelegateHop()
 
-        for _ in 0..<100 {
-            if recorder.stats.matchedTrailName == "Live Path" { break }
-            try await Task.sleep(for: .milliseconds(10))
+        // `matchedTrailName` is written after the matched geometry it
+        // describes, so naming it also settles the trace behind it.
+        await settleDelegateHop(until: "the live match to name the trail") {
+            recorder.stats.matchedTrailName == "Live Path"
         }
         #expect(recorder.stats.matchedTrailName == "Live Path")
 
         clock.advance(by: 30)
         source.deliver(fix(latitude: 47.632))
-        await settleDelegateHop()
-        for _ in 0..<100 {
-            if recorder.stats.matchedTrailName == nil { break }
-            try await Task.sleep(for: .milliseconds(10))
+        await settleDelegateHop(until: "the unmatchable tail to clear the trail name") {
+            recorder.stats.matchedTrailName == nil
         }
 
         #expect(recorder.stats.pointCount == 3)
@@ -134,7 +132,7 @@ extension HikeRecorderTests {
     }
 
     @Test("live matching catches up when a fix arrives during graph loading")
-    func slowLiveMatchDoesNotStarve() async throws {
+    func slowLiveMatchDoesNotStarve() async {
         let recorder = makeRecorder(
             trailGraphProvider: StubTrailGraphProvider(
                 graph: liveMatchingGraph(),
@@ -143,22 +141,16 @@ extension HikeRecorderTests {
         )
         await recorder.start()
         source.deliver(fix(latitude: 47.63))
-        await settleDelegateHop()
         clock.advance(by: 10)
         source.deliver(fix(latitude: 47.6302))
-        await settleDelegateHop()
         clock.advance(by: 10)
         source.deliver(fix(latitude: 47.6304))
-        await settleDelegateHop()
 
-        for _ in 0..<100 {
-            if recorder.stats.matchedTrailName == "Live Path",
-               recorder.trace.tail.allSatisfy({ coord in
-                   abs(coord.longitude - 12.8599) < 0.00001
-               }) {
-                break
-            }
-            try await Task.sleep(for: .milliseconds(10))
+        await settleDelegateHop(until: "the delayed match to catch up with every fix") {
+            recorder.stats.matchedTrailName == "Live Path"
+                && recorder.trace.tail.allSatisfy { coord in
+                    abs(coord.longitude - 12.8599) < 0.00001
+                }
         }
 
         #expect(recorder.stats.matchedTrailName == "Live Path")
@@ -180,10 +172,8 @@ extension HikeRecorderTests {
         await recorder.start()
         let draft = try #require(recorder.currentHike)
         source.deliver(fix(latitude: 47.63, longitude: 12.86))
-        await settleDelegateHop()
         clock.advance(by: 720)
         source.deliver(fix(latitude: 47.63, longitude: 12.864))
-        await settleDelegateHop()
 
         let outcome = try await recorder.stop()
         guard case .needsReview = outcome else {
@@ -198,10 +188,13 @@ extension HikeRecorderTests {
         let section = try #require(recorder.routeReview?.current)
         #expect(section.kind == .ambiguous)
         #expect(section.alternatives.count >= 2)
+        await settleDelegateHop(until: "the review preview to be drawn") {
+            !recorder.trace.reviewSegment.isEmpty
+        }
         #expect(recorder.trace.reviewSegment.count == 2)
         #expect(FileManager.default.fileExists(atPath: TrackJournal(directory: directory).journalURL.path))
         let sessionID = try #require(
-            await sharedStore.savedSnapshots().last?.sessionID
+            await settle(sharedStore) { !$0.isEmpty }.last?.sessionID
         )
         let lateWidgetFix = SharedRecordingFix(
             sessionID: sessionID,
@@ -220,6 +213,9 @@ extension HikeRecorderTests {
         recorder.selectRouteChoice(
             .alternative(alternative.id)
         )
+        await settleDelegateHop(until: "the preview to redraw as the chosen alternative") {
+            recorder.trace.reviewSegment.count > 2
+        }
         #expect(recorder.trace.reviewSegment.count > 2)
 
         let hike = try await recorder.saveReviewedRecording()
@@ -241,7 +237,6 @@ extension HikeRecorderTests {
 
         let first = fix(latitude: 47.63, longitude: 12.86)
         source.deliver(first)
-        await settleDelegateHop()
         // Far enough to be a different region, slow enough that
         // ``RecordingFixPolicy`` accepts it. The clock has to move before the
         // fix is built: ``fix(latitude:longitude:accuracy:speed:)`` stamps it
@@ -249,7 +244,6 @@ extension HikeRecorderTests {
         clock.advance(by: 4000)
         let second = fix(latitude: 47.63, longitude: 12.96)
         source.deliver(second)
-        await settleDelegateHop()
 
         // Each fix also seeds its eight neighbours (see
         // ``HikeRecorder/prefetchNeighbouringTrailGraphRegions(around:)``), so
@@ -283,7 +277,6 @@ extension HikeRecorderTests {
 
         let only = fix(latitude: 47.63, longitude: 12.86)
         source.deliver(only)
-        await settleDelegateHop()
 
         let region = provider.region(containing: only.coordinate)
         var regions = await settle(provider) { fetched in
@@ -313,6 +306,32 @@ extension HikeRecorderTests {
         return fetched
     }
 
+    /// The same wait for the widget snapshots a recording publishes. Also not
+    /// a ``settleDelegateHop(until:sourceLocation:condition:)``: reading them
+    /// means awaiting an actor, and a settle condition is synchronous.
+    private func settle(
+        _ store: StubRecordingSharedStateStore,
+        until condition: ([SharedRecordingSnapshot]) -> Bool
+    ) async -> [SharedRecordingSnapshot] {
+        let deadline = ContinuousClock.now + .seconds(5)
+        var snapshots = await store.savedSnapshots()
+        while !condition(snapshots), ContinuousClock.now < deadline {
+            try? await Task.sleep(for: .milliseconds(5))
+            snapshots = await store.savedSnapshots()
+        }
+        return snapshots
+    }
+
+    /// The general form, for a flag that only an `await` can read. The caller
+    /// still asserts, so a lapsed deadline is reported as the expectation it
+    /// was waiting for rather than as a bare timeout.
+    private func settle(untilTrue condition: () async -> Bool) async {
+        let deadline = ContinuousClock.now + .seconds(5)
+        while !(await condition()), ContinuousClock.now < deadline {
+            try? await Task.sleep(for: .milliseconds(5))
+        }
+    }
+
     @Test("trail graph prefetch is cancelled when the recording is discarded")
     func trailGraphPrefetchStopsWithRecording() async {
         let provider = BlockingTrailGraphProvider()
@@ -320,20 +339,43 @@ extension HikeRecorderTests {
         await recorder.start()
 
         source.deliver(fix(latitude: 47.63, longitude: 12.86))
-        await settleDelegateHop()
-        for _ in 0..<100 where !(await provider.didStart()) {
-            await Task.yield()
-        }
+        await settle { await provider.didStart() }
         #expect(await provider.didStart())
 
         await recorder.discard()
-        for _ in 0..<100 where !(await provider.wasCancelled()) {
-            await Task.yield()
-        }
+        await settle { await provider.wasCancelled() }
 
         #expect(await provider.wasCancelled())
         #expect(recorder.trailGraphPrefetchTasks.isEmpty)
         #expect(recorder.trailGraphPrefetchStates.isEmpty)
+    }
+
+    @Test("a provider reporting cancellation does not strand its region")
+    func selfCancellingPrefetchDoesNotStrandRegion() async throws {
+        let provider = CancellingTrailGraphProvider()
+        let recorder = makeRecorder(trailGraphProvider: provider)
+        let coordinate = CLLocationCoordinate2D(
+            latitude: 47.63,
+            longitude: 12.86
+        )
+        let region = try #require(provider.region(containing: coordinate))
+        await recorder.start()
+
+        deliverTrailGraphFix(at: coordinate)
+        await settle { await provider.attemptCount() == 1 }
+        await settleDelegateHop(
+            until: "the cancelled prefetch to release its region"
+        ) {
+            recorder.trailGraphPrefetchStates[region] == nil
+        }
+
+        // Stranded in `.fetching`, the region reads as already-handled, so no
+        // later fix ever retries it and it silently never gets a graph.
+        #expect(recorder.trailGraphPrefetchStates[region] == nil)
+
+        deliverTrailGraphFix(at: coordinate, after: 10)
+        await settle { await provider.attemptCount() == 2 }
+        #expect(await provider.attemptCount() == 2)
     }
 
     @Test("trail graph retry delay exponentiates with jitter and a ceiling")
@@ -372,7 +414,7 @@ extension HikeRecorderTests {
         await recorder.start()
 
         let firstRetryAt = clock.now.addingTimeInterval(30)
-        await deliverTrailGraphFix(at: coordinate)
+        deliverTrailGraphFix(at: coordinate)
         await waitForTrailGraphPrefetchState(
             .waiting(failures: 1, retryAt: firstRetryAt),
             region: region,
@@ -384,11 +426,11 @@ extension HikeRecorderTests {
                 == .waiting(failures: 1, retryAt: firstRetryAt)
         )
 
-        await deliverTrailGraphFix(at: coordinate, after: 20)
+        deliverTrailGraphFix(at: coordinate, after: 20)
         #expect(await provider.attemptCount() == 1)
 
         let secondRetryAt = firstRetryAt.addingTimeInterval(60)
-        await deliverTrailGraphFix(at: coordinate, after: 10)
+        deliverTrailGraphFix(at: coordinate, after: 10)
         await waitForTrailGraphPrefetchState(
             .waiting(failures: 2, retryAt: secondRetryAt),
             region: region,
@@ -400,10 +442,10 @@ extension HikeRecorderTests {
                 == .waiting(failures: 2, retryAt: secondRetryAt)
         )
 
-        await deliverTrailGraphFix(at: coordinate, after: 50)
+        deliverTrailGraphFix(at: coordinate, after: 50)
         #expect(await provider.attemptCount() == 2)
 
-        await deliverTrailGraphFix(at: coordinate, after: 10)
+        deliverTrailGraphFix(at: coordinate, after: 10)
         await waitForTrailGraphPrefetchState(
             .loaded,
             region: region,
@@ -416,29 +458,34 @@ extension HikeRecorderTests {
         source.deliver(
             fix(latitude: coordinate.latitude, longitude: coordinate.longitude)
         )
-        await settleDelegateHop()
+        // Nothing to wait for: a region that is already `.loaded` is refused
+        // by `prefetchTrailGraphIfNeeded` while the fix is still on the stack.
         #expect(await provider.attemptCount() == 3)
     }
 
     private func deliverTrailGraphFix(
         at coordinate: CLLocationCoordinate2D,
         after interval: TimeInterval = 0
-    ) async {
+    ) {
         clock.advance(by: interval)
         source.deliver(
             fix(latitude: coordinate.latitude, longitude: coordinate.longitude)
         )
-        await settleDelegateHop()
     }
 
     private func waitForTrailGraphPrefetchState(
         _ expected: TrailGraphPrefetchState,
         region: TrailGraphRegion,
-        recorder: HikeRecorder
+        recorder: HikeRecorder,
+        sourceLocation: SourceLocation = #_sourceLocation
     ) async {
-        for _ in 0..<100
-        where recorder.trailGraphPrefetchStates[region] != expected {
-            await Task.yield()
+        await settleDelegateHop(
+            until: Comment(
+                rawValue: "the prefetch state to reach \(String(describing: expected))"
+            ),
+            sourceLocation: sourceLocation
+        ) {
+            recorder.trailGraphPrefetchStates[region] == expected
         }
     }
 
@@ -491,9 +538,8 @@ extension HikeRecorderTests {
         let recorder = makeRecorder(sharedStateStore: sharedStore)
         await recorder.start()
         source.deliver(fix(latitude: 47.63))
-        await settleDelegateHop()
 
-        let snapshots = await sharedStore.savedSnapshots()
+        let snapshots = await settle(sharedStore) { !$0.isEmpty }
         let sessionID = try #require(snapshots.last?.sessionID)
         let widgetFix = SharedRecordingFix(
             sessionID: sessionID,
@@ -504,9 +550,8 @@ extension HikeRecorderTests {
         )
         await sharedStore.setPendingFixes([widgetFix])
         recorder.sceneDidBecomeActive()
-        for _ in 0..<100 {
-            if recorder.stats.pointCount == 2 { break }
-            try await Task.sleep(for: .milliseconds(10))
+        await settleDelegateHop(until: "the widget's anchor to be merged into the recording") {
+            recorder.stats.pointCount == 2
         }
 
         #expect(recorder.stats.pointCount == 2)
@@ -514,7 +559,6 @@ extension HikeRecorderTests {
 
         clock.advance(by: 40)
         source.deliver(fix(latitude: 47.6304))
-        await settleDelegateHop()
         let hike = try savedHike(from: await recorder.stop())
 
         #expect(hike.route.count == 3)
@@ -527,20 +571,17 @@ extension HikeRecorderTests {
     }
 
     @Test("periodic snapshots do not force extra WidgetKit reloads")
-    func periodicSnapshotsDoNotForceReloads() async throws {
+    func periodicSnapshotsDoNotForceReloads() async {
         let sharedStore = StubRecordingSharedStateStore()
         let recorder = makeRecorder(sharedStateStore: sharedStore)
         await recorder.start()
         source.deliver(fix(latitude: 47.63))
-        await settleDelegateHop()
         clock.advance(by: 15 * 60)
         source.deliver(fix(latitude: 47.6302))
-        await settleDelegateHop()
 
-        for _ in 0..<100 {
-            if await sharedStore.savedSnapshots().count >= 3 { break }
-            try await Task.sleep(for: .milliseconds(10))
-        }
+        // Three: the session's own snapshot, the first fix's forced one, and
+        // the interval-driven one the second fix is far enough away to earn.
+        _ = await settle(sharedStore) { $0.count >= 3 }
 
         #expect(await sharedStore.widgetReloadFlags().last == false)
     }

@@ -153,7 +153,6 @@ opt_in_rules:
   - switch_case_on_newline
   - test_case_accessibility
   - toggle_bool
-  - trailing_closure
   - unavailable_function
   - unhandled_throwing_task
   - unneeded_escaping
@@ -171,6 +170,19 @@ opt_in_rules:
 
 # … and disable the conflicting / impractical ones.
 disabled_rules:
+  # Conflicts with multiple_closures_with_trailing_closure (a default rule):
+  # one demands trailing closure syntax "whenever possible", the other forbids
+  # it as soon as a call passes more than one closure. On an initialiser with
+  # several closure parameters no spelling satisfies both.
+  #
+  # Worse, obeying it can be actively wrong. Swift matches a trailing closure
+  # by forward scan, so on
+  #     init(directory:clock:transport:)
+  # a trailing closure binds to `clock:` — the *first* closure parameter — and
+  # not to the `transport:` the author meant. That compiles, and silently does
+  # the wrong thing. A rule that cannot be satisfied and whose advice
+  # introduces bugs is not worth the call sites it costs.
+  - trailing_closure
   # Conflicts: contrasted_opening_brace wants brace on next line, but
   # opening_brace (enabled below) enforces K&R same-line style as per
   # Swift API Design Guidelines and Xcode defaults.

@@ -13,14 +13,6 @@ import Foundation
 import Observation
 import OpenHikesShared
 
-nonisolated struct RecordingSessionOptions: Codable, Equatable, Sendable {
-    static let defaults = Self()
-
-    static func load(from defaults: UserDefaults) -> Self {
-        Self()
-    }
-}
-
 nonisolated struct RecordingPointFlags: OptionSet, Codable, Hashable, Sendable {
     let rawValue: UInt32
 

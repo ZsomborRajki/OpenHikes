@@ -5,6 +5,11 @@
 //  Stopping a recording that matching moved now ends in review rather than in
 //  the store: the hiker decides, per section, between the trail and the trace.
 //
+//  A delivered fix lands synchronously — `onMainActor` runs its body inline
+//  when the caller is already on the main actor — so what is settled for here
+//  is only the review preview, which ``HikeRecorder/updateReviewPreview()``
+//  resolves off the main actor and publishes when it returns.
+//
 
 import CoreLocation
 import Foundation
@@ -38,6 +43,9 @@ extension HikeRecorderTests {
         #expect(section.kind == .snapped)
         #expect(section.trailName == "Matched Path")
         #expect(review.choice(for: section) == .matched)
+        await settleDelegateHop(until: "the review preview to be drawn") {
+            !recorder.trace.reviewSegment.isEmpty
+        }
         #expect(recorder.trace.reviewSegment.count == section.matchedPoints.count)
 
         let draft = try #require(recorder.currentHike)
@@ -70,6 +78,12 @@ extension HikeRecorderTests {
         _ = try await recorder.stop()
 
         recorder.selectRouteChoice(.gps)
+        await settleDelegateHop(until: "the preview to redraw as the recorded trace") {
+            let segment = recorder.trace.reviewSegment
+            return !segment.isEmpty && segment.allSatisfy { coordinate in
+                abs(coordinate.longitude - 12.86) < 0.00001
+            }
+        }
         let previewedLongitudes = recorder.trace.reviewSegment.map(\.longitude)
         let hike = try await recorder.saveReviewedRecording()
 
@@ -98,10 +112,8 @@ extension HikeRecorderTests {
         )
         await recorder.start()
         source.deliver(fix(latitude: SnappedTrace.startLatitude))
-        await settleDelegateHop()
         clock.advance(by: 10)
         source.deliver(fix(latitude: SnappedTrace.endLatitude))
-        await settleDelegateHop()
 
         guard case .needsReview = try await recorder.stop(
             customName: "  Retried Reviewed Hike  "
@@ -165,10 +177,8 @@ extension HikeRecorderTests {
         )
         await recorder.start()
         source.deliver(fix(latitude: SnappedTrace.startLatitude))
-        await settleDelegateHop()
         clock.advance(by: 10)
         source.deliver(fix(latitude: SnappedTrace.endLatitude))
-        await settleDelegateHop()
 
         let hike = try savedHike(from: await recorder.stop())
 
@@ -187,10 +197,8 @@ extension HikeRecorderTests {
         )
         await recorder.start()
         source.deliver(fix(latitude: SnappedTrace.startLatitude))
-        await settleDelegateHop()
         clock.advance(by: 10)
         source.deliver(fix(latitude: SnappedTrace.endLatitude))
-        await settleDelegateHop()
         return recorder
     }
 }

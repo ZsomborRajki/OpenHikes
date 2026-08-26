@@ -339,7 +339,7 @@ private extension SettingsView {
         )
     }
 
-    @concurrent nonisolated
+    @concurrent
     static func photoByteCount(of files: [HikePhotoStore.PhotoFiles]) async -> Int64 {
         HikePhotoStore.shared.byteCount(of: files)
     }
@@ -411,7 +411,7 @@ private extension SettingsView {
     /// A cancelled key enumeration deletes nothing rather than a partial set:
     /// cache keys carry no hike identity, so an under-reported claim set frees
     /// tiles that a surviving hike still needs.
-    @concurrent nonisolated
+    @concurrent
     static func diskUsage(
         claimedBy claims: [TileOwnership]
     ) async -> TileCache.DiskUsage? {
@@ -419,13 +419,13 @@ private extension SettingsView {
         return TileCache.shared.diskUsage(claimedBy: keys)
     }
 
-    @concurrent nonisolated
+    @concurrent
     static func removeTiles(unclaimedBy claims: [TileOwnership]) async {
         guard let keys = try? keys(of: claims) else { return }
         TileCache.shared.removeTiles(unclaimedBy: keys)
     }
 
-    @concurrent nonisolated
+    @concurrent
     static func removeAllTiles() async {
         TileCache.shared.removeAllTiles()
     }

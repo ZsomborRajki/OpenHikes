@@ -42,6 +42,11 @@ nonisolated extension OfflineTileDownloader {
         assertOffMainThread(
             "Offline-download planning must stay off the main thread"
         )
+        // The one thing that runs before a download commits to any network
+        // traffic, so a trace can tell "the tap did nothing for two seconds"
+        // apart from "the tile server was slow".
+        let interval = RenderSignpost.beginInterval("OfflineDownloadPlan")
+        defer { RenderSignpost.endInterval("OfflineDownloadPlan", interval) }
         var coordinates: [CLLocationCoordinate2D] = []
         coordinates.reserveCapacity(route.count)
         for (index, point) in route.enumerated() {
@@ -55,6 +60,10 @@ nonisolated extension OfflineTileDownloader {
             budget: tileBudget
         )
         guard !Task.isCancelled else { throw CancellationError() }
+        RenderSignpost.mark(
+            "OfflineDownloadPlanned",
+            "route=\(route.count) maxZoom=\(maxZoom) tiles=\(result.count)"
+        )
         return result
     }
 
@@ -96,6 +105,11 @@ nonisolated extension OfflineTileDownloader {
             "per download record — call it off the main thread"
         )
         guard !offlineDownloads.isEmpty else { return [] }
+        // Re-derived rather than stored, and re-derived again every time
+        // storage is measured — which is the cost worth watching here, not the
+        // one-off a download pays.
+        let interval = RenderSignpost.beginInterval("OfflineKeyRecompute")
+        defer { RenderSignpost.endInterval("OfflineKeyRecompute", interval) }
         var keys = Set<String>()
         for record in offlineDownloads {
             // Every record, not every nth: each one re-walks the whole route
@@ -117,6 +131,10 @@ nonisolated extension OfflineTileDownloader {
                 )
             )
         }
+        RenderSignpost.mark(
+            "OfflineKeysRecomputed",
+            "records=\(offlineDownloads.count) keys=\(keys.count)"
+        )
         return Array(keys)
     }
 

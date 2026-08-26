@@ -28,6 +28,19 @@
 //  survive the user switching sync off, deleting a walk, and switching it on
 //  again.
 //
+//  That split — re-derivable against not — is also what decides which of
+//  these files is written the moment it changes and which is coalesced. The
+//  record cache and the index are whole-file snapshots rewritten from
+//  scratch, so acknowledging each 250-record batch as it landed rewrote a
+//  megabyte per batch inside a callback the engine was awaiting, and made a
+//  first sync quadratic in the size of the library. They are gathered behind
+//  ``flush()`` instead. Losing the newest of them to a crash costs a
+//  re-upload that CloudKit resolves into a merge, because record names are
+//  derived from the hike's own `UUID` and a save without a change tag
+//  therefore collides with itself rather than duplicating anything. The
+//  tombstones, the deferred payloads and the queued saves are none of them
+//  re-derivable, so all of those are still written where they are made.
+//
 
 import CloudKit
 import Foundation
@@ -148,6 +161,37 @@ actor CloudSyncStateStore {
     private var deferredDeletions: [String]
     private var index: RecordIndex
 
+    /// How long acknowledgements are allowed to gather before the record cache
+    /// and the index are rewritten, or `nil` for no window at all — in which
+    /// case only ``flush()`` writes them.
+    ///
+    /// Extended by every change rather than counted from the first, so a send
+    /// that is producing a batch a second never fires it: the write that
+    /// matters is the one at the end of the burst, and the engine's own idle
+    /// event asks for that. What this window is actually for is the burst that
+    /// has no end — a process killed by the watchdog or the memory monitor
+    /// mid-sync, which reaches none of the flush points below. It bounds what
+    /// that loses to the last few seconds of acknowledgements.
+    private let coalescingWindow: Duration?
+
+    /// Called after every file this store writes, with the file's name.
+    ///
+    /// Only a suite ever passes one, and only because coalescing is a claim
+    /// about how *few* writes a burst costs — which is invisible from outside
+    /// the actor, since every read here is served from memory and is correct
+    /// either way.
+    private let didWriteFile: (@Sendable (String) -> Void)?
+
+    private var unwrittenRecords = false
+    private var unwrittenIndex = false
+    private var writeDeadline: ContinuousClock.Instant?
+
+    /// `nonisolated(unsafe)` for the reason ``AutoSaveController``'s drain task
+    /// is: `deinit` has to cancel it and has no way to hop onto the actor to do
+    /// so, while `Task` cancellation is itself thread-safe. Nothing else
+    /// touches it from off the actor.
+    nonisolated(unsafe) private var coalescedWrite: Task<Void, Never>?
+
     /// False when `deferred-photos.json` existed and could not be read.
     ///
     /// An unreadable file is not an empty one, and the difference decides
@@ -198,7 +242,19 @@ actor CloudSyncStateStore {
     ///     and ``HikePhotoStore`` both offer.
     ///   - stagingRoot: Overrides Caches, separately, because staged assets are
     ///     re-derivable and so belong somewhere the system may reclaim.
-    init(storageRoot: URL? = nil, stagingRoot: URL? = nil) {
+    ///   - coalescingWindow: See the property. `nil` disables the backstop
+    ///     entirely, which is what a suite wants: an armed window would
+    ///     otherwise rewrite a directory the case has already deleted, and a
+    ///     case that asserts on *when* a write happens would race it.
+    ///   - didWriteFile: A suite's write counter. See the property.
+    init(
+        storageRoot: URL? = nil,
+        stagingRoot: URL? = nil,
+        coalescingWindow: Duration? = .seconds(2),
+        didWriteFile: (@Sendable (String) -> Void)? = nil
+    ) {
+        self.coalescingWindow = coalescingWindow
+        self.didWriteFile = didWriteFile
         let support = storageRoot ?? FileManager.default.urls(
             for: .applicationSupportDirectory,
             in: .userDomainMask
@@ -252,6 +308,10 @@ actor CloudSyncStateStore {
         ) ?? []
     }
 
+    deinit {
+        coalescedWrite?.cancel()
+    }
+
     // MARK: - Engine state
 
     func loadStateSerialization() -> CKSyncEngine.State.Serialization? {
@@ -264,6 +324,19 @@ actor CloudSyncStateStore {
         )
     }
 
+    /// Writes the change token, and deliberately does not flush the coalesced
+    /// record cache first.
+    ///
+    /// The two are separate files, and the correspondence that has to hold is
+    /// between this blob and the *hikes*, which SwiftData has already
+    /// committed by the time anything is remembered. A token that runs ahead
+    /// of the record cache costs a change tag, and a save built without one
+    /// fails with `serverRecordChanged`, is answered by taking the server's
+    /// record and retrying, and merges — every record name here is the hike's
+    /// or the photo's own `UUID`, so there is no version of this that
+    /// duplicates a record. Flushing here instead would defeat the coalescing
+    /// outright: the engine emits a state update whenever its pending changes
+    /// move, which is at least once per batch.
     func save(stateSerialization: CKSyncEngine.State.Serialization) {
         guard let data = try? JSONEncoder().encode(stateSerialization) else {
             Self.logger.error("Could not encode the sync engine's state.")
@@ -351,7 +424,8 @@ actor CloudSyncStateStore {
     /// and a first sync sends thousands, while each write re-encodes the
     /// entire dictionary. Per-record flushing turned an initial upload into
     /// quadratic disk traffic, inside the delegate callbacks the engine is
-    /// waiting on.
+    /// waiting on — and per-*batch* flushing only divided that by 250. What
+    /// lands here is therefore held in memory and written by ``flush()``.
     func remember(_ records: [CKRecord]) {
         guard !records.isEmpty else { return }
         var touchedIndex = false
@@ -370,8 +444,8 @@ actor CloudSyncStateStore {
                 continue
             }
         }
-        writeRecords()
-        if touchedIndex { writeIndex() }
+        recordsChanged()
+        if touchedIndex { indexChanged() }
     }
 
     /// The photo records iCloud believes belong to this hike.
@@ -437,8 +511,8 @@ actor CloudSyncStateStore {
                 || touchedIndex
             touchedIndex = index.hikeRecordNames.remove(id.recordName) != nil || touchedIndex
         }
-        if touchedRecords { writeRecords() }
-        if touchedIndex { writeIndex() }
+        if touchedRecords { recordsChanged() }
+        if touchedIndex { indexChanged() }
     }
 
     /// Deletions fetched from iCloud that could not be written — the
@@ -457,59 +531,6 @@ actor CloudSyncStateStore {
         deferredDeletions = []
         writeDeferredDeletions()
         return names
-    }
-
-    // MARK: - Changes waiting to be sent
-
-    func rememberPendingSaves(_ recordNames: [String]) {
-        guard !recordNames.isEmpty else { return }
-        let before = index.pendingSaves.count
-        index.pendingSaves.formUnion(recordNames)
-        guard index.pendingSaves.count != before else { return }
-        writeIndex()
-    }
-
-    func pendingSaveNames() -> [String] { Array(index.pendingSaves) }
-
-    func forgetPendingSaves(_ recordNames: [String]) {
-        guard !recordNames.isEmpty else { return }
-        let before = index.pendingSaves.count
-        index.pendingSaves.subtract(recordNames)
-        guard index.pendingSaves.count != before else { return }
-        writeIndex()
-    }
-
-    // MARK: - Deletions waiting to be sent
-
-    /// Remembers that these records should be gone from iCloud.
-    ///
-    /// Recorded whether or not sync is running, because the moment to ask a
-    /// hike which photos were its own is *before* it is deleted, and that
-    /// moment does not come back. A tombstone is discarded when the server
-    /// confirms the delete, and it outlives ``reset()`` — a hike deleted with
-    /// sync switched off would otherwise be re-downloaded the moment it was
-    /// switched on again.
-    func rememberDeletions(_ recordNames: [String]) {
-        guard !recordNames.isEmpty else { return }
-        var known = Set(pendingDeletions)
-        let additions = recordNames.filter { known.insert($0).inserted }
-        guard !additions.isEmpty else { return }
-        pendingDeletions.append(contentsOf: additions)
-        if pendingDeletions.count > Self.deletionLimit {
-            pendingDeletions.removeFirst(pendingDeletions.count - Self.deletionLimit)
-        }
-        writeDeletions()
-    }
-
-    func pendingDeletionNames() -> [String] { pendingDeletions }
-
-    func forgetDeletions(_ recordNames: [String]) {
-        guard !recordNames.isEmpty else { return }
-        let sent = Set(recordNames)
-        let remaining = pendingDeletions.filter { !sent.contains($0) }
-        guard remaining.count != pendingDeletions.count else { return }
-        pendingDeletions = remaining
-        writeDeletions()
     }
 
     // MARK: - Photos waiting for their hike
@@ -617,6 +638,12 @@ actor CloudSyncStateStore {
         deferredHikes = []
         deferredDeletions = []
         index = RecordIndex()
+        // Before the directory goes, not after: an armed window that fired
+        // afterwards would write the emptied cache straight back into the
+        // directory this just removed.
+        cancelCoalescedWrite()
+        unwrittenRecords = false
+        unwrittenIndex = false
         try? FileManager.default.removeItem(at: directory)
         staging.removeAll()
         // Tombstones are the one thing here that isn't re-derivable, so they
@@ -630,17 +657,157 @@ actor CloudSyncStateStore {
     }
 }
 
+// MARK: - Changes and deletions waiting to be sent
+
+/// Split out of the actor's own body only for length; every member here is
+/// part of it.
+extension CloudSyncStateStore {
+
+    /// Records an edit made while nothing was up to send it, and writes it
+    /// down there and then.
+    ///
+    /// The one thing touching the index that is not coalesced. An edited hike
+    /// already has a server record, so reconciliation's "has iCloud ever
+    /// acknowledged this?" answers yes and never asks again — this entry *is*
+    /// the memory of the edit, and a few seconds is a window an app can be
+    /// killed in. ``forgetPendingSaves(_:)`` is the opposite case and
+    /// coalesces: a save left pending too long is re-sent once for nothing.
+    func rememberPendingSaves(_ recordNames: [String]) {
+        guard !recordNames.isEmpty else { return }
+        let before = index.pendingSaves.count
+        index.pendingSaves.formUnion(recordNames)
+        guard index.pendingSaves.count != before else { return }
+        unwrittenIndex = true
+        flush()
+    }
+
+    func forgetPendingSaves(_ recordNames: [String]) {
+        guard !recordNames.isEmpty else { return }
+        let before = index.pendingSaves.count
+        index.pendingSaves.subtract(recordNames)
+        guard index.pendingSaves.count != before else { return }
+        indexChanged()
+    }
+
+    func pendingSaveNames() -> [String] { Array(index.pendingSaves) }
+
+    /// Remembers that these records should be gone from iCloud.
+    ///
+    /// Recorded whether or not sync is running, because the moment to ask a
+    /// hike which photos were its own is *before* it is deleted, and that
+    /// moment does not come back. A tombstone is discarded when the server
+    /// confirms the delete, and it outlives ``reset()`` — a hike deleted with
+    /// sync switched off would otherwise be re-downloaded the moment it was
+    /// switched on again.
+    func rememberDeletions(_ recordNames: [String]) {
+        guard !recordNames.isEmpty else { return }
+        var known = Set(pendingDeletions)
+        let additions = recordNames.filter { known.insert($0).inserted }
+        guard !additions.isEmpty else { return }
+        pendingDeletions.append(contentsOf: additions)
+        if pendingDeletions.count > Self.deletionLimit {
+            pendingDeletions.removeFirst(pendingDeletions.count - Self.deletionLimit)
+        }
+        writeDeletions()
+    }
+
+    func pendingDeletionNames() -> [String] { pendingDeletions }
+
+    func forgetDeletions(_ recordNames: [String]) {
+        guard !recordNames.isEmpty else { return }
+        let sent = Set(recordNames)
+        let remaining = pendingDeletions.filter { !sent.contains($0) }
+        guard remaining.count != pendingDeletions.count else { return }
+        pendingDeletions = remaining
+        writeDeletions()
+    }
+}
+
 // MARK: - Files
 
 /// Split out of the actor's own body only for length; every member here is
 /// part of it.
 extension CloudSyncStateStore {
 
+    /// Writes whatever the coalescing window is still holding.
+    ///
+    /// Every read this store answers is served from memory, so nothing *here*
+    /// needs the file to be current; what needs it is the next launch, which
+    /// has only the files. The call sites are therefore the points a launch
+    /// can be counted from: the engine going idle after a fetch or a send, the
+    /// app being backgrounded or terminated, sync being stopped or reset, and
+    /// the window itself for the kill that reaches none of them.
+    ///
+    /// The index goes first. Both writes are atomic on their own but there is
+    /// no atomicity *across* them, so a crash in between has a side it should
+    /// land on: an index naming a record whose change tag was lost re-uploads
+    /// and merges, while a change tag whose ownership entry was lost leaves a
+    /// photo record in iCloud that nothing on this device will ever ask to
+    /// delete.
+    func flush() {
+        cancelCoalescedWrite()
+        if unwrittenIndex {
+            unwrittenIndex = !writeJSON(index, to: Self.indexFileName)
+        }
+        if unwrittenRecords {
+            unwrittenRecords = !writeRecords()
+        }
+    }
+
+    /// The write the current window is waiting to make, or `nil` when there is
+    /// none in flight.
+    ///
+    /// A suite's handle on the backstop: awaiting it is how a case asserts
+    /// that the window writes on its own, without asserting anything about how
+    /// long a machine took to get there.
+    func pendingWrite() -> Task<Void, Never>? { coalescedWrite }
+
+    private func recordsChanged() {
+        unwrittenRecords = true
+        extendCoalescingWindow()
+    }
+
+    private func indexChanged() {
+        unwrittenIndex = true
+        extendCoalescingWindow()
+    }
+
+    private func cancelCoalescedWrite() {
+        coalescedWrite?.cancel()
+        coalescedWrite = nil
+        writeDeadline = nil
+    }
+
+    private func extendCoalescingWindow() {
+        guard let coalescingWindow else { return }
+        writeDeadline = .now + coalescingWindow
+        guard coalescedWrite == nil else { return }
+        coalescedWrite = Task { [weak self] in
+            await self?.writeWhenIdle()
+        }
+    }
+
+    /// Sleeps until nothing has changed for a whole window, then writes.
+    ///
+    /// Reentrant on purpose: the sleep is a suspension, so the acknowledgements
+    /// that keep pushing the deadline out are free to arrive on this actor
+    /// while it runs.
+    private func writeWhenIdle() async {
+        while let deadline = writeDeadline {
+            try? await Task.sleep(until: deadline, clock: ContinuousClock())
+            if Task.isCancelled { return }
+            guard let extended = writeDeadline, extended > .now else { break }
+        }
+        flush()
+    }
+
     private func url(_ name: String) -> URL {
         directory.appendingPathComponent(name, isDirectory: false)
     }
 
-    private func write(_ data: Data, to name: String) {
+    /// Reports whether the bytes reached disk, so a caller holding a coalesced
+    /// change keeps holding it rather than dropping it on a full volume.
+    @discardableResult private func write(_ data: Data, to name: String) -> Bool {
         do {
             try FileManager.default.createDirectory(
                 at: directory,
@@ -651,17 +818,20 @@ extension CloudSyncStateStore {
             Self.logger.error(
                 "Could not persist \(name, privacy: .public): \(error.localizedDescription, privacy: .public)"
             )
+            return false
         }
+        didWriteFile?(name)
+        return true
     }
 
-    private func writeRecords() {
+    private func writeRecords() -> Bool {
         // Binary rather than the encoder's default XML: every value here is
         // an archived `CKRecord`, and XML would base64 each one into roughly
         // four bytes per three on a file rewritten once per send.
         let encoder = PropertyListEncoder()
         encoder.outputFormat = .binary
-        guard let data = try? encoder.encode(serverRecords) else { return }
-        write(data, to: Self.recordsFileName)
+        guard let data = try? encoder.encode(serverRecords) else { return false }
+        return write(data, to: Self.recordsFileName)
     }
 
     private func writeDeferredPhotos() {
@@ -676,17 +846,13 @@ extension CloudSyncStateStore {
         writeJSON(deferredDeletions, to: Self.deferredDeletionsFileName)
     }
 
-    private func writeIndex() {
-        writeJSON(index, to: Self.indexFileName)
-    }
-
     private func writeDeletions() {
         writeJSON(pendingDeletions, to: Self.deletionsFileName)
     }
 
-    private func writeJSON(_ value: some Encodable, to name: String) {
-        guard let data = try? JSONEncoder().encode(value) else { return }
-        write(data, to: name)
+    @discardableResult private func writeJSON(_ value: some Encodable, to name: String) -> Bool {
+        guard let data = try? JSONEncoder().encode(value) else { return false }
+        return write(data, to: name)
     }
 
     private static func read<Value: Decodable>(_ type: Value.Type, at url: URL) -> Value? {

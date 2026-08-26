@@ -48,10 +48,20 @@ actor TileLoadGate {
     }
 
     /// Blocking pipelines allowed at once, across every caller.
-    private let totalBudget = 6
+    private let totalBudget: Int
     /// The most of those a bulk download may hold. The remainder is what
     /// guarantees the map keeps loading tiles while a download runs.
-    private let backgroundBudget = 3
+    private let backgroundBudget: Int
+
+    /// The app's budgets are the defaults, so ``shared`` and a
+    /// ``OfflineTileDownloader`` under test agree about what they mean. They
+    /// are parameters only so a test can widen them past whatever it is
+    /// measuring — a caller's own in-flight window is invisible behind a gate
+    /// narrower than it is.
+    init(totalBudget: Int = 6, backgroundBudget: Int = 3) {
+        self.totalBudget = totalBudget
+        self.backgroundBudget = backgroundBudget
+    }
 
     private var active = 0
     private var activeBackground = 0

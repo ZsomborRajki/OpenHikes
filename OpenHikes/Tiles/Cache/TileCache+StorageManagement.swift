@@ -39,6 +39,8 @@ nonisolated extension TileCache {
         assertOffMainThread(
             "diskUsage(claimedBy:) enumerates and stats every cached tile file — call it off the main thread"
         )
+        let interval = RenderSignpost.beginInterval("TileDiskUsageScan")
+        defer { RenderSignpost.endInterval("TileDiskUsageScan", interval) }
         let claimedNames = Set(keys.map(diskName(for:)))
         var usage = DiskUsage()
         // Durable first, then skip any name already seen: one tile is one tile
@@ -53,6 +55,10 @@ nonisolated extension TileCache {
                 usage.unclaimed += fileSize(file)
             }
         }
+        RenderSignpost.mark(
+            "TileDiskUsageMeasured",
+            "files=\(counted.count) claimed=\(usage.claimed) unclaimed=\(usage.unclaimed)"
+        )
         return usage
     }
 
@@ -70,6 +76,8 @@ nonisolated extension TileCache {
         assertOffMainThread(
             "bytes(forKeys:) stats up to two files per key — call it off the main thread"
         )
+        let interval = RenderSignpost.beginInterval("TileClaimedByteScan")
+        defer { RenderSignpost.endInterval("TileClaimedByteScan", interval) }
         var total: Int64 = 0
         for (index, key) in keys.enumerated() {
             if index.isMultiple(of: 32), Task.isCancelled { throw CancellationError() }
@@ -77,6 +85,7 @@ nonisolated extension TileCache {
             let durableSize = fileSize(durable)
             total += durableSize > 0 ? durableSize : fileSize(cached)
         }
+        RenderSignpost.mark("TileClaimedBytesMeasured", "keys=\(keys.count) bytes=\(total)")
         return total
     }
 
@@ -85,17 +94,21 @@ nonisolated extension TileCache {
         assertOffMainThread(
             "removeAllTiles() deletes every cached tile file synchronously — call it off the main thread"
         )
-        mutationVersions.withLock { versions in
+        let interval = RenderSignpost.beginInterval("TileCacheClear")
+        defer { RenderSignpost.endInterval("TileCacheClear", interval) }
+        let cleared = mutationVersions.withLock { versions -> Int in
             versions.invalidateAll()
             memory.removeAllObjects()
-            for file in allTileFiles(in: directory)
-                + allTileFiles(in: durableDirectory) {
+            let files = allTileFiles(in: directory) + allTileFiles(in: durableDirectory)
+            for file in files {
                 _ = removeItemIgnoringNotFound(
                     at: file,
                     operation: "remove all tiles"
                 )
             }
+            return files.count
         }
+        RenderSignpost.mark("TileCacheCleared", "files=\(cleared)")
     }
 
     /// Removes every tile `keys` doesn't claim, leaving offline coverage intact.
@@ -108,18 +121,25 @@ nonisolated extension TileCache {
             "removeTiles(unclaimedBy:) enumerates and deletes tile files synchronously — call it off the main thread"
         )
         let claimedNames = Set(keys.map(diskName(for:)))
-        mutationVersions.withLock { versions in
+        let interval = RenderSignpost.beginInterval("TileUnclaimedSweep")
+        defer { RenderSignpost.endInterval("TileUnclaimedSweep", interval) }
+        let removed = mutationVersions.withLock { versions -> Int in
             versions.invalidateAll()
             memory.removeAllObjects()
+            var removed = 0
             for file in allTileFiles(in: directory)
                 + allTileFiles(in: durableDirectory)
             where !claimedNames.contains(file.lastPathComponent) {
-                _ = removeItemIgnoringNotFound(
+                if removeItemIgnoringNotFound(
                     at: file,
                     operation: "remove unclaimed tile"
-                )
+                ) {
+                    removed += 1
+                }
             }
+            return removed
         }
+        RenderSignpost.mark("TileUnclaimedSwept", "removed=\(removed) claimed=\(claimedNames.count)")
     }
 
     /// Ceiling on tiles no hike claims. At roughly 30 KB a tile that's ~17,000
@@ -158,6 +178,18 @@ nonisolated extension TileCache {
 
         var unclaimed: [(url: URL, size: Int64, modified: Date)] = []
         var total: Int64 = 0
+        var freed: Int64 = 0
+        // Marked from the `defer` so the under-the-limit case reports too: it
+        // is the common one at launch, and it still walks both directories and
+        // stats everything they hold.
+        let interval = RenderSignpost.beginInterval("TileCacheTrim")
+        defer {
+            RenderSignpost.mark(
+                "TileCacheTrimmed",
+                "unclaimed=\(unclaimed.count) bytes=\(total) freed=\(freed)"
+            )
+            RenderSignpost.endInterval("TileCacheTrim", interval)
+        }
         for file in allTileFiles(in: directory) + allTileFiles(in: durableDirectory)
         where !claimedNames.contains(file.lastPathComponent) {
             let values: URLResourceValues?
@@ -189,7 +221,6 @@ nonisolated extension TileCache {
         // A trimmed tile still in memory draws until it's evicted normally,
         // which is strictly better than refetching it from the provider.
         let target = Int64(Double(limit) * Self.trimTargetFraction)
-        var freed: Int64 = 0
         for tile in unclaimed.sorted(by: { $0.modified < $1.modified }) {
             guard total - freed > target else { break }
             guard removeItemIgnoringNotFound(
@@ -211,6 +242,9 @@ nonisolated extension TileCache {
         assertOffMainThread(
             "removeTiles(forKeys:) deletes two files per key synchronously — call it off the main thread"
         )
+        let interval = RenderSignpost.beginInterval("TileKeyedRemoval")
+        defer { RenderSignpost.endInterval("TileKeyedRemoval", interval) }
+        RenderSignpost.mark("TilesRemoved", "keys=\(keys.count)")
         for key in keys {
             mutationVersions.withLock { versions in
                 versions.invalidate(key)

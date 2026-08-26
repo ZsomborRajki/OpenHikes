@@ -37,16 +37,28 @@ struct CloudSyncStateStoreTests {
             )
             store = CloudSyncStateStore(
                 storageRoot: root.appendingPathComponent("support", isDirectory: true),
-                stagingRoot: root.appendingPathComponent("caches", isDirectory: true)
+                stagingRoot: root.appendingPathComponent("caches", isDirectory: true),
+                // No window, for the reason ``AutoSaveController``'s drain
+                // takes `nil`: an armed one would rewrite a directory the case
+                // has already deleted, and would race the cases that assert on
+                // when a write happens. `relaunched()` flushes instead.
+                coalescingWindow: nil
             )
         }
 
         /// A second store over the same directories — what the next launch
         /// sees.
-        func relaunched() -> CloudSyncStateStore {
-            CloudSyncStateStore(
+        ///
+        /// Flushed first, because that is what precedes a real relaunch: the
+        /// engine's idle events and the coordinator's background hook. The
+        /// record cache and the index are coalesced, so without this a
+        /// relaunch reads back the state of the previous flush.
+        func relaunched() async -> CloudSyncStateStore {
+            await store.flush()
+            return CloudSyncStateStore(
                 storageRoot: root.appendingPathComponent("support", isDirectory: true),
-                stagingRoot: root.appendingPathComponent("caches", isDirectory: true)
+                stagingRoot: root.appendingPathComponent("caches", isDirectory: true),
+                coalescingWindow: nil
             )
         }
 
@@ -160,7 +172,7 @@ struct CloudSyncStateStoreTests {
 
         await sandbox.store.deferPhoto(payload)
 
-        let next = sandbox.relaunched()
+        let next = await sandbox.relaunched()
         #expect(await next.takeDeferredPhotos().map(\.payload) == [payload])
         #expect(await next.takeDeferredPhotos().isEmpty)
     }
@@ -196,7 +208,7 @@ struct CloudSyncStateStoreTests {
 
         await sandbox.store.reset()
 
-        let next = sandbox.relaunched()
+        let next = await sandbox.relaunched()
         #expect(await next.lastKnownRecord(id: recordID) == nil)
         #expect(await next.takeDeferredPhotos().isEmpty)
     }
@@ -355,7 +367,7 @@ extension CloudSyncStateStoreTests {
         let name = UUID().uuidString
         await sandbox.store.deferDeletions([name, name])
 
-        let next = sandbox.relaunched()
+        let next = await sandbox.relaunched()
         #expect(await next.takeDeferredDeletions() == [name])
         #expect(await next.takeDeferredDeletions().isEmpty)
     }
@@ -426,7 +438,7 @@ extension CloudSyncStateStoreTests {
         let payload = Self.hikePayload(id: UUID())
         await sandbox.store.deferHikes([payload])
 
-        let next = sandbox.relaunched()
+        let next = await sandbox.relaunched()
         #expect(await next.takeDeferredHikes().map(\.payload) == [payload])
         #expect(await next.takeDeferredHikes().isEmpty)
     }

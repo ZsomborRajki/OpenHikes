@@ -51,6 +51,14 @@ final class ObservationCounter {
     /// Lets the queued re-registrations run. Observation delivers its change
     /// callback synchronously but the re-registration hops through a `Task`,
     /// same as in the app.
+    ///
+    /// Deliberately without a condition — the one wait in these suites that
+    /// stays best-effort. Half its callers wait for the count to rise and the
+    /// other half assert that it did *not*, and "the count has reached N"
+    /// would satisfy the first kind the instant the notification it expects
+    /// lands, returning before a *spurious* extra one could arrive. That turns
+    /// the regression this counter exists to catch into a pass, which is worse
+    /// than the load-sensitivity naming it would remove.
     func settle() async {
         await settleDelegateHop()
     }

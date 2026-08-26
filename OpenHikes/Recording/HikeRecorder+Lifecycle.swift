@@ -143,8 +143,7 @@ extension HikeRecorder {
         do {
             try await journal.start(
                 sessionID: id,
-                startedAt: startedAt,
-                recordingOptions: .defaults
+                startedAt: startedAt
             )
         } catch {
             fail(.storage(error.localizedDescription), endLocationUpdates: false)
@@ -260,7 +259,7 @@ extension HikeRecorder {
         elevationFilter.restart(at: anchorElevation)
         guard let elevationSource, elevationSource.isAvailable else { return }
         elevationSource.start { [weak self] relativeAltitude in
-            Task { @MainActor [weak self] in
+            onMainActor { [weak self] in
                 self?.elevationFilter.update(relativeAltitude: relativeAltitude)
             }
         }
@@ -271,7 +270,7 @@ extension HikeRecorder {
         latestMotionState = .unknown
         guard let motionSource, motionSource.isAvailable else { return }
         motionSource.start { [weak self] state in
-            Task { @MainActor [weak self] in
+            onMainActor { [weak self] in
                 self?.latestMotionState = state
             }
         }
@@ -324,6 +323,18 @@ extension HikeRecorder {
                 trailGraphPrefetchStates[region] = .loaded
                 prefetchNeighbouringTrailGraphRegions(around: coordinate)
             } catch is CancellationError {
+                // `prefetch` now propagates cancellation, so this path is
+                // reachable where it previously was not. A cancelled prefetch
+                // must not leave its region pinned in `.fetching`: that is the
+                // state `prefetchTrailGraph` reads to decide the region is
+                // already being handled, so a stranded one is never retried
+                // and the region silently never gets a graph.
+                guard let self,
+                      sessionID == expectedSessionID,
+                      trailGraphPrefetchTasks[region]?.id == taskID,
+                      case .fetching? = trailGraphPrefetchStates[region]
+                else { return }
+                trailGraphPrefetchStates[region] = nil
                 return
             } catch {
                 guard let self,
@@ -464,7 +475,12 @@ extension HikeRecorder: CLLocationManagerDelegate {
         didUpdateLocations locations: [CLLocation]
     ) {
         let ordered = locations.sorted { $0.timestamp < $1.timestamp }
-        Task { @MainActor in
+        // Synchronous on the main actor rather than a task per delivery. The
+        // sort above only orders a batch *within itself*; it is `onMainActor`
+        // that keeps two consecutive batches from arriving out of order and
+        // losing the older one to `RecordingFixPolicy`'s `interval > 0` guard.
+        onMainActor { [weak self] in
+            guard let self else { return }
             for location in ordered {
                 accept(location)
             }
@@ -474,8 +490,12 @@ extension HikeRecorder: CLLocationManagerDelegate {
     nonisolated func locationManagerDidChangeAuthorization(
         _ manager: CLLocationManager
     ) {
-        Task { @MainActor in
-            guard startRequested else { return }
+        // Still a task, and deliberately: the authorized branch awaits, and an
+        // authorization change arrives once per session rather than once per
+        // fix, so the allocation this saves elsewhere is not worth an
+        // `assumeIsolated` on a path that has to suspend anyway.
+        Task { @MainActor [weak self] in
+            guard let self, startRequested else { return }
             switch source.authorization {
             case .notDetermined: return
             case .denied: fail(.locationDenied, endLocationUpdates: sessionID != nil)
