@@ -214,6 +214,58 @@ nonisolated final class AccessibilityUITests: XCTestCase {
         try audit(app)
     }
 
+    /// The photo-discovery sheet, which is a grid of pictures and nothing else.
+    ///
+    /// A cell has no text in it, so its label is the whole of what separates
+    /// one photograph from the next — and it has to say more than "photo": when
+    /// it was taken and on what evidence it was placed, because that is what a
+    /// walker is deciding on when they tick it. The audit is run over the grid
+    /// rather than only over the button that opens it, since a screen reached
+    /// through a modal is a screen a sweep otherwise never sees.
+    @MainActor
+    func testPhotoDiscoveryIsReadable() throws {
+        let app = launchApp(
+            arguments: [
+                "--ui-test-expanded-sheet",
+                "--ui-test-import-gpx=\(UITestFixture.gpxName)",
+                "--ui-test-photo-library=3",
+            ]
+        )
+        openHikeDetail(in: app)
+
+        let discover = element("photo-discovery-button", in: app)
+        XCTAssertTrue(
+            scrollIntoView(discover, in: app),
+            "a hike with a timed route should offer to look for photos of it"
+        )
+        XCTAssertEqual(
+            discover.label,
+            "Find Photos of This Hike",
+            "a magnifying glass is not a label"
+        )
+        discover.tap()
+
+        XCTAssertTrue(
+            element("photo-discovery-grid", in: app)
+                .waitForExistence(timeout: UITestTimeout.existence),
+            "the matches should be offered for review"
+        )
+        let cell = app.descendants(matching: .any)
+            .matching(NSPredicate(format: "label BEGINSWITH %@", "Photo taken at"))
+            .firstMatch
+        XCTAssertTrue(
+            cell.waitForExistence(timeout: UITestTimeout.existence),
+            "a cell should say when its photo was taken and how it was placed"
+        )
+        XCTAssertTrue(
+            cell.isSelected,
+            "results arrive selected, and a tint is not something VoiceOver "
+                + "can see: the trait is what says so"
+        )
+
+        try audit(app)
+    }
+
     /// The empty state, which is a screen made almost entirely of glyphs
     /// interpolated into sentences.
     ///

@@ -198,8 +198,9 @@ alongside `--ui-testing`:
 of that bundle. The first runs `performAccessibilityAudit` per screen — the
 sweep catches unnamed controls, tap targets below 44pt and elements it cannot
 reach — over the map and sheet, a hike's details, settings, the recording
-screen, route review, the photo gallery and the empty state. The second
-asserts the labels, values and traits this app promises: that a hike row reads as one
+screen, route review, the photo gallery, the library-photo review grid and the
+empty state. The second asserts the labels, values and traits this app
+promises: that a hike row reads as one
 element and reports which route the map is drawing, that a stat tile reads as
 a label and a number rather than as spelled-out capitals, that the elevation
 graph is a single adjustable element which speaks the point under the tracker,
