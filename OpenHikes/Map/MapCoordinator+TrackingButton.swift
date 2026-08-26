@@ -39,10 +39,6 @@ extension MapView.Coordinator {
     private static let trackingButtonSpacing: CGFloat = 16
     /// Used only before the button has been laid out or measured.
     private static let trackingButtonFallbackHeight: CGFloat = 44
-    /// Gap between the attribution line and the controls below it. Tighter than
-    /// the controls' own spacing: this is chrome that stacks with them, not a
-    /// control that needs a thumb's worth of clearance around it.
-    private static let attributionSpacing: CGFloat = 8
 
     /// Observes `sheetMetrics.topY` and repositions the tracking button
     /// imperatively, then re-registers. Keeps sheet drags off SwiftUI's
@@ -94,14 +90,12 @@ extension MapView.Coordinator {
     /// Both controls take the same constant and the same opacity, which is the
     /// reason the pill is a UIKit subview at all — see ``MapPhotoControlsView``.
     ///
-    /// The attribution line takes the same constant one row higher, and the
-    /// same opacity: it is stacked *above* the controls rather than between
-    /// them and the sheet so that adding it moved neither. Where the controls
-    /// stop and how far they fade is measured, not chosen — see this file's
-    /// header — and a credit line is not a reason to re-derive it. It fades on
-    /// the same schedule because past the middle detent the sheet is covering
-    /// the map, and a credit for a map that is no longer drawn is not one
-    /// anybody is owed.
+    /// The attribution line takes the same constant, centred between the two
+    /// controls rather than stacked above them: the credit is minimal chrome,
+    /// not a third control, so it rides in the gap they already leave rather
+    /// than adding a row of its own. It fades on the same schedule because
+    /// past the middle detent the sheet is covering the map, and a credit for
+    /// a map that is no longer drawn is not one anybody is owed.
     func applySheetTop(on mapView: MKMapView) {
         guard mapView.bounds.height > 0 else { return }
         let wanted = sheetTop(in: mapView) - Self.trackingButtonSpacing
@@ -109,8 +103,7 @@ extension MapView.Coordinator {
         let constant = max(wanted, limit)
         trackingBottomConstraint?.constant = constant
         photoControlsBottomConstraint?.constant = constant
-        attributionBottomConstraint?.constant =
-            constant - trackingButtonHeight - Self.attributionSpacing
+        attributionBottomConstraint?.constant = constant
         applyControlAlpha(
             encroachment: limit - wanted,
             over: fadeDistance(from: limit, in: mapView)

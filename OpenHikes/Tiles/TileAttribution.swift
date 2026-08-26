@@ -67,8 +67,12 @@ nonisolated extension TileAttribution.Credit {
     // typo in one should fail the attribution tests immediately rather than
     // silently drop the licence link a provider's terms require.
     // swiftlint:disable force_unwrapping
+    // "OpenStreetMap" alone (rather than "OpenStreetMap contributors") is the
+    // shortened form the OSM Foundation's attribution guidelines explicitly
+    // sanction for space-constrained placements, provided the credit still
+    // links to the copyright page — which this one does.
     static let openStreetMap = Self(
-        title: "OpenStreetMap contributors",
+        title: "OpenStreetMap",
         prefix: "©",
         url: URL(string: "https://www.openstreetmap.org/copyright")!
     )

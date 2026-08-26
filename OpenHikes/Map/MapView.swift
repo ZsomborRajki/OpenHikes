@@ -224,10 +224,11 @@ struct MapView: MapViewRepresentable, Equatable {
     }
 
     #if os(iOS)
-    /// The credit line, on the leading edge below the two controls and hugging
-    /// the sheet — the bottom-most piece of map chrome, which is where a map's
-    /// attribution conventionally sits and where these providers' terms
-    /// require it to be. See ``MapAttributionView``.
+    /// The credit line, centred between the tracking button and the camera
+    /// pill and level with them, hugging the sheet — the bottom-most piece of
+    /// map chrome, which is where a map's attribution conventionally sits and
+    /// where these providers' terms require it to be. See
+    /// ``MapAttributionView``.
     private func addAttribution(
         to mapView: MKMapView,
         _ coordinator: Coordinator,
@@ -246,13 +247,14 @@ struct MapView: MapViewRepresentable, Equatable {
         coordinator.attributionBottomConstraint = bottom
 
         NSLayoutConstraint.activate([
-            attribution.leadingAnchor.constraint(
-                equalTo: guide.leadingAnchor,
-                constant: Self.controlInset
-            ),
+            attribution.centerXAnchor.constraint(equalTo: guide.centerXAnchor),
             // A ceiling rather than a width: the line is as wide as its credits
             // need and no wider, but a provider that names three parties must
             // still wrap inside the map rather than run off it.
+            attribution.leadingAnchor.constraint(
+                greaterThanOrEqualTo: guide.leadingAnchor,
+                constant: Self.controlInset
+            ),
             attribution.trailingAnchor.constraint(
                 lessThanOrEqualTo: guide.trailingAnchor,
                 constant: -Self.controlInset

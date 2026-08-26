@@ -38,8 +38,9 @@ final class PhotoMapAnnotation: NSObject, MKAnnotation {
 
     let pin: PhotoMapPin
     @objc dynamic let coordinate: CLLocationCoordinate2D
-    /// The callout needs a title to open at all, so the pin says when its
-    /// picture was taken — the one thing the app knows about a photograph.
+    /// The callout needs a title to open at all. Kept minimal — "Photo" is all
+    /// the map needs to say, since the picture itself is the callout's content
+    /// and the date it names nothing else on the map cares about.
     @objc let title: String?
     /// Only set where a point has more than one photo, so the callout admits
     /// that the picture above it is the first of several rather than the only
@@ -49,7 +50,7 @@ final class PhotoMapAnnotation: NSObject, MKAnnotation {
     init(pin: PhotoMapPin) {
         self.pin = pin
         coordinate = pin.coordinate
-        title = pin.photo.capturedAt.formatted(date: .abbreviated, time: .shortened)
+        title = String(localized: "Photo")
         subtitle = pin.count > 1
             ? String(localized: "First of \(pin.count) photos taken here")
             : nil

@@ -315,11 +315,6 @@ struct SettingsView: View {
                 Label("Project on GitHub", systemImage: "chevron.left.forwardslash.chevron.right")
             }
             .accessibilityIdentifier("project-github-link")
-
-            Link(destination: URL(string: "mailto:zsombor.rajki@gmail.com")!) {
-                Label("Email Feedback and Suggestions", systemImage: "envelope")
-            }
-            .accessibilityIdentifier("contact-email-link")
         } header: {
             Text("Contact & Feedback")
         } footer: {
