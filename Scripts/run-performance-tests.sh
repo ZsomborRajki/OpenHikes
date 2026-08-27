@@ -47,8 +47,13 @@ EOF
 }
 
 list_tests() {
-    sed -nE 's/^[[:space:]]*func (test[A-Za-z0-9_]+)\(\).*/\1/p' \
-        "$repository_root/$bundle/$suite.swift"
+    # Every PerformanceUITests file, not just the one named after the suite.
+    # The scenarios have lived in extensions since the photo gallery landed,
+    # so reading only `$suite.swift` made `--list` under-report and `--test`
+    # reject the name of a test that exists.
+    cat "$repository_root/$bundle/$suite"*.swift \
+        | sed -nE 's/^[[:space:]]*func (test[A-Za-z0-9_]+)\(\).*/\1/p' \
+        | sort -u
 }
 
 require_value() {

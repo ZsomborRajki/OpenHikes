@@ -234,6 +234,37 @@ LOCATION_FUNNEL = (
 )
 
 
+def backgrounded_windows(events: list[Event]) -> list[tuple[float, float]]:
+    """The spans the app spent backgrounded, from its own scene-phase marks.
+
+    Worth separating because a request is not equally expensive wherever it
+    lands. A tile fetched while the walker is looking at the map is the app
+    doing its job; the same fetch with the phone in a pocket is a radio woken
+    for output nobody can see, and it is the second one that decides whether
+    the battery lasts the walk.
+    """
+    windows: list[tuple[float, float]] = []
+    opened: float | None = None
+    for event in events:
+        if event.name != "ScenePhaseChanged":
+            continue
+        phase = (event.detail or "").strip()
+        if phase == "background" and opened is None:
+            opened = event.elapsed
+        elif phase == "active" and opened is not None:
+            windows.append((opened, event.elapsed))
+            opened = None
+    if opened is not None:
+        windows.append((opened, events[-1].elapsed))
+    return windows
+
+
+def count_within(windows: list[tuple[float, float]], events: list[Event]) -> int:
+    return sum(
+        1 for event in events if any(start <= event.elapsed <= end for start, end in windows)
+    )
+
+
 def energy_section(scenario: Scenario) -> list[str]:
     """What the scenario cost a battery, as opposed to a frame.
 
@@ -292,6 +323,20 @@ def energy_section(scenario: Scenario) -> list[str]:
         )
     else:
         lines.extend(["No request left the device. Every byte came from cache.", ""])
+
+    pocket = backgrounded_windows(events)
+    if pocket and network:
+        # The number that matters to a battery, as opposed to the total: a
+        # foreground map load is the app doing what was asked of it, and the
+        # same request with the screen off is not.
+        woken = count_within(pocket, network)
+        lines.extend(
+            [
+                f"{woken} of {len(network)} requests were made while backgrounded, "
+                f"over {sum(end - start for start, end in pocket):.1f} s in a pocket.",
+                "",
+            ]
+        )
 
     suppressed: dict[str, int] = defaultdict(int)
     for event in events:
@@ -404,19 +449,26 @@ def energy_findings(scenario: Scenario) -> list[str]:
     the counters above. These are the shapes worth a look.
     """
     notes: list[str] = []
-    requests = sum(
-        1
+    network = [
+        event
         for event in scenario.events
         if event.name in NETWORK_SIGNPOSTS and event.kind == "interval"
-    )
-    if "offline" in scenario.name and requests:
+    ]
+    if "offline" in scenario.name and network:
         notes.append(
-            f"`{scenario.name}` opened {requests} connection(s) in a scenario that claims to be offline."
+            f"`{scenario.name}` opened {len(network)} connection(s) in a scenario that claims to be offline."
         )
-    fixes = sum(1 for event in scenario.events if event.name == "LiveFixAccepted")
-    if fixes and requests / fixes > 1.0:
+    # Deliberately not "requests per accepted fix". That ratio charges the
+    # tiles a foreground map loads at launch against the handful of fixes a
+    # short scenario accepts, and reported 52 requests per fix for a recording
+    # that in fact woke the radio zero times once it was in a pocket. What is
+    # worth flagging is the backgrounded case, because nobody is waiting for
+    # any of it.
+    pocket = backgrounded_windows(scenario.events)
+    if woken := count_within(pocket, network):
         notes.append(
-            f"`{scenario.name}` made {requests / fixes:.1f} network requests per accepted fix."
+            f"`{scenario.name}` woke the radio {woken} time(s) while backgrounded — "
+            "nothing it fetched could be seen."
         )
     delivered = sum(1 for event in scenario.events if event.name == "LocationFixDelivered")
     rejected = sum(1 for event in scenario.events if event.name == "RecordingFixRejected")

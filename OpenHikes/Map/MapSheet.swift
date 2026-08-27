@@ -12,7 +12,6 @@ import SwiftUI
 import UniformTypeIdentifiers
 
 struct MapSheet: View {
-    private static let compactDetentHeight: CGFloat = 80
     private static let topPadding: CGFloat = 18
     /// How close the search field and the settings button have to come before
     /// their glass merges. Slightly under the 10pt gap between them, so they
@@ -20,14 +19,17 @@ struct MapSheet: View {
     private static let chromeGlassSpacing: CGFloat = 8
 
     @Binding var searchText: String
-    @Binding var detent: PresentationDetent
     @Binding var selectedHike: Hike?
-    /// Owned by `OpenHikesView` rather than this view, so a widget tap can push
-    /// a hike's detail view from outside the sheet. Typed as `[SheetRoute]` (not
-    /// `NavigationPath`) because the caller has to be able to ask what's
-    /// already on screen before deciding to navigate — `NavigationPath` can
-    /// be appended to but never read back.
-    @Binding var path: [SheetRoute]
+    /// Where the sheet rests and what is pushed into it. Owned by
+    /// `OpenHikesView` rather than this view, so a widget tap can push a hike's
+    /// detail view from outside the sheet and so the detent picker can be
+    /// attached out there — but handed over by reference, so a push that
+    /// changes neither the resting height nor whether anything is pushed at all
+    /// re-evaluates neither that view nor this one. The path is typed as
+    /// `[SheetRoute]` (not `NavigationPath`) because the caller has to be able
+    /// to ask what's already on screen before deciding to navigate —
+    /// `NavigationPath` can be appended to but never read back.
+    var presentation: SheetPresentation
     var highlight: RouteHighlight
     var mapController: MapController
     /// Handed down so a pushed screen can offer the map's camera pill, and
@@ -45,6 +47,9 @@ struct MapSheet: View {
     /// Reports the sheet's top edge (global Y) as it's dragged, so the map can
     /// keep the "my location" button riding just above the sheet.
     var onSheetTopChange: (CGFloat) -> Void = { _ in /* no-op default */ }
+    /// Reports the sheet coming to rest at (or leaving) its middle detent,
+    /// which is the only one the map learns a resting height for.
+    var onSheetDetentCommitted: (Bool) -> Void = { _ in /* no-op default */ }
 
     @Environment(OpenHikesModel.self)
     private var appModel
@@ -55,10 +60,6 @@ struct MapSheet: View {
     @State private var showSettings = false
     @State private var completer = SearchCompleter()
     @State private var searchTask: Task<Void, Never>?
-    /// The height the sheet was at before a full-height screen was pushed, so
-    /// popping back restores it rather than collapsing a detail view that was
-    /// being read at `.large`.
-    @State private var detentBeforeFullHeight: PresentationDetent?
 
     private var autoSave: AutoSaveController {
         appModel.autoSaveController
@@ -68,18 +69,17 @@ struct MapSheet: View {
         appModel.hikeRecorder
     }
 
-    /// True at the smallest detent, where only the search field shows.
-    private var isCompact: Bool { detent == .height(Self.compactDetentHeight) }
-
     var body: some View {
-        // Deliberately reads no `Hike`. This body runs on every detent change
-        // a sheet drag produces, and it is also the `NavigationStack` the hike
-        // detail view — with its touch-frequency tint and width sliders — is
-        // pushed into. `MapSheetHikes` holds the `@Query`, which has no
-        // per-property granularity, so keeping it out of here is what stops a
-        // slider drag re-evaluating the search field and the navigation stack.
+        // Deliberately reads no `Hike`, and no `path` or `detent` either. This
+        // body is the `NavigationStack` the hike detail view — with its
+        // touch-frequency tint and width sliders — is pushed into, and
+        // `MapSheetHikes` holds the `@Query`, which has no per-property
+        // granularity; keeping both out of here is what stops a slider drag,
+        // and a push two screens deep, re-evaluating the search field and the
+        // navigation stack. The three flags below are coarse on purpose — see
+        // ``SheetPresentation``.
         RenderSignpost.mark("MapSheetBody")
-        return NavigationStack(path: $path) {
+        return NavigationStack(path: presentation.pathBinding) {
             VStack(spacing: 0) {
                 // One container for the two pieces of chrome side by side:
                 // they sample the map behind them once between them, and the
@@ -98,7 +98,7 @@ struct MapSheet: View {
                 MapSheetHikes(
                     searchText: searchText,
                     isSearchFocused: searchFocused,
-                    isCompact: isCompact,
+                    isCompact: presentation.isCompact,
                     completer: completer,
                     recorder: hikeRecorder,
                     selectedHikeID: selectedHike?.id,
@@ -109,6 +109,12 @@ struct MapSheet: View {
                     onRecord: openRecording,
                     onImport: presentImporter
                 )
+                    // The list of every hike, rebuilt only when one of the
+                    // values above actually differs. Without this it is rebuilt
+                    // whenever this body runs, because the action closures are
+                    // new objects every pass — which made a photo tap three
+                    // screens away redraw every row on the map screen.
+                    .equatable()
             }
             .navigationDestination(for: SheetRoute.self, destination: navigationDestinationView)
             #if os(iOS)
@@ -142,32 +148,18 @@ struct MapSheet: View {
         // Focusing the search field expands the sheet to full height.
         .onChange(of: searchFocused) { _, focused in
             if focused {
-                withAnimation { detent = .large }
+                withAnimation { presentation.detent = .large }
             }
         }
         // Collapsing below full height (e.g. dragging to medium) drops focus.
-        .onChange(of: detent) { _, newValue in
-            if newValue != .large {
+        //
+        // The flag rather than the detent itself: this only ever asks whether
+        // the sheet is still at `.large`, and reading the detent here would put
+        // every drag that settles somewhere new through this body.
+        .onChange(of: presentation.isFullHeight) { _, isFullHeight in
+            if !isFullHeight {
                 searchFocused = false
             }
-        }
-        // The photo viewer draws one picture and nothing else, so it takes the
-        // whole sheet. Done here rather than in the viewer's own `onAppear`
-        // because the detent is this view's binding, and because popping back
-        // has to restore the height the hike screen was read at — a viewer
-        // dismissed to a full-height detail view has swallowed the map, and
-        // one dismissed to a fixed `.medium` has thrown away a reader's own
-        // choice of `.large`.
-        .onChange(of: path.last?.prefersFullHeight ?? false) { wasFull, isFull in
-            guard wasFull != isFull else { return }
-            guard isFull else {
-                let restored = detentBeforeFullHeight ?? .medium
-                detentBeforeFullHeight = nil
-                withAnimation { detent = restored }
-                return
-            }
-            detentBeforeFullHeight = detent
-            withAnimation { detent = .large }
         }
         // The map's photo controls belong to whatever screen is pushed, and a
         // pushed screen's `onDisappear` arrives only once the pop animation has
@@ -176,13 +168,20 @@ struct MapSheet: View {
         // navigation. Reported here as a function of the path rather than as a
         // pop event, so an abandoned back-swipe recomputes to the same answer
         // rather than withdrawing them for good.
-        .onChange(of: path.isEmpty, initial: true) { _, isEmpty in
-            photoCapture.setHostScreenPresent(!isEmpty)
-            photoPins.setHostScreenPresent(!isEmpty)
+        //
+        // "A screen, any screen" is deliberately all this asks: a hike and the
+        // photo viewer pushed on top of it are both a screen that can offer the
+        // pill, so moving between them changes nothing here.
+        .onChange(of: presentation.hasPushedScreen, initial: true) { _, isPushed in
+            photoCapture.setHostScreenPresent(isPushed)
+            photoPins.setHostScreenPresent(isPushed)
         }
         // Track the sheet's top edge continuously (including during interactive
         // drags) and hand it to the map so it can position the location button.
         .onTopEdgeChange(perform: onSheetTopChange)
+        .onChange(of: presentation.isAtMiddleDetent) { _, atMiddle in
+            onSheetDetentCommitted(atMiddle)
+        }
         .onDisappear {
             searchTask?.cancel()
             searchTask = nil
@@ -266,8 +265,8 @@ struct MapSheet: View {
                 trailGraphProvider: appModel.trailGraphProvider,
                 photoCapture: photoCapture,
                 photoPins: photoPins,
-                onOpenPhoto: { photo in path.append(.photo(hike, photo.id)) },
-                onZoomToRoute: { withAnimation { detent = .medium } }
+                onOpenPhoto: { photo in presentation.path.append(.photo(hike, photo.id)) },
+                onZoomToRoute: { withAnimation { presentation.detent = .medium } }
             )
         case .recording:
             RecordingView(
@@ -283,22 +282,9 @@ struct MapSheet: View {
                 startID: photoID,
                 highlight: highlight,
                 mapController: mapController,
-                onShowOnMap: collapseWhenFullHeightPops
+                onShowOnMap: presentation.collapseWhenFullHeightScreenPops
             )
         }
-    }
-
-    /// Sends the sheet to its smallest detent when the photo viewer pops,
-    /// rather than back to the height the hike was being read at.
-    ///
-    /// Called by the viewer's "show on map" button and by nothing else. That
-    /// button dismisses the picture *because* the user asked where it was
-    /// taken, and the restore above — which exists so a reader who was at
-    /// `.large` is put back there — would answer by covering the very thing
-    /// they asked to see. Overwriting the remembered height is enough: the pop
-    /// runs the same restore, and finds the sheet is wanted out of the way.
-    private func collapseWhenFullHeightPops() {
-        detentBeforeFullHeight = .height(Self.compactDetentHeight)
     }
 }
 
@@ -332,7 +318,7 @@ private func delete(_ hike: Hike, among hikes: [Hike]) {
     // detaches rather than invalidates, so it's a stale screen rather than a
     // crash. `SheetRoute.removeHike` owns both, including why the path is
     // cleared unconditionally where the selection is not.
-    if SheetRoute.removeHike(hike.id, selectedHike: &selectedHike, from: &path) {
+    if SheetRoute.removeHike(hike.id, selectedHike: &selectedHike, from: &presentation.path) {
         highlight.move(to: nil)
     }
 
@@ -417,7 +403,7 @@ private func startSearch(request: MKLocalSearch.Request) {
         }
         mapController.show(response.boundingRegion)
         // Drop to a partial detent so the zoomed map is visible.
-        withAnimation { detent = .medium }
+        withAnimation { presentation.detent = .medium }
     }
 }
 
@@ -441,14 +427,14 @@ private func openRecording() {
     SheetRoute.openRecording(
         hike: hikeRecorder.currentHike,
         selectedHike: &selectedHike,
-        in: &path
+        in: &presentation.path
     )
     highlight.move(to: nil)
-    withAnimation { detent = .medium }
+    withAnimation { presentation.detent = .medium }
 }
 
 private func closeRecording() {
-    path.removeAll { $0 == .recording }
+    presentation.path.removeAll { $0 == .recording }
 }
 
 private func closeDiscardedRecording(_ hikeID: UUID?) {
@@ -461,8 +447,8 @@ private func closeDiscardedRecording(_ hikeID: UUID?) {
 
 private func showSavedRecording(_ hike: Hike) {
     selectedHike = hike
-    path = [.hike(hike)]
-    withAnimation { detent = .medium }
+    presentation.path = [.hike(hike)]
+    withAnimation { presentation.detent = .medium }
 }
 
 private func open(_ hike: Hike) {
@@ -470,7 +456,7 @@ private func open(_ hike: Hike) {
     if belongsToActiveRecording(hike) {
         openRecording()
     } else {
-        path = [.hike(hike)]
+        presentation.path = [.hike(hike)]
     }
 }
 

@@ -20,13 +20,18 @@ struct OpenHikesView: View {
 
     @State private var showSheet = true
     @State private var searchText = ""
-    @State private var sheetDetent: PresentationDetent = .height(Self.compactDetentHeight)
     @State private var selectedHike: Hike?
-    /// The sheet's navigation stack, held here rather than inside `MapSheet`
-    /// so a widget tap can push a hike's detail view (see `openHike(id:)`).
-    /// The cost is that popping the detail view now re-evaluates this body
-    /// too; `MapView` is `.equatable()`, so that diff stops at the map.
-    @State private var navigationPath: [SheetRoute] = []
+    /// The sheet's navigation stack and the height it rests at, held here
+    /// rather than inside `MapSheet` so a widget tap can push a hike's detail
+    /// view (see `openHike(id:)`) and so the detent picker can be attached to
+    /// the sheet from out here.
+    ///
+    /// A reference type rather than two pieces of `@State`, because `@State`
+    /// invalidates the view that declares it whether or not its body reads it —
+    /// which is what made opening a photo from a hike's gallery re-render this
+    /// view, the sheet and the hikes list. Only the coarse flags on it are read
+    /// below; see ``SheetPresentation``.
+    @State private var sheet = SheetPresentation()
     @State private var highlight = RouteHighlight()
     /// Set when a picked file couldn't become a hike; drives the alert that
     /// says so. `nil` the rest of the time.
@@ -84,18 +89,8 @@ struct OpenHikesView: View {
     @AppStorage(SettingsKey.savePhotosToLibrary)
     var savePhotosToLibrary = SettingsDefault.savePhotosToLibrary
 
-    /// Height of the compact (search-only) sheet detent.
-    private static let compactDetentHeight: CGFloat = 80
     /// Top padding for the weather badge, sitting below the Dynamic Island/notch.
     private static let weatherBadgeTopPadding: CGFloat = 96
-
-    init() {
-        _sheetDetent = State(
-            initialValue: AppLaunchEnvironment.startsWithExpandedSheet
-                ? .medium
-                : .height(Self.compactDetentHeight)
-        )
-    }
 
     /// The route drawn on the map — always the currently selected hike, if any.
     /// Geometry only: its appearance reaches the map through ``routeStyle``,
@@ -104,7 +99,9 @@ struct OpenHikesView: View {
         DisplayedRoute.forSelection(
             selectedHike,
             cache: displayedRouteCoordinateCache,
-            recordingPresented: navigationPath.last == .recording
+            // The flag, not the path: a push inside the sheet that isn't the
+            // recording screen leaves this alone, and the map's route with it.
+            recordingPresented: sheet.isRecordingPresented
                 || selectedHike?.belongsToActiveRecording(
                     currentHikeID: currentRecordingHikeID
                 ) == true
@@ -203,9 +200,8 @@ struct OpenHikesView: View {
             .sheet(isPresented: $showSheet) {
                 MapSheet(
                     searchText: $searchText,
-                    detent: $sheetDetent,
                     selectedHike: $selectedHike,
-                    path: $navigationPath,
+                    presentation: sheet,
                     highlight: highlight,
                     mapController: mapController,
                     photoCapture: photoCapture,
@@ -214,10 +210,27 @@ struct OpenHikesView: View {
                     onImportFailed: { importFailure = .unreadable },
                     onSearchFailed: { failure in searchFailure = failure },
                     onSheetTopChange: { topY in
-                        sheetMetrics.report(topY: topY, atMiddleDetent: sheetDetent == .medium)
+                        // Read when the sheet reports, not when this body runs:
+                        // a drag reports at display rate, and this closure is
+                        // called from a geometry change rather than evaluated
+                        // here, so `isAtMiddleDetent` is not an input of this
+                        // view.
+                        sheetMetrics.report(topY: topY, atMiddleDetent: sheet.isAtMiddleDetent)
+                    },
+                    // The sheet settled at a new detent: let the map measure
+                    // where the middle one rests, so the "my location" button
+                    // knows how far it may follow the sheet up.
+                    //
+                    // Reported by the sheet rather than watched from here.
+                    // Watching it would make the detent an input of this body
+                    // again — and this view draws a map that does not move when
+                    // the sheet does, which is the whole reason `SheetMetrics`
+                    // exists.
+                    onSheetDetentCommitted: { atMiddle in
+                        sheetMetrics.detentCommitted(toMiddle: atMiddle)
                     }
                 )
-                    .presentationDetents([.height(Self.compactDetentHeight), .medium, .large], selection: $sheetDetent)
+                    .presentationDetents(SheetPresentation.detents, selection: sheet.detentBinding)
                     .presentationBackgroundInteraction(.enabled(upThrough: .medium))
                     .presentationBackground {
                         #if os(visionOS)
@@ -239,12 +252,6 @@ struct OpenHikesView: View {
                         onCaptured: attachCapturedPhoto,
                         onPicked: attachPickedPhotos
                     )
-                    // The sheet settles at a new detent: let the map measure
-                    // where the middle one rests, so the "my location" button
-                    // knows how far it may follow the sheet up.
-                    .onChange(of: sheetDetent) { _, detent in
-                        sheetMetrics.detentCommitted(toMiddle: detent == .medium)
-                    }
             }
             // The sheet is the app's primary surface and must always stay up. The
             // GPX document picker (a UIKit controller presented from within a
@@ -313,9 +320,6 @@ struct OpenHikesView: View {
             .onChange(of: tileProviderID) { _, _ in
                 appModel.tileProviderDidChange(selectedHike: selectedHike)
             }
-            .onChange(of: navigationPath) { _, _ in
-                importSelectionGate.invalidate()
-            }
             .onChange(of: currentRecordingHikeID) { _, id in
                 importSelectionGate.invalidate()
                 guard let id,
@@ -370,16 +374,16 @@ struct OpenHikesView: View {
             SheetRoute.openRecording(
                 hike: appModel.hikeRecorder.currentHike,
                 selectedHike: &selectedHike,
-                in: &navigationPath
+                in: &sheet.path
             )
             highlight.move(to: nil)
-            withAnimation { sheetDetent = .medium }
+            withAnimation { sheet.detent = .medium }
         case .hike(let id): openHike(id: id)
         }
     }
 
     private func openHike(id: UUID) {
-        if case let .hike(current)? = navigationPath.last, current.id == id { return }
+        if case let .hike(current)? = sheet.path.last, current.id == id { return }
 
         let descriptor = FetchDescriptor<Hike>(predicate: #Predicate { $0.id == id })
         // A hike deleted while the widget still showed it: open the app and
@@ -393,10 +397,10 @@ struct OpenHikesView: View {
             SheetRoute.openRecording(
                 hike: hike,
                 selectedHike: &selectedHike,
-                in: &navigationPath
+                in: &sheet.path
             )
             highlight.move(to: nil)
-            withAnimation { sheetDetent = .medium }
+            withAnimation { sheet.detent = .medium }
             return
         }
 
@@ -404,10 +408,10 @@ struct OpenHikesView: View {
         // otherwise still be showing over the detail view.
         searchText = ""
         selectedHike = hike
-        navigationPath = [.hike(hike)]
+        sheet.path = [.hike(hike)]
         // The compact detent is only tall enough for the search field, so a
         // push there would arrive off-screen.
-        withAnimation { sheetDetent = .medium }
+        withAnimation { sheet.detent = .medium }
     }
 
     /// Restores an active recording draft when recovery has already found it;
@@ -454,7 +458,7 @@ struct OpenHikesView: View {
     private func performImport(from url: URL) async {
         let selectionToken = importSelectionGate.token(
             selectedHikeID: selectedHike?.id,
-            path: navigationPath
+            path: sheet.path
         )
         let importedHike: Hike
         // Typed, so the catch below can't quietly widen to `any Error` and
@@ -475,13 +479,13 @@ struct OpenHikesView: View {
         guard importSelectionGate.permits(
             token: selectionToken,
             selectedHikeID: selectedHike?.id,
-            path: navigationPath,
+            path: sheet.path,
             currentRecordingHikeID: currentRecordingHikeID,
-            recordingPresented: navigationPath.last == .recording
+            recordingPresented: sheet.isRecordingPresented
         ) else { return }
         selectedHike = importedHike
         // The selection draws the imported route; expanding reveals it.
-        withAnimation { sheetDetent = .medium }
+        withAnimation { sheet.detent = .medium }
     }
 }
 
@@ -558,6 +562,14 @@ private extension OpenHikesView {
     }
 }
 
+/// Whether an import that was started a moment ago is still allowed to take
+/// over the map and the sheet by the time it finishes parsing.
+///
+/// A navigation move needs no explicit invalidation: a token carries the
+/// destination it was taken at, and ``permits(token:selectedHikeID:path:currentRecordingHikeID:recordingPresented:)``
+/// compares it against where the sheet is now. ``invalidate()`` is for the
+/// things a path can't answer — the selection changing under the import, and a
+/// recording claiming it.
 struct ImportSelectionGate {
     struct Token: Equatable {
         let revision: UInt64

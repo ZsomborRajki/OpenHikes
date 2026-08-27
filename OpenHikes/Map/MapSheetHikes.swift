@@ -20,7 +20,7 @@ import MapKit
 import SwiftData
 import SwiftUI
 
-struct MapSheetHikes: View {
+struct MapSheetHikes: View, Equatable {
     private static let selectedHikeHighlightOpacity: Double = 0.15
     private static let actionGlyphSize: CGFloat = 40
     /// Under the 8pt gap between the two action circles, so they stay separate
@@ -49,6 +49,32 @@ struct MapSheetHikes: View {
     let onDelete: (Hike, [Hike]) -> Void
     let onRecord: () -> Void
     let onImport: () -> Void
+
+    /// Lets `.equatable()` skip this subtree when nothing it draws has changed.
+    ///
+    /// Without it, every re-evaluation of `MapSheet` rebuilds the whole list:
+    /// the six action closures are new values on each pass, so SwiftUI's own
+    /// structural comparison can never conclude that two of these are the same
+    /// view. That is a body pass, a `@Query` read and a `HikeRow` per hike for
+    /// things the list has no part in — a photo opened three screens deep was
+    /// paying for two of them.
+    ///
+    /// The closures are excluded on purpose rather than by necessity. They are
+    /// methods on the sheet, and everything they write to — the selection and
+    /// path bindings, the search field's state, the completer — is reached
+    /// through a property wrapper whose storage outlives any one copy of that
+    /// struct, so an older closure and a newer one do the same thing. The
+    /// controllers are compared by identity for the reason ``MapView`` compares
+    /// its own: the parent hands down the same instance every time, and their
+    /// contents changing is something this body observes directly.
+    static func == (lhs: Self, rhs: Self) -> Bool {
+        lhs.searchText == rhs.searchText
+            && lhs.isSearchFocused == rhs.isSearchFocused
+            && lhs.isCompact == rhs.isCompact
+            && lhs.selectedHikeID == rhs.selectedHikeID
+            && lhs.completer === rhs.completer
+            && lhs.recorder === rhs.recorder
+    }
 
     var body: some View {
         // The ranking below is the only real work here. Two things keep it off

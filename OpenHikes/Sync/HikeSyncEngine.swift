@@ -52,7 +52,15 @@ actor HikeSyncEngine {
         return created
     }
 
-    private let cloudContainer: CKContainer
+    /// Built on first use rather than at init.
+    ///
+    /// Both readers are on `async` paths — the engine's configuration and the
+    /// account-status query — and neither runs during launch, but a
+    /// `CKContainer` constructed as a default argument does. That put CloudKit
+    /// framework load and its daemon handshake on the main thread inside
+    /// `AppModelInit`, twice, before the first frame; see `PERFORMANCE.md`.
+    private let makeCloudContainer: () -> CKContainer
+    private lazy var cloudContainer: CKContainer = makeCloudContainer()
     private var engine: CKSyncEngine?
 
     /// - Parameter store: Injectable so a suite gets its own directories
@@ -62,14 +70,14 @@ actor HikeSyncEngine {
         applier: HikeSyncApplier,
         status: CloudSyncStatus,
         store: CloudSyncStateStore? = nil,
-        cloudContainer: CKContainer = CKContainer(
+        cloudContainer: @autoclosure @escaping () -> CKContainer = CKContainer(
             identifier: CloudSyncSchema.containerIdentifier
         )
     ) {
         self.applier = applier
         self.status = status
         loadedStore = store
-        self.cloudContainer = cloudContainer
+        makeCloudContainer = cloudContainer
     }
 
     var isRunning: Bool { engine != nil }

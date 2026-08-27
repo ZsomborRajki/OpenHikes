@@ -88,7 +88,7 @@ and they leave the device only through an explicit share sheet. No dependency
 was added — MetricKit is a system framework, and the 26.5 deployment target
 means every API used, including `MXDiskSpaceUsageMetric` and
 `MXAnimationMetric.hitchTimeRatio`, needs no availability guard. See
-`PERFORMANCE.md` § "The other half — MetricKit in the field".
+`PERFORMANCE.md` § "MetricKit in the field".
 
 ## Validation performed
 
@@ -102,7 +102,7 @@ means every API used, including `MXDiskSpaceUsageMetric` and
 | iOS release build | Passed. This is what validates the `#if DEBUG` wrap around every `--ui-test-*` flag: the parsing and its argument names do not compile into a shipping binary at all |
 | Mutation checks | Two fixes were verified by reverting them and confirming the new test fails: the offline download window, and the stranded trail-graph region. A test that passes against the unfixed code is not evidence |
 | UI automation | Not re-run. No `--ui-test-*` flag, launch path or accessibility surface changed |
-| Render and resource performance suite | Not run. The `PERFORMANCE.md` baseline predates the Photos and Sync domains |
+| Render and resource performance suite | Passed, 10 of 10 scenarios, covering the Photos and Sync domains. Numbers in `PERFORMANCE.md` |
 | GPX Thread Sanitizer suite | Not re-run; previously passed, including concurrent timestamp parsing |
 | macOS compile | Not run; the `canImport` aliases and `#if os(iOS)` guards are unbuilt, not supported |
 | visionOS build | Not run; the platform is not installed |

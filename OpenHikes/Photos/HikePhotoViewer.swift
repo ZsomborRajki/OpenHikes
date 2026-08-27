@@ -40,32 +40,43 @@ struct HikePhotoViewer: View {
     @State private var currentID: UUID?
     @State private var didRestoreStart = false
 
-    private var photos: [HikePhoto] { hike.orderedPhotos }
+    /// The sorted gallery, read once per body pass and handed down.
+    ///
+    /// It used to be a computed property, which made every use of it look free
+    /// — and there were six, so a swipe cost six full sorts of the hike's
+    /// photos, each one allocating a `uuidString` per comparison. A computed
+    /// property that does real work is invisible at its call sites, which is
+    /// exactly how that survived review; passing the value down makes the cost
+    /// countable and pays it once.
+    ///
+    /// There is deliberately no `photos` property here any more. One existed,
+    /// spelled `hike.orderedPhotos`, and its innocence is the whole bug — so
+    /// the sort is now written out at each of the three places that take a
+    /// snapshot, where it is visible.
 
-    private var currentIndex: Int? {
-        guard let currentID else { return nil }
-        return photos.firstIndex { $0.id == currentID }
-    }
-
-    private var current: HikePhoto? {
-        currentIndex.map { photos[$0] }
+    private func index(of id: UUID?, in photos: [HikePhoto]) -> Int? {
+        guard let id else { return nil }
+        return photos.firstIndex { $0.id == id }
     }
 
     var body: some View {
+        RenderSignpost.mark("PhotoViewerBody")
+        let photos = hike.orderedPhotos
+        let currentIndex = index(of: currentID, in: photos)
         // A photo is shown against black everywhere in iOS, and the strip's
         // tiles are letterboxed here rather than cropped, so the backdrop is
         // doing real work: it's what the un-filled edges of a portrait shot on
         // a landscape screen become.
-        ZStack {
+        return ZStack {
             Color.black.ignoresSafeArea()
             if photos.isEmpty {
                 emptyState
             } else {
-                pages
+                pages(photos)
             }
         }
-        .overlay(alignment: .bottom) { controls }
-        .navigationTitle(title)
+        .overlay(alignment: .bottom) { controls(photos, currentIndex: currentIndex) }
+        .navigationTitle(title(photos, currentIndex: currentIndex))
         #if os(iOS)
         .navigationBarTitleDisplayMode(.inline)
         .toolbarBackground(.hidden, for: .navigationBar)
@@ -74,7 +85,7 @@ struct HikePhotoViewer: View {
         // scheme's label colour and is black on black.
         .toolbarColorScheme(.dark, for: .navigationBar)
         #endif
-        .toolbar { toolbarContent }
+        .toolbar { toolbarContent(currentIndex.map { photos[$0] }) }
         .accessibilityIdentifier("photo-viewer")
         .onAppear {
             // Assigning the scroll position before the scroll view exists is
@@ -96,7 +107,7 @@ struct HikePhotoViewer: View {
 
     // MARK: - Pages
 
-    private var pages: some View {
+    private func pages(_ photos: [HikePhoto]) -> some View {
         ScrollView(.horizontal) {
             LazyHStack(spacing: 0) {
                 ForEach(photos) { photo in
@@ -128,20 +139,24 @@ struct HikePhotoViewer: View {
     /// Disabled rather than hidden at the two ends: a control that disappears
     /// moves the one beside it, and at the end of a gallery that would shift
     /// the button the user is about to press.
-    private var controls: some View {
+    private func controls(_ photos: [HikePhoto], currentIndex: Int?) -> some View {
         GlassStack(spacing: 6) {
             HStack(spacing: 6) {
                 stepButton(
                     systemImage: "chevron.left",
                     label: "Previous photo",
                     identifier: "previous-photo-button",
-                    offset: -1
+                    offset: -1,
+                    photos: photos,
+                    currentIndex: currentIndex
                 )
                 stepButton(
                     systemImage: "chevron.right",
                     label: "Next photo",
                     identifier: "next-photo-button",
-                    offset: 1
+                    offset: 1,
+                    photos: photos,
+                    currentIndex: currentIndex
                 )
             }
         }
@@ -154,7 +169,9 @@ struct HikePhotoViewer: View {
         systemImage: String,
         label: LocalizedStringKey,
         identifier: String,
-        offset: Int
+        offset: Int,
+        photos: [HikePhoto],
+        currentIndex: Int?
     ) -> some View {
         Button {
             step(by: offset)
@@ -165,12 +182,13 @@ struct HikePhotoViewer: View {
         }
         .glassButtonStyle()
         .buttonBorderShape(.circle)
-        .disabled(destination(from: currentIndex, by: offset) == nil)
+        .disabled(destination(from: currentIndex, by: offset, in: photos) == nil)
         .accessibilityLabel(label)
         .accessibilityIdentifier(identifier)
     }
 
-    @ToolbarContentBuilder private var toolbarContent: some ToolbarContent {
+    @ToolbarContentBuilder
+    private func toolbarContent(_ current: HikePhoto?) -> some ToolbarContent {
         ToolbarItemGroup(placement: .topBarTrailing) {
             if let current, let coordinate = current.coordinate {
                 Button {
@@ -195,7 +213,7 @@ struct HikePhotoViewer: View {
 
     // MARK: - Titles
 
-    private var title: String {
+    private func title(_ photos: [HikePhoto], currentIndex: Int?) -> String {
         guard let index = currentIndex else { return String(localized: "Photo") }
         return String(localized: "\(index + 1) of \(photos.count)")
     }
@@ -203,14 +221,19 @@ struct HikePhotoViewer: View {
     // MARK: - Actions
 
     /// The index `offset` steps away, or `nil` at either end.
-    private func destination(from index: Int?, by offset: Int) -> Int? {
+    private func destination(from index: Int?, by offset: Int, in photos: [HikePhoto]) -> Int? {
         guard let index else { return nil }
         let target = index + offset
         return photos.indices.contains(target) ? target : nil
     }
 
     private func step(by offset: Int) {
-        guard let target = destination(from: currentIndex, by: offset) else { return }
+        let photos = hike.orderedPhotos
+        guard let target = destination(
+            from: index(of: currentID, in: photos),
+            by: offset,
+            in: photos
+        ) else { return }
         withAnimation { currentID = photos[target].id }
     }
 
@@ -247,8 +270,10 @@ struct HikePhotoViewer: View {
         // Step off the photo first: removing the one the scroll view is
         // resting on leaves `scrollPosition` pointing at an id that no longer
         // exists, and the view stays blank until something else moves it.
-        let successor = destination(from: currentIndex, by: 1)
-            ?? destination(from: currentIndex, by: -1)
+        let photos = hike.orderedPhotos
+        let currentIndex = index(of: currentID, in: photos)
+        let successor = destination(from: currentIndex, by: 1, in: photos)
+            ?? destination(from: currentIndex, by: -1, in: photos)
         currentID = successor.map { photos[$0].id }
         HikePhotoImport.remove(photo, from: hike, store: store)
     }
@@ -290,7 +315,7 @@ private struct HikePhotoPage: View {
     /// know about it: when it was taken, and whether it has a place on the
     /// trail.
     private static func label(for photo: HikePhoto) -> String {
-        let taken = photo.capturedAt.formatted(date: .abbreviated, time: .shortened)
+        let taken = HikeFormat.timestamp(photo.capturedAt)
         return photo.isAnchored
             ? String(localized: "Photo taken \(taken), pinned to the trail")
             : String(localized: "Photo taken \(taken)")

@@ -139,8 +139,19 @@ extension Hike {
     /// back several assets at once and out of order, and there is no second
     /// place for the order to be got wrong if there is no stored order.
     var orderedPhotos: [HikePhoto] {
-        photos.sorted { lhs, rhs in
-            (lhs.capturedAt, lhs.id.uuidString) < (rhs.capturedAt, rhs.id.uuidString)
+        // Marked because this is a full sort behind a computed property, and a
+        // computed property is invisible at its call sites: the viewer used to
+        // read it six times per body pass without any of them looking like
+        // work. A count that outruns `PhotoViewerBody` is the shape to catch.
+        RenderSignpost.mark("PhotoOrderComputed", "\(photos.count) photos")
+        return photos.sorted { lhs, rhs in
+            // The timestamps are compared first and the identifiers only on a
+            // tie. `UUID.uuidString` allocates a 36-character string, and
+            // building the pair up front meant two allocations for *every*
+            // comparison — O(n log n) of them for an ordering that two photos
+            // taken in the same second are the only ones that need.
+            if lhs.capturedAt != rhs.capturedAt { return lhs.capturedAt < rhs.capturedAt }
+            return lhs.id.uuidString < rhs.id.uuidString
         }
     }
 

@@ -56,7 +56,11 @@ final class CloudSyncCoordinator {
     @ObservationIgnored private let settings: SyncedSettingsMirror
     @ObservationIgnored private let defaults: UserDefaults
     @ObservationIgnored private let storageIsDurable: Bool
-    @ObservationIgnored private let cloudContainer: CKContainer
+    /// Built on first use, for the reason ``HikeSyncEngine``'s is: its only
+    /// reader is the `async` account-status query, and constructing it as a
+    /// default argument charged launch for CloudKit's bring-up.
+    @ObservationIgnored private let makeCloudContainer: () -> CKContainer
+    @ObservationIgnored private lazy var cloudContainer: CKContainer = makeCloudContainer()
     @ObservationIgnored private var saveObserver: (any NSObjectProtocol)?
     @ObservationIgnored private var accountObserver: (any NSObjectProtocol)?
     @ObservationIgnored private var lifecycleObservers: [any NSObjectProtocol] = []
@@ -93,7 +97,7 @@ final class CloudSyncCoordinator {
         status: CloudSyncStatus,
         defaults: UserDefaults,
         storageIsDurable: Bool = true,
-        cloudContainer: CKContainer = CKContainer(
+        cloudContainer: @autoclosure @escaping () -> CKContainer = CKContainer(
             identifier: CloudSyncSchema.containerIdentifier
         )
     ) {
@@ -103,7 +107,7 @@ final class CloudSyncCoordinator {
         self.status = status
         self.defaults = defaults
         self.storageIsDurable = storageIsDurable
-        self.cloudContainer = cloudContainer
+        makeCloudContainer = cloudContainer
         isEnabled = defaults.object(forKey: SettingsKey.cloudSyncEnabled) as? Bool
             ?? SettingsDefault.cloudSyncEnabled
     }

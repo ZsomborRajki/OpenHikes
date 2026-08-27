@@ -25,7 +25,30 @@ struct SettingsView: View {
     private var dismiss
     @Environment(\.modelContext)
     private var modelContext
-    @Query private var hikes: [Hike]
+
+    /// Fetched on demand rather than held in a `@Query`.
+    ///
+    /// `@Query` is a `DynamicProperty`: it invalidates the view that *declares*
+    /// it on any write to the queried type, whether or not the body reads the
+    /// results. This body renders no hike at all — the hikes are wanted by the
+    /// storage measurement and the two delete actions, none of which is a
+    /// render — so the query was an input this screen did not want.
+    ///
+    /// Measured both ways before the change was kept, and it is worth being
+    /// straight about the result: the `settings` scenario reads the same 2
+    /// `SettingsBody` passes for Clear Cache with the query and without it,
+    /// because that action's writes land in one transaction and SwiftData
+    /// coalesces them into a single invalidation that the explicit state
+    /// changes were already paying for. What the fetch removes is the *shape*
+    /// — an unbounded number of invalidation sources, none of them visible at
+    /// this screen — not a number anything currently reproduces.
+    ///
+    /// A fetch is also the more correct of the two. Every caller wants a
+    /// snapshot at the moment it acts, and a fetch taken then cannot be a pass
+    /// behind the store the way a captured query result can.
+    private func fetchHikes() -> [Hike] {
+        (try? modelContext.fetch(FetchDescriptor<Hike>())) ?? []
+    }
 
     /// Needed to fold in tiles auto-saved since the last drain before anything
     /// here reads the manifests — this screen both measures and deletes by them.
@@ -70,7 +93,14 @@ struct SettingsView: View {
     }
 
     var body: some View {
-        NavigationStack {
+        // This screen is a seven-section `Form` in one body, so every input it
+        // takes costs all of it. The mark is how an input that follows a
+        // *hike* would show up — a recording writing to its draft per fix, or
+        // auto-save folding tile keys in every couple of seconds — since
+        // neither of those is visible by reading the body, which mentions no
+        // hike at all.
+        RenderSignpost.mark("SettingsBody")
+        return NavigationStack {
             Form {
                 CloudSyncSection(sync: cloudSync)
                 mapProviderSection
@@ -431,7 +461,7 @@ private extension SettingsView {
         // nothing in SwiftData pointing at them yet. Unflushed, they measure as
         // cache and — worse — a cache clear would delete them.
         autoSave.flushPendingKeys()
-        return hikes.filter(\.hasStoredTiles).map(TileOwnership.init)
+        return fetchHikes().filter(\.hasStoredTiles).map(TileOwnership.init)
     }
 
     func refreshUsage() async {
@@ -444,7 +474,7 @@ private extension SettingsView {
     /// reading SwiftData is legal, and only the array crosses.
     func refreshPhotoBytes() async {
         photoBytes = await Self.photoByteCount(
-            of: hikes.flatMap(\.photos).map(HikePhotoStore.PhotoFiles.init)
+            of: fetchHikes().flatMap(\.photos).map(HikePhotoStore.PhotoFiles.init)
         )
     }
 
@@ -483,7 +513,7 @@ private extension SettingsView {
         let resumed = autoSave.currentHike
         autoSave.hikeSelectionChanged(to: nil)
 
-        for hike in hikes {
+        for hike in fetchHikes() {
             hike.offlineDownloads.removeAll()
             hike.autoSavedTileKeys.removeAll()
             // `autoSaveTilesEnabled` is deliberately left alone. Reclaiming

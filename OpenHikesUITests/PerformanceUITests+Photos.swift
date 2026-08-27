@@ -117,6 +117,23 @@ extension PerformanceUITests {
         assertAtLeast(1, of: "PhotoImageDecoded", in: viewing, phase: "photo-viewer")
         assertNoStall(in: viewing, phase: "photo-viewer")
         assertNoMoreThan(0, of: "MapRouteRebuilt", in: viewing, phase: "photo-viewer")
+        // Pushing the viewer covers the map screen entirely, so nothing out
+        // there has anything to redraw. Both of these used to be 1 and 2: the
+        // sheet's navigation path was `@State` on the root, and `@State`
+        // invalidates its declaring view on every write whether or not the body
+        // reads it, which re-ran the sheet's content closure and rebuilt the
+        // hike list with it. The path lives on `SheetPresentation` now and the
+        // root reads only the coarse flags it actually draws from.
+        assertNoMoreThan(0, of: "OpenHikesViewBody", in: viewing, phase: "photo-viewer")
+        assertNoMoreThan(0, of: "MapSheetHikesBody", in: viewing, phase: "photo-viewer")
+        // One, not zero. `NavigationStack(path:)` reads its binding while the
+        // body that contains the stack is being evaluated, so whichever view
+        // owns the stack is a reader of the path no matter where the path is
+        // stored — moving the stack into a child would relocate this pass, not
+        // remove it. `NavigationStackBodyCostTests` pins that floor directly;
+        // if SwiftUI ever stops charging for it, lower this rather than
+        // restoring the pass.
+        assertNoMoreThan(1, of: "MapSheetBody", in: viewing, phase: "photo-viewer")
 
         let viewer = element("photo-viewer", in: app)
         XCTAssertTrue(viewer.waitForExistence(timeout: Self.photoTimeout))
@@ -137,6 +154,25 @@ extension PerformanceUITests {
         // hike list are all still behind the viewer and none of them changed.
         assertNoMoreThan(0, of: "OpenHikesViewBody", in: paging, phase: "photo-paging")
         assertNoMoreThan(0, of: "MapSheetHikesBody", in: paging, phase: "photo-paging")
+        // What a page turn *does* legitimately cost is the viewer's own body:
+        // the title, the caption and the current-photo controls all name the
+        // photo being looked at.
+        //
+        // The ratio below it is the one worth watching. `hike.orderedPhotos`
+        // is a full sort behind a computed property, and the viewer reads it
+        // through six separate accessors — `photos.isEmpty`, `currentIndex`,
+        // `current`, `pages`, the title and an `onChange` — none of which look
+        // like work at the call site. A sort per read rather than per pass is
+        // invisible at eight photos and is O(n log n) string comparisons per
+        // swipe at two hundred, so the budget is stated against the body count
+        // rather than as a constant.
+        assertNoMoreThan(3, of: "PhotoViewerBody", in: paging, phase: "photo-paging")
+        assertRatio(
+            atMost: 2,
+            of: "PhotoOrderComputed",
+            per: paging.count(of: "PhotoViewerBody"),
+            in: paging
+        )
         finish()
     }
 

@@ -34,7 +34,14 @@ struct PhotoDiscoverySheet: View {
     private static let badgeSize: CGFloat = 22
 
     var body: some View {
-        NavigationStack {
+        // A tick per ticked box means the selection is an input of the *sheet*
+        // rather than of the cell that owns it, which rebuilds every visible
+        // tile — and every tile's accessibility label — for one tap.
+        RenderSignpost.mark(
+            "PhotoDiscoveryBody",
+            "\(controller.matches.count) matches"
+        )
+        return NavigationStack {
             content
                 .navigationTitle("Photos of This Hike")
                 #if os(iOS)
@@ -71,29 +78,15 @@ struct PhotoDiscoverySheet: View {
             // moment there is something in the grid, where `disabled` then
             // means what it should — nothing is ticked.
             if !controller.matches.isEmpty {
-                Button(addTitle) {
-                    Task {
-                        let added = await controller.importSelected(into: hike)
-                        // Something landed and nothing is left to review: the
-                        // sheet has finished its job, and leaving it up on its
-                        // empty state would read as an import that found
-                        // nothing rather than as one that just succeeded.
-                        // Anything that failed stays in `matches`, which keeps
-                        // the sheet open to be retried.
-                        if added > 0, controller.matches.isEmpty { dismiss() }
-                    }
-                }
-                .disabled(!controller.canImport)
-                .accessibilityIdentifier("photo-discovery-add-button")
+                // A view of its own, and not because the toolbar is crowded.
+                // Its title counts the selection, so reading it here would put
+                // `selection` back into this sheet's inputs — which is the
+                // whole thing the cells were moved out for. A `.toolbar`
+                // closure is evaluated with the body around it, so a toolbar
+                // item is no more insulated than a row is.
+                DiscoveryAddButton(controller: controller, hike: hike, onFinished: dismiss.callAsFunction)
             }
         }
-    }
-
-    private var addTitle: String {
-        let count = controller.selectedCount
-        return count > 0
-            ? String(localized: "Add \(count)")
-            : String(localized: "Add")
     }
 
     // MARK: - Results
@@ -110,7 +103,14 @@ struct PhotoDiscoverySheet: View {
                 spacing: Self.cellSpacing
             ) {
                 ForEach(Array(controller.matches.enumerated()), id: \.element.id) { index, match in
-                    cell(match, at: index)
+                    DiscoveredPhotoCell(
+                        match: match,
+                        controller: controller,
+                        index: index,
+                        size: Self.cellSize,
+                        cornerRadius: Self.cornerRadius,
+                        badgeSize: Self.badgeSize
+                    )
                 }
             }
             .padding()
@@ -126,78 +126,8 @@ struct PhotoDiscoverySheet: View {
         .safeAreaInset(edge: .bottom) { selectionBar }
     }
 
-    private func cell(_ match: LibraryPhotoMatch, at index: Int) -> some View {
-        Button {
-            controller.toggle(match.id)
-        } label: {
-            DiscoveredPhotoTile(
-                match: match,
-                controller: controller,
-                isSelected: controller.isSelected(match.id),
-                size: Self.cellSize,
-                cornerRadius: Self.cornerRadius,
-                badgeSize: Self.badgeSize
-            )
-        }
-        .buttonStyle(.plain)
-        // One element, not a picture plus a checkmark plus two captions. A
-        // cell is a single tap target, so four stops through it would say the
-        // same thing four times.
-        .accessibilityElement(children: .ignore)
-        .accessibilityLabel(Self.label(for: match))
-        .accessibilityAddTraits(
-            controller.isSelected(match.id) ? [.isButton, .isSelected] : .isButton
-        )
-        .accessibilityIdentifier("discovered-photo-\(index)")
-    }
-
     private var selectionBar: some View {
-        VStack(spacing: 0) {
-            if controller.importFailed { failureNotice }
-            HStack {
-                Button(
-                    controller.selectedCount == controller.matches.count
-                        ? "Deselect All"
-                        : "Select All"
-                ) {
-                    if controller.selectedCount == controller.matches.count {
-                        controller.deselectAll()
-                    } else {
-                        controller.selectAll()
-                    }
-                }
-                .accessibilityIdentifier("photo-discovery-select-all-button")
-
-                Spacer()
-
-                Text("\(controller.selectedCount) of \(controller.matches.count) selected")
-                    .font(.footnote)
-                    .foregroundStyle(.secondary)
-                    .accessibilityIdentifier("photo-discovery-selection-count")
-            }
-            .padding(.horizontal)
-            .padding(.vertical, 8)
-        }
-        .background(.bar)
-    }
-
-    /// What is left on screen when a copy did not go through.
-    ///
-    /// The photographs that failed are still in the list and still selected,
-    /// so the recovery is to tap Add again — which is worth saying, because a
-    /// grid that looked like it had been added and then still had things in it
-    /// would otherwise be a mystery.
-    private var failureNotice: some View {
-        Label(
-            "Some photos couldn\u{2019}t be added. Try adding them again.",
-            systemImage: "exclamationmark.triangle"
-        )
-        .font(.footnote)
-        .foregroundStyle(.orange)
-        .frame(maxWidth: .infinity, alignment: .leading)
-        .padding(.horizontal)
-        .padding(.top, 8)
-        .accessibilityIdentifier("photo-discovery-import-failed")
+        DiscoverySelectionBar(controller: controller)
     }
 
     private var footnote: some View {
@@ -283,11 +213,13 @@ struct PhotoDiscoverySheet: View {
 
     /// What a cell says to VoiceOver: when the picture was taken, whether it
     /// is going to be added, and on what evidence it was placed.
-    private static func label(for match: LibraryPhotoMatch) -> String {
-        let taken = match.asset.createdAt.formatted(
-            date: .omitted,
-            time: .shortened
-        )
+    ///
+    /// The time goes through ``HikeFormat`` rather than being formatted here
+    /// for the reason stated there: this label is attached to every square in
+    /// the grid, and a `Date.FormatStyle` written at the call site is rebuilt
+    /// for each of them on each pass.
+    static func label(for match: LibraryPhotoMatch) -> String {
+        let taken = HikeFormat.timeOfDay(match.asset.createdAt)
         return String(
             localized: "Photo taken at \(taken), \(evidenceDescription(match))"
         )
@@ -307,6 +239,124 @@ struct PhotoDiscoverySheet: View {
             )
         case .timeAndPlace: String(localized: "matched by both time and place")
         }
+    }
+}
+
+/// One square of the review grid, and the only thing that reads whether it is
+/// ticked.
+///
+/// The read is the whole point of this type existing. `selection` is one
+/// property on one `@Observable`, so whoever reads it re-renders when it
+/// changes — and while that reader was the sheet, one tick mark rebuilt the
+/// navigation stack, the scroll view, the grid, the toolbar and every visible
+/// cell's accessibility label. Here it rebuilds a border and a glyph.
+private struct DiscoveredPhotoCell: View {
+    let match: LibraryPhotoMatch
+    let controller: PhotoDiscoveryController
+    let index: Int
+    let size: CGFloat
+    let cornerRadius: CGFloat
+    let badgeSize: CGFloat
+
+    var body: some View {
+        let isSelected = controller.isSelected(match.id)
+        return Button {
+            controller.toggle(match.id)
+        } label: {
+            DiscoveredPhotoTile(
+                match: match,
+                controller: controller,
+                isSelected: isSelected,
+                size: size,
+                cornerRadius: cornerRadius,
+                badgeSize: badgeSize
+            )
+        }
+        .buttonStyle(.plain)
+        // One element, not a picture plus a checkmark plus two captions. A
+        // cell is a single tap target, so four stops through it would say the
+        // same thing four times.
+        .accessibilityElement(children: .ignore)
+        .accessibilityLabel(PhotoDiscoverySheet.label(for: match))
+        .accessibilityAddTraits(isSelected ? [.isButton, .isSelected] : .isButton)
+        .accessibilityIdentifier("discovered-photo-\(index)")
+    }
+}
+
+/// The count and the select-all switch, which are the other two readers of the
+/// selection — kept out of the sheet for the same reason the cell is.
+private struct DiscoverySelectionBar: View {
+    let controller: PhotoDiscoveryController
+
+    var body: some View {
+        let selected = controller.selectedCount
+        let total = controller.matches.count
+        return VStack(spacing: 0) {
+            if controller.importFailed { failureNotice }
+            HStack {
+                Button(selected == total ? "Deselect All" : "Select All") {
+                    if selected == total {
+                        controller.deselectAll()
+                    } else {
+                        controller.selectAll()
+                    }
+                }
+                .accessibilityIdentifier("photo-discovery-select-all-button")
+
+                Spacer()
+
+                Text("\(selected) of \(total) selected")
+                    .font(.footnote)
+                    .foregroundStyle(.secondary)
+                    .accessibilityIdentifier("photo-discovery-selection-count")
+            }
+            .padding(.horizontal)
+            .padding(.vertical, 8)
+        }
+        .background(.bar)
+    }
+
+    /// What is left on screen when a copy did not go through.
+    ///
+    /// The photographs that failed are still in the list and still selected,
+    /// so the recovery is to tap Add again — which is worth saying, because a
+    /// grid that looked like it had been added and then still had things in it
+    /// would otherwise be a mystery.
+    private var failureNotice: some View {
+        Label(
+            "Some photos couldn\u{2019}t be added. Try adding them again.",
+            systemImage: "exclamationmark.triangle"
+        )
+        .font(.footnote)
+        .foregroundStyle(.orange)
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .padding(.horizontal)
+        .padding(.top, 8)
+        .accessibilityIdentifier("photo-discovery-import-failed")
+    }
+}
+
+/// The toolbar's Add button, which counts the selection in its own title.
+private struct DiscoveryAddButton: View {
+    let controller: PhotoDiscoveryController
+    let hike: Hike
+    let onFinished: () -> Void
+
+    var body: some View {
+        let count = controller.selectedCount
+        return Button(count > 0 ? String(localized: "Add \(count)") : String(localized: "Add")) {
+            Task {
+                let added = await controller.importSelected(into: hike)
+                // Something landed and nothing is left to review: the sheet
+                // has finished its job, and leaving it up on its empty state
+                // would read as an import that found nothing rather than as
+                // one that just succeeded. Anything that failed stays in
+                // `matches`, which keeps the sheet open to be retried.
+                if added > 0, controller.matches.isEmpty { onFinished() }
+            }
+        }
+        .disabled(!controller.canImport)
+        .accessibilityIdentifier("photo-discovery-add-button")
     }
 }
 

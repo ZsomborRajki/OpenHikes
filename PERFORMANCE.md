@@ -1,38 +1,28 @@
 # OpenHikes performance and energy
 
-A record of what the app actually costs — in frames and in battery — how that
-was measured, and what to do about it. Every number here was produced by
+What the app costs — in frames and in battery — how that was measured, and what
+is still wrong with it. Every number here was produced by
 `Scripts/run-performance-tests.sh` on an iPhone 17 Pro simulator (iOS 26.5,
 Xcode 26.6, Debug); none of it is estimated.
 
-There are two claims to check, and they are not the same claim.
+**This is a live list, not a log**, on the same terms as `CODE_REVIEW.md`. A
+finding that has been fixed is deleted rather than annotated, and a "was → now"
+column survives only where the *now* is still in question. What stays is the
+current state, the decisions that remain load-bearing, and what is still open.
 
-The first is about *rendering*. `RouteHighlight`, `SheetMetrics`, `RouteStyle`,
-`MapController`, `TrackerState` and `LocationManager` are stable `@Observable`
-reference types precisely so that high-frequency state — a GPS fix, a finger on
-the elevation chart — moves the map without re-evaluating any SwiftUI body
-above it.
+Two claims are under test, and they are not the same claim.
 
-The second is about *energy*, and it is the one the app exists for. This is a
-hiking recorder: it runs for six hours, in a pocket, with the screen off, on a
-phone that has to still have charge when its owner needs a map to get down. An
-app that renders beautifully and flattens a battery by three in the afternoon
-has failed at the only job that mattered. Energy is therefore not a subsection
-of performance here. It is the other half of the document.
+*Rendering.* `RouteHighlight`, `SheetMetrics`, `RouteStyle`, `MapController`,
+`TrackerState`, `LocationManager` and `SheetPresentation` are stable
+`@Observable` reference types precisely so that high-frequency state — a GPS
+fix, a finger on the elevation chart, a pushed screen — moves the map without
+re-evaluating any SwiftUI body above it.
 
-Both claims are either true or they aren't, and both are now measured across
-eight scenarios.
-
-One lesson is worth putting before the numbers, because it is the only one that
-generalises. Every energy finding in this document — E1 through E5 — was a
-piece of work the app was doing that nobody had decided it should do, and in
-every case the prevailing assumption before the measurement was that it was
-already fine. The GPS was assumed to be adaptive; it was pinned. The
-backgrounded map was assumed not to draw; it drew twice per fix. The 1 Hz clock
-was assumed to be suspended by the system; it ran all the way through a pocket.
-None of these were visible in the code by reading it, and none were expensive
-enough to feel. On a device that has to last six hours, the costs that matter
-are the ones nobody chose.
+*Energy*, which is the one the app exists for. This is a hiking recorder: six
+hours, in a pocket, screen off, on a phone that has to still have charge when
+its owner needs a map to get down. An app that renders beautifully and flattens
+a battery by three in the afternoon has failed at the only job that mattered.
+Energy is not a subsection of performance here; it is the other half.
 
 ## How to run it
 
@@ -50,10 +40,13 @@ Scripts/run-performance-tests.sh --keep-going
 
 Debug is mandatory, not incidental: `RenderSignpost`, `PerformanceLog` and
 `MainThreadWatchdog` all compile to nothing in Release, so a Release run would
-measure an app that reports nothing at all. The MetricKit integration
-described under [The other half](#the-other-half--metrickit-in-the-field) is
+measure an app that reports nothing at all. The MetricKit integration below is
 the exact inverse — it ships in Release and reports nothing here — which is why
 the two coexist rather than compete.
+
+`PerformanceReports/` is git-ignored. A run is evidence on the machine that
+produced it and nowhere else, so this document carries the numbers rather than
+the paths.
 
 ## How it works
 
@@ -82,98 +75,18 @@ that a millisecond budget is not.
 
 `Scripts/perf-report.py` then joins the `PERF-PHASE`/`PERF-COUNT` lines the test
 prints with the app's event file and writes the markdown report, including the
-per-scenario **Energy** section described below.
+per-scenario energy, network and location-funnel sections.
 
-### Six measurement traps this had to solve
+## Where this stands
 
-Worth recording, because each produced a convincing wrong answer first.
+Ten scenarios, all passing, measured 2026-08-27.
 
-*The observer perturbs the observed.* The first interaction with a
-newly-presented screen forces XCUITest to hit-test against a fresh snapshot of a
-hierarchy it has not described before, and SwiftUI evaluates bodies to answer.
-Charged to the gesture, this made the chart scrub look like it re-rendered
-`HikeDetailBody` five times when the drag accounts for two — and whether it did
-depended on where the snapshot happened to fall, so the same code reported 2 and
-5 on consecutive runs. `warmAccessibilityTree(around:in:)` pays that cost before
-the baseline reading.
-
-*A fixed settle time cannot be both correct and fast.* Waiting a constant three
-seconds after an interaction was long enough to waste three seconds on every
-phase and still short enough to occasionally include the previous phase's tail.
-`settle(in:)` instead polls the app's own counters and returns once nothing has
-re-rendered for 1.5 s, ignoring the sampler's own entries — which tick every
-second regardless and would otherwise mean the app never looked quiet.
-
-*A permission dialog must not decide whether you get data.* The recording
-scenario reset the location authorization and relied on a UI interruption
-monitor to answer the resulting alert. When that failed, Core Location delivered
-nothing, the recorder accepted no fixes, and the run produced fifty-one seconds
-of an idle app — which looks like a measurement but is the absence of one.
-`Scripts/run-performance-tests.sh` now grants the permission out-of-band with
-`simctl privacy` and the test no longer resets it; the monitor stays as a
-fallback.
-
-*A cache is a lie detector that has already been bribed.* The offline scenario
-asserts that browsing the map opens no connection. On its first run it passed
-instantly and proved nothing: every tile in the fixture region was already on
-disk from the *previous* scenario, so there was no miss, no fetch to refuse and
-no policy under test. `--ui-test-offline` now also hands the launch an empty
-tile root (`AppLaunchEnvironment.isolatedTileRoot()`), which turns 0 refusals
-into 45 and the assertion into a real one.
-
-*A harness failure will happily impersonate a product failure.* Running the
-suite four times back to back produced a different set of failures each time —
-`kAXErrorServerNotFound`, `Error getting main window`, `Application … is not
-running` — and never the same test twice. None of them were assertions; all of
-them were the accessibility server being asked about an app that had not
-finished coming forward, after `launch()` or after `activate()`. Both return
-before the state they name is true. `bringToForeground(_:)` and the wait added
-to `launch()` block on `XCUIApplication.wait(for: .runningForeground)` first, so
-a genuine regression is now the only thing that can fail these tests. The
-lesson generalises: when a performance suite starts failing *differently* on
-each run, suspect the harness before the app.
-
-*Instrumenting a thing can break it.* The 1 Hz clock in Finding E5 became
-countable by moving the readout into its own small view — which stored the
-recorder, made the view structurally identical on every tick, and so stopped the
-clock the instrument was there to measure. It then reported one tick per
-recording and looked like excellent news. Two rules came out of it. A view
-extracted purely to be counted must store the *value* being displayed, not the
-object it came from, or SwiftUI's diff will skip it. And a suite made entirely
-of upper bounds cannot notice work that has stopped happening: `RecordingClockTick`
-now has a lower-bound assertion in the foreground scenario as well as an upper
-bound in the backgrounded one, and any counter measuring work that is *supposed*
-to happen needs the same pair.
-
-Two smaller ones, both from the photo scenario, both cheap to re-learn the hard
-way. `warmAccessibilityTree(around:in:)` performs a real centre tap, so warming
-on the photo strip — where every pixel is a button — navigates into the viewer
-before the phase starts; warm on a harmless element on the same screen instead,
-since the cost being paid off belongs to the screen, not the element. And a
-counter that ticks on a timer must be added to the `sampled` exclusion set in
-`PerformanceCounters.isEquivalent(to:)`, or `settle(in:)` never sees the app go
-quiet and every recording scenario spins to its timeout.
-
-## Baseline — 2026-08-17
-
-Eight scenarios, all passing. `PerformanceReports/20260817-084046/`.
-
-This run is the first to include the photo pipeline, which landed in `d06ff4b`
-after the previous baseline and was, until now, the largest feature in the app
-with no performance number attached to it at all. It is also the run that found
-the app's last per-second wake-up still running with the screen off — see
-Finding E5, which is the most consequential thing in this document.
-
-> **Two changes have landed since this baseline that it does not reflect.**
-> Neither invalidates a number below, because neither is on a path these
-> scenarios measure, but both change what a re-run should be expected to show.
-> The photo thumbnail cache is now bounded at 32 MB of decoded bytes rather
-> than at a count of 200, so a long strip evicts where it previously did not
-> (see the P3 gallery item under TODO). And the tile renderer now re-arms its
-> retry timer at the end of every draw pass rather than only on a failure,
-> which adds one `ContinuousClock` deadline comparison per pass and removes a
-> class of permanently-missing tile. Both are described in `CODE_REVIEW.md`'s
-> 2026-08-25 pass.
+| Check | Result |
+|---|---|
+| `PerformanceUITests` | **10 of 10 passed** |
+| App and widget unit tests | **1087 passed** (1064 app + 23 widget) |
+| `OpenHikesUITests`, functional | **44 passed** |
+| `swiftlint --strict` | Clean |
 
 ### What is already right
 
@@ -182,76 +95,100 @@ These are the load-bearing claims of the architecture, and they hold.
 | Scenario | Measurement | Result |
 |---|---|---|
 | Idle, 7 s, map visible | body evaluations | **0** |
-| Idle, 7 s | CPU | **0.047 s — 0.7% of one core** |
-| Chart scrub, one drag | `ElevationChartBody` | 19 |
+| Idle, 7 s | CPU | **0.045 s — 0.6% of one core** |
+| Chart scrub, one drag | `ElevationChartBody` | 17 |
 | Chart scrub, one drag | `OpenHikesViewBody`, `MapSheetBody`, `MapRouteRebuilt` | **0, 0, 0** |
-| Map browsing, 17 s of pans and zooms | `OpenHikesViewBody` | 2 |
-| Live recording | `TrailMatcherWork` on the main thread | **0** (off-main) |
+| Map browsing, 17 s of pans and zooms | root, hike list | **0, 0** |
+| Live recording | `TrailMatcherWork` | 1.0 per fix, off-main, no stall |
 | Offline browsing, 17 s | connections opened | **0**, with 45 fetches refused |
 | Backgrounded recording | SwiftUI bodies per fix | **0** |
+| Backgrounded recording | radio wake-ups over 14 s in a pocket | **0** of the run's 209 |
 | Photo strip, scrolled | decodes, bodies, stalls | **0, 0, 0** |
-| Whole suite | connections opened | **0** in every scenario |
+| Photo paging | sorts per viewer body | **1.0** |
+| Settings, toggling a switch | `SettingsBody` | **0** |
+| Photo discovery, four selections | `PhotoDiscoveryBody` | **0** |
+| Photo push: root / hike list / sheet | body evaluations | **0 / 0 / 1** |
 
-A sustained scrub moves the map marker nineteen times without re-evaluating a
+A sustained scrub moves the map marker seventeen times without re-evaluating a
 single body above the chart; an idle app with a map on screen costs under one
-percent of one core; a recording in a pocket does no rendering work at all; and
-scrolling a gallery of eight 12 MP photos re-decodes nothing.
+percent of one core; a recording in a pocket does no rendering and opens no
+connection at all; scrolling a gallery of eight 12 MP photos re-decodes nothing;
+and ticking four checkboxes in a twelve-cell grid rebuilds four checkboxes.
 
-## Energy
+The one `MapSheetBody` left on a photo push is a floor rather than a miss.
+`NavigationStack(path:)` reads its binding during the enclosing body, so one
+evaluation per push is structural — asserted by `NavigationStackBodyCostTests`,
+which builds a real stack and measures exactly +1, rather than argued in a
+comment.
 
-### What a hike actually costs
+### The costs
 
-Battery has no single counter an app can read, and the one iOS does expose —
-`UIDevice.batteryLevel` — is quantised to 5% and useless over a test that lasts
-thirty seconds. What the app can see are four proxies, and the report now puts
-them side by side per scenario:
+| Measurement | Value |
+|---|---|
+| Launch, first responsive frame | 1.471 s, RSD 0.18% (n=3) |
+| Launch main-thread stall | 544–595 ms, asserted below 1200 ms |
+| `AppModelInit` | 64.7–71.3 ms |
+| `ModelContainerInit` | 36.4–39.0 ms |
+| `RecordingTailRebuilt` per fix | 2.0, 0.02–0.03 ms median |
+| `MapRecordingTraceApplied` per fix | 2.0 foreground, **0.33** backgrounded |
+| CPU per accepted fix | 0.488 s screen on, **0.225 s** backgrounded |
+| Photo thumbnail decode | 18.9 ms median, 20.8 ms max |
+| Photo full-size decode | 64.5 ms median, 65.3 ms max |
+| Recording footprint | 107.5 MB start → 95.7 MB end, 189.1 MB transient peak |
 
-1. **CPU seconds.** The most direct thing under our control.
-2. **Radio wake-ups** — `TileNetworkFetch`, `WeatherFetch`, `TrailGraphFetch`,
-   counted and timed. A cellular radio that has to be woken costs far more than
-   the bytes it moves, especially at one bar.
-3. **GPS duty** — the location funnel, below, plus which accuracy profile was
-   in force and when it changed.
-4. **Screen work** — the body-evaluation counts the rest of this document is
-   about, which matter to energy only while the screen is actually on.
+Two of those rows need reading with care.
 
-Extrapolated to a hiking hour from the current run:
+`RecordingTailRebuilt` and `MapRecordingTraceApplied` are **2.0 per fix by
+design**, not by tolerance. `accept(_:)` appends the raw coordinate so the line
+keeps up with the walker, then the asynchronous trail match returns and replaces
+the provisional tail with snapped geometry. The two land 11–72 ms apart, so the
+raw tail really is on screen for a frame or three before it snaps — which is the
+feature rather than waste, since the alternative is a line that lags the walker
+by the matcher's latency. Each rebuild costs 0.02–0.03 ms. The budget is 2.5
+rather than 1.5 because a test that fails permanently is a test everyone learns
+to ignore; what is worth defending is that it stays two and does not grow.
+
+The **footprint peak is automation, not the app** — nothing was leaked, since
+the scenario ends 12 MB below where it started. See "Absolute footprint under
+XCUITest is not the app's footprint" below.
+
+### What a hike costs a battery
+
+Battery has no single counter an app can read — `UIDevice.batteryLevel` is
+quantised to 5% and useless over a thirty-second test — so the report puts four
+proxies side by side per scenario: CPU seconds, radio wake-ups, GPS duty
+(the location funnel), and screen work.
 
 | Scenario | CPU per hour (extrapolated) |
 |---|---|
-| Idle with the map up | 250 CPU-s |
-| Offline browsing | 284 CPU-s |
-| Map browsing (online) | 333 CPU-s |
-| Recording, backgrounded | 403 CPU-s |
-| Live recording, screen on | 406 CPU-s |
-| Photo gallery | 510 CPU-s |
-| Chart scrubbing | 627 CPU-s |
+| Idle with the map up | 239 CPU-s |
+| Offline browsing | 305 CPU-s |
+| Map browsing (online) | 335 CPU-s |
+| Recording, backgrounded | 459 CPU-s |
+| Live recording, screen on | 438 CPU-s |
+| Settings | 504 CPU-s |
+| Photo discovery | 532 CPU-s |
+| Photo gallery | 534 CPU-s |
+| Chart scrubbing | 648 CPU-s |
 
-Read those with care: they are whole-run figures that include launch and the
-automation's own polling, and they say more about how much a scenario queries
-the accessibility tree than about the feature it names. The chart-scrub and
-photo figures are the clearest example — a thirteen-tap phase burns 1.99 CPU-s
-while evaluating *zero* bodies, which is XCUITest hit-testing, not the app. The
-comparable figure is per accepted fix, where the phases are like for like:
+Read those as shapes, not values. They are whole-run figures that include launch
+and the automation's own polling, and they say more about how much a scenario
+queries the accessibility tree than about the feature they name — the chart
+phase burns 2.21 CPU-s while evaluating *zero* chart bodies, which is XCUITest
+hit-testing. The backgrounded recording reading *above* the screen-on one is the
+clearest proof of that: it is the scenario that polls the counters hardest.
 
-| | CPU per accepted fix |
-|---|---|
-| Recording, screen on | 0.340 s |
-| Recording, backgrounded | **0.217 s** |
-
-Putting the phone in a pocket cuts the per-fix cost by a third, which is the
-right shape — and, since that is how the app is used for all but a few minutes
-of a walk, the backgrounded number is the one that decides whether the battery
-lasts. Immediately before Finding E5 was fixed the same phase measured 0.244 s;
-the improvement is real but it is a few percent on a noisy figure, and the
-argument for that change rests on the 21,600 redraws it removes over a real
-walk rather than on this number.
+The comparable pair is per accepted fix, where the phases are like for like:
+**0.488 s screen on against 0.225 s backgrounded**. Putting the phone in a
+pocket halves the per-fix cost, which is the right shape — and since that is how
+the app is used for all but a few minutes of a walk, the backgrounded number is
+the one that decides whether the battery lasts.
 
 ### The location funnel
 
-Every scenario's report now includes this, because "the GPS is busy" and "the
-GPS is busy and we are throwing the results away" cost identical energy and
-need opposite fixes:
+Every scenario's report includes this, because "the GPS is busy" and "the GPS is
+busy and we are throwing the results away" cost identical energy and need
+opposite fixes:
 
 ```
 LocationFixDelivered   → CoreLocation handed us a fix
@@ -261,20 +198,18 @@ LiveFixAccepted        → it became part of the route
 RecordingFixRejected   → it did not
 ```
 
-A high rejection rate is not a recording problem, it is an energy problem: full
-GPS duty paid, half a route recorded. `Scripts/perf-report.py` raises it as a
-finding above 50%.
+`Scripts/perf-report.py` raises a rejection rate above 50% as a finding: full
+GPS duty paid, half a route recorded.
 
-### Finding E1 — the GPS never stepped down (fixed)
+## Energy policies in force
 
-Until this change the recorder pinned `kCLLocationAccuracyBest` with a 10 m
-distance filter for the entire walk and never reconsidered. Low Power Mode was
-read exactly once, to show a warning; `thermalState` was not read anywhere in
-the app. So the app told the walker their phone was struggling and then carried
-on asking for the most expensive positioning mode iOS offers, for six hours.
+Three policies decide what the app spends. Each was a measured finding once;
+each is now shipping behaviour whose full argument lives in the source header
+rather than here, so that the rationale cannot drift away from the code it
+justifies.
 
-`RecordingEnergyPolicy` replaces the constant with a function of conditions,
-along two axes that answer to different authorities:
+**GPS accuracy is a function of conditions**, not a constant
+(`OpenHikes/Recording/RecordingEnergyPolicy.swift`).
 
 | | Precise (default) | Conserving |
 |---|---|---|
@@ -282,777 +217,460 @@ along two axes that answer to different authorities:
 | `distanceFilter`, moving | 10 m | 20 m |
 | `distanceFilter`, stationary | 25 m | 25 m |
 
-`desiredAccuracy` moves only for Low Power Mode or thermal `.serious` and
-above — both explicit signals that the *user or the system* wants less work
-done, and neither something an app should overrule for a slightly smoother
-line. `distanceFilter` moves for those and for standing still, taking the
-larger of the two candidates: both conditions are reasons to be woken less, and
-standing still in Low Power Mode is not a reason to be woken more than either
-alone.
+`desiredAccuracy` moves only for Low Power Mode or thermal `.serious` and above.
+`distanceFilter` moves for those and for standing still, taking the larger of
+the two candidates. `.fair` thermal is deliberately excluded — a phone in a
+jacket pocket in direct sun sits there all summer, and a mitigation that is
+always on is indistinguishable from having lowered the default.
+`PowerStateMonitor` watches both notifications, so the transition with no fix to
+prompt it — a walker stopping for lunch as the battery crosses 20% — still
+reconfigures. Each application emits `RecordingEnergyProfileApplied`, and only
+when the profile actually changed. Pinned by `RecordingEnergyPolicyTests` (the
+decision, 8 cases) and `HikeRecorderTests+Energy` (that it reaches CoreLocation
+at the right moments, 5 cases).
 
-Three thresholds worth defending:
-
-*Why the filter is the better lever.* It is applied inside `locationd`. Raising
-it stops the fix before it costs this process a delegate callback, a main-actor
-hop and a `RecordingFixPolicy` evaluation that was only ever going to reject it.
-
-*Why accuracy is not lowered merely for standing still.* A stationary walker is
-one step from a moving one, and the first fix after they set off anchors the
-next leg of the track. Buying a little energy by making that fix coarse is a bad
-trade for a route somebody keeps. A raised filter costs nothing there, because a
-step past the filter distance still arrives at full accuracy.
-
-*Why `.fair` thermal is excluded.* A phone in a jacket pocket in direct sun
-reaches `.fair` and stays there for an entire summer walk. Treating it as a
-signal would make the conserving profile the normal one — and a mitigation
-that is always on is indistinguishable from having lowered the default.
-
-`PowerStateMonitor` watches both notifications and re-evaluates, so the
-transition that has no fix to prompt it — a walker stopping for lunch while the
-battery crosses 20% — still reconfigures. Each application emits
-`RecordingEnergyProfileApplied` with the profile name and filter, and the
-recording screen now explains itself in the walker's terms: *"Low Power Mode —
-recording at ten-metre accuracy to save battery."*
-
-Pinned by `RecordingEnergyPolicyTests` (the decision) and
-`HikeRecorderTests+Energy` (that the decision reaches CoreLocation, at the
-right moments, and is not re-applied when it has not changed).
-
-### Finding E2 — nothing acted on network conditions (fixed)
-
-`NWPathMonitor` was already running and its `isExpensive` and `isConstrained`
-flags were already being delivered. The cache read neither. A tile miss on one
-bar of cellular in a valley — the most expensive networking a phone can do,
-because a weak signal makes the radio transmit harder and for longer — was
-treated exactly like a miss on home Wi-Fi.
-
-`TileNetworkPolicy` now decides, split by purpose rather than by caller, because
-what matters is whether anyone is waiting for the tile: `loadTile` takes that as
-a parameter and defaults to `.interactive`, while `saveTileDurably` — the
-bulk-download path — fixes it at `.speculative`:
+**Tile fetching is split by purpose**, not by caller
+(`OpenHikes/Tiles/TileNetworkPolicy.swift`). What matters is whether anyone is
+waiting for the tile: `loadTile` takes the purpose and defaults to
+`.interactive`, while `saveTileDurably` fixes it at `.speculative`.
 
 | Condition | Interactive (drawing now) | Speculative (prefetch) |
 |---|---|---|
 | Offline | denied | denied |
 | Low Data Mode (`isConstrained`) | denied | denied |
-| Cellular (`isExpensive`) | **allowed** | denied (`cellular-speculative`) |
+| Cellular (`isExpensive`) | **allowed** | denied |
 | Low Power Mode | allowed | denied |
 | Thermal `.serious`+ | allowed | denied |
 
-The asymmetry is the point. A walker looking at the map gets their tile; what
-stops is the app spending a metered, expensive radio on tiles nobody has asked
-to see.
+The asymmetry is the point: a walker looking at the map gets their tile, and
+what stops is the app spending a metered radio on tiles nobody asked to see.
+None of it is configurable — a switch is a question the walker has to answer
+correctly *before* the walk to get the right behaviour during it. Every refusal
+emits `TileFetchSuppressed` with `purpose=` and `reason=`, which matters more
+than it sounds: a tile that silently never loads is the hardest thing in this
+pipeline to debug, and this policy creates exactly that situation on purpose.
+Pinned by `TileNetworkPolicyTests` and four cases in `TileTransportTests+Energy`.
 
-None of it is configurable, on purpose. There was briefly a **Settings › Data
-Use › Download Maps on Cellular** switch; it is gone. A switch is a question the
-walker has to answer correctly *before* the walk to get the right behaviour
-during it, and the app is meant to be pocketed and walked with rather than
-configured. The policy instead assumes a connection is available wherever the
-walker is and spends as little of it as it can: everything nobody is waiting for
-is given up the moment the connection turns metered, throttled or constrained,
-and everything the walker is actually looking at still loads. That is exactly
-what the removed switch did in its default position, so no walker who never
-opened Settings sees any change — and none of them can now reach the position
-where a blank map looked like a bug. Low Data Mode remains the one condition
-that reaches interactive traffic, because it is an explicit per-network
-instruction from the user and a hiking app is not the exception.
-
-Every refusal emits `TileFetchSuppressed` with `purpose=` and `reason=`, which
-matters more than it sounds: a tile that silently never loads is the hardest
-thing in this pipeline to debug, and this policy creates exactly that situation
-on purpose. The reasons are also grouped into a table in the report.
-
-Pinned by `TileNetworkPolicyTests` (the decision) and four cases in
-`TileTransportTests` that drive it through the real cache.
-
-### Finding E3 — a backgrounded recording drew a map nobody could see (fixed)
-
-Measured on the first run of the new background scenario: with the app
-backgrounded and fixes still arriving, `MapRecordingTraceApplied` fired **2.0
-times per fix**. Each one allocates an `MKPolyline` and makes MapKit drop and
-re-render the old overlay — for a map that is not on screen. Over a six-hour
-walk at ~2000 fixes that is four thousand overlay swaps whose entire output is
-discarded.
-
-`MapView.Coordinator` now gates the apply on foreground, observed through
+**A backgrounded recording draws nothing and ticks nothing.**
+`MapView.Coordinator` gates the overlay apply on foreground, observed through
 `UIApplication` lifecycle notifications rather than `scenePhase` so it stays
-entirely off SwiftUI's render path. The `withObservationTracking` registration
-continues regardless — the revision must keep being tracked or the map would
-never learn about the fixes that arrived while it was away. The work is
-deferred, not dropped, and caught up in a single pass on return, which draws an
-hour of pocket walking for the price of one fix.
+entirely off SwiftUI's render path; the `withObservationTracking` registration
+continues regardless, since the revision must keep being tracked, and the work
+is deferred rather than dropped and caught up in a single pass on return.
+`RecordingHeader` builds its 1 Hz `TimelineView` only while `scenePhase` is
+`.active` — that one *is* on the render path, deliberately, because the question
+is whether the `TimelineView` is in the hierarchy at all and only SwiftUI can
+answer it. Gating on `.active` rather than `!= .background` covers the states a
+walker is actually in most often: shade pulled down, app switcher open, screen
+locked but not yet backgrounded. Nothing is lost by not counting, because the
+readout derives from a timestamp rather than accumulating.
 
-| | Before | After |
-|---|---|---|
-| `MapRecordingTraceApplied`, 3 backgrounded fixes | 6 | **1** |
-| …per fix | 2.0 | **0.33** |
+The assumption that iOS would have suspended that timer was wrong for a specific
+reason worth keeping: iOS suspends a backgrounded app, and a suspended app runs
+no timers — but *this* app is not suspended. It holds the location background
+mode for the entire hike, which is exactly what keeps it running. The one app
+that most needs the timer to stop is the one where it does not stop by itself.
 
-`RecordingTailRebuilt` stays at 2.0 per fix and should: that is the in-memory
-trace, which has to keep up so the catch-up pass has something correct to draw.
-It costs 0.02 ms.
+## Open findings
 
-### Finding E4 — what a backgrounded fix costs now
+### Launch blocks the main thread for ~600 ms (P1)
 
-The measured answer, from `testBackgroundRecordingCostsNothingPerFix`:
-
-| Counter | Total, 3 fixes | Per fix |
-|---|---|---|
-| `ScenePhaseChanged` | 4 | — |
-| `OpenHikesViewBody` | 4 | **0** beyond the transitions |
-| `MapSheetHikesBody` | 4 | **0** beyond the transitions |
-| `MapSheetBody` | 4 | **0** beyond the transitions |
-| `RecordingBody` | 4 | **0** beyond the transitions |
-| `RecordingClockTick` | 2 | **0** beyond the transitions (see E5) |
-| `MapRecordingTraceApplied` | 1 | **0.33** |
-| `RecordingTailRebuilt` | 6 | 2.0 (in-memory only) |
-
-Four bodies for four scene transitions, and nothing per fix. The test asserts
-exactly that shape — body count ≤ transition count — rather than a constant,
-because a per-fix budget would pass *more* easily the longer the walk, which is
-backwards.
-
-### Finding E5 — the elapsed clock ticked all the way through a pocket (fixed)
-
-The previous version of this document listed, under P2, "suppress the 1 Hz
-`TimelineView` in `RecordingView` while backgrounded", with the note that *it
-is almost certainly already suspended by the system, but "almost certainly" is
-not a measurement*. It was not suspended. The measurement, once there was one,
-said so immediately:
-
-```
-10.96 s  ScenePhaseChanged     ← app backgrounded
-11.76 s  RecordingClockTick
-12.76 s  RecordingClockTick
-…        one per second, unbroken
-23.76 s  RecordingClockTick
-23.93 s  ScenePhaseChanged     ← app foregrounded
-```
-
-Thirteen ticks in the thirteen backgrounded seconds, at a steady 1 Hz, with the
-screen off — no gap while backgrounded and no catch-up burst on return, which
-rules out the comfortable explanation that the system had coalesced them. (The
-phase counter reads 17, which includes the foreground moments either side.) Each
-tick re-evaluates a view and re-lays out a `Text` that nobody can see. Over a
-six-hour walk that is **~21,600 redraws** of a hidden label.
-
-The assumption was reasonable and wrong for a specific reason: iOS suspends a
-backgrounded app, and a suspended app runs no timers — but *this* app is not
-suspended. It holds the location background mode for the entire hike, which is
-exactly what keeps it running, and a running app's `TimelineView` schedule keeps
-firing. The one app that most needs the timer to stop is the one app where it
-does not stop by itself.
-
-`RecordingHeader` now builds the `TimelineView` only while `scenePhase` is
-`.active`. This is on SwiftUI's render path, unlike `MapView.Coordinator`'s
-notification observers in E3, and deliberately so: the question is not whether
-to do some work when a fix arrives, it is whether the `TimelineView` is *in the
-hierarchy at all*, and only SwiftUI can answer that. The cost is bounded by
-scene transitions rather than by fixes. Nothing is lost by not counting — the
-readout derives from a timestamp rather than accumulating, so it is correct
-again on the first tick after return.
-
-| | Before | After |
-|---|---|---|
-| `RecordingClockTick`, measured phase | 17 | **2** |
-| …of which backgrounded | 13 | **0** |
-| …extrapolated over a six-hour walk | ~21,600 | **~0** |
-| CPU per backgrounded fix | 0.244 s | **0.217 s** |
-
-The CPU row is the weakest of the three and is included for completeness rather
-than as the argument: it is a few percent on a figure that varies by more than
-that between runs. The case for this change is the redraw count, which is not
-noisy — it is one per second, for as long as the walk lasts.
-
-Gating on `.active` rather than on `!= .background` turns out to matter more
-than it looks. In the measured run the ticks stop at `inactive` — 1.3 s before
-`background` — and resume 0.01 s after `active` returns. That covers the states
-a walker is actually in most often: the notification shade pulled down, the app
-switcher open, the screen locked but the app not yet backgrounded. None of those
-show the readout either.
-
-The residue is the foreground moments either side of the transition, which is
-why the budget is "at most one per scene transition" rather than zero.
-
-Two assertions pin it, and it needs both. `testBackgroundRecordingCostsNothingPerFix`
-bounds the backgrounded count by the transition count; `testLiveRecordingCostPerFix`
-asserts the *lower* bound that the clock still ticks roughly once a second in
-the foreground. The lower bound exists because this finding was created by its
-own instrumentation: extracting the readout into a `RecordingClock` view that
-stored only the recorder made the view structurally identical on every tick, so
-SwiftUI skipped its body and the timer silently froze. Every budget in this
-suite is an upper bound, and a frozen clock scores perfectly against all of
-them. The view now stores the formatted string, so what SwiftUI diffs is the
-thing on screen.
-
-## Rendering findings
-
-### Finding 1 — launch blocks the main thread for ~600 ms (P1)
-
-`XCTApplicationLaunchMetric` puts first-responsive-frame at **1.398 s**
-(RSD 0.142%, n=3). The watchdog reports a **526–673 ms** unbroken main-thread
-stall in *every* scenario. The bisection intervals split it as:
+`XCTApplicationLaunchMetric` puts first-responsive-frame at **1.471 s**. The
+watchdog reports a **544–595 ms** unbroken main-thread stall in *every*
+scenario. That stall begins before `PerformanceLog` itself exists and ends at
+t≈0.55 s on its clock, by which point the map and sheet have already drawn. The
+timeline inside it bisects as:
 
 | Span | Cost |
 |---|---|
-| `ModelContainerInit` (SwiftData) | 27.8–31.2 ms |
-| `AppModelInit` (whole `OpenHikesModel`, includes the above) | 50.5–59.4 ms |
-| SwiftUI/UIKit bootstrap before the first body runs | **~240 ms** |
-| First render → main thread free again | **~370 ms** |
+| `ModelContainerInit` (SwiftData), at t=0.003 | 36.4–39.0 ms |
+| `AppModelInit` (whole `OpenHikesModel`, includes the above) | 64.7–71.3 ms |
+| Model built → first SwiftUI body, at t=0.226 | **~130 ms** of framework bootstrap |
+| `MapViewCreated` → `MapRecordingTraceApplied` | **~52 ms** of `MKMapView` construction |
+| First body → main thread free again | **~330 ms** |
 
-Inside that last 370 ms, `MapViewCreated` → `MapRecordingTraceApplied` alone is
-**~62 ms** of `MKMapView` construction, and the sheet renders three to four
-times before the app settles.
+The sheet body runs five times and the hike list eight before the app settles at
+t≈0.68 s. The framework bootstrap is not ours; the rest of the first render
+largely is. **This is also the largest single energy item in a short session**:
+a walker who opens the app to check where they are, and closes it, pays this and
+almost nothing else.
 
-Both bisection intervals grew about 15% since the previous baseline
-(`ModelContainerInit` 24–26 → 27.8–31.2 ms, `AppModelInit` 46–53 → 50.5–59.4 ms).
-The container's share is attributable: `Hike.photos` is a relationship, so
-`HikePhoto` joined the schema transitively and SwiftData has one more entity to
-describe before it can open the store. It is small against the ~600 ms total and
-it is not the thing to fix first, but it is the direction this number moves
-every time an entity lands, and it is the only part of launch that grows with
-the app rather than with the framework.
+Two things are known about the two bisection intervals and neither is fixed.
+`ModelContainerInit` carries `#Index<Hike>([\.id], [\.date], [\.isRecording])`
+(`Hike.swift:35`) — three indexes built at store-open, traded for a faster hike
+list on a large store, with nothing measuring the benefit. `AppModelInit` had
+one attributable cause, two `CKContainer(identifier:)` default arguments
+constructed synchronously during model construction and used only from `async`
+readers; they are now `@autoclosure @escaping` factories behind a `lazy var`,
+which bought about 2 ms of mean and 6 ms of worst case and did not move the
+first frame at all. Roughly 14 ms of `AppModelInit` and the whole of the
+first-frame cost remain unattributed.
 
-The 240 ms of framework bootstrap is not ours. The ~370 ms of first render
-largely is. This is also the largest single *energy* item in a short session,
-which is worth saying out loud: a walker who opens the app to check where they
-are, and closes it, pays this and almost nothing else.
+*Next step:* put a signpost interval around each dependency
+`OpenHikesModel.init` constructs rather than guessing again, and find out how
+much of the sheet hierarchy is genuinely required for the first frame.
 
-The stall is now asserted rather than merely recorded. `testIdleCostsNothing`
-fails above a **1200 ms** ceiling — a tripwire set well above the observed
-range, not a target, because the target is to remove the work rather than to
-hold a line around it. It needed a budget shape of its own: launch is over
-before any measured phase begins, so the four existing budgets, which all
-compare counters across a phase, could not see it. `assertLaunchStall(atMost:in:)`
-reads the watchdog's *maximum* out of the counter tally instead of a delta,
-which is why `PerformanceCounters` parses the `Name=count/max` form at all.
+The stall is asserted rather than merely recorded: `assertLaunchStall(atMost:in:)`
+fails `testIdleCostsNothing` above a **1200 ms** ceiling — a tripwire set well
+above the observed range, not a target, because the target is to remove the work
+rather than to hold a line around it. It needed a budget shape of its own, since
+launch is over before any measured phase begins, so it reads the watchdog's
+*maximum* out of the counter tally instead of a delta.
 
-### Finding 2 — the 210 MB "recording footprint" is the harness, not the app (P1, resolved)
+### Panning still reaches the sheet, sometimes (P2)
 
-The first read of the data said the recording scenario settled at 210 MB
-against 87–95 MB everywhere else, and that looked like the most serious thing
-in this document — 210 MB resident is where a backgrounded recording starts
-being a jetsam candidate, and a recording that gets killed loses the hike.
+Four consecutive runs of the browsing phase against the current build:
 
-It is not real. Launching the same build outside XCUITest, driven only by
-`simctl`, and giving it every ingredient the recording scenario has:
-
-| Configuration | Settled footprint |
+| `browsing` phase | Four runs |
 |---|---|
-| `--ui-testing` alone | 74.0 MB |
-| `+ --ui-test-enable-location` | 74.3 MB |
-| `+ --ui-test-trail-graph=ThumseeRidgePath` | 73.8 MB |
-| both | 74.1 MB |
-| both, **with a simulated location the map follows** | 77.7 MB |
+| `MapSheetHikesBody` | **0, 1, 0, 0** |
+| `OpenHikesViewBody` | **0, 1, 0, 0** |
+| `MapSheetBody` | 2, 4, 2, 2 |
 
-Neither Core Location, nor the bundled trail graph, nor a map actively
-following a position and loading tiles for it moves the number. The same app
-under UI automation reports 95–225 MB.
+Three of four are clean and the worst case is 1, down from 4 before
+`SheetPresentation` removed the root's `@State` invalidation and `MapSheetHikes`
+became `Equatable`. But it is not zero, it is still run-dependent, and
+`MapSheetBody` did not improve at all — that column is the unexplained part.
 
-The difference is the automation. Every counter read, every `waitForExistence`,
-every element query makes the app build an accessibility snapshot of its
-hierarchy, and the recording scenarios poll far more than the others.
+This was never a stable number: earlier runs against one unchanged build
+reported 4/3/2, then 1/1/1, then 4/3/2 again, which is why the measurement above
+is four runs rather than one. The budget stays at 4 until four consecutive clean
+runs justify lowering it. Panning is the single most common thing anyone does in
+this app, and a `@Query`-backed list re-evaluating on it is exactly the shape
+that becomes expensive when somebody has two hundred hikes.
 
-**The rule this establishes: absolute footprint under XCUITest is not the app's
-footprint.** Only footprint *deltas inside a single phase* mean anything, and
-even those are contaminated by however much querying the phase does.
+### A tap on the elevation chart scrubs nothing (P3)
 
-The current run makes the same point from inside the harness: recording peaks at
-160.6 MB and **ends at 91.9 MB**, having started at 97.0 MB; the backgrounded
-scenario peaks at 160.1 MB and ends at 91.5 MB from 93.9 MB. Nothing was leaked
-and nothing settled high — the peak is transient automation cost handed straight
-back.
+Nine taps along the elevation profile produce **zero** `ElevationChartBody`
+evaluations. A continuous drag over the same pixels produces 17. So the render
+cost of a tap is nil and what is left is behavioural: a tap does not scrub.
 
-Every settled figure is up about 8 MB on the previous baseline (83–84 MB →
-91–92 MB), and that part is a genuine change rather than harness noise, since it
-appears at the *end* of every scenario including the ones that never open a
-photo. It is not attributed here: the photo pipeline is the largest thing that
-landed between the two baselines but not the only one, and nothing in this
-harness isolates a fixed cost by feature. The peaks moved the other way, from
-213–225 MB down to ~160 MB, which is not an improvement anyone made — it is the
-same automation variance this finding exists to warn about.
+**The cause is unknown.** An earlier version of this document said "the gesture
+is drag-only"; there is no hand-written gesture involved. Scrubbing is
+`.chartXSelection(value:)` (`ElevationChartView.swift:94`), which Swift Charts
+documents as handling taps as well as drags, and the tree contains no
+`DragGesture`, `onTapGesture`, `chartGesture` or `chartOverlay` anywhere. The
+candidates are the chart's hit area, the `.accessibilityElement()` applied after
+it — which flattens the subtree and is the most likely of the three — or the
+selection resolving and being immediately discarded. Settling it needs a run
+against the actual view, not another reading.
 
-Recorded here rather than deleted because the wrong version of this finding was
-convincing, and the next person to read a memory column off a UI-test run
-deserves to know that first.
+Low priority, since nobody taps a chart repeatedly, but it is where a scrub's
+start/stop edges would show a regression first. Note that the tap phase still
+burns 2.21 CPU-s while evaluating nothing, all of it XCUITest hit-testing.
 
-### Finding 3 — every accepted fix does the trace work twice (P2, resolved)
+## Blind spots
 
-| Counter | Per accepted fix |
-|---|---|
-| `RecordingTailRebuilt` | **2.0** |
-| `MapRecordingTraceApplied` | **2.0** (foreground; 0.33 backgrounded — see E3) |
-| `LiveTrailMatchApplied` | 1.0 |
-| `TrailMatcherWork` | 1.0 |
+Things this harness structurally cannot see, listed so nobody mistakes silence
+for a passing grade.
 
-Reproduced identically across every run. The cause is visible in the event
-timeline and is *by design*: `accept(_:)` calls
-`trace.append(accepted.coordinate, provisional: liveMatchingEnabled)` so the raw
-fix draws immediately, then the live match returns and `applyLiveMatch(…)`
-replaces the provisional tail with the snapped geometry. Two genuine state
-changes, two revisions, two
-overlay rebuilds — 0.7–4.7 ms apart, inside the same frame. The intermediate
-state is never presented to anyone.
+- **A real hike-length recording.** Every energy number above extrapolates from
+  a three-fix scenario. `Scripts/simulate-hike.sh` plus the Energy Log
+  instrument over a full GPX is the only way to know whether the per-fix cost is
+  flat. Instrumented but not answered: the `RecordingSession` `mxSignpost`
+  interval attributes cumulative CPU, average footprint and logical writes to
+  one whole walk, and `MXAppRunTimeMetric.cumulativeBackgroundLocationTime`
+  gives the denominator. The instrument is in; the walk has not been taken.
+- **A physical device.** `XCTHitchMetric` needs a signpost stream the Simulator
+  does not emit — it raises inside `harvestData` rather than degrading — so
+  frame-level hitch data cannot be produced here at all. A device is also the
+  only place thermal state ever leaves `.nominal`, so the conserving GPS profile
+  has never been exercised outside unit tests, and the only place background
+  suspension behaves as it will for a walker.
+- **Any MetricKit payload.** The integration is in and tested, but nothing has
+  been read on a device: the Simulator emits `NO_METRICS` and delivery is daily.
+  Check first that `RecordingSession` appears at all — an interval that outlives
+  the 24-hour aggregation period is dropped silently, and a long walk is exactly
+  the case that risks it.
+- **`Purchases/` and the widget's timeline provider.** Neither carries a single
+  `RenderSignpost` mark, so a rendering problem in the paywall or in a timeline
+  reload is invisible here. Both rendering findings that this suite did catch
+  were in code that *had* marks.
+- **A long recording, and a gallery larger than the strip.** No scenario drives
+  hundreds of fixes, so O(n)-per-fix shapes show up as an argument rather than a
+  slope. `--ui-test-seed-photos` caps at 24, and the thumbnail tier is bounded at
+  32 MB of decoded bytes — roughly 42 thumbnails — so eviction is a routine event
+  on a long strip and the ~19 ms re-decode is the price. Whether that trade is
+  sized right is a measurement nobody has taken.
+- **A stored baseline.** `Scripts/perf-report.py` has no `--baseline` flag, so
+  every report is read in isolation and a regression against the numbers above
+  has to be spotted by eye.
 
-**Fixed.** `RecordingTrace` now caches how much of `tail` came from the stable
-half and validates that cache with a `stableRevision` counter, so a fix that
-only moves the provisional tail — the common case — costs the provisional
-remainder instead of the whole tail. It also compares the rebuilt remainder
-against the previous one and publishes a revision only when the geometry
-actually moved, which matters because a stationary recorder produces the same
-matched geometry repeatedly. `MapView.Coordinator` takes separate
-`tailRevision`/`reviewRevision` tokens, so a revision that moved one overlay no
-longer rebuilds the other.
+Two smaller gaps worth deciding rather than drifting on. `isIdleTimerDisabled`
+is never set, which is the right default — but a walker navigating a junction
+with the screen dimming every 30 s reaches for the power button repeatedly, and
+each wake costs more than the timeout saved; that wants a setting rather than a
+constant. And nothing has re-checked periodic work since 2026-08-26, when a
+reading of the tree found `RecordingClockTick` to be the only periodic path in
+the shipping app: `AutoSaveController`'s drain is signal-driven,
+`CachingTileOverlayRenderer`'s retry wake is a bounded one-shot,
+`HikeRecorder+Helpers` is event-driven, and `CKSyncEngine` schedules its own
+work. That was a reading, not a measurement.
 
-| | Before | After |
-|---|---|---|
-| `RecordingTailRebuilt` mean | 0.0256 ms | **0.0194 ms** |
-| `RecordingTailRebuilt` max | 0.0638 ms | **0.0365 ms** |
+## Rules this suite learned the hard way
 
-A 24% mean and 43% peak improvement on a tail four coordinates long, which is
-the least favourable case the change has. Proving the rest of it needs the
-long-recording scenario in the P3 list.
+Each of these produced a convincing wrong answer first.
 
-The count stays at 2.0 per fix, and the budget says 2.5 rather than 1.5: two
-publications per fix is correct, and a test that fails permanently is a test
-everyone learns to ignore. What is worth defending is that it stays two.
+### About the app
 
-### Finding 4 — a tap on the elevation chart does nothing at all (P3)
+**Only a `View` type is a boundary.** A helper `func`, a computed `var`, and a
+`.toolbar`/`.safeAreaInset`/`.overlay` closure are all inlined into the body
+that declares them, so an observable read inside one registers as an input of
+*that body*. This is how a tick mark came to rebuild a whole photo grid: the
+selection lived correctly in an `@Observable` controller, and the cells were
+built by a `private func cell(_:at:)` in the sheet's scope. If a body is
+re-running and you cannot see the observable read in it, look for those four
+before looking anywhere else.
 
-Thirteen taps along the elevation profile produce **zero** body evaluations of
-anything — no `ElevationChartBody`, and none of the `OpenHikesViewBody`,
-`MapSheetBody`, `MapSheetHikesBody` or `HikeDetailBody` this used to cost (1, 2,
-3 and 3 respectively at the previous baseline). A continuous drag over the same
-pixels produces 19 chart bodies and nothing above them.
+**State can be correctly owned and incorrectly placed.** `@State` invalidates
+its declaring view unconditionally, whether or not `body` reads it — so a
+navigation path held as `@State` on the root re-rendered the entire map screen
+underneath a full-screen cover that completely obscured it. A second pass came
+from an `.onChange` writing a `@State` that *no body ever read*: pure
+bookkeeping, charged two body evaluations. The fix shape is `SheetPresentation`
+— a stable `@Observable` holding the raw state as `@ObservationIgnored` storage
+and publishing only *coarser* derived flags, so pushing a photo onto a hike, the
+same screen at the same height, flips nothing at all.
 
-So the render cost of this is gone, and what is left is the behavioural half:
-a tap does not scrub.
+**A computed property that sorts looks like a field access.**
+`Hike.orderedPhotos` was read six times in one body pass of the photo viewer for
+exactly that reason. Its comparator also allocated: comparing
+`(capturedAt, id.uuidString)` tuples makes Swift build *both* sides before
+comparing, so every comparison allocated two 36-character strings rather than
+only the ties the tie-break exists for.
 
-**The cause stated here was wrong and is now unknown.** This said "the gesture
-is drag-only". There is no hand-written gesture involved: scrubbing is
-`.chartXSelection(value:)` (`ElevationChartView.swift:94`), and Swift Charts
-documents that as handling taps as well as drags. Grepping the tree for
-`DragGesture` returns nothing, in this file or anywhere else in the app — the
-explanation appears to have been written from an assumption about how chart
-scrubbing is usually built rather than from this implementation. Corrected on
-2026-08-25; see `CODE_REVIEW.md`'s pass of that date, §B.
+**A container's accessibility identifier smothers the leaves underneath it.**
+SwiftUI pushes it down onto every descendant, so a `photos-section` on a `VStack`
+made three unrelated elements answer to one name and left the inner strip
+unreachable from automation. That is a shipped VoiceOver defect, not a test
+problem.
 
-The symptom is real and reproduced by the measurement above; only the diagnosis
-is retracted. Settling it needs a run against the actual view, not another
-reading — the candidates are the chart's hit area, an overlay above it, or the
-selection resolving and being immediately discarded. Still low priority —
-nobody taps a chart repeatedly — but it remains the place where a scrub's
-start/stop edges would show a regression first, and it is worth knowing that
-the phase still burns 1.99 CPU-s while evaluating nothing, all of it XCUITest
-hit-testing thirteen times.
+**Not every well-argued prediction survives a measurement.** `SettingsView`
+declared `@Query private var hikes: [Hike]` and rendered no hike — an unbounded
+invalidation source by construction — so the prediction was that all seven
+`Form` sections were charged for every write to any `Hike`. Measured: 2.0
+`SettingsBody` with the query and 2.0 with an on-demand fetch, because SwiftData
+coalesces the writes into one invalidation the explicit state changes were
+already paying for. The change was kept for correctness, since a fetch taken
+when an action runs cannot be a pass behind the store, but it is not a win.
 
-### Finding 5 — panning re-renders the hike list (P2, variable)
+### About the harness
 
-Map browsing produces up to **4** `MapSheetHikesBody`, **3** `MapSheetBody` and
-**2** `OpenHikesViewBody` for a gesture that changes no hike and selects
-nothing. Until this was budgeted the hike list was not measured at all, which is
-how it grew.
+**Absolute footprint under XCUITest is not the app's footprint.** A recording
+scenario once settled at 210 MB against 87–95 MB everywhere else, which looked
+like the most serious thing in this document — that is where a backgrounded
+recording starts being a jetsam candidate. It was the harness. Driven by
+`simctl` alone the same build sits at 74 MB, and neither Core Location, nor the
+bundled trail graph, nor a map actively following a position and loading tiles
+moves it; every counter read and element query makes the app build an
+accessibility snapshot, and the recording scenarios poll the most. Only
+footprint *deltas inside a single phase* mean anything, and even those are
+contaminated by however much querying the phase does.
 
-It is small in absolute terms and it is not on the per-fix path, but panning is
-the single most common thing anyone does in this app, and a `@Query`-backed
-list re-evaluating on it is exactly the shape that becomes expensive when
-somebody has two hundred hikes. Budgeted at 4 in
-`testMapBrowsingDoesNotReRenderTheSheet`, which stops it growing while the cause
-is found.
+**The observer perturbs the observed.** The first interaction with a
+newly-presented screen forces XCUITest to hit-test against a hierarchy it has
+not described before, and SwiftUI evaluates bodies to answer. Charged to the
+gesture, this made one chart scrub report 2 and 5 on consecutive runs of
+identical code. `warmAccessibilityTree(around:in:)` pays that cost before the
+baseline reading — but it performs a real centre tap, so it has to be *aimed*:
+warming on the photo strip navigates into the viewer, and warming on the
+Settings form's centre lands on the tile-provider list and either switches the
+map source or opens the paywall. Warm on a harmless control on the same screen,
+after scrolling it into view.
 
-Worth recording that this is not a stable number: an intermediate run during
-this session reported **1** of each for the same gesture against the same build,
-and the final run reported 4/3/2 again. Whatever drives it depends on how the
-pan lands rather than on the code, so the budget stays at 4 and the cause is
-still unexplained. A single good run here is not evidence that it was fixed —
-which is exactly the mistake this note exists to prevent.
+**A fixed settle time cannot be both correct and fast.** A constant three
+seconds wasted three seconds per phase and was still short enough to
+occasionally include the previous phase's tail. `settle(in:)` polls the app's
+own counters and returns once nothing has re-rendered for 1.5 s, ignoring the
+sampler's entries — which tick every second regardless and would otherwise mean
+the app never looked quiet. A counter that ticks on a timer must be added to the
+`sampled` exclusion set in `PerformanceCounters.isEquivalent(to:)`, or every
+recording scenario spins to its timeout. The same rule bans a fixed sleep as a
+barrier: wait on the positive effect that must follow.
 
-### Finding 6 — the photo gallery pays for exactly what it shows
+**A suite made entirely of upper bounds cannot notice work that has stopped.**
+Instrumenting the 1 Hz clock nearly broke it: extracting the readout into a view
+that stored the *recorder* made the view structurally identical on every tick,
+so SwiftUI skipped its body and the clock silently froze — scoring perfectly
+against every budget in the suite. The view now stores the formatted string, so
+what SwiftUI diffs is the thing on screen, and `RecordingClockTick` carries a
+*lower* bound in the foreground scenario as well as an upper bound in the
+backgrounded one. Any counter measuring work that is *supposed* to happen needs
+the same pair.
 
-The photo pipeline was the largest feature in the app with no performance
-number at all, which made it the obvious next scenario. It needed the app's
-help to exist: the Simulator has no camera and the library picker is a system
-process automation may not touch, so `--ui-test-seed-photos=<count>` attaches
-synthetic 12 MP JPEGs through the real `HikePhotoImport`. Only the pixels are
-invented — the files, the store, and the ImageIO decode path underneath are the
-shipping ones.
+**A cache is a lie detector that has already been bribed.** The offline scenario
+asserts that browsing opens no connection. On its first run it passed instantly
+and proved nothing: every tile in the region was already on disk from the
+*previous* scenario, so there was no miss and no fetch to refuse.
+`--ui-test-offline` now also hands the launch an empty tile root, which turns 0
+refusals into 45.
 
-Three phases, eight seeded photos:
+**A permission dialog must not decide whether you get data.** The recording
+scenario once reset location authorization and relied on a UI interruption
+monitor to answer the alert. When that failed, Core Location delivered nothing
+and the run produced fifty-one seconds of an idle app — which looks like a
+measurement but is the absence of one. `Scripts/run-performance-tests.sh` grants
+the permission out-of-band with `simctl privacy`; the monitor stays as a
+fallback.
 
-| Phase | What it does | Cost |
-|---|---|---|
-| `photo-strip` | scrolls the gallery strip end to end | **0** decodes, **0** bodies, **0** stalls, +0.02 MB |
-| `photo-viewer` | opens one photo full screen | **2** `PhotoImageDecoded`, +3.19 MB |
-| `photo-paging` | swipes to the next photo | **1** `PhotoImageDecoded`, **0** bodies above the viewer, +0.22 MB |
+**A harness failure will happily impersonate a product failure.** Four runs back
+to back once produced a different failure each time — `kAXErrorServerNotFound`,
+`Error getting main window`, `Application … is not running` — and never the same
+test twice. None were assertions; all were the accessibility server being asked
+about an app that had not finished coming forward, because both `launch()` and
+`activate()` return before the state they name is true. `bringToForeground(_:)`
+blocks on `XCUIApplication.wait(for: .runningForeground)` first. When a
+performance suite starts failing *differently* on each run, suspect the harness.
 
-The strip is the important row. Scrolling a gallery re-decodes nothing and
-re-renders nothing above it: thumbnails are decoded once, at **20.4 ms median
-(20.6 ms max)** each, and all eight complete within the same millisecond of each
-other, so the set costs about 21 ms of wall time rather than 8 × 20 ms. That is
-the `@concurrent` loader and the `.task`-per-cell shape working as intended.
+**A test the runner cannot find is a test that passes.**
+`run-performance-tests.sh` once built its list by scanning
+`PerformanceUITests.swift` alone, after the suite had already grown into
+`+Photos.swift` and `+Screens.swift` — so `--list` under-reported and `--test`
+rejected names that existed. It scans `PerformanceUITests*.swift` now. Anything
+that decides *which* tests run is part of the harness and needs the same
+suspicion as the assertions.
 
-The viewer's **2** decodes on open looks like duplicated work and is not. The
-paging phase is what settles it: a page turn costs exactly **1** decode, so the
-horizontally-paged `ScrollView`'s `LazyHStack` is realising the current page
-plus one lookahead. Opening photo *n* decodes *n* and *n+1*; turning to *n+1*
-decodes *n+2*. Paging through all eight therefore costs nine decodes, not
-sixteen and not twenty-four. Without the paging phase the honest reading of "2"
-is a bug, which is why the scenario has three phases rather than two.
+**A ratio can invent a finding.** The report generator flagged the backgrounded
+recording for "52.2 network requests per accepted fix", which was arithmetic
+rather than a fact: it charged the tiles the foreground map loaded at launch
+against the three fixes a short scenario accepts. That scenario in fact woke the
+radio **zero** times once the phone was in a pocket. The generator now counts
+requests inside the backgrounded windows instead, which is the number that costs
+a battery.
 
-A full-size decode is **73.9 ms median, 76.0 ms max** — three and a half times a
-thumbnail, and far more than a frame, which is why it matters that it cannot
-reach the main thread: `HikePhotoLoader` is `@concurrent`, and
-`HikePhotoStore`'s decode entry points call `assertOffMainThread`, so a future
-change that moved this work onto the main actor would trap in Debug rather than
-quietly drop frames.
+## Chasing a problem you can feel
 
-The scenario also found a real bug on its first run, and it is the one this
-repository's own conventions warn about. `HikePhotoSection`'s `VStack` carried
-`.accessibilityIdentifier("photos-section")` and the inner `ScrollView` carried
-`hike-photo-strip`. SwiftUI pushes a container's identifier down onto every
-descendant, so the container won: three unrelated elements all answered to
-`photos-section` and `hike-photo-strip` was unreachable from automation
-entirely. That is a shipped accessibility defect, not a test problem — VoiceOver
-sees the same flattened tree. The container identifier is gone.
-
-## Finding a UI performance problem while using the app
-The suite above catches regressions in scenarios someone thought to write. This
-is how to chase one you can feel but cannot name.
+The suite catches regressions in scenarios someone thought to write. This is how
+to chase one you cannot name.
 
 **1. Turn on the signpost console.** Set `RENDER_SIGNPOST_LOG=1` in the scheme's
-run action, run on a device or simulator, and use the app. Every body
-evaluation, map update and matcher run prints as it happens. If something
-re-renders when you touch an unrelated control, you will see it in the stream
-before you can measure it.
+run action and use the app. Every body evaluation, map update and matcher run
+prints as it happens; if something re-renders when you touch an unrelated
+control, you will see it before you can measure it.
 
 **2. Watch it in Instruments.** The same marks are `os_signpost` events, so
 *File › Recording Options › os_signpost* plus the **Energy Log** and **Location
 Energy Impact** instruments give the render stream and the battery cost on one
-timeline. This is the only way to see a radio wake-up you did not cause and a
-GPS duty cycle you did not ask for.
+timeline. This is the only way to see a radio wake-up you did not cause.
 
 **3. Reproduce it as a scenario.** Add a `test…` to `PerformanceUITests`, launch
 with `--ui-test-performance-log=<name>`, wrap the interaction in
-`measurePhase(named:in:seconds:)`, and read the counter deltas. If the number
-is stable, assert it; if it is not, the instability is the finding.
+`measurePhase(named:in:seconds:)`, and read the counter deltas. If the number is
+stable, assert it; if it is not, the instability is the finding.
 
 **4. Drive a real route.** `Scripts/simulate-hike.sh` plays a GPX through the
-simulator for long-running behaviour that a three-fix scenario cannot show —
-drift, growth per fix, the accumulator deciding you have stopped.
+simulator for long-running behaviour a three-fix scenario cannot show — drift,
+growth per fix, the accumulator deciding you have stopped.
 
-**5. Check the energy section of the report.** Radio wake-ups, refused fetches
-by reason, the location funnel, and every GPS reconfiguration with a timestamp.
-A scenario that renders perfectly and opens forty connections is a bug this
-document cares about just as much.
+**5. Read the energy section.** Radio wake-ups, refused fetches by reason, the
+location funnel, and every GPS reconfiguration with a timestamp. A scenario that
+renders perfectly and opens forty connections is a bug this document cares about
+just as much.
 
-Useful launch arguments, all gated behind `--ui-testing`:
+The launch arguments are all gated behind `--ui-testing` and documented in one
+place — the table in `README.md`. The ones this suite uses are
+`--ui-test-performance-log=<scenario>`, `--ui-test-offline` (which also hands
+the launch an empty tile root), `--ui-test-enable-location`,
+`--ui-test-import-gpx=<name>`, `--ui-test-trail-graph=<name>`,
+`--ui-test-seed-photos=<count>`, `--ui-test-photo-library=<count>`,
+`--ui-test-seed-metrics=<count>` and `--ui-test-expanded-sheet`.
 
-| Argument | Effect |
-|---|---|
-| `--ui-test-performance-log=<scenario>` | Opens the event log and the counter probe |
-| `--ui-test-offline` | Holds `TileCache` offline **and** gives it an empty tile root |
-| `--ui-test-enable-location` | Uses real simulator Core Location |
-| `--ui-test-import-gpx=<name>` | Imports a bundled GPX fixture |
-| `--ui-test-trail-graph=<name>` | Matches against a bundled graph instead of Overpass |
-| `--ui-test-seed-photos=<count>` | Attaches synthetic 12 MP photos to the imported hike (max 24) |
-| `--ui-test-expanded-sheet` | Starts with the sheet expanded |
+### Signposts
 
-### Signpost reference
+There is no canonical list of signpost names. `RenderSignpost`
+(`OpenHikes/General/Diagnostics/RenderInstrumentation.swift`) takes a
+`StaticString`, so a name exists only at its call site and any list written here
+would drift silently. The tree currently emits 68 distinct names; read them off
+the code:
 
-Rendering: `OpenHikesViewBody`, `MapSheetBody`, `MapSheetHikesBody`,
-`HikeDetailBody`, `RecordingBody`, `ElevationChartBody`,
-`HikePhotoSectionBody`.
+```sh
+rg -o --multiline --no-filename 'RenderSignpost\.\w+\(\s*"[A-Za-z]+"' --glob '*.swift' \
+  | sed -E 's/.*"([A-Za-z]+)".*/\1/' | sort -u
+```
 
-Map: `MapViewCreated`, `MapUpdateCalled`, `MapRouteRebuilt`, `MapRouteRestyled`,
-`MapTileSourceRebuilt`, `MapCentered`, `MapRecordingTraceApplied`.
+They fall into families whose prefixes are worth knowing: `…Body` for a SwiftUI
+body evaluation, `Map…` for anything that reaches `MKMapView`, `Recording…` and
+`Live…` for the fix pipeline, `Photo…` for decode and ordering, `Tile…` and
+`Offline…` for the storage and download pipeline (much the largest family), and
+`AppModelInit`/`ModelContainerInit`/`GPXParsed`/`HikeTrailAnalysis` for startup
+and I/O intervals.
 
-Recording: `LocationFixDelivered`, `LocationPublished`, `RecordingFixReceived`,
-`RecordingFixRejected`, `LiveFixAccepted`, `LiveTrailMatchApplied`,
-`LiveFollowUpdate`, `RecordingTailRebuilt`, `TrailMatcherWork` (interval),
-`RecordingEnergyProfileApplied`, `RecordingClockTick`.
-
-Photos: `PhotoThumbnailDecoded`, `PhotoImageDecoded` (both intervals).
-
-Energy and network: `PowerStateChanged`, `ScenePhaseChanged`,
-`TileNetworkFetch` (interval), `TileFetchSuppressed`, `WeatherFetch`
-(interval), `TrailGraphFetch` (interval).
-
-Startup and I/O: `AppModelInit`, `ModelContainerInit`, `GPXParsed`,
-`GPXExported`, `HikeDetailPrepared`, `HikeTrailAnalysis` (all intervals).
-
-## The other half — MetricKit in the field
+## MetricKit in the field
 
 Everything above is a Debug build, on a Simulator, driving synthetic input, on
-one machine. That is the right shape for a regression harness — it is
-deterministic, it fails a pull request, and it can be re-run — but it is the
-wrong shape for four of the questions this document keeps asking, and no amount
-of work on the harness will change that. A Simulator has no battery, no
-thermal state, no cellular radio, no jetsam, and no user.
+one machine. That is the right shape for a regression harness — deterministic,
+re-runnable, able to fail a pull request — and the wrong shape for the questions
+in **Blind spots**, because a Simulator has no battery, no thermal state, no
+cellular radio, no jetsam and no user.
 
-MetricKit answers exactly those. It is worth being precise about what it did
-and did not do to the harness:
-
-**It replaced nothing.** Not one line of `RenderSignpost`, `PerformanceLog`,
-`MainThreadWatchdog`, `PerformanceCounterProbe` or `PerformanceUITests` became
-redundant. MetricKit reports once every 24 hours, aggregated across a whole
-day, from a Release build, on a device, with no way to attribute a number to a
-gesture. It cannot fail a build, cannot bisect a regression, and cannot tell
-you that `MapSheetHikesBody` rendered four times during a pan. Anyone who reads
-"MetricKit collects launch times" and concludes it supersedes
+**MetricKit replaced nothing.** Not one line of `RenderSignpost`,
+`PerformanceLog`, `MainThreadWatchdog`, `PerformanceCounterProbe` or
+`PerformanceUITests` became redundant. It reports once every 24 hours,
+aggregated across a whole day, from a Release build, with no way to attribute a
+number to a gesture; it cannot fail a build, cannot bisect a regression, and
+cannot tell you that `MapSheetHikesBody` rendered four times during a pan.
+Anyone who reads "MetricKit collects launch times" and concludes it supersedes
 `XCTApplicationLaunchMetric` has confused a population statistic with a
-measurement.
+measurement. What it does is reach into the gaps the harness is shut out of:
+`MXAnimationMetric.hitchTimeRatio` for hitches,
+`LocationAccuracyBreakdown.conservingShare` for the conserving GPS profile,
+`MXAppExitMetric.backgroundExitData` for the jetsam risk a recording carries,
+and `MXCPUMetric` plus `cumulativeBackgroundLocationTime` for a whole walk.
 
-**It extended the harness into the gaps the harness is structurally shut out
-of.** Which is a real answer to five open items rather than a new source of
-graphs:
-
-| Open question above | What answers it |
-|---|---|
-| P2 "measure a real hike-length recording's energy" — *"the one measurement this harness structurally cannot make"* | `MXAppRunTimeMetric.cumulativeBackgroundAudioTime`/`cumulativeBackgroundLocationTime` and `MXCPUMetric.cumulativeCPUTime`, plus a `RecordingSession` signpost interval that attributes CPU, memory and writes to one whole walk |
-| Finding E1's leftover — *"the conserving profile has never been exercised anywhere but in unit tests"* | `MXLocationActivityMetric`'s six accuracy buckets, reduced to `LocationAccuracyBreakdown.conservingShare` |
-| P3 *"`XCTHitchMetric` needs a signpost stream the Simulator does not emit"* | `MXAnimationMetric.hitchTimeRatio` (new in iOS 26) and `MXAppResponsivenessMetric.histogrammedApplicationHangTime` |
-| P1 *"~370 ms between the first body and a free main thread"* | `extendLaunchMeasurement(forTaskID: .firstMapFrame)` around exactly that span, reported as `histogrammedExtendedLaunch`, plus `MXAppLaunchDiagnostic` stacks when it goes badly wrong |
-| Finding 2's real worry — a backgrounded recording being jetsammed | `MXAppExitMetric.backgroundExitData`, including `cumulativeSuspendedWithLockedFileExitCount`, which is the SwiftData-sqlite-specific one |
-
-### What was built
-
-`OpenHikes/General/Diagnostics/FieldMetrics/` — and note it is *not* `#if
-DEBUG`, unlike every other file in `Diagnostics/`. A Debug-only MetricKit
-integration would report nothing, since the framework only delivers against
-Release builds in the field. Six files, split along one line: what can be
-tested and what cannot.
+`OpenHikes/General/Diagnostics/FieldMetrics/` is six files, split along one
+line — what can be tested and what cannot — and note it is *not* `#if DEBUG`,
+unlike everything else in `Diagnostics/`. A Debug-only MetricKit integration
+would report nothing, since the framework only delivers against Release builds
+in the field.
 
 - **`FieldMetricsDigest.swift`** holds every judgement the app makes about a
-  payload — the quantile walk, the shares, which exits count as unexpected —
-  and imports no MetricKit at all. `MXMetricPayload` has no initializer and
-  cannot be synthesised, so anything that touched it would be untestable by
+  payload and imports no MetricKit at all. `MXMetricPayload` has no initializer
+  and cannot be synthesised, so anything touching it would be untestable by
   construction. This is why `FieldMetricsDigestTests` can exist.
-- **`FieldMetricsDigest+MetricKit.swift`** is the adapter, kept deliberately
-  thin: it reads fields and hands them across, and does nothing else.
+- **`FieldMetricsDigest+MetricKit.swift`** is the adapter, deliberately thin.
 - **`FieldMetricsStore.swift`** is an actor over a directory in Application
-  Support, bounded on every write at 16 reports and 4 MB, oldest-first, with
-  the newest never pruned — a crash payload larger than the whole budget is
-  exactly the one worth keeping.
-- **`FieldSignpost.swift`** is the `mxSignpost` wrapper and the launch
-  extension.
+  Support, bounded on every write at 16 reports and 4 MB, oldest-first, with the
+  newest never pruned — a crash payload larger than the whole budget is exactly
+  the one worth keeping.
+- **`FieldSignpost.swift`** is the `mxSignpost` wrapper and the launch extension.
 - **`FieldMetrics.swift`** is the `MXMetricManagerSubscriber`, and the only
-  thing in the app that talks to `MXMetricManager`. Not `#if DEBUG` — it is
-  the bridge from the above to the framework that actually delivers payloads.
+  thing in the app that talks to `MXMetricManager`.
 - **`SeededFieldMetricsFixture.swift`** is `#if DEBUG` and wires up
-  `--ui-test-seed-metrics=N`: it writes synthetic reports through the real
-  `FieldMetricsStore` so Settings ▸ Device Reports and its downstream screens
-  are reachable by automation on a Simulator that never receives a live payload.
+  `--ui-test-seed-metrics=N`, so Settings ▸ Device Reports is reachable by
+  automation on a Simulator that never receives a live payload.
 
 Nothing is uploaded. Reports are written locally, shown in **Settings ▸ Device
-Reports**, and leave the device only through an explicit share sheet — the
-position `CODE_REVIEW.md` already took, implemented rather than asserted.
+Reports**, and leave the device only through an explicit share sheet.
 
-### Why only four signposts
-
-Apple's own guidance: *"To limit on-device overhead, the system will
-automatically limit the number of signposts (emitted using the MetricKit log
-handle) processed. Avoid losing telemetry by limiting usage of signposts to
-critical sections of code."* The failure mode is silent — a fifth span does not
-error, it costs the other four their data.
-
-So the MetricKit set is four coarse, user-initiated spans, and is not the
-`RenderSignpost` list:
-
-| Span | Why |
-|---|---|
-| `RecordingSession` | The headline. One interval per whole walk gives cumulative CPU, average footprint and logical writes attributed to a hike-length recording. This *is* the P2 item |
-| `OfflineDownload` | A bulk tile download is the largest deliberate burst of network and disk the app ever does |
-| `HikeImport` | GPX parse plus trail analysis, on real files rather than fixtures |
-| `TrailGraphPrefetch` | The one unavoidable Overpass round trip, on a real radio |
-
-`TrailMatcherWork` fires roughly two thousand times per hike and
+**Why only four signposts.** Apple's guidance: *"To limit on-device overhead,
+the system will automatically limit the number of signposts (emitted using the
+MetricKit log handle) processed."* The failure mode is silent — a fifth span
+does not error, it costs the other four their data. So the MetricKit set is four
+coarse, user-initiated spans and is deliberately *not* the `RenderSignpost` list:
+`RecordingSession` (one interval per whole walk — this is the long-hike
+measurement), `OfflineDownload` (the largest deliberate burst of network and disk
+the app ever does), `HikeImport` (GPX parse plus trail analysis on real files)
+and `TrailGraphPrefetch` (the one unavoidable Overpass round trip on a real
+radio). `TrailMatcherWork` fires roughly two thousand times per hike and
 `TileNetworkFetch` hundreds; both stay `RenderSignpost`-only. `FieldSignpost.Span`
-is `CaseIterable` and `FieldMetricsDigestTests` asserts the count, so a fifth
-has to be added on purpose.
+is `CaseIterable` and `FieldMetricsDigestTests` asserts the count, so a fifth has
+to be added on purpose. `RecordingSession` ends where `stopLocationSensors()`
+runs rather than where the hike is saved — a walker who spends ten minutes naming
+a hike should not be charged for it against the recording.
 
-`RecordingSession` ends where `stopLocationSensors()` runs, not where the hike
-is saved — a walker who spends ten minutes naming a hike should not be charged
-for it against the recording.
+**Three caveats, all of which matter.** The Simulator emits no MetricKit
+telemetry: `MXSignpost_Private.h` branches on `TARGET_OS_SIMULATOR` and attaches
+the literal string `NO_METRICS`, so the call still emits an ordinary
+`os_signpost` and Instruments still works, but every number in this section can
+only be gathered on a device. Delivery is daily and a span that outlives the
+aggregation period is lost entirely, which for a `RecordingSession` means a
+recording left running overnight reports nothing. And `extendLaunchMeasurement`
+must be balanced — a task never finished stays open for the process lifetime and
+reports nothing — so `LaunchMeasurement.finish()` is idempotent and is called
+both from `MapView`'s creation and, as a backstop, from
+`sceneWillResignActive()` for the launch that never reaches a map.
 
-### Three caveats, all of which matter
-
-**The Simulator emits no MetricKit telemetry.** `MXSignpost_Private.h` branches
-on `TARGET_OS_SIMULATOR`: on a device `mxSignpost` attaches
-`_MXSignpostMetricsSnapshot()`, and on the Simulator it attaches the literal
-string `NO_METRICS`. The call compiles and emits an ordinary `os_signpost`
-either way, so Instruments still works — but every number in this section can
-only ever be gathered on a device. Xcode's **Debug ▸ Simulate MetricKit
-Payloads** is how the parsing and the UI were exercised; it is not how the
-numbers were.
-
-**Delivery is daily, and a span that outlives the period is lost.** MetricKit
-delivers at most once every 24 hours, on its own schedule. An interval still
-open when the aggregation period closes is not reported at all — which for a
-`RecordingSession` means a recording left running overnight produces nothing.
-
-**`extendLaunchMeasurement` must be balanced.** An extended-launch task that is
-never finished stays open for the process lifetime and reports nothing, so
-`LaunchMeasurement.finish()` is idempotent and is called both from `MapView`'s
-creation — the actual thing being measured — and as a backstop from
-`sceneWillResignActive()`, for the launch that never reaches a map at all.
-
-## TODO
-
-### P1
-
-- [ ] **Cut the first render.** ~370 ms between the first body and a free main
-      thread, of which ~62 ms is `MKMapView` construction and the rest is a
-      sheet that renders three to four times before settling. Find out how much
-      of the sheet hierarchy is required for the first frame. This is the
-      dominant cost of a short "where am I" session.
-- [x] ~~Assert the launch stall.~~ Done — `assertLaunchStall(atMost:in:)` fails
-      `testIdleCostsNothing` above 1200 ms, against an observed 526–673 ms.
-      It reads the watchdog's maximum rather than a phase delta, because launch
-      is over before any phase begins.
-
-### P2 — energy
-
-- [x] ~~Make the GPS configuration a function of conditions.~~ Done —
-      `RecordingEnergyPolicy`, Finding E1.
-- [x] ~~Act on `isExpensive` / `isConstrained` / Low Power Mode for tiles.~~
-      Done — `TileNetworkPolicy`, Finding E2.
-- [x] ~~Stop rebuilding map overlays while backgrounded.~~ Done — 2.0 → 0.33
-      applications per fix, Finding E3.
-- [x] ~~Suppress the 1 Hz `TimelineView` in `RecordingView` while
-      backgrounded.~~ Done, and it was **not** already suspended by the system —
-      it ticked 17 times through a 13-second pocket. Finding E5.
-- [ ] **Measure a real hike-length recording's energy.** Every number above
-      extrapolates from a three-fix scenario. `Scripts/simulate-hike.sh` plus
-      the Energy Log instrument over a full GPX is the only way to know whether
-      the per-fix cost is flat, and it is the one measurement this harness
-      structurally cannot make. **Instrumented on 2026-08-25, not yet
-      answered**: the `RecordingSession` `mxSignpost` interval now attributes
-      cumulative CPU, average footprint and logical writes to one whole walk,
-      and `MXAppRunTimeMetric.cumulativeBackgroundLocationTime` gives the
-      denominator. That turns this from a measurement nobody can take into one
-      that needs a Release build on a device and a day's wait. The instrument
-      is in; the walk has not been taken.
-- [x] ~~Audit the app for any remaining periodic work.~~ Performed by
-      inspection on 2026-08-25. `RecordingClockTick` is in fact the only
-      periodic path in the shipping app: `RecordingView.swift:232`'s
-      `TimelineView` is the one E5 gated, and the only other repeating timer in
-      the tree is `PerformanceLog`'s own 1 Hz sampler, which is `#if DEBUG` and
-      exists to take these measurements. Three things that look periodic and
-      are not, checked individually so the next sweep does not re-flag them:
-      `AutoSaveController`'s drain is signal-driven and its own comment records
-      that it used to poll every 2 s and no longer does;
-      `CachingTileOverlayRenderer`'s retry wake is a one-shot armed from a
-      backoff deadline; and `HikeRecorder+Helpers`' scheduling is event-driven.
-      This was a reading, not a measurement — an Energy Log over a full hike
-      would still be the thing that proves it, and that is the item above.
-- [ ] **Consider `isIdleTimerDisabled` deliberately.** The app never sets it,
-      which is the right default — but a walker navigating a junction with the
-      screen dimming every 30 s will reach for the power button repeatedly, and
-      each wake costs more than the timeout saved. Worth a setting rather than
-      a constant.
-
-### P2 — rendering
-
-- [x] ~~Make `rebuildTail()` cost the provisional tail, not the whole tail.~~
-      Done — mean per-fix cost down 24%, peak down 43% (Finding 3).
-- [x] ~~Stop rebuilding unchanged overlays in `applyRecordingTrace`.~~ Done —
-      the tail and review polylines carry independent change tokens.
-- [x] ~~Publish no revision when a fix changes nothing.~~ Done — a fix dropped by
-      `appendDistinct` as too close to the last no longer bumps `stableRevision`.
-- [ ] **Find out why panning re-renders `MapSheetHikesBody`** (Finding 5). Now
-      budgeted, not yet explained, and now known to be run-dependent rather
-      than constant.
-
-### P3
-
-- [ ] Work out why a tap on the elevation chart scrubs nothing (Finding 4). It
-      no longer costs renders, so this is a behaviour question rather than a
-      performance one.
-- [ ] Add a `--ui-test-*` scenario for a long recording (hundreds of fixes) so
-      the O(n)-per-fix shapes show up as a slope rather than as an argument.
-      This is also what would size the `rebuildTail()` win properly, and what
-      would make the per-hike-hour extrapolations above into measurements.
-- [ ] Measure a gallery larger than the strip. Eight photos is enough to prove
-      the strip re-decodes nothing, but not enough to show whether a hike with
-      two hundred photos evicts thumbnails and re-decodes them on the way back.
-      `--ui-test-seed-photos` caps at 24 today for run-time reasons.
-      **The expected answer changed on 2026-08-25**, so this is worth doing
-      sooner: the thumbnail tier used to be bounded only by a count of 200 —
-      an effective ceiling near 150 MB of decoded bitmaps, which is why the
-      question above was phrased around two hundred photos. It is now bounded
-      at 32 MB of decoded bytes, roughly 42 thumbnails, so eviction is a
-      routine event on any long strip rather than a pathological one, and the
-      20.4 ms re-decode measured above is the cost being paid for it. Whether
-      that trade is sized right is now a measurement rather than a guess. See
-      `CODE_REVIEW.md`'s 2026-08-25 pass, §A.4.
-- [ ] Run the suite on a device once. `XCTHitchMetric` needs a signpost stream
-      the Simulator does not emit — it raises inside `harvestData` rather than
-      degrading — so frame-level hitch data is the one thing this harness cannot
-      currently produce. A device is also the only place thermal state ever
-      leaves `.nominal`, so the conserving profile has never been exercised
-      anywhere but in unit tests. It is also the only place the E5 finding can
-      be confirmed in the form that matters, since the Simulator does not
-      suspend apps the way a real device does.
-      **This item now has a second, cheaper half.** The MetricKit integration
-      answers the same three questions without a tethered run —
-      `MXAnimationMetric.hitchTimeRatio` for hitches, the
-      `LocationAccuracyBreakdown.conservingShare` for the conserving profile,
-      and `MXAppExitMetric.backgroundExitData` for suspension — but from a
-      Release build, a day late, aggregated. Neither substitutes for the other:
-      a tethered run says *why*, MetricKit says *whether it happens to anyone*.
-      Do the tethered run to explain a number the field data shows.
-- [ ] **Read the first MetricKit payloads.** The integration is in and tested,
-      but no payload has been read on a device, because the Simulator emits
-      `NO_METRICS` (see above) and delivery is daily. Until a Release build has
-      run on a phone for a day, every claim in "The other half" is about what
-      the API reports, not about what this app does. Check first that
-      `RecordingSession` appears at all — an interval that outlives the
-      24-hour period is dropped silently, and a long walk is exactly the case
-      that risks it.
-- [ ] Give the report generator a `--baseline` flag so a run can be diffed
-      against a stored one instead of by hand.
-
-## Where this stands
-
-Measured on 2026-08-17, iPhone 17 Pro simulator, iOS 26.5, Xcode 26.6, Debug:
-
-| Check | Result |
-|---|---|
-| `PerformanceUITests` | **8 of 8 passed** |
-| App and widget unit tests | **811 passed** |
-| `swiftlint --strict` | Clean |
-| Launch, first responsive frame | 1.398 s, RSD 0.14% (n=3) |
-| Launch main-thread stall | 526–673 ms, now asserted below 1200 ms |
-| Idle CPU, 7 s | 0.047 s — 0.7% of one core |
-| Offline browsing | 0 connections, 45 fetches refused |
-| Whole suite | 0 connections opened, in every scenario |
-| Backgrounded recording | 0 bodies per fix, **0.217** CPU-s per fix |
-| `RecordingClockTick` backgrounded | 17 → **2** per ~13 s |
-| `MapRecordingTraceApplied` backgrounded | 2.0 → **0.33** per fix |
-| `RecordingTailRebuilt` per fix | 2.0, mean 0.019 ms |
-| Photo strip, scrolled | 0 decodes, 0 bodies |
-| Photo thumbnail decode | 20.4 ms median, 8 concurrent |
-| Recording footprint | 97.0 MB start → 91.9 MB end, 160.6 MB transient peak |
-
-The energy work is pinned by `RecordingEnergyPolicyTests`,
-`HikeRecorderTests+Energy`, `TileNetworkPolicyTests`, four cases in
-`TileTransportTests`, and now by the paired `RecordingClockTick` assertions in
-the two recording scenarios. What remains is the P1 first-render item, the
-long-hike measurement that no simulator scenario can substitute for, the
-periodic-work audit E5 argues for, and the P3 list.
-
-The MetricKit work added on 2026-08-25 is pinned by `FieldMetricsDigestTests`
-and `FieldMetricsStoreTests` (29 cases). Those test the arithmetic and the
-bounded store; they cannot test the payloads, because `MXMetricPayload` cannot
-be constructed. Nothing in that section has been observed on a device yet.
-
-Four caveats for anyone reading a future run. Memory columns from a UI-test run
-describe the harness as much as the app (Finding 2). The per-hike-hour energy
-figures are extrapolations from thirty-second scenarios and should be treated as
-shapes, not values. Some counters are not stable run to run — Finding 5 reported
-4 and then 1 and then 4 again for the same build — so a single good run is not
-evidence that something was fixed. And the suite has never run on a physical
-device, which is the only place `XCTHitchMetric` works, the only place the launch
-number means what a user would experience, the only place thermal throttling has
-ever actually happened, the only place background suspension behaves as it
-will for a real walker, and — since 2026-08-25 — the only place MetricKit
-reports anything at all.
+Pinned by `FieldMetricsDigestTests` and `FieldMetricsStoreTests`, 29 cases
+between them. Those test the arithmetic and the bounded store; they cannot test
+the payloads, because `MXMetricPayload` cannot be constructed. Nothing in this
+section has been observed on a device.

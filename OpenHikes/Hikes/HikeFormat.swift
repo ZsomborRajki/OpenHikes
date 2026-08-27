@@ -39,6 +39,29 @@ nonisolated enum HikeFormat {
             : duration.formatted(shortStyle)
     }
 
+    /// The date and the time to the minute — what a photograph, a map pin and
+    /// the sync status all put beside themselves.
+    ///
+    /// `static let` for the same reason the two above are, and it matters more
+    /// here: these are attached per cell. A `Date.FormatStyle` written at the
+    /// call site is a fresh value each time, so a grid of a dozen photographs
+    /// built a dozen of them on every pass, and the pass ran on every tick of
+    /// a checkbox.
+    ///
+    /// Safe to hold: `Date.FormatStyle` defaults to `Locale.autoupdatingCurrent`,
+    /// so a static one still follows a change of language or region.
+    private static let timestampStyle = Date.FormatStyle(date: .abbreviated, time: .shortened)
+    /// The time alone, for a caption already sitting under a known date.
+    private static let timeOfDayStyle = Date.FormatStyle(date: .omitted, time: .shortened)
+
+    static func timestamp(_ date: Date) -> String {
+        date.formatted(timestampStyle)
+    }
+
+    static func timeOfDay(_ date: Date) -> String {
+        date.formatted(timeOfDayStyle)
+    }
+
     static func length(_ measurement: Measurement<UnitLength>) -> String {
         let rounded = Measurement(value: measurement.value.rounded(), unit: measurement.unit)
         return rounded.formatted(.measurement(width: .abbreviated, usage: .asProvided))

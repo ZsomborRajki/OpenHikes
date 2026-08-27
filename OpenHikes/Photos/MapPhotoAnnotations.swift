@@ -160,7 +160,7 @@ final class PhotoCalloutPreview: UIControl {
     /// gallery's own tiles say about one — when it was taken, and that
     /// activating it opens it.
     private static func label(for pin: PhotoMapPin) -> String {
-        let taken = pin.photo.capturedAt.formatted(date: .abbreviated, time: .shortened)
+        let taken = HikeFormat.timestamp(pin.photo.capturedAt)
         return pin.count > 1
             ? String(localized: "Open photo taken \(taken), first of \(pin.count) taken here")
             : String(localized: "Open photo taken \(taken)")
@@ -261,7 +261,7 @@ extension MapView.Coordinator {
     /// What the marker itself says, as distinct from the preview inside its
     /// callout: this one is a place on the trail, not the way into the photo.
     private static func markerLabel(for pin: PhotoMapPin) -> String {
-        let taken = pin.photo.capturedAt.formatted(date: .abbreviated, time: .shortened)
+        let taken = HikeFormat.timestamp(pin.photo.capturedAt)
         return pin.count > 1
             ? String(localized: "\(pin.count) photos taken here, first on \(taken)")
             : String(localized: "Photo taken \(taken)")

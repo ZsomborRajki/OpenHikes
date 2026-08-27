@@ -166,9 +166,8 @@ struct SheetQueryIsolationTests {
         let container = try Fixture.modelContainer()
         let sheet = MapSheet(
             searchText: .constant(""),
-            detent: .constant(.large),
             selectedHike: .constant(nil),
-            path: .constant([]),
+            presentation: SheetPresentation(detent: .large),
             highlight: RouteHighlight(),
             mapController: MapController(),
             photoCapture: PhotoCaptureController(),

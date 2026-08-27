@@ -110,7 +110,7 @@ final class CloudSyncStatus {
             reason
         case .idle:
             lastSyncedAt.map { date in
-                "Last synced \(date.formatted(date: .abbreviated, time: .shortened))."
+                "Last synced \(HikeFormat.timestamp(date))."
             } ?? "Your hikes and photos are kept in your private iCloud storage."
         case .paused:
             "Your hikes stay on this device only."
