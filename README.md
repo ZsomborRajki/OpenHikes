@@ -40,7 +40,7 @@ locked, and OpenStreetMap keeps working.
 1. Open `OpenHikes.xcodeproj`.
 2. Set your development team for `OpenHikes` and `OpenWidgetExtension`.
 3. If your team cannot use `group.tappium.com.OpenHikes`, replace it in both entitlement files and in `SharedStore.appGroupID`.
-4. iCloud sync needs a CloudKit container. Xcode creates `iCloud.tappium.com.OpenHikes` on the first signed build; if your team cannot use that identifier, replace it in `OpenHikes/OpenHikes.entitlements` and in `CloudSyncSchema.containerIdentifier`. The app creates its own record types on first write, so there is nothing to configure in the CloudKit dashboard for development.
+4. iCloud sync needs a CloudKit container. Xcode creates `iCloud.tappium.com.OpenHikes` on the first signed build; if your team cannot use that identifier, replace it in `OpenHikes/OpenHikes.entitlements` and in `CloudSyncCoordinator.containerIdentifier`. SwiftData's mirroring creates the development schema from the model on first run, so there is nothing to configure in the CloudKit dashboard until you ship.
 5. Optionally enable Stadia or Thunderforest:
 
    ```sh
@@ -251,7 +251,7 @@ domain folders.
 | `OpenHikes/Map/` | MapKit bridge, map state, search, location tracking, and map rendering. |
 | `OpenHikes/Tiles/` | Tile provider policy, cache, auto-save, offline downloads, and overlay rendering. |
 | `OpenHikes/Photos/` | Photo capture and import, library discovery and time-to-place matching, the file store behind them, trail anchoring, the gallery and viewer, and the pins they draw on the map. |
-| `OpenHikes/Sync/` | CloudKit sync engine, record mapping, and the settings key-value mirror. |
+| `OpenHikes/Sync/` | iCloud sync status and control, and the settings key-value mirror. |
 | `OpenHikes/Weather/` | WeatherKit polling and presentation state. |
 | `OpenHikes/Settings/` | User-facing app, recording, map, and storage settings. |
 | `OpenHikes/General/` | Cross-domain extensions and diagnostics. |
@@ -270,23 +270,43 @@ Hikes follow the walker rather than the phone. There is no OpenHikes account
 and no server: everything travels through the user's own private CloudKit
 database, so the app never sees it and nobody has to sign up for anything.
 
+SwiftData does the syncing. `Hike` lives in a store configured with
+`cloudKitDatabase: .automatic`, and mirroring uploads, downloads, merges and
+deletes from inside Core Data — there is no queue this app owns, no change
+token it persists and no record mapping it writes. `OpenHikes/Sync/` is what
+mirroring does *not* do: report what is happening, and remember whether the
+user wanted it.
+
 | Travels | Stays on the device |
 |---|---|
 | Hike title, custom name, date, distance, style, symbol, auto-follow and GPX metadata | Auto-saved and offline tiles, and the download records that describe them |
 | The matched route and the raw GPS trace | Whether tile auto-save is on for a hike |
-| Surface and difficulty breakdowns | A recording in progress |
-| Photos — pixels and trail anchor alike | Whether Background Trail Tracking is on |
+| Surface and difficulty breakdowns | Photo pixels — only a photo's metadata travels |
+| Photo metadata, including the trail anchor | Whether Background Trail Tracking is on |
 | Map tile provider, and the save-to-photo-library switch | Which hike this device has selected, and where it is along it |
 
-Tiles are the reason this uses `CKSyncEngine` rather than SwiftData's CloudKit
-mirroring. Mirroring syncs a whole row with no way to hold a column back, and
-half of `Hike` describes files in *this* device's Application Support — a
-second device restoring them would believe it holds offline maps it never
-downloaded, bill the user for phantom bytes on the storage screen, and free
-nothing when they deleted them. `HikeSyncPayload` is the single readable list
-of what leaves the device. SwiftData's own mirroring is switched off
-explicitly, in `ModelConfiguration+OpenHikes.swift`, because the iCloud
-entitlement would otherwise turn it on by itself.
+Mirroring syncs a whole *row* and resolves conflicts last-writer-wins, with no
+way to hold a column back — so anything describing files in this device's
+Application Support has to live somewhere the mirror cannot reach. That is
+`HikeLocalState`: a second `@Model` in a second, unmirrored `ModelConfiguration`,
+holding the tile inventory and the per-hike auto-save switch. It is not
+tidiness. `TileOwnership` builds the tile claim set from exactly those two
+arrays and `TileCache.trimCache(claimedBy:)` deletes whatever no hike claims, so
+a second device's inventory overwriting this one's would strip this device of
+offline maps it really had downloaded, at the next launch, silently. The two
+rows are in different stores and so cannot be related, which is why deleting a
+hike calls `deleteLocalState()` by hand — nothing cascades.
+
+Routes are `@Attribute(.externalStorage)` so mirroring carries them as a
+`CKAsset`. A day's recording is some twenty thousand points, which is a couple
+of megabytes encoded, and a `CKRecord`'s fields have to add up to less than one;
+without this the longest hikes would be exactly the ones that failed to sync.
+
+Two constraints ride along with `.automatic` and are easy to trip over later.
+Mirroring refuses to open a store with a mandatory attribute that has no
+default, and it forbids uniqueness constraints outright — every non-optional
+column on `Hike` carries an inline default for that reason, and a new one has
+to.
 
 Settings ride separately, on `NSUbiquitousKeyValueStore`, because two
 preferences do not need a record type and a conflict policy. The list is an
@@ -294,31 +314,43 @@ allowlist: a setting that describes *this* device — a granted location
 permission, where this phone is in the app — deliberately does not travel.
 
 Sync is on by default and can be turned off in Settings, where the same section
-says what it is doing and, when it isn't, why. Turning it off stops the engine
-and forgets its change token; it never deletes a hike. Neither does a zone
-deleted from iCloud settings: the library is simply uploaded again.
+says what it is doing and, when it isn't, why. A `ModelConfiguration` decides
+whether it mirrors when it is built, so the switch cannot take effect until the
+app is next launched; `CloudSyncCoordinator.pendingRelaunch` is what makes that
+gap a sentence on the screen rather than something the user discovers. Turning
+it off never deletes a hike.
 
-Photos travel as their own records, keyed by photo, so adding one picture does
-not re-upload the other twenty. Routes travel compressed, inline under 400 KB
-and as a `CKAsset` above it.
+The status row is driven by `NSPersistentCloudKitContainer.eventChangedNotification`,
+which is the only window SwiftData leaves open onto mirroring — an event says a
+setup, import or export began or ended and whether it succeeded, and nothing
+about what was in it. `CloudSyncOutcome` reduces one to the four things the row
+can say, and filters CloudKit's own retry vocabulary out of it: a device in a
+tunnel is not a device with a sync problem, and the retry that succeeds is
+silent, so a transient error promoted to a headline would stay on the screen.
 
-Two kinds of local change cannot be re-derived by looking at the device later,
-so both are written down the moment they happen rather than only queued with
-the engine. A **deletion** leaves nothing behind that a later scan could notice
-is missing, while iCloud still holds a copy that the next fetch would bring
-back — so its tombstone even outlives turning sync off, which is what stops a
-hike deleted in that state from reappearing when it is turned on again. An
-**edit** to a hike iCloud already knows about is invisible to reconciliation,
-which only asks whether a record exists. Both matter because the engine is not
-up for the first moments of a launch: it waits on an iCloud account check
-first. Going the other way, a fetched change is offered exactly once, so one
-whose write to SwiftData fails is held on disk and retried rather than logged
-and lost.
+### What this costs
+
+Letting SwiftData own sync gave up things a hand-written engine had. They are
+deliberate, and they are the whole of the trade:
+
+- **Photo pixels do not travel.** They are files under `HikePhotoStore`, not a
+  SwiftData column, and mirroring only carries columns. A second device gets a
+  photo's metadata and finds no file behind it.
+- **Whole-row uploads.** Renaming a hike re-uploads its routes and its photo
+  metadata, where the old engine sent one small record.
+- **No draft filtering.** A recording in progress is a row like any other, so a
+  walk is uploaded as it happens and a second device shows a hike whose line is
+  still being drawn.
+- **Last-writer-wins.** There is no hook to prefer an unsent local edit, and
+  none to stop a remote copy landing on a hike this device is recording.
+- **The CloudKit schema is now permanent.** It is append-only in production, so
+  a column added to `Hike` cannot later change type or go away.
 
 ## Current limitations
 
 - Offline trail matching is limited to Overpass graph regions that were cached previously; prebuilt regional graph bundles are not shipped.
-- iCloud sync carries hikes, their metadata and their photos; downloaded map tiles stay on the device that downloaded them, by design.
+- iCloud sync carries hikes and their metadata; photo pixels and downloaded map tiles stay on the device that produced them, by design.
+- Turning iCloud sync on or off takes effect on the next launch.
 - The Simulator cannot receive CloudKit push notifications, so a second simulator only picks up changes when it is brought to the foreground.
 - The SwiftData store is not migrated across schema changes.
 - Third-party tile keys can only be supplied at build time.

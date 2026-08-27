@@ -404,8 +404,8 @@ constant. And nothing has re-checked periodic work since 2026-08-26, when a
 reading of the tree found `RecordingClockTick` to be the only periodic path in
 the shipping app: `AutoSaveController`'s drain is signal-driven,
 `CachingTileOverlayRenderer`'s retry wake is a bounded one-shot,
-`HikeRecorder+Helpers` is event-driven, and `CKSyncEngine` schedules its own
-work. That was a reading, not a measurement.
+`HikeRecorder+Helpers` is event-driven, and CloudKit mirroring schedules its
+own work. That was a reading, not a measurement.
 
 ## Rules this suite learned the hard way
 

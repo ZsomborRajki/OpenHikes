@@ -2,42 +2,50 @@
 //  CloudSyncCoordinator.swift
 //  OpenHikes
 //
-//  The one object the rest of the app talks to about sync, and the only place
-//  that decides whether sync should be running at all.
+//  The one object the rest of the app talks to about sync, now that SwiftData
+//  does the syncing.
 //
-//  Four unrelated reasons make sync a no-op — the user turned it off, there is
-//  no Apple Account on the device, this process is hosting a test bundle, or
-//  the persistent store did not open and the app is running on the empty
-//  in-memory fallback — and they all arrive here rather than being re-checked
-//  at each call site. Everything below this line can then assume it was
-//  started deliberately.
+//  There is no engine here any more. `Hike` lives in a store configured with
+//  `cloudKitDatabase: .automatic`, so mirroring uploads, downloads, merges and
+//  deletes on its own, from inside Core Data, with no queue this app owns and
+//  no change token it has to persist. What is left is the part mirroring does
+//  not do: tell the person what is happening, and remember whether they wanted
+//  it at all.
 //
-//  It also owns the one thing that would otherwise need a hook in every screen
-//  that edits a hike: the SwiftData save notification. A title changed in the
-//  detail view, a photo added from the map, a route saved by the recorder and
-//  a hike imported from Files all end in the same `save`, so all four are
-//  noticed by watching that instead of by remembering to call something.
+//  The switch is the awkward part of that bargain. A `ModelConfiguration` is
+//  fixed for the life of its container, so flipping it cannot take effect
+//  until the app is next launched — ``OpenHikesModel`` reads
+//  ``SettingsKey/cloudSyncEnabled`` when it builds the container, and
+//  ``pendingRelaunch`` is what makes the gap between the switch and the
+//  behaviour something the settings screen says out loud rather than something
+//  the user discovers.
 //
 
 import CloudKit
-import CoreLocation
+import CoreData
 import Foundation
 import Observation
 import os
 import SwiftData
-#if canImport(UIKit)
-import UIKit
-#endif
 
 @MainActor
 @Observable
 final class CloudSyncCoordinator {
     private static let logger = Logger(subsystem: "OpenHikes", category: "CloudSync")
 
+    /// The default container for this bundle identifier, spelled out rather
+    /// than left to `CKContainer.default()` so that it is greppable and so
+    /// that it matches the entitlement literally.
+    ///
+    /// Mirroring picks its own container from the entitlement and never reads
+    /// this. The account check does, which is the only CloudKit call this app
+    /// still makes by hand.
+    static let containerIdentifier = "iCloud.tappium.com.OpenHikes"
+
     let status: CloudSyncStatus
 
-    /// The user's switch. Persisted, and the only one of the three reasons
-    /// sync might be off that the app itself decides.
+    /// The user's switch. Persisted, and read at launch by whoever builds the
+    /// container.
     ///
     /// On by default. This is the person's own private iCloud storage, it is
     /// how every first-party app on the device behaves, and the alternative —
@@ -47,179 +55,167 @@ final class CloudSyncCoordinator {
         didSet {
             guard isEnabled != oldValue else { return }
             defaults.set(isEnabled, forKey: SettingsKey.cloudSyncEnabled)
-            requestState(resetting: !isEnabled)
+            updateSettingsMirror()
+            refreshStatus()
         }
     }
 
-    @ObservationIgnored private let applier: HikeSyncApplier
-    @ObservationIgnored private let engine: HikeSyncEngine
-    @ObservationIgnored private let settings: SyncedSettingsMirror
+    /// Whether the switch and this launch's container disagree.
+    ///
+    /// True exactly between flipping the switch and relaunching. Read by
+    /// ``CloudSyncStatus`` so the row explains itself instead of claiming a
+    /// state the store is not in.
+    var pendingRelaunch: Bool { isEnabled != isSyncingThisLaunch }
+
     @ObservationIgnored private let defaults: UserDefaults
     @ObservationIgnored private let storageIsDurable: Bool
-    /// Built on first use, for the reason ``HikeSyncEngine``'s is: its only
-    /// reader is the `async` account-status query, and constructing it as a
-    /// default argument charged launch for CloudKit's bring-up.
+    /// What the container was actually built with — see ``pendingRelaunch``.
+    @ObservationIgnored private let isSyncingThisLaunch: Bool
+    /// Built on first use. Its only reader is the `async` account check, and a
+    /// `CKContainer` constructed as a stored default argument put CloudKit's
+    /// framework load and daemon handshake on the launch path; see
+    /// `PERFORMANCE.md`.
     @ObservationIgnored private let makeCloudContainer: () -> CKContainer
     @ObservationIgnored private lazy var cloudContainer: CKContainer = makeCloudContainer()
-    @ObservationIgnored private var saveObserver: (any NSObjectProtocol)?
+    @ObservationIgnored private let settings: SyncedSettingsMirror
+    @ObservationIgnored private var eventObserver: (any NSObjectProtocol)?
     @ObservationIgnored private var accountObserver: (any NSObjectProtocol)?
-    @ObservationIgnored private var lifecycleObservers: [any NSObjectProtocol] = []
-    @ObservationIgnored private var stateTask: Task<Void, Never>?
+    @ObservationIgnored private var accountTask: Task<Void, Never>?
 
-    #if canImport(UIKit)
-    @ObservationIgnored private var flushAssertion = UIBackgroundTaskIdentifier.invalid
-    #endif
-
-    /// - Parameter storageIsDurable: False when ``OpenHikesModel`` fell back
-    ///   to its in-memory container because the persistent store would not
-    ///   open. See ``canSync``.
-    convenience init(
-        container: ModelContainer,
-        defaults: UserDefaults,
-        storageIsDurable: Bool = true
-    ) {
-        let sharedStatus = CloudSyncStatus()
-        let sharedApplier = HikeSyncApplier(container: container)
-        self.init(
-            applier: sharedApplier,
-            engine: HikeSyncEngine(applier: sharedApplier, status: sharedStatus),
-            settings: SyncedSettingsMirror(defaults: defaults),
-            status: sharedStatus,
-            defaults: defaults,
-            storageIsDurable: storageIsDurable
-        )
+    /// Whether the user's setting says sync should be on, for the call site
+    /// that has to decide before there is a coordinator to ask: the container
+    /// is built first, and the coordinator takes what it was built with.
+    static func isEnabled(in defaults: UserDefaults) -> Bool {
+        defaults.object(forKey: SettingsKey.cloudSyncEnabled) as? Bool
+            ?? SettingsDefault.cloudSyncEnabled
     }
 
+    /// - Parameter isSyncingThisLaunch: Whether the container this coordinator
+    ///   reports on was actually built to mirror. Not re-derived from
+    ///   `defaults`, because the two differ precisely in the case
+    ///   ``pendingRelaunch`` exists to describe.
+    /// - Parameter storageIsDurable: False when ``OpenHikesModel`` fell back to
+    ///   its in-memory container because the persistent store would not open.
+    ///   That container never mirrors, whatever the switch says.
     init(
-        applier: HikeSyncApplier,
-        engine: HikeSyncEngine,
-        settings: SyncedSettingsMirror,
-        status: CloudSyncStatus,
         defaults: UserDefaults,
+        isSyncingThisLaunch: Bool,
         storageIsDurable: Bool = true,
+        settings: SyncedSettingsMirror? = nil,
+        status: CloudSyncStatus = CloudSyncStatus(),
         cloudContainer: @autoclosure @escaping () -> CKContainer = CKContainer(
-            identifier: CloudSyncSchema.containerIdentifier
+            identifier: CloudSyncCoordinator.containerIdentifier
         )
     ) {
-        self.applier = applier
-        self.engine = engine
-        self.settings = settings
-        self.status = status
         self.defaults = defaults
+        self.isSyncingThisLaunch = isSyncingThisLaunch && storageIsDurable
         self.storageIsDurable = storageIsDurable
+        self.status = status
+        self.settings = settings ?? SyncedSettingsMirror(defaults: defaults)
         makeCloudContainer = cloudContainer
-        isEnabled = defaults.object(forKey: SettingsKey.cloudSyncEnabled) as? Bool
-            ?? SettingsDefault.cloudSyncEnabled
+        isEnabled = Self.isEnabled(in: defaults)
+        status.pendingRelaunch = isEnabled != self.isSyncingThisLaunch
     }
 
     // MARK: - Lifecycle
 
-    /// Starts watching for local changes and brings the engine up if it should
-    /// be up.
+    /// Starts reporting on what mirroring is doing.
     ///
     /// Behind the test guard for the same reason every other startup writer
     /// is: both unit-test bundles are hosted by the app, so this would
-    /// otherwise reach for a real iCloud account, a real container and the
-    /// user's real hikes underneath suites that own their own store.
+    /// otherwise reach for a real iCloud account underneath suites that own
+    /// their own store.
     func start() {
+        updateSettingsMirror()
         guard canSync else {
             status.paused()
+            refreshStatus()
             return
         }
+        observeMirroringEvents()
         observeAccountChanges()
-        observeSaves()
-        observeAppLifecycle()
-        requestState(resetting: false)
+        refreshStatus()
     }
 
-    /// Re-checks iCloud and pulls anything waiting.
+    /// Matches the settings mirror to the switch, immediately.
     ///
-    /// Necessary because a CloudKit push is a best effort: the system drops
-    /// them under pressure, and the Simulator cannot receive them at all. A
-    /// foreground fetch is what makes those two cases indistinguishable from
-    /// the working one.
+    /// Unlike the hikes themselves, settings need no relaunch to change their
+    /// minds: they ride on `NSUbiquitousKeyValueStore`, which this object owns
+    /// outright rather than receiving pre-configured from a
+    /// ``ModelConfiguration``. Turning the switch off has to stop them the
+    /// moment it is turned off — a user who has just said "do not put my
+    /// things in iCloud" and watches their map provider upload anyway has been
+    /// told something untrue.
+    private func updateSettingsMirror() {
+        if canSync, isEnabled {
+            settings.start()
+        } else {
+            settings.stop()
+        }
+    }
+
+    /// Re-checks iCloud.
+    ///
+    /// Mirroring needs no nudge to fetch — it holds its own subscription and
+    /// wakes on the same pushes — so unlike the engine this replaced, it asks
+    /// nothing of the store. It exists so a user who signed into iCloud in the
+    /// Settings app and came back sees the row change.
     func sceneDidBecomeActive() {
-        guard isEnabled else { return }
-        requestState(resetting: false)
+        refreshStatus()
     }
 
-    /// Whether sync may touch iCloud at all, for reasons that have nothing to
+    /// Whether mirroring is running at all, for reasons that have nothing to
     /// do with the user's switch.
-    ///
-    /// The store matters as much as the test host does. When the persistent
-    /// store will not open, ``OpenHikesModel`` falls back to an empty
-    /// in-memory container for that launch — but this feature's bookkeeping
-    /// lives in Application Support, is untouched by that failure, and still
-    /// names every hike the device has uploaded. Syncing an empty library
-    /// against it ends in the whole account being reconciled away, on that
-    /// launch or the next one, and no relaunch undoes it.
     private var canSync: Bool {
         storageIsDurable && !AppLaunchEnvironment.isRunningTests
     }
 
-    // MARK: - Local changes
+    // MARK: - Observation
 
-    /// Queues a hike's removal while it can still say which photos were its
-    /// own.
+    /// Turns Core Data's mirroring events into the three words the settings
+    /// row is allowed to say.
     ///
-    /// Called from the same place, and in the same breath, as
-    /// ``AutoSaveController/hikeWillBeDeleted(_:)`` and
-    /// ``HikePhotoImport/discardFiles(of:store:)`` — a deleted `@Model` has
-    /// nothing left to enumerate, so all three have to ask before rather than
-    /// after.
-    func hikeWillBeDeleted(_ hike: Hike) {
-        // Deliberately not gated on ``isEnabled``. A hike deleted with sync
-        // switched off is still a hike iCloud may hold a copy of, and turning
-        // sync back on would download it again; the engine writes the
-        // deletion down now and sends it whenever it next can.
-        guard canSync else { return }
-        let identifiers = applier.deletionIdentifiers(of: hike)
-        guard !identifiers.isEmpty else { return }
-        Task {
-            await engine.enqueueDeletions(
-                hikeIDs: identifiers.hikeIDs,
-                photoIDs: identifiers.photoIDs
-            )
+    /// `NSPersistentCloudKitContainer` is what SwiftData builds underneath a
+    /// mirrored `ModelConfiguration`, and it posts these whether or not
+    /// anybody holds a reference to it — which is fortunate, because SwiftData
+    /// does not hand one out. This is the only window onto sync the framework
+    /// leaves open, and it is narrower than the engine's was: an event says a
+    /// setup, import or export began or ended and whether it succeeded, and
+    /// nothing about what was in it.
+    private func observeMirroringEvents() {
+        guard eventObserver == nil else { return }
+        eventObserver = NotificationCenter.default.addObserver(
+            forName: NSPersistentCloudKitContainer.eventChangedNotification,
+            object: nil,
+            queue: .main
+        ) { [weak self] notification in
+            // Reduced to a `Sendable` value *here*, on the posting thread,
+            // rather than carried across the hop: `Event` is a class and its
+            // `error` is an existential, so neither can cross an isolation
+            // boundary. Everything the row can say about a pass is in the four
+            // cases of ``CloudSyncOutcome`` anyway.
+            guard let outcome = CloudSyncOutcome(notification: notification) else { return }
+            MainActor.assumeIsolated { self?.apply(outcome) }
         }
     }
 
-    /// The photo files sync is holding onto that no `Hike` claims yet.
-    ///
-    /// Handed to the launch-time orphan sweep, which would otherwise delete
-    /// the pixels of a photo still waiting for its hike — see
-    /// ``CloudSyncStateStore/deferredPhotoFileNames()``.
-    ///
-    /// `nil` means "this launch cannot enumerate them", which must skip the
-    /// sweep rather than shrink the claim set.
-    func deferredPhotoClaims() async -> Set<String>? { // swiftlint:disable:this discouraged_optional_collection
-        await engine.deferredPhotoClaims()
-    }
-
-    // MARK: - Observation
-
-    private func observeSaves() {
-        guard saveObserver == nil else { return }
-        // `queue: nil` deliberately: the block then runs *synchronously* on
-        // the thread that posted, which for the main context is inside
-        // `save()` itself — while ``HikeSyncApplier/isApplyingRemoteChanges``
-        // is still up. Handing this to `.main` instead would run it a turn
-        // later, after the flag came down, and every change fetched from
-        // iCloud would be queued straight back for upload: two devices
-        // re-sending each other a hike neither of them touched, forever.
-        saveObserver = NotificationCenter.default.addObserver(
-            forName: ModelContext.didSave,
-            object: nil,
-            queue: nil
-        ) { [weak self] notification in
-            let identifiers = Self.changedIdentifiers(in: notification)
-            guard !identifiers.isEmpty else { return }
-            guard Thread.isMainThread else {
-                // A background context, which is never where a fetched change
-                // is written, so there is no flag to be inside of.
-                Task { @MainActor in self?.recordChanges(identifiers) }
-                return
-            }
-            MainActor.assumeIsolated { self?.recordChanges(identifiers) }
+    private func apply(_ outcome: CloudSyncOutcome) {
+        switch outcome {
+        case .began:
+            status.began()
+        case .succeeded:
+            status.finished()
+        case .transientFailure(let reason):
+            Self.logger.error(
+                "Transient iCloud mirroring error: \(reason, privacy: .public)"
+            )
+            // Reported as a completed pass rather than a failure: mirroring
+            // retries these itself, and a device in a tunnel is not a device
+            // with a sync problem.
+            status.finished()
+        case .failed(let reason):
+            Self.logger.error("iCloud mirroring failed: \(reason, privacy: .public)")
+            status.failed(reason)
         }
     }
 
@@ -230,156 +226,37 @@ final class CloudSyncCoordinator {
             object: nil,
             queue: .main
         ) { [weak self] _ in
-            MainActor.assumeIsolated {
-                // Through the same queue as every other transition: an
-                // unchained one would race a reset across the account
-                // round-trip and could restart the engine after it.
-                self?.requestState(resetting: false)
-            }
+            MainActor.assumeIsolated { self?.refreshStatus() }
         }
     }
 
-    /// Gets the sync bookkeeping the engine is holding onto disk before the
-    /// process stops running.
+    /// Re-reads the things the row shows that are not events: whether there is
+    /// an account, and whether the switch is waiting on a relaunch.
     ///
-    /// The record cache and the record index are coalesced — see
-    /// ``CloudSyncStateStore/flush()`` — so the last acknowledgements of a
-    /// session are still in memory when the app leaves the foreground.
-    /// `willTerminate` is only delivered to a foreground app, which is why
-    /// backgrounding is the hook that matters: a suspended process is killed
-    /// without being told.
-    private func observeAppLifecycle() {
-        #if canImport(UIKit)
-        guard lifecycleObservers.isEmpty else { return }
-        let center = NotificationCenter.default
-        lifecycleObservers = [
-            UIApplication.didEnterBackgroundNotification,
-            UIApplication.willTerminateNotification,
-        ].map { name in
-            center.addObserver(forName: name, object: nil, queue: .main) { [weak self] _ in
-                MainActor.assumeIsolated { self?.flushSyncState() }
-            }
-        }
-        #endif
-    }
-
-    private func flushSyncState() {
-        beginFlushAssertion()
-        Task { [weak self, engine] in
-            await engine.flushState()
-            self?.endFlushAssertion()
-        }
-    }
-
-    /// Keeps the process alive for the length of one flush.
-    ///
-    /// The write is an actor hop away and a process the system has just
-    /// suspended does not get to finish one — which would leave the coalesced
-    /// half of the state waiting for a launch that reads it back stale.
-    private func beginFlushAssertion() {
-        #if canImport(UIKit)
-        guard flushAssertion == .invalid else { return }
-        flushAssertion = UIApplication.shared.beginBackgroundTask(
-            withName: "CloudSyncStateFlush"
-        ) { [weak self] in
-            MainActor.assumeIsolated { self?.endFlushAssertion() }
-        }
-        #endif
-    }
-
-    private func endFlushAssertion() {
-        #if canImport(UIKit)
-        guard flushAssertion != .invalid else { return }
-        UIApplication.shared.endBackgroundTask(flushAssertion)
-        flushAssertion = .invalid
-        #endif
-    }
-
-    nonisolated private static func changedIdentifiers(
-        in notification: Notification
-    ) -> [PersistentIdentifier] {
-        let userInfo = notification.userInfo ?? [:]
-        let inserted = userInfo[ModelContext.NotificationKey.insertedIdentifiers.rawValue]
-            as? [PersistentIdentifier] ?? []
-        let updated = userInfo[ModelContext.NotificationKey.updatedIdentifiers.rawValue]
-            as? [PersistentIdentifier] ?? []
-        return inserted + updated
-    }
-
-    private func recordChanges(_ identifiers: [PersistentIdentifier]) {
-        guard isEnabled, !applier.isApplyingRemoteChanges else { return }
-        let changed = applier.photosByHike(for: identifiers)
-        guard !changed.isEmpty else { return }
-        Task { await engine.enqueue(photosByHike: changed) }
-    }
-
-    // MARK: - Reaching the right state
-
-    /// Queues a state transition behind whatever is already in flight.
-    ///
-    /// Four unsynchronised things ask for one — launch, foregrounding, the
-    /// switch and an account change — and `@MainActor` only excludes them
-    /// between suspension points, not across the account round-trip in the
-    /// middle. Left to interleave, a foregrounding that started before the
-    /// user switched sync off would finish *after* it, restart the engine
-    /// against a store the reset had just emptied, and upload the entire
-    /// library to the iCloud account the user had just opted out of.
-    ///
-    /// - Parameter resetting: Whether to forget where sync had got to. True
-    ///   only when the user turned it off — an account that merely went away
-    ///   may come back, and throwing away the change token would cost a full
-    ///   re-download for nothing.
-    private func requestState(resetting: Bool) {
+    /// The account check is chained behind whatever is already in flight, so
+    /// two overlapping round-trips — a foregrounding and an account change
+    /// arriving together — cannot land out of order and leave the row
+    /// describing the older of the two.
+    private func refreshStatus() {
+        status.pendingRelaunch = pendingRelaunch
         guard canSync else {
+            status.account = .available
             status.paused()
             return
         }
-        let previous = stateTask
-        stateTask = Task { [weak self] in
+        guard isSyncingThisLaunch else {
+            status.paused()
+            return
+        }
+        let previous = accountTask
+        accountTask = Task { [weak self] in
             await previous?.value
-            await self?.applyEnabledState(resetting: resetting)
+            guard let container = self?.cloudContainer else { return }
+            let account = await Self.accountStatus(of: container)
+            guard let self else { return }
+            status.account = account
+            if !account.isUsable { status.paused() }
         }
-    }
-
-    private func applyEnabledState(resetting: Bool) async {
-        guard isEnabled else {
-            settings.stop()
-            if resetting {
-                await engine.reset()
-            } else {
-                await engine.stop()
-            }
-            return
-        }
-
-        let account = await Self.accountStatus(of: cloudContainer)
-        // The switch may have moved while that round-trip was in flight, and
-        // the branch above has already run for it.
-        guard isEnabled else { return }
-        status.account = account
-        guard account.isUsable else {
-            settings.stop()
-            await engine.stop()
-            return
-        }
-
-        settings.start()
-        await engine.start()
-        Self.registerForPushes()
-        await engine.fetchChanges()
-    }
-
-    /// Asks for a device token so CloudKit can wake the app when another
-    /// device writes something.
-    ///
-    /// No permission prompt and no `UNUserNotificationCenter`: these are
-    /// silent pushes that never become an alert, and `CKSyncEngine` intercepts
-    /// them itself rather than handing them to an app delegate — which is why
-    /// there is no delegate here to hand them to.
-    private static func registerForPushes() {
-        #if canImport(UIKit)
-        UIApplication.shared.registerForRemoteNotifications()
-        #endif
     }
 
     private static func accountStatus(of container: CKContainer) async -> CloudAccountStatus {

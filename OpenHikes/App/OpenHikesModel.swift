@@ -41,13 +41,12 @@ final class OpenHikesModel {
     /// instance would keep its own copy of all three and double the request
     /// rate against a volunteer-run API.
     let trailGraphProvider: (any TrailGraphProviding)?
-    /// Mirrors hikes and their photos through the user's private iCloud
-    /// database. Built here because it needs the same `ModelContainer` every
-    /// other writer uses — a second container would mean a second store, and
-    /// the whole point is that a fetched hike lands in the list the user is
-    /// looking at.
+    /// Reports on the CloudKit mirroring SwiftData does for the store built
+    /// above, and remembers whether the user wants it at all.
     ///
-    /// Deliberately does *not* carry tiles: see ``HikeSyncPayload``.
+    /// Deliberately does *not* carry tiles or anything else describing this
+    /// device's disk: see ``HikeLocalState``, which lives in the second,
+    /// unmirrored store for exactly that reason.
     let cloudSync: CloudSyncCoordinator
     /// Whether the two commercial map sources are unlocked, and the paywall's
     /// backing store. Built here rather than per-view because the answer has to
@@ -77,7 +76,19 @@ final class OpenHikesModel {
 
         // Built explicitly so background relaunch services and the view
         // hierarchy share one SwiftData store.
-        let load = Self.loadDefaultContainer()
+        //
+        // The switch has to be read here rather than by the coordinator: a
+        // `ModelConfiguration` decides whether it mirrors when it is created,
+        // and it is created before there is a coordinator to ask.
+        //
+        // Behind the test guard for the reason every other startup writer is,
+        // and more sharply: both unit-test bundles are hosted by the app, so a
+        // mirrored container here would have the host reach for the developer's
+        // real iCloud account and their real hikes underneath suites that own
+        // their own store.
+        let syncsToCloud = !AppLaunchEnvironment.isRunningTests
+            && CloudSyncCoordinator.isEnabled(in: launchDefaults)
+        let load = Self.loadDefaultContainer(syncsToCloud: syncsToCloud)
         let graphProvider = OverpassTrailGraphProvider()
 
         self.init(
@@ -96,7 +107,8 @@ final class OpenHikesModel {
             weatherManager: WeatherManager(),
             trailGraphProvider: graphProvider,
             defaults: launchDefaults,
-            startupIssue: load.startupIssue
+            startupIssue: load.startupIssue,
+            isSyncingThisLaunch: syncsToCloud
         )
     }
 
@@ -105,10 +117,7 @@ final class OpenHikesModel {
     ) throws {
         let testingContainer = try RenderSignpost.interval("ModelContainerInit") {
             () throws(Swift.Error) in
-            try ModelContainer(
-                for: Hike.self,
-                configurations: .openHikes(isStoredInMemoryOnly: true)
-            )
+            try ModelContainer.openHikes(isStoredInMemoryOnly: true)
         }
         let graphProvider = AppLaunchEnvironment
             .trailGraphFixtureName
@@ -138,23 +147,17 @@ final class OpenHikesModel {
         )
     }
 
-    private static func loadDefaultContainer() -> ContainerLoadResult {
+    private static func loadDefaultContainer(syncsToCloud: Bool) -> ContainerLoadResult {
         do {
             return try loadContainer(
                 persistent: {
                     try RenderSignpost.interval("ModelContainerInit") {
                         () throws(Swift.Error) in
-                        try ModelContainer(
-                            for: Hike.self,
-                            configurations: .openHikes()
-                        )
+                        try ModelContainer.openHikes(syncsToCloud: syncsToCloud)
                     }
                 },
                 fallback: {
-                    try ModelContainer(
-                        for: Hike.self,
-                        configurations: .openHikes(isStoredInMemoryOnly: true)
-                    )
+                    try ModelContainer.openHikes(isStoredInMemoryOnly: true)
                 }
             )
         } catch {
@@ -196,7 +199,8 @@ final class OpenHikesModel {
         weatherManager: WeatherManager,
         trailGraphProvider: (any TrailGraphProviding)? = nil,
         defaults: UserDefaults = .standard,
-        startupIssue: StorageStartupIssue? = nil
+        startupIssue: StorageStartupIssue? = nil,
+        isSyncingThisLaunch: Bool = false
     ) {
         self.container = container
         self.backgroundTracker = backgroundTracker
@@ -208,11 +212,11 @@ final class OpenHikesModel {
         self.defaults = defaults
         self.startupIssue = startupIssue
         // `storageIsDurable` is the whole of what a failed store means to
-        // sync, and the coordinator holds it rather than this call site
-        // because `sceneDidBecomeActive()` would otherwise start it anyway.
+        // sync: the fallback container is in-memory, and an in-memory store
+        // does not mirror whatever the switch says.
         cloudSync = CloudSyncCoordinator(
-            container: container,
             defaults: defaults,
+            isSyncingThisLaunch: isSyncingThisLaunch,
             storageIsDurable: startupIssue == nil
         )
         cloudSync.start()
@@ -530,6 +534,11 @@ extension OpenHikesModel {
     /// A fetch that fails sweeps nothing rather than sweeping with an empty
     /// claim set — the same rule the tile trim follows, and for the same
     /// reason: an under-reported claim would delete every photo in the app.
+    ///
+    /// Nothing has to be reserved for sync any more. The engine used to hold
+    /// pixels for a photo whose hike had not arrived yet, which looked exactly
+    /// like an orphan; mirroring writes a photo's metadata and its hike in the
+    /// same transaction, so a claimed file and its claim appear together.
     func reclaimOrphanedPhotos(
         in modelContext: ModelContext,
         store: HikePhotoStore = .shared
@@ -537,16 +546,8 @@ extension OpenHikesModel {
         guard let claimed = try? Self.photoClaims(fetchingHikes: {
             try modelContext.fetch(FetchDescriptor<Hike>())
         }) else { return }
-        // Photos fetched from iCloud whose hike hasn't arrived yet have their
-        // pixels on disk and nothing pointing at them, which is precisely what
-        // an orphan looks like. They belong in the claim set for the same
-        // reason the grace period exists: a file with no claim is also what an
-        // arrival in flight looks like. A `nil` answer means sync cannot
-        // enumerate them this launch, and sweeps nothing — the same rule the
-        // fetch above follows.
-        Task(priority: .utility) { [cloudSync] in
-            guard let deferred = await cloudSync.deferredPhotoClaims() else { return }
-            await Self.reclaim(claimed.union(deferred), in: store)
+        Task(priority: .utility) {
+            await Self.reclaim(claimed, in: store)
         }
     }
 

@@ -580,14 +580,14 @@ private extension SettingsView {
 #Preview {
     let container: ModelContainer
     do {
-        container = try ModelContainer(for: Hike.self, configurations: .init(isStoredInMemoryOnly: true))
+        container = try ModelContainer.openHikes(isStoredInMemoryOnly: true)
     } catch {
         preconditionFailure("Failed to create preview container: \(error)")
     }
     return SettingsView(
         autoSave: AutoSaveController(),
         backgroundTracker: BackgroundTrailTracker(container: container),
-        cloudSync: CloudSyncCoordinator(container: container, defaults: .standard),
+        cloudSync: CloudSyncCoordinator(defaults: .standard, isSyncingThisLaunch: false),
         entitlement: MapEntitlementStore(currentEntitlements: { false })
     )
 }

@@ -70,6 +70,12 @@ struct HikePersistenceTests {
         directory.appendingPathComponent("OpenHikes.store")
     }
 
+    /// The sidecar's own file. Separate from ``storeURL`` because the two are
+    /// separate stores — see ``HikeLocalState``.
+    private var localStoreURL: URL {
+        directory.appendingPathComponent("OpenHikesLocal.store")
+    }
+
     private func makeDirectory() throws {
         try FileManager.default.createDirectory(at: directory, withIntermediateDirectories: true)
     }
@@ -78,19 +84,24 @@ struct HikePersistenceTests {
         try? FileManager.default.removeItem(at: directory)
     }
 
-    /// A container over this test's own file. Deliberately *not*
+    /// A container over this test's own files. Deliberately *not*
     /// `isStoredInMemoryOnly` — the point is the disk.
     private func openContainer() throws -> ModelContainer {
-        try ModelContainer(
-            for: Hike.self,
-            configurations: .openHikes(url: storeURL)
-        )
+        try ModelContainer.openHikes(url: storeURL, localURL: localStoreURL)
     }
 
+    /// The hike store alone, in its older shape. The sidecar is deliberately
+    /// absent: a store written before the split had no second file, which is
+    /// exactly the starting point the migration tests need.
     private func openLegacyContainer() throws -> ModelContainer {
         try ModelContainer(
             for: HikeSchemaBeforeAutoSave.Hike.self,
-            configurations: .openHikes(url: storeURL)
+            configurations: ModelConfiguration(
+                "Hikes",
+                schema: Schema([HikeSchemaBeforeAutoSave.Hike.self]),
+                url: storeURL,
+                cloudKitDatabase: .none
+            )
         )
     }
 
@@ -120,11 +131,6 @@ struct HikePersistenceTests {
                 route: Fixture.ridgeRoute,
                 rawRoute: Array(Fixture.ridgeRoute.reversed()),
                 isRecording: true,
-                offlineDownloads: [
-                    OfflineDownloadRecord(providerID: "osm", scale: 2, maxZoom: 14, savedTileKeys: ["osm/14/1/1@2.0"])
-                ],
-                autoSavedTileKeys: ["osm/16/9/9@2.0"],
-                autoSaveTilesEnabled: false,
                 autoFollowEnabled: false,
                 trackDescription: "A ridge",
                 author: "Someone",
@@ -132,6 +138,15 @@ struct HikePersistenceTests {
             )
             hike.customName = "My Ridge"
             context.insert(hike)
+            // After the insert, and only then: the tile columns live in the
+            // sidecar store, and the passthroughs on ``Hike`` need a context
+            // to reach it. A value that was never inserted has nowhere to put
+            // them, which is why they are no longer initialiser arguments.
+            hike.offlineDownloads = [
+                OfflineDownloadRecord(providerID: "osm", scale: 2, maxZoom: 14, savedTileKeys: ["osm/14/1/1@2.0"])
+            ]
+            hike.autoSavedTileKeys = ["osm/16/9/9@2.0"]
+            hike.autoSaveTilesEnabled = false
             try context.save()
         }
 
@@ -257,7 +272,17 @@ struct HikePersistenceTests {
         #expect(migrated.date == date)
         #expect(migrated.tintHex == "#34C759FF")
         #expect(migrated.route == Fixture.ridgeRoute)
-        #expect(migrated.offlineDownloads.first?.providerID == "osm")
+
+        // And what it deliberately does not: the tile inventory moved out of
+        // `Hike` and into ``HikeLocalState``'s own store when mirroring took
+        // over, so a legacy row's copy is dropped rather than carried across.
+        // Tiles are re-fetchable by definition — this costs a download, and it
+        // is the price of keeping a column that names *this* device's files
+        // out of a row that syncs.
+        #expect(
+            migrated.offlineDownloads.isEmpty,
+            "the legacy tile manifest does not survive the move to the sidecar store"
+        )
     }
 
     /// And the migration is durable: the backfilled values are written back,

@@ -182,7 +182,7 @@ Recorded so none of it is re-raised as a finding.
 `OverpassTrailGraphProvider`'s injectable transport and clock,
 `BackgroundTrailTracker`'s injectable location source and defaults,
 `OfflineTileDownloader`'s injectable transport and `TileLoadGate`,
-`CloudSyncStateStore`'s injectable coalescing window and `didWriteFile` hook,
+`CloudSyncCoordinator`'s injectable `CKContainer` and settings mirror,
 `LocationManager`'s injectable defaults, and `TileSandbox`'s parallel
 `TileCache` directories all exist so suites can run in parallel without
 touching the app's singletons, the network, or wall-clock time.
@@ -233,9 +233,10 @@ exists; the App Group identifier agrees across both entitlements files and
 sets both `IDESkip…` keys; every `--ui-test-*` flag matches
 `AppLaunchEnvironment` and the README table in both directions;
 `@concurrent` is spelled one way throughout; and
-`ModelConfiguration+OpenHikes.swift` pins `cloudKitDatabase: .none` on every
-store, with no other `ModelConfiguration(` literal anywhere — which is what
-keeps `Hike`'s non-optional columns and its `Codable` `photos` array legal.
+`ModelConfiguration+OpenHikes.swift` is the only place `cloudKitDatabase` is
+named at all, with no other `ModelConfiguration(` literal anywhere — which is
+what keeps the mirrored `Hike` store and the unmirrored `HikeLocalState` store
+from being built any other way.
 
 ### Unverified assumptions worth knowing about
 
@@ -250,6 +251,9 @@ the first asks for it, and `inFlight` now carries the rects of the fifteen
 folded into that request so they are invalidated too. `fetchPath` is unit
 tested; neither the loop nor the blank tile was measured.
 
-Whether iOS purges the Caches-backed asset staging directory between staging and
-send is likewise assumed rather than measured; `CloudSyncFailure` treats
-`.assetFileNotFound` as retryable on that assumption.
+Whether `@Attribute(.externalStorage)` on `Hike.route` and `Hike.rawRoute` is
+what makes CloudKit mirroring carry them as a `CKAsset` rather than as a record
+field is likewise assumed rather than observed. It is the documented behaviour
+and it compiles, but nothing here has watched a twenty-thousand-point route
+cross a real container, and the 1 MB `CKRecord` limit it is meant to stay under
+would be hit only by the longest hikes.

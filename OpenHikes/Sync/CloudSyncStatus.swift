@@ -40,10 +40,10 @@ nonisolated enum CloudAccountStatus: Equatable, Sendable {
 nonisolated enum CloudSyncActivity: Equatable, Sendable {
     /// Something went wrong that isn't going to fix itself by waiting.
     ///
-    /// The transient failures — no signal, rate limiting, a busy zone — *do*
-    /// reach the delegate; ``CloudSyncFailure`` is what keeps them from
-    /// reaching here. ``CKSyncEngine`` retries those itself, so they are
-    /// logged rather than turned into a headline nobody can act on.
+    /// The transient failures — no signal, rate limiting, a busy zone — do
+    /// reach ``CloudSyncCoordinator``; its `isWorthReporting(_:)` filter is
+    /// what keeps them from reaching here. Mirroring retries those itself, so
+    /// they are logged rather than turned into a headline nobody can act on.
     case failed(String)
     case idle
     /// Sync is off, or there is no Apple Account signed in on this device.
@@ -58,40 +58,51 @@ final class CloudSyncStatus {
     var activity: CloudSyncActivity = .paused
     var lastSyncedAt: Date?
 
+    /// Whether the user's switch and this launch's store disagree — see
+    /// ``CloudSyncCoordinator/pendingRelaunch``.
+    ///
+    /// Outranks everything else the row could say. A store that is mirroring
+    /// while the switch reads off is not "Synced with iCloud", and saying so
+    /// would be the one sentence a person in that state would be right to call
+    /// a lie.
+    var pendingRelaunch = false
+
     /// Whether the pass currently running has raised anything.
     ///
-    /// A pass is one `willFetch`/`willSend` … `didFetch`/`didSend` bracket,
-    /// and `didSendChanges` always follows `sentRecordZoneChanges`. Without
-    /// this, ``finished()`` had no way to tell a clean pass from one that
-    /// failed a moment earlier, so every failure raised during a send was
-    /// erased by the event immediately after it: "Sync Problem", its detail
-    /// line and ``CloudSyncSection``'s warning icon were unreachable outside
-    /// one throw path, and ``lastSyncedAt`` was stamped for passes that had
-    /// just failed.
+    /// A pass is one mirroring event's start/end bracket. Without this,
+    /// ``finished()`` had no way to tell a clean pass from one that failed a
+    /// moment earlier, so every failure raised during an export was erased by
+    /// the event immediately after it: "Sync Problem", its detail line and
+    /// ``CloudSyncSection``'s warning icon were unreachable, and
+    /// ``lastSyncedAt`` was stamped for passes that had just failed.
     private var passRaisedAFailure = false
 
     /// The headline the settings row shows.
     var title: String {
+        if pendingRelaunch { return "Restart to Apply" }
         switch account {
-        case .available: activityTitle
-        case .noAccount: "No Apple Account"
-        case .restricted: "iCloud Restricted"
-        case .unknown: "Checking iCloud…"
+        case .available: return activityTitle
+        case .noAccount: return "No Apple Account"
+        case .restricted: return "iCloud Restricted"
+        case .unknown: return "Checking iCloud…"
         }
     }
 
     /// The line underneath it. Always says something concrete: "why isn't this
     /// working" is the only question this section exists to answer.
     var detail: String {
+        if pendingRelaunch {
+            return "Quit and reopen OpenHikes to finish changing this setting."
+        }
         switch account {
         case .available:
-            activityDetail
+            return activityDetail
         case .noAccount:
-            "Sign in to iCloud in the Settings app to sync your hikes across your devices."
+            return "Sign in to iCloud in the Settings app to sync your hikes across your devices."
         case .restricted:
-            "This device's settings don't allow iCloud, so hikes stay on this device."
+            return "This device's settings don't allow iCloud, so hikes stay on this device."
         case .unknown:
-            "Asking iCloud whether it's available on this device."
+            return "Asking iCloud whether it's available on this device."
         }
     }
 

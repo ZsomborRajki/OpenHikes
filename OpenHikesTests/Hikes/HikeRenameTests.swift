@@ -106,10 +106,7 @@ struct HikeRenameTests {
 
     @Test("customName survives a SwiftData round-trip")
     func customNamePersists() throws {
-        let container = try ModelContainer(
-            for: Hike.self,
-            configurations: .openHikes(isStoredInMemoryOnly: true)
-        )
+        let container = try ModelContainer.openHikes(isStoredInMemoryOnly: true)
         let context = ModelContext(container)
         let id = UUID()
         let hike = Hike(title: "Ridge Loop", distanceMeters: 1000, id: id)
@@ -126,10 +123,7 @@ struct HikeRenameTests {
 
     @Test("nil customName is preserved on save")
     func nilCustomNamePersists() throws {
-        let container = try ModelContainer(
-            for: Hike.self,
-            configurations: .openHikes(isStoredInMemoryOnly: true)
-        )
+        let container = try ModelContainer.openHikes(isStoredInMemoryOnly: true)
         let context = ModelContext(container)
         let id = UUID()
         context.insert(Hike(title: "No Rename", distanceMeters: 500, id: id))

@@ -7,9 +7,10 @@
 //
 //  A separate mechanism from the hikes on purpose. The key-value store is
 //  Apple's answer for exactly this shape of data — a kilobyte of small,
-//  last-writer-wins settings — and it needs no zone, no records and no change
-//  tokens. Putting two settings through ``CKSyncEngine`` would have meant
-//  giving them a record type and a conflict policy to earn nothing.
+//  last-writer-wins settings — and it needs no schema at all. Putting two
+//  settings into the mirrored SwiftData store would have meant giving them a
+//  model, a record type and a permanent CloudKit column apiece to earn
+//  nothing.
 //
 //  The list is short and it is an allowlist, because the interesting decision
 //  here is what *doesn't* travel:
@@ -109,8 +110,7 @@ final class SyncedSettingsMirror {
     /// — by which time this has already come down. What actually stops the two
     /// stores talking to each other forever is that ``apply(_:to:)`` and
     /// ``write(_:to:)`` only write a value that differs, so the round trip
-    /// converges after one pass. See ``CloudSyncCoordinator``'s save observer
-    /// for the case where synchronous delivery *is* required.
+    /// converges after one pass.
     private var isMirroring = false
 
     init(

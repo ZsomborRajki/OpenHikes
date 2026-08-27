@@ -2,161 +2,162 @@
 //  CloudSyncCoordinatorTests.swift
 //  OpenHikesTests
 //
-//  The three unrelated reasons sync might be doing nothing — the user turned
-//  it off, there is no Apple Account, or this process is hosting a test bundle
-//  — all meet in the coordinator. The first and the third are testable in
-//  process; the second belongs to a device with an account on it.
+//  The two things left for this app to decide now that SwiftData does the
+//  syncing: whether the user wants it, and whether the switch they just moved
+//  has actually taken effect.
+//
+//  The second is the new one. A `ModelConfiguration` decides whether it
+//  mirrors when it is built, so a switch flipped mid-session describes a store
+//  that does not exist yet — and a settings row that answered "Synced with
+//  iCloud" in that state would be telling a person their hikes were leaving a
+//  device they had just told it not to leave.
 //
 
 import Foundation
 @testable import OpenHikes
-import SwiftData
 import Testing
 
 @MainActor
 @Suite("Cloud sync coordinator")
 struct CloudSyncCoordinatorTests {
-    /// Defaults of this case's own. These suites run in parallel and the real
-    /// `UserDefaults` belongs to the host app.
-    private struct Harness {
-        let defaults: UserDefaults
-        let suiteName: String
-        let coordinator: CloudSyncCoordinator
-
-        init() throws {
-            suiteName = "CloudSyncCoordinatorTests-\(UUID().uuidString)"
-            defaults = try #require(UserDefaults(suiteName: suiteName))
-            coordinator = CloudSyncCoordinator(
-                container: try Fixture.modelContainer(),
-                defaults: defaults
-            )
-        }
-
-        func removeAll() {
-            defaults.removePersistentDomain(forName: suiteName)
-        }
+    /// Its own defaults suite per test: these assert on persisted values, and
+    /// suites run in parallel in one process against one `UserDefaults`.
+    private static func defaults() throws -> UserDefaults {
+        let name = "CloudSyncCoordinatorTests-\(UUID().uuidString)"
+        return try #require(UserDefaults(suiteName: name))
     }
 
-    /// On by default. This is the user's own private iCloud storage, and the
-    /// failure the default prevents — a replaced phone opening to an empty
-    /// list because a switch was never found — is the one people notice.
-    @Test("Sync is on until the user says otherwise")
+    private static func coordinator(
+        defaults: UserDefaults,
+        isSyncingThisLaunch: Bool
+    ) -> CloudSyncCoordinator {
+        CloudSyncCoordinator(
+            defaults: defaults,
+            isSyncingThisLaunch: isSyncingThisLaunch,
+            storageIsDurable: true
+        )
+    }
+
+    /// On by default, for the reason the property's own comment gives: a phone
+    /// restored from backup showing an empty hikes list is the failure this
+    /// feature exists to prevent.
+    @Test("sync is on unless the user has said otherwise")
     func enabledByDefault() throws {
-        let harness = try Harness()
-        defer { harness.removeAll() }
-
-        #expect(harness.coordinator.isEnabled)
+        let defaults = try Self.defaults()
         #expect(SettingsDefault.cloudSyncEnabled)
+        #expect(CloudSyncCoordinator.isEnabled(in: defaults))
+        #expect(Self.coordinator(defaults: defaults, isSyncingThisLaunch: true).isEnabled)
     }
 
-    @Test("The switch is remembered across launches")
-    func switchIsPersisted() throws {
-        let harness = try Harness()
-        defer { harness.removeAll() }
+    /// The switch has to outlive the process, because the process is what
+    /// reads it: the container is built from this value on the next launch.
+    @Test("turning sync off is remembered for the launch that acts on it")
+    func disablingPersists() throws {
+        let defaults = try Self.defaults()
+        let coordinator = Self.coordinator(defaults: defaults, isSyncingThisLaunch: true)
 
-        harness.coordinator.isEnabled = false
+        coordinator.isEnabled = false
 
-        #expect(harness.defaults.bool(forKey: SettingsKey.cloudSyncEnabled) == false)
-        let relaunched = CloudSyncCoordinator(
-            container: try Fixture.modelContainer(),
-            defaults: harness.defaults
-        )
+        #expect(defaults.bool(forKey: SettingsKey.cloudSyncEnabled) == false)
+        #expect(!CloudSyncCoordinator.isEnabled(in: defaults))
+        // What the next launch would build its container with.
+        let relaunched = Self.coordinator(defaults: defaults, isSyncingThisLaunch: false)
         #expect(!relaunched.isEnabled)
+        #expect(!relaunched.pendingRelaunch)
     }
 
-    /// Both unit-test bundles are hosted by the app, so without this guard
-    /// starting the app model would reach for a real iCloud account, a real
-    /// container and the user's real hikes underneath suites that own their
-    /// own store.
-    @Test("A test host starts paused rather than reaching for iCloud")
-    func testHostStaysPaused() throws {
-        let harness = try Harness()
-        defer { harness.removeAll() }
+    /// The gap the whole type exists to name: switch off, store still
+    /// mirroring, until the app is next opened.
+    @Test("a switch that this launch's store cannot honour asks for a relaunch")
+    func flippingOffAsksForARelaunch() throws {
+        let defaults = try Self.defaults()
+        let coordinator = Self.coordinator(defaults: defaults, isSyncingThisLaunch: true)
+        #expect(!coordinator.pendingRelaunch)
 
-        #expect(AppLaunchEnvironment.isRunningTests)
-        harness.coordinator.start()
+        coordinator.isEnabled = false
 
-        #expect(harness.coordinator.status.activity == .paused)
+        #expect(coordinator.pendingRelaunch)
+        #expect(coordinator.status.pendingRelaunch)
+        #expect(coordinator.status.title == "Restart to Apply")
     }
 
-    /// Every route into a state change has to be behind the test guard, not
-    /// just `start()`. The coordinator built here points at the *host app's*
-    /// real sync directory, so a toggle that reached the engine would delete
-    /// the state and remembered records of whoever is running the tests —
-    /// leaving their next real launch to re-download the zone and re-upload
-    /// the whole library over it.
-    @Test("Toggling the switch under a test host reaches no real storage")
-    func togglingUnderTestsStaysPaused() async throws {
-        let harness = try Harness()
-        defer { harness.removeAll() }
+    /// And the same in the other direction, which is the more common one: a
+    /// user who turned sync on expects their hikes to start travelling, and
+    /// nothing will happen until the store is rebuilt.
+    @Test("turning sync back on asks for the same relaunch")
+    func flippingOnAsksForARelaunch() throws {
+        let defaults = try Self.defaults()
+        defaults.set(false, forKey: SettingsKey.cloudSyncEnabled)
+        let coordinator = Self.coordinator(defaults: defaults, isSyncingThisLaunch: false)
+        #expect(!coordinator.pendingRelaunch)
 
-        harness.coordinator.isEnabled = false
-        harness.coordinator.isEnabled = true
-        await Task.yield()
+        coordinator.isEnabled = true
 
-        #expect(harness.coordinator.status.activity == .paused)
+        #expect(coordinator.pendingRelaunch)
+        #expect(coordinator.status.detail.contains("reopen"))
     }
 
-    /// A deletion is the one local change nothing can re-derive afterwards:
-    /// the hike is gone, so no later scan of this device notices it is
-    /// missing, while iCloud still holds a copy that the next fetch would
-    /// bring back. It therefore has to be written down even with sync off.
-    @Test("A hike deleted with sync off is still noticed")
-    func deletionIsRecordedWithSyncOff() async throws {
-        let root = URL.temporaryDirectory.appendingPathComponent(
-            "CloudSyncCoordinatorTests-\(UUID().uuidString)",
-            isDirectory: true
-        )
-        defer { try? FileManager.default.removeItem(at: root) }
-        let store = CloudSyncStateStore(
-            storageRoot: root.appendingPathComponent("support", isDirectory: true),
-            stagingRoot: root.appendingPathComponent("caches", isDirectory: true)
-        )
-        let container = try Fixture.modelContainer()
-        let hike = Fixture.hike(in: container.mainContext)
-        try container.mainContext.save()
-        let applier = HikeSyncApplier(container: container)
-        let engine = HikeSyncEngine(
-            applier: applier,
-            status: CloudSyncStatus(),
-            store: store
-        )
+    /// Flipping back to where it started is not a pending change. Without
+    /// this, a user who toggled the switch twice would be asked to restart for
+    /// nothing.
+    @Test("flipping the switch back clears the request")
+    func flippingBackClearsTheRequest() throws {
+        let defaults = try Self.defaults()
+        let coordinator = Self.coordinator(defaults: defaults, isSyncingThisLaunch: true)
 
-        let identifiers = applier.deletionIdentifiers(of: hike)
-        await engine.enqueueDeletions(
-            hikeIDs: identifiers.hikeIDs,
-            photoIDs: identifiers.photoIDs
+        coordinator.isEnabled = false
+        coordinator.isEnabled = true
+
+        #expect(!coordinator.pendingRelaunch)
+        #expect(!coordinator.status.pendingRelaunch)
+    }
+
+    /// A store that would not open runs on an in-memory fallback, which does
+    /// not mirror whatever the switch says. Reporting it as syncing would be
+    /// the one case where the row promises a backup that is not happening.
+    @Test("a non-durable store never claims to be syncing")
+    func fallbackStorageIsNeverSyncing() throws {
+        let defaults = try Self.defaults()
+        let coordinator = CloudSyncCoordinator(
+            defaults: defaults,
+            isSyncingThisLaunch: true,
+            storageIsDurable: false
         )
 
-        // The engine was never started, which is also what a launch looks like
-        // before the account round-trip comes back.
-        #expect(await engine.isRunning == false)
-        #expect(await store.pendingDeletionNames() == [hike.id.uuidString])
+        // The switch still reads on — the user did not turn it off — but this
+        // launch is not honouring it, so it is a pending change and says so.
+        #expect(coordinator.isEnabled)
+        #expect(coordinator.pendingRelaunch)
     }
 
-    /// The settings row has to say something concrete in every state: "why
-    /// isn't this working" is the only question that section exists to answer.
-    @Test("Every account state has something to say")
-    func statusAlwaysExplainsItself() {
-        let status = CloudSyncStatus()
-        let accounts: [CloudAccountStatus] = [.available, .noAccount, .restricted, .unknown]
-        let activities: [CloudSyncActivity] = [.failed("Nope"), .idle, .paused, .working]
+    /// Settings are the half of sync that does *not* wait for a relaunch:
+    /// `NSUbiquitousKeyValueStore` is owned by this object outright rather
+    /// than handed to it pre-configured, so the switch reaches it at once.
+    ///
+    /// What this can actually assert is the guard underneath that, and it is
+    /// the one worth guarding: the key-value store is real iCloud even in a
+    /// test host, so a coordinator built by the app that hosts these bundles
+    /// must never start mirroring settings — in either switch position, and
+    /// whether or not the store is durable.
+    @Test(
+        "the test host never mirrors settings to a real iCloud account",
+        arguments: [true, false]
+    )
+    func settingsMirrorStaysOffUnderTests(enabled: Bool) throws {
+        let defaults = try Self.defaults()
+        defaults.set(enabled, forKey: SettingsKey.cloudSyncEnabled)
+        let mirror = SyncedSettingsMirror(defaults: defaults)
+        let coordinator = CloudSyncCoordinator(
+            defaults: defaults,
+            isSyncingThisLaunch: enabled,
+            settings: mirror
+        )
 
-        for account in accounts {
-            status.account = account
-            for activity in activities {
-                status.activity = activity
-                #expect(!status.title.isEmpty)
-                #expect(!status.detail.isEmpty)
-            }
-        }
-    }
+        coordinator.start()
+        #expect(!mirror.isRunning)
 
-    @Test("Only an available account is usable")
-    func onlyAvailableAccountIsUsable() {
-        #expect(CloudAccountStatus.available.isUsable)
-        #expect(!CloudAccountStatus.noAccount.isUsable)
-        #expect(!CloudAccountStatus.restricted.isUsable)
-        #expect(!CloudAccountStatus.unknown.isUsable)
+        // And the switch cannot talk it into starting either.
+        coordinator.isEnabled.toggle()
+        #expect(!mirror.isRunning)
     }
 }

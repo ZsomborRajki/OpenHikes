@@ -159,6 +159,12 @@ enum Fixture {
 
     /// A hike backed by an in-memory store, so `@Model` bookkeeping
     /// (`autoSavedTileKeys`, `offlineDownloads`) behaves as it does in the app.
+    ///
+    /// `configure` runs *after* the insert, and has to: those two live in the
+    /// unmirrored ``HikeLocalState`` store, and ``Hike``'s passthroughs need a
+    /// context to reach it. Configured before the insert they would be
+    /// silently dropped, which is a fixture that lies rather than a test that
+    /// fails.
     static func hike(
         in context: ModelContext,
         title: String = "Ridge Loop",
@@ -171,16 +177,13 @@ enum Fixture {
             distanceMeters: profile.distances.last ?? 0,
             route: route
         )
-        configure(hike)
         context.insert(hike)
+        configure(hike)
         return hike
     }
 
     static func modelContainer() throws -> ModelContainer {
-        try ModelContainer(
-            for: Hike.self,
-            configurations: .openHikes(isStoredInMemoryOnly: true)
-        )
+        try ModelContainer.openHikes(isStoredInMemoryOnly: true)
     }
 
     static func modelContext() throws -> ModelContext {

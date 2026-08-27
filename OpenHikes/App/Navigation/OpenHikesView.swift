@@ -663,7 +663,7 @@ private struct WeatherBadge: View {
 #Preview {
     let container: ModelContainer
     do {
-        container = try ModelContainer(for: Hike.self, configurations: .init(isStoredInMemoryOnly: true))
+        container = try ModelContainer.openHikes(isStoredInMemoryOnly: true)
     } catch {
         preconditionFailure("Failed to create preview container: \(error)")
     }

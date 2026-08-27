@@ -32,18 +32,26 @@ final class Hike {
     /// refuse to open a store that already violates it, which for this app
     /// means the user reinstalls and loses every saved hike. The code already
     /// treats the id as unique by looking a hike up before creating one.
+    /// CloudKit mirroring forbids one outright, so this is now settled rather
+    /// than merely chosen.
     #Index<Hike>([\.id], [\.date], [\.isRecording])
 
+    // Every non-optional column below carries an inline default, and now has
+    // to: CloudKit mirroring refuses to open a store whose mandatory
+    // attributes cannot be backfilled, and says so by failing to launch. The
+    // values are placeholders for a row that is always fully initialised by
+    // ``init(title:distanceMeters:)`` — nothing reads them.
+
     /// Stable identity, also used to key the route drawn on the map.
-    var id: UUID
-    var title: String
+    var id = UUID()
+    var title: String = ""
     /// Total route length, in meters.
-    var distanceMeters: Double
+    var distanceMeters: Double = 0
     /// Activity date — the GPX start time when available, otherwise the import date.
-    var date: Date
+    var date = Date.distantPast
     /// Route tint, stored as "#RRGGBB" or "#RRGGBBAA". The alpha is used only for
     /// the map polyline; other UI reads ``tintOpaque``.
-    var tintHex: String
+    var tintHex: String = "#34C759"
     /// Map polyline width, in points.
     var routeWidth: Double = 3
     /// How the map draws this route's line — see ``RouteLinePattern``. Stored
@@ -54,9 +62,16 @@ final class Hike {
     /// store written before this column existed has to backfill it.
     var routeLinePatternID: String = RouteLinePattern.default.rawValue
     /// SF Symbol shown in the row's colored circle.
-    var symbol: String
+    var symbol: String = "figure.hiking"
     /// Ordered track points making up the route.
-    var route: [RouteCoordinate]
+    ///
+    /// Stored externally so mirroring carries it as a `CKAsset` rather than as
+    /// a record field: a day's recording is some twenty thousand points, which
+    /// is a couple of megabytes encoded, and a `CKRecord`'s fields have to add
+    /// up to less than one. Without this the longest hikes — the ones most
+    /// worth keeping — are exactly the ones that would silently fail to sync.
+    @Attribute(.externalStorage)
+    var route: [RouteCoordinate] = []
     /// A user-chosen name that overrides the GPS/import-derived ``title``.
     /// `nil` means no override is set and the original title is displayed.
     ///
@@ -67,33 +82,22 @@ final class Hike {
     /// The unmatched GPS trace when trail matching moved a recorded route.
     /// Imported hikes and recordings that stayed raw leave this empty.
     ///
-    /// The inline default is required for lightweight migration of existing
-    /// stores, just like the defaults on the auto-save fields below.
+    /// External for the same reason ``route`` is: it is the same size and
+    /// travels the same way.
+    @Attribute(.externalStorage)
     var rawRoute: [RouteCoordinate] = []
     /// True while this row is the durable draft owned by an active recording.
     /// The route stays empty until Stop finalizes the draft in place.
-    var isRecording = false
-
-    /// Records of offline tile downloads for this hike, enough to recompute (and
-    /// so measure and remove) exactly the tiles each one saved.
-    var offlineDownloads: [OfflineDownloadRecord] = []
-
-    /// Cache keys of tiles auto-saved for this hike while browsing (OSM-style,
-    /// non-bulk-downloadable providers) — recorded exactly, since (unlike
-    /// ``OfflineDownloadRecord``) organic partial coverage can't be recomputed
-    /// deterministically from a bounding box.
     ///
-    /// The inline `= []`/`= true` defaults below (not just the `init`
-    /// parameter defaults) are required so SwiftData's lightweight migration
-    /// can backfill these values on existing rows — without them, adding the
-    /// column fails with "missing attribute values on mandatory destination
-    /// attribute" for anyone who already has hikes saved.
-    var autoSavedTileKeys: [String] = []
-    /// Whether auto-save is turned on for this hike's map.
-    var autoSaveTilesEnabled = true
+    /// Mirrored along with everything else, which means a walk in progress is
+    /// uploaded fix by fix and a second device shows a hike whose line is
+    /// still being drawn. That is the price of letting SwiftData own sync:
+    /// there is no hook to hold a row back.
+    var isRecording: Bool = false
+
     /// Whether the elevation graph auto-scrolls to track the user's live
     /// location while browsing this hike.
-    var autoFollowEnabled = true
+    var autoFollowEnabled: Bool = true
 
     // Optional metadata pulled from the GPX file.
     var trackDescription: String?
@@ -131,7 +135,21 @@ final class Hike {
     /// ``HikePhotoStore``, because a SwiftData column is loaded whole whenever
     /// the row is touched and a walk's worth of captures in one would be paid
     /// for by the hikes list.
+    ///
+    /// Which is also why a photo's pixels do not sync: mirroring carries this
+    /// column and nothing else, so a second device receives the metadata and
+    /// finds no file behind it. ``HikePhotoStore/hasImage(for:)`` is what the
+    /// UI asks before it offers to show one.
     var photos: [HikePhoto] = []
+
+    /// The resolved ``HikeLocalState``, remembered so repeated tile-ownership
+    /// questions cost one fetch per hike rather than one per question.
+    ///
+    /// `@Transient` because it is a pointer into the *other* store: persisting
+    /// it would be persisting a cross-store reference, which is the thing that
+    /// cannot exist. Invalidated by ``Hike/deleteLocalState()`` and by the
+    /// `isDeleted` check in ``Hike/localState``.
+    @Transient var cachedLocalState: HikeLocalState?
 
     init(
         title: String,
@@ -145,9 +163,6 @@ final class Hike {
         route: [RouteCoordinate] = [],
         rawRoute: [RouteCoordinate] = [],
         isRecording: Bool = false,
-        offlineDownloads: [OfflineDownloadRecord] = [],
-        autoSavedTileKeys: [String] = [],
-        autoSaveTilesEnabled: Bool = true,
         autoFollowEnabled: Bool = true,
         trackDescription: String? = nil,
         author: String? = nil,
@@ -167,9 +182,6 @@ final class Hike {
         self.route = route
         self.rawRoute = rawRoute
         self.isRecording = isRecording
-        self.offlineDownloads = offlineDownloads
-        self.autoSavedTileKeys = autoSavedTileKeys
-        self.autoSaveTilesEnabled = autoSaveTilesEnabled
         self.autoFollowEnabled = autoFollowEnabled
         self.trackDescription = trackDescription
         self.author = author
@@ -177,6 +189,77 @@ final class Hike {
         self.surfaceMetersByCategory = surfaceMetersByCategory
         self.difficultyMetersByGrade = difficultyMetersByGrade
         self.photos = photos
+    }
+}
+
+// MARK: - Device-local state
+
+extension Hike {
+    /// This hike's device-local storage record, or `nil` if it has never
+    /// claimed a tile on this device.
+    ///
+    /// Resolved once and remembered, because the pre-filter in
+    /// ``StoredTileDeletionPlan`` asks every hike in the library whether it has
+    /// stored tiles and a fetch each would put the whole library's worth on the
+    /// main actor during a delete — the same cost ``hasStoredTiles`` was
+    /// written to avoid in the first place.
+    var localState: HikeLocalState? {
+        if let cachedLocalState, !cachedLocalState.isDeleted { return cachedLocalState }
+        guard let modelContext else { return nil }
+        let found = HikeLocalState.existing(for: id, in: modelContext)
+        cachedLocalState = found
+        return found
+    }
+
+    /// The same record, brought into existence by the first write.
+    ///
+    /// `nil` for a hike with no context — a value built but never inserted, or
+    /// one already deleted — which makes the passthrough setters below no-ops
+    /// there rather than silently inserting a sidecar into nothing.
+    private var mutableLocalState: HikeLocalState? {
+        if let localState { return localState }
+        guard let modelContext, isAttached else { return nil }
+        let created = HikeLocalState.forHike(id, in: modelContext)
+        cachedLocalState = created
+        return created
+    }
+
+    /// Records of offline tile downloads for this hike, enough to recompute
+    /// (and so measure and remove) exactly the tiles each one saved.
+    ///
+    /// Reads through to ``HikeLocalState``, which lives in the unmirrored
+    /// store — see that type for why this cannot be a column on `Hike` any
+    /// more. Kept as a property rather than made an explicit lookup so the
+    /// twenty call sites that only ever wanted a list of tile keys did not all
+    /// have to learn about a second store.
+    var offlineDownloads: [OfflineDownloadRecord] {
+        get { localState?.offlineDownloads ?? [] }
+        set { mutableLocalState?.offlineDownloads = newValue }
+    }
+
+    /// Cache keys of tiles auto-saved for this hike while browsing.
+    var autoSavedTileKeys: [String] {
+        get { localState?.autoSavedTileKeys ?? [] }
+        set { mutableLocalState?.autoSavedTileKeys = newValue }
+    }
+
+    /// Whether auto-save is turned on for this hike's map. On by default,
+    /// which is what a hike with no local record yet reports.
+    var autoSaveTilesEnabled: Bool {
+        get { localState?.autoSaveTilesEnabled ?? true }
+        set { mutableLocalState?.autoSaveTilesEnabled = newValue }
+    }
+
+    /// Removes the sidecar, for a hike on its way out of the store.
+    ///
+    /// Explicit because the two rows are in different stores and so cannot be
+    /// related: nothing cascades, and a sidecar left behind would go on
+    /// claiming this hike's tiles forever, which is precisely the leak
+    /// ``TileCache/trimCache(claimedBy:)`` cannot see.
+    func deleteLocalState() {
+        guard let modelContext, let state = localState else { return }
+        cachedLocalState = nil
+        modelContext.delete(state)
     }
 }
 

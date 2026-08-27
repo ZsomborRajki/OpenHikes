@@ -306,11 +306,6 @@ private func delete(_ hike: Hike, among hikes: [Hike]) {
     // by a hike that no longer exists.
     autoSave.hikeWillBeDeleted(hike)
 
-    // Same ordering, same reason: the record and its photo records have to be
-    // named while the hike can still name them. Queued rather than sent, so a
-    // deletion made in a tunnel still reaches iCloud once there is a signal.
-    appModel.cloudSync.hikeWillBeDeleted(hike)
-
     // Clearing the selection stops the *map* drawing a deleted trail; clearing
     // the path stops its detail view staying pushed, showing a hike that no
     // longer exists — stats, elevation chart, and live Offline/Auto-Save
@@ -343,6 +338,15 @@ private func delete(_ hike: Hike, among hikes: [Hike]) {
         }
     }
 
+    // Last, because everything above reads it: `hasStoredTiles` and the
+    // deletion plan both take their claims from the sidecar row, which lives
+    // in the *other* store and so has nothing cascading to it. Dropping it any
+    // earlier would leave the plan with an empty claim set and this hike's
+    // tiles on disk; leaving it behind entirely would have it go on claiming
+    // them forever, which is the one leak `TileCache.trimCache(claimedBy:)`
+    // cannot see — it frees what nothing claims, and an orphaned sidecar is
+    // still a claim.
+    hike.deleteLocalState()
     modelContext.delete(hike)
 }
 
