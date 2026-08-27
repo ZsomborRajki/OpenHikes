@@ -87,12 +87,21 @@ nonisolated struct TileFailureLog: Sendable {
     }
 
     /// Records a failure and returns when the tile may next be tried.
+    ///
+    /// `notBefore` is a floor a server named for itself — a `Retry-After` on a
+    /// 429 or a 503, see ``RetryAfterHeader``. It can only ever push the
+    /// deadline out: a server asking for one second must not undo a backoff
+    /// that has already escalated to five minutes, and the escalation itself
+    /// carries on regardless, so a tile that keeps failing keeps backing off
+    /// whether or not anyone is advising it.
     @discardableResult mutating func recordFailure(
         _ key: String,
-        at now: ContinuousClock.Instant
+        at now: ContinuousClock.Instant,
+        notBefore serverDeadline: ContinuousClock.Instant? = nil
     ) -> ContinuousClock.Instant {
         let failures = (entries[key]?.failures ?? 0) + 1
-        let retryAt = now.advanced(by: policy.delay(afterFailures: failures))
+        var retryAt = now.advanced(by: policy.delay(afterFailures: failures))
+        if let serverDeadline, serverDeadline > retryAt { retryAt = serverDeadline }
         entries[key] = Entry(failures: failures, retryAt: retryAt)
         evictIfNeeded()
         return retryAt

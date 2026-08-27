@@ -72,6 +72,17 @@ nonisolated final class TileOverlay: MKTileOverlay, @unchecked Sendable {
         return true
     }
 
+    /// When the tile server last said this tile may be asked for again, if it
+    /// said anything and that moment has not passed.
+    ///
+    /// A separate call rather than part of ``cacheTile(at:)``'s result,
+    /// because the two are keyed differently: the renderer's failure log is
+    /// keyed by tile path while the cache files advice under the
+    /// provider-namespaced key, and this is the only type that knows both.
+    func retryDeadline(at path: MKTileOverlayPath) -> ContinuousClock.Instant? {
+        cache.retryDeadline(forKey: cacheKey(for: path))
+    }
+
     /// Provider-namespaced cache key, so switching providers doesn't reuse tiles.
     private func cacheKey(for path: MKTileOverlayPath) -> String {
         TileCacheKey.namespaced(

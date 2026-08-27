@@ -9,7 +9,17 @@
 
 import Foundation
 
-public struct SharedRecordingSnapshot: Codable, Sendable, Equatable {
+public struct SharedRecordingSnapshot: SharedPayload, Equatable {
+    public static let currentSchemaVersion = 1
+
+    /// See ``SharedPayload/schemaVersion``: `nil` in bytes written before
+    /// versioning existed, which is every payload already in a container at
+    /// the moment this shipped. Readable but not settable from outside this
+    /// package — a version is a fact about the build that wrote the bytes, and
+    /// one a caller could choose would be a version nothing verifies.
+    /// ``SharedStore`` stamps it on write.
+    public internal(set) var schemaVersion: Int?
+
     public var sessionID: UUID
     public var startedAt: Date
     public var distanceMeters: Double
@@ -45,6 +55,7 @@ public struct SharedRecordingSnapshot: Codable, Sendable, Equatable {
         self.polyline = polyline
         self.isCapturingFixes = isCapturingFixes
         self.updatedAt = updatedAt
+        schemaVersion = Self.currentSchemaVersion
     }
 
     public var title: String {

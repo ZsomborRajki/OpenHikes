@@ -1,0 +1,74 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0">
+<dict>
+	<!--
+	  The app keeps everything on device. Nothing here is collected, nothing
+	  leaves the phone except the tile and Overpass requests the map needs and
+	  the user's own iCloud mirroring, so `NSPrivacyCollectedDataTypes` is
+	  deliberately empty rather than absent: an empty array is the positive
+	  statement that the question was asked and the answer is none.
+	-->
+	<key>NSPrivacyTracking</key>
+	<false/>
+	<key>NSPrivacyTrackingDomains</key>
+	<array/>
+	<key>NSPrivacyCollectedDataTypes</key>
+	<array/>
+	<key>NSPrivacyAccessedAPITypes</key>
+	<array>
+		<dict>
+			<!--
+			  Settings, the last-known map entitlement, and the UI-testing and
+			  test-host suites. Every one of them is this app's own domain:
+			  `CA92.1` and not `1C8F.1`, because nothing is read or written
+			  through an App Group defaults suite — the App Group carries a
+			  file (`SharedStore`), not preferences.
+			-->
+			<key>NSPrivacyAccessedAPIType</key>
+			<string>NSPrivacyAccessedAPICategoryUserDefaults</string>
+			<key>NSPrivacyAccessedAPITypeReasons</key>
+			<array>
+				<string>CA92.1</string>
+			</array>
+		</dict>
+		<dict>
+			<!--
+			  `C617.1` covers the app container: the tile cache's TTL and
+			  oldest-first eviction, the photo store's orphan sweep, the
+			  Overpass trail-graph cache's 30-day expiry, and the export
+			  staging directory's cleanup all read modification dates on files
+			  this app wrote.
+
+			  `3B52.1` covers the other half: an imported GPX arrives through a
+			  document picker, and its size is read before the file is loaded
+			  so an unbounded one cannot be read into memory. That URL is the
+			  user's, not the app's, which is a different approved reason
+			  rather than the same one twice.
+			-->
+			<key>NSPrivacyAccessedAPIType</key>
+			<string>NSPrivacyAccessedAPICategoryFileTimestamp</string>
+			<key>NSPrivacyAccessedAPITypeReasons</key>
+			<array>
+				<string>C617.1</string>
+				<string>3B52.1</string>
+			</array>
+		</dict>
+		<dict>
+			<!--
+			  `HikeRecorder` measures elapsed time between fixes against
+			  `systemUptime` rather than `Date`, so a clock change mid-hike
+			  cannot rewrite a recording's duration. That is the elapsed-time
+			  reason, `35F9.1`, and not `8FFB.1` — no absolute timestamp is
+			  derived from boot time, and none of it leaves the device.
+			-->
+			<key>NSPrivacyAccessedAPIType</key>
+			<string>NSPrivacyAccessedAPICategorySystemBootTime</string>
+			<key>NSPrivacyAccessedAPITypeReasons</key>
+			<array>
+				<string>35F9.1</string>
+			</array>
+		</dict>
+	</array>
+</dict>
+</plist>

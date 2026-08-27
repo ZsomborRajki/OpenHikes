@@ -78,10 +78,13 @@ struct AutoSaveDrainTests {
     /// run.
     ///
     /// The observer records that it was woken rather than the test awaiting
-    /// it, because "this never happens" can't be awaited. A run of yields is
-    /// enough for a signal that was going to be delivered to arrive — and if
-    /// one slips past the window the second half still fails, since it asserts
-    /// on the count rather than merely on being woken at all.
+    /// it, because "this never happens" can't be awaited. So the declined tile
+    /// is bracketed by claimed ones: the first proves the observer is on the
+    /// stream before the tile under test reaches the store, and the second is
+    /// a wake-up that must arrive — waited for by that effect rather than by a
+    /// run of yields, which buys an amount of progress that depends on how
+    /// loaded the machine is. A wake-up the declined tile caused would be
+    /// delivered ahead of it and counted here.
     @Test("a tile the hike doesn't claim wakes nobody")
     func decliningATileRaisesNoSignal() async throws {
         let context = try Fixture.modelContext()
@@ -96,22 +99,41 @@ struct AutoSaveDrainTests {
         }
         defer { observer.cancel() }
 
+        try await persistTile(key: tileKey(UUID().uuidString))
+        await settleWakeups(untilAtLeast: 1, in: wakeups)
+        #expect(wakeups.withLock { count in count } == 1, "precondition: the observer is listening")
+
         try await persistDistantTile(key: tileKey(UUID().uuidString))
-        for _ in 0..<100 { await Task.yield() }
+        try await persistTile(key: tileKey(UUID().uuidString))
+        await settleWakeups(untilAtLeast: 2, in: wakeups)
+
         #expect(
-            wakeups.withLock { count in count } == 0,
+            wakeups.withLock { count in count } == 2,
             "a tile nothing claims must not cost a wake-up"
         )
-
-        // …and the observer is genuinely still listening, so the silence above
-        // is the store's doing rather than a stream that was never connected.
-        let claimed = tileKey(UUID().uuidString)
-        try await persistTile(key: claimed)
-        for _ in 0..<100 where wakeups.withLock({ count in count }) == 0 {
-            await Task.yield()
-        }
-        #expect(wakeups.withLock { count in count } == 1)
         controller.flushPendingKeys()
+    }
+
+    /// Waits until the drain has been woken `count` times, on a deadline that
+    /// reports what it was waiting for rather than on a number of scheduler
+    /// turns. The caller still asserts the exact count, so an extra wake-up
+    /// this returns early on is caught there.
+    private func settleWakeups(
+        untilAtLeast count: Int,
+        in wakeups: borrowing Mutex<Int>,
+        sourceLocation: SourceLocation = #_sourceLocation
+    ) async {
+        let deadline = ContinuousClock.now + .seconds(5)
+        while wakeups.withLock({ observed in observed }) < count {
+            guard ContinuousClock.now < deadline else {
+                Issue.record(
+                    "Timed out waiting for \(count) drain wake-ups",
+                    sourceLocation: sourceLocation
+                )
+                return
+            }
+            guard await settlePollTick() else { return }
+        }
     }
 
     /// End to end through a real drain: nothing in the test flushes, and the

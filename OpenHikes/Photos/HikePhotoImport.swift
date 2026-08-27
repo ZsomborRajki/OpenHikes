@@ -31,6 +31,9 @@ nonisolated enum HikePhotoImport {
     ///   so a later scan doesn't offer the same picture twice.
     /// - Parameter matchEvidence: How the coordinate above was arrived at, for
     ///   the same case. `nil` for every photo the app itself placed.
+    /// - Parameter libraryWriter: The seam the mirrored copy goes through, so
+    ///   a test can watch what it was handed without a photo library to write
+    ///   into.
     /// - Returns: The stored photo, or `nil` when the bytes were not an image,
     ///   could not be written, or the hike went away while they were being
     ///   written.
@@ -43,7 +46,8 @@ nonisolated enum HikePhotoImport {
         capturedAt: Date = .now,
         assetLocalIdentifier: String? = nil,
         matchEvidence: PhotoMatchEvidence? = nil,
-        store: HikePhotoStore = .shared
+        store: HikePhotoStore = .shared,
+        libraryWriter: any PhotoLibraryWriting = PhotoLibraryWriter()
     ) async -> HikePhoto? {
         guard let photo = await stored(
             data,
@@ -64,7 +68,17 @@ nonisolated enum HikePhotoImport {
         }
         hike.addPhoto(photo)
         if savesToPhotoLibrary {
-            await PhotoLibraryWriter.save(data, fileExtension: photo.pathExtension)
+            // Read back off the stored photo rather than from the arguments,
+            // so the copy in the user's library and the copy in the app carry
+            // the same claims about when and where it was taken. `coordinate`
+            // is genuinely absent for a photo the app could not place, and an
+            // absent location is written as an absent one.
+            await libraryWriter.save(
+                data,
+                fileExtension: photo.pathExtension,
+                capturedAt: photo.capturedAt,
+                coordinate: photo.coordinate
+            )
         }
         return photo
     }
@@ -77,7 +91,8 @@ nonisolated enum HikePhotoImport {
         coordinate: CLLocationCoordinate2D?,
         savesToPhotoLibrary: Bool,
         capturedAt: Date = .now,
-        store: HikePhotoStore = .shared
+        store: HikePhotoStore = .shared,
+        libraryWriter: any PhotoLibraryWriting = PhotoLibraryWriter()
     ) async -> HikePhoto? {
         guard let data = await encoded(frame, in: store) else { return nil }
         return await add(
@@ -86,7 +101,8 @@ nonisolated enum HikePhotoImport {
             coordinate: coordinate,
             savesToPhotoLibrary: savesToPhotoLibrary,
             capturedAt: capturedAt,
-            store: store
+            store: store,
+            libraryWriter: libraryWriter
         )
     }
 

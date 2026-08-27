@@ -1,0 +1,38 @@
+name: Dependency review
+
+# Runs on ubuntu rather than macos-26: it reads GitHub's dependency graph
+# through the API and never builds anything, so a macOS runner would cost ten
+# times as much to do exactly the same work.
+on:
+  pull_request:
+    paths:
+      - "**/Package.resolved"
+      - "**/Package.swift"
+      - "OpenHikes.xcodeproj/project.pbxproj"
+      - ".github/workflows/dependency-review.yml"
+
+permissions:
+  contents: read
+
+jobs:
+  dependency-review:
+    name: Review dependency changes
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    permissions:
+      contents: read
+      # Only for the failure summary comment below.
+      pull-requests: write
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
+
+      # Free on public repositories, and it compares the dependency graph
+      # either side of the pull request rather than scanning the whole tree —
+      # so it only speaks up when a pull request actually adds, removes or
+      # bumps a package. The paths filter above is what stops it running on
+      # every pull request to say nothing.
+      - name: Review dependency changes
+        uses: actions/dependency-review-action@a1d282b36b6f3519aa1f3fc636f609c47dddb294 # v5.0.0
+        with:
+          fail-on-severity: moderate
+          comment-summary-in-pr: on-failure

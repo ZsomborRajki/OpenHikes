@@ -193,21 +193,7 @@ extension HikeRecorderTests {
         }
         #expect(recorder.trace.reviewSegment.count == 2)
         #expect(FileManager.default.fileExists(atPath: TrackJournal(directory: directory).journalURL.path))
-        let sessionID = try #require(
-            await settle(sharedStore) { !$0.isEmpty }.last?.sessionID
-        )
-        let lateWidgetFix = SharedRecordingFix(
-            sessionID: sessionID,
-            latitude: 47.631,
-            longitude: 12.862,
-            timestamp: clock.now.addingTimeInterval(60),
-            horizontalAccuracy: 50
-        )
-        await sharedStore.setPendingFixes([lateWidgetFix])
-        recorder.sceneDidBecomeActive()
-        try await Task.sleep(for: .milliseconds(50))
-        #expect(recorder.stats.pointCount == 2)
-        #expect(!(await sharedStore.removedIDs()).contains(lateWidgetFix.id))
+        try await expectLateWidgetFixIsRefused(by: recorder, sharedStore: sharedStore)
 
         let alternative = try #require(section.alternatives.first)
         recorder.selectRouteChoice(
@@ -261,7 +247,7 @@ extension HikeRecorderTests {
     }
 
     @Test("speculative neighbour prefetch is skipped when the policy denies it")
-    func neighbourPrefetchRespectsNetworkPolicy() async {
+    func neighbourPrefetchRespectsNetworkPolicy() async throws {
         let provider = StubTrailGraphProvider(graph: .empty)
         // Bound to a constant rather than written inline: `makeRecorder`
         // takes further closures after this one, so a trailing closure
@@ -278,15 +264,22 @@ extension HikeRecorderTests {
         let only = fix(latitude: 47.63, longitude: 12.86)
         source.deliver(only)
 
-        let region = provider.region(containing: only.coordinate)
-        var regions = await settle(provider) { fetched in
-            fetched.contains { $0 == region }
-        }
-        // Give a neighbour sweep every chance to have happened anyway.
-        try? await Task.sleep(for: .milliseconds(100))
-        regions = Set(await provider.prefetches())
+        let region = try #require(provider.region(containing: only.coordinate))
+        // `.loaded` is written immediately before the neighbour sweep is
+        // decided, so reaching it proves the fix was carried all the way to
+        // the decision — the provider's own prefetch log reaches the region
+        // one step earlier than that, while the sweep is still to come.
+        await waitForTrailGraphPrefetchState(
+            .loaded,
+            region: region,
+            recorder: recorder
+        )
+        // And `prefetchNeighbouringTrailGraphRegions` assigns its task
+        // synchronously, so a sweep the policy failed to deny is waited
+        // through here rather than raced against.
+        await recorder.neighbourPrefetchTask?.value
 
-        #expect(regions == Set([region].compactMap(\.self)))
+        #expect(Set(await provider.prefetches()) == [region])
     }
 
     /// Waits for a provider's prefetch log to satisfy `condition`, then returns
@@ -330,6 +323,54 @@ extension HikeRecorderTests {
         while !(await condition()), ContinuousClock.now < deadline {
             guard await settlePollTick() else { break }
         }
+    }
+
+    /// Hands a recording that is already in review a widget fix that arrived
+    /// too late, and proves it is refused.
+    ///
+    /// Becoming active republishes the widget snapshot unconditionally, so that
+    /// republish is the positive effect proving the whole scene-active path
+    /// ran — and only then is "the fix was not folded in" a claim rather than a
+    /// race. The merge task is awaited for the same reason: a reviewing
+    /// recorder that stopped refusing the merge assigns it synchronously, so it
+    /// would have finished folding by the time the expectations below are read.
+    ///
+    /// The review state is asserted alongside the point count because folding
+    /// into a finished journal is what a regression here actually does: the
+    /// merge throws, the recorder fails, and the review the walker is halfway
+    /// through disappears.
+    private func expectLateWidgetFixIsRefused(
+        by recorder: HikeRecorder,
+        sharedStore: StubRecordingSharedStateStore
+    ) async throws {
+        let sessionID = try #require(
+            await settle(sharedStore) { !$0.isEmpty }.last?.sessionID
+        )
+        let lateLatitude = 47.631
+        let lateLongitude = 12.862
+        let lateWidgetFix = SharedRecordingFix(
+            sessionID: sessionID,
+            latitude: lateLatitude,
+            longitude: lateLongitude,
+            timestamp: clock.now.addingTimeInterval(60),
+            horizontalAccuracy: 50
+        )
+        await sharedStore.setPendingFixes([lateWidgetFix])
+        let published = (await sharedStore.savedSnapshots()).count
+        recorder.sceneDidBecomeActive()
+        let snapshots = await settle(sharedStore) { $0.count > published }
+        #expect(
+            snapshots.count > published,
+            "becoming active must republish the recording snapshot"
+        )
+        await recorder.pendingFixMergeTask?.value
+        #expect(recorder.stats.pointCount == 2)
+        #expect(!(await sharedStore.removedIDs()).contains(lateWidgetFix.id))
+        #expect(recorder.phase == .reviewing)
+        #expect(
+            recorder.routeReview?.current != nil,
+            "the review must survive the scene becoming active"
+        )
     }
 
     @Test("trail graph prefetch is cancelled when the recording is discarded")

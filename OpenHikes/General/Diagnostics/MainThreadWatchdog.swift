@@ -45,6 +45,42 @@ nonisolated enum MainThreadWatchdog {
     private static let pingInterval: TimeInterval = 0.2
     private static let retryInterval: TimeInterval = 0.05
 
+    /// One turn of the ping loop, reported whether or not the main thread
+    /// stalled.
+    struct Cycle: Sendable {
+        /// How long the main thread took to answer, when that was longer than
+        /// ``warnThreshold``. `nil` on a healthy cycle.
+        ///
+        /// Carried even though the only thing checking cycles today counts
+        /// them, because a report of "a turn happened" that threw away what
+        /// the turn found would be a strange thing to hand anyone, and this is
+        /// the sole channel through which the stall figure is visible at all —
+        /// the log is write-only from inside the process, and
+        /// `PerformanceLog.shared` is `nil` outside a performance run.
+        let stall: Duration?
+    }
+
+    /// An extra sink for every cycle, alongside the log.
+    ///
+    /// This is measurement infrastructure, and a watchdog that has quietly
+    /// stopped turning scores perfectly against every budget in the
+    /// performance suite — so that it is running at all has to be checkable,
+    /// and it is not observable through either of the sinks this otherwise
+    /// writes to: `Logger` is write-only from inside the process, and
+    /// `PerformanceLog.shared` is a `static let` that is `nil` outside a
+    /// `--ui-test-performance-log` launch.
+    ///
+    /// Read from inside the loop on every cycle rather than captured once at
+    /// `start()`, because starting is once-only and the app has already done
+    /// it before any test runs.
+    private static let observer = Mutex<(@Sendable (Cycle) -> Void)?>(nil)
+
+    /// Installs `body` as the cycle observer, replacing any previous one.
+    /// Pass `nil` to remove it.
+    static func observeCycles(_ body: (@Sendable (Cycle) -> Void)?) {
+        observer.withLock { $0 = body }
+    }
+
     /// Set on the main queue, polled from the watchdog thread. A reference box
     /// because the ping closure escapes, and `Atomic` — like `Mutex` — is
     /// non-copyable and so cannot itself be captured.
@@ -82,6 +118,7 @@ nonisolated enum MainThreadWatchdog {
             while true {
                 let sentAt = ContinuousClock.now
                 let ping = PingFlag()
+                var stall: Duration?
 
                 // Also deliberately the main *queue* rather than a `@MainActor`
                 // hop, which would route the ping through the cooperative pool
@@ -98,6 +135,7 @@ nonisolated enum MainThreadWatchdog {
                         Thread.sleep(forTimeInterval: retryInterval)
                     }
                     let elapsed = ContinuousClock.now - sentAt
+                    stall = elapsed
                     PerformanceLog.shared?.record(
                         kind: .stall,
                         name: "MainThread",
@@ -110,6 +148,11 @@ nonisolated enum MainThreadWatchdog {
                         + " Pause in the debugger or profile with Instruments to find what."
                     logger.warning("\(stallMsg, privacy: .public)")
                 }
+
+                // Lifted out of the lock before it is called: an observer that
+                // reached back into the watchdog would otherwise deadlock.
+                let observe = observer.withLock { $0 }
+                observe?(Cycle(stall: stall))
 
                 Thread.sleep(forTimeInterval: pingInterval)
             }

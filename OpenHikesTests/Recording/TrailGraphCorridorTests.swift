@@ -71,7 +71,11 @@ struct TrailGraphCorridorTests {
 
         let corridor = TrailGraphCorridor.coordinates(bridging: points)
 
-        #expect(corridor.count <= TrailGraphCorridor.maximumSamplesPerGap)
+        // Sydney to London is some seventeen thousand kilometres, which at
+        // ``samplingIntervalMeters`` would be thousands of samples: the cap is
+        // the only thing deciding this count, so it is asserted exactly rather
+        // than as a bound a truncated or empty result would also satisfy.
+        #expect(corridor.count == TrailGraphCorridor.maximumSamplesPerGap)
     }
 
     @Test("a deliberate pause contributes no corridor")

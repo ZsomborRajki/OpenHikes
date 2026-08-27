@@ -1,0 +1,91 @@
+name: CodeQL
+
+# Swift is the only language in this repository that CodeQL can analyse, and
+# CodeQL's Swift support runs on macOS only — it traces an Xcode build, so
+# there is no Linux path and no `build-mode: none` for it. That makes this the
+# second macOS job in the repository, and the reason it is not folded into
+# ci.yml: it costs a full extra build of the app and does not gate a merge.
+on:
+  pull_request:
+    paths:
+      - "**/*.swift"
+      - "OpenHikes.xcodeproj/**"
+      - "OpenHikesShared/Package*"
+      - ".github/workflows/codeql.yml"
+  push:
+    branches:
+      - main
+  schedule:
+    # Weekly, so a newly published query finds this code without waiting for
+    # somebody to open a pull request.
+    - cron: "17 6 * * 1"
+  workflow_dispatch:
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+permissions:
+  contents: read
+
+env:
+  DEVELOPER_DIR: /Applications/Xcode_26.6.app/Contents/Developer
+
+jobs:
+  analyze:
+    name: Analyze Swift
+    runs-on: macos-26
+    timeout-minutes: 60
+    # Reporting, not gating — the same stance the accessibility job in ci.yml
+    # takes, for the same reason. CodeQL's Swift extractor tracks specific
+    # Swift versions (2.26.2 added 6.3.3, which is what Xcode 26.6 ships), so a
+    # runner-image Xcode bump can outrun the bundle and produce a red run that
+    # says nothing about this code. Drop this line once the job has been green
+    # across a few runs and the pairing is known to hold.
+    continue-on-error: true
+    permissions:
+      contents: read
+      security-events: write
+
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
+
+      - uses: ./.github/actions/verify-xcode
+
+      - name: Initialize CodeQL
+        uses: github/codeql-action/init@cdf488f595d80d6e07e03d4674febd5ab45fa938 # v4.37.9
+        with:
+          languages: swift
+          # Manual rather than autobuild: autobuild guesses at the largest
+          # Xcode target, and this project already has one known-good build
+          # command. It also has to carry -skipPackagePluginValidation, which
+          # autobuild would not add — see the same flag on every xcodebuild
+          # call in ci.yml.
+          build-mode: manual
+          queries: security-and-quality
+
+      # No signing identity exists on a runner, and CodeQL only needs the
+      # compilation to happen — not a runnable product — so signing is turned
+      # off outright rather than worked around. A simulator destination for the
+      # same reason: it needs no device SDK and no provisioning profile.
+      #
+      # Not piped through xcbeautify: this build is an input to the extractor
+      # rather than a report for a human, and when extraction goes wrong the
+      # raw compiler invocations are what says why.
+      - name: Build for analysis
+        run: |
+          set -o pipefail
+          xcodebuild build \
+            -project OpenHikes.xcodeproj \
+            -scheme OpenHikes \
+            -configuration Debug \
+            -destination 'generic/platform=iOS Simulator' \
+            -skipPackagePluginValidation \
+            CODE_SIGNING_ALLOWED=NO \
+            CODE_SIGNING_REQUIRED=NO \
+            CODE_SIGN_IDENTITY=""
+
+      - name: Perform CodeQL analysis
+        uses: github/codeql-action/analyze@cdf488f595d80d6e07e03d4674febd5ab45fa938 # v4.37.9
+        with:
+          category: "/language:swift"

@@ -18,6 +18,17 @@ excluded:
   - build
   - DerivedData
   - "OpenHikesShared/.build"
+  # A git worktree or scratch checkout placed inside the repository is a second
+  # copy of every source file, and SwiftLint's walk does not skip hidden
+  # directories on its own — it stays out of one here only because `included:`
+  # above scopes the walk to the seven target roots. That guard lapses whenever
+  # paths are passed on the command line, which is exactly how the SwiftLint
+  # build-tool plugin invokes it: `included:` stops applying, and `excluded:`
+  # applies only under `--force-exclude`. So exclude the shape of the hazard —
+  # anything hidden, at any depth — rather than the names of whichever copies
+  # happen to exist this week. They are never the same twice, and not all of
+  # them are worktrees.
+  - "**/.*"
 
 # --- Rule sets ----------------------------------------------------------------
 # Enable every opt-in rule …

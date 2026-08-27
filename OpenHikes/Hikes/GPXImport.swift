@@ -65,10 +65,58 @@ nonisolated enum GPXImport {
         }
     }
 
+    /// What one picked file is allowed to cost.
+    ///
+    /// The app has no say in what arrives here. A file the user chose from
+    /// Files at least passed under their eyes first; one delivered through
+    /// `Documents/Inbox` — AirDrop, a mail attachment, a share extension —
+    /// was chosen by somebody else and is read unattended, so these two
+    /// numbers are the only thing standing between the import and however
+    /// much memory the sender felt like spending.
+    ///
+    /// Two bounds because neither implies the other: the byte cap bounds the
+    /// single allocation `Data(contentsOf:)` makes, while the point cap bounds
+    /// the arrays the parse grows out of those bytes, which a file written
+    /// without whitespace or elevations can fill from far fewer of them.
+    ///
+    /// Taken as a parameter rather than read as a constant only so the suite
+    /// can drive both bounds directly instead of having to serialize a file
+    /// large enough to reach the shipping ones; every caller in the app takes
+    /// ``standard``.
+    struct Limits: Sendable, Equatable {
+        var maximumFileSizeBytes: Int
+        var maximumPointCount: Int
+
+        /// Sized against the largest file a walker could plausibly own, not
+        /// against the smallest one that would still work.
+        ///
+        /// A day out recorded at 1 Hz is roughly 20,000 track points and a
+        /// little over 2 MB; the same points carrying Garmin's or Strava's
+        /// `<extensions>` (heart rate, cadence, temperature) are nearer 6 MB.
+        /// 32 MB is well over an order of magnitude above a day's walk, so
+        /// nothing anybody would recognise as one of their own hikes comes
+        /// near it, and reading plus parsing a file at the cap still peaks
+        /// inside what iOS lets a foreground app hold. Half a million points
+        /// is around 140 hours of 1 Hz fixes — more than any single track is —
+        /// and is what a file that spends all its bytes on points runs into
+        /// first.
+        ///
+        /// Both are deliberately loose. A cap that refuses a real hike is a
+        /// worse failure than one that lets an absurd file through, because
+        /// the walker with the real hike has no way to get it in.
+        static let standard = Self(
+            maximumFileSizeBytes: standardFileSizeBytes,
+            maximumPointCount: standardPointCount
+        )
+
+        private static let standardFileSizeBytes = 32 * 1024 * 1024
+        private static let standardPointCount = 500_000
+    }
+
     /// Why a file couldn't be turned into a hike.
     ///
     /// Worth distinguishing rather than collapsing to "import failed": the
-    /// three mean genuinely different things to whoever picked the file, and
+    /// four mean genuinely different things to whoever picked the file, and
     /// send them somewhere different to fix it. The import used to say nothing
     /// at all — a picked file that produced no hike looked exactly like a
     /// picked file that was ignored.
@@ -77,10 +125,14 @@ nonisolated enum GPXImport {
         /// — no points at all, points missing `lat`/`lon`, or points outside
         /// Web Mercator's range.
         case noUsablePoints
+        /// Past one of ``Limits``. Refused before the bytes are read where the
+        /// file system will say how big the file is, and mid-parse where it
+        /// won't.
+        case tooLarge
         /// One usable point. Enough to put a pin on a map; not a route — no
         /// length, no elevation profile, nothing to draw. Policy rather than a
-        /// parse failure, so ``load(from:)`` still returns such a track and the
-        /// import is what refuses it.
+        /// parse failure, so ``load(from:limits:)`` still returns such a track
+        /// and the import is what refuses it.
         case tooShort
         /// Not there, or not well-formed XML — the parser had nothing to work
         /// with. Note that well-formed XML that simply *isn't* GPX (an HTML
@@ -91,6 +143,7 @@ nonisolated enum GPXImport {
         var errorDescription: String? {
             switch self {
             case .noUsablePoints: "No track points were found in this file."
+            case .tooLarge: "This GPX file is too large to import."
             case .tooShort: "This GPX file has only one track point."
             case .unreadable: "This file couldn't be read."
             }
@@ -101,6 +154,10 @@ nonisolated enum GPXImport {
             // Deliberately covers "it isn't GPX at all" as well — see the case's
             // own note for why that lands here.
             case .noUsablePoints: "It may not be a GPX file, or its points are missing coordinates or out of range."
+            // No number in the copy: the message has to be true of both bounds,
+            // and the walker can act on it without knowing which one was hit.
+            case .tooLarge: "A single walk is a few megabytes at most. A file this size usually holds many tracks, "
+                + "and splitting it lets them import one at a time."
             case .tooShort: "A hike needs at least two points to have a route."
             case .unreadable: "Check that it's a .gpx file and isn't damaged."
             }
@@ -112,15 +169,31 @@ nonisolated enum GPXImport {
     /// A one-point file parses *successfully* — refusing it is the import's
     /// call, not the parser's, and the distinction is what lets the caller say
     /// which of the two happened. See ``ImportFailure``.
-    static func load(from url: URL) throws(ImportFailure) -> Track {
+    static func load(from url: URL, limits: Limits = .standard) throws(ImportFailure) -> Track {
+        // Asked of the file system before the read rather than measured after
+        // it. `Data(contentsOf:)` brings the whole file in as one allocation,
+        // so a size learned from `data.count` has already been paid for, and
+        // the file this bound exists for is precisely the one that shouldn't
+        // be read at all.
+        if let reportedSize = try? url.resourceValues(forKeys: [.fileSizeKey]).fileSize,
+           reportedSize > limits.maximumFileSizeBytes { throw .tooLarge }
         guard let data = try? Data(contentsOf: url), !data.isEmpty else { throw .unreadable }
-        let documentParser = DocumentParser()
+        // Not every URL answers `.fileSizeKey` — a file vended by a document
+        // provider may report nothing — so the length that was actually read
+        // is checked as well, before it is handed to the parser.
+        guard data.count <= limits.maximumFileSizeBytes else { throw .tooLarge }
+
+        let documentParser = DocumentParser(maximumPointCount: limits.maximumPointCount)
         let parser = XMLParser(data: data)
         parser.delegate = documentParser
         parser.shouldProcessNamespaces = true
         parser.shouldReportNamespacePrefixes = false
         parser.shouldResolveExternalEntities = false
-        guard parser.parse() else { throw .unreadable }
+        // An aborted parse and a malformed one both come back `false`, and the
+        // two have to reach the user as different sentences.
+        guard parser.parse() else {
+            throw documentParser.hasExceededPointLimit ? .tooLarge : .unreadable
+        }
         guard let track = track(from: documentParser.document) else { throw .noUsablePoints }
         return track
     }
@@ -131,7 +204,10 @@ nonisolated enum GPXImport {
     /// importing task, so abandoning the import cancels it, and the caller's
     /// priority carries through instead of being pinned here.
     @concurrent
-    static func loadOffMain(from url: URL) async throws(ImportFailure) -> Track {
+    static func loadOffMain(
+        from url: URL,
+        limits: Limits = .standard
+    ) async throws(ImportFailure) -> Track {
         assertOffMainThread(
             "GPX parsing and route preparation must stay off the main thread"
         )
@@ -139,7 +215,7 @@ nonisolated enum GPXImport {
         // is whether the main thread stayed answerable for the whole of it.
         // Pair this interval with any `MainThread` stall at the same instant.
         return try RenderSignpost.interval("GPXParsed") { () throws(ImportFailure) in
-            try load(from: url)
+            try load(from: url, limits: limits)
         }
     }
 
@@ -179,7 +255,18 @@ nonisolated enum GPXImport {
         else { return nil }
         return Point(
             coordinate: CLLocationCoordinate2D(latitude: lat, longitude: lon),
-            elevation: waypoint.elevation,
+            // `<ele>nan</ele>` and `<ele>1e400</ele>` are both ordinary GPX
+            // text that `Double.init` accepts, and either one poisons every
+            // figure derived from the route afterwards: a NaN loses every
+            // comparison, so `min` and `max` return it rather than the real
+            // extremes, and the elevation chart's y-domain becomes `nan...nan`
+            // — bounds `ClosedRange` traps on rather than draws badly.
+            //
+            // The point keeps its coordinate instead of being dropped whole,
+            // unlike an unprojectable one above: a height is a field the route
+            // does not need, so tearing a hole in the line to punish a bad
+            // `<ele>` would cost geometry that was never in question.
+            elevation: waypoint.elevation.flatMap { $0.isFinite ? $0 : nil },
             time: waypoint.time
         )
     }
@@ -248,12 +335,35 @@ nonisolated private extension GPXImport {
             includingFractionalSeconds: true
         )
         private let dateStrategy = Date.ISO8601FormatStyle()
+        /// The same grammar with the zone designator taken out of it, so what
+        /// the string omits is supplied by the device instead. See
+        /// ``date(from:)`` for why that is the reading chosen.
+        private let localDateStrategy = Date.ISO8601FormatStyle(
+            timeZone: .autoupdatingCurrent
+        )
+        .year()
+        .month()
+        .day()
+        .dateSeparator(.dash)
+        .dateTimeSeparator(.standard)
+        .time(includingFractionalSeconds: true)
+        private let maximumPointCount: Int
         private var path: [String] = []
         private var text = ""
         private var currentTrackIndex = -1
         private var pendingPoint: PendingPoint?
+        private var parsedPointCount = 0
 
         var document = ParsedDocument()
+        /// Set the moment the file goes past ``maximumPointCount``, which is
+        /// also when the parse is abandoned. Read by ``GPXImport/load(from:limits:)``
+        /// to tell a deliberate stop from a malformed document, since
+        /// `XMLParser.parse()` reports both as `false`.
+        private(set) var hasExceededPointLimit = false
+
+        init(maximumPointCount: Int) {
+            self.maximumPointCount = maximumPointCount
+        }
 
         func parser(
             _ parser: XMLParser,
@@ -315,6 +425,10 @@ nonisolated private extension GPXImport {
             apply(value: value, for: elementName)
             path.removeLast()
             text = ""
+            // Stopping here rather than inside `finishPoint` because this is
+            // where the parser itself is in scope, and one more end tag's worth
+            // of work is nothing next to the rest of the file it saves.
+            if hasExceededPointLimit { parser.abortParsing() }
         }
 
         private func updatePendingPoint(
@@ -379,12 +493,32 @@ nonisolated private extension GPXImport {
             case .waypoint: document.waypoints.append(point.value)
             }
             pendingPoint = nil
+            // Counted across all three flavours, not per flavour: memory does
+            // not care which array a point landed in, and only one of them will
+            // become the track.
+            parsedPointCount += 1
+            if parsedPointCount > maximumPointCount { hasExceededPointLimit = true }
         }
 
+        /// GPX 1.1 says a `<time>` is UTC and carries a designator, and the two
+        /// strict strategies are that file. The third is for the files people
+        /// actually have: exporters that write `2020-01-01T10:00:00` with no
+        /// `Z` and no offset are common enough that refusing them costs the
+        /// hike its duration, both its speeds and its date — a whole track's
+        /// worth of timestamps discarded over a missing letter.
+        ///
+        /// Read as the device's own time rather than as UTC. Both are guesses
+        /// and both are wrong by the same offset when the guess is wrong; what
+        /// decides it is that an exporter omitting the designator is writing
+        /// wall-clock time, so reading it locally is the one that shows the
+        /// walker the hour their own file says. Last of the three because the
+        /// lenient grammar also accepts a string that *does* carry a
+        /// designator and would quietly ignore it.
         private func date(from value: String) -> Date? {
             guard !value.isEmpty else { return nil }
             return (try? fractionalDateStrategy.parse(value))
                 ?? (try? dateStrategy.parse(value))
+                ?? (try? localDateStrategy.parse(value))
         }
     }
 }

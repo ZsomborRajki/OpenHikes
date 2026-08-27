@@ -37,9 +37,19 @@ actor TrailBasemapRenderer {
     private static let fnvOffsetBasis: UInt64 = 0xcbf2_9ce4_8422_2325
     private static let fnvPrime: UInt64 = 0x100_0000_01b3
 
-    /// Rendered at 2× rather than the device's own scale: a 3× image is 2.25×
-    /// the bytes and gets decoded inside a widget extension, which has a hard
-    /// memory ceiling and no way to recover from crossing it.
+    /// Rendered at 2× rather than the device's own scale: a 3× image decodes
+    /// to 2.25× the bytes inside a widget extension, which has a hard memory
+    /// ceiling and no way to recover from crossing it. Measured on the two
+    /// variants: 3.5 MB → 1.6 MB and 2.3 MB → 1.0 MB of decoded bitmap.
+    ///
+    /// `MKMapSnapshotter` does not honour this. It ignores
+    /// `options.traitCollection.displayScale` and the deprecated
+    /// `options.scale` alike and returns the device's own scale regardless,
+    /// so for a long time this constant expressed an intent that never
+    /// happened — manifests recorded 960×960 where they meant 640×640.
+    /// ``resampled(_:)`` is what applies it now; the request in
+    /// ``snapshotTraits(for:)`` is left in place so the resample becomes a
+    /// no-op if a later OS starts honouring it.
     private static let renderScale: CGFloat = 2
 
     private static let renderExecutor = DispatchQueue(
@@ -85,7 +95,8 @@ actor TrailBasemapRenderer {
            // A manifest whose images have been pruned away is worse than no
            // manifest: without this check it would keep claiming the work is
            // done while the widget quietly fell back to the line glyph.
-           SharedStore.hasAllBasemapImages(in: existing) { return }
+           SharedStore.hasAllBasemapImages(in: existing),
+           Self.isAtIntendedScale(existing) { return }
 
         inFlight = request
         let startedAt = generation
@@ -259,6 +270,11 @@ actor TrailBasemapRenderer {
     /// isolated, while this renderer is an actor of its own — the trait
     /// collection itself is `Sendable`, so one hop per snapshot buys the
     /// whole render pass its appearance without the pass leaving its actor.
+    ///
+    /// `displayScale` here is a request the snapshotter does not honour; it
+    /// returns the device's own scale whatever this says. Kept anyway, as the
+    /// statement of intent that ``resampled(_:)`` currently has to enforce by
+    /// hand, and so the resample turns itself off if that ever changes.
     #if canImport(UIKit)
     @MainActor
     private static func snapshotTraits(
@@ -317,7 +333,11 @@ actor TrailBasemapRenderer {
         )
     }
 
-    private struct Encoded {
+    /// Internal rather than private so the suite can hand ``encode(_:)`` an
+    /// image at a chosen device scale and read back what reaches disk. The
+    /// snapshotter has no injectable seam, so this is the only way the pixel
+    /// dimensions a manifest records are asserted by anything.
+    struct Encoded {
         let data: Data
         let pixelWidth: Int
         let pixelHeight: Int
@@ -327,13 +347,16 @@ actor TrailBasemapRenderer {
     /// extension has to decode within a hard memory budget, and the trail
     /// line — the part that has to stay crisp — is drawn on top afterwards,
     /// never baked in.
-    private static func encode(_ image: PlatformImage) -> Encoded? {
+    ///
+    /// Resamples to ``renderScale`` first, because the snapshotter won't.
+    static func encode(_ image: PlatformImage) -> Encoded? {
+        let scaled = resampled(image)
         #if canImport(UIKit)
-        guard let data = image.jpegData(compressionQuality: jpegCompressionQuality) else { return nil }
+        guard let data = scaled.jpegData(compressionQuality: jpegCompressionQuality) else { return nil }
         return Encoded(
             data: data,
-            pixelWidth: Int((image.size.width * image.scale).rounded()),
-            pixelHeight: Int((image.size.height * image.scale).rounded())
+            pixelWidth: Int((scaled.size.width * scaled.scale).rounded()),
+            pixelHeight: Int((scaled.size.height * scaled.scale).rounded())
         )
         #elseif canImport(AppKit)
         guard let tiff = image.tiffRepresentation,
@@ -348,10 +371,82 @@ actor TrailBasemapRenderer {
         return nil
         #endif
     }
+
+    /// Redraws `image` at ``renderScale`` so the bytes that reach the App
+    /// Group are the size that constant names.
+    ///
+    /// This is the only lever left. The snapshotter ignores every scale knob
+    /// it offers — five spellings were tried, including the deprecated
+    /// `options.scale` reached by KVC, and all returned the device's own
+    /// scale — so asking harder is not an option and asking differently is
+    /// not either.
+    ///
+    /// The trade is deliberate and one-directional. It costs the *app*
+    /// roughly 2 ms of CPU per image (four per pass, off the main thread,
+    /// against four network round-trips) and a transient buffer the size of
+    /// the output. It saves the *widget extension* 2.25× on every decode, and
+    /// the extension is the process the header calls out as unable to recover
+    /// from crossing its ceiling. The file on disk shrinks too, by a measured
+    /// 1.9× rather than 2.25× — downsampling concentrates detail, so JPEG
+    /// spends slightly more per remaining pixel. Decode memory is the figure
+    /// that matters here, and that one is exactly 2.25×.
+    ///
+    /// A device already at or below `renderScale` is returned untouched, so
+    /// this costs nothing on a 2× phone and would cost nothing at all if a
+    /// later OS honoured the request in ``snapshotTraits(for:)``.
+    private static func resampled(_ image: PlatformImage) -> PlatformImage {
+        #if canImport(UIKit)
+        guard image.scale > renderScale else { return image }
+        let format = UIGraphicsImageRendererFormat()
+        format.scale = renderScale
+        // A basemap has nothing to see through, and an opaque context drops
+        // the alpha channel from both the resample and the JPEG.
+        format.opaque = true
+        return UIGraphicsImageRenderer(size: image.size, format: format).image { _ in
+            image.draw(in: CGRect(origin: .zero, size: image.size))
+        }
+        #else
+        // AppKit renders at the screen's backing scale and `encode` reports
+        // whatever pixel size that produced. Unbuilt — see the platform note
+        // in the repository conventions — and left as-is rather than guessed at.
+        return image
+        #endif
+    }
+
+    /// The pixel size an image of `variant` is meant to reach disk at.
+    static func intendedPixelSize(for variant: TrailBasemapVariant) -> (width: Int, height: Int) {
+        (
+            width: Int((variant.pointSize.width * renderScale).rounded()),
+            height: Int((variant.pointSize.height * renderScale).rounded())
+        )
+    }
+
+    /// Whether every image `set` names was written at the scale
+    /// ``renderScale`` asks for.
+    ///
+    /// A manifest written before the resample existed records the device's
+    /// own scale, and the short-circuit in ``refreshIfNeeded(hikeID:polyline:)``
+    /// would otherwise serve it for as long as the trail stays selected —
+    /// which for someone with one favourite trail is forever. Treating it as
+    /// stale costs one render pass, once.
+    ///
+    /// This cannot re-render in a loop: ``encode(_:)`` reports the dimensions
+    /// of a context it *constructed* at that scale rather than ones it
+    /// measured, so a pass that publishes anything publishes something this
+    /// accepts.
+    static func isAtIntendedScale(_ set: TrailBasemapSet) -> Bool {
+        set.images.allSatisfy { image in
+            let intended = intendedPixelSize(for: image.variant)
+            return image.pixelWidth == intended.width && image.pixelHeight == intended.height
+        }
+    }
 }
 
+/// Internal rather than private only because ``TrailBasemapRenderer/encode(_:)``
+/// is a test seam and Swift will not let an internal signature name a private
+/// type. Nothing else in the app declares this name.
 #if canImport(UIKit)
-private typealias PlatformImage = UIImage
+typealias PlatformImage = UIImage
 #elseif canImport(AppKit)
-private typealias PlatformImage = NSImage
+typealias PlatformImage = NSImage
 #endif

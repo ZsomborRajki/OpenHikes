@@ -174,7 +174,7 @@ nonisolated final class CachingTileOverlayRenderer: MKOverlayRenderer, TileCache
         let overlay = tileOverlay
         let overlayRect = overlay.boundingMapRect
         let tileMapSize = Double(overlay.tileSize.width) / Double(zoomScale)
-        let zoom = zoomLevel(for: zoomScale, tileWidth: overlay.tileSize.width)
+        let zoom = Self.zoomLevel(for: zoomScale, tileWidth: overlay.tileSize.width)
 
         let firstCol = Int(floor((mapRect.minX - overlayRect.origin.x) / tileMapSize))
         let lastCol = Int(floor((mapRect.maxX - overlayRect.origin.x) / tileMapSize))
@@ -344,7 +344,15 @@ nonisolated final class CachingTileOverlayRenderer: MKOverlayRenderer, TileCache
                 // Deliberately no redraw here: redrawing *on* failure is what
                 // spun the request loop. The retry instead rides a wake-up
                 // scheduled for when the backoff expires.
-                let retryAt = failures.withLock { $0.recordFailure(key, at: .now) }
+                //
+                // A server that answered 429 or 503 with `Retry-After` named
+                // its own deadline, and that is fed in as a floor rather than
+                // as a second mechanism: the tile waits for whichever is
+                // longer. Read before the lock, since it takes the cache's.
+                let serverDeadline = overlay.retryDeadline(at: fetchPath)
+                let retryAt = failures.withLock { log in
+                    log.recordFailure(key, at: .now, notBefore: serverDeadline)
+                }
                 scheduleRetryWake()
                 #if DEBUG
                 let seconds = ContinuousClock.now.duration(to: retryAt).components.seconds
@@ -410,10 +418,43 @@ nonisolated final class CachingTileOverlayRenderer: MKOverlayRenderer, TileCache
         }
     }
 
+    /// The deepest level ``zoomLevel(for:tileWidth:)`` will report.
+    ///
+    /// Eight levels past the deepest `maximumZ` any provider here declares, so
+    /// it cannot shorten a real map, and far enough below the width of an
+    /// `Int` that `1 << zoom` in `draw` stays a positive tile count. That
+    /// second part is the one that matters: at 64 the shift yields zero, and
+    /// `SlippyTileMath.wrap(_:to:)` divides by it.
+    static let maximumZoomLevel = 30
+
     /// Approximates a tile zoom level from a zoomScale (no public API for this).
-    private func zoomLevel(for zoomScale: MKZoomScale, tileWidth: CGFloat) -> Int {
+    ///
+    /// The level is `log2` of how many tiles span the world at this scale,
+    /// rounded half *up* — so the scale exactly halfway between two levels
+    /// draws the deeper one, and a level covers scales in
+    /// `[2^(k-0.5), 2^(k+0.5))`. Doubling the scale adds exactly one level;
+    /// doubling the tile width takes one away, which is the only way a
+    /// display scale enters — this reads no `contentScaleFactor`, because a
+    /// retina screen is served the same level as an `@2x` asset rather than a
+    /// deeper level.
+    ///
+    /// `static` and not `private` for the same reason ``fetchPath`` is: it
+    /// reads nothing but its arguments, and a wrong answer here is invisible —
+    /// the map is uniformly blurry or fetches four times the tiles it needs,
+    /// and nothing throws, logs or crashes.
+    static func zoomLevel(for zoomScale: MKZoomScale, tileWidth: CGFloat) -> Int {
         let tilesAcrossWorld = MKMapSize.world.width / Double(tileWidth)
-        return max(0, Int(log2(tilesAcrossWorld) + floor(log2(Double(zoomScale)) + 0.5)))
+        let level = log2(tilesAcrossWorld) + floor(log2(Double(zoomScale)) + 0.5)
+        // `Int(_:)` traps on a non-finite `Double`, and every degenerate input
+        // reaches it as one: a zero, negative or NaN scale (or tile width)
+        // makes `log2` return -infinity or NaN, and an infinite scale or a
+        // zero width makes it +infinity. MapKit passes neither today, so this
+        // is a guard against a future caller rather than a live crash — but
+        // the trap it replaces is unconditional, and answering it with the
+        // whole world (or the deepest level) is the only interpretation that
+        // still draws something.
+        guard level.isFinite else { return level > 0 ? Self.maximumZoomLevel : 0 }
+        return min(Self.maximumZoomLevel, max(0, Int(level)))
     }
 }
 

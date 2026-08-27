@@ -1,0 +1,35 @@
+name: Feature request
+description: Something the app should do and does not.
+labels:
+  - enhancement
+body:
+  - type: markdown
+    attributes:
+      value: >-
+        OpenHikes has a deliberate scope: local-first, iPhone-only, no backend
+        and no account. `README.md` lists the current limitations and
+        `.github/copilot-instructions.md` records the decisions that have
+        already been settled — worth a look before writing.
+
+  - type: textarea
+    id: problem
+    attributes:
+      label: What are you trying to do
+      description: >-
+        The problem rather than the solution. What are you doing on a walk that
+        the app makes hard?
+    validations:
+      required: true
+
+  - type: textarea
+    id: proposal
+    attributes:
+      label: What you would like it to do
+    validations:
+      required: true
+
+  - type: textarea
+    id: alternatives
+    attributes:
+      label: What you do instead today
+      description: Another app, a workaround, or nothing.

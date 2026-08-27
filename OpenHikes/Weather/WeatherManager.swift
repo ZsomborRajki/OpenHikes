@@ -149,22 +149,38 @@ nonisolated struct WeatherSnapshot: Equatable, Sendable {
     let symbolName: String
     let temperature: Measurement<UnitTemperature>
     let conditionDescription: String
+    /// When the reading itself was produced — not when this app asked for it.
+    ///
+    /// ``WeatherManager/update(for:)`` deliberately keeps the last successful
+    /// reading when WeatherKit is unavailable, which is right (a temperature
+    /// from twenty minutes ago beats an empty badge) and was previously
+    /// indistinguishable from a current one, because nothing recorded how old
+    /// it was. This is what ``isStale(asOf:policy:)`` answers from.
+    ///
+    /// Taken from WeatherKit's own `metadata.date` rather than from `Date.now`
+    /// at the call site: WeatherKit serves cached payloads, so a response that
+    /// arrives instantly is not necessarily a reading taken just now, and
+    /// stamping the arrival would reset the age of data that never changed.
+    let capturedAt: Date
 
     init(
         symbolName: String,
         temperature: Measurement<UnitTemperature>,
-        conditionDescription: String
+        conditionDescription: String,
+        capturedAt: Date
     ) {
         self.symbolName = symbolName
         self.temperature = temperature
         self.conditionDescription = conditionDescription
+        self.capturedAt = capturedAt
     }
 
     init(_ weather: CurrentWeather) {
         self.init(
             symbolName: weather.symbolName,
             temperature: weather.temperature,
-            conditionDescription: weather.condition.description
+            conditionDescription: weather.condition.description,
+            capturedAt: weather.metadata.date
         )
     }
 }
@@ -230,10 +246,18 @@ extension WeatherSnapshot {
     /// Deliberately unmistakable: a temperature no simulator's real location
     /// is likely to report, so a test that finds this value knows the badge is
     /// drawing the fixture rather than something that arrived by accident.
-    static let uiTestFixture = Self(
-        symbolName: "cloud.sun.fill",
-        temperature: Measurement(value: 12, unit: UnitTemperature.celsius),
-        conditionDescription: "Partly Cloudy"
-    )
+    ///
+    /// Computed rather than stored, so every launch gets a reading captured at
+    /// that launch. A `static let` is initialized once and would hand a long
+    /// simulator session a fixture that ages past the staleness window, which
+    /// would dim the badge in a test that never asked about staleness.
+    static var uiTestFixture: Self {
+        Self(
+            symbolName: "cloud.sun.fill",
+            temperature: Measurement(value: 12, unit: UnitTemperature.celsius),
+            conditionDescription: "Partly Cloudy",
+            capturedAt: .now
+        )
+    }
 }
 #endif

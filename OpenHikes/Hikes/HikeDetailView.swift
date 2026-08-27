@@ -62,12 +62,7 @@ nonisolated enum HikeDetailPreparation {
             Stat(
                 "Distance",
                 Measurement(value: distanceMeters, unit: UnitLength.meters)
-                    .formatted(
-                        .measurement(
-                            width: .abbreviated,
-                            usage: .road
-                        )
-                    )
+                    .formatted(.measurement(width: .abbreviated, usage: .road))
             ),
             statistics.duration.map { duration in
                 Stat("Duration", HikeFormat.duration(duration))
@@ -84,8 +79,16 @@ nonisolated enum HikeDetailPreparation {
             statistics.minElevation.map { elevation in
                 Stat("Min Elevation", HikeFormat.length(elevation))
             },
+            // Two clocks over one distance, named for the clock rather than
+            // left as a bare "Avg Speed" that has always been the elapsed one
+            // without saying so. Spelled out on both rows: relabelling only
+            // the new one would leave the older row still answering a question
+            // it was never measuring.
             statistics.averageSpeed.map { speed in
-                Stat("Avg Speed", HikeFormat.speed(speed))
+                Stat("Overall Avg Speed", HikeFormat.speed(speed))
+            },
+            statistics.movingAverageSpeed.map { speed in
+                Stat("Moving Avg Speed", HikeFormat.speed(speed))
             },
             statistics.maxSpeed.map { speed in
                 Stat("Max Speed", HikeFormat.speed(speed))

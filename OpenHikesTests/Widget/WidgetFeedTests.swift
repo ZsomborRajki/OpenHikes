@@ -195,6 +195,7 @@ final class WidgetFeedTests {
 
         let match = try #require(profile.nearestPoint(to: profile.coordinates[3]))
         tracker.publishLiveFix(hike: hike, profile: profile, match: match)
+        await tracker.waitForLiveFixPublish()
 
         let snapshot = try #require(SharedStore.load())
         let fix = try #require(snapshot.liveFix)
@@ -221,6 +222,7 @@ final class WidgetFeedTests {
 
         let match = try #require(profile.nearestPoint(to: profile.coordinates[3]))
         tracker.publishLiveFix(hike: hike, profile: profile, match: match)
+        await tracker.waitForLiveFixPublish()
 
         let snapshot = try #require(SharedStore.load())
         let elevation = try #require(snapshot.liveFix?.elevationMeters)
@@ -243,6 +245,7 @@ final class WidgetFeedTests {
         )
         #expect(far.offRouteMeters > RouteProfile.followMatchThresholdMeters, "precondition: this fix is off the trail")
         tracker.publishLiveFix(hike: hike, profile: profile, match: far)
+        await tracker.waitForLiveFixPublish()
 
         let snapshot = try #require(SharedStore.load())
         #expect(snapshot.liveFix == nil)
@@ -259,10 +262,12 @@ final class WidgetFeedTests {
 
         let first = try #require(profile.nearestPoint(to: profile.coordinates[1]))
         tracker.publishLiveFix(hike: hike, profile: profile, match: first)
+        await tracker.waitForLiveFixPublish()
         let published = try #require(SharedStore.load()?.liveFix)
 
         let later = try #require(profile.nearestPoint(to: profile.coordinates[4]))
         tracker.publishLiveFix(hike: hike, profile: profile, match: later)
+        await tracker.waitForLiveFixPublish()
         let stillPublished = try #require(SharedStore.load()?.liveFix)
         #expect(stillPublished.distanceAlongRouteMeters == published.distanceAlongRouteMeters)
     }
@@ -278,9 +283,11 @@ final class WidgetFeedTests {
 
         let onRoute = try #require(profile.nearestPoint(to: profile.coordinates[1]))
         tracker.publishLiveFix(hike: hike, profile: profile, match: onRoute)
+        await tracker.waitForLiveFixPublish()
         #expect(SharedStore.load()?.liveFix != nil)
 
         tracker.publishLiveFix(hike: hike, profile: profile, match: nil)
+        await tracker.waitForLiveFixPublish()
         #expect(SharedStore.load()?.liveFix == nil, "walking off the trail should show right away")
     }
 
@@ -296,6 +303,7 @@ final class WidgetFeedTests {
         let profile = RouteProfile(route: other.route)
         let match = try #require(profile.nearestPoint(to: profile.coordinates[2]))
         tracker.publishLiveFix(hike: other, profile: profile, match: match)
+        await tracker.waitForLiveFixPublish()
 
         let snapshot = try #require(SharedStore.load())
         #expect(snapshot.hikeID == tracked.id)
@@ -312,6 +320,7 @@ final class WidgetFeedTests {
         await tracker.waitForSelectionPublish()
         let match = try #require(profile.nearestPoint(to: profile.coordinates[3]))
         tracker.publishLiveFix(hike: first, profile: profile, match: match)
+        await tracker.waitForLiveFixPublish()
         #expect(SharedStore.load()?.liveFix != nil)
 
         let second = Fixture.hike(in: context, title: "Second")

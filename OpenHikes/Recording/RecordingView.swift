@@ -513,7 +513,16 @@ private struct RecordingControls: View {
 
     private var stopButton: some View {
         Button("Stop", systemImage: "stop.fill") {
-            stopNameDraft = recorder.currentHike?.title ?? ""
+            // Deliberately blank rather than pre-filled with the default
+            // title. The alert's own copy says "leave it blank to keep the
+            // default" and the field's placeholder already shows that default,
+            // so pre-filling made the field impossible to leave blank —
+            // tapping Stop → Save without typing sent the default through as
+            // `customName`, and `normalizedCustomName` only nils out an
+            // *empty* string, so the hike was permanently flagged user-named.
+            // The rendered name was identical, which is why nothing looked
+            // wrong; the state was just no longer true.
+            stopNameDraft = ""
             showStopAlert = true
         }
         .prominentGlassButtonStyle()

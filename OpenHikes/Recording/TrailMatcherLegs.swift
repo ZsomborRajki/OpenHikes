@@ -33,7 +33,6 @@ nonisolated extension TrailMatcher {
         return MatchingLegsResult(
             legs: legs,
             matchedCount: stats.matchedCount,
-            ambiguousCount: stats.ambiguousCount,
             trailNameCounts: stats.trailNameCounts,
             didMoveRoute: stats.didMoveRoute
         )
@@ -99,8 +98,6 @@ nonisolated extension TrailMatcher {
                 trailNameCounts: &stats.trailNameCounts,
                 didMoveRoute: &stats.didMoveRoute
             )
-        } else if parameters.isSparse {
-            stats.ambiguousCount += 1
         }
         return MatchLeg(
             transition: transition,
@@ -244,22 +241,55 @@ nonisolated extension TrailMatcher {
         fromAnchor: RecordingPoint,
         toAnchor: RecordingPoint
     ) -> [TrailMatchAlternative] {
-        guard !legs[legIndex].isConfident,
-              legs[legIndex].isSparse,
-              let transition = legs[legIndex].transition
-        else { return [] }
-        return transition.alternatives.enumerated().map { alternativeIndex, alternative in
-            TrailMatchAlternative(
-                id: alternativeIndex,
-                points: recordingPoints(
-                    along: alternative.coordinates,
-                    from: fromAnchor,
-                    to: toAnchor,
-                    inferred: legs[legIndex].isGap
-                ),
-                distanceMeters: alternative.distanceMeters,
-                trailNames: alternative.trailNames
-            )
+        let leg = legs[legIndex]
+        guard !leg.isConfident, let transition = leg.transition else { return [] }
+        return transitionCandidates(
+            of: transition,
+            fromAnchor: fromAnchor,
+            toAnchor: toAnchor
+        )
+            .enumerated()
+            .map { alternativeIndex, alternative in
+                TrailMatchAlternative(
+                    id: alternativeIndex,
+                    points: recordingPoints(
+                        along: alternative.coordinates,
+                        from: fromAnchor,
+                        to: toAnchor,
+                        inferred: leg.isGap
+                    ),
+                    distanceMeters: alternative.distanceMeters,
+                    trailNames: alternative.trailNames
+                )
+            }
+    }
+
+    /// What a non-confident leg can offer the walker to choose between.
+    ///
+    /// A sparse leg was routed several ways and keeps its ranked runner-up.
+    /// A dense one was routed once, so the only choice it can put is the trail
+    /// it found against the raw line it drew — and that is worth putting only
+    /// when abstaining actually shortened the walk, which is what
+    /// ``minimumDeclinedDetourMeters`` decides and documents.
+    private static func transitionCandidates(
+        of transition: TrailMatcherTransition,
+        fromAnchor: RecordingPoint,
+        toAnchor: RecordingPoint
+    ) -> [TrailMatcherTransitionAlternative] {
+        guard transition.alternatives.isEmpty else { return transition.alternatives }
+        let drawn = RouteGeometry.distanceMeters(
+            from: fromAnchor.coordinate,
+            to: toAnchor.coordinate
+        )
+        guard transition.distanceMeters - drawn >= minimumDeclinedDetourMeters else {
+            return []
         }
+        return [
+            TrailMatcherTransitionAlternative(
+                distanceMeters: transition.distanceMeters,
+                coordinates: transition.coordinates,
+                trailNames: transition.trailNames.sorted()
+            ),
+        ]
     }
 }

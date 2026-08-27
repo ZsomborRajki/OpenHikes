@@ -24,6 +24,19 @@ struct GPXExportTests {
     private static let gpxIdentifier = "com.topografix.gpx"
     private static let maximumFileStemLength = 64
 
+    /// ``date`` as the file name spells it, taken from the calendar rather
+    /// than from ``GPXExport``'s own style — which would agree with the
+    /// exporter about a wrong day just as readily as about a right one.
+    private static func expectedFileDate() throws -> String {
+        let day = Calendar.current.dateComponents([.year, .month, .day], from: date)
+        return String(
+            format: "%04d-%02d-%02d",
+            try #require(day.year),
+            try #require(day.month),
+            try #require(day.day)
+        )
+    }
+
     private func track(
         name: String = "Thumsee Loop",
         trackDescription: String? = "A lakeside loop.",
@@ -221,11 +234,15 @@ struct GPXExportTests {
 
     // MARK: File name
 
+    /// The date has to be the *hike's*, and a pattern that matches any date
+    /// cannot tell that from the day the share sheet happened to open — so
+    /// the expected day is derived from the fixture's own date through the
+    /// calendar, rather than through the exporter's format style.
     @Test("the suggested file name is the hike's name, its date and .gpx")
-    func buildsFileName() {
+    func buildsFileName() throws {
         let fileName = GPXExport.fileName(for: track(name: "Thumsee Loop"))
 
-        #expect(fileName.wholeMatch(of: /Thumsee Loop-\d{4}-\d{2}-\d{2}\.gpx/) != nil)
+        #expect(fileName == "Thumsee Loop-\(try Self.expectedFileDate()).gpx")
     }
 
     /// Hyphens rather than deletions, so two hikes whose names differ only in

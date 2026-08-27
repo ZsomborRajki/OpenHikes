@@ -205,10 +205,10 @@ nonisolated final class TileCache: @unchecked Sendable {
     /// See the `durableByteLimitScale` parameter on ``init``.
     let durableByteLimitScale: Double
 
-    /// OSM's tile usage policy requires an identifying User-Agent. Named so a
-    /// test can assert on the header the app really sends rather than on a
-    /// copy of the string.
-    static let userAgent = "OpenHikes/1.0 (iOS; hiking app)"
+    /// Deadlines tile servers have asked for through `Retry-After`, read back
+    /// by the renderer when the load they belong to fails. See
+    /// ``TileRetryAdvice``.
+    let retryAdvice = Mutex(TileRetryAdvice())
 
     /// The subdirectory names for the two tiers, under whichever roots they
     /// end up in — so a test cache lays its files out exactly as the app's does.
@@ -281,26 +281,6 @@ nonisolated final class TileCache: @unchecked Sendable {
             // exactly wrong for the launch argument that asked to be offline.
             conditions.withLock { $0.isOnline = false }
         }
-    }
-
-    static func tileSessionConfiguration(
-        from configuration: URLSessionConfiguration? = nil
-    ) -> URLSessionConfiguration {
-        let config = configuration ?? URLSessionConfiguration.ephemeral
-        config.httpAdditionalHeaders = ["User-Agent": Self.userAgent]
-        config.waitsForConnectivity = false
-        config.urlCache = nil
-        config.requestCachePolicy = .reloadIgnoringLocalCacheData
-        // A backstop under ``TileNetworkPolicy``, not a substitute for it. The
-        // policy stops the request before a connection is opened, which is
-        // what saves the radio; this makes sure that a path that somehow
-        // reaches here still cannot spend a Low Data Mode allowance on a map
-        // tile. There is no matching `allowsExpensiveNetworkAccess = false`
-        // because cellular is not a blanket refusal: a tile the walker is
-        // looking at still loads over it, and only the reading-ahead the
-        // policy classes as speculative does not.
-        config.allowsConstrainedNetworkAccess = false
-        return config
     }
 
     deinit {
@@ -418,7 +398,7 @@ nonisolated extension TileCache {
         guard storeFetchedTile(
             fetched,
             forKey: key,
-            at: wasDurable ? paths.durable : paths.cached,
+            in: wasDurable ? .durable : .browsing,
             token: mutationToken
         ) else { return nil }
         return fetched.image
@@ -477,9 +457,9 @@ nonisolated extension TileCache {
     /// browsing fetch refreshes, and the two hold the same image.
     private func diskImage(forKey key: String) -> (image: TileImage, storedAt: Date)? {
         let name = diskName(for: key)
-        for tier in [directory, durableDirectory] {
-            let file = tier.appendingPathComponent(name)
-            guard let storedAt = freshModificationDate(for: file) else { continue }
+        for tier in [StorageTier.browsing, .durable] {
+            let file = directory(for: tier).appendingPathComponent(name)
+            guard let storedAt = freshModificationDate(for: file, in: tier) else { continue }
             do {
                 let data = try Data(contentsOf: file)
                 guard let image = TileImage(data: data) else {
@@ -535,25 +515,52 @@ nonisolated extension TileCache {
         }
     }
 
+    /// Files freshly-fetched bytes in `tier` and publishes them to memory,
+    /// unless the key was deleted while the fetch was in flight.
+    ///
+    /// A durable write here is a *refresh* of coverage that already exists —
+    /// ``loadTile(forKey:url:purpose:)`` only reaches it for a key that was
+    /// durable before the fetch — so the provider's total is moved by what
+    /// this write actually changes rather than gated by
+    /// ``reserveDurableBytes(forKey:byteCount:)``. Reserving would be the
+    /// obvious symmetry with ``storeFetchedTileDurably(_:forKey:token:)`` and
+    /// is the wrong call: a reservation can refuse, and a refusal here returns
+    /// `nil` from a *browse*, so the tile the walker is looking at goes blank
+    /// and the coverage their hike claims is gone for good, on a key whose
+    /// bytes were counted against the ceiling a moment earlier. That trades an
+    /// accounting drift for a functional regression. The ceiling still gates
+    /// every genuinely new durable tile — ``saveTileDurably(forKey:url:)`` and
+    /// ``promoteCachedTile(forKey:)`` both reserve — and
+    /// ``enforceDurableByteLimits()`` corrects a store that is over it.
+    ///
+    /// The delta, rather than the tile's whole size, because the destination
+    /// may still hold a counted file: a durable tile that is present but
+    /// undecodable is not deleted by the TTL check, and this write replaces
+    /// it. Adding the full size there would count one tile twice.
     private func storeFetchedTile(
         _ fetched: FetchedTile,
         forKey key: String,
-        at destination: URL,
+        in tier: StorageTier,
         token: MutationToken
     ) -> Bool {
-        mutationVersions.withLock { versions in
+        let paths = filePaths(forKey: key)
+        let destination = tier == .durable ? paths.durable : paths.cached
+        return mutationVersions.withLock { versions in
             guard token == MutationToken(
                 global: versions.global,
                 key: versions.keys[key, default: 0]
             ) else { return false }
+            let previousBytes = tier == .durable ? fileSize(destination) : 0
             do {
                 try fetched.data.write(to: destination, options: .atomic)
+                if tier == .durable {
+                    adjustDurableBytes(
+                        forProviderID: Self.providerID(forKey: key),
+                        by: Int64(fetched.data.count) - previousBytes
+                    )
+                }
             } catch {
-                logFileError(
-                    error,
-                    operation: "write cached tile",
-                    url: destination
-                )
+                logFileError(error, operation: "write cached tile", url: destination)
             }
             // A download sharing this fetch may have filed the same bytes in
             // durable storage. Durable wins, so reconcile before publishing
@@ -627,6 +634,11 @@ nonisolated extension TileCache {
                 return nil
             }
             guard Self.httpSuccessRange.contains(http.statusCode) else {
+                // A 429 or an overloaded 503 is the one failure that comes
+                // with its own answer to "when should I come back". Filed
+                // here, applied by the renderer's existing backoff — nothing
+                // in this file waits on it.
+                recordRetryAdvice(from: http, forKey: key)
                 #if DEBUG
                 let tileErrMsg = "Tile \(key) failed: HTTP \(http.statusCode)"
                     + " (\(data.count)b) from \(url.absoluteString)"
@@ -686,13 +698,13 @@ nonisolated extension TileCache {
         // this case must not reserve any. Checked before the lock so the
         // reservation below — which may walk the durable directory to take its
         // first measurement — is never taken with `mutationVersions` held.
-        if freshModificationDate(for: paths.durable) != nil {
+        if freshModificationDate(for: paths.durable, in: .durable) != nil {
             return mutationVersions.withLock { _ in
                 discardRedundantCachedCopy(forKey: key)
                 return true
             }
         }
-        guard freshModificationDate(for: paths.cached) != nil else { return false }
+        guard freshModificationDate(for: paths.cached, in: .browsing) != nil else { return false }
 
         let byteCount = fileSize(paths.cached)
         guard reserveDurableBytes(forKey: key, byteCount: byteCount) else { return false }
@@ -708,7 +720,7 @@ nonisolated extension TileCache {
             // and two writers racing one key can both pass it. Without this,
             // the destination clear below would delete the durable tile the
             // other writer just wrote, and then report that nothing was saved.
-            if freshModificationDate(for: paths.durable) != nil {
+            if freshModificationDate(for: paths.durable, in: .durable) != nil {
                 discardRedundantCachedCopy(forKey: key)
                 return .alreadyDurable
             }
@@ -724,7 +736,7 @@ nonisolated extension TileCache {
             } catch {
                 // Another writer may have produced the durable copy after the
                 // checks above. That is still a successful save.
-                if freshModificationDate(for: paths.durable) != nil {
+                if freshModificationDate(for: paths.durable, in: .durable) != nil {
                     discardRedundantCachedCopy(forKey: key)
                     return .alreadyDurable
                 }

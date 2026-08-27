@@ -26,6 +26,18 @@ device="${OPENHIKES_SIMULATOR_NAME:-iPhone 17 Pro}"
 test_name=""
 output_root="$repository_root/PerformanceReports"
 keep_going=false
+# Each run keeps its own .xcresult, which is tens of megabytes, so the
+# directory grows without bound and reached 1.6 GB before anything trimmed it.
+# Ten is enough to compare a change against the runs around it and still notice
+# a drift over an afternoon; older than that, the build it measured has moved
+# on. Rename a run directory to keep it forever — pruning only ever considers
+# the bare `YYYYMMDD-HHMMSS` names this script creates itself.
+retained_runs="${OPENHIKES_PERFORMANCE_RETAINED_RUNS:-10}"
+# Tracked, unlike the reports themselves: PerformanceReports/ is gitignored
+# because it holds a machine's own measurements, whereas the baseline is the
+# number the repository agrees on. It is absent until someone records one.
+baseline="$repository_root/Scripts/performance-baseline.json"
+update_baseline=false
 
 usage() {
     cat <<EOF
@@ -38,13 +50,23 @@ Options:
   --device <name>     Simulator name (default: $device)
   --test <name>       Run one test method instead of the whole suite
   --output <dir>      Where reports are written (default: PerformanceReports)
+  --keep <n>          Run directories to retain (default: $retained_runs)
+  --baseline <file>   Counters to compare against (default: Scripts/performance-baseline.json)
+  --update-baseline   Overwrite that file with this run's counters
   --keep-going        Still write a report when a test fails
   --list              List the available test methods
   -h, --help          Show this help
 
+A baseline turns the report from a set of upper bounds into a diff, which is
+the only way it notices a counter that *fell* — work that stopped happening
+scores perfectly against every budget in the suite. Record one on a machine
+that is otherwise idle, and re-record it deliberately rather than to make a
+red report go away.
+
 Examples:
   Scripts/run-performance-tests.sh
   Scripts/run-performance-tests.sh --test testLiveRecordingCostPerFix
+  Scripts/run-performance-tests.sh --update-baseline
 EOF
 }
 
@@ -65,6 +87,39 @@ require_value() {
     fi
 }
 
+# Deletes the oldest runs so a directory of .xcresult bundles cannot grow
+# without limit.
+#
+# Two deliberate limits on what it will touch. It reads only the immediate
+# children of the output directory, so nothing outside the directory this
+# script writes to is ever a candidate; and it matches only the bare
+# `YYYYMMDD-HHMMSS` names the script produces, so a run somebody renamed —
+# `20260814-171100-manual-memory`, say — is kept for good. Renaming is the way
+# to say "keep this one".
+prune_old_runs() {
+    local root="$1"
+    [[ -d "$root" ]] || return 0
+
+    local -a runs=()
+    local directory
+    while IFS= read -r directory; do
+        runs+=("$directory")
+    done < <(
+        find "$root" -mindepth 1 -maxdepth 1 -type d -exec basename {} \; \
+            | grep -E '^[0-9]{8}-[0-9]{6}$' \
+            | sort -r
+    )
+
+    (( ${#runs[@]} > retained_runs )) || return 0
+
+    local removed=0
+    for directory in "${runs[@]:$retained_runs}"; do
+        rm -rf "${root:?}/${directory:?}"
+        removed=$(( removed + 1 ))
+    done
+    echo "Pruned:    $removed older run(s), keeping the newest $retained_runs."
+}
+
 while [[ $# -gt 0 ]]; do
     case "$1" in
         --device)
@@ -82,8 +137,26 @@ while [[ $# -gt 0 ]]; do
             output_root="$2"
             shift 2
             ;;
+        --keep)
+            require_value "$1" "${2:-}"
+            if ! [[ "$2" =~ ^[0-9]+$ ]]; then
+                echo "--keep takes a non-negative whole number, not '$2'." >&2
+                exit 2
+            fi
+            retained_runs="$2"
+            shift 2
+            ;;
         --keep-going)
             keep_going=true
+            shift
+            ;;
+        --baseline)
+            require_value "$1" "${2:-}"
+            baseline="$2"
+            shift 2
+            ;;
+        --update-baseline)
+            update_baseline=true
             shift
             ;;
         --list)
@@ -119,6 +192,9 @@ fi
 
 timestamp="$(date +%Y%m%d-%H%M%S)"
 run_directory="$output_root/$timestamp"
+# Before the new directory exists, so this run is never a candidate and the
+# disk is freed before the .xcresult that needs it is written.
+prune_old_runs "$output_root"
 mkdir -p "$run_directory/events"
 build_log="$run_directory/xcodebuild.log"
 
@@ -180,9 +256,24 @@ if (( status != 0 )) && [[ "$keep_going" == false ]]; then
     exit "$status"
 fi
 
-python3 "$repository_root/Scripts/perf-report.py" \
-    --log "$build_log" \
-    --events "$run_directory/events" \
+report_arguments=(
+    --log "$build_log"
+    --events "$run_directory/events"
     --out "$run_directory/report.md"
+)
+# A single-method run measures a fraction of the counters, so every baseline
+# entry it did not reach would be reported as having vanished. Comparing only
+# a whole-suite run keeps "this counter was not reported" meaning what it says.
+if [[ -z "$test_name" && -f "$baseline" ]]; then
+    report_arguments+=(--baseline "$baseline")
+fi
+if [[ "$update_baseline" == true ]]; then
+    report_arguments+=(--write-baseline "$baseline")
+fi
+
+python3 "$repository_root/Scripts/perf-report.py" "${report_arguments[@]}"
 
 echo "Report written to $run_directory/report.md"
+if [[ -z "$test_name" && ! -f "$baseline" && "$update_baseline" == false ]]; then
+    echo "No baseline at $baseline — run again with --update-baseline to record one."
+fi

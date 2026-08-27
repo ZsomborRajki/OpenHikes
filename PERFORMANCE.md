@@ -26,6 +26,8 @@ Scripts/run-performance-tests.sh          # whole suite → PerformanceReports/<
 Scripts/run-performance-tests.sh --list
 Scripts/run-performance-tests.sh --test testBackgroundRecordingCostsNothingPerFix
 Scripts/run-performance-tests.sh --keep-going   # still report when a budget fails
+Scripts/run-performance-tests.sh --baseline <file>
+Scripts/run-performance-tests.sh --update-baseline
 ```
 
 Debug is mandatory rather than incidental: `RenderSignpost`, `PerformanceLog`
@@ -36,7 +38,20 @@ two coexist rather than compete.
 
 `PerformanceReports/` is git-ignored. A run is evidence on the machine that
 produced it and nowhere else, so this document carries the numbers rather than
-the paths.
+the paths. `Scripts/performance-baseline.json` is the exception, and is tracked:
+it holds the counters and XCTest metrics a whole-suite run is diffed against, so
+the report says what *changed* rather than only what stayed inside a budget.
+That direction matters more than it looks. Every assertion in the suite is an
+upper bound, and an upper bound cannot notice work that has stopped — the 1 Hz
+recording clock once froze because a refactor made its view structurally
+identical on every tick, and it scored perfectly against every budget while
+doing so. The diff reports a counter that *fell*, a counter that reached zero,
+and a counter the run never reported at all, each as its own finding.
+
+Record one on an otherwise idle machine, and re-record it deliberately rather
+than to make a red report go away. There is no baseline in the tree today: the
+numbers below were measured on one developer's hardware, and a file committed
+from that run would be asserting them for everyone.
 
 Three pieces do the measuring, because no single one sees the whole picture.
 `PerformanceLog` is a debug-only text sink switched on by
@@ -58,7 +73,7 @@ Ten scenarios, all passing, measured 2026-08-27.
 | Check | Result |
 |---|---|
 | `PerformanceUITests` | 10 of 10 passed |
-| App and widget unit tests | 1,087 passed (1,064 app + 23 widget) |
+| App and widget unit tests | 1,298 passed (1,275 app + 23 widget) |
 | `OpenHikesUITests`, functional | 44 passed |
 | `swiftlint --strict` | Clean |
 
@@ -285,9 +300,6 @@ for a passing grade.
   32 MB of decoded bytes — roughly 42 thumbnails — so eviction is routine on a
   long strip and the ~19 ms re-decode is the price. Whether that trade is sized
   right is a measurement nobody has taken.
-- **A stored baseline.** `Scripts/perf-report.py` has no `--baseline` flag, so
-  every report is read in isolation and a regression against the numbers above
-  has to be spotted by eye.
 
 Two smaller gaps worth deciding rather than drifting on. `isIdleTimerDisabled`
 is never set, which is the right default — but a walker navigating a junction

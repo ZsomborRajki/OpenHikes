@@ -30,8 +30,16 @@ nonisolated struct RecordingDistanceAccumulator: Sendable {
     private var stationaryAnchor: RecordingPoint?
     private var motionStationaryStartedAt: Date?
 
-    private static let stationaryInterval: TimeInterval = 30
-    private static let stationaryNetDisplacement: CLLocationDistance = 15
+    /// How long a walker has to stay inside one small area before the
+    /// recording stops calling it walking, and how small that area is.
+    ///
+    /// Not private, because ``MovingTimeAccumulator`` answers the same
+    /// question about a saved route that this answers live, and "standing
+    /// still" has to mean one thing in both. A second copy of these two
+    /// numbers would be free to drift, and neither reading would be wrong
+    /// enough to notice.
+    static let stationaryInterval: TimeInterval = 30
+    static let stationaryNetDisplacement: CLLocationDistance = 15
     private static let resumeDisplacement: CLLocationDistance = 20
 
     var averageSpeedMetersPerSecond: Double? {

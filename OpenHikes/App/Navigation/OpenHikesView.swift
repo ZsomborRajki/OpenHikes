@@ -10,7 +10,6 @@ import OpenHikesShared
 import PhotosUI
 import SwiftData
 import SwiftUI
-import WeatherKit
 
 struct OpenHikesView: View {
     @Environment(OpenHikesModel.self)
@@ -55,6 +54,12 @@ struct OpenHikesView: View {
     /// The sheet's live top edge, observed directly by the map so dragging the
     /// sheet never re-renders this view or the sheet's contents.
     @State private var sheetMetrics = SheetMetrics()
+    /// Whether the weather badge's detail sheet is up. A reference type for
+    /// the reason ``SheetPresentation`` is one — and *presented* from inside
+    /// `MapSheet`, because a modal attached beside a sheet that is never
+    /// dismissed is never presented at all. See the `.weatherDetailSheet`
+    /// call below.
+    @State private var weatherDetail = WeatherDetailPresentation()
     /// Where the open hike's photos were taken, observed directly by the map.
     /// Owned here for the same reason ``photoCapture`` is: the pins are drawn
     /// on the map and the photos live on a screen inside the sheet.
@@ -157,7 +162,7 @@ struct OpenHikesView: View {
             .ignoresSafeArea()
             .overlay(alignment: .topLeading) {
                 if let current = appModel.weatherManager.current {
-                    WeatherBadge(weather: current)
+                    WeatherBadge(weather: current) { weatherDetail.present() }
                         .padding(.leading)
                         .padding(.top, Self.weatherBadgeTopPadding)
                 }
@@ -252,6 +257,10 @@ struct OpenHikesView: View {
                         onCaptured: attachCapturedPhoto,
                         onPicked: attachPickedPhotos
                     )
+                    // Here for exactly the same reason: the badge that opens
+                    // it is over the map, but a `.sheet` attached out there
+                    // would be a tap that silently does nothing.
+                    .weatherDetailSheet(weatherDetail, weather: appModel.weatherManager)
             }
             // The sheet is the app's primary surface and must always stay up. The
             // GPX document picker (a UIKit controller presented from within a
@@ -626,37 +635,6 @@ struct ImportSelectionGate {
         // the user is looking at.
         case .some(.photo(let hike, _)): .hike(hike.id)
         }
-    }
-}
-
-private struct WeatherBadge: View {
-    let weather: WeatherSnapshot
-
-    var body: some View {
-        HStack(spacing: 8) {
-            Image(systemName: weather.symbolName)
-                .symbolRenderingMode(.multicolor)
-                .font(.title3)
-            Text("\(Int(weather.temperature.value.rounded()))°")
-                .font(.headline)
-        }
-        .padding(.horizontal, 14)
-        .padding(.vertical, 8)
-        // Liquid Glass rather than `.ultraThinMaterial`: this hovers over live
-        // map imagery, which is exactly what the material could not adapt to —
-        // it took on whatever the tiles under it happened to be, so a
-        // temperature over a snowfield and one over forest were two different
-        // badges. Glass keeps its own legibility over both.
-        .glassSurface(.regular, in: .capsule)
-        // A symbol and a number that only mean anything together, and the
-        // number needs its unit spelled out to be spoken as a temperature.
-        .accessibilityElement(children: .ignore)
-        .accessibilityLabel("Current weather")
-        .accessibilityValue(
-            "\(weather.temperature.formatted(.measurement(width: .wide))), "
-                + weather.conditionDescription
-        )
-        .accessibilityIdentifier("weather-badge")
     }
 }
 

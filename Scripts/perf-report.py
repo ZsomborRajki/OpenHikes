@@ -18,6 +18,7 @@ shapes that are worth a look regardless of whether an assertion tripped.
 from __future__ import annotations
 
 import argparse
+import json
 import re
 from collections import defaultdict
 from dataclasses import dataclass, field
@@ -28,6 +29,12 @@ TEST_CASE = re.compile(r"Test Case '-\[(\S+) (\S+)\]' (passed|failed)")
 # A body that runs at most this often during a phase is not what a report
 # should lead with; the interesting entries are the ones that repeat.
 NOISE_FLOOR = 2
+# Deliberately tight. These counters are exact — an idle app with a map on
+# screen evaluates zero bodies, and a chart scrub moves the map a specific
+# number of times — so a wide band would let a real regression through while
+# looking rigorous. A scenario that genuinely is noisy raises it in its own
+# baseline file rather than everyone paying for it.
+DEFAULT_TOLERANCE = 0.10
 
 
 @dataclass
@@ -60,9 +67,12 @@ class Scenario:
     counts: list[tuple[str, str, float, str]] = field(default_factory=list)
 
 
-def parse_build_log(path: Path) -> tuple[dict[str, Scenario], list[str], list[str]]:
+def parse_build_log(
+    path: Path,
+) -> tuple[dict[str, Scenario], list[str], dict[str, float], list[str]]:
     scenarios: dict[str, Scenario] = {}
     measurements: list[str] = []
+    metrics: dict[str, float] = {}
     results: list[str] = []
     for line in path.read_text(errors="replace").splitlines():
         stripped = line.strip()
@@ -83,9 +93,10 @@ def parse_build_log(path: Path) -> tuple[dict[str, Scenario], list[str], list[st
             measurements.append(
                 f"{match.group(1)} — average {match.group(2)}, deviation {match.group(3)}%"
             )
+            metrics[match.group(1)] = float(match.group(2))
         elif (match := TEST_CASE.search(stripped)) is not None:
             results.append(f"{match.group(2)}: {match.group(3)}")
-    return scenarios, measurements, results
+    return scenarios, measurements, metrics, results
 
 
 def parse_events(path: Path) -> list[Event]:
@@ -483,14 +494,114 @@ def energy_findings(scenario: Scenario) -> list[str]:
     return notes
 
 
+def baseline_snapshot(
+    scenarios: dict[str, Scenario], metrics: dict[str, float]
+) -> dict:
+    """This run's numbers, in the shape ``--baseline`` reads back.
+
+    Only the counters and the XCTest metrics: they are the two things that are
+    exact, repeatable and already hand-copied into ``PERFORMANCE.md``. The
+    timelines and resource samples are deliberately left out — a footprint
+    reading taken under XCUITest is automation overhead rather than the app's,
+    and comparing one across runs would produce confident nonsense.
+    """
+    counters: dict[str, dict[str, dict[str, float]]] = {}
+    for name in sorted(scenarios):
+        for phase, counter, count, _ in scenarios[name].counts:
+            counters.setdefault(name, {}).setdefault(phase, {})[counter] = count
+    return {
+        "tolerance": DEFAULT_TOLERANCE,
+        "counters": counters,
+        "metrics": metrics,
+    }
+
+
+def compare_to_baseline(
+    baseline: dict, scenarios: dict[str, Scenario], metrics: dict[str, float]
+) -> list[str]:
+    """Every way this run disagrees with the baseline, in both directions.
+
+    Growth is the obvious regression. A *fall* is reported just as loudly,
+    because a suite made entirely of upper bounds cannot notice work that has
+    stopped: extracting the 1 Hz recording clock into a view that stored the
+    recorder once made the view structurally identical on every tick, so
+    SwiftUI skipped its body and the clock silently froze — scoring perfectly
+    against every budget in the suite. A counter that reaches zero gets its own
+    line, because that is what that failure looks like from here.
+
+    Nothing in this function decides whether the run is acceptable; it decides
+    what changed. ``--fail-on-regression`` is where a caller opts into an
+    opinion.
+    """
+    tolerance = float(baseline.get("tolerance", DEFAULT_TOLERANCE))
+    expected_counters = baseline.get("counters", {})
+    notes: list[str] = []
+
+    for name in sorted(scenarios):
+        for phase, counter, count, _ in scenarios[name].counts:
+            before = expected_counters.get(name, {}).get(phase, {}).get(counter)
+            if before is None:
+                notes.append(
+                    f"`{name}` · `{phase}` · `{counter}` is new — {count:g}, no baseline."
+                )
+                continue
+            where = f"`{name}` · `{phase}` · `{counter}`"
+            if count > before * (1 + tolerance) and count > before:
+                notes.append(f"{where} rose {before:g} → {count:g}.")
+            elif before > 0 and count == 0:
+                notes.append(
+                    f"{where} fell {before:g} → 0 — the work stopped happening, "
+                    "which no upper bound would catch."
+                )
+            elif count < before * (1 - tolerance):
+                notes.append(f"{where} fell {before:g} → {count:g}.")
+
+    measured = {(name, phase, counter) for name in scenarios
+                for phase, counter, _, _ in scenarios[name].counts}
+    for name, phases in sorted(expected_counters.items()):
+        for phase, counters in sorted(phases.items()):
+            for counter, before in sorted(counters.items()):
+                if (name, phase, counter) not in measured:
+                    notes.append(
+                        f"`{name}` · `{phase}` · `{counter}` was not reported at all "
+                        f"this run — baseline had {before:g}. A counter the runner "
+                        "cannot find is a counter that passes."
+                    )
+
+    for metric, before in sorted(baseline.get("metrics", {}).items()):
+        now = metrics.get(metric)
+        if now is None:
+            notes.append(f"`{metric}` was not measured this run — baseline {before:g}.")
+        elif now > before * (1 + tolerance):
+            notes.append(f"`{metric}` rose {before:g} → {now:g}.")
+        elif now < before * (1 - tolerance):
+            notes.append(f"`{metric}` fell {before:g} → {now:g}.")
+    return notes
+
+
 def main() -> int:
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--log", type=Path, required=True, help="xcodebuild output")
     parser.add_argument("--events", type=Path, required=True, help="directory of .tsv event files")
     parser.add_argument("--out", type=Path, required=True, help="markdown report to write")
+    parser.add_argument(
+        "--baseline",
+        type=Path,
+        help="JSON of a previous run's counters to compare against",
+    )
+    parser.add_argument(
+        "--write-baseline",
+        type=Path,
+        help="write this run's counters as a baseline and exit codes unchanged",
+    )
+    parser.add_argument(
+        "--fail-on-regression",
+        action="store_true",
+        help="exit non-zero when the run disagrees with --baseline",
+    )
     args = parser.parse_args()
 
-    scenarios, measurements, results = parse_build_log(args.log)
+    scenarios, measurements, metrics, results = parse_build_log(args.log)
     if args.events.is_dir():
         for tsv in sorted(args.events.glob("*.tsv")):
             scenario = scenarios.setdefault(tsv.stem, Scenario(tsv.stem))
@@ -516,6 +627,22 @@ def main() -> int:
     lines.extend(f"- {note}" for note in findings(scenarios))
     lines.append("")
 
+    drift: list[str] = []
+    if args.baseline is not None:
+        if args.baseline.is_file():
+            drift = compare_to_baseline(
+                json.loads(args.baseline.read_text()), scenarios, metrics
+            )
+            lines.extend([f"## Against `{args.baseline.name}`", ""])
+            lines.extend(
+                f"- {note}" for note in drift or ["Every counter matched the baseline."]
+            )
+            lines.append("")
+        else:
+            # Loud rather than silent. A baseline the runner cannot find would
+            # otherwise read exactly like a run with nothing to report.
+            print(f"No baseline at {args.baseline}; skipping comparison.")
+
     for name in sorted(scenarios):
         scenario = scenarios[name]
         lines.extend([f"## Scenario `{name}`", ""])
@@ -531,6 +658,18 @@ def main() -> int:
 
     args.out.write_text("\n".join(lines) + "\n")
     print(f"Wrote {args.out}")
+
+    if args.write_baseline is not None:
+        args.write_baseline.write_text(
+            json.dumps(baseline_snapshot(scenarios, metrics), indent=2, sort_keys=True)
+            + "\n"
+        )
+        print(f"Wrote {args.write_baseline}")
+
+    if drift and args.fail_on_regression:
+        for note in drift:
+            print(note)
+        return 1
     return 0
 
 

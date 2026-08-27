@@ -56,12 +56,12 @@ struct TrailGlyphView: View {
 
     // Minimum cos(latitude) to prevent degenerate near-polar bounding boxes from
     // blowing up the projection scale.
-    private static let minCosLat: Double = 0.15
+    static let minCosLat: Double = 0.15
     // Near-zero floor for bounding-box extents, preventing division by zero on
     // single-point or perfectly vertical/horizontal routes.
-    private static let minBoundsExtent: Double = 1e-9
+    static let minBoundsExtent: Double = 1e-9
 
-    private struct Projected {
+    struct Projected {
         let points: [CGPoint]
         let liveFixPoint: CGPoint?
     }
@@ -72,7 +72,12 @@ struct TrailGlyphView: View {
     /// choice here precisely *because* nothing else has to agree with it.
     /// (``TrailMapView``, which must line up with a rendered map, projects
     /// through ``Mercator`` instead.)
-    private static func project(
+    ///
+    /// Internal rather than private so ``TrailGlyphProjectionTests`` can hold
+    /// it to exact outputs: it is the only maths in the widget's fallback, it
+    /// divides by three separately-floored quantities, and a canvas cannot be
+    /// asked afterwards where it put the line.
+    static func project(
         polyline: [SharedTrailSnapshot.CodableCoordinate],
         liveFix: SharedTrailSnapshot.CodableCoordinate?,
         into size: CGSize,
@@ -106,8 +111,14 @@ struct TrailGlyphView: View {
         let availableWidth = max(size.width - inset * 2, 1)
         let availableHeight = max(size.height - inset * 2, 1)
         let scale = min(availableWidth / boundsWidth, availableHeight / boundsHeight)
-        let originX = (size.width - boundsWidth * scale) / 2
-        let originY = (size.height - boundsHeight * scale) / 2
+        // Centre on what is actually drawn, which for a route with no extent
+        // at all is a point. Centring on the *floored* extents instead would
+        // multiply the 1e-9 floor by the enormous scale that same floor
+        // produced and get back a full available width, putting a walker who
+        // is standing still — every fix identical — in the top-left corner
+        // rather than in the middle of the glyph.
+        let originX = (size.width - (maxX - minX) * scale) / 2
+        let originY = (size.height - (maxY - minY) * scale) / 2
 
         func fit(_ pt: CGPoint) -> CGPoint {
             CGPoint(x: originX + (pt.x - minX) * scale, y: originY + (pt.y - minY) * scale)

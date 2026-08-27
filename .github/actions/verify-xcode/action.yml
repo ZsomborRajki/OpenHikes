@@ -1,0 +1,31 @@
+name: Verify the pinned Xcode
+description: >-
+  Fails with a readable diagnostic when DEVELOPER_DIR names an Xcode the runner
+  image does not have, instead of letting every later xcodebuild call fail on
+  its own.
+
+runs:
+  using: composite
+  steps:
+    # DEVELOPER_DIR is pinned by path rather than selected by a third-party
+    # action, which keeps the toolchain exact and this repository free of
+    # actions it does not own. The cost of that pin is this step: when the
+    # runner image drops the exact version, xcodebuild otherwise fails
+    # somewhere deep in a build log with nothing naming the real cause.
+    - name: Verify the pinned Xcode is installed
+      shell: bash
+      run: |
+        set -euo pipefail
+        if [[ -z "${DEVELOPER_DIR:-}" ]]; then
+          echo "::error::DEVELOPER_DIR is not set. Set it at the workflow level."
+          exit 1
+        fi
+        if [[ ! -x "$DEVELOPER_DIR/usr/bin/xcodebuild" ]]; then
+          echo "::error::DEVELOPER_DIR is $DEVELOPER_DIR, which this runner image does not provide. Update DEVELOPER_DIR in the workflow to one of the versions listed in the log."
+          echo "Xcode installations present on this runner:"
+          /bin/ls -1d /Applications/Xcode*.app 2>/dev/null || echo "  (none)"
+          echo "Currently selected:"
+          xcode-select --print-path || true
+          exit 1
+        fi
+        xcodebuild -version

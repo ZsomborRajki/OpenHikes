@@ -80,6 +80,10 @@ nonisolated struct TrailMatchResult: Sendable {
 
     let points: [RecordingPoint]
     let matchedLegCount: Int
+    /// How many legs the walker will actually be asked about — derived from
+    /// ``ambiguities`` rather than counted alongside it, so the two cannot
+    /// disagree. They once could: a dense leg the matcher was unsure about
+    /// went uncounted *and* unsurfaced, which read as a clean match.
     let ambiguousLegCount: Int
     let matchedTrailName: String?
     let currentTrailName: String?

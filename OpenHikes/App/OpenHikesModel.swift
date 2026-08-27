@@ -11,6 +11,7 @@ import Foundation
 import Observation
 import os
 import SwiftData
+import SwiftUI
 import Synchronization
 
 nonisolated struct StorageStartupIssue: Equatable, Sendable {
@@ -265,33 +266,18 @@ final class OpenHikesModel {
         }
     }
 
-    func sceneDidBecomeActive() {
-        autoSaveController.sceneDidBecomeActive()
-        if !AppLaunchEnvironment.isRunningTests {
-            backgroundTracker.refreshBasemaps()
-        }
-        hikeRecorder.sceneDidBecomeActive()
-        cloudSync.sceneDidBecomeActive()
-        entitlement.sceneDidBecomeActive()
-    }
+    /// Distinguishes the `.inactive` step of leaving the foreground from the
+    /// one on the way back, which are otherwise identical.
+    ///
+    /// Held here rather than as `@State` on the scene: `@State` invalidates
+    /// its declaring view whether or not `body` reads it, and this one is read
+    /// by nothing that draws.
+    @ObservationIgnored private var lifecycleGate = SceneLifecycleGate()
 
-    func sceneWillResignActive() {
-        hikeRecorder.sceneWillResignActive()
-        // Backstop: a launch whose map never appeared — a failed store, an
-        // error screen — would otherwise leave the extended launch task open
-        // for the life of the process, and MetricKit reports nothing for a
-        // measurement that never ends.
-        LaunchMeasurement.finish()
-        autoSaveController.sceneWillResignActive {
-            try container.mainContext.save()
-        }
-        #if DEBUG
-        // The last moment a measured run can count on: UI automation
-        // backgrounds the app and only then terminates it, so this is what
-        // gets the tail of the scenario onto disk.
-        PerformanceLog.shared?.flush()
-        #endif
-    }
+    /// Routes a scene-phase transition to the resign and active handlers,
+    /// once each per episode. See ``SceneLifecycleGate`` for which transition
+    /// is dropped and why. Implemented in the *Scene lifecycle* extension
+    /// below.
 
     func selectedHikeDidChange(to hike: Hike?) {
         let finishedHike = browsableHike(hike)
@@ -426,6 +412,57 @@ final class OpenHikesModel {
     }
 }
 
+// MARK: - Scene lifecycle
+
+/// Kept out of the model's own body so its length stays about the app's
+/// dependencies rather than about the phases iOS reports. The gate itself is
+/// stored above, because a stored property cannot live in an extension.
+extension OpenHikesModel {
+    func scenePhaseChanged(to phase: ScenePhase) {
+        // Marked before either handler runs so the event file carries the
+        // boundary itself. A hike is mostly spent with the screen off, and
+        // without this the log has no way to say which of its entries
+        // happened while anything was on screen — which is exactly the
+        // distinction between a render that cost a frame and one that cost a
+        // wakeup for nobody. Marked for every phase, including the ones the
+        // gate drops, so the log still describes what iOS actually did.
+        RenderSignpost.mark("ScenePhaseChanged", "\(phase)")
+        switch lifecycleGate.event(for: phase) {
+        case .becameActive: sceneDidBecomeActive()
+        case .willResignActive: sceneWillResignActive()
+        case .redundant: break
+        }
+    }
+
+    func sceneDidBecomeActive() {
+        autoSaveController.sceneDidBecomeActive()
+        if !AppLaunchEnvironment.isRunningTests {
+            backgroundTracker.refreshBasemaps()
+        }
+        hikeRecorder.sceneDidBecomeActive()
+        cloudSync.sceneDidBecomeActive()
+        entitlement.sceneDidBecomeActive()
+    }
+
+    func sceneWillResignActive() {
+        hikeRecorder.sceneWillResignActive()
+        // Backstop: a launch whose map never appeared — a failed store, an
+        // error screen — would otherwise leave the extended launch task open
+        // for the life of the process, and MetricKit reports nothing for a
+        // measurement that never ends.
+        LaunchMeasurement.finish()
+        autoSaveController.sceneWillResignActive {
+            try container.mainContext.save()
+        }
+        #if DEBUG
+        // The last moment a measured run can count on: UI automation
+        // backgrounds the app and only then terminates it, so this is what
+        // gets the tail of the scenario onto disk.
+        PerformanceLog.shared?.flush()
+        #endif
+    }
+}
+
 // MARK: - UI-test seams
 
 /// The refusals a UI-testing launch can ask for. Held apart from the model's
@@ -527,9 +564,31 @@ extension OpenHikesModel {
     func trimTileCache(in modelContext: ModelContext) {
         // Auto-save can have tiles on disk that no manifest claims yet.
         autoSaveController.flushPendingKeys()
-        guard let claims = try? Self.tileClaims(fetchingHikes: {
+        Self.trimTileCache(TileCache.shared) {
             try modelContext.fetch(FetchDescriptor<Hike>())
-        }) else { return }
+        }
+    }
+
+    /// The rule itself, with the cache and the fetch handed in.
+    ///
+    /// `static` and closure-driven for the same reason
+    /// ``tileClaims(fetchingHikes:)`` is, and it is the same sentence: the
+    /// branch that matters is the failing one, and nothing makes a
+    /// `ModelContext` throw on demand — a fetch against a schema it doesn't
+    /// know returns an empty result rather than an error. Without this seam
+    /// the `guard` above could be rewritten as `?? []` and every test in the
+    /// bundle would still pass, while the app deleted every durably saved
+    /// tile on the device at the next launch.
+    ///
+    /// `limit` is a parameter for the reason
+    /// ``TileCache/trimCache(claimedBy:limit:)``'s own is: so a test can reach
+    /// the trim with a handful of tiles rather than half a gigabyte.
+    static func trimTileCache(
+        _ cache: TileCache,
+        limit: Int64 = TileCache.cacheByteLimit,
+        fetchingHikes fetch: () throws -> [Hike]
+    ) {
+        guard let claims = try? tileClaims(fetchingHikes: fetch) else { return }
 
         TileCache.scheduleMaintenance {
             // A cancelled enumeration trims nothing rather than a partial
@@ -540,7 +599,7 @@ extension OpenHikesModel {
                 guard let claimed = try? ownership.tileKeys() else { return }
                 keys.formUnion(claimed)
             }
-            TileCache.shared.trimCache(claimedBy: keys)
+            cache.trimCache(claimedBy: keys, limit: limit)
         }
     }
 
@@ -563,11 +622,30 @@ extension OpenHikesModel {
         in modelContext: ModelContext,
         store: HikePhotoStore = .shared
     ) {
-        guard let claimed = try? Self.photoClaims(fetchingHikes: {
+        Self.reclaimOrphanedPhotos(from: store) {
             try modelContext.fetch(FetchDescriptor<Hike>())
-        }) else { return }
-        Task(priority: .utility) {
-            await Self.reclaim(claimed, in: store)
+        }
+    }
+
+    /// The rule itself, with the store and the fetch handed in — the companion
+    /// seam to ``trimTileCache(_:limit:fetchingHikes:)`` and there for the
+    /// same reason.
+    ///
+    /// The sweep itself is handed back, and `nil` *is* the refusal: a claim
+    /// fetch that failed never reaches the store, so there is no task to
+    /// return. The tile side needs no equivalent because
+    /// ``TileCache/scheduleMaintenance(_:)`` is a single serial queue, where a
+    /// later block starting is already proof that an earlier one finished. Two
+    /// unstructured tasks have no order at all, so a caller that must know
+    /// this sweep is done — today only the test that proves the refusal
+    /// deletes nothing — has nothing else to wait on.
+    @discardableResult static func reclaimOrphanedPhotos(
+        from store: HikePhotoStore,
+        fetchingHikes fetch: () throws -> [Hike]
+    ) -> Task<Void, Never>? {
+        guard let claimed = try? photoClaims(fetchingHikes: fetch) else { return nil }
+        return Task(priority: .utility) {
+            await reclaim(claimed, in: store)
         }
     }
 

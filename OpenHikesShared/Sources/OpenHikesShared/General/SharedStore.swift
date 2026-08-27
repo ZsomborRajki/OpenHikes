@@ -18,8 +18,34 @@ public enum SharedStore {
     private static let basemapSetFileName = "trail-basemaps.json"
     private static let basemapDirectoryName = "basemaps"
 
+    /// Resolves the container root every path below is built from — a
+    /// deliberate test seam, in the same spirit as the injectable clocks,
+    /// transports and directories elsewhere in this project. The app and the
+    /// widget never bind it and pay one task-local read against a
+    /// `FileManager` container lookup.
+    ///
+    /// It is necessary rather than convenient. `swift test` runs this package
+    /// as an unsigned macOS process, where
+    /// `containerURL(forSecurityApplicationGroupIdentifier:)` does not fail:
+    /// it hands back a real path under the developer's own
+    /// `~/Library/Group Containers`. A suite exercising these functions
+    /// without a seam would write into — and through ``clear()`` delete from
+    /// — the container a locally installed build is using.
+    ///
+    /// A closure rather than a `URL?`, because a plain optional cannot tell
+    /// "not overridden" from "overridden to no container at all", and the
+    /// second is the branch worth testing hardest: it is what every
+    /// ``SharedRecordingStoreError/containerUnavailable`` throw below is for.
+    ///
+    /// Task-local rather than a settable static, because a binding is scoped
+    /// to the work that made it. It cannot outlive a test or leak into a suite
+    /// running beside it, which a process-global `static var` on an all-static
+    /// type would do under Swift Testing's parallel execution.
+    @TaskLocal static var containerOverride: (@Sendable () -> URL?)?
+
     private static var containerURL: URL? {
-        FileManager.default.containerURL(forSecurityApplicationGroupIdentifier: appGroupID)
+        if let containerOverride { return containerOverride() }
+        return FileManager.default.containerURL(forSecurityApplicationGroupIdentifier: appGroupID)
     }
 
     /// The shared container root for app-owned cross-process files that do not
@@ -43,15 +69,32 @@ public enum SharedStore {
     /// The current snapshot, or `nil` if none has ever been written, the App
     /// Group capability isn't wired up on this target yet, or the file can't
     /// be read/decoded.
+    ///
+    /// `nil` still means "nothing usable here" — the widget's fallback is the
+    /// right drawing for every one of those causes, and giving callers a
+    /// `Result` to switch on would spread a decision none of them can act on.
+    /// What changed is that the last cause now announces itself through
+    /// ``SharedStoreDiagnostic`` instead of being indistinguishable from the
+    /// first.
     public static func load() -> SharedTrailSnapshot? {
         guard let fileURL, let data = try? Data(contentsOf: fileURL) else { return nil }
-        return try? JSONDecoder().decode(SharedTrailSnapshot.self, from: data)
+        return decode(SharedTrailSnapshot.self, from: data, named: fileName)
     }
 
     /// Writes the snapshot. No-ops rather than crashing if the App Group
     /// container can't be resolved.
+    ///
+    /// The version is stamped here rather than trusted from the value, because
+    /// it describes the bytes and this is what writes them. The app's live-fix
+    /// path loads the stored snapshot, moves the fix and saves it back, so
+    /// carrying the loaded version through would leave a container that was
+    /// unversioned before this shipped unversioned forever — re-deciding the
+    /// legacy question on every walk instead of once.
     public static func save(_ snapshot: SharedTrailSnapshot) {
-        guard let fileURL, let data = try? JSONEncoder().encode(snapshot) else { return }
+        guard let fileURL else { return }
+        var stamped = snapshot
+        stamped.schemaVersion = SharedTrailSnapshot.currentSchemaVersion
+        guard let data = try? JSONEncoder().encode(stamped) else { return }
         try? data.write(to: fileURL, options: .atomic)
     }
 
@@ -70,10 +113,7 @@ public enum SharedStore {
         guard let recordingFileURL,
               let data = try? Data(contentsOf: recordingFileURL)
         else { return nil }
-        return try? JSONDecoder().decode(
-            SharedRecordingSnapshot.self,
-            from: data
-        )
+        return decode(SharedRecordingSnapshot.self, from: data, named: recordingFileName)
     }
 
     public static func saveRecording(
@@ -81,8 +121,10 @@ public enum SharedStore {
     ) throws {
         guard let recordingFileURL, let pendingRecordingFixStore
         else { throw SharedRecordingStoreError.containerUnavailable }
+        var stamped = snapshot
+        stamped.schemaVersion = SharedRecordingSnapshot.currentSchemaVersion
         try pendingRecordingFixStore.saveRecording(
-            snapshot,
+            stamped,
             to: recordingFileURL
         )
     }
@@ -140,6 +182,60 @@ public enum SharedStore {
         try pendingRecordingFixStore.clear(sessionID: sessionID)
     }
 
+    // MARK: Decoding
+
+    /// Reads a versioned payload, refusing — audibly — anything this build
+    /// should not interpret.
+    ///
+    /// The version is peeked out of the raw bytes before the payload is
+    /// decoded, because the two failures need different answers. A payload
+    /// from a *newer* build may well still decode as this one, and that is the
+    /// dangerous case rather than the safe one: it would be accepted with
+    /// whatever meaning the fields used to have. Refuse on the announced
+    /// version, not on whether the decoder happened to cope.
+    ///
+    /// Everything at or below ``SharedPayload/currentSchemaVersion`` is
+    /// accepted if it decodes, and an absent version — every payload already
+    /// in a container the day this shipped — is version 0 and accepted the
+    /// same way. Discarding those instead would blank a working widget on the
+    /// update that introduced versioning, to protect against a change that had
+    /// not happened yet; a payload that decodes has, by construction, every
+    /// key this build requires.
+    private static func decode<Payload: SharedPayload>(
+        _ type: Payload.Type,
+        from data: Data,
+        named file: String
+    ) -> Payload? {
+        let announced = (try? JSONDecoder().decode(SharedPayloadVersionPeek.self, from: data))?.schemaVersion
+        if let announced, announced > Payload.currentSchemaVersion {
+            SharedStoreDiagnostics.report(
+                .unsupportedSchemaVersion(
+                    file: file,
+                    found: announced,
+                    supported: Payload.currentSchemaVersion
+                )
+            )
+            return nil
+        }
+        return decodeUnversioned(type, from: data, named: file)
+    }
+
+    /// The decode half on its own, for payloads that carry no version.
+    private static func decodeUnversioned<Payload: Decodable>(
+        _ type: Payload.Type,
+        from data: Data,
+        named file: String
+    ) -> Payload? {
+        do {
+            return try JSONDecoder().decode(type, from: data)
+        } catch {
+            SharedStoreDiagnostics.report(
+                .decodeFailed(file: file, detail: SharedStoreDiagnostics.describe(error))
+            )
+            return nil
+        }
+    }
+
     // MARK: Basemaps
 
     // Kept in files of their own rather than inside the snapshot: the
@@ -158,9 +254,19 @@ public enum SharedStore {
     /// rendered, they belong to a different hike, or they can't be read. The
     /// hike check is the caller's protection against a set that outlived the
     /// snapshot it was rendered alongside.
+    ///
+    /// Carries no ``SharedPayload/schemaVersion``, and does not need one. This
+    /// manifest is derived state, not a record of the walk: the renderer
+    /// already treats a `nil` here and a missing image identically, and
+    /// re-renders. A schema change costs one render, and the next read is
+    /// correct — where the same change to a snapshot costs a blank widget
+    /// until the app next publishes. It is still routed through the
+    /// diagnostic, because a manifest that can never be decoded is re-rendered
+    /// on every timeline reload forever, and a battery cost that presents as
+    /// nothing at all is worth being able to see.
     public static func loadBasemapSet(for hikeID: UUID) -> TrailBasemapSet? {
         guard let basemapSetURL, let data = try? Data(contentsOf: basemapSetURL),
-              let set = try? JSONDecoder().decode(TrailBasemapSet.self, from: data),
+              let set = decodeUnversioned(TrailBasemapSet.self, from: data, named: basemapSetFileName),
               set.hikeID == hikeID
         else { return nil }
         return set

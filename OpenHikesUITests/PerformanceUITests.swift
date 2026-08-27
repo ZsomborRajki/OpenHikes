@@ -65,8 +65,8 @@ nonisolated final class PerformanceUITests: XCTestCase {
     private static let scrubSteps = 9
     private static let launchIterations = 3
     /// The watchdog has reported 489–711 ms here since this suite existed.
-    /// A tripwire above the noise, not a target — the target is the P1 item
-    /// in `PERFORMANCE.md`.
+    /// A tripwire above the noise, not a target — the target is the launch
+    /// finding in `PERFORMANCE.md`.
     private static let launchStallCeilingMilliseconds: Double = 1200
 
     // MARK: - Idle

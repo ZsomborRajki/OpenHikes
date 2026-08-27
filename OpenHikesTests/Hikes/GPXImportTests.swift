@@ -326,7 +326,7 @@ struct GPXImportTests {
     /// of typing them. A case added later without copy would fail here rather
     /// than surfacing as an empty alert.
     @Test("every failure explains itself", arguments: [
-        GPXImport.ImportFailure.unreadable, .noUsablePoints, .tooShort
+        GPXImport.ImportFailure.unreadable, .noUsablePoints, .tooShort, .tooLarge
     ])
     func failuresAreExplained(failure: GPXImport.ImportFailure) throws {
         let description = try #require(failure.errorDescription)
@@ -348,8 +348,6 @@ struct GPXImportTests {
         """
         let track = try GPXImport.load(from: try gpxFile(xml))
         #expect(track.points.count == 1)
-        // The rule `OpenHikesModel.importHike` applies to it.
-        #expect(track.points.count <= 1, "which is what makes it .tooShort at the import")
     }
 
     /// Blank metadata fields are common (`<desc></desc>`) and should read as

@@ -27,6 +27,12 @@
 //  anything else — so a picture that made it is a picture the user has, and
 //  the ones that did not are still in their library, untouched.
 //
+//  And a search that finds nothing has to be honest about *why*. Under
+//  limited access the app is looking at a subset somebody chose, so "nothing
+//  from this walk" is a statement about that subset and not about the
+//  library; ``libraryAccess`` is kept for the sheet to say so, and
+//  ``selectMorePhotos(in:from:)`` is the way out.
+//
 
 import Foundation
 import Observation
@@ -67,6 +73,15 @@ final class PhotoDiscoveryController {
     }
 
     private(set) var phase = Phase.idle
+    /// What the library last said it would let the app do.
+    ///
+    /// Kept because an empty result means two different things depending on
+    /// the answer, and the sheet has to say which: under full access nothing
+    /// in the library was taken during this walk, while under
+    /// ``PhotoLibraryAccess/limited`` nothing *the user shared* was — and the
+    /// photographs may well be sitting there unshared. `nil` until a search
+    /// has asked.
+    private(set) var libraryAccess: PhotoLibraryAccess?
     /// Everything the search turned up, oldest first.
     private(set) var matches: [LibraryPhotoMatch] = []
     /// Which of them the user wants, by local identifier. Everything is
@@ -85,6 +100,9 @@ final class PhotoDiscoveryController {
     }
 
     var selectedCount: Int { selection.count }
+
+    /// Whether there is more of the library the user could let this app see.
+    var canSelectMorePhotos: Bool { libraryAccess == .limited }
 
     var canImport: Bool {
         guard case .results = phase else { return false }
@@ -107,6 +125,7 @@ final class PhotoDiscoveryController {
         importFailed = false
 
         let access = await reader.requestAccess()
+        libraryAccess = access
         guard access.allowsReading else {
             phase = access == .restricted ? .accessRestricted : .accessDenied
             return
@@ -115,6 +134,19 @@ final class PhotoDiscoveryController {
 
         let assets = await reader.assets(takenIn: timeline.searchWindow)
         guard !Task.isCancelled, hike.isAttached else { return }
+
+        // Asked again after the fetch, not only before it. The fetch is a
+        // cross-process query that can take seconds, and what a library the
+        // app may no longer read returns is an empty array — which would land
+        // in `empty` and tell the user their walk had no photographs, when
+        // what actually happened is that permission went away underneath the
+        // question. A revocation has to end the flow where a refusal does.
+        let remaining = reader.currentAccess()
+        libraryAccess = remaining
+        guard remaining.allowsReading else {
+            phase = remaining == .restricted ? .accessRestricted : .accessDenied
+            return
+        }
 
         let found = LibraryPhotoMatcher.matches(
             assets: assets,
@@ -125,6 +157,29 @@ final class PhotoDiscoveryController {
         matches = found
         selection = Set(found.map(\.id))
         phase = found.isEmpty ? .empty : .results
+    }
+
+    /// Hands the user the system's own picker for the shared subset, then
+    /// searches again with whatever it left the app able to see.
+    ///
+    /// The way out of the one dead end this feature can create. Under
+    /// ``PhotoLibraryAccess/limited`` a search sees only what was shared, so a
+    /// walk whose photographs were not among them finds nothing — and nothing
+    /// else in this app could change that answer.
+    ///
+    /// The search is re-run whether or not the picker reports a change. It
+    /// reports additions only, while the same picker can take a photograph's
+    /// access away, so its answer cannot stand in for "is anything different
+    /// now"; the fetch is narrowed to the walk's own window and is cheap
+    /// enough to be the thing that decides.
+    func selectMorePhotos(
+        in hike: Hike,
+        from presenter: LimitedLibraryPresenter
+    ) async {
+        guard canSelectMorePhotos else { return }
+        await reader.presentLimitedLibraryPicker(from: presenter)
+        guard !Task.isCancelled, hike.isAttached else { return }
+        await search(in: hike)
     }
 
     func toggle(_ id: String) {

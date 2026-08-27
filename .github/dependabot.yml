@@ -1,0 +1,45 @@
+version: 2
+
+updates:
+  # The actions this repository runs are SHA-pinned in .github/workflows/, which
+  # makes them immutable but also invisible to a human reading the diff. Grouping
+  # every action into one weekly pull request keeps the SHA and its `# vX.Y.Z`
+  # comment updated together rather than one action at a time.
+  - package-ecosystem: "github-actions"
+    directory: "/"
+    schedule:
+      interval: "weekly"
+      day: "monday"
+    groups:
+      github-actions:
+        patterns:
+          - "*"
+    commit-message:
+      prefix: "ci"
+
+  # Two roots, because the packages live in two places. `/` covers the Xcode
+  # project: Dependabot reads the version constraints out of
+  # OpenHikes.xcodeproj/project.pbxproj and updates the nested
+  # project.xcworkspace/xcshareddata/swiftpm/Package.resolved, which is where
+  # this repository's five pinned dependencies actually are.
+  # `/OpenHikesShared` covers the local package. It declares no external
+  # dependency today and so produces nothing; it is listed so that the first
+  # one added is covered without anybody remembering to come back here.
+  #
+  # A bump here has to keep the `Verify resolved packages` step in ci.yml green,
+  # which fails if `xcodebuild -resolvePackageDependencies` would rewrite
+  # Package.resolved — so the lockfile in the pull request has to be the one
+  # Xcode itself would produce.
+  - package-ecosystem: "swift"
+    directories:
+      - "/"
+      - "/OpenHikesShared"
+    schedule:
+      interval: "weekly"
+      day: "monday"
+    groups:
+      swift-packages:
+        patterns:
+          - "*"
+    commit-message:
+      prefix: "deps"

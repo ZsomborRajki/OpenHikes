@@ -53,6 +53,19 @@ final class WidgetFeedBudgetTests {
         )
     }
 
+    /// Somewhere in the middle of it, so a match has the whole route either
+    /// side of it to search.
+    private static let midpointIndex = longRoute.count / 2
+
+    /// The budget every measurement here is held to, in milliseconds.
+    ///
+    /// A frame at 60 Hz is 16.7 ms and the work being measured is supposed to
+    /// be a value snapshot and a scheduling hop, so this is generous by design:
+    /// what it catches is a route-sized rebuild returning to the main actor,
+    /// which costs tens of milliseconds, not a few hundred microseconds of CI
+    /// timer resolution.
+    private static let mainActorBudgetMilliseconds: Double = 5
+
     private func milliseconds(_ work: () -> Void) -> Double {
         let start = ContinuousClock.now
         work()
@@ -96,6 +109,7 @@ final class WidgetFeedBudgetTests {
                 profile: profile,
                 match: step.isMultiple(of: 2) ? onRoute : offRoute
             )
+            await tracker.waitForLiveFixPublish()
             let now = SharedStore.load()?.updatedAt
             if now != previous { writes += 1 }
             previous = now
@@ -118,6 +132,7 @@ final class WidgetFeedBudgetTests {
 
         let onRoute = try #require(profile.nearestPoint(to: profile.coordinates[2]))
         tracker.publishLiveFix(hike: hike, profile: profile, match: onRoute)
+        await tracker.waitForLiveFixPublish()
 
         // Just past the follow threshold, but inside the hysteresis band —
         // the walker has not left the trail.
@@ -129,6 +144,7 @@ final class WidgetFeedBudgetTests {
         var writes = 0
         for _ in 0..<10 {
             tracker.publishLiveFix(hike: hike, profile: profile, match: marginal)
+            await tracker.waitForLiveFixPublish()
             let now = SharedStore.load()?.updatedAt
             if now != previous { writes += 1 }
             previous = now
@@ -150,9 +166,11 @@ final class WidgetFeedBudgetTests {
 
         let onRoute = try #require(profile.nearestPoint(to: profile.coordinates[2]))
         tracker.publishLiveFix(hike: hike, profile: profile, match: onRoute)
+        await tracker.waitForLiveFixPublish()
         #expect(SharedStore.load()?.liveFix != nil)
 
         tracker.publishLiveFix(hike: hike, profile: profile, match: nil)
+        await tracker.waitForLiveFixPublish()
         #expect(SharedStore.load()?.liveFix == nil)
     }
 
@@ -169,9 +187,103 @@ final class WidgetFeedBudgetTests {
         // CI runners can land a few hundred microseconds over the floor due to
         // timer resolution and host load. The work is still a cheap snapshot and
         // scheduling hop, not a frame-consuming rebuild.
-        #expect(elapsed < 5, "selection should only snapshot values and schedule the publication")
+        #expect(
+            elapsed < Self.mainActorBudgetMilliseconds,
+            "selection should only snapshot values and schedule the publication"
+        )
         await tracker.waitForSelectionPublish()
         #expect(SharedStore.load()?.hikeID == hike.id, "precondition: it really published")
+    }
+
+    /// The same claim for the live-fix feed, which had been left behind: the
+    /// write path read the App Group file, rebuilt and decimated the trail when
+    /// the store held a different one, encoded the result and wrote it back —
+    /// all synchronously, on the actor that draws.
+    ///
+    /// The rebuild is provoked deliberately by clearing the store after
+    /// selection, because that is the expensive branch and the one a relaunch
+    /// takes. A fix landing on a trail already stored only re-encodes.
+    @Test("publishing a fix onto a trail the store doesn't hold stays inside a frame")
+    func publishingRebuildStaysInsideAFrame() async throws {
+        let hike = Fixture.hike(in: context, title: "Five hours", route: Self.longRoute)
+        let profile = RouteProfile(route: hike.route)
+        let match = try #require(profile.nearestPoint(to: profile.coordinates[Self.midpointIndex]))
+        tracker.hikeSelectionChanged(to: hike)
+        await tracker.waitForSelectionPublish()
+        // A relaunch, or a snapshot the widget's own housekeeping removed: the
+        // tracked hike is known but nothing is stored for it.
+        SharedStore.clear()
+
+        let elapsed = milliseconds { tracker.publishLiveFix(hike: hike, profile: profile, match: match) }
+
+        await tracker.waitForLiveFixPublish()
+        #expect(SharedStore.load()?.liveFix != nil, "precondition: it really did publish")
+        #expect(
+            elapsed < Self.mainActorBudgetMilliseconds,
+            "the load, the rebuild, the encode and the App Group write all belong off the main actor"
+        )
+    }
+
+    /// And for the background feed, which is the expensive one. A
+    /// significant-change wake-up has no profile in memory, so the fix is
+    /// matched against a route read back from SwiftData and rebuilt from
+    /// scratch — a route-sized materialisation and then two O(route points)
+    /// passes, before the write path is even reached.
+    ///
+    /// This is a guard rather than a benchmark, and it is worth saying what it
+    /// guards: `BackgroundTrailTracker` declares no isolation, and
+    /// `SWIFT_DEFAULT_ACTOR_ISOLATION = MainActor` makes everything on it
+    /// main-actor by default. Work put here is main-thread work unless
+    /// something deliberately moves it, and nothing about the call site says
+    /// so.
+    @Test("matching a background fix against a long route stays inside a frame")
+    func backgroundFixStaysInsideAFrame() async throws {
+        let hike = Fixture.hike(in: context, title: "Five hours", route: Self.longRoute)
+        try context.save()
+        defaults.set(hike.id.uuidString, forKey: SettingsKey.lastSelectedHikeID)
+        let monitor = StubLocationMonitor()
+        // Retained for the length of the test: the monitor holds its delegate
+        // weakly, exactly as CoreLocation does.
+        let relaunched = BackgroundTrailTracker(container: container, monitor: monitor, defaults: defaults)
+        let profile = RouteProfile(route: hike.route)
+        let location = CLLocation(
+            coordinate: profile.coordinates[Self.midpointIndex],
+            altitude: 0,
+            horizontalAccuracy: 10,
+            verticalAccuracy: -1,
+            course: -1,
+            speed: -1,
+            timestamp: .now
+        )
+
+        let elapsed = milliseconds { monitor.deliver(location) }
+
+        await relaunched.waitForLiveFixPublish()
+        #expect(SharedStore.load()?.liveFix != nil, "precondition: it really did publish")
+        #expect(
+            elapsed < Self.mainActorBudgetMilliseconds,
+            "the delegate callback should judge the fix and schedule, not read and profile 18,000 points"
+        )
+    }
+
+    /// The guarantee the three budgets above rest on, asserted directly rather
+    /// than through a stopwatch — and asserted the way
+    /// `CloudSyncCoordinatorTests` asserts its own seam, because it is the same
+    /// mistake: a `Task {}` started from a method on a `@MainActor` type looks
+    /// exactly like `Task.detached` and runs its body on the main thread.
+    /// Stripping `@concurrent` or `nonisolated` from the seam fails here
+    /// immediately, with the reason, instead of showing up as a slow frame in
+    /// the field.
+    @Test("the widget feed's hop off the main actor really leaves the main thread")
+    func offMainSeamLeavesTheMainThread() async {
+        // `pthread_main_np` rather than `Thread.isMainThread`, which Swift
+        // makes unavailable from an `async` context — the very context the
+        // question has to be asked in.
+        #expect(pthread_main_np() != 0, "the bug needs a main-actor caller to reproduce")
+
+        let ranOnMainThread = await BackgroundTrailTracker.offMainThread { pthread_main_np() != 0 }
+
+        #expect(!ranOnMainThread)
     }
 
     /// A deliberately different elevation range makes reuse observable:
@@ -198,6 +310,7 @@ final class WidgetFeedBudgetTests {
         SharedStore.clear()
 
         tracker.publishLiveFix(hike: hike, profile: profile, match: match)
+        await tracker.waitForLiveFixPublish()
 
         let snapshot = try #require(SharedStore.load())
         #expect(snapshot.liveFix != nil, "precondition: it really did publish")

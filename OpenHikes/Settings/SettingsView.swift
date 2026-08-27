@@ -210,8 +210,8 @@ struct SettingsView: View {
             Text(
                 "Photos you take on a hike are always kept in OpenHikes and shown"
                 + " with that hike. Turn this on to put a copy in your photo library"
-                + " too, in an album called \"OpenHikes\". You'll be asked for"
-                + " permission the first time one is saved."
+                + " too, stamped with when and where you took it. You'll be asked"
+                + " for permission the first time one is saved."
             )
         }
     }

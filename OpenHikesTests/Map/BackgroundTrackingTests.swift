@@ -61,18 +61,21 @@ final class StubLocationMonitor: SignificantLocationMonitor {
     /// Delivers a fix exactly as CoreLocation does — through the delegate the
     /// tracker registered, not by calling into it directly.
     ///
-    /// The tracker has finished handling it by the time this returns: its
-    /// `nonisolated` callbacks reach main-actor state through `onMainActor`,
-    /// which runs the body synchronously when the caller is already on the
-    /// main actor — and a main-actor-isolated test always is. That is why the
-    /// tests below assert straight after a delivery rather than settling for
-    /// a hop that no longer happens.
+    /// The tracker's `nonisolated` callbacks reach main-actor state through
+    /// `onMainActor`, which runs the body synchronously when the caller is
+    /// already on the main actor — and a main-actor-isolated test always is.
+    /// So the tracker has *started* handling the fix by the time this returns,
+    /// and anything it decides synchronously (whether the fix is accepted at
+    /// all, which hike it belongs to) is already settled. Matching it against
+    /// the route and writing the App Group snapshot are not: both were moved
+    /// off the main actor, so a test asserting on the store waits through
+    /// ``BackgroundDeliveryTests/deliver(_:)``.
     func deliver(_ location: CLLocation) {
         monitorDelegate?.locationManager?(CLLocationManager(), didUpdateLocations: [location])
     }
 
     /// The user answering the Always prompt, long after it was shown.
-    /// Synchronous for the same reason as ``deliver(_:)``.
+    /// Synchronous: nothing about arming monitoring leaves the main actor.
     func grantAlways() {
         authorization = .always
         monitorDelegate?.locationManagerDidChangeAuthorization?(CLLocationManager())
@@ -274,16 +277,31 @@ final class BackgroundDeliveryTests {
         )
     }
 
+    /// Hands a fix to the delegate and waits for the publication it starts.
+    ///
+    /// Matching a fix against a route and writing the App Group snapshot both
+    /// happen off the main actor, so reading the store straight after the
+    /// delivery would read it before anything had been written. This is the
+    /// tracker's own seam rather than a settle: it waits for exactly the work
+    /// this fix started, not for the machine to look quiet. On a fix the
+    /// tracker refuses outright — stale, imprecise, or for a hike that is gone
+    /// — nothing was started and the wait returns at once, which is what makes
+    /// it safe to use for the negative assertions too.
+    private func deliver(_ location: CLLocation) async {
+        monitor.deliver(location)
+        await retainedTracker?.waitForLiveFixPublish()
+    }
+
     /// The whole feature in one test: woken with no in-memory state, the app
     /// matches the fix against the hike `UserDefaults` says was selected and
     /// publishes progress along it.
     @Test("a fix delivered after a relaunch is matched against the persisted selection")
-    func backgroundFixPublishesProgress() throws {
+    func backgroundFixPublishesProgress() async throws {
         let hike = selectedHike()
         let profile = RouteProfile(route: hike.route)
         relaunchedTracker()
 
-        monitor.deliver(fix(at: profile.coordinates[3]))
+        await deliver(fix(at: profile.coordinates[3]))
 
         let snapshot = try #require(SharedStore.load())
         #expect(snapshot.hikeID == hike.id, "the selection came from defaults, not from memory")
@@ -294,16 +312,16 @@ final class BackgroundDeliveryTests {
     /// Off the trail, the widget shows the trail's length rather than a
     /// position that isn't on it.
     @Test("a fix off the trail clears the published position")
-    func offRouteFixClearsTheLiveFix() throws {
+    func offRouteFixClearsTheLiveFix() async throws {
         let hike = selectedHike()
         let profile = RouteProfile(route: hike.route)
         relaunchedTracker()
 
-        monitor.deliver(fix(at: profile.coordinates[2]))
+        await deliver(fix(at: profile.coordinates[2]))
         #expect(try #require(SharedStore.load()).liveFix != nil, "precondition: on the trail first")
 
         // ~900 m west of the ridge, well past the follow threshold.
-        monitor.deliver(fix(at: CLLocationCoordinate2D(latitude: 37.3340, longitude: -122.0400)))
+        await deliver(fix(at: CLLocationCoordinate2D(latitude: 37.3340, longitude: -122.0400)))
 
         let snapshot = try #require(SharedStore.load())
         #expect(snapshot.liveFix == nil, "a walker who left the trail has no progress along it")
@@ -314,12 +332,12 @@ final class BackgroundDeliveryTests {
     /// fix older than ``LocationFixPolicy/backgroundMaximumAge`` is a position
     /// the walker has left.
     @Test("a stale fix is refused")
-    func staleFixIsRefused() {
+    func staleFixIsRefused() async {
         let hike = selectedHike()
         let profile = RouteProfile(route: hike.route)
         relaunchedTracker()
 
-        monitor.deliver(fix(at: profile.coordinates[3], age: LocationFixPolicy.backgroundMaximumAge + 60))
+        await deliver(fix(at: profile.coordinates[3], age: LocationFixPolicy.backgroundMaximumAge + 60))
 
         #expect(SharedStore.load() == nil, "nothing should have been published at all")
     }
@@ -327,12 +345,12 @@ final class BackgroundDeliveryTests {
     /// A fix whose uncertainty is wider than the matching tolerance can't say
     /// which part of a trail someone is on — including whether they're on it.
     @Test("a fix too imprecise to match is refused")
-    func impreciseFixIsRefused() {
+    func impreciseFixIsRefused() async {
         let hike = selectedHike()
         let profile = RouteProfile(route: hike.route)
         relaunchedTracker()
 
-        monitor.deliver(
+        await deliver(
             fix(at: profile.coordinates[3], accuracy: RouteProfile.followMatchThresholdMeters + 100)
         )
 
@@ -342,14 +360,14 @@ final class BackgroundDeliveryTests {
     /// The hike was deleted while the app was suspended, and the wake-up
     /// arrives for a selection that no longer exists.
     @Test("a fix for a hike that has been deleted publishes nothing")
-    func deletedHikePublishesNothing() throws {
+    func deletedHikePublishesNothing() async throws {
         let hike = selectedHike()
         let profile = RouteProfile(route: hike.route)
         relaunchedTracker()
         context.delete(hike)
         try context.save()
 
-        monitor.deliver(fix(at: profile.coordinates[3]))
+        await deliver(fix(at: profile.coordinates[3]))
 
         #expect(SharedStore.load() == nil, "there is no trail to report progress along")
     }
@@ -358,11 +376,11 @@ final class BackgroundDeliveryTests {
     /// which is what a wake-up before the user has ever picked a trail looks
     /// like.
     @Test("a fix with no persisted selection publishes nothing")
-    func noSelectionPublishesNothing() {
+    func noSelectionPublishesNothing() async {
         _ = Fixture.hike(in: context)
         relaunchedTracker()
 
-        monitor.deliver(fix(at: Fixture.ridgeRoute[3].clCoordinate))
+        await deliver(fix(at: Fixture.ridgeRoute[3].clCoordinate))
 
         #expect(SharedStore.load() == nil)
     }
@@ -371,7 +389,7 @@ final class BackgroundDeliveryTests {
     /// precisely because a relaunch has no memory: on a loop, the fix alone is
     /// ambiguous, and "where were they last time?" is what resolves it.
     @Test("matching continues from the distance the previous launch persisted")
-    func matchingResumesFromPersistedDistance() throws {
+    func matchingResumesFromPersistedDistance() async throws {
         // An out-and-back: at the trailhead the outbound and return legs are
         // less than a metre apart, so the fix alone cannot say which of them
         // the walker is on. Only the persisted distance can.
@@ -381,13 +399,16 @@ final class BackgroundDeliveryTests {
         relaunchedTracker()
 
         let trailhead = profile.coordinates[0]
-        monitor.deliver(fix(at: trailhead))
+        await deliver(fix(at: trailhead))
         let cold = try #require(SharedStore.load()?.liveFix)
         #expect(cold.distanceAlongRouteMeters < total / 2, "with nothing to go on, a fix here is the start")
 
-        // Now the app is relaunched knowing the walker was nearly home.
+        // Now the app is relaunched knowing the walker was nearly home. The
+        // wait above is what makes this safe to write here: matching reads the
+        // reference off the main actor now, so seeding it while the previous
+        // fix was still in flight would decide nothing.
         defaults.set(total, forKey: SettingsKey.lastMatchedDistance)
-        monitor.deliver(fix(at: trailhead))
+        await deliver(fix(at: trailhead))
 
         let resumed = try #require(SharedStore.load()?.liveFix)
         #expect(
@@ -398,12 +419,12 @@ final class BackgroundDeliveryTests {
 
     /// And it writes one back, so the *next* wake-up has the same continuity.
     @Test("a matched background fix persists its distance for the next launch")
-    func matchedFixPersistsItsDistance() throws {
+    func matchedFixPersistsItsDistance() async throws {
         let hike = selectedHike()
         let profile = RouteProfile(route: hike.route)
         relaunchedTracker()
 
-        monitor.deliver(fix(at: profile.coordinates[3]))
+        await deliver(fix(at: profile.coordinates[3]))
 
         let persisted = defaults.object(forKey: SettingsKey.lastMatchedDistance) as? Double
         #expect(abs(try #require(persisted) - profile.distances[3]) < 1)

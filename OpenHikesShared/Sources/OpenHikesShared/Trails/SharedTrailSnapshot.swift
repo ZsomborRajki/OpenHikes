@@ -16,7 +16,17 @@ public enum TrailWidgetKind {
     public static let id = "TrailWidget"
 }
 
-public struct SharedTrailSnapshot: Codable, Sendable, Equatable {
+public struct SharedTrailSnapshot: SharedPayload, Equatable {
+    public static let currentSchemaVersion = 1
+
+    /// See ``SharedPayload/schemaVersion``: `nil` in bytes written before
+    /// versioning existed, which is every payload already in a container at
+    /// the moment this shipped. Readable but not settable from outside this
+    /// package — a version is a fact about the build that wrote the bytes, and
+    /// one a caller could choose would be a version nothing verifies.
+    /// ``SharedStore`` stamps it on write.
+    public internal(set) var schemaVersion: Int?
+
     public var hikeID: UUID
     public var title: String
     public var tintHex: String
@@ -59,6 +69,7 @@ public struct SharedTrailSnapshot: Codable, Sendable, Equatable {
         self.polyline = polyline
         self.liveFix = liveFix
         self.updatedAt = updatedAt
+        schemaVersion = Self.currentSchemaVersion
     }
 
     public struct LiveFix: Codable, Sendable, Equatable {

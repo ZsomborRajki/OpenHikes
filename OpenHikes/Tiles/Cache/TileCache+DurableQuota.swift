@@ -119,8 +119,42 @@ nonisolated extension TileCache {
     /// of them would leave the total drifting permanently upward until it
     /// refused every write. Re-measuring costs one directory walk on the next
     /// durable write, and deletions are rare next to writes.
+    ///
+    /// The exception is a path that mutates exactly one durable file whose
+    /// size it already knows, on the browse path — the lazy TTL deletion in
+    /// ``freshModificationDate(for:in:referenceDate:)`` and the durable
+    /// re-fetch write. Those use ``adjustDurableBytes(forProviderID:by:)``
+    /// below, because invalidating per tile would turn the next reservation
+    /// into a directory walk and, during a bulk download over expired
+    /// coverage, one walk per tile saved.
     func invalidateDurableMeasurements() {
         durableProviderBytes.withLock { $0.removeAll() }
+    }
+
+    /// Moves a *measured* provider's total by `delta`, and does nothing at all
+    /// when there is no measurement to move.
+    ///
+    /// The no-op is the point: a partial total is worse than no total. An
+    /// unmeasured provider is re-measured by the next reservation, and that
+    /// walk reads whatever this caller just wrote or deleted — so skipping the
+    /// adjustment loses nothing, while installing `delta` as if it were the
+    /// whole store would under-count everything already on disk and let the
+    /// ceiling be overrun.
+    ///
+    /// Safe to call with ``mutationVersions`` held: it takes
+    /// ``durableProviderBytes`` — the inner lock of the two, and never the
+    /// other way round — and never measures, so no directory walk happens
+    /// under a lock.
+    func adjustDurableBytes(forProviderID providerID: String?, by delta: Int64) {
+        guard delta != 0,
+              let providerID,
+              durableByteLimit(forProviderID: providerID) != nil
+        else { return }
+
+        durableProviderBytes.withLock { bytes in
+            guard let current = bytes[providerID] else { return }
+            bytes[providerID] = max(0, current + delta)
+        }
     }
 
     /// Durable bytes currently attributed to `providerID`, if measured.

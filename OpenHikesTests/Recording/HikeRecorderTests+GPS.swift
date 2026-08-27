@@ -372,7 +372,10 @@ extension HikeRecorderTests {
 
         #expect(hikeRecorder.phase == .failed(.locationDenied))
         #expect(source.stopCount == 1)
-        #expect(elevation.stopCount >= 2)
+        // Twice, exactly: `startElevationUpdates()` stops the source before it
+        // starts it, and `fail(_:endLocationUpdates:)` stops it again. A third
+        // would mean something restarted the barometer after the failure.
+        #expect(elevation.stopCount == 2)
     }
 
     @Test("a completed journal is saved on the next launch")

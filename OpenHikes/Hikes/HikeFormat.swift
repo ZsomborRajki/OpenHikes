@@ -62,19 +62,49 @@ nonisolated enum HikeFormat {
         date.formatted(timeOfDayStyle)
     }
 
+    /// Whole units, in the unit it was handed — and a dash for a figure that
+    /// isn't a number.
+    ///
+    /// The same answer ``duration(_:)`` gives, for the same reason: an
+    /// elevation total derived from a route carrying a non-finite height
+    /// formats as "∞ m" or "NaN m", and both read on a stat tile as though
+    /// something had been measured.
     static func length(_ measurement: Measurement<UnitLength>) -> String {
+        guard measurement.value.isFinite else { return "—" }
         let rounded = Measurement(value: measurement.value.rounded(), unit: measurement.unit)
         return rounded.formatted(.measurement(width: .abbreviated, usage: .asProvided))
     }
 
-    static func speed(_ measurement: Measurement<UnitSpeed>) -> String {
-        measurement.converted(to: .kilometersPerHour)
-            .formatted(
-                .measurement(
-                    width: .abbreviated,
-                    usage: .asProvided,
-                    numberFormatStyle: .number.precision(.fractionLength(1))
-                )
+    /// One decimal, in whatever unit the reader's region measures speed in.
+    ///
+    /// `usage: .general` rather than `.asProvided`, and no explicit conversion
+    /// before it: `.asProvided` renders the unit it was handed, so pinning the
+    /// value to km/h first pinned the *whole app* to km/h. The distance beside
+    /// it has always used `usage: .road` and does adapt, which left a reader in
+    /// the US looking at "3.1 mi" and "5.0 km/h" in the same grid. `.general`
+    /// gives mph for `en_US` and `en_GB` and km/h for `de_DE` and `ja_JP`, from
+    /// the same metres-per-second input, so the two rows finally agree.
+    ///
+    /// `numberFormatStyle` is kept because the unit change must not quietly
+    /// become a precision change as well: without it the style rounds to whole
+    /// units, and "4 km/h" cannot tell a stroll from a march.
+    ///
+    /// The `locale` parameter is a test seam. Region is exactly the input this
+    /// is now sensitive to, and a suite that could only ask about the
+    /// simulator's own region would assert whatever the machine happened to be
+    /// set to — which is how a formatting bug survives a green test run.
+    static func speed(
+        _ measurement: Measurement<UnitSpeed>,
+        locale: Locale = .autoupdatingCurrent
+    ) -> String {
+        guard measurement.value.isFinite else { return "—" }
+        return measurement.formatted(
+            .measurement(
+                width: .abbreviated,
+                usage: .general,
+                numberFormatStyle: .number.precision(.fractionLength(1))
             )
+            .locale(locale)
+        )
     }
 }

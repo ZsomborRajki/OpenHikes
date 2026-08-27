@@ -20,6 +20,12 @@
 //  worst possible sequence. And a refusal must stop the flow before the fetch,
 //  rather than fetching and finding nothing.
 //
+//  The third thing pinned here is the difference between an empty answer and
+//  an empty *library*. Under limited access the app is looking at a subset
+//  somebody chose for it; under a revocation it is looking at nothing at all.
+//  Both come back as no assets, and reporting either as "your walk has no
+//  photographs" would be the sheet stating something it has no way to know.
+//
 
 import CoreLocation
 import Foundation

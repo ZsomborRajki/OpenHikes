@@ -58,7 +58,7 @@ struct PhotoDiscoverySheet: View {
         switch controller.phase {
         case .accessDenied: deniedView
         case .accessRestricted: restrictedView
-        case .empty: emptyView
+        case .empty: DiscoveryEmptyState(hike: hike, controller: controller)
         case .idle, .searching: searchingView
         case let .importing(completed, total):
             importingView(completed: completed, total: total)
@@ -164,20 +164,6 @@ struct PhotoDiscoverySheet: View {
         .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .center)
     }
 
-    private var emptyView: some View {
-        ContentUnavailableView {
-            Label("No Photos Found", systemImage: "photo.on.rectangle.angled")
-        } description: {
-            Text(
-                """
-                Nothing in your photo library was taken while this hike was \
-                being recorded — or everything that was is already here.
-                """
-            )
-        }
-        .accessibilityIdentifier("photo-discovery-empty")
-    }
-
     private var deniedView: some View {
         ContentUnavailableView {
             Label("Photo Access Off", systemImage: "lock")
@@ -260,6 +246,81 @@ struct PhotoDiscoverySheet: View {
         case .timeAndPlace: String(localized: "matched by both time and place")
         }
     }
+}
+
+/// The end of a search that found nothing — which is two different statements
+/// depending on how much of the library the app was allowed to look at.
+///
+/// Under full access "nothing was taken while this hike was being recorded" is
+/// true, and it is the whole answer. Under limited access it is false: the app
+/// looked at a subset somebody chose for it, and the walk's photographs may be
+/// sitting just outside that subset. Saying the first thing in the second
+/// situation is a screen telling the user their pictures do not exist, on the
+/// one control whose entire job is finding them.
+///
+/// A view of its own rather than a `var` on the sheet, for the reason stated
+/// at the top of this file: a computed property is inlined into the body that
+/// reads it, so the access level and the presenter would both become inputs of
+/// the whole sheet.
+private struct DiscoveryEmptyState: View {
+    let hike: Hike
+    let controller: PhotoDiscoveryController
+
+    /// Owned here, and only meaningful while this state is on screen — which
+    /// is exactly the anchor's lifetime. It holds no changing value SwiftUI
+    /// can observe, so declaring it as `@State` costs no invalidation.
+    @State private var presenter = LimitedLibraryPresenter()
+
+    private static let spacing: CGFloat = 16
+
+    var body: some View {
+        let canSelectMore = controller.canSelectMorePhotos
+        return VStack(spacing: Self.spacing) {
+            ContentUnavailableView {
+                Label(
+                    canSelectMore ? "No Shared Photos From This Hike" : "No Photos Found",
+                    systemImage: "photo.on.rectangle.angled"
+                )
+            } description: {
+                Text(canSelectMore ? Self.limitedMessage : Self.fullMessage)
+            }
+            // The button is a sibling rather than a `ContentUnavailableView`
+            // action, so this identifier stays off it: SwiftUI pushes a
+            // container's identifier down onto every descendant, and the
+            // button underneath it would end up answering to this name
+            // instead of its own.
+            .accessibilityIdentifier("photo-discovery-empty")
+
+            if canSelectMore { selectMoreButton }
+        }
+        .limitedLibraryAnchor(presenter)
+    }
+
+    private var selectMoreButton: some View {
+        Button("Select More Photos\u{2026}") {
+            Task { await controller.selectMorePhotos(in: hike, from: presenter) }
+        }
+        .buttonStyle(.borderedProminent)
+        .accessibilityIdentifier("photo-discovery-select-more-button")
+    }
+
+    private static let fullMessage = String(
+        localized: """
+            Nothing in your photo library was taken while this hike was being \
+            recorded — or everything that was is already here.
+            """
+    )
+
+    /// Says what was actually looked at, and stops short of a claim about the
+    /// library as a whole, because the app is in no position to make one.
+    private static let limitedMessage = String(
+        localized: """
+            OpenHikes can only see the photos you have shared with it, and none \
+            of those were taken while this hike was being recorded. If your \
+            pictures of this walk are elsewhere in your library, share them and \
+            OpenHikes will look again.
+            """
+    )
 }
 
 /// One square of the review grid, and the only thing that reads whether it is

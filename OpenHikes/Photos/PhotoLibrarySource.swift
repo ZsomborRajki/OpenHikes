@@ -66,6 +66,20 @@ nonisolated struct StubPhotoLibrary: PhotoLibraryReading {
     // swiftlint:disable async_without_await
     func requestAccess() async -> PhotoLibraryAccess { access }
 
+    /// The same answer as ``requestAccess()``, because nothing here can take
+    /// access away mid-run: this stub exists so automation never meets a
+    /// permission prompt at all.
+    func currentAccess() -> PhotoLibraryAccess { access }
+
+    /// Nothing to present. The stub always answers ``PhotoLibraryAccess/granted``,
+    /// so the state that offers this picker is unreachable in automation — and
+    /// the picker itself is a system screen, which is precisely the kind of
+    /// thing a UI test must not be driving.
+    @MainActor
+    func presentLimitedLibraryPicker(from _: LimitedLibraryPresenter) async {
+        // Deliberately empty; see above.
+    }
+
     /// Spread evenly across the window, so every one of them falls inside the
     /// walk and lands on a different part of the route.
     ///

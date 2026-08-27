@@ -21,9 +21,8 @@ final class SearchCompleter: NSObject, MKLocalSearchCompleterDelegate {
     var suggestions: [MKLocalSearchCompletion] = []
 
     @ObservationIgnored private let completer = MKLocalSearchCompleter()
-    /// The last query the user committed to, by tapping a suggestion. See
-    /// ``commit(query:)``.
-    @ObservationIgnored private var committedQuery: String?
+    /// Whether the next query is worth asking. See ``SearchQueryPolicy``.
+    @ObservationIgnored private var policy = SearchQueryPolicy()
 
     override init() {
         super.init()
@@ -33,23 +32,23 @@ final class SearchCompleter: NSObject, MKLocalSearchCompleterDelegate {
 
     /// Feeds the latest query to the completer, or clears results when empty.
     func update(query: String) {
-        let trimmed = query.trimmingCharacters(in: .whitespacesAndNewlines)
-        guard !trimmed.isEmpty else {
-            committedQuery = nil
+        switch policy.action(for: query) {
+        case .cancel:
+            // Cancelled rather than merely blanked: an answer already in
+            // flight for the fragment the user has just erased would arrive
+            // through `completerDidUpdateResults` and refill the list under an
+            // empty field.
+            completer.cancel()
             suggestions = []
-            return
+        case .ignore:
+            break
+        case .request(let fragment):
+            completer.queryFragment = fragment
         }
-        // Setting the search field to a tapped suggestion's title fires the
-        // field's `onChange` one more time, and the completer would answer a
-        // question the user has already stopped asking — a wasted round-trip
-        // on the radio in the one screen whose brief is not spending power.
-        guard trimmed != committedQuery else { return }
-        committedQuery = nil
-        completer.queryFragment = trimmed
     }
 
     func clear() {
-        committedQuery = nil
+        policy.reset()
         completer.cancel()
         suggestions = []
     }
@@ -58,7 +57,7 @@ final class SearchCompleter: NSObject, MKLocalSearchCompleterDelegate {
     /// echo of it arriving through ``update(query:)`` is not re-requested.
     func commit(query: String) {
         completer.cancel()
-        committedQuery = query.trimmingCharacters(in: .whitespacesAndNewlines)
+        policy.commit(query: query)
         suggestions = []
     }
 

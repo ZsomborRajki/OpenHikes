@@ -153,10 +153,11 @@ nonisolated struct LocationAccuracyBreakdown: Codable, Sendable, Equatable {
 
 /// Why the process went away.
 ///
-/// `PERFORMANCE.md` spends a whole section establishing that a 210 MB
-/// reading was the automation rather than the app, and closed on the worry it
-/// could not settle: a backgrounded recording that grows toward that figure is
-/// a jetsam candidate, and a recording that gets killed loses the hike.
+/// `PERFORMANCE.md` spends a whole section establishing that the alarming
+/// footprint peak was the automation rather than the app, and closed on the
+/// worry it could not settle: a backgrounded recording that grows toward that
+/// figure is a jetsam candidate, and a recording that gets killed loses the
+/// hike.
 /// ``backgroundMemoryLimitExits`` and ``backgroundMemoryPressureExits`` settle
 /// it with the only evidence that counts — how often it happened to a real
 /// walker mid-hike.
@@ -279,7 +280,7 @@ nonisolated struct FieldMetricsDigest: Codable, Sendable, Equatable {
     var gpuSeconds: Double?
     var locationAccuracy: LocationAccuracyBreakdown?
 
-    // Launch — `PERFORMANCE.md`'s P1 launch finding.
+    // Launch — `PERFORMANCE.md`'s launch finding.
     var timeToFirstDraw: HistogramSummary?
     var optimizedTimeToFirstDraw: HistogramSummary?
     /// The span `FieldSignpost` brackets with `extendLaunchMeasurement`: first
@@ -291,7 +292,8 @@ nonisolated struct FieldMetricsDigest: Codable, Sendable, Equatable {
     // Responsiveness — `MainThreadWatchdog`'s field counterpart.
     var applicationHangTime: HistogramSummary?
 
-    // Hitches — the P3 item `XCTHitchMetric` cannot supply off-device.
+    // Hitches — the scroll-smoothness item `XCTHitchMetric` cannot supply
+    // off-device.
     var hitchTimeRatio: Double?
     var scrollHitchTimeRatio: Double?
 
@@ -381,11 +383,23 @@ nonisolated struct FieldMetricsDigest: Codable, Sendable, Equatable {
     /// `PERFORMANCE.md` asserts the backgrounded per-fix cost is the one that
     /// decides whether the battery lasts "since that is how the app is used
     /// for all but a few minutes of a walk" — this is that claim, measured.
+    ///
+    /// Clamped to 1.0, and the clamp is load-bearing rather than cosmetic.
+    /// MetricKit accounts `cumulativeBackgroundLocationTime` on a different
+    /// clock from `cumulativeForegroundTime`/`cumulativeBackgroundTime` — a
+    /// location session that spans a suspension is charged in full to the
+    /// former while the latter advance only while the process is resident — so
+    /// the ratio is genuinely representable above one. Reporting "112%" reads
+    /// as a bug in the app rather than as the accounting difference it is, and
+    /// it is not a number the reader can act on either way. The row's footnote
+    /// in `FieldMetricsSection` carries the caveat, so the fact is stated once
+    /// where someone would look for it rather than encoded in an out-of-range
+    /// value nobody can interpret.
     var backgroundLocationShare: Double? {
         guard let backgroundLocationSeconds else { return nil }
         let alive = (foregroundSeconds ?? 0) + (backgroundSeconds ?? 0)
         guard alive > 0 else { return nil }
-        return backgroundLocationSeconds / alive
+        return min(1, backgroundLocationSeconds / alive)
     }
 }
 

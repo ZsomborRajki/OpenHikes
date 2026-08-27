@@ -231,18 +231,25 @@ struct TileCacheTierTests {
     /// from `OpenHikesModel` on every launch, and a tile it leaves on disk must
     /// still be in memory afterwards. (An over-the-limit trim is what makes
     /// this reachable at all — under the limit it returns before touching
-    /// anything.)
+    /// anything, which is why there is a second, unclaimed tile here to put the
+    /// sweep over its limit.)
     @Test("a cache trim doesn't evict tiles it decided to keep")
     func trimKeepsFreshMemoryTiles() async throws {
         let kept = makeKey()
+        let residue = makeKey()
         try sandbox.browse(key: kept)
+        try sandbox.browse(key: residue)
 
         let loaded = await sandbox.cache.loadTile(forKey: kept, url: URL(string: "http://127.0.0.1:9/x.png")!)
         try #require(loaded != nil, "precondition: the tile is cached in memory")
 
         // Claimed, so the trim can't delete it however far over the limit we are.
-        let freed = await trimCache(claimedBy: [kept], limit: TileStore.tileByteCount)
-        #expect(freed >= 0)
+        let freed = await trimCache(claimedBy: [kept], limit: 0)
+        #expect(
+            freed == TileStore.tileByteCount,
+            "the unclaimed tile is the only one the trim may count, so it is the whole reclaim"
+        )
+        #expect(!sandbox.isBrowsed(residue), "precondition: the trim really did delete something")
         #expect(sandbox.isBrowsed(kept), "precondition: a claimed tile survives the trim")
         #expect(
             sandbox.cache.memoryImage(forKey: kept) != nil,

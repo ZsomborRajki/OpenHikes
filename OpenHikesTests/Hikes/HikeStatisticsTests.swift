@@ -158,17 +158,55 @@ struct HikeStatisticsTests {
     @Test("max speed finds the fastest single segment")
     func maxSpeed() throws {
         let start = Date(timeIntervalSince1970: 1_750_000_000)
-        // ~111 m per 0.001° of latitude: 111 m in 10 s, then 111 m in 100 s.
+        // ~111 m per 0.001° of latitude: 111 m in 30 s, then 111 m in 300 s.
         let route = [
             RouteCoordinate(latitude: 47.630, longitude: 12.86, timestamp: start),
-            RouteCoordinate(latitude: 47.631, longitude: 12.86, timestamp: start.addingTimeInterval(10)),
-            RouteCoordinate(latitude: 47.632, longitude: 12.86, timestamp: start.addingTimeInterval(110)),
+            RouteCoordinate(latitude: 47.631, longitude: 12.86, timestamp: start.addingTimeInterval(30)),
+            RouteCoordinate(latitude: 47.632, longitude: 12.86, timestamp: start.addingTimeInterval(330)),
         ]
         let stats = Fixture.hike(in: context, route: route).routeStatistics
         let fastest = try #require(stats.maxSpeed).converted(to: .metersPerSecond).value
         let average = try #require(stats.averageSpeed).converted(to: .metersPerSecond).value
-        #expect(abs(fastest - 11.1) < 0.5)
+        #expect(abs(fastest - 3.7) < 0.1)
         #expect(fastest > average)
+    }
+
+    /// An imported GPX is cleaned by nobody — ``RecordingFixPolicy`` only sees
+    /// fixes this app recorded itself. One pair a second apart and a hundred
+    /// metres wide is enough to report ~360 km/h as the walk's maximum, and it
+    /// would be the largest figure in the stats grid.
+    @Test("a segment nobody could have walked isn't the hike's fastest")
+    func maxSpeedIgnoresImplausibleSegments() throws {
+        let start = Date(timeIntervalSince1970: 1_750_000_000)
+        let route = [
+            RouteCoordinate(latitude: 47.630, longitude: 12.86, timestamp: start),
+            // ~111 m in one second: a dropped fix reacquired somewhere else.
+            RouteCoordinate(latitude: 47.631, longitude: 12.86, timestamp: start.addingTimeInterval(1)),
+            RouteCoordinate(latitude: 47.632, longitude: 12.86, timestamp: start.addingTimeInterval(101)),
+        ]
+        let stats = Fixture.hike(in: context, route: route).routeStatistics
+        let fastest = try #require(stats.maxSpeed).converted(to: .metersPerSecond).value
+
+        #expect(fastest <= RecordingFixPolicy.maximumSpeed)
+        // The surviving segment, reported as itself rather than capped at the
+        // ceiling — a clamp would invent a second number that looks measured.
+        #expect(abs(fastest - 1.11) < 0.1)
+    }
+
+    /// A track made entirely of implausible legs has no fastest segment to
+    /// report, which is the same answer a walk with no clock gets. Better an
+    /// absent tile than a confident wrong one.
+    @Test("a route with nothing walkable in it reports no max speed")
+    func maxSpeedAbsentWhenEverySegmentIsImplausible() {
+        let start = Date(timeIntervalSince1970: 1_750_000_000)
+        let route = (0..<4).map { idx in
+            RouteCoordinate(
+                latitude: 47.63 + Double(idx) * 0.001,
+                longitude: 12.86,
+                timestamp: start.addingTimeInterval(Double(idx))
+            )
+        }
+        #expect(Fixture.hike(in: context, route: route).routeStatistics.maxSpeed == nil)
     }
 
     /// A segment is a speed sample only when both its ends carry a timestamp.
@@ -211,12 +249,25 @@ struct HikeStatisticsTests {
         #expect(hike.distance.value == hike.distanceMeters)
     }
 
+    /// The row's second line is the only place a hike's length and its date
+    /// appear in the list, so both halves are pinned. A subtitle that dated
+    /// every row with today, or lost its length entirely, still contains a
+    /// "·" and is still longer than five characters.
     @Test("the list subtitle carries both a length and a date")
     func subtitle() {
-        let hike = Fixture.hike(in: context)
-        let subtitle = hike.subtitle
-        #expect(subtitle.contains("·"))
-        #expect(subtitle.count > 5)
+        // Comfortably in the past, so "is this the hike's date or the day the
+        // list was drawn?" can never be answered by coincidence.
+        let recorded = Date(timeIntervalSince1970: 1_000_000_000)
+        let hike = Fixture.hike(in: context) { $0.date = recorded }
+        let halves = hike.subtitle.components(separatedBy: " · ")
+
+        #expect(halves.count == 2)
+        #expect(
+            halves.first
+                == hike.distance.formatted(.measurement(width: .abbreviated, usage: .road))
+        )
+        #expect(halves.last == recorded.formatted(date: .abbreviated, time: .omitted))
+        #expect(halves.last != Date.now.formatted(date: .abbreviated, time: .omitted))
     }
 }
 
@@ -245,12 +296,37 @@ struct HikeFormatTests {
         #expect(!text.contains("218"))
     }
 
-    /// Speeds arrive in metres per second and are read in km/h.
+    /// A route carrying a height that isn't a number can still produce a
+    /// non-finite total, and `Measurement` formats those as "∞ m" and
+    /// "NaN m" — which sit on a stat tile looking exactly like readings.
+    @Test("a length that isn't a number reads as absent", arguments: [
+        Double.infinity, -.infinity, .nan,
+    ])
+    func nonFiniteLength(value: Double) {
+        #expect(HikeFormat.length(Measurement(value: value, unit: .meters)) == "—")
+    }
+
+    /// Speeds arrive in metres per second and are read in km/h — and the
+    /// decimal is the substance of the claim, since rounding 3.6 km/h to
+    /// "4 km/h" erases the difference between a stroll and a march. Compared
+    /// against the locale's own decimal separator, because the region the
+    /// simulator is set to decides whether that is a dot or a comma.
+    /// Pinned to one region rather than read from `Locale.current`: speed is
+    /// now a regional unit, so a test that takes the machine's own region as
+    /// its input agrees with whatever the machine happens to be set to. The
+    /// full regional matrix lives in ``SpeedFormatTests``; what this asserts
+    /// is the conversion out of metres per second and the surviving decimal.
     @Test("speeds are converted to km/h with one decimal")
     func speed() {
-        let text = HikeFormat.speed(Measurement(value: 10, unit: .metersPerSecond))
-        #expect(text.contains("36"))
-        #expect(text.contains("km/h"))
+        let metric = Locale(identifier: "de_DE")
+
+        let fast = HikeFormat.speed(Measurement(value: 10, unit: .metersPerSecond), locale: metric)
+        #expect(fast == "36,0 km/h")
+
+        // 1 m/s is 3.6 km/h: the conversion has to happen at all, and the
+        // digit it lands on has to survive the rounding.
+        let walking = HikeFormat.speed(Measurement(value: 1, unit: .metersPerSecond), locale: metric)
+        #expect(walking == "3,6 km/h")
     }
 }
 
@@ -349,6 +425,34 @@ struct ElevationDeadbandTests {
         let accumulator = Self.gain([900, 800, 802, 750])
         #expect(accumulator.lossMeters == 150)
         #expect(accumulator.gainMeters == 0)
+    }
+
+    /// `<ele>nan</ele>` parses to a `Double` like any other height, and NaN
+    /// loses every comparison — so one of them reaching `minimumMeters` and
+    /// `maximumMeters` would not corrupt its own reading, it would replace
+    /// the extremes of the whole route with itself and leave every total
+    /// derived from them meaningless.
+    @Test("a height that isn't a number is skipped like a missing one")
+    func nonFiniteHeightsAreSkipped() throws {
+        let accumulator = Self.gain([.nan, 500, .infinity, 600, -.infinity, 550])
+
+        #expect(accumulator.count == 3)
+        #expect(try #require(accumulator.minimumMeters) == 500)
+        #expect(try #require(accumulator.maximumMeters) == 600)
+        #expect(accumulator.gainMeters == 100)
+        #expect(accumulator.lossMeters == 50)
+    }
+
+    /// And a route with nothing but such heights has to look like a route
+    /// with no heights at all, rather than one whose extremes are NaN.
+    @Test("a route of nothing but non-numbers has no elevation to report")
+    func allNonFiniteHeightsReadAsNoHeights() {
+        let accumulator = Self.gain([.nan, .infinity, -.infinity])
+
+        #expect(accumulator.count == 0)
+        #expect(accumulator.minimumMeters == nil)
+        #expect(accumulator.maximumMeters == nil)
+        #expect(!accumulator.hasChange)
     }
 
     @Test(

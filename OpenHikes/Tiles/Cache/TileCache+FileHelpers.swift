@@ -8,6 +8,29 @@ import os
 
 nonisolated extension TileCache {
 
+    /// Which of the two disk tiers a file belongs to.
+    ///
+    /// Carried explicitly rather than inferred from the file's parent
+    /// directory, because ``freshModificationDate(for:in:referenceDate:)``
+    /// deletes what it finds expired and the two tiers are accounted for
+    /// differently — a durable byte is spent against a provider's licensed
+    /// ceiling and a browsing byte is not. Comparing URLs would make that
+    /// distinction depend on path normalisation; a parameter makes the
+    /// compiler check it at every call site.
+    enum StorageTier: Sendable {
+        /// `Caches` — a tile fetched to draw the map, which the OS may reclaim.
+        case browsing
+        /// `Application Support` — offline coverage a hike claims.
+        case durable
+    }
+
+    func directory(for tier: StorageTier) -> URL {
+        switch tier {
+        case .browsing: directory
+        case .durable: durableDirectory
+        }
+    }
+
     func allTileFiles(in directory: URL) -> [URL] {
         do {
             return try FileManager.default.contentsOfDirectory(
@@ -47,7 +70,19 @@ nonisolated extension TileCache {
     /// Returns a usable fetch date, deleting the file when its fixed TTL has
     /// elapsed. Modification time is the fetch time because tile files are
     /// written atomically and never rewritten except by a fresh response.
-    func freshModificationDate(for file: URL, referenceDate: Date = Date()) -> Date? {
+    ///
+    /// `tier` is what the deletion is accounted for against. A durable tile
+    /// removed here is bytes a capped provider gets back — without that, the
+    /// total kept counting a file that no longer exists, and since the only
+    /// thing that reset it was a launch-time sweep, a browsing session over
+    /// week-old Stadia coverage could refuse legitimate saves for the rest of
+    /// the session. A browsing-tier deletion is accounted for by nobody,
+    /// which is why the tier has to be known rather than assumed.
+    func freshModificationDate(
+        for file: URL,
+        in tier: StorageTier,
+        referenceDate: Date = Date()
+    ) -> Date? {
         guard FileManager.default.fileExists(atPath: file.path) else { return nil }
         let modified: Date?
         do {
@@ -63,10 +98,31 @@ nonisolated extension TileCache {
             modified = nil
         }
         guard let modified, !isExpired(modified, referenceDate: referenceDate) else {
-            _ = removeItemIgnoringNotFound(
+            // Sized before the unlink, and given back only if the unlink was
+            // this caller's: `removeItemIgnoringNotFound` reports `false` for a
+            // file another thread already took, so two threads finding the
+            // same tile expired cannot subtract it twice.
+            let byteCount = tier == .durable ? fileSize(file) : 0
+            let removed = removeItemIgnoringNotFound(
                 at: file,
                 operation: "remove unusable tile"
             )
+            if removed, tier == .durable {
+                // A decrement rather than ``invalidateDurableMeasurements()``,
+                // which is what the batch deletion paths use. Those delete
+                // many files and invalidate once; this deletes exactly one
+                // file whose size it just read, and runs per tile on the
+                // browse path. Invalidating here would make the next capped
+                // provider reservation re-walk the durable directory — and
+                // interleaved with a bulk download over expired coverage,
+                // that is one full directory walk per tile saved.
+                // ``reclaimDurableBytes(forProviderID:protecting:byteCount:)``
+                // already subtracts what it deletes for the same reason.
+                adjustDurableBytes(
+                    forProviderID: Self.providerID(forDiskName: file.lastPathComponent),
+                    by: -byteCount
+                )
+            }
             return nil
         }
         return modified

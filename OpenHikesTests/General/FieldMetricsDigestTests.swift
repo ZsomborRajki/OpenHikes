@@ -203,6 +203,37 @@ nonisolated struct FieldMetricsDigestTests {
         #expect(digest.backgroundLocationShare == nil)
     }
 
+    @Test("the pocket share is capped at 100% when the two clocks disagree")
+    func backgroundLocationShareIsClamped() {
+        // MetricKit charges a location session that spans a suspension in full,
+        // while foreground/background time advances only while the process is
+        // resident, so the raw ratio is representable above one. 112% reads as a
+        // bug in the app rather than as the accounting difference it is.
+        let digest = FieldMetricsDigest(
+            foregroundSeconds: 100,
+            backgroundSeconds: 900,
+            backgroundLocationSeconds: 1120
+        )
+        #expect(digest.backgroundLocationShare == 1)
+    }
+
+    @Test("the pocket share is exact at the boundary rather than rounded to it")
+    func backgroundLocationShareAtTheBoundary() {
+        let digest = FieldMetricsDigest(
+            foregroundSeconds: 100,
+            backgroundSeconds: 900,
+            backgroundLocationSeconds: 1000
+        )
+        #expect(digest.backgroundLocationShare == 1)
+
+        let below = FieldMetricsDigest(
+            foregroundSeconds: 100,
+            backgroundSeconds: 900,
+            backgroundLocationSeconds: 999
+        )
+        #expect(below.backgroundLocationShare == 0.999)
+    }
+
     // MARK: - Signposts
 
     @Test("a signpost's CPU cost is amortised over its occurrences")

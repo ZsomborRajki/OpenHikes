@@ -267,7 +267,7 @@ struct TileTransportTests {
     /// clears their failure logs and redraws. Without this the map stays full
     /// of holes until something else forces a draw pass.
     @Test("reconnecting notifies renderers so they can retry")
-    func reconnectNotifiesObservers() async throws {
+    func reconnectNotifiesObservers() async {
         let stub = StubbedTileCache(reachable: false)
         defer { stub.tearDown() }
 
@@ -281,14 +281,33 @@ struct TileTransportTests {
         stub.cache.addObserver(listener)
 
         stub.cache.setReachable(true)
-        // The notification hops to the main queue before touching renderers.
-        try await Task.sleep(for: .milliseconds(120))
+        // The notification hops to the main queue before touching renderers,
+        // so wait for it to arrive rather than for a duration.
+        await settleDelegateHop(until: "the reconnect to reach the renderer") {
+            listener.reconnects == 1
+        }
         #expect(listener.reconnects == 1)
 
         // Only the offline→online edge counts; staying online says nothing.
+        // A second notification would have been enqueued on the main queue
+        // from inside the call below, ahead of the probe that follows it, and
+        // the main queue is serial — so a probe that has run is proof that a
+        // duplicate would already have been delivered.
         stub.cache.setReachable(true)
-        try await Task.sleep(for: .milliseconds(120))
+        await mainQueueRoundTrip()
         #expect(listener.reconnects == 1)
+    }
+
+    /// One trip through the main *dispatch* queue, which is where
+    /// `TileCache.notifyReconnect()` hands its work over. Enqueued after
+    /// anything that call posted, and serviced after it for the same reason:
+    /// the queue is serial.
+    private func mainQueueRoundTrip() async {
+        await withCheckedContinuation { continuation in
+            DispatchQueue.main.async {
+                continuation.resume()
+            }
+        }
     }
 
     /// And the requests really do resume, rather than the flag flipping while

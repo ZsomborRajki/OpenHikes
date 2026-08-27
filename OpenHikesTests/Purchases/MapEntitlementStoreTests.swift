@@ -15,6 +15,35 @@
 //  ``MapEntitlement`` is process-wide and shared with every other suite in this
 //  bundle, so each test here restores it — see ``restoreProcessEntitlement()``.
 //
+//  ## The rest of the store is deliberately not covered, and cannot be
+//
+//  Four measured constraints, recorded here because each one was re-derived
+//  from scratch at least once and each looks like an oversight until it is not.
+//
+//  1. `StoreKitTest` does not compile into this bundle. `SWIFT_TREAT_WARNINGS_
+//     AS_ERRORS` reaches the Clang module build, and Apple's own
+//     `SKTestTransaction.h` declares an `SKPaymentTransactionState` that Apple
+//     deprecated in iOS 18, so the precompiled module fails to emit and takes
+//     every other file in the bundle down with it. It builds with
+//     `-Xcc -Wno-error=deprecated-declarations` on this target — a project-file
+//     change, and one the repository's warnings-as-errors guarantee argues
+//     against making for a single framework header.
+//  2. Even with that flag, `SKTestSession` does not attach under `xcodebuild
+//     test` on this toolchain. The session constructs, but `storefront` comes
+//     back empty rather than the `USA` in `OpenHikes.storekit`, and storekitd
+//     logs the app as talking to the *Sandbox* server — the configuration is
+//     synced to the device by the Xcode IDE, never by the command line. So the
+//     `revocationDate` filter, the product-ID match and the `.verified` /
+//     `.unverified` split inside `hasProEntitlement()` have no reachable input
+//     here: nothing can put a transaction in `Transaction.currentEntitlements`.
+//  3. `AppStore.sync()`, which `restore()` is built on, never returns in this
+//     environment — observed still running after ten minutes. A `restore()`
+//     test would hang the bundle rather than fail it.
+//  4. `start()` and `loadProduct()` do resolve through the seam above, and are
+//     covered by ``MapEntitlementStoreLaunchTests`` rather than here — they are
+//     the only tests in the bundle that reach StoreKit for real, so that suite
+//     carries a time limit and its header explains what it cannot clean up.
+//
 
 import Foundation
 @testable import OpenHikes

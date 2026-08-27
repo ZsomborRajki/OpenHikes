@@ -108,8 +108,9 @@ struct HikeDetailWorkloadTests {
             "Elevation Loss": standalone.elevationLoss.map(HikeFormat.length),
             "Max Elevation": standalone.maxElevation.map(HikeFormat.length),
             "Min Elevation": standalone.minElevation.map(HikeFormat.length),
-            "Avg Speed": standalone.averageSpeed.map(HikeFormat.speed),
-            "Max Speed": standalone.maxSpeed.map(HikeFormat.speed),
+            "Overall Avg Speed": standalone.averageSpeed.map { HikeFormat.speed($0) },
+            "Moving Avg Speed": standalone.movingAverageSpeed.map { HikeFormat.speed($0) },
+            "Max Speed": standalone.maxSpeed.map { HikeFormat.speed($0) },
         ]
         for (label, value) in expected {
             let stat = prepared.stats.first { stat in stat.label == label }
@@ -122,6 +123,10 @@ struct HikeDetailWorkloadTests {
         #expect(
             standalone.maxSpeed != nil,
             "the fixture has a fastest segment, so the comparison above has to have something to compare"
+        )
+        #expect(
+            standalone.movingAverageSpeed != nil,
+            "the fixture never stops, so both speed rows have to be present for the comparison to mean anything"
         )
         #expect(prepared.profile.coordinates.count == route.count)
     }

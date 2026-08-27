@@ -26,6 +26,30 @@ nonisolated enum TrailMatcher {
     static let denseMaximumSpeedMPS = 3.5
     static let minimumTransitionDistanceMeters = 75.0
     static let evidenceDistanceMarginFactor = 1.2
+    /// How much longer the trail a dense leg *declined* has to be than the
+    /// line it drew instead before the walker is asked about it.
+    ///
+    /// A dense leg is routed exactly one way — `optionLimit` is 1 off the
+    /// sparse path — so when the matcher is unsure about one it has no second
+    /// route to offer, only the trail it found against the raw GPS it fell
+    /// back to drawing. Offering that pair unconditionally is far too noisy to
+    /// ship: measured over the bundled 330-point walk, ordinary consumer noise
+    /// leaves 51–94 of 329 legs non-confident, which is a review screen of
+    /// 74–130 sections after every walk against 4–8 today.
+    ///
+    /// What separates the ones worth asking about is whether abstaining
+    /// actually cost the walker any distance. For an ordinary noisy leg it
+    /// costs nothing — the declined trail is a median 0.4–1.5 m *shorter* than
+    /// the zig-zag the noise drew, and the 90th percentile is under 5 m at
+    /// 8 m accuracy. A cut switchback corner is a different quantity
+    /// altogether: the trail rounds the apex for 46 m where the fixes stepped
+    /// 17.5 m straight across it, so the recording silently loses 29 m.
+    ///
+    /// This sits above the whole observed noise distribution and well below
+    /// that, so the corner is surfaced and the noise is not. Raising it hides
+    /// real lost distance; lowering it towards 10 m starts admitting ordinary
+    /// legs again — 11 of them at a pessimistic 12 m accuracy.
+    static let minimumDeclinedDetourMeters = 20.0
     static let widgetSourcedAccuracyWeight = 1.5
 
     /// When a leg stops being a stretch the matcher has to think harder about
@@ -166,7 +190,7 @@ nonisolated enum TrailMatcher {
         return TrailMatchResult(
             points: output,
             matchedLegCount: legsResult.matchedCount,
-            ambiguousLegCount: legsResult.ambiguousCount,
+            ambiguousLegCount: ambiguities.count,
             matchedTrailName: matchedTrailName,
             currentTrailName: currentTrailName,
             didMoveRoute: legsResult.didMoveRoute,
@@ -197,7 +221,6 @@ nonisolated extension TrailMatcher {
     struct MatchingLegsResult {
         let legs: [MatchLeg]
         let matchedCount: Int
-        let ambiguousCount: Int
         let trailNameCounts: [String: Int]
         let didMoveRoute: Bool
     }
@@ -206,7 +229,6 @@ nonisolated extension TrailMatcher {
     /// grouped so the per-leg work can take one `inout` rather than four.
     struct LegStats {
         var matchedCount = 0
-        var ambiguousCount = 0
         var trailNameCounts: [String: Int] = [:]
         var didMoveRoute = false
     }

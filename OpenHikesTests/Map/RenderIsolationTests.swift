@@ -15,6 +15,12 @@
 //    and
 //  * observing one property really doesn't wake observers of another.
 //
+//  Neither is true unconditionally, and the two halves point opposite ways:
+//  Observation *does* filter a write that compares equal on an `Equatable`
+//  property, and SwiftData's `@Model` does *not*. Several suites' zero
+//  assertions are really assertions about one or the other, so both are pinned
+//  here — see `Observation cost`.
+//
 //  So the tests here pin the *notification* behaviour these views are tuned
 //  against, and then check the producers that feed them at high frequency.
 //
@@ -23,6 +29,7 @@ import CoreLocation
 import Foundation
 import MapKit
 @testable import OpenHikes
+import SwiftUI
 import Testing
 
 /// Counts `withObservationTracking` notifications, re-registering after each
@@ -62,19 +69,6 @@ final class ObservationCounter {
     func settle() async {
         await settleDelegateHop()
     }
-}
-
-/// A bare coordinate-typed publisher, the shape `RouteHighlight` and
-/// `LocationManager` had before either compared for itself.
-///
-/// Owned by the tests rather than borrowed from the app: what the two tests
-/// below pin is Observation's own treatment of a non-`Equatable` value, which
-/// is the *premise* those models' guards rest on — so it has to be measurable
-/// on something unguarded, or the evidence for the guards disappears the moment
-/// they're added.
-@Observable
-final class CoordinatePublisher {
-    var coordinate: CLLocationCoordinate2D?
 }
 
 @Suite("Recording isolation")
@@ -233,69 +227,6 @@ private final class IsolationRecordingSource: RecordingLocationSource {
 
 @Suite("Observation cost")
 struct ObservationCostTests {
-    /// Observation filters a write that doesn't change an `Equatable` value.
-    /// So the hot paths' guards around `Double`/`Double?`/`CGFloat` state —
-    /// `if moved { tracker.liveTrackerDistance = … }` and friends — are
-    /// belt-and-braces on this toolchain: an unguarded equal assignment costs
-    /// nothing either. Pinned because the comments around those guards claim
-    /// otherwise, and because a future guard removed on this evidence should
-    /// fail loudly here if the runtime ever changes back.
-    @Test("an equal write to an Equatable property notifies nobody")
-    func equalEquatableWriteIsFiltered() async {
-        let tracker = TrackerState()
-        tracker.trackerDistance = 100
-        tracker.liveTrackerDistance = 100
-        let distanceCounter = ObservationCounter { _ = tracker.trackerDistance }
-        let liveCounter = ObservationCounter { _ = tracker.liveTrackerDistance }
-        await distanceCounter.settle()
-
-        tracker.trackerDistance = 100
-        tracker.liveTrackerDistance = 100
-        await distanceCounter.settle()
-        #expect(distanceCounter.count == 0)
-        #expect(liveCounter.count == 0)
-
-        tracker.trackerDistance = 200
-        await distanceCounter.settle()
-        #expect(distanceCounter.count == 1, "a real move must still reach the chart")
-    }
-
-    /// …but `CLLocationCoordinate2D` is not `Equatable`, so Observation has
-    /// no way to tell an unchanged position from a new one and notifies on
-    /// every assignment. That is why the two coordinate-typed publishers —
-    /// `RouteHighlight` and `LocationManager`, the two written most often
-    /// (drag frequency and 1 Hz respectively) — compare before assigning
-    /// instead of leaving it to the runtime.
-    @Test("an equal write to a coordinate notifies anyway")
-    func equalCoordinateWriteIsNotFiltered() async {
-        let publisher = CoordinatePublisher()
-        publisher.coordinate = CLLocationCoordinate2D(latitude: 47.63, longitude: 12.86)
-        let counter = ObservationCounter { _ = publisher.coordinate }
-        await counter.settle()
-
-        publisher.coordinate = CLLocationCoordinate2D(latitude: 47.63, longitude: 12.86)
-        await counter.settle()
-        #expect(
-            counter.count == 1,
-            "same place, still a notification — the coordinate publishers must compare for themselves"
-        )
-    }
-
-    /// The other half of the same idea: the guard genuinely costs nothing when
-    /// it holds.
-    @Test("a skipped write notifies nobody")
-    func skippedWriteIsSilent() async {
-        let publisher = CoordinatePublisher()
-        let counter = ObservationCounter { _ = publisher.coordinate }
-        await counter.settle()
-
-        // The shape `RouteHighlight.move(to:)` applies: only write when there's
-        // something to change.
-        if publisher.coordinate != nil { publisher.coordinate = nil }
-        await counter.settle()
-        #expect(counter.count == 0)
-    }
-
     /// The sheet's top edge is written at frame rate while dragging, and the
     /// map repositions its location button from it — but nothing in SwiftUI
     /// should hear about it.
@@ -571,12 +502,18 @@ struct LocationPublishingTests {
 
     /// CoreLocation can deliver far more often than once a second; the
     /// throttle is what keeps that off every observer downstream.
+    ///
+    /// Asserted on the published value rather than on a notification count.
+    /// `ObservationCounter` re-arms through a `Task`, so ten writes in one
+    /// runloop turn consume the single armed registration on the first and
+    /// reach the counter exactly once whether the throttle exists or not —
+    /// measured, by deleting `minimumPublishInterval` and watching this stay
+    /// green. `coordinate` is the only witness that can tell the two apart:
+    /// throttled it holds the *first* fix of the burst, unthrottled the last.
     @Test("a burst of fixes publishes once")
-    func burstIsThrottled() async {
+    func burstIsThrottled() {
         let clock = TestClock()
         let manager = LocationManager(clock: clock.read)
-        let counter = ObservationCounter { _ = manager.coordinate }
-        await counter.settle()
 
         for step in 0..<10 {
             manager.locationManager(
@@ -584,9 +521,18 @@ struct LocationPublishingTests {
                 didUpdateLocations: [CLLocation(latitude: 47.63 + Double(step) * 1e-4, longitude: 12.86)]
             )
         }
-        await counter.settle()
-        await counter.settle()
-        #expect(counter.count == 1, "ten fixes in one runloop turn should reach observers once")
+        // `onMainActor` runs the delegate body synchronously here, so there is
+        // a value to read without settling for one.
+        #expect(manager.coordinate?.latitude == 47.63, "the nine behind the first are inside the window")
+
+        // Past `minimumPublishInterval`, which is private; the sibling tests
+        // step the same 1.1s over it.
+        clock.advance(by: 1.1)
+        manager.locationManager(
+            CLLocationManager(),
+            didUpdateLocations: [CLLocation(latitude: 47.64, longitude: 12.86)]
+        )
+        #expect(manager.coordinate?.latitude == 47.64, "and the window reopens rather than latching shut")
     }
 
     /// A walker who has stopped — at a viewpoint, a hut, a photo — still gets

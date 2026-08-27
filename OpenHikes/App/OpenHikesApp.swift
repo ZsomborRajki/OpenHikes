@@ -71,18 +71,7 @@ struct OpenHikesApp: App {
         // without them. Re-checking on every foreground is how that heals;
         // it's a bounds comparison and no work when they're already right.
         .onChange(of: scenePhase) { _, phase in
-            // Marked before either handler runs so the event file carries the
-            // boundary itself. A hike is mostly spent with the screen off, and
-            // without this the log has no way to say which of its entries
-            // happened while anything was on screen — which is exactly the
-            // distinction between a render that cost a frame and one that
-            // cost a wakeup for nobody.
-            RenderSignpost.mark("ScenePhaseChanged", "\(phase)")
-            if phase == .active {
-                model.sceneDidBecomeActive()
-            } else if phase == .inactive || phase == .background {
-                model.sceneWillResignActive()
-            }
+            model.scenePhaseChanged(to: phase)
         }
     }
 }

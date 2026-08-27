@@ -133,10 +133,22 @@ final class RouteStyle {
     static let defaultWidth: Double = 3
     static let defaultPattern: RouteLinePattern = .default
 
-    /// Written only through ``apply(tint:width:pattern:)``, which filters a
-    /// write that changes nothing — the map's observer is one `Task` hop and a
-    /// renderer invalidation away, and a drag that returns a colour to where it
-    /// already was shouldn't pay for either.
+    /// Written only through ``apply(tint:width:pattern:)``, which restates the
+    /// followed hike's appearance on every notification — including the many
+    /// that change nothing, since SwiftData notifies on a same-value write to
+    /// `tintHex` as readily as on a real one. The map's observer is one `Task`
+    /// hop and a renderer invalidation away, and a drag that returns a colour
+    /// to where it already was shouldn't pay for either.
+    ///
+    /// What stops it is Observation's own expansion, which skips an assignment
+    /// that compares equal, and all three of these are `Equatable`. Say it out
+    /// loud, because the `if`s in `apply` read as though they are the filter
+    /// and they are not: delete all three and nothing downstream notices.
+    /// They are belt-and-braces over undocumented runtime behaviour, kept for
+    /// the same reason as the guard in `HikeRecorder`'s accepted-fix path.
+    /// `an equal write to the map's appearance types notifies nobody` in
+    /// `ObservationCostTests` is what would go red if that behaviour changed;
+    /// without it, this file's quiet would be nobody's decision.
     private(set) var tint: Color = defaultTint
     private(set) var width: Double = defaultWidth
     private(set) var pattern: RouteLinePattern = defaultPattern
@@ -146,10 +158,21 @@ final class RouteStyle {
     /// in flight from the previously followed hike carries the generation it
     /// was registered under and is dropped rather than allowed to reinstate
     /// that hike's colour over the newly selected one's.
+    ///
+    /// Redundant with the `self.trackedHike` re-read beside it for *that*
+    /// purpose — mutation-tested, either alone keeps the stale colour out — but
+    /// not for its other one: it is also what stops a stale callback re-arming
+    /// a second `withObservationTracking` registration, so every subsequent
+    /// write would be applied once per hike ever followed. No test covers that.
     @ObservationIgnored private var generation = 0
 
     /// The hike currently being tracked for style changes.
-    @ObservationIgnored private var trackedHike: Hike?
+    ///
+    /// Readable rather than fully private so a test can assert that following
+    /// `nil` lets go of it: the reference is never *acted* on once
+    /// `generation` moves, so nothing else observable would distinguish a
+    /// cleared field from a stale one.
+    @ObservationIgnored private(set) var trackedHike: Hike?
 
     /// Tracks `hike`'s tint, width and line pattern, or resets to the defaults
     /// with `nil`.
@@ -159,6 +182,12 @@ final class RouteStyle {
     func follow(_ hike: Hike?) {
         generation &+= 1
         guard let hike else {
+            // Cleared here rather than only overwritten by the next non-nil
+            // follow: the reference is harmless — `track(generation:)`
+            // re-guards, so a stale one is never acted on — but a `RouteStyle`
+            // that has been told to follow nothing should not still be holding
+            // a `Hike` from the store.
+            trackedHike = nil
             apply(tint: Self.defaultTint, width: Self.defaultWidth, pattern: Self.defaultPattern)
             return
         }

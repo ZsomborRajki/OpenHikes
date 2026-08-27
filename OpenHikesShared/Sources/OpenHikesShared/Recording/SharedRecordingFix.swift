@@ -162,9 +162,22 @@ struct PendingRecordingFixStore: Sendable {
         try withExclusiveLock {
             let removesSnapshot: Bool
             if let sessionID {
-                removesSnapshot = try loadRecordingUnlocked(
-                    from: recordingURL
-                )?.sessionID == sessionID
+                // A snapshot that cannot be decoded names no session, so it
+                // cannot claim to belong to a *different* recording and
+                // survive this clear. Letting the decode failure propagate —
+                // which is what this did — meant an unreadable snapshot
+                // outlived the recording it described: this is the only clear
+                // the stop path calls, so nothing else would ever remove it,
+                // and every later `append(_:validatingRecordingAt:)` raised
+                // against a file that had become permanent. Falling back to
+                // removal reaches the same end state as the session-less
+                // clear, which is the correct one for bytes that describe
+                // nothing.
+                if let existing = decodableRecordingUnlocked(from: recordingURL) {
+                    removesSnapshot = existing.sessionID == sessionID
+                } else {
+                    removesSnapshot = true
+                }
             } else {
                 removesSnapshot = true
             }
@@ -228,8 +241,27 @@ struct PendingRecordingFixStore: Sendable {
                 from: data
             )
         } catch {
+            // Still throws — the append path's caller has a fix in hand and
+            // has to know it was not persisted — but says what broke on the
+            // way out, so this stops being the only failure in the container
+            // whose cause has to be guessed at.
+            SharedStoreDiagnostics.report(
+                .decodeFailed(
+                    file: recordingURL.lastPathComponent,
+                    detail: SharedStoreDiagnostics.describe(error)
+                )
+            )
             throw SharedRecordingStoreError.io(error.localizedDescription)
         }
+    }
+
+    /// ``loadRecordingUnlocked(from:)`` for the caller that cannot act on the
+    /// difference between "no recording" and "a recording nobody can read":
+    /// both mean there is no session here to match against.
+    private func decodableRecordingUnlocked(
+        from recordingURL: URL
+    ) -> SharedRecordingSnapshot? {
+        try? loadRecordingUnlocked(from: recordingURL)
     }
 
     private func loadUnlocked() throws -> [SharedRecordingFix] {

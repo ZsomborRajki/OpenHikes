@@ -31,6 +31,11 @@ public struct UnitMercatorRect: Codable, Sendable, Equatable {
     public var width: Double
     public var height: Double
 
+    /// Takes the four fields as given. The only initializer that does not
+    /// check ``isFinite`` — it has no way to refuse — so it is the one place
+    /// a non-finite rect can enter. Nothing in the app or the widget calls
+    /// it; the two failable initializers below and `Codable` are the real
+    /// entry points, and `JSONDecoder` rejects a non-finite `Double` itself.
     public init(originX: Double, originY: Double, width: Double, height: Double) {
         self.originX = originX
         self.originY = originY
@@ -38,13 +43,47 @@ public struct UnitMercatorRect: Codable, Sendable, Equatable {
         self.height = height
     }
 
-    /// Bounding box of `coordinates`, or `nil` if there are none. A single
-    /// coordinate yields a zero-sized rect — callers pad it out.
+    /// Whether this rect is a real region: every field a number, so it can be
+    /// compared, framed and drawn.
+    ///
+    /// The invariant both failable initializers below enforce, and the reason
+    /// they are failable rather than total. A rect carrying `.nan` compares
+    /// unequal to **itself**, so `==` and ``isEquivalent(to:)`` answer "no"
+    /// forever — which downstream reads as a basemap that is permanently out
+    /// of date and a render pass that cannot recognize its own in-flight
+    /// work, re-entered on every selection change. Worse, nothing reports it:
+    /// `JSONEncoder` refuses a non-finite `Double` by default, so a manifest
+    /// built from one would simply never reach disk.
+    ///
+    /// This is deliberately weaker than ``Mercator/isRepresentable(latitude:longitude:)``.
+    /// A latitude past Mercator's limit is a real place and gets clamped;
+    /// longitude past the antimeridian is cyclic and is left alone on purpose.
+    /// Only `±∞` and `.nan` describe no region at all.
+    public var isFinite: Bool {
+        originX.isFinite && originY.isFinite && width.isFinite && height.isFinite
+    }
+
+    /// Bounding box of `coordinates`, or `nil` if there are none — or if any
+    /// one of them is non-finite. A single coordinate yields a zero-sized
+    /// rect — callers pad it out.
+    ///
+    /// One bad coordinate refuses the whole box rather than being skipped.
+    /// Skipping is what used to happen, by accident and only sometimes:
+    /// `min`/`max` return their first argument when the comparison is false,
+    /// so a `.nan` past index 0 lost every comparison and vanished, leaving a
+    /// plausible finite box framing a line that still had a hole in it, while
+    /// the same value at index 0 seeded the extremes and poisoned the rect.
+    /// Two different wrong answers for one bad point. See ``isFinite`` for
+    /// why a rect is never allowed to carry the value instead.
     public init?(bounding coordinates: [SharedTrailSnapshot.CodableCoordinate]) {
-        guard let first = coordinates.first else { return nil }
+        guard let first = coordinates.first, first.latitude.isFinite, first.longitude.isFinite else { return nil }
         let start = Mercator.unitPoint(latitude: first.latitude, longitude: first.longitude)
         var minX = start.x, maxX = start.x, minY = start.y, maxY = start.y
         for coordinate in coordinates.dropFirst() {
+            // Checked per point rather than in a pass of its own: a route is
+            // tens of thousands of points, and this way a bad one at index 3
+            // stops there.
+            guard coordinate.latitude.isFinite, coordinate.longitude.isFinite else { return nil }
             let point = Mercator.unitPoint(latitude: coordinate.latitude, longitude: coordinate.longitude)
             minX = min(minX, point.x); maxX = max(maxX, point.x)
             minY = min(minY, point.y); maxY = max(maxY, point.y)
@@ -62,6 +101,13 @@ public struct UnitMercatorRect: Codable, Sendable, Equatable {
         /// rather than assumed.
         public var x: Double
         public var y: Double
+
+        /// Every field a number. A non-finite reference point describes no
+        /// mapping, so the initializer taking it refuses rather than
+        /// propagating the value — see ``UnitMercatorRect/isFinite``.
+        public var isFinite: Bool {
+            latitude.isFinite && longitude.isFinite && x.isFinite && y.isFinite
+        }
 
         public init(latitude: Double, longitude: Double, x: Double, y: Double) {
             self.latitude = latitude
@@ -84,7 +130,15 @@ public struct UnitMercatorRect: Codable, Sendable, Equatable {
     /// positive extent — the one convention drawing code has to know.
     ///
     /// Returns `nil` if the two references are too close together on either
-    /// axis to derive a scale from.
+    /// axis to derive a scale from, or if any input — or the rect they work
+    /// out to — is non-finite (see ``isFinite``).
+    ///
+    /// The result is checked as well as the inputs because finite inputs are
+    /// not sufficient here: the scale is a *ratio*, so an image dimension
+    /// multiplied by a steep enough per-point factor overflows to `±∞` with
+    /// every argument a perfectly ordinary number. Guarding only the way in
+    /// would leave the promise ``isFinite`` makes true by inspection rather
+    /// than by construction.
     public init?(
         imageWidth: Double,
         imageHeight: Double,
@@ -93,6 +147,7 @@ public struct UnitMercatorRect: Codable, Sendable, Equatable {
     ) {
         let spanX = second.x - first.x
         let spanY = second.y - first.y
+        guard imageWidth.isFinite, imageHeight.isFinite, first.isFinite, second.isFinite else { return nil }
         guard abs(spanX) > 1, abs(spanY) > 1, imageWidth > 0, imageHeight > 0 else { return nil }
 
         let unitFirst = Mercator.unitPoint(latitude: first.latitude, longitude: first.longitude)
@@ -106,12 +161,14 @@ public struct UnitMercatorRect: Codable, Sendable, Equatable {
         let signedWidth = imageWidth * perPointX
         let signedHeight = imageHeight * perPointY
 
-        self.init(
+        let candidate = Self(
             originX: signedWidth >= 0 ? baseX : baseX + signedWidth,
             originY: signedHeight >= 0 ? baseY : baseY + signedHeight,
             width: abs(signedWidth),
             height: abs(signedHeight)
         )
+        guard candidate.isFinite else { return nil }
+        self = candidate
     }
 
     public var midX: Double { originX + width / 2 }

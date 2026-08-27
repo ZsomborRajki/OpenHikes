@@ -240,7 +240,6 @@ struct TrailWidgetTests {
         // equality against the one the widget says it schedules.
         let reload = TrailWidgetProvider.nextReload(after: now)
         #expect(timeline.policy == .after(reload), "a missed push would otherwise be permanent")
-        #expect(timeline.policy != .never)
         #expect(
             reload.timeIntervalSince(now) >= 5 * 3600,
             "a near reload would spend the daily budget the pushes need"

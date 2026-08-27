@@ -1,0 +1,4 @@
+# Every file in this repository has one owner. Review is a courtesy on a
+# single-developer project rather than a gate, but a CODEOWNERS entry is what
+# makes GitHub request it automatically.
+*       @ZsomborRajki
