@@ -63,6 +63,7 @@ struct PhotoDiscoverySheet: View {
         case let .importing(completed, total):
             importingView(completed: completed, total: total)
         case .results: grid
+        case .unsupported: unsupportedView
         }
     }
 
@@ -209,6 +210,25 @@ struct PhotoDiscoverySheet: View {
             )
         }
         .accessibilityIdentifier("photo-discovery-restricted")
+    }
+
+    /// A route with no clock on it. The offer is made on every hike, so this
+    /// is the screen that explains the one case it cannot be honoured on —
+    /// which is a better answer than a button that quietly isn't there.
+    private var unsupportedView: some View {
+        ContentUnavailableView {
+            Label("No Times on This Route", systemImage: "clock.badge.questionmark")
+        } description: {
+            Text(
+                """
+                This hike\u{2019}s route doesn\u{2019}t record when each point \
+                was reached, so there is nothing to match a photo\u{2019}s own \
+                timestamp against. Hikes you record in OpenHikes always carry \
+                those times.
+                """
+            )
+        }
+        .accessibilityIdentifier("photo-discovery-unsupported")
     }
 
     /// What a cell says to VoiceOver: when the picture was taken, whether it

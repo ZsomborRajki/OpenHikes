@@ -16,8 +16,16 @@ struct RecordingView: View {
     /// Offers the map's camera pill while a walk is being recorded. Optional
     /// so previews and tests can build this view without one.
     var photoCapture: PhotoCaptureController?
+    /// Draws the photos already taken on this walk as pins on the live track,
+    /// the same way a saved hike's detail screen draws its own. Optional for
+    /// the same reason as above.
+    var photoPins: PhotoMapPinController?
     var onSaved: (Hike) -> Void
     var onDiscarded: (UUID?) -> Void
+    /// Pushes the gallery when one of those pins is tapped. Carries the draft
+    /// with it because the caller builds a route out of the pair, and the
+    /// recorder's hike is this screen's to know, not the sheet's.
+    var onOpenPhoto: (Hike, HikePhoto) -> Void = { _, _ in /* no-op default */ }
 
     private var recordingFailure: RecordingFailure? {
         if case let .failed(failure) = recorder.phase {
@@ -74,6 +82,17 @@ struct RecordingView: View {
         .photoCaptureSubject(photoCapture, for: recorder.currentHike) {
             PhotoTrailAnchor.recordingCoordinate(recorder.lastAcceptedPoint)
         }
+        // …and each one stands on the map as soon as it is taken, rather than
+        // only once the walk has been saved. A background because the claim is
+        // all this draws — see ``RecordingPhotoPins`` for why it is a separate
+        // view rather than a modifier on this one.
+        .background {
+            if let hike = recorder.currentHike {
+                RecordingPhotoPins(hike: hike, controller: photoPins) { photo in
+                    onOpenPhoto(hike, photo)
+                }
+            }
+        }
         // The phase is a coloured dot and a word at the top of a scrolling
         // screen, so a change nobody is looking at is a change nobody hears.
         .onChange(of: recorder.phase) { _, phase in
@@ -93,6 +112,34 @@ struct RecordingView: View {
             #endif
             Button("OK", role: .cancel) { /* no-op */ }
         }
+    }
+}
+
+/// The photos already taken on this walk, as pins on the map's live track.
+///
+/// Its own view for the reason ``HikePhotoSection`` is one on the detail
+/// screen, and with rather more at stake here: `RecordingView`'s body reads
+/// `recorder.stats`, so it re-runs on every accepted fix — and `orderedPhotos`
+/// is a full sort behind a computed property. Reading the gallery from up
+/// there would sort it once per GPS fix, for the whole of a six-hour walk, to
+/// produce the same handful of pins every time.
+///
+/// It draws nothing itself. The pins are MapKit annotations published through
+/// ``PhotoMapPinController``; this exists only to own the claim, which is why
+/// it is a zero-sized background rather than anything on the screen.
+private struct RecordingPhotoPins: View {
+    let hike: Hike
+    var controller: PhotoMapPinController?
+    var onOpen: (HikePhoto) -> Void
+
+    var body: some View {
+        RenderSignpost.mark("RecordingPhotoPinsBody", "\(hike.photos.count) photos")
+        return Color.clear
+            .frame(width: 0, height: 0)
+            .photoMapPins(controller, photos: hike.orderedPhotos) { photoID in
+                guard let photo = hike.photos.first(where: { $0.id == photoID }) else { return }
+                onOpen(photo)
+            }
     }
 }
 

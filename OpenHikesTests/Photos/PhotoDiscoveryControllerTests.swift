@@ -30,7 +30,16 @@ import Testing
 
 @Suite("Photo discovery controller")
 struct PhotoDiscoveryControllerTests {
-    @Test("a hike with no timestamps never raises the permission prompt")
+    /// The button that opens this flow is offered on every hike, including the
+    /// ones it cannot possibly match on — so the sheet has to be able to say
+    /// *why* nothing happened, and has to be able to say it without spending
+    /// somebody's photo-library permission to find out.
+    ///
+    /// Both halves are asserted here: the phase is ``Phase/unsupported`` and
+    /// not ``Phase/empty``, which is what lets the sheet distinguish "this
+    /// route has no clock on it" from "your library had nothing from that
+    /// day"; and neither the prompt nor the fetch was reached.
+    @Test("a hike with no timestamps is unsupported, and raises no prompt")
     func hikeWithoutTimestampsAsksForNothing() async throws {
         let library = StubPhotoLibraryFixture(assets: [PhotoDiscoveryFixture.asset("a", atStep: 2)])
         let controller = PhotoDiscoveryController(reader: library)
@@ -47,7 +56,9 @@ struct PhotoDiscoveryControllerTests {
 
         await controller.search(in: hike)
 
-        #expect(controller.phase == .empty)
+        #expect(controller.phase == .unsupported)
+        #expect(controller.phase != .empty)
+        #expect(!controller.canImport)
         #expect(library.calls.withLock(\.accessRequests) == 0)
         #expect(library.calls.withLock(\.fetches) == 0)
     }

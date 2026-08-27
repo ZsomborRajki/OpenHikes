@@ -5,10 +5,10 @@
 //  Where MetricKit reports live once they arrive, which is on this device and
 //  nowhere else.
 //
-//  `CODE_REVIEW.md` states the position this file implements: "For battery
-//  telemetry, prefer native Instruments, signposts, and current MetricKit
-//  reporting rather than an analytics SDK that adds its own network and
-//  background cost." A hiking app that opens a connection to report on how
+//  `PERFORMANCE.md` states the position this file implements: for battery
+//  telemetry, prefer native Instruments, signposts and MetricKit rather than
+//  an analytics SDK that adds its own network and background cost. A hiking
+//  app that opens a connection to report on how
 //  carefully it avoids opening connections would be a joke at its own expense,
 //  so nothing here uploads anything. A report is written to Application
 //  Support, shown in Settings, and leaves the device only if the walker picks

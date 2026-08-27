@@ -2,9 +2,9 @@
 //  DirectionalPolylineRendererTests.swift
 //  OpenHikesTests
 //
-//  `CODE_REVIEW.md` lists this renderer as lacking a direct suite, and
-//  `MapCoordinatorTests` only ever checks that the coordinator hands one back
-//  with the right stroke, width and pattern on it. Nothing drove `draw`.
+//  This suite exists because `MapCoordinatorTests` only ever checks that the
+//  coordinator hands a renderer back with the right stroke, width and pattern
+//  on it. Nothing drove `draw`.
 //
 //  Two things are worth driving. The chevron pass is the app's own drawing
 //  rather than MapKit's, so a pattern that carries chevrons has to actually

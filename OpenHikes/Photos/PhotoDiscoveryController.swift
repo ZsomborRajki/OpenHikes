@@ -58,6 +58,12 @@ final class PhotoDiscoveryController {
         case importing(completed: Int, total: Int)
         case results
         case searching
+        /// The route carries no timestamps, so there is no clock to look a
+        /// photograph up against. Distinct from ``empty``, which means the
+        /// question was asked and came back with nothing: here it was never
+        /// askable, and the sheet says so rather than reporting a search it
+        /// did not run.
+        case unsupported
     }
 
     private(set) var phase = Phase.idle
@@ -92,7 +98,7 @@ final class PhotoDiscoveryController {
     /// rather than offered twice.
     func search(in hike: Hike) async {
         guard let timeline = hike.photoTimeline else {
-            phase = .empty
+            phase = .unsupported
             return
         }
         phase = .searching

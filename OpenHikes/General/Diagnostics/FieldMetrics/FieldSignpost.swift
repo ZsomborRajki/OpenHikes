@@ -19,8 +19,8 @@
 //
 //  | Span | The question it answers |
 //  |---|---|
-//  | `RecordingSession` | "Measure a real hike-length recording's energy" — `PERFORMANCE.md`, P2 |
-//  | `OfflineDownload` | "Auto-save and a maximum-budget offline download" — `CODE_REVIEW.md`'s battery plan, item 5 |
+//  | `RecordingSession` | "Measure a real hike-length recording's energy" — `PERFORMANCE.md`, "Blind spots" |
+//  | `OfflineDownload` | "Auto-save and a maximum-budget offline download" — `PERFORMANCE.md`, "Validating on a device" |
 //  | `HikeImport` | GPX parse, statistics and first render, end to end |
 //  | `TrailGraphPrefetch` | What reaching Overpass mid-hike costs, radio included |
 //
@@ -127,10 +127,10 @@ nonisolated enum FieldSignpost {
 // MARK: - Extended launch
 
 extension MXLaunchTaskID {
-    /// The span `PERFORMANCE.md`'s Finding 1 measures at "~370 ms between the
-    /// first body and a free main thread", of which "~62 ms is `MKMapView`
-    /// construction and the rest is a sheet that renders three to four times
-    /// before settling".
+    /// The span `PERFORMANCE.md`'s launch finding measures as the gap between
+    /// the first SwiftUI body and a free main thread, most of which is
+    /// `MKMapView` construction and a sheet that renders several times before
+    /// it settles.
     ///
     /// `histogrammedTimeToFirstDraw` stops at the first CA commit and so ends
     /// *before* any of that; on its own it would report the app as launching

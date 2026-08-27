@@ -153,10 +153,10 @@ nonisolated struct LocationAccuracyBreakdown: Codable, Sendable, Equatable {
 
 /// Why the process went away.
 ///
-/// `PERFORMANCE.md`'s Finding 2 spent a whole section deciding that a 210 MB
+/// `PERFORMANCE.md` spends a whole section establishing that a 210 MB
 /// reading was the automation rather than the app, and closed on the worry it
-/// could not settle: "210 MB resident is where a backgrounded recording starts
-/// being a jetsam candidate, and a recording that gets killed loses the hike."
+/// could not settle: a backgrounded recording that grows toward that figure is
+/// a jetsam candidate, and a recording that gets killed loses the hike.
 /// ``backgroundMemoryLimitExits`` and ``backgroundMemoryPressureExits`` settle
 /// it with the only evidence that counts — how often it happened to a real
 /// walker mid-hike.
@@ -279,12 +279,12 @@ nonisolated struct FieldMetricsDigest: Codable, Sendable, Equatable {
     var gpuSeconds: Double?
     var locationAccuracy: LocationAccuracyBreakdown?
 
-    // Launch — `PERFORMANCE.md` Finding 1 / P1.
+    // Launch — `PERFORMANCE.md`'s P1 launch finding.
     var timeToFirstDraw: HistogramSummary?
     var optimizedTimeToFirstDraw: HistogramSummary?
     /// The span `FieldSignpost` brackets with `extendLaunchMeasurement`: first
-    /// frame *plus* the map's first real render. Finding 1 measures the same
-    /// span at ~370 ms in the Simulator and has no field number for it.
+    /// frame *plus* the map's first real render. The launch finding measures
+    /// the same span in the Simulator and has no field number for it.
     var extendedLaunch: HistogramSummary?
     var resumeTime: HistogramSummary?
 

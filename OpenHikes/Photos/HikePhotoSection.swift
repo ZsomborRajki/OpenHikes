@@ -2,8 +2,17 @@
 //  HikePhotoSection.swift
 //  OpenHikes
 //
-//  The gallery strip on a hike's detail screen: a row of small squares, above
-//  the surface breakdown and below the numbers.
+//  The photo section of a hike's detail screen, above the surface breakdown
+//  and below the numbers: a row of small squares when there are photos, and
+//  the offer to go and find some whether there are or not.
+//
+//  The section is unconditional. It used to render nothing at all on a hike
+//  nobody had photographed, and then nothing but a button — each gated on a
+//  property of the route the user cannot see. A control that appears on some
+//  hikes and not others is a feature people conclude does not exist, which is
+//  exactly what happened. It is always here now, and the one case it cannot
+//  be honoured on is explained by the sheet it opens rather than by its
+//  absence.
 //
 //  Its own view, for the reason every other section on that screen is its own
 //  view — taking a photo writes `hike.photos`, and that write should redraw a
@@ -48,12 +57,25 @@ struct HikePhotoSection: View {
         // tile decode — becomes visible in the report rather than being
         // argued about.
         RenderSignpost.mark("HikePhotoSectionBody", "\(hike.photos.count) photos")
-        return Group {
-            if hike.hasPhotos {
-                gallery(hike.orderedPhotos)
-            } else if hike.canMatchLibraryPhotos {
-                placeholder
+        // Ordered once and handed down. `orderedPhotos` sorts, and reading it
+        // from both the strip and the caption below would sort twice for one
+        // pass.
+        let photos = hike.orderedPhotos
+        return VStack(alignment: .leading, spacing: 12) {
+            Text("Photos")
+                .font(.headline)
+                .frame(maxWidth: .infinity, alignment: .leading)
+                .accessibilityAddTraits(.isHeader)
+
+            if !photos.isEmpty {
+                gallery(photos)
             }
+
+            discoverButton
+
+            Text(caption(for: photos))
+                .font(.caption2)
+                .foregroundStyle(.secondary)
         }
         // Inside the sheet, like every other modal this app presents: the
         // bottom sheet is never taken down, and a view can only have one
@@ -64,39 +86,18 @@ struct HikePhotoSection: View {
         }
     }
 
-    /// What a hike with no photos shows: the offer to go and find some.
+    /// The offer to go and find photographs of this walk, on every hike and in
+    /// every state.
     ///
-    /// The screen used to render nothing at all here, which was right while
-    /// the only way to get a photo onto a hike was to have had OpenHikes open
-    /// at the time. It isn't any more — most people's pictures of a walk are
-    /// taken with the system camera — and a feature nobody can see is a
-    /// feature nobody has.
-    ///
-    /// Shown only when the route carries timestamps, because that is the whole
-    /// basis of the match: on a GPX exported without them there is nothing to
-    /// look up, and a button that could only ever report failure is worse than
-    /// no button.
-    private var placeholder: some View {
-        VStack(alignment: .leading, spacing: 8) {
-            Text("Photos")
-                .font(.headline)
-                .frame(maxWidth: .infinity, alignment: .leading)
-                .accessibilityAddTraits(.isHeader)
-
-            discoverButton
-
-            Text(
-                """
-                OpenHikes can look through your photo library for pictures \
-                taken while you walked this hike, and pin each one to the \
-                point of the trail you were on.
-                """
-            )
-            .font(.caption2)
-            .foregroundStyle(.secondary)
-        }
-    }
-
+    /// It used to be hidden on a route without timestamps, on the argument
+    /// that a button which could only report failure is worse than no button.
+    /// That argument was wrong in practice: a control that comes and goes
+    /// depending on a property of the route the user cannot see is a feature
+    /// they cannot find, and "why is there no button here" is a worse question
+    /// than "why did it find nothing". The sheet now has a state that answers
+    /// the second one — see ``PhotoDiscoveryController/Phase/unsupported`` —
+    /// and asking it costs no photo-library permission, because the timeline
+    /// is built before access is requested.
     private var discoverButton: some View {
         Button {
             isDiscovering = true
@@ -111,70 +112,83 @@ struct HikePhotoSection: View {
         .accessibilityIdentifier("photo-discovery-button")
     }
 
-    @ViewBuilder
+    /// The horizontal strip of thumbnails, drawn only when there is at least
+    /// one.
+    ///
+    /// The pins go up from here rather than from the section around it,
+    /// deliberately: deleting the last photo takes this subtree down, and its
+    /// `onDisappear` is what clears the pins that were standing for it. Moving
+    /// the modifier up to the always-present container would leave a deleted
+    /// photo's marker on the map.
     private func gallery(_ photos: [HikePhoto]) -> some View {
-        VStack(alignment: .leading, spacing: 12) {
-            Text("Photos")
-                .font(.headline)
-                .frame(maxWidth: .infinity, alignment: .leading)
-                .accessibilityAddTraits(.isHeader)
-
-            ScrollView(.horizontal) {
-                HStack(spacing: Self.tileSpacing) {
-                    ForEach(photos) { photo in
-                        Button {
-                            onOpen(photo)
-                        } label: {
-                            HikePhotoThumbnail(
-                                photo: photo,
-                                store: store,
-                                size: Self.tileSize,
-                                cornerRadius: Self.cornerRadius
-                            )
-                        }
-                        .buttonStyle(.plain)
-                        .accessibilityLabel(Self.label(for: photo, among: photos))
-                        .accessibilityIdentifier("hike-photo-\(photo.id.uuidString)")
+        ScrollView(.horizontal) {
+            HStack(spacing: Self.tileSpacing) {
+                ForEach(photos) { photo in
+                    Button {
+                        onOpen(photo)
+                    } label: {
+                        HikePhotoThumbnail(
+                            photo: photo,
+                            store: store,
+                            size: Self.tileSize,
+                            cornerRadius: Self.cornerRadius
+                        )
                     }
+                    .buttonStyle(.plain)
+                    .accessibilityLabel(Self.label(for: photo, among: photos))
+                    .accessibilityIdentifier("hike-photo-\(photo.id.uuidString)")
                 }
-                // Room for the tiles' shadows and for a finger to start a
-                // scroll from the very edge of the row.
-                .padding(.vertical, 2)
             }
-            .scrollIndicators(.hidden)
-            // On the strip and deliberately not on the `VStack` around it.
-            // SwiftUI pushes a container's identifier down onto every
-            // descendant, so an identifier here *and* one on the stack leaves
-            // the heading, the strip and the footnote all answering to the
-            // stack's name — and the strip unreachable under its own. That is
-            // what it did until a performance scenario went looking for it.
-            .accessibilityIdentifier("hike-photo-strip")
-
-            Text(footnote(count: photos.count, anchored: photos.count(where: \.isAnchored)))
-                .font(.caption2)
-                .foregroundStyle(.secondary)
-
-            // Offered here as well as on the empty placeholder: a walk almost
-            // never produces all its pictures through one route, and somebody
-            // who took two photos in the app still has the other twenty on
-            // their camera roll.
-            if hike.canMatchLibraryPhotos {
-                discoverButton
-            }
+            // Room for the tiles' shadows and for a finger to start a
+            // scroll from the very edge of the row.
+            .padding(.vertical, 2)
         }
+        .scrollIndicators(.hidden)
+        // On the strip and deliberately not on the `VStack` around it.
+        // SwiftUI pushes a container's identifier down onto every
+        // descendant, so an identifier here *and* one on the stack leaves
+        // the heading, the strip and the footnote all answering to the
+        // stack's name — and the strip unreachable under its own. That is
+        // what it did until a performance scenario went looking for it.
+        .accessibilityIdentifier("hike-photo-strip")
         // Published from here rather than from `HikeDetailView`, because this
         // is already the body that reads `hike.photos` — the whole reason this
         // section is its own view. Attaching it a level up would put a photo
         // capture through the elevation chart, the stats grid and the action
         // bar to reach the map.
-        //
-        // Inside the `if` above it, deliberately: deleting the last photo
-        // takes this view down, and its `onDisappear` is what clears the pins
-        // that were standing for it.
         .photoMapPins(mapPins, photos: photos) { photoID in
             guard let photo = hike.photos.first(where: { $0.id == photoID }) else { return }
             onOpen(photo)
         }
+    }
+
+    /// The line under the strip and the button.
+    ///
+    /// Four things to say, and which one is true is the fastest way for
+    /// somebody to tell whether the button in front of them is going to be
+    /// able to do anything.
+    private func caption(for photos: [HikePhoto]) -> String {
+        guard hike.canMatchLibraryPhotos else {
+            return String(
+                localized: """
+                    This hike\u{2019}s route doesn\u{2019}t record when each point was \
+                    reached, so photos can\u{2019}t be matched to it by time.
+                    """
+            )
+        }
+        guard !photos.isEmpty else {
+            return String(
+                localized: """
+                    OpenHikes can look through your photo library for pictures \
+                    taken while you walked this hike, and pin each one to the \
+                    point of the trail you were on.
+                    """
+            )
+        }
+        return footnote(
+            count: photos.count,
+            anchored: photos.count(where: \.isAnchored)
+        )
     }
 
     /// A tile draws a picture and nothing else, so its position in the walk is

@@ -154,8 +154,8 @@ final class OfflineTileDownloader {
         let maxZoom = max(source.maximumZ, Self.minZoom)
         // Bracketed for MetricKit rather than for `RenderSignpost`: what a
         // maximum-budget download costs in CPU, footprint and *logical writes*
-        // on a real phone is the one item in `CODE_REVIEW.md`'s battery
-        // validation plan that no simulator run can answer, because the
+        // on a real phone is the one item in `PERFORMANCE.md`'s "Validating on
+        // a device" list that no simulator run can answer, because the
         // simulator writes to a Mac's SSD.
         let span = FieldSignpost.begin(.offlineDownload)
         task = Task { [weak self] in

@@ -273,8 +273,12 @@ struct MapSheet: View {
                 recorder: appModel.hikeRecorder,
                 mapController: mapController,
                 photoCapture: photoCapture,
+                photoPins: photoPins,
                 onSaved: showSavedRecording,
-                onDiscarded: closeDiscardedRecording
+                onDiscarded: closeDiscardedRecording,
+                onOpenPhoto: { hike, photo in
+                    presentation.path.append(.photo(hike, photo.id))
+                }
             )
         case let .photo(hike, photoID):
             HikePhotoViewer(

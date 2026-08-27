@@ -541,8 +541,8 @@ private extension HikeDetailView {
 
     // MARK: Photos
 
-    /// Renders nothing until there is a photo, so a hike nobody has
-    /// photographed reads exactly as it did before the feature existed.
+    /// Always drawn, on every hike: the strip when there are photos, and the
+    /// offer to go and find some either way. See ``HikePhotoSection``.
     private var photoSection: some View {
         HikePhotoSection(hike: hike, mapPins: photoPins, onOpen: onOpenPhoto)
     }

@@ -188,8 +188,8 @@ nonisolated struct FieldMetricsDigestTests {
 
     @Test("the pocket share is background GPS against the app's whole lifetime")
     func backgroundLocationShare() {
-        // "Time in a pocket": screen off, recording running. Finding 4's
-        // 0.9% duty cycle is a Simulator figure; this is the field twin.
+        // "Time in a pocket": screen off, recording running. The Simulator's
+        // location-funnel duty cycle is a synthetic figure; this is the field twin.
         let digest = FieldMetricsDigest(
             backgroundSeconds: 4000,
             backgroundLocationSeconds: 3000
