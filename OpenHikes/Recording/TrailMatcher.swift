@@ -16,8 +16,6 @@ nonisolated enum TrailMatcher {
     typealias Candidate = TrailMatcherCandidate
     typealias GraphIndex = TrailMatcherGraphIndex
     typealias Transition = TrailMatcherTransition
-    typealias TransitionAlternative = TrailMatcherTransitionAlternative
-    typealias TransitionParameters = TrailMatcherTransitionParameters
 
     static let minimumSigmaMeters = 4.0
     static let confidenceRatio = 1.15

@@ -98,12 +98,6 @@ nonisolated struct PhotosLibraryReader: PhotoLibraryReading {
         )
     }
 
-    /// What the library would answer without prompting, so a screen can be
-    /// drawn for a user who has already refused without asking them again.
-    func currentAccess() -> PhotoLibraryAccess {
-        Self.access(of: PHPhotoLibrary.authorizationStatus(for: .readWrite))
-    }
-
     func assets(takenIn window: ClosedRange<Date>) async -> [PhotoLibraryAsset] {
         await Self.fetchAssets(takenIn: window)
     }

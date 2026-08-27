@@ -147,6 +147,25 @@ final class OpenHikesModel {
         )
     }
 
+    /// Where a test host's stubbed entitlement remembers its answer.
+    ///
+    /// UI tests already run against their own defaults suite, so that is where
+    /// it goes. A unit-test host does not: both unit bundles are hosted by the
+    /// app, which launches against `.standard`, and a stub publishing there
+    /// would leave `purchases.lastKnownMapEntitlement` in the developer's own
+    /// defaults and decide which map their *next real launch* draws. A named
+    /// suite, wiped as it is handed over, keeps the write path exercised and
+    /// lands nowhere that outlives the run.
+    private static let testHostEntitlementSuite = "com.openhikes.testhost.entitlement"
+
+    private static func entitlementDefaults(_ launchDefaults: UserDefaults) -> UserDefaults {
+        guard !AppLaunchEnvironment.isUITesting,
+              let isolated = UserDefaults(suiteName: testHostEntitlementSuite)
+        else { return launchDefaults }
+        isolated.removePersistentDomain(forName: testHostEntitlementSuite)
+        return isolated
+    }
+
     private static func loadDefaultContainer(syncsToCloud: Bool) -> ContainerLoadResult {
         do {
             return try loadContainer(
@@ -225,12 +244,13 @@ final class OpenHikesModel {
         // only a real launch starts StoreKit.
         if AppLaunchEnvironment.isRunningTests {
             let stub = MapEntitlementStore(
+                defaults: Self.entitlementDefaults(defaults),
                 currentEntitlements: { AppLaunchEnvironment.grantsPaidMaps }
             )
             entitlement = stub
             Task { await stub.refresh() }
         } else {
-            let store = MapEntitlementStore()
+            let store = MapEntitlementStore(defaults: defaults)
             entitlement = store
             store.start()
         }

@@ -36,6 +36,8 @@ nonisolated enum AppLaunchEnvironment {
         /// ``AppLaunchEnvironment/stubbedLibraryPhotoCount``.
         let stubbedLibraryPhotoCount: Int?
 
+        // periphery:ignore - read only from the `#else` branch below, which
+        // a Debug-configuration scan never compiles.
         /// What every shipping launch gets, and what a debug launch with no
         /// arguments parses to.
         static let production = Self()

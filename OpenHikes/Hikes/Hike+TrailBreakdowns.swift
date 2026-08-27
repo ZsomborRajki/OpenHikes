@@ -26,13 +26,13 @@ extension Hike {
                 recognised[surface] = meters
             }
             guard !recognised.isEmpty else { return nil }
-            let breakdown = TrailSurfaceBreakdown(metersBySurface: recognised)
+            let breakdown = TrailSurfaceBreakdown(metersByCategory: recognised)
             return breakdown.isEmpty ? nil : breakdown
         }
         set {
             var stored: [String: Double] = [:]
             for share in newValue?.shares ?? [] {
-                stored[share.surface.rawValue] = share.meters
+                stored[share.category.rawValue] = share.meters
             }
             surfaceMetersByCategory = stored
         }
@@ -50,15 +50,13 @@ extension Hike {
                 recognised[difficulty] = meters
             }
             guard !recognised.isEmpty else { return nil }
-            let breakdown = TrailDifficultyBreakdown(
-                metersByDifficulty: recognised
-            )
+            let breakdown = TrailDifficultyBreakdown(metersByCategory: recognised)
             return breakdown.isEmpty ? nil : breakdown
         }
         set {
             var stored: [String: Double] = [:]
             for share in newValue?.shares ?? [] {
-                stored[share.difficulty.rawValue] = share.meters
+                stored[share.category.rawValue] = share.meters
             }
             difficultyMetersByGrade = stored
         }

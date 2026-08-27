@@ -16,7 +16,7 @@ import Foundation
 ///
 /// The cases are declared alphabetically; the order they are *presented* in —
 /// easiest grade first — is ``displayOrdering``.
-nonisolated enum TrailDifficulty: String, CaseIterable, Codable, Hashable, Sendable {
+nonisolated enum TrailDifficulty: String, CaseIterable, Codable, Hashable, Sendable, TrailCategory {
     /// Broken terrain; continuous use of hands required.
     case alpineHiking = "alpine_hiking"
     /// Exposed and technically demanding; rope experience an advantage.

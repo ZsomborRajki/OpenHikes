@@ -277,6 +277,102 @@ struct PhotoCaptureControllerTests {
 
         #expect(controller.isAvailable == false)
     }
+
+    /// The picker's loop checks `Task.isCancelled` on every asset, and before
+    /// the controller held the task nothing could ever make that check true.
+    /// A pick of thirty photos therefore kept loading, and kept writing, into a
+    /// hike the user had already navigated away from.
+    @Test("an import whose sheet empties out is cancelled")
+    func importIsCancelledWhenTheStackEmpties() async throws {
+        let context = try Fixture.modelContext()
+        let controller = PhotoCaptureController()
+        controller.attach(to: Fixture.hike(in: context)) { nil }
+        let progress = ImportProgress()
+
+        controller.runLibraryImport { await progress.run() }
+        await settleDelegateHop(until: "the import to start working") {
+            progress.items > 0
+        }
+
+        controller.setHostScreenPresent(false)
+        await settleDelegateHop(until: "the import to notice it was cancelled") {
+            progress.wasCancelled
+        }
+
+        #expect(progress.wasCancelled)
+        #expect(!progress.finished)
+    }
+
+    /// Every asset in one pick is filed under a single anchor resolved when the
+    /// picker closed, so a second pick is a newer answer to the same question
+    /// rather than more of the same one — and two loops appending to one hike
+    /// interleave their photos.
+    @Test("a second pick supersedes the one still working")
+    func aSecondImportCancelsTheFirst() async throws {
+        let context = try Fixture.modelContext()
+        let controller = PhotoCaptureController()
+        controller.attach(to: Fixture.hike(in: context)) { nil }
+        let first = ImportProgress()
+        let second = ImportProgress()
+
+        controller.runLibraryImport { await first.run() }
+        await settleDelegateHop(until: "the first import to start working") {
+            first.items > 0
+        }
+
+        controller.runLibraryImport { await second.run(steps: 2) }
+        await settleDelegateHop(until: "the first import to give way to the second") {
+            first.wasCancelled && second.finished
+        }
+
+        #expect(first.wasCancelled)
+        #expect(!first.finished)
+        #expect(second.finished)
+    }
+
+    /// A pop is routinely transient — pushing the photo viewer over a hike
+    /// releases and re-claims the same walk — so cancellation hangs off the
+    /// sheet's path and not off `detach`, which would kill an import every
+    /// time the user opened one of the photos it had already filed.
+    @Test("opening a photo over the hike does not cancel its import")
+    func detachAloneDoesNotCancelAnImport() async throws {
+        let context = try Fixture.modelContext()
+        let hike = Fixture.hike(in: context)
+        let controller = PhotoCaptureController()
+        let token = controller.attach(to: hike) { nil }
+        let progress = ImportProgress()
+
+        controller.runLibraryImport { await progress.run(steps: 3) }
+        controller.attach(to: hike) { nil }
+        controller.detach(token: token)
+
+        await settleDelegateHop(until: "the import to run to completion") {
+            progress.finished
+        }
+        #expect(progress.finished)
+        #expect(!progress.wasCancelled)
+    }
+}
+
+/// A stand-in for the picker's per-asset loop: it yields between items, so a
+/// cancellation raised while it is working is seen on the next one.
+@MainActor
+private final class ImportProgress {
+    private(set) var items = 0
+    private(set) var wasCancelled = false
+    private(set) var finished = false
+
+    func run(steps: Int = 10_000) async {
+        for _ in 0..<steps {
+            guard !Task.isCancelled else {
+                wasCancelled = true
+                return
+            }
+            items += 1
+            await Task.yield()
+        }
+        finished = true
+    }
 }
 
 /// A coordinate a test can move after handing out the closure that reads it.

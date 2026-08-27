@@ -1,38 +1,78 @@
 //
-//  TrailSurfaceBreakdown.swift
+//  TrailBreakdown.swift
 //  OpenHikes
 //
-//  How much of a route runs on each kind of surface, derived by projecting the
-//  route onto the cached OSM trail graph and reading the `surface` tagging off
-//  the ways it lands on.
+//  How much of a route runs in each category of some OSM tag, and the one walk
+//  over the trail graph that measures it.
+//
+//  Surface and difficulty are the same measurement asked of two different tags:
+//  project the route onto the cached graph, read a tag off the ways it lands
+//  on, and total the metres per category. They were written twice — two
+//  structurally identical value types and two sampling loops that matched each
+//  other line for line — and the hazard in that is not size, it is drift: a fix
+//  to the stickiness rule or the cancellation cadence lands in one copy and
+//  quietly not in the other.
+//
+//  So the geometry lives here once and the categories supply only what
+//  genuinely differs between them: how a way is classified, what "no way at
+//  all" is called, and what order the results read best in.
 //
 
 import CoreLocation
 import Foundation
 
-nonisolated struct TrailSurfaceBreakdown: Equatable, Sendable {
+/// A category a stretch of route can be attributed to by reading one OSM tag.
+///
+/// Conformers are ``TrailSurface`` and ``TrailDifficulty``. Everything a
+/// breakdown needs from them is here; everything about *presenting* one — names,
+/// colours, summaries — deliberately is not, because the analysis has no view
+/// layer and should not gain one.
+nonisolated protocol TrailCategory: Hashable, Sendable {
+    /// The natural presentation order, which is also the tie-break between two
+    /// categories covering exactly the same distance.
+    static var displayOrdering: [Self] { get }
+    /// What a stretch with no way beneath it is called. Reported rather than
+    /// snapped to the nearest thing available — see
+    /// ``TrailBreakdownAnalyzer/breakdown(of:route:graph:toleranceMeters:)``.
+    static var unmapped: Self { get }
+    /// Whether this category came from actual OSM tagging, as opposed to
+    /// describing the absence of it.
+    var isSurveyed: Bool { get }
+    /// The category the tagging on `edge` puts a sample in.
+    init(edge: TrailGraphEdge)
+}
+
+nonisolated extension TrailCategory {
+    /// Position in ``displayOrdering``. Anything missing from it sorts last.
+    var displayOrder: Int {
+        Self.displayOrdering.firstIndex(of: self) ?? Self.displayOrdering.count
+    }
+}
+
+/// How much of a route falls in each category of one tag.
+nonisolated struct TrailBreakdown<Category: TrailCategory>: Equatable, Sendable {
     nonisolated struct Share: Identifiable, Equatable, Sendable {
-        var id: TrailSurface { surface }
-        let surface: TrailSurface
+        var id: Category { category }
+        let category: Category
         let meters: Double
-        /// Portion of ``TrailSurfaceBreakdown/totalMeters``, in `0...1`.
+        /// Portion of ``TrailBreakdown/totalMeters``, in `0...1`.
         let fraction: Double
     }
 
-    /// Every surface with a non-zero share, surveyed categories first and
-    /// longest first within each group, so the leading entry is the answer to
-    /// "what did I mostly walk on".
+    /// Every category with a non-zero share, surveyed ones first and longest
+    /// first within each group, so the leading entry is the answer to "what did
+    /// I mostly walk on".
     let shares: [Share]
     /// Route length as measured by this walk, which is the sum of the shares
     /// rather than ``Hike/distanceMeters`` — using the sum keeps the fractions
     /// adding up to exactly 1.
     let totalMeters: Double
 
-    static let empty = Self(shares: [], totalMeters: 0)
+    static var empty: Self { Self(shares: [], totalMeters: 0) }
 
     var isEmpty: Bool { shares.isEmpty }
 
-    /// The leading share: the longest surveyed surface, or — when nothing on
+    /// The leading share: the longest surveyed category, or — when nothing on
     /// this route was surveyed — the longest share of any kind. `nil` for an
     /// empty breakdown.
     var dominant: Share? { shares.first }
@@ -43,12 +83,12 @@ nonisolated struct TrailSurfaceBreakdown: Equatable, Sendable {
     /// quietly dropped.
     var surveyedFraction: Double {
         shares.reduce(0) { total, share in
-            share.surface.isSurveyed ? total + share.fraction : total
+            share.category.isSurveyed ? total + share.fraction : total
         }
     }
 
-    func meters(for surface: TrailSurface) -> Double {
-        shares.first { $0.surface == surface }?.meters ?? 0
+    func meters(for category: Category) -> Double {
+        shares.first { $0.category == category }?.meters ?? 0
     }
 
     private init(shares: [Share], totalMeters: Double) {
@@ -56,36 +96,43 @@ nonisolated struct TrailSurfaceBreakdown: Equatable, Sendable {
         self.totalMeters = totalMeters
     }
 
-    init(metersBySurface: [TrailSurface: Double]) {
-        let total = metersBySurface.values.reduce(0, +)
+    init(metersByCategory: [Category: Double]) {
+        let total = metersByCategory.values.reduce(0, +)
         guard total > 0 else {
             self = .empty
             return
         }
         totalMeters = total
-        shares = metersBySurface
+        shares = metersByCategory
             .filter { _, meters in meters > 0 }
-            .map { surface, meters in
+            .map { category, meters in
                 Share(
-                    surface: surface,
+                    category: category,
                     meters: meters,
                     fraction: meters / total
                 )
             }
             .sorted { lhs, rhs in
-                if lhs.surface.isSurveyed != rhs.surface.isSurveyed { return lhs.surface.isSurveyed }
+                if lhs.category.isSurveyed != rhs.category.isSurveyed {
+                    return lhs.category.isSurveyed
+                }
                 if lhs.meters != rhs.meters { return lhs.meters > rhs.meters }
-                return lhs.surface.displayOrder < rhs.surface.displayOrder
+                return lhs.category.displayOrder < rhs.category.displayOrder
             }
     }
 }
 
+/// The breakdown of a route by surface, derived from OSM `surface` tagging.
+typealias TrailSurfaceBreakdown = TrailBreakdown<TrailSurface>
+/// The breakdown of a route by SAC grade, derived from OSM `sac_scale` tagging.
+typealias TrailDifficultyBreakdown = TrailBreakdown<TrailDifficulty>
+
 // MARK: - Analysis
 
-nonisolated enum TrailSurfaceAnalyzer {
+nonisolated enum TrailBreakdownAnalyzer {
     /// How far a sample may sit from a way before that way stops being a
     /// plausible explanation for it. An imported GPX can be a good 20 m off a
-    /// correctly mapped trail under tree cover, and attributing a surface is a
+    /// correctly mapped trail under tree cover, and attributing a tag is a
     /// much cheaper claim than relocating a route.
     static let defaultToleranceMeters = 25.0
     /// Upper bound on the spacing between samples — a route segment shorter
@@ -109,28 +156,34 @@ nonisolated enum TrailSurfaceAnalyzer {
     /// How often the walk checks for cancellation, in samples.
     private static let cancellationCheckInterval = 255
 
-    /// Attributes every metre of `route` to a surface.
+    /// Attributes every metre of `route` to a category of `categoryType`.
     ///
     /// This is a read-only measurement, not a match: it never moves the route,
     /// and a stretch with no way beneath it is reported as
-    /// ``TrailSurface/unmapped`` rather than snapped to the nearest thing
+    /// ``TrailCategory/unmapped`` rather than snapped to the nearest thing
     /// available. Running the full HMM matcher here would be both slower and
     /// less honest — it exists to decide where a walker *was*, and its answer
-    /// for a leg it is unsure about is a straight line, which has no surface.
+    /// for a leg it is unsure about is a straight line, which has no tagging.
+    ///
+    /// A way matched but carrying no tag of its own is the category's own
+    /// business, not this function's: ``TrailSurface`` and ``TrailDifficulty``
+    /// both report it as `unknown`, which is common for paths in lower terrain
+    /// where a mapper records a footway but not its grade.
     @concurrent
-    static func breakdown(
+    static func breakdown<Category: TrailCategory>(
+        of categoryType: Category.Type,
         route: [RouteCoordinate],
         graph: TrailGraph,
         toleranceMeters: Double = defaultToleranceMeters
-    ) async throws(CancellationError) -> TrailSurfaceBreakdown {
+    ) async throws(CancellationError) -> TrailBreakdown<Category> {
         assertOffMainThread(
-            "Trail surface analysis must stay off the main thread"
+            "Trail breakdown analysis must stay off the main thread"
         )
         guard route.count > 1, !graph.isEmpty else { return .empty }
         let index = TrailMatcherGraphIndex(graph: graph)
         guard !index.edges.isEmpty else { return .empty }
 
-        var metersBySurface: [TrailSurface: Double] = [:]
+        var metersByCategory: [Category: Double] = [:]
         var previousWayID: Int64?
         var samplesTaken = 0
 
@@ -150,8 +203,8 @@ nonisolated enum TrailSurfaceAnalyzer {
                    Task.isCancelled { throw CancellationError() }
                 samplesTaken += 1
                 // The midpoint of each sub-step, so a sample never lands
-                // exactly on a junction where two differently surfaced ways
-                // meet and the choice between them is a coin toss.
+                // exactly on a junction where two differently tagged ways meet
+                // and the choice between them is a coin toss.
                 let sample = RouteGeometry.interpolate(
                     from: from,
                     to: to,
@@ -163,20 +216,20 @@ nonisolated enum TrailSurfaceAnalyzer {
                     within: toleranceMeters,
                     preferringWay: previousWayID
                 )
-                let surface: TrailSurface
+                let category: Category
                 if let edgeIndex {
                     let edge = index.edges[edgeIndex]
-                    surface = TrailSurface(edge: edge)
+                    category = Category(edge: edge)
                     previousWayID = edge.id.wayID
                 } else {
-                    surface = .unmapped
+                    category = .unmapped
                     previousWayID = nil
                 }
-                metersBySurface[surface, default: 0] += stepMeters
+                metersByCategory[category, default: 0] += stepMeters
             }
         }
 
-        return TrailSurfaceBreakdown(metersBySurface: metersBySurface)
+        return TrailBreakdown(metersByCategory: metersByCategory)
     }
 
     /// The closest way to `coordinate`, with a bias towards staying on the way

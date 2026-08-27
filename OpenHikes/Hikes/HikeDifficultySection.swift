@@ -84,7 +84,7 @@ struct TrailDifficultyBar: View {
                     id: \.0.id
                 ) { share, width in
                     Rectangle()
-                        .fill(share.difficulty.color)
+                        .fill(share.category.color)
                         .frame(width: width)
                 }
             }
@@ -119,7 +119,7 @@ struct TrailDifficultyBar: View {
                 let percent = share.fraction.formatted(
                     .percent.precision(.fractionLength(0))
                 )
-                return "\(percent) \(share.difficulty.displayName)"
+                return "\(percent) \(share.category.displayName)"
             }
             .formatted(.list(type: .and))
     }
@@ -135,12 +135,12 @@ struct TrailDifficultyLegendRow: View {
     var body: some View {
         HStack(spacing: 10) {
             Circle()
-                .fill(share.difficulty.color)
+                .fill(share.category.color)
                 .frame(width: Self.swatchSize, height: Self.swatchSize)
             VStack(alignment: .leading, spacing: 1) {
-                Text(share.difficulty.displayName)
+                Text(share.category.displayName)
                     .font(.subheadline)
-                Text(share.difficulty.summary)
+                Text(share.category.summary)
                     .font(.caption2)
                     .foregroundStyle(.secondary)
             }

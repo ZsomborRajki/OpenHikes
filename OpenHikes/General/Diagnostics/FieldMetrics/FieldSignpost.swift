@@ -108,20 +108,6 @@ nonisolated enum FieldSignpost {
     static func end(_ token: Token) {
         mxSignpost(.end, log: log, name: token.span.signpostName, signpostID: token.id)
     }
-
-    /// The closure form, for a span whose whole extent is one call.
-    ///
-    /// Typed-throws for the same reason ``RenderSignpost/interval(_:_:)`` is:
-    /// so it can wrap `throws(ImportFailure)` pipeline entry points without
-    /// widening their error type at the call site.
-    static func span<T, E: Error>(
-        _ span: Span,
-        _ body: () throws(E) -> T
-    ) throws(E) -> T {
-        let token = begin(span)
-        defer { end(token) }
-        return try body()
-    }
 }
 
 // MARK: - Extended launch

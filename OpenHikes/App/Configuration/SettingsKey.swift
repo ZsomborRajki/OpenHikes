@@ -45,6 +45,15 @@ nonisolated enum SettingsKey {
     /// only one of the three reasons sync might be idle that the app decides
     /// for itself — the other two are the Apple Account and the test guard.
     static let cloudSyncEnabled = "settings.cloudSyncEnabled"
+    /// The last entitlement ``MapEntitlementStore`` resolved, remembered so a
+    /// cold launch draws the right map before StoreKit answers.
+    ///
+    /// Deliberately *not* synced, and deliberately not authoritative: it is a
+    /// hint about this device's last known answer, overwritten the moment
+    /// `Transaction.currentEntitlements` returns. See
+    /// ``MapEntitlementStore/init(defaults:currentEntitlements:)`` for what it
+    /// is and is not for.
+    static let lastKnownMapEntitlement = "purchases.lastKnownMapEntitlement"
 }
 
 /// Defaults for keys where "absent" and "false" are different answers, so the

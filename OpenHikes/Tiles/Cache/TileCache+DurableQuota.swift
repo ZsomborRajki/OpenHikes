@@ -124,11 +124,7 @@ nonisolated extension TileCache {
     }
 
     /// Durable bytes currently attributed to `providerID`, if measured.
-    /// Test-facing; the app reserves rather than reads.
-    func measuredDurableBytes(forProviderID providerID: String) -> Int64? {
-        durableProviderBytes.withLock { $0[providerID] }
-    }
-
+    ///
     /// A rough per-tile size, used only to decide *up front* whether a planned
     /// download can fit under a provider's ceiling.
     ///

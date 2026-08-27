@@ -35,7 +35,6 @@ opt_in_rules:
   - closure_spacing
   - collection_alignment
   - comma_inheritance
-  - conditional_returns_on_newline
   - contains_over_filter_count
   - contains_over_filter_is_empty
   - contains_over_first_not_nil
@@ -59,7 +58,6 @@ opt_in_rules:
   - fallthrough
   - fatal_error_message
   - file_name_no_space
-  - file_types_order
   - final_test_case
   - first_where
   - flatmap_over_map_reduce
@@ -136,7 +134,6 @@ opt_in_rules:
   - redundant_self
   - redundant_sendable
   - redundant_type_annotation
-  - required_deinit
   - return_value_from_void_function
   - self_binding
   - self_in_property_initialization
@@ -150,7 +147,6 @@ opt_in_rules:
   - strict_fileprivate
   - strong_iboutlet
   - superfluous_else
-  - switch_case_on_newline
   - test_case_accessibility
   - toggle_bool
   - unavailable_function
@@ -161,7 +157,6 @@ opt_in_rules:
   - unowned_variable_capture
   - untyped_error_in_catch
   - variable_shadowing
-  - vertical_whitespace_between_cases
   - void_function_in_ternary
   - weak_delegate
   - xct_specific_matcher

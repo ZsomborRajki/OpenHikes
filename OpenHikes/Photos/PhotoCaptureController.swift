@@ -54,6 +54,10 @@ final class PhotoCaptureController {
 
     @ObservationIgnored private(set) var subject: Subject?
     @ObservationIgnored private var nextToken = 0
+    /// The one library import in flight, held so it can be cancelled — see
+    /// ``runLibraryImport(_:)``.
+    @ObservationIgnored private var importTask: Task<Void, Never>?
+    @ObservationIgnored private var importToken = 0
     /// Whether the sheet still has a screen pushed that a photo could be filed
     /// under. See ``setHostScreenPresent(_:)``.
     @ObservationIgnored private var hasHostScreen = true
@@ -100,7 +104,50 @@ final class PhotoCaptureController {
     func setHostScreenPresent(_ present: Bool) {
         guard hasHostScreen != present else { return }
         hasHostScreen = present
+        if !present { cancelLibraryImport() }
         refreshAvailability()
+    }
+
+    /// Runs a library import as *the* import, cancelling whichever one was
+    /// still working.
+    ///
+    /// Held here rather than in a view's `@State` for two reasons. Writing a
+    /// task handle into `@State` invalidates the declaring view whether or not
+    /// its body reads it, and the view that starts this one is the root — the
+    /// render cost this whole controller exists to avoid. And this is already
+    /// the object that knows when the import's destination has gone away.
+    ///
+    /// Superseding rather than queueing is the right shape for what the picker
+    /// hands over: every asset in one pick is filed under a single anchor
+    /// resolved when the picker closed, so a second pick is a newer answer to
+    /// the same question rather than more of the same one — and two loops
+    /// appending to the same hike interleave their photos.
+    func runLibraryImport(_ body: @escaping @MainActor () async -> Void) {
+        importTask?.cancel()
+        importToken &+= 1
+        let token = importToken
+        importTask = Task { [weak self] in
+            await body()
+            guard let self, importToken == token else { return }
+            importTask = nil
+        }
+    }
+
+    /// Stops an import that no longer has anywhere to land.
+    ///
+    /// Driven by ``setHostScreenPresent(_:)`` and not by ``detach(token:)``,
+    /// because a detach is routinely transient: SwiftUI claims the incoming
+    /// screen before it releases the outgoing one, and pushing the photo
+    /// viewer over a hike releases and re-claims the same walk. `hasHostScreen`
+    /// is computed from the sheet's navigation path instead, so it goes false
+    /// only when the sheet is genuinely back at a list with no screen to file
+    /// a photo into.
+    ///
+    /// The loop's own `Task.isCancelled` check is what this reaches; without a
+    /// handle to cancel, that check could never be true.
+    func cancelLibraryImport() {
+        importTask?.cancel()
+        importTask = nil
     }
 
     /// Both requests are refused when the pill isn't available, so a tap that

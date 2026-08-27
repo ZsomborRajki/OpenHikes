@@ -14,6 +14,8 @@
 set -euo pipefail
 
 repository_root="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
+# shellcheck source=lib/xcodebuild-output.sh
+source "$repository_root/Scripts/lib/xcodebuild-output.sh"
 project="$repository_root/OpenHikes.xcodeproj"
 scheme="OpenHikesUI"
 bundle="OpenHikesUITests"
@@ -149,10 +151,14 @@ xcodebuild test \
     -only-testing:"$only_testing" \
     -resultBundlePath "$run_directory/result.xcresult" \
     -skipPackagePluginValidation \
-    2>&1 | tee "$build_log" \
-    | grep -E "Test Case|PERF-|measured|error:|TEST (SUCCEEDED|FAILED)"
+    2>&1 | format_xcodebuild_stream "$build_log"
 status="${PIPESTATUS[0]}"
 set -e
+
+# xcbeautify does not emit `measured [...]` or the suite's PERF- markers, and
+# those are what this script exists to produce. $build_log holds the raw
+# stream either way, which is also what perf-report.py parses below.
+print_measurement_lines "$build_log"
 
 # Pulled after the run rather than streamed during it: the app writes into its
 # own container, which only exists on the simulator, and reading it while the

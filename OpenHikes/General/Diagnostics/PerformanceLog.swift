@@ -80,8 +80,6 @@ nonisolated final class PerformanceLog: Sendable {
     private static let bytesPerMegabyte = 1_048_576.0
     private static let columnHeader = "# epoch_s\telapsed_s\tkind\tname\tvalue\tdetail"
 
-    let fileURL: URL
-
     private let start = ContinuousClock.now
     private let startEpoch = Date().timeIntervalSince1970
     private let buffer = Mutex(Buffer())
@@ -119,7 +117,6 @@ nonisolated final class PerformanceLog: Sendable {
             return nil
         }
 
-        fileURL = destination
         timer = DispatchSource.makeTimerSource(queue: queue)
 
         let preamble = [

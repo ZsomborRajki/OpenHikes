@@ -227,10 +227,24 @@ nonisolated extension TileCache {
         let target = Int64(Double(limit) * Self.trimTargetFraction)
         for tile in unclaimed.sorted(by: { $0.modified < $1.modified }) {
             guard total - freed > target else { break }
-            guard removeItemIgnoringNotFound(
-                at: tile.url,
-                operation: "trim cached tile"
-            ) else { continue }
+            // Bump-then-delete under one acquisition, the same shape
+            // `reclaimDurableBytes` uses: it is what stops a fetch that took
+            // its token before this deletion from writing the tile back after
+            // it. Reaching that interleaving through *this* path needs a tile
+            // promoted after the claim snapshot to sort early in an
+            // oldest-first order it cannot — a promoted tile keeps its
+            // fetch-time mtime — so the safety here was already arithmetic.
+            // The lock is what makes it an invariant instead, and what keeps
+            // `trimTargetFraction` a tunable rather than a load-bearing one.
+            let removed = mutationVersions.withLock { versions -> Bool in
+                guard removeItemIgnoringNotFound(
+                    at: tile.url,
+                    operation: "trim cached tile"
+                ) else { return false }
+                versions.invalidateAll()
+                return true
+            }
+            guard removed else { continue }
             freed += tile.size
         }
         #if DEBUG

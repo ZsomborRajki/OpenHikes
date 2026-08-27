@@ -44,7 +44,8 @@ struct TrailTagFixtureTests {
 
     @Test("the fixture graph attributes a surface to the whole imported route")
     func surfaceBreakdownCoversTheRoute() async throws {
-        let breakdown = try await TrailSurfaceAnalyzer.breakdown(
+        let breakdown = try await TrailBreakdownAnalyzer.breakdown(
+            of: TrailSurface.self,
             route: fixtureRoute(),
             graph: fixtureGraph()
         )
@@ -68,7 +69,8 @@ struct TrailTagFixtureTests {
 
     @Test("the fixture graph grades the whole imported route")
     func difficultyBreakdownCoversTheRoute() async throws {
-        let breakdown = try await TrailDifficultyAnalyzer.breakdown(
+        let breakdown = try await TrailBreakdownAnalyzer.breakdown(
+            of: TrailDifficulty.self,
             route: fixtureRoute(),
             graph: fixtureGraph()
         )

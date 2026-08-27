@@ -69,7 +69,7 @@ extension OpenHikesView {
     /// there.
     func attachPickedPhotos(_ items: [PhotosPickerItem]) {
         guard let subject = photoCapture.currentSubject() else { return }
-        Task {
+        photoCapture.runLibraryImport {
             for item in items {
                 guard !Task.isCancelled else { return }
                 // The user can pop back and delete the hike while the loader

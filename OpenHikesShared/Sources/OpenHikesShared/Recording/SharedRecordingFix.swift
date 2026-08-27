@@ -47,11 +47,11 @@ public struct SharedRecordingFix: Codable, Sendable, Equatable, Identifiable {
     }
 }
 
-public enum SharedRecordingStoreError: LocalizedError, Sendable {
+enum SharedRecordingStoreError: LocalizedError, Sendable {
     case containerUnavailable
     case io(String)
 
-    public var errorDescription: String? {
+    var errorDescription: String? {
         switch self {
         case .containerUnavailable: "The shared recording container is unavailable."
         case .io(let detail): detail
@@ -59,10 +59,10 @@ public enum SharedRecordingStoreError: LocalizedError, Sendable {
     }
 }
 
-public struct PendingRecordingFixStore: Sendable {
-    public static let maximumEntryCount = 200
+struct PendingRecordingFixStore: Sendable {
+    static let maximumEntryCount = 200
 
-    public let directory: URL
+    let directory: URL
 
     private var fileURL: URL {
         directory.appendingPathComponent("pending-fixes.json")
@@ -76,17 +76,19 @@ public struct PendingRecordingFixStore: Sendable {
         directory.appendingPathComponent("widget-sampling.json")
     }
 
-    public init(directory: URL) {
+    init(directory: URL) {
         self.directory = directory
     }
 
-    public func append(_ fix: SharedRecordingFix) throws {
+    // periphery:ignore - exercised by `OpenHikesShared/Tests`, a SwiftPM
+    // target the Xcode-scheme scan does not index.
+    func append(_ fix: SharedRecordingFix) throws {
         try withExclusiveLock {
             try appendUnlocked(fix)
         }
     }
 
-    @discardableResult public func append(
+    @discardableResult func append(
         _ fix: SharedRecordingFix,
         validatingRecordingAt recordingURL: URL
     ) throws -> Bool {
@@ -101,7 +103,7 @@ public struct PendingRecordingFixStore: Sendable {
         }
     }
 
-    public func saveRecording(
+    func saveRecording(
         _ snapshot: SharedRecordingSnapshot,
         to recordingURL: URL
     ) throws {
@@ -117,13 +119,13 @@ public struct PendingRecordingFixStore: Sendable {
         }
     }
 
-    public func load() throws -> [SharedRecordingFix] {
+    func load() throws -> [SharedRecordingFix] {
         try withExclusiveLock {
             try loadUnlocked()
         }
     }
 
-    public func remove(ids: Set<UUID>) throws {
+    func remove(ids: Set<UUID>) throws {
         guard !ids.isEmpty else { return }
         try withExclusiveLock {
             let remaining = try loadUnlocked().filter { fix in !ids.contains(fix.id) }
@@ -131,7 +133,7 @@ public struct PendingRecordingFixStore: Sendable {
         }
     }
 
-    public func claimSample(
+    func claimSample(
         sessionID: UUID,
         at date: Date,
         minimumInterval: TimeInterval
@@ -147,13 +149,13 @@ public struct PendingRecordingFixStore: Sendable {
         }
     }
 
-    public func clear(sessionID: UUID? = nil) throws {
+    func clear(sessionID: UUID? = nil) throws {
         try withExclusiveLock {
             try clearPendingUnlocked(sessionID: sessionID)
         }
     }
 
-    public func clearRecordingState(
+    func clearRecordingState(
         recordingURL: URL,
         sessionID: UUID? = nil
     ) throws {

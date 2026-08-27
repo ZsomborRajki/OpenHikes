@@ -223,6 +223,8 @@ nonisolated final class HikePhotoStore: @unchecked Sendable {
         #endif
     }
 
+    // periphery:ignore - the other half of the unbuilt photo-sync path
+    // described on `hasImage(for:)`.
     /// Writes bytes whose identity was decided elsewhere — a photo arriving
     /// from another device, which has to land under the file name the device
     /// that took it gave it, or the metadata that travelled with it would
@@ -249,10 +251,16 @@ nonisolated final class HikePhotoStore: @unchecked Sendable {
         return true
     }
 
+    // periphery:ignore - nothing calls this yet, and the gap is the finding
+    // rather than the function; see the doc comment below.
     /// Whether this photo's pixels are already on this device.
     ///
     /// Read before a sync re-download so that a hike arriving with twenty
     /// pictures the device already has doesn't fetch twenty assets again.
+    ///
+    /// Nothing calls it. ``Hike/photos`` documents this as what the UI asks
+    /// before offering a synced photo, and that call site does not exist — so
+    /// a second device currently offers pictures it has no file for.
     func hasImage(for photo: HikePhoto) -> Bool {
         FileManager.default.fileExists(atPath: url(for: photo).path)
     }

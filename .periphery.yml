@@ -1,0 +1,91 @@
+# Periphery — unused-code analysis. Run with `periphery scan`.
+#
+# Not part of the build or of CI: a scan compiles the whole project with
+# indexing enabled and takes minutes, and its output is a list of candidates to
+# read rather than a pass/fail signal. It exists because the class of finding it
+# produces — a declaration nothing references any more — is otherwise found only
+# by a person noticing, which is how CODE_REVIEW.md has had to collect them one
+# at a time.
+#
+# Read a result before acting on it. Periphery reasons about references, not
+# intent, so a declaration kept deliberately is indistinguishable to it from
+# dead weight — the `canImport(UIKit)` platform guards are the standing example.
+
+project: OpenHikes.xcodeproj
+schemes:
+  - OpenHikes
+
+# Periphery builds into its own DerivedData, so it re-resolves packages from
+# scratch and hits the same SwiftLintPlugins fingerprint check that every
+# xcodebuild call in .github/workflows/ci.yml has to skip. Without this the
+# scan fails before it indexes anything.
+#
+# The destination is needed for the same reason it is needed everywhere else
+# here: Periphery passes none of its own, so xcodebuild resolves the scheme
+# against "Any iOS Device" and then cannot find a test host for OpenWidgetTests,
+# which is built for the simulator like everything else in this project.
+build_arguments:
+  - -skipPackagePluginValidation
+  - -destination
+  - generic/platform=iOS Simulator
+
+# `#Preview` bodies reference views nothing else does and are not compiled into
+# a Release build, so without this every preview-only view is reported and the
+# real findings are buried underneath them.
+retain_swift_ui_previews: true
+
+# Synthesised Codable conformances are invisible to the index: a property that
+# only ever crosses the App Group boundary inside SharedTrailSnapshot or
+# SharedRecordingSnapshot is written by code Periphery cannot see. There are 29
+# Codable types here, so without this the report is mostly them.
+retain_encodable_properties: true
+
+# SwiftData and the few remaining selector-based call sites reach their
+# declarations dynamically rather than through a reference the index records.
+retain_objc_annotated: true
+
+# A synthesised `==` or `hash(into:)` reads every stored property, but does so
+# in code the index never sees, so without these Periphery reports the members
+# of an Equatable or Hashable struct as assigned-but-never-read. That was 11 of
+# the first run's 20 assign-only findings and all of them were wrong:
+# SelectedHikeState, RenderRequest, MutationToken, StorageStartupIssue and
+# TrailMatchAmbiguity are compared with `==`, and Traversal and NodePair are
+# used as dictionary keys.
+retain_equatable_properties: true
+retain_hashable_properties: true
+
+# Deliberately absent: `exclude_tests`.
+#
+# The OpenHikes scheme builds the app's test bundles, so a reference from a
+# test counts as a use and a declaration exercised only by tests is not
+# reported — `RouteMotion`, written by `RecordingPoint.routeCoordinate` and
+# read by nothing but tests, is the known example of what that hides.
+#
+# `periphery scan --exclude-tests` is how to go looking for that class of
+# finding, but it is an explicit choice rather than the default because it also
+# reports every deliberate test seam: the injectable transports, clocks,
+# defaults, location sources and containers on OverpassTrailGraphProvider,
+# BackgroundTrailTracker, OfflineTileDownloader, CloudSyncCoordinator,
+# LocationManager, MapEntitlementStore and TileSandbox. Those are settled
+# decisions rather than findings, and a report that lists them on every run is
+# a report that invites re-raising them.
+
+# Known blind spot, and the one that has already caused a wrong deletion:
+# this scan builds the *Xcode* scheme, which contains the OpenHikesShared
+# library but not `OpenHikesShared/Tests`. That test target is SwiftPM's and is
+# reached by `swift test --package-path OpenHikesShared`, so Periphery never
+# indexes it. Every declaration under `OpenHikesShared/Sources` that only its
+# own suite exercises is therefore reported as unused when it is not —
+# `decimate(_:maxPoints:)` and `PendingRecordingFixStore.append(_:)` both are.
+# Check a shared-package finding against `OpenHikesShared/Tests` before acting
+# on it. `redundantPublicAccessibility` is unaffected: those tests use
+# `@testable import`, which reaches internal declarations anyway.
+
+# Writing a `// periphery:ignore`, two rules that are easy to get wrong and
+# both fail quietly:
+#   - Put it *above* any `///` doc comment. Between the doc comment and the
+#     declaration it separates the two, and `Scripts/lint.sh` fails the file
+#     with `orphaned_doc_comment`.
+#   - Separate the reason with a plain `-`, never an em-dash. Periphery stops
+#     recognising the annotation after an em-dash, so the finding survives and
+#     the comment silently does nothing.

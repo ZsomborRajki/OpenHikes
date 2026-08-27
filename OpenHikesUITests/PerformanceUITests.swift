@@ -429,7 +429,7 @@ nonisolated final class PerformanceUITests: XCTestCase {
 
         let before = counters(in: app)
         let started = Date().timeIntervalSince1970
-        walkRecordedTrace(in: app, points: points)
+        walkRecordedTrace(points: points)
         let after = counters(in: app)
         printPhase("recording", from: started, to: Date().timeIntervalSince1970)
 
@@ -685,7 +685,7 @@ private extension PerformanceUITests {
     /// Steps the simulator through the measured trace. The generic walker in
     /// `UITestSupport.swift` does the waiting; this only names the trace.
     @MainActor
-    func walkRecordedTrace(in app: XCUIApplication, points: XCUIElement) {
+    func walkRecordedTrace(points: XCUIElement) {
         walkRecordedTrace(Self.recordedTrace, countedBy: points)
     }
 }

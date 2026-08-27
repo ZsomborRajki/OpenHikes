@@ -122,6 +122,8 @@ public struct SharedTrailSnapshot: Codable, Sendable, Equatable {
     }
 }
 
+// periphery:ignore - exercised by `OpenHikesShared/Tests`, a SwiftPM target
+// the Xcode-scheme scan does not index.
 /// Decimates an ordered coordinate list to at most `maxPoints` by fixed
 /// stride, always keeping the first and last point so the drawn shape's
 /// endpoints match the real route. A widget is only ever a few hundred

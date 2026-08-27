@@ -15,10 +15,10 @@ import Foundation
 
 /// Number formatting shared by everything the widget draws, so a distance in
 /// the status line cannot be rounded differently from a distance in a chip.
-public enum WidgetFormat {
+enum WidgetFormat {
     /// Trail-length style: locale-aware, and rounded the way a road sign
     /// rounds — "4.2 km", "2.6 mi".
-    public static func length(
+    static func length(
         meters: Double,
         locale: Locale = .current
     ) -> String {
@@ -33,7 +33,7 @@ public enum WidgetFormat {
     /// unit, and never promoted to kilometres — a 1,250 m summit is 1,250 m
     /// high, not "1.2 km" high, which is what `.road` and `.general` would
     /// both make of it.
-    public static func elevation(
+    static func elevation(
         meters: Double,
         locale: Locale = .current
     ) -> String {
@@ -56,7 +56,7 @@ public enum WidgetFormat {
     /// `UnitSpeed` has no locale-aware usage of its own, so the unit is
     /// chosen from the locale's measurement system the way the length
     /// formatter's `.road` usage does it for distances.
-    public static func speed(
+    static func speed(
         metersPerSecond: Double,
         locale: Locale = .current
     ) -> String {

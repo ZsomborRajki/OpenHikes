@@ -245,6 +245,8 @@ final class HikeRecorderTests {
             "recording-sandbox-\(UUID().uuidString)",
             isDirectory: true
         )
+    // periphery:ignore - the strong reference that keeps the recorder alive
+    // for the length of the test; never read back.
     var recorder: HikeRecorder?
 
     init() throws {

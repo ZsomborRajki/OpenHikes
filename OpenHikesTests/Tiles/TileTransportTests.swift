@@ -155,7 +155,7 @@ struct TileTransportTests {
         let stub = StubbedTileCache()
         defer { stub.tearDown() }
         // Nothing scripted: any request at all fails the test loudly.
-        try stub.place(key, in: durable ? stub.savedFile(for: key) : stub.browsedFile(for: key))
+        try stub.place(in: durable ? stub.savedFile(for: key) : stub.browsedFile(for: key))
 
         let image = await stub.cache.loadTile(forKey: key, url: url())
 
@@ -170,7 +170,7 @@ struct TileTransportTests {
     func expiredTileIsRefetched() async throws {
         let stub = StubbedTileCache()
         defer { stub.tearDown() }
-        try stub.place(key, in: stub.browsedFile(for: key), agedByDays: 8)
+        try stub.place(in: stub.browsedFile(for: key), agedByDays: 8)
         StubTileProtocol.alwaysRespond(with: .tile())
 
         let image = await stub.cache.loadTile(forKey: key, url: url())
@@ -186,7 +186,7 @@ struct TileTransportTests {
     func freshTileIsNotRefetched() async throws {
         let stub = StubbedTileCache()
         defer { stub.tearDown() }
-        try stub.place(key, in: stub.browsedFile(for: key), agedByDays: 6)
+        try stub.place(in: stub.browsedFile(for: key), agedByDays: 6)
 
         #expect(await stub.cache.loadTile(forKey: key, url: url()) != nil)
         #expect(StubTileProtocol.requestCount == 0)
@@ -228,7 +228,7 @@ struct TileTransportTests {
     func downloadPromotesRatherThanRefetching() async throws {
         let stub = StubbedTileCache()
         defer { stub.tearDown() }
-        try stub.place(key, in: stub.browsedFile(for: key))
+        try stub.place(in: stub.browsedFile(for: key))
 
         #expect(await stub.cache.saveTileDurably(forKey: key, url: url()))
         #expect(StubTileProtocol.requestCount == 0, "the bytes were already here")
@@ -255,7 +255,7 @@ struct TileTransportTests {
     func offlineStillServesSavedTiles() async throws {
         let stub = StubbedTileCache(reachable: false)
         defer { stub.tearDown() }
-        try stub.place(key, in: stub.savedFile(for: key))
+        try stub.place(in: stub.savedFile(for: key))
 
         #expect(await stub.cache.loadTile(forKey: key, url: url()) != nil)
         #expect(StubTileProtocol.requestCount == 0)

@@ -77,16 +77,6 @@ nonisolated final class FieldMetrics: NSObject, MXMetricManagerSubscriber, @unch
         Self.logger.notice("Subscribed to MetricKit.")
     }
 
-    func unregister() {
-        let (claimed, _) = isRegistered.compareExchange(
-            expected: true,
-            desired: false,
-            ordering: .relaxed
-        )
-        guard claimed else { return }
-        MXMetricManager.shared.remove(self)
-    }
-
     // MARK: MXMetricManagerSubscriber
 
     /// Invoked on a background queue. Kept there: reducing a payload reads a

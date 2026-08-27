@@ -79,6 +79,24 @@ Scripts/lint.sh
 
 Unit and integration tests use Swift Testing; `OpenHikesUITests` uses XCUITest, because Apple's UI automation and launch metrics are not available through Swift Testing. UI-test launches use an in-memory SwiftData store and isolated preferences.
 
+### Optional tooling
+
+None of these are required to build, test or contribute; each one is used if present and skipped if not.
+
+```sh
+brew install xcbeautify periphery xcode-build-server
+```
+
+[`xcbeautify`](https://github.com/cpisciotta/xcbeautify) formats `xcodebuild` output. `Scripts/run-ui-tests.sh` and `Scripts/run-performance-tests.sh` use it when it is installed and fall back to their previous `grep` filter when it is not, and CI pipes through it to get compiler diagnostics as inline annotations. It is preinstalled on the `macos-26` runner at the version Homebrew installs, so local and CI output match. Both scripts keep the raw log as well, because xcbeautify does not emit `measured [...]` lines or the performance suite's `PERF-` markers.
+
+[`periphery`](https://github.com/peripheryapp/periphery) reports declarations nothing references any more. `periphery scan` reads the checked-in `.periphery.yml`; it builds the whole project with indexing enabled, so it takes minutes and is deliberately not part of CI. Its output is a list of candidates to read rather than a pass/fail signal.
+
+[`xcode-build-server`](https://github.com/SolaWing/xcode-build-server) lets an editor's `sourcekit-lsp` resolve symbols across the app target rather than only the shared package. It is per-machine — the generated `buildServer.json` records absolute DerivedData paths and is gitignored — so generate it locally, and again after adding or renaming a target:
+
+```sh
+xcode-build-server config -project OpenHikes.xcodeproj -scheme OpenHikes
+```
+
 CI runs strict SwiftLint, the shared package suite, the app and widget unit tests, warning-free debug and release builds, the concurrent GPX parser under Thread Sanitizer, and both accessibility UI classes. The functional UI automation and the performance suite stay out, because both lean on real gestures and timing-sensitive waits that a shared runner makes slow and flaky — run them locally before a change that touches recording, the map or render isolation.
 
 [`PERFORMANCE.md`](PERFORMANCE.md) records what the app costs in frames and in battery, how that was measured, and what is still open. [`CODE_REVIEW.md`](CODE_REVIEW.md) is the open code-quality list. [`.github/copilot-instructions.md`](.github/copilot-instructions.md) holds the architecture and the repository conventions, including the launch arguments the UI suites use.

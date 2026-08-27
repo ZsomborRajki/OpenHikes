@@ -97,7 +97,6 @@ nonisolated enum SyncedSettingsMerge {
 /// Account.
 @MainActor
 final class SyncedSettingsMirror {
-    private static let logger = Logger(subsystem: "OpenHikes", category: "CloudSync")
 
     private let defaults: UserDefaults
     private let store: NSUbiquitousKeyValueStore

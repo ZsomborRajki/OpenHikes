@@ -20,6 +20,11 @@ violations.txt
 .swiftpm/
 .build/
 
+# sourcekit-lsp's build-server binding, written by `xcode-build-server config`.
+# It records absolute DerivedData and workspace paths, so it is per-machine and
+# has to be regenerated locally rather than shared. See README.md.
+buildServer.json
+
 # macOS
 .DS_Store
 

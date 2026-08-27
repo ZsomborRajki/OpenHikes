@@ -310,8 +310,7 @@ struct RecordingDistanceTests {
 
         let prepared = try RecordingPreparation.prepare(
             points: points,
-            startedAt: start,
-            endedAt: start.addingTimeInterval(660)
+            startedAt: start
         )
 
         #expect(abs(prepared.distanceMeters - 222) < 5)

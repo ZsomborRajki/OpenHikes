@@ -121,11 +121,6 @@ nonisolated struct ElevationAccumulator: Sendable {
     /// not a change, and reporting "0 m climbed" for it would be a claim the
     /// data does not support.
     var hasChange: Bool { count > 1 }
-
-    var range: ClosedRange<Double>? {
-        guard let minimumMeters, let maximumMeters else { return nil }
-        return minimumMeters...maximumMeters
-    }
 }
 
 /// What a route's elevations add up to, in the shape the widget snapshot

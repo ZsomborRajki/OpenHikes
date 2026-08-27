@@ -17,7 +17,7 @@ import Foundation
 ///
 /// The cases are declared alphabetically; the order they are *presented* in is
 /// ``displayOrdering``.
-nonisolated enum TrailSurface: String, CaseIterable, Codable, Hashable, Sendable {
+nonisolated enum TrailSurface: String, CaseIterable, Codable, Hashable, Sendable, TrailCategory {
     /// Loose but engineered: gravel, fine gravel, compacted hardcore.
     case gravel = "gravel"
     /// Natural and unengineered: dirt, earth, grass, sand, mud, woodchips.
@@ -50,11 +50,7 @@ nonisolated enum TrailSurface: String, CaseIterable, Codable, Hashable, Sendable
         }
     }
 
-    /// Position in ``displayOrdering``.
-    var displayOrder: Int {
-        Self.displayOrdering.firstIndex(of: self) ?? Self.displayOrdering.count
-    }
-
+    /// Position in ``displayOrdering``. Supplied by ``TrailCategory``.
     var displayName: String {
         switch self {
         case .paved: "Paved"

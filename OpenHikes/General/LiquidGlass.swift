@@ -27,11 +27,6 @@ struct GlassSurface: Equatable {
     /// over map imagery, a chart, or a plain background.
     static let regular = Self()
 
-    /// Thinner and more transparent — for chrome laid over something the user
-    /// is meant to keep seeing through it, such as the sheet over the map.
-    static let clear = Self(isClear: true)
-
-    private var isClear = false
     private var tintColor: Color?
     private var isInteractive = false
 
@@ -56,7 +51,7 @@ struct GlassSurface: Equatable {
     #if !os(visionOS)
     /// The SwiftUI value this stands for. Only reachable where `Glass` exists.
     var resolved: Glass {
-        var glass: Glass = isClear ? .clear : .regular
+        var glass: Glass = .regular
         if let tintColor {
             glass = glass.tint(tintColor)
         }

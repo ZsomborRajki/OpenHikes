@@ -16,14 +16,14 @@
 
 import SwiftUI
 
-public struct TrailGlyphView: View {
+struct TrailGlyphView: View {
     private let polyline: [SharedTrailSnapshot.CodableCoordinate]
     private let liveFix: SharedTrailSnapshot.CodableCoordinate?
     private let tint: Color
     private let lineWidth: CGFloat
     private let showsFixDot: Bool
 
-    public init(
+    init(
         polyline: [SharedTrailSnapshot.CodableCoordinate],
         tint: Color,
         liveFix: SharedTrailSnapshot.CodableCoordinate? = nil,
@@ -37,7 +37,7 @@ public struct TrailGlyphView: View {
         self.showsFixDot = showsFixDot
     }
 
-    public var body: some View {
+    var body: some View {
         Canvas { context, size in
             guard polyline.count > 1,
                   let projected = Self.project(polyline: polyline, liveFix: liveFix, into: size, inset: lineWidth * 2)

@@ -45,7 +45,10 @@ jobs:
         run: Scripts/lint.sh
 
       - name: Test shared package
-        run: swift test --package-path OpenHikesShared -Xswiftc -warnings-as-errors
+        run: |
+          set -o pipefail
+          swift test --package-path OpenHikesShared -Xswiftc -warnings-as-errors \
+            | xcbeautify --renderer github-actions --disable-logging
 
       - name: Verify resolved packages
         run: |
@@ -64,8 +67,16 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
+      # Piped through xcbeautify rather than run with -quiet: -quiet hides
+      # compiler warnings outright, while the github-actions renderer turns
+      # each one into an inline annotation on the pull request. xcbeautify
+      # 3.2.1 is preinstalled on this image and is the version Homebrew
+      # installs, so this output matches what Scripts/ produces locally.
+      # `set -o pipefail` is mandatory — Actions runs `bash -e`, which without
+      # it would report the formatter's success instead of xcodebuild's.
       - name: Build for testing
         run: |
+          set -o pipefail
           xcodebuild build-for-testing \
             -project OpenHikes.xcodeproj \
             -scheme OpenHikes \
@@ -73,7 +84,7 @@ jobs:
             -derivedDataPath DerivedData \
             -skipPackagePluginValidation \
             'SWIFT_ACTIVE_COMPILATION_CONDITIONS=$(inherited) REQUIRE_ALL_SUITES' \
-            -quiet
+            | xcbeautify --renderer github-actions --disable-logging
 
       # Booted as its own step so the first test launch does not pay for it.
       # A cold simulator is a known source of "Early unexpected exit, operation
@@ -87,6 +98,7 @@ jobs:
 
       - name: Run tests with strict suite preconditions
         run: |
+          set -o pipefail
           mkdir -p TestResults
           xcodebuild test-without-building \
             -project OpenHikes.xcodeproj \
@@ -97,11 +109,15 @@ jobs:
             -only-testing:OpenWidgetTests \
             -enableCodeCoverage YES \
             -resultBundlePath TestResults/UnitTests.xcresult \
-            -skipPackagePluginValidation
+            -skipPackagePluginValidation \
+            | xcbeautify --renderer github-actions --disable-logging
 
-      # Deliberately not `-quiet`: the output is one line per test, and a
-      # failing one carries its assertion text. The result bundle below is the
-      # backstop for a failure that prints no such line — a crash or a hang.
+      # xcbeautify understands Swift Testing's output, so a failing @Test keeps
+      # its issue text and its file:line and gains an inline annotation. What
+      # it does not print is anything at all for a failure it cannot parse — a
+      # crash or a hang yields no formatted line, not even `** TEST FAILED **`.
+      # The exit status still propagates through pipefail, so the job goes red
+      # either way, and this bundle is the backstop for exactly that case.
       - name: Upload result bundle
         if: failure()
         uses: actions/upload-artifact@v4
@@ -132,13 +148,14 @@ jobs:
 
       - name: Build
         run: |
+          set -o pipefail
           xcodebuild build \
             -project OpenHikes.xcodeproj \
             -scheme OpenHikes \
             -configuration "${{ matrix.configuration }}" \
             -destination "${{ matrix.destination }}" \
             -skipPackagePluginValidation \
-            -quiet
+            | xcbeautify --renderer github-actions --disable-logging
 
   gpx-thread-sanitizer:
     name: GPX thread sanitizer
@@ -152,6 +169,12 @@ jobs:
           xcrun simctl boot "$IOS_SIMULATOR" || true
           xcrun simctl bootstatus "$IOS_SIMULATOR" -b
 
+      # The one xcodebuild call in this file that is deliberately not piped
+      # through xcbeautify. A ThreadSanitizer race is reported as a plain
+      # `WARNING: ThreadSanitizer: data race` block, which xcbeautify does not
+      # recognise and therefore drops in full — the report this job exists to
+      # produce would vanish, leaving a red run with no stack and no file. Raw
+      # output is the product here, so it stays raw.
       - name: Run concurrent GPX imports under TSan
         run: |
           mkdir -p TestResults

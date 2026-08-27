@@ -50,11 +50,13 @@ nonisolated enum HikeTrailAnalysis {
         defer { RenderSignpost.endInterval("HikeTrailAnalysis", state) }
 
         guard let graph = await graph(covering: route, provider: provider) else { return .empty }
-        let surface = try? await TrailSurfaceAnalyzer.breakdown(
+        let surface = try? await TrailBreakdownAnalyzer.breakdown(
+            of: TrailSurface.self,
             route: route,
             graph: graph
         )
-        let difficulty = try? await TrailDifficultyAnalyzer.breakdown(
+        let difficulty = try? await TrailBreakdownAnalyzer.breakdown(
+            of: TrailDifficulty.self,
             route: route,
             graph: graph
         )

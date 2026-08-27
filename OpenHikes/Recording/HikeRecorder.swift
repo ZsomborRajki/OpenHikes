@@ -510,16 +510,12 @@ extension HikeRecorder {
             let points = pendingReviewSave.normalizedPoints
             let choices = routeReview.legChoices
             let startedAt = pendingReviewSave.session.metadata.startedAt
-            let endedAt = try {
-                guard let endedAt = pendingReviewSave.session.metadata.endedAt else {
-                    throw RecordingFailure.save("The recording has not been finished yet.")
-                }
-                return endedAt
-            }()
+            guard pendingReviewSave.session.metadata.endedAt != nil else {
+                throw RecordingFailure.save("The recording has not been finished yet.")
+            }
             let prepared = try await RecordingPreparation.prepareResolvedOffMain(
                 points: points,
                 startedAt: startedAt,
-                endedAt: endedAt,
                 matchResult: pendingReviewSave.matchResult,
                 choices: choices
             )

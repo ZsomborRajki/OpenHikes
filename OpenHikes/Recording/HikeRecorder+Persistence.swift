@@ -10,7 +10,6 @@
 import CoreLocation
 import Foundation
 import Observation
-import OpenHikesShared
 import os
 import SwiftData
 
@@ -27,7 +26,7 @@ extension HikeRecorder {
         prepared: PreparedRecording,
         review: PendingReviewSave?
     ) {
-        guard let endedAt = session.metadata.endedAt else { throw .save("The recording has not been finished yet.") }
+        guard session.metadata.endedAt != nil else { throw .save("The recording has not been finished yet.") }
 
         let (normalized, graph, gapEvidence) = await normalizeSession(session)
         // `prepareOffMain` is typed `throws(RecordingFailure)` and `@concurrent`
@@ -36,7 +35,6 @@ extension HikeRecorder {
         let prepared = try await RecordingPreparation.prepareOffMain(
             points: normalized,
             startedAt: session.metadata.startedAt,
-            endedAt: endedAt,
             graph: graph,
             gapDistances: gapEvidence
         )

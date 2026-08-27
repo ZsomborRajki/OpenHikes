@@ -153,7 +153,7 @@ struct TrailSurfaceBreakdownTests {
     @Test("shares are surveyed-first, then longest-first")
     func ordersShares() throws {
         let breakdown = TrailSurfaceBreakdown(
-            metersBySurface: [
+            metersByCategory: [
                 .unmapped: 500,
                 .paved: 100,
                 .ground: 300,
@@ -162,19 +162,19 @@ struct TrailSurfaceBreakdownTests {
         )
 
         #expect(
-            breakdown.shares.map(\.surface) == [.ground, .paved, .gravel, .unmapped]
+            breakdown.shares.map(\.category) == [.ground, .paved, .gravel, .unmapped]
         )
         // `paved` precedes `gravel` in `TrailSurface.displayOrdering`, which
         // is the tie-break, so a rebuild of the same data can't reshuffle the
         // legend.
         let dominant = try #require(breakdown.dominant)
-        #expect(dominant.surface == .ground)
+        #expect(dominant.category == .ground)
     }
 
     @Test("fractions are of the measured total and sum to one")
     func fractionsSumToOne() {
         let breakdown = TrailSurfaceBreakdown(
-            metersBySurface: [.paved: 250, .ground: 750]
+            metersByCategory: [.paved: 250, .ground: 750]
         )
 
         #expect(breakdown.totalMeters == 1000)
@@ -187,7 +187,7 @@ struct TrailSurfaceBreakdownTests {
     @Test("the surveyed fraction excludes both ways of not knowing")
     func surveyedFractionCountsOnlyTaggedSurfaces() {
         let breakdown = TrailSurfaceBreakdown(
-            metersBySurface: [
+            metersByCategory: [
                 .gravel: 600,
                 .unknown: 200,
                 .unmapped: 200,
@@ -200,12 +200,12 @@ struct TrailSurfaceBreakdownTests {
     @Test("zero-length categories are dropped, and nothing at all is empty")
     func dropsEmptyShares() {
         let breakdown = TrailSurfaceBreakdown(
-            metersBySurface: [.paved: 100, .rock: 0]
+            metersByCategory: [.paved: 100, .rock: 0]
         )
 
         #expect(breakdown.shares.count == 1)
-        #expect(TrailSurfaceBreakdown(metersBySurface: [:]).isEmpty)
-        #expect(TrailSurfaceBreakdown(metersBySurface: [.paved: 0]).isEmpty)
+        #expect(TrailSurfaceBreakdown(metersByCategory: [:]).isEmpty)
+        #expect(TrailSurfaceBreakdown(metersByCategory: [.paved: 0]).isEmpty)
     }
 }
 
@@ -213,7 +213,6 @@ struct TrailSurfaceBreakdownTests {
 
 @Suite("Trail surface analysis")
 struct TrailSurfaceAnalyzerTests {
-    private static let baseLatitude = 47.6300
     private static let baseLongitude = 12.8600
 
     /// Two ways meeting end to end, the southern half gravel and the northern
@@ -244,14 +243,15 @@ struct TrailSurfaceAnalyzerTests {
             }
         )
 
-        let breakdown = try await TrailSurfaceAnalyzer.breakdown(
+        let breakdown = try await TrailBreakdownAnalyzer.breakdown(
+            of: TrailSurface.self,
             route: walked,
             graph: splitGraph()
         )
 
         #expect(
             breakdown.shares
-                .map(\.surface)
+                .map(\.category)
                 .sorted { $0.displayOrder < $1.displayOrder } == [.paved, .gravel]
         )
         #expect(
@@ -274,12 +274,13 @@ struct TrailSurfaceAnalyzerTests {
             (47.6320, east),
         ])
 
-        let breakdown = try await TrailSurfaceAnalyzer.breakdown(
+        let breakdown = try await TrailBreakdownAnalyzer.breakdown(
+            of: TrailSurface.self,
             route: walked,
             graph: splitGraph()
         )
 
-        #expect(breakdown.shares.map(\.surface) == [.unmapped])
+        #expect(breakdown.shares.map(\.category) == [.unmapped])
         #expect(breakdown.surveyedFraction == 0)
     }
 
@@ -299,12 +300,13 @@ struct TrailSurfaceAnalyzerTests {
             (47.6318, Self.baseLongitude),
         ])
 
-        let breakdown = try await TrailSurfaceAnalyzer.breakdown(
+        let breakdown = try await TrailBreakdownAnalyzer.breakdown(
+            of: TrailSurface.self,
             route: walked,
             graph: graph
         )
 
-        #expect(breakdown.shares.map(\.surface) == [.gravel])
+        #expect(breakdown.shares.map(\.category) == [.gravel])
     }
 
     @Test("a mapped way with no surface tagging reports as unknown")
@@ -321,12 +323,13 @@ struct TrailSurfaceAnalyzerTests {
             (47.6318, Self.baseLongitude),
         ])
 
-        let breakdown = try await TrailSurfaceAnalyzer.breakdown(
+        let breakdown = try await TrailBreakdownAnalyzer.breakdown(
+            of: TrailSurface.self,
             route: walked,
             graph: graph
         )
 
-        #expect(breakdown.shares.map(\.surface) == [.unknown])
+        #expect(breakdown.shares.map(\.category) == [.unknown])
         #expect(breakdown.surveyedFraction == 0)
     }
 
@@ -358,12 +361,13 @@ struct TrailSurfaceAnalyzerTests {
             (47.6320, driftLongitude),
         ])
 
-        let breakdown = try await TrailSurfaceAnalyzer.breakdown(
+        let breakdown = try await TrailBreakdownAnalyzer.breakdown(
+            of: TrailSurface.self,
             route: walked,
             graph: graph
         )
 
-        #expect(breakdown.shares.map(\.surface) == [.gravel])
+        #expect(breakdown.shares.map(\.category) == [.gravel])
     }
 
     @Test("nothing to measure against produces nothing")
@@ -373,11 +377,13 @@ struct TrailSurfaceAnalyzerTests {
             (47.6320, Self.baseLongitude),
         ])
 
-        let withoutGraph = try await TrailSurfaceAnalyzer.breakdown(
+        let withoutGraph = try await TrailBreakdownAnalyzer.breakdown(
+            of: TrailSurface.self,
             route: walked,
             graph: .empty
         )
-        let withoutRoute = try await TrailSurfaceAnalyzer.breakdown(
+        let withoutRoute = try await TrailBreakdownAnalyzer.breakdown(
+            of: TrailSurface.self,
             route: [walked[0]],
             graph: splitGraph()
         )
@@ -405,13 +411,14 @@ struct TrailSurfaceAnalyzerTests {
             (endLatitude, Self.baseLongitude),
         ])
 
-        let breakdown = try await TrailSurfaceAnalyzer.breakdown(
+        let breakdown = try await TrailBreakdownAnalyzer.breakdown(
+            of: TrailSurface.self,
             route: walked,
             graph: graph
         )
 
         let paved = try #require(
-            breakdown.shares.first { $0.surface == .paved }
+            breakdown.shares.first { $0.category == .paved }
         )
         #expect(abs(paved.fraction - 0.2) < 0.05)
         #expect(abs(breakdown.totalMeters - 1000) < 5)
@@ -428,12 +435,12 @@ struct TrailSurfacePersistenceTests {
         #expect(hike.surfaceBreakdown == nil)
 
         hike.surfaceBreakdown = TrailSurfaceBreakdown(
-            metersBySurface: [.gravel: 700, .paved: 200, .unmapped: 100]
+            metersByCategory: [.gravel: 700, .paved: 200, .unmapped: 100]
         )
 
         #expect(hike.surfaceMetersByCategory["gravel"] == 700)
         let restored = try #require(hike.surfaceBreakdown)
-        #expect(restored.shares.map(\.surface) == [.gravel, .paved, .unmapped])
+        #expect(restored.shares.map(\.category) == [.gravel, .paved, .unmapped])
         #expect(restored.totalMeters == 1000)
     }
 
@@ -441,7 +448,7 @@ struct TrailSurfacePersistenceTests {
     func clearingRemovesStoredCategories() {
         let hike = Hike(title: "Thumsee", distanceMeters: 1000)
         hike.surfaceBreakdown = TrailSurfaceBreakdown(
-            metersBySurface: [.gravel: 700]
+            metersByCategory: [.gravel: 700]
         )
 
         hike.surfaceBreakdown = nil
@@ -455,7 +462,7 @@ struct TrailSurfacePersistenceTests {
         hike.surfaceMetersByCategory = ["gravel": 300, "lunar_regolith": 100]
 
         let restored = try #require(hike.surfaceBreakdown)
-        #expect(restored.shares.map(\.surface) == [.gravel])
+        #expect(restored.shares.map(\.category) == [.gravel])
         // Renormalised over what survived, so the percentages still add up.
         #expect(restored.totalMeters == 300)
     }

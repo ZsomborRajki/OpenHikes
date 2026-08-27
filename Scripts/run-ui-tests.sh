@@ -3,6 +3,8 @@
 set -euo pipefail
 
 repository_root="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
+# shellcheck source=lib/xcodebuild-output.sh
+source "$repository_root/Scripts/lib/xcodebuild-output.sh"
 project="$repository_root/OpenHikes.xcodeproj"
 scheme="OpenHikesUI"
 bundle="OpenHikesUITests"
@@ -245,12 +247,18 @@ status=0
 if [[ "$verbose" == true ]]; then
     "${command[@]}" || status=$?
 else
+    # The raw stream is kept because the formatter is allowed to drop lines:
+    # --test testLaunchPerformance reports through `measured [Time, s]`, which
+    # xcbeautify does not emit. See Scripts/lib/xcodebuild-output.sh.
+    raw_log="$(mktemp -t openhikes-ui-tests)"
+    trap 'rm -f "$raw_log"' EXIT
+
     set +e
-    "${command[@]}" 2>&1 \
-        | grep -E \
-            "Test Case|Test Suite .* (passed|failed)|error:|TEST (SUCCEEDED|FAILED)|measured"
+    "${command[@]}" 2>&1 | format_xcodebuild_stream "$raw_log"
     status="${PIPESTATUS[0]}"
     set -e
+
+    print_measurement_lines "$raw_log"
 fi
 
 if (( status != 0 )); then

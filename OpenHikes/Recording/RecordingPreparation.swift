@@ -12,9 +12,7 @@ nonisolated struct PreparedRecording: Sendable {
     let rawRoute: [RouteCoordinate]
     let distanceMeters: Double
     let startedAt: Date
-    let endedAt: Date
     let matchedTrailName: String?
-    let ambiguousLegCount: Int
     let matchResult: TrailMatchResult?
 }
 
@@ -31,7 +29,6 @@ nonisolated enum RecordingPreparation {
     static func prepareOffMain(
         points: [RecordingPoint],
         startedAt: Date,
-        endedAt: Date,
         graph: TrailGraph? = nil,
         gapDistances: [Int: Double] = [:],
         routeChoices: [Int: TrailRouteChoice] = [:]
@@ -42,7 +39,6 @@ nonisolated enum RecordingPreparation {
         return try prepare(
             points: points,
             startedAt: startedAt,
-            endedAt: endedAt,
             graph: graph,
             gapDistances: gapDistances,
             routeChoices: routeChoices
@@ -53,7 +49,6 @@ nonisolated enum RecordingPreparation {
     static func prepare(
         points: [RecordingPoint],
         startedAt: Date,
-        endedAt: Date,
         graph: TrailGraph? = nil,
         gapDistances: [Int: Double] = [:],
         routeChoices: [Int: TrailRouteChoice] = [:]
@@ -71,19 +66,17 @@ nonisolated enum RecordingPreparation {
         return preparedRecording(
             points: deduplicated,
             startedAt: startedAt,
-            endedAt: endedAt,
             match: match,
             routeChoices: routeChoices
         )
     }
 
     /// Resolves review choices without occupying the main actor. `@concurrent`
-    /// for the same reasons as ``prepareOffMain(points:startedAt:endedAt:graph:gapDistances:routeChoices:)``.
+    /// for the same reasons as ``prepareOffMain(points:startedAt:graph:gapDistances:routeChoices:)``.
     @concurrent
     static func prepareResolvedOffMain(
         points: [RecordingPoint],
         startedAt: Date,
-        endedAt: Date,
         matchResult: TrailMatchResult,
         choices: [Int: TrailRouteChoice]
     ) async throws(RecordingFailure) -> PreparedRecording {
@@ -93,7 +86,6 @@ nonisolated enum RecordingPreparation {
         return try prepareResolved(
             points: points,
             startedAt: startedAt,
-            endedAt: endedAt,
             matchResult: matchResult,
             choices: choices
         )
@@ -102,7 +94,6 @@ nonisolated enum RecordingPreparation {
     static func prepareResolved(
         points: [RecordingPoint],
         startedAt: Date,
-        endedAt: Date,
         matchResult: TrailMatchResult,
         choices: [Int: TrailRouteChoice]
     ) throws(RecordingFailure) -> PreparedRecording {
@@ -111,7 +102,6 @@ nonisolated enum RecordingPreparation {
         return preparedRecording(
             points: deduplicated,
             startedAt: startedAt,
-            endedAt: endedAt,
             match: matchResult,
             routeChoices: choices
         )
@@ -120,7 +110,6 @@ nonisolated enum RecordingPreparation {
     private static func preparedRecording(
         points deduplicated: [RecordingPoint],
         startedAt: Date,
-        endedAt: Date,
         match: TrailMatchResult?,
         routeChoices: [Int: TrailRouteChoice]
     ) -> PreparedRecording {
@@ -153,13 +142,9 @@ nonisolated enum RecordingPreparation {
             rawRoute: usesMatchedRoute ? rawRoute : [],
             distanceMeters: distanceMeters,
             startedAt: startedAt,
-            endedAt: endedAt,
             matchedTrailName: usesMatchedRoute
                 ? match?.matchedTrailName
                 : nil,
-            ambiguousLegCount: routeChoices.isEmpty
-                ? match?.ambiguousLegCount ?? 0
-                : 0,
             matchResult: match
         )
     }

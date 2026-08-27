@@ -110,12 +110,6 @@ nonisolated final class StubTileProtocol: URLProtocol, @unchecked Sendable {
         state.withLock { $0.responder = { _ in response } }
     }
 
-    /// Answers per URL — for tier-precedence tests, where the point is which
-    /// tile was asked for.
-    static func respond(_ responder: @escaping @Sendable (URL) -> Response) {
-        state.withLock { $0.responder = responder }
-    }
-
     /// Holds every response open for `duration`, so concurrent requests
     /// genuinely overlap rather than completing one after another.
     static func setDelay(_ duration: Duration?) {
@@ -124,10 +118,6 @@ nonisolated final class StubTileProtocol: URLProtocol, @unchecked Sendable {
 
     static var requests: [URLRequest] { state.withLock { $0.requests } }
     static var requestCount: Int { state.withLock { $0.requests.count } }
-
-    static func requestCount(forPathSuffix suffix: String) -> Int {
-        state.withLock { $0.requests.filter { $0.url?.path.hasSuffix(suffix) ?? false }.count }
-    }
 
     /// Suspends until at least `count` requests have been received by the stub.
     ///
@@ -244,7 +234,6 @@ struct StubbedTileCache {
 
     var cache: TileCache { sandbox.cache }
     var store: AutoSaveTileStore { sandbox.store }
-    var root: URL { sandbox.root }
 
     init(
         reachable: Bool = true,
@@ -266,8 +255,8 @@ struct StubbedTileCache {
     func isSaved(_ key: String) -> Bool { sandbox.isSaved(key) }
 
     /// Puts a tile in a tier directly, as a previous session would have left it.
-    func place(_ key: String, in file: URL, agedByDays days: Double = 0) throws {
-        try sandbox.place(key, in: file, agedByDays: days)
+    func place(in file: URL, agedByDays days: Double = 0) throws {
+        try sandbox.place(in: file, agedByDays: days)
     }
 
     /// Clears the process-wide response script. The directories go with the

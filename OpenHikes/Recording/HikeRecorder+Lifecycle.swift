@@ -8,7 +8,6 @@
 
 import CoreLocation
 import Foundation
-import OpenHikesShared
 import os
 import SwiftData
 

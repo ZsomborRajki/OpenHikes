@@ -333,7 +333,6 @@ extension HikeRecorder {
         // the merge sees a settled journal. A fix arriving after this point is
         // genuinely later than the widget's, and `mergeWidgetFixes`
         // deduplicates by timestamp, so it needs no ordering of its own.
-        let mergeRevision = acceptedFixRevision
         await journalQueue.drain()
         guard sessionID == expectedSessionID else { return }
         if case .failed = phase { return }
@@ -362,18 +361,38 @@ extension HikeRecorder {
         guard mergedCount > 0 else { return }
         await refreshLiveStateAfterJournalMerge(
             expectedSessionID: expectedSessionID,
-            journal: journal,
-            minimumRevision: mergeRevision
+            journal: journal
         )
     }
 
+    /// How many times ``refreshLiveStateAfterJournalMerge(expectedSessionID:journal:)``
+    /// re-reads the journal when a fix lands inside the window it is reading.
+    ///
+    /// The retry is real work — drain the queue, load the whole session from
+    /// disk, normalize every point — so it costs O(points), and the window it
+    /// occupies therefore *widens* as the hike gets longer. That makes another
+    /// fix landing inside it more likely the longer the recording runs, which
+    /// is the wrong direction for a loop to have no cap in.
+    ///
+    /// Three, because fixes are distance-filtered and the common case
+    /// converges on the first pass; the count exists for the pathological one,
+    /// not the ordinary one. Giving up is not a failure state: the live state
+    /// keeps the values it already had, the merged points are durable
+    /// regardless, and the next accepted fix rebuilds from the merged journal.
+    static let journalMergeRefreshAttemptLimit = 3
+
+    /// Rebuilds the live stats and trace from the journal after widget fixes
+    /// were merged into it.
+    ///
+    /// Retries when a fix is accepted while the load is in flight, because the
+    /// state rebuilt from that load would be missing it — but only
+    /// ``journalMergeRefreshAttemptLimit`` times.
     func refreshLiveStateAfterJournalMerge(
         expectedSessionID: UUID,
-        journal: TrackJournal,
-        minimumRevision: UInt64
+        journal: TrackJournal
     ) async {
-        while sessionID == expectedSessionID,
-              acceptedFixRevision >= minimumRevision {
+        for _ in 0..<Self.journalMergeRefreshAttemptLimit {
+            guard sessionID == expectedSessionID else { return }
             let revision = acceptedFixRevision
             await journalQueue.drain()
             guard sessionID == expectedSessionID else { return }
@@ -395,6 +414,9 @@ extension HikeRecorder {
                 return
             }
         }
+        Self.logger.notice(
+            "Live state kept its pre-merge value: a fix landed inside every refresh attempt"
+        )
     }
 
     // MARK: Shared state

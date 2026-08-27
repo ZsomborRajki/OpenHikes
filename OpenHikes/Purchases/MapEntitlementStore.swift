@@ -86,13 +86,43 @@ final class MapEntitlementStore {
     /// Injectable so a suite can drive the store without StoreKit. The default
     /// reads the real one.
     private let currentEntitlements: @Sendable () async -> Bool
+    /// Where the last resolved answer is remembered across launches.
+    private let defaults: UserDefaults
 
+    /// Remembers the last answer, and starts from it when it was "no".
+    ///
+    /// Without this, *every* cold launch serves paid tiles to everybody until
+    /// `currentEntitlements` returns — which on a cold start with poor
+    /// connectivity is not instant, and which bills Stadia or Thunderforest
+    /// against OpenHikes' own key for a user who never subscribed.
+    ///
+    /// Only the negative answer is acted on, and that asymmetry is the whole
+    /// design. A remembered "entitled" leaves the state ``MapEntitlementState``
+    /// starts in — `.unknown`, which already allows — so a subscriber's map is
+    /// byte-for-byte what it was before this existed and never flickers. A
+    /// remembered "not entitled" starts at `.notEntitled` instead, which draws
+    /// the free source and locks the paid rows until StoreKit says otherwise;
+    /// a row going from locked to *un*locked is not the transition Settings
+    /// guards against. A device that has never launched has nothing remembered
+    /// and stays permissive, which is one launch and cannot be closed without
+    /// holding the map back on the App Store.
+    ///
+    /// Not a security control and not built as one. The tile keys ship in the
+    /// binary, so the threat this addresses is accidental cost, not a
+    /// determined attacker — which is also why a plain `UserDefaults` bool is
+    /// the right weight for it.
     init(
+        defaults: UserDefaults = .standard,
         currentEntitlements: @escaping @Sendable () async -> Bool = {
             await MapEntitlementStore.hasProEntitlement()
         }
     ) {
+        self.defaults = defaults
         self.currentEntitlements = currentEntitlements
+        if defaults.object(forKey: SettingsKey.lastKnownMapEntitlement) != nil,
+           !defaults.bool(forKey: SettingsKey.lastKnownMapEntitlement) {
+            publish(.notEntitled)
+        }
     }
 
     /// Resolves the entitlement and begins listening for changes.
@@ -204,10 +234,23 @@ final class MapEntitlementStore {
     }
 
     /// Writes to the observable half and the process-wide half together, so a
-    /// view and the tile pipeline can never be looking at different answers.
+    /// view and the tile pipeline can never be looking at different answers —
+    /// and remembers a resolved one for the next cold launch.
+    ///
+    /// `.unknown` is never written back: it is the absence of an answer, and
+    /// overwriting a remembered one with it would reopen the window that
+    /// ``init(defaults:currentEntitlements:)`` exists to close.
     private func publish(_ newValue: MapEntitlementState) {
         state = newValue
         MapEntitlement.set(newValue)
+        switch newValue {
+        case .entitled:
+            defaults.set(true, forKey: SettingsKey.lastKnownMapEntitlement)
+        case .notEntitled:
+            defaults.set(false, forKey: SettingsKey.lastKnownMapEntitlement)
+        case .unknown:
+            break
+        }
     }
 
     private static func verified(_ result: VerificationResult<Transaction>) -> Transaction? {

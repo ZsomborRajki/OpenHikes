@@ -192,7 +192,10 @@ enum Fixture {
 
     private enum TileImageConstants {
         static let tilePoints: Double = 256.0
+        // periphery:ignore - read only from the `canImport(AppKit)` branch
+        // below, which this iPhone-only build never compiles.
         static let bitsPerSample: Int = 8
+        // periphery:ignore - as above.
         static let samplesPerPixel: Int = 4
     }
 
@@ -361,16 +364,16 @@ nonisolated final class TileSandbox: Sendable {
 
     /// Puts a tile in the browsing cache, as drawing it would have.
     func browse(key: String) throws {
-        try place(key, in: browsedFile(for: key))
+        try place(in: browsedFile(for: key))
     }
 
     /// Puts a tile in durable storage, as a previous session's save would have.
     func save(key: String) throws {
-        try place(key, in: savedFile(for: key))
+        try place(in: savedFile(for: key))
     }
 
     /// Puts a tile in a tier directly, optionally backdated.
-    func place(_ key: String, in file: URL, agedByDays days: Double = 0) throws {
+    func place(in file: URL, agedByDays days: Double = 0) throws {
         try FileManager.default.createDirectory(
             at: file.deletingLastPathComponent(), withIntermediateDirectories: true
         )
@@ -393,13 +396,6 @@ nonisolated final class TileSandbox: Sendable {
                 ofItemAtPath: file.path
             )
         }
-    }
-
-    /// Removes a key from both tiers, for the tests that assert on what a
-    /// second pass finds rather than on what the first one left.
-    func remove(key: String) {
-        try? FileManager.default.removeItem(at: browsedFile(for: key))
-        try? FileManager.default.removeItem(at: savedFile(for: key))
     }
 }
 

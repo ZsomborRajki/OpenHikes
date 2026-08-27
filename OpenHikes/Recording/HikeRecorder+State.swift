@@ -10,7 +10,6 @@
 import CoreLocation
 import Foundation
 import Observation
-import OpenHikesShared
 import os
 import SwiftData
 

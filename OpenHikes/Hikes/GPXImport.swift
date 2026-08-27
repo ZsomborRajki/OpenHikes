@@ -27,7 +27,6 @@ nonisolated enum GPXImport {
         /// Activity start time, from the metadata or the first timestamped point.
         let startTime: Date?
         let points: [Point]
-        let coordinates: [CLLocationCoordinate2D]
         let route: [RouteCoordinate]
         /// Total length in meters, computed once while preparing the import.
         let distanceMeters: Double
@@ -46,7 +45,6 @@ nonisolated enum GPXImport {
             self.keywords = keywords
             self.startTime = startTime
             self.points = points
-            coordinates = points.map(\.coordinate)
             route = points.map { point in
                 RouteCoordinate(
                     latitude: point.coordinate.latitude,

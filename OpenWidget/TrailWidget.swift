@@ -100,6 +100,8 @@ final class WidgetRecordingRequest {
 /// it must stay stable.
 struct TrailWidgetConfiguration: WidgetConfigurationIntent {
     static let title: LocalizedStringResource = "Trail"
+    // periphery:ignore - an optional `AppIntent` requirement, read through
+    // the AppIntents metadata rather than by any call site.
     static let description = IntentDescription(
         "Shows your selected trail or a hike currently being recorded."
     )

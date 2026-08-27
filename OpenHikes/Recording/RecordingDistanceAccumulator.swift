@@ -5,7 +5,6 @@
 
 import CoreLocation
 import Foundation
-import OpenHikesShared
 
 /// Distance accumulation that can retract a short window of GPS wander when
 /// the walker has remained within one small area for long enough.

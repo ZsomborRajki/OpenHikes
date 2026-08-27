@@ -9,7 +9,6 @@
 //
 
 import Foundation
-import OpenHikesShared
 
 nonisolated struct RouteReviewSection: Identifiable, Sendable {
     enum Kind: Equatable, Sendable {
