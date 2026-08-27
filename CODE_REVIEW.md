@@ -97,7 +97,7 @@ means every API used, including `MXDiskSpaceUsageMetric` and
 | Strict SwiftLint | Passed (`Scripts/lint.sh`, 0.65.0, `--strict`) |
 | Shared package tests | 76 tests in 12 suites passed |
 | App and widget unit tests | 955 tests in 106 suites, plus 23 widget tests in 3 suites, passed |
-| Full-bundle repeat runs | Passed 3× consecutively. Run in a batch on purpose: the parallel-suite load is what exposed a flake that a targeted run could not, and a cancellation test that only passes alone is not passing |
+| Full-bundle repeat runs | Passed 3× consecutively. Run in a batch on purpose: a cancellation test that only passes alone is not passing |
 | iOS debug build | Passed, app and embedded widget, Swift warnings as errors |
 | iOS release build | Passed. This is what validates the `#if DEBUG` wrap around every `--ui-test-*` flag: the parsing and its argument names do not compile into a shipping binary at all |
 | Mutation checks | Two fixes were verified by reverting them and confirming the new test fails: the offline download window, and the stranded trail-graph region. A test that passes against the unfixed code is not evidence |
@@ -183,9 +183,12 @@ Recorded so none of it is re-raised as a finding.
 `BackgroundTrailTracker`'s injectable location source and defaults,
 `OfflineTileDownloader`'s injectable transport and `TileLoadGate`,
 `CloudSyncCoordinator`'s injectable `CKContainer` and settings mirror,
-`LocationManager`'s injectable defaults, and `TileSandbox`'s parallel
-`TileCache` directories all exist so suites can run in parallel without
-touching the app's singletons, the network, or wall-clock time.
+`LocationManager`'s injectable defaults, and `TileSandbox`'s per-suite
+`TileCache` directories all exist so suites never touch the app's singletons,
+the network, or wall-clock time. That isolation is not a consequence of
+parallelism and did not go away with it: the whole bundle runs in one process,
+so a suite that reached for `TileCache.shared` would still leak into the next
+one.
 
 `ObservationCounter.settle()` in `RenderIsolationTests.swift` stays a bare
 settle on purpose, with the argument written next to it. It asserts that an

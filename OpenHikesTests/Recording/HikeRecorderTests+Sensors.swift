@@ -300,7 +300,7 @@ extension HikeRecorderTests {
         let deadline = ContinuousClock.now + .seconds(5)
         var fetched = Set(await provider.prefetches())
         while !condition(fetched), ContinuousClock.now < deadline {
-            try? await Task.sleep(for: .milliseconds(5))
+            guard await settlePollTick() else { break }
             fetched = Set(await provider.prefetches())
         }
         return fetched
@@ -316,7 +316,7 @@ extension HikeRecorderTests {
         let deadline = ContinuousClock.now + .seconds(5)
         var snapshots = await store.savedSnapshots()
         while !condition(snapshots), ContinuousClock.now < deadline {
-            try? await Task.sleep(for: .milliseconds(5))
+            guard await settlePollTick() else { break }
             snapshots = await store.savedSnapshots()
         }
         return snapshots
@@ -328,7 +328,7 @@ extension HikeRecorderTests {
     private func settle(untilTrue condition: () async -> Bool) async {
         let deadline = ContinuousClock.now + .seconds(5)
         while !(await condition()), ContinuousClock.now < deadline {
-            try? await Task.sleep(for: .milliseconds(5))
+            guard await settlePollTick() else { break }
         }
     }
 

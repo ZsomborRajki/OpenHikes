@@ -7,23 +7,31 @@
 //
 //  Each suite that needed such a wait used to spin its own fixed number of
 //  `Task.yield()`s — 8 here, 32 there. That premise is wrong in a way that
-//  only shows up under load. The bundle is main-actor isolated project-wide
-//  (`SWIFT_DEFAULT_ACTOR_ISOLATION = MainActor`) and Swift Testing runs its
-//  suites in parallel *within one process*, so every main-actor test in the
-//  bundle is contending for one executor. A yield hands that executor to
-//  whichever job is next, not to this test's hop, so "8 turns" buys an amount
-//  of progress that depends entirely on how busy the machine is.
-//
-//  On a developer's machine it passed. On CI it did not: `Map coordinator`
-//  and `Location publishing` both failed in run 31834514456 with a
-//  `hasCentered` that was still false and a `routeFix` that was still nil,
-//  in tests that had by then been running for 34 and 42 seconds without
-//  touching disk or network.
+//  only shows up under load: a yield hands the executor to whichever job is
+//  next, not to this test's hop, so "8 turns" buys an amount of progress that
+//  depends entirely on how busy the machine is. On a developer's machine it
+//  passed. On CI it did not — `Map coordinator` and `Location publishing`
+//  both failed in run 31834514456 with a `hasCentered` that was still false
+//  and a `routeFix` that was still nil, in tests that had by then been running
+//  for 34 and 42 seconds without touching disk or network.
 //
 //  So wait for the effect rather than for a number of scheduler turns. A
 //  caller names what it is waiting for, and the budget is a real deadline —
-//  which is what makes the wait insensitive to load, and what turns a timeout
-//  into "waited 5s for X" instead of a bare failed expectation further down.
+//  which turns a timeout into "waited 5s for X" instead of a bare failed
+//  expectation further down.
+//
+//  A deadline is only meaningful if the test owns the machine while it runs,
+//  and that is why `OpenHikes.xctestplan` marks both unit bundles
+//  `parallelizable: false`. The bundle is main-actor isolated project-wide
+//  (`SWIFT_DEFAULT_ACTOR_ISOLATION = MainActor`), so Swift Testing's
+//  in-process parallelism could never run two tests at once anyway — it could
+//  only interleave a thousand of them at their suspension points, all
+//  contending for one executor. Run 33049137656 is what that costs: seven
+//  recording tests started within two seconds of each other, and the first
+//  five-second budget took *seventeen* seconds of wall time to notice it had
+//  expired, because a 5 ms poll was not resumed for seconds at a time. Do not
+//  reach for a bigger number here if this file starts failing again; check
+//  that the plan still serializes first.
 //
 
 import Foundation
@@ -58,6 +66,26 @@ private func mainActorRoundTrip() async {
     }.value
 }
 
+/// One poll interval of a deadline loop. `false` means the task was cancelled
+/// and the caller should stop.
+///
+/// Shared so that a suite hand-rolling its own wait — which
+/// `HikeRecorderTests+Sensors.swift` has to, because reading an actor's
+/// contents needs an `await` and a settle condition is synchronous — spells
+/// the sleep the same way this file does. `try? await Task.sleep` is the
+/// version to avoid: once the task is cancelled, sleeping throws immediately,
+/// so swallowing the error turns the loop into a tight spin that holds the
+/// main actor until the deadline passes.
+@MainActor
+func settlePollTick() async -> Bool {
+    do {
+        try await Task.sleep(for: settlePollInterval)
+        return true
+    } catch {
+        return false
+    }
+}
+
 /// Lets the `Task { @MainActor in … }` hop that every delegate callback in
 /// this app makes actually run, and — when `condition` is given — keeps
 /// waiting until the effect of that hop is visible.
@@ -88,7 +116,20 @@ func settleDelegateHop(
 
     let deadline = ContinuousClock.now + settleBudget
     while ContinuousClock.now < deadline {
-        try? await Task.sleep(for: settlePollInterval)
+        guard await settlePollTick() else {
+            // Cancelled — a `.timeLimit` fired, or the run is being torn down.
+            // Give the condition one last look before leaving.
+            if !condition() {
+                Issue.record(
+                    Comment(rawValue: """
+                        Cancelled while waiting for \
+                        \(description?.rawValue ?? "the main-actor delegate hop to settle").
+                        """),
+                    sourceLocation: sourceLocation
+                )
+            }
+            return
+        }
         if condition() { return }
     }
 
