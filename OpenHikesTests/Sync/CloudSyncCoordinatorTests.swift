@@ -160,4 +160,31 @@ struct CloudSyncCoordinatorTests {
         coordinator.isEnabled.toggle()
         #expect(!mirror.isRunning)
     }
+
+    /// The regression that shipped: `CKContainer(identifier:)` is not the
+    /// cheap construction it looks like — the first one in a process loads
+    /// CloudKit and shakes hands with its daemon, synchronously — and a
+    /// `Task {}` started from a method on this `@MainActor` type *inherits*
+    /// that isolation. So the account check ran the handshake on the main
+    /// thread, which on a fresh install pinned it for seconds: a new user's
+    /// very first launch was a grey map, no sheet, and an app that did not
+    /// respond to touch.
+    ///
+    /// Asserted through the seam rather than through a real container, because
+    /// a test that builds one depends on a daemon and a connection. What broke
+    /// was never CloudKit — it was which thread the work was handed to — and
+    /// this test runs from the same main-actor context that caused it.
+    @Test("work that must leave the main thread actually leaves it")
+    func offMainThreadLeavesTheMainThread() async {
+        // `pthread_main_np` rather than `Thread.isMainThread`, which Swift
+        // makes unavailable from an `async` context — the very context the
+        // question has to be asked in.
+        #expect(pthread_main_np() != 0, "the bug needs a main-actor caller to reproduce")
+
+        let ranOnMainThread = await CloudSyncCoordinator.offMainThread {
+            pthread_main_np() != 0
+        }
+
+        #expect(!ranOnMainThread)
+    }
 }

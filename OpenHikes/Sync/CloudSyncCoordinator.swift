@@ -31,7 +31,7 @@ import SwiftData
 @MainActor
 @Observable
 final class CloudSyncCoordinator {
-    private static let logger = Logger(subsystem: "OpenHikes", category: "CloudSync")
+    nonisolated private static let logger = Logger(subsystem: "OpenHikes", category: "CloudSync")
 
     /// The default container for this bundle identifier, spelled out rather
     /// than left to `CKContainer.default()` so that it is greppable and so
@@ -40,7 +40,7 @@ final class CloudSyncCoordinator {
     /// Mirroring picks its own container from the entitlement and never reads
     /// this. The account check does, which is the only CloudKit call this app
     /// still makes by hand.
-    static let containerIdentifier = "iCloud.tappium.com.OpenHikes"
+    nonisolated static let containerIdentifier = "iCloud.tappium.com.OpenHikes"
 
     let status: CloudSyncStatus
 
@@ -71,12 +71,16 @@ final class CloudSyncCoordinator {
     @ObservationIgnored private let storageIsDurable: Bool
     /// What the container was actually built with — see ``pendingRelaunch``.
     @ObservationIgnored private let isSyncingThisLaunch: Bool
-    /// Built on first use. Its only reader is the `async` account check, and a
-    /// `CKContainer` constructed as a stored default argument put CloudKit's
-    /// framework load and daemon handshake on the launch path; see
-    /// `PERFORMANCE.md`.
-    @ObservationIgnored private let makeCloudContainer: () -> CKContainer
-    @ObservationIgnored private lazy var cloudContainer: CKContainer = makeCloudContainer()
+    /// Builds the `CKContainer` the account check asks about.
+    ///
+    /// Held as a closure and never called from here, because calling it is not
+    /// the cheap value-type construction it looks like: the first
+    /// `CKContainer(identifier:)` in a process loads CloudKit and shakes hands
+    /// with its daemon, synchronously, and on a fresh install that is seconds
+    /// rather than milliseconds. See ``accountStatus(making:)`` for where it is
+    /// allowed to run, and `PERFORMANCE.md` for the launch cost that first
+    /// moved it off the stored default it used to be.
+    @ObservationIgnored private let makeCloudContainer: @Sendable () -> CKContainer
     @ObservationIgnored private let settings: SyncedSettingsMirror
     @ObservationIgnored private var eventObserver: (any NSObjectProtocol)?
     @ObservationIgnored private var accountObserver: (any NSObjectProtocol)?
@@ -103,7 +107,7 @@ final class CloudSyncCoordinator {
         storageIsDurable: Bool = true,
         settings: SyncedSettingsMirror? = nil,
         status: CloudSyncStatus = CloudSyncStatus(),
-        cloudContainer: @autoclosure @escaping () -> CKContainer = CKContainer(
+        cloudContainer: @autoclosure @escaping @Sendable () -> CKContainer = CKContainer(
             identifier: CloudSyncCoordinator.containerIdentifier
         )
     ) {
@@ -249,27 +253,67 @@ final class CloudSyncCoordinator {
             return
         }
         let previous = accountTask
+        let makeContainer = makeCloudContainer
         accountTask = Task { [weak self] in
             await previous?.value
-            guard let container = self?.cloudContainer else { return }
-            let account = await Self.accountStatus(of: container)
+            let account = await Self.accountStatus(making: makeContainer)
             guard let self else { return }
             status.account = account
             if !account.isUsable { status.paused() }
         }
     }
 
-    private static func accountStatus(of container: CKContainer) async -> CloudAccountStatus {
-        do {
-            return CloudAccountStatus(try await container.accountStatus())
-        } catch {
-            logger.error(
-                """
-                Could not read the iCloud account status: \
-                \(error.localizedDescription, privacy: .public)
-                """
-            )
-            return .unknown
+    /// Builds the container and asks CloudKit about the account, both away
+    /// from the main thread.
+    ///
+    /// `Task.detached` rather than a plain `Task`, and this is the whole
+    /// point of the function: this type is `@MainActor`, and a `Task {}`
+    /// started from one of its methods *inherits* that isolation. Building the
+    /// container inside one therefore ran CloudKit's synchronous framework
+    /// load and daemon handshake on the main thread — which on a fresh install
+    /// pinned it for seconds and left a new user looking at a grey map, no
+    /// sheet and an app that did not respond, on the very first launch. Making
+    /// the container `lazy` did not help: it moved *when* the handshake ran,
+    /// not *where*.
+    ///
+    /// Not cached, deliberately. `CKContainer(identifier:)` hands back the
+    /// same instance for an identifier it has already seen, so the cost this
+    /// avoids is paid once per process no matter how often this is called, and
+    /// a cache would only be somewhere else for a non-`Sendable` reference to
+    /// have to live.
+    private static func accountStatus(
+        making container: @escaping @Sendable () -> CKContainer
+    ) async -> CloudAccountStatus {
+        await offMainThread {
+            do {
+                return CloudAccountStatus(try await container().accountStatus())
+            } catch {
+                logger.error(
+                    """
+                    Could not read the iCloud account status: \
+                    \(error.localizedDescription, privacy: .public)
+                    """
+                )
+                return .unknown
+            }
         }
+    }
+
+    /// Runs `work` somewhere that is not the main thread, and waits for it.
+    ///
+    /// Belt and braces, and both are load-bearing on their own: `nonisolated`
+    /// stops the function inheriting this type's `@MainActor` isolation, and
+    /// `Task.detached` refuses to inherit any isolation even if it did. Either
+    /// alone is enough; together they mean a later edit has to remove two
+    /// things to reintroduce the bug, and the suite fails when it does.
+    ///
+    /// Its own function so that the guarantee has somewhere to be tested at
+    /// all. What it prevents is invisible at the call site and fatal at
+    /// launch: `Task {}` started from a main-actor method looks exactly like
+    /// `Task.detached` and runs its body on the main thread.
+    nonisolated static func offMainThread<T: Sendable>(
+        _ work: @escaping @Sendable () async -> T
+    ) async -> T {
+        await Task.detached(priority: .utility) { await work() }.value
     }
 }
