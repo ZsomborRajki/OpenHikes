@@ -144,9 +144,30 @@ nonisolated enum RecordingFixPolicy {
             to: location.coordinate
         )
         let impliedSpeed = displacement / interval
+        // The `interval` term is what stops this gate outranking the heartbeat
+        // below. A first fix has no predecessor and so anchors the recording on
+        // its claimed accuracy alone, and a cold start can claim a figure
+        // inside the 50 m filter while sitting materially further out than
+        // that. Every accurate fix afterwards is then measured against a place
+        // the walker has never stood and implies a speed no walk supports;
+        // their real speed cannot rescue it either, since 1.4 m/s does not
+        // corroborate an implied 16. Without the term the lockout runs until
+        // the anchor's error divided by `maximumSpeed` has elapsed — around
+        // 19 s for 150 m, and longer the worse the anchor was — and that
+        // opening stretch of the walk is simply lost.
+        //
+        // Little is given up. A teleport arrives amid a stream whose anchor is
+        // seconds old, and inside `maximumInterval` it is refused exactly as
+        // before; past it this was never a rejection but a delay, being a
+        // distance threshold that grows at `maximumSpeed` and admits the same
+        // bad fix a little later. A live recording would rather re-anchor on a
+        // position that may be wrong than hold one that is certainly stale.
+        // The `interval > 0` guard above still refuses a reordered pair, so
+        // the escape cannot admit one.
         if impliedSpeed > maximumSpeed,
            motionState != .nonPedestrian,
-           !reportedSpeedSupports(impliedSpeed, location.speed) { return false }
+           !reportedSpeedSupports(impliedSpeed, location.speed),
+           interval < maximumInterval { return false }
 
         let displacementGate = max(
             minimumDisplacement,

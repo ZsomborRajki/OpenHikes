@@ -83,7 +83,7 @@ jobs:
 
       # The same suite against genuinely optimised code. This is the only place
       # in the repository where a *test* runs against `-O` and whole-module
-      # optimisation: the two app-hosted bundles cannot, because 116 `@testable
+      # optimisation: the two app-hosted bundles cannot, because 152 `@testable
       # import`s need ENABLE_TESTABILITY, and the seams they reach for —
       # `AppLaunchEnvironment.Configuration(arguments:)`, `TileLoadGate`'s
       # `TestState`, `MapEntitlement.resetForTesting()` — are inside `#if
@@ -190,10 +190,20 @@ jobs:
       # own, and close enough that a real fall — a suite deleted, a domain
       # stubbed out — does. Raise it when the measured number rises. Lowering
       # it to make a run pass is the one change this step exists to prevent.
+      #
+      # The published line names its *selection*, because the number describes
+      # this job's configuration as much as it describes the code: the test
+      # action above excludes `OpenHikesUITests`, which is the only suite that
+      # evaluates SwiftUI view bodies, so the ten largest apparently-untested
+      # files are tested by a bundle whose results never reach this gate. The
+      # gap to the full plan is roughly 25 points. Raising the floor to match
+      # the full plan would make the gate depend on a suite CI does not run —
+      # the fix is to say which selection produced the number, not to move it.
       - name: Check coverage against its floor
         env:
           COVERAGE_FLOOR: "55.0"
           COVERAGE_TARGET: OpenHikes.app
+          COVERAGE_SELECTION: OpenHikesTests + OpenWidgetTests (no UI suite)
         run: |
           set -o pipefail
           xcrun xccov view --report TestResults/UnitTests.xcresult
@@ -222,7 +232,8 @@ jobs:
           line = (
               f"`{wanted}` line coverage **{measured:.2f}%**, "
               f"{verdict} the {floor:.2f}% floor "
-              f"({target['coveredLines']}/{target['executableLines']} lines)."
+              f"({target['coveredLines']}/{target['executableLines']} lines), "
+              f"measured over `{os.environ['COVERAGE_SELECTION']}`."
           )
           print(line)
 

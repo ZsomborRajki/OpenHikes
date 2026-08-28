@@ -8,18 +8,26 @@
 //  `HikeLiveActivityControllerTests`. What is asserted here is the wiring: that
 //  the recorder publishes at all, that it publishes the same figures the
 //  widget gets, and that every way a session can end takes the activity with
-//  it. The last one is the whole risk of the feature: an activity that outlives
-//  its recording sits on the Lock Screen reporting a walk that is over, and
-//  nothing in the app would ever take it down.
+//  it — including the ways that end badly. The last one is the whole risk of
+//  the feature: an activity that outlives its recording sits on the Lock
+//  Screen reporting a walk that is over, and nothing in the app would ever
+//  take it down.
 //
 
 import CoreLocation
 import Foundation
 @testable import OpenHikes
 import OpenHikesShared
+import SwiftData
 import Testing
 
 extension HikeRecorderTests {
+    /// The two fixes the failure fixture below walks between. Named rather
+    /// than inline because `no_magic_numbers` skips a `@Test` body and this is
+    /// a helper.
+    private static let firstFixLatitude = 47.63
+    private static let secondFixLatitude = 47.6302
+
     private func liveActivityHarness() -> (
         controller: HikeLiveActivityController,
         presenter: StubHikeActivityPresenter
@@ -112,6 +120,96 @@ extension HikeRecorderTests {
         #expect(harness.controller.activeSubject == nil)
         #expect(
             harness.presenter.calls.last == .end(finalState: nil, dismissAfter: nil)
+        )
+    }
+
+    /// A recorder with its activity on screen, stopped straight into a
+    /// storage failure — the walker's "tap Stop, hit an error" path.
+    ///
+    /// `failedSaveNumbers: [2]` because the first save is the draft
+    /// `ensureRecordingHike` writes at activation and the second is `persist`.
+    private func recorderAfterAFailedStop(
+        controller: HikeLiveActivityController
+    ) async throws -> HikeRecorder {
+        let saver = ScriptedModelContextSaver(failedSaveNumbers: [2])
+        let recorder = makeRecorder(
+            liveActivityController: controller,
+            saveModelContext: saver.save
+        )
+        await recorder.start()
+        source.deliver(fix(latitude: Self.firstFixLatitude))
+        clock.advance(by: 10)
+        source.deliver(fix(latitude: Self.secondFixLatitude))
+        await controller.settle()
+        let sessionID = try #require(recorder.sessionID)
+        #expect(
+            controller.activeSubject == .recording(sessionID: sessionID),
+            "the recording has to reach the Lock Screen before losing it can be asserted"
+        )
+
+        do {
+            _ = try await recorder.stop()
+            Issue.record("the injected persistence failure was ignored")
+        } catch let failure as RecordingFailure {
+            guard case .save = failure else {
+                Issue.record("the stop returned the wrong failure")
+                throw failure
+            }
+        }
+        await controller.settle()
+        guard case .failed = recorder.phase else {
+            Issue.record("the injected failure did not leave the recorder failed")
+            throw RecordingFailure.save("the recorder did not fail")
+        }
+        return recorder
+    }
+
+    /// The failure path, which nothing used to take down. Stopping a
+    /// recording turns the sensors off and the recorder publishes nothing
+    /// further, so the last state the panel holds says
+    /// `isCapturingFixes: false` — which it draws as *Paused*. Left there it
+    /// spends the whole ten-minute stale window telling a walker whose hike is
+    /// over that it is waiting for them.
+    ///
+    /// Removed outright rather than finished off with the walk's totals: no
+    /// `Hike` was written, and a lingering final panel claims one that was.
+    /// The walker who retries the save is looking at the app.
+    @Test("a failed save takes the recording off the Lock Screen")
+    func failedSaveEndsTheActivity() async throws {
+        let harness = liveActivityHarness()
+        let recorder = try await recorderAfterAFailedStop(
+            controller: harness.controller
+        )
+
+        #expect(harness.controller.activeSubject == nil)
+        #expect(
+            harness.presenter.calls.last == .end(finalState: nil, dismissAfter: nil)
+        )
+        #expect(recorder.canRetrySave, "the save is still retryable; the panel was never the retry")
+    }
+
+    /// And it stays off. A failed recorder is still `isActive` — that is how
+    /// the walker gets back to it — so pocketing the phone publishes one more
+    /// snapshot, which the widget genuinely wants. Letting that reach the
+    /// controller would find nothing running and *start* a second activity for
+    /// the recording that just failed: the same "Paused" claim, arriving by a
+    /// slightly longer route.
+    @Test("a scene change after a failed save starts no replacement activity")
+    func sceneChangeAfterAFailedSaveStartsNoSecondActivity() async throws {
+        let harness = liveActivityHarness()
+        let recorder = try await recorderAfterAFailedStop(
+            controller: harness.controller
+        )
+
+        recorder.sceneWillResignActive()
+        recorder.sceneDidBecomeActive()
+        await recorder.journalQueue.drain()
+        await harness.controller.settle()
+
+        #expect(harness.controller.activeSubject == nil)
+        #expect(
+            harness.presenter.startedSubjects.count == 1,
+            "the one this recording began with, and no replacement for it"
         )
     }
 

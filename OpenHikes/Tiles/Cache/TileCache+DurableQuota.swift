@@ -240,12 +240,18 @@ nonisolated extension TileCache {
         var freed: Int64 = 0
         for tile in candidates.sorted(by: { $0.modified < $1.modified }) {
             guard freed < byteCount else { break }
+            // Delete and bump under one acquisition, so a fetch that took its
+            // token before this cannot write the tile back after it. The bump
+            // is this tile's own row — its file name — rather than the epoch:
+            // a reclaim runs while the map is being browsed, and bumping the
+            // epoch per tile made every unrelated in-flight fetch throw away a
+            // correct response, once per tile deleted.
             let removed = mutationVersions.withLock { versions -> Bool in
                 guard removeItemIgnoringNotFound(
                     at: tile.url,
                     operation: "reclaim durable tile for a confirmed download"
                 ) else { return false }
-                versions.invalidateAll()
+                versions.invalidate(tile.url.lastPathComponent)
                 return true
             }
             guard removed else { continue }
@@ -374,12 +380,15 @@ nonisolated extension TileCache {
         var freed: Int64 = 0
         for tile in tiles.sorted(by: { $0.modified < $1.modified }) {
             guard total - freed > target else { break }
+            // Per-tile rather than the epoch, for the same reason as
+            // ``reclaimDurableBytes(forProviderID:protecting:byteCount:)``:
+            // this runs at launch, alongside the first draw pass's fetches.
             let removed = mutationVersions.withLock { versions -> Bool in
                 guard removeItemIgnoringNotFound(
                     at: tile.url,
                     operation: "trim durable tile over provider limit"
                 ) else { return false }
-                versions.invalidateAll()
+                versions.invalidate(tile.url.lastPathComponent)
                 return true
             }
             guard removed else { continue }

@@ -163,8 +163,24 @@ final class RouteStyle {
     /// purpose — mutation-tested, either alone keeps the stale colour out — but
     /// not for its other one: it is also what stops a stale callback re-arming
     /// a second `withObservationTracking` registration, so every subsequent
-    /// write would be applied once per hike ever followed. No test covers that.
+    /// write would be applied once per hike ever followed. That second purpose
+    /// is what `a stale callback neither applies nor arms a second
+    /// registration` in `RouteStyleTrackingTests` holds, through
+    /// ``appliedCount``.
     @ObservationIgnored private var generation = 0
+
+    /// How many times ``apply(tint:width:pattern:)`` has run.
+    ///
+    /// A test seam, and the only one this file's stale-callback guard has.
+    /// Every apply restates the *currently* tracked hike's appearance, so a
+    /// duplicated one writes values that are already there — and Observation
+    /// drops an equal write to an `Equatable` property. A stale callback that
+    /// slipped through `generation` and armed a second registration is
+    /// therefore invisible in `tint`, `width` and `pattern` however many of
+    /// them pile up; only the amount of work changes, so the work is what is
+    /// counted. `@ObservationIgnored` because a counter that notified would be
+    /// the very cost it exists to measure.
+    @ObservationIgnored private(set) var appliedCount = 0
 
     /// The hike currently being tracked for style changes.
     ///
@@ -222,6 +238,7 @@ final class RouteStyle {
     }
 
     private func apply(tint: Color, width: Double, pattern: RouteLinePattern) {
+        appliedCount &+= 1
         if self.tint != tint { self.tint = tint }
         if self.width != width { self.width = width }
         if self.pattern != pattern { self.pattern = pattern }

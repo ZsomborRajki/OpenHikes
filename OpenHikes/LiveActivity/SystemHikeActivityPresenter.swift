@@ -30,8 +30,17 @@ final class SystemHikeActivityPresenter: HikeActivityPresenting {
     }
 
     var activeSubject: HikeActivityAttributes.Subject? {
-        guard let activity, Self.isLive(activity) else { return nil }
-        return activity.attributes.subject
+        if let activity, Self.isLive(activity) { return activity.attributes.subject }
+        // Nothing held, which is not the same as nothing on screen: a Live
+        // Activity outlives its process, and after a relaunch the system's own
+        // list is the only place the truth is. Recordings first, so a process
+        // that somehow finds both is answered with the higher-ranked one and
+        // this property cannot disagree with the precedence rule.
+        let running = Activity<HikeActivityAttributes>.activities.filter { candidate in
+            Self.isLive(candidate)
+        }
+        let preferred = running.first(where: \.attributes.subject.isRecording)
+        return (preferred ?? running.first)?.attributes.subject
     }
 
     func start(
@@ -96,6 +105,31 @@ final class SystemHikeActivityPresenter: HikeActivityPresenting {
             .after(.now.addingTimeInterval(delay))
         } ?? .immediate
         await Self.finish(Handle(activity), content: content, policy: policy)
+    }
+
+    /// Ends every live activity of `kind`, held or not.
+    ///
+    /// Plural because the system's list is what is being read, not a handle:
+    /// two panels for one app is a state ActivityKit permits and this app has
+    /// one way to reach — a relaunch that requests a follow while an
+    /// unadopted recording is still up, since ``start`` adopts only a walk
+    /// that matches. Ending one of two and leaving the other would be the
+    /// worse half of the bug this method exists for.
+    ///
+    /// The held handle is dropped when it is one of them, so a later `update`
+    /// does not address an activity that has just been ended — which the
+    /// framework accepts silently and which looks exactly like a dead feed.
+    func endUnowned(_ kind: HikeActivityKind) async {
+        let doomed = Activity<HikeActivityAttributes>.activities.filter { candidate in
+            Self.isLive(candidate) && kind.matches(candidate.attributes.subject)
+        }
+        guard !doomed.isEmpty else { return }
+        if let activity, doomed.contains(where: { candidate in candidate.id == activity.id }) {
+            self.activity = nil
+        }
+        for candidate in doomed {
+            await Self.finish(Handle(candidate), content: nil, policy: .immediate)
+        }
     }
 
     /// Carries an `Activity` across an isolation boundary.

@@ -5,10 +5,13 @@ Every number here was produced by `Scripts/run-performance-tests.sh` on an
 iPhone 17 Pro simulator (iOS 26.5, Xcode 26.6, Debug); none of it is estimated.
 
 **This is a live list, not a log**, on the same terms as `CODE_REVIEW.md`. A
-finding that has been fixed is deleted rather than annotated. What stays is the
-current state and what is still open. The rules this harness learned, and the
-energy policies it justifies, live in `.github/copilot-instructions.md` so they
-cannot drift away from the code they constrain.
+finding that has been fixed is deleted rather than annotated. What stays is what
+is still open, and how to read a measurement correctly — not a table of last
+week's numbers, which has to be re-measured to stay true and which nobody can
+act on. A run's own report carries its figures; `Scripts/performance-baseline.json`
+is what a run is diffed against. The rules this harness learned, and the energy
+policies it justifies, live in `.github/copilot-instructions.md` so they cannot
+drift away from the code they constrain.
 
 Two claims are under test, and they are not the same claim. *Rendering*: the
 stable `@Observable` controllers exist so that high-frequency state — a GPS fix,
@@ -66,66 +69,9 @@ rather than absolutes, because a test cannot control what the app did before the
 gesture it cares about. `Scripts/perf-report.py` joins the test's output with
 the app's event file into the markdown report.
 
-## Where this stands
+## Reading a measurement
 
-Ten scenarios, all passing, measured 2026-08-27.
-
-| Check | Result |
-|---|---|
-| `PerformanceUITests` | 10 of 10 passed |
-| App and widget unit tests | 1,298 passed (1,275 app + 23 widget) |
-| `OpenHikesUITests`, functional | 44 passed |
-| `swiftlint --strict` | Clean |
-
-### What is already right
-
-These are the load-bearing claims of the architecture, and they hold.
-
-| Scenario | Measurement | Result |
-|---|---|---|
-| Idle, 7 s, map visible | body evaluations | **0** |
-| Idle, 7 s | CPU | **0.045 s — 0.6% of one core** |
-| Chart scrub, one drag | `ElevationChartBody` | 17 |
-| Chart scrub, one drag | `OpenHikesViewBody`, `MapSheetBody`, `MapRouteRebuilt` | **0, 0, 0** |
-| Map browsing, 17 s of pans and zooms | root, hike list | **0, 0** |
-| Live recording | `TrailMatcherWork` | 1.0 per fix, off-main, no stall |
-| Offline browsing, 17 s | connections opened | **0**, with 45 fetches refused |
-| Backgrounded recording | SwiftUI bodies per fix | **0** |
-| Backgrounded recording | radio wake-ups over 14 s in a pocket | **0** of the run's 209 |
-| Photo strip, scrolled | decodes, bodies, stalls | **0, 0, 0** |
-| Photo paging | sorts per viewer body | **1.0** |
-| Settings, toggling a switch | `SettingsBody` | **0** |
-| Photo discovery, four selections | `PhotoDiscoveryBody` | **0** |
-| Photo push: root / hike list / sheet | body evaluations | **0 / 0 / 1** |
-
-A sustained scrub moves the map marker seventeen times without re-evaluating a
-single body above the chart; an idle app with a map on screen costs under one
-percent of one core; a recording in a pocket does no rendering and opens no
-connection at all; scrolling a gallery of eight 12 MP photos re-decodes nothing;
-and ticking four checkboxes in a twelve-cell grid rebuilds four checkboxes.
-
-The one `MapSheetBody` left on a photo push is a floor rather than a miss.
-`NavigationStack(path:)` reads its binding during the enclosing body, so one
-evaluation per push is structural — asserted by `NavigationStackBodyCostTests`,
-which builds a real stack and measures exactly +1, rather than argued in a
-comment.
-
-### The costs
-
-| Measurement | Value |
-|---|---|
-| Launch, first responsive frame | 1.471 s, RSD 0.18% (n=3) |
-| Launch main-thread stall | 544–595 ms, asserted below 1200 ms |
-| `AppModelInit` | 64.7–71.3 ms |
-| `ModelContainerInit` | 36.4–39.0 ms |
-| `RecordingTailRebuilt` per fix | 2.0, 0.02–0.03 ms median |
-| `MapRecordingTraceApplied` per fix | 2.0 foreground, **0.33** backgrounded |
-| CPU per accepted fix | 0.488 s screen on, **0.225 s** backgrounded |
-| Photo thumbnail decode | 18.9 ms median, 20.8 ms max |
-| Photo full-size decode | 64.5 ms median, 65.3 ms max |
-| Recording footprint | 107.5 MB start → 95.7 MB end, 189.1 MB transient peak |
-
-Two of those rows need reading with care.
+Two shapes in this harness are routinely misread.
 
 `RecordingTailRebuilt` and `MapRecordingTraceApplied` are **2.0 per fix by
 design**, not by tolerance. `accept(_:)` appends the raw coordinate so the line
@@ -137,15 +83,15 @@ by the matcher's latency. Each rebuild costs 0.02–0.03 ms. The budget is 2.5
 rather than 1.5 because a test that fails permanently is a test everyone learns
 to ignore; what is worth defending is that it stays two and does not grow.
 
-The **footprint peak is automation, not the app** — nothing was leaked, since
-the scenario ends 12 MB below where it started. Absolute footprint under
-XCUITest is not the app's footprint: driven by `simctl` alone the same build
-sits around 74 MB, because every counter read and element query makes the app
-build an accessibility snapshot. Only deltas within a single phase mean
-anything, and even those are contaminated by however much querying the phase
-does.
+The **footprint peak under XCUITest is automation, not the app.** Absolute
+footprint measured this way is not the app's footprint: driven by `simctl`
+alone the same build sits substantially lower, because every counter read and
+element query makes the app build an accessibility snapshot. Only deltas within
+a single phase mean anything, and even those are contaminated by however much
+querying the phase does — a scenario that ends below where it started has
+leaked nothing, whatever its peak said.
 
-### What a hike costs a battery
+## What a hike costs a battery
 
 Battery has no single counter an app can read — `UIDevice.batteryLevel` is
 quantised to 5% and useless over a thirty-second test — so the report puts four

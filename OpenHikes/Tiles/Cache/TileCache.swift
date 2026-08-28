@@ -176,12 +176,13 @@ nonisolated final class TileCache: @unchecked Sendable {
 
     private struct MutationToken: Equatable {
         let global: UInt64
-        let key: UInt64
+        let name: UInt64
     }
 
     /// Orders disk/memory writes against explicit deletion. A fetch captures
-    /// a token before awaiting the network; deleting that key invalidates the
-    /// token so the late response cannot put the tile back.
+    /// a token before awaiting the network; deleting that tile invalidates the
+    /// token so the late response cannot put the tile back. Keyed by disk
+    /// name — see ``MutationVersions/names``.
     let mutationVersions: Mutex<MutationVersions>
 
     /// Weakly-held reconnect listeners. A boxed array keeps the reference weak so
@@ -229,7 +230,7 @@ nonisolated final class TileCache: @unchecked Sendable {
     ///   - monitorsNetwork: `false` leaves reachability wherever
     ///     `setReachable(_:)` puts it, so a test isn't at the mercy of the
     ///     machine's own connection.
-    ///   - mutationKeyLimit: how many per-key deletion versions are held
+    ///   - mutationKeyLimit: how many per-tile deletion versions are held
     ///     before the table is compacted. A test lowers it to reach
     ///     compaction in a handful of deletions.
     ///   - readPower: how the fetch policy learns whether the device is
@@ -507,12 +508,28 @@ nonisolated extension TileCache {
     }
 
     private func mutationToken(forKey key: String) -> MutationToken {
-        mutationVersions.withLock { versions in
-            MutationToken(
-                global: versions.global,
-                key: versions.keys[key, default: 0]
-            )
+        let name = diskName(for: key)
+        return mutationVersions.withLock { versions in
+            Self.mutationToken(forName: name, in: versions)
         }
+    }
+
+    /// The one place a tile's row in ``MutationVersions`` is located, so the
+    /// site that takes a token and the three that re-check one cannot drift
+    /// apart on how a key becomes a row.
+    ///
+    /// By disk name, because that is what the paths that *delete* have:
+    /// ``trimCache(claimedBy:limit:)`` and
+    /// ``reclaimDurableBytes(forProviderID:protecting:byteCount:)`` enumerate
+    /// files, and ``diskName(for:)`` is one-way. Nothing is lost by meeting
+    /// them there — see ``MutationVersions/names``.
+    ///
+    /// Call with ``mutationVersions`` held.
+    private static func mutationToken(
+        forName name: String,
+        in versions: MutationVersions
+    ) -> MutationToken {
+        MutationToken(global: versions.global, name: versions.names[name, default: 0])
     }
 
     /// Files freshly-fetched bytes in `tier` and publishes them to memory,
@@ -544,12 +561,10 @@ nonisolated extension TileCache {
         token: MutationToken
     ) -> Bool {
         let paths = filePaths(forKey: key)
+        let name = diskName(for: key)
         let destination = tier == .durable ? paths.durable : paths.cached
         return mutationVersions.withLock { versions in
-            guard token == MutationToken(
-                global: versions.global,
-                key: versions.keys[key, default: 0]
-            ) else { return false }
+            guard token == Self.mutationToken(forName: name, in: versions) else { return false }
             let previousBytes = tier == .durable ? fileSize(destination) : 0
             do {
                 try fetched.data.write(to: destination, options: .atomic)
@@ -576,11 +591,9 @@ nonisolated extension TileCache {
         forKey key: String,
         token: MutationToken
     ) -> Bool {
-        mutationVersions.withLock { versions in
-            guard token == MutationToken(
-                global: versions.global,
-                key: versions.keys[key, default: 0]
-            ) else { return false }
+        let name = diskName(for: key)
+        return mutationVersions.withLock { versions in
+            guard token == Self.mutationToken(forName: name, in: versions) else { return false }
             cacheInMemory(
                 tile.image,
                 storedAt: tile.storedAt,
@@ -596,14 +609,12 @@ nonisolated extension TileCache {
         token: MutationToken
     ) -> Bool {
         let byteCount = Int64(fetched.data.count)
+        let name = diskName(for: key)
         // Outside the lock, since taking the provider's first measurement
         // walks the durable directory.
         guard reserveDurableBytes(forKey: key, byteCount: byteCount) else { return false }
         let stored = mutationVersions.withLock { versions in
-            guard token == MutationToken(
-                global: versions.global,
-                key: versions.keys[key, default: 0]
-            ) else { return false }
+            guard token == Self.mutationToken(forName: name, in: versions) else { return false }
             cacheInMemory(fetched.image, storedAt: Date(), forKey: key)
             return writeDurable(fetched.data, forKey: key)
         }

@@ -255,6 +255,15 @@ extension HikeRecorder {
               let hike = try existingHike(sessionID: sessionID),
               hike.isRecording else { return }
         HikePhotoImport.discardFiles(of: hike)
+        // Before the delete, because `Hike.deleteLocalState()` reaches the
+        // sidecar through the hike's own `modelContext` and a deleted row has
+        // none. A recording draft is not an empty one: `AutoSaveController`
+        // folds browsing tiles into whichever hike is active, which for the
+        // length of a walk is this draft. Nothing cascades between the two
+        // stores, and nothing ever fetches a `HikeLocalState` except by the
+        // `hikeID` of a hike that still exists — so a row left behind here is
+        // unreachable and unsweepable, one per discarded recording, forever.
+        hike.deleteLocalState()
         container.mainContext.delete(hike)
         do {
             try saveModelContext(container.mainContext)
@@ -284,6 +293,10 @@ extension HikeRecorder {
         }
         for hike in orphans {
             HikePhotoImport.discardFiles(of: hike)
+            // As in `deleteRecordingHike(sessionID:)` and for the same
+            // reason — an orphan has had a whole walk to accumulate
+            // auto-saved tile keys before the launch that abandoned it.
+            hike.deleteLocalState()
             container.mainContext.delete(hike)
         }
         do {
@@ -458,6 +471,25 @@ extension HikeRecorder {
         if sessionID != nil {
             publishSharedRecordingSnapshot(force: true)
         }
+        // Unconditionally, from every one of its call sites, because no
+        // failure leaves a recording still taking fixes. The flag
+        // `endLocationUpdates: false` does not mean "it carries on" — it means
+        // the sensors are already off or were never started: `stop()` and
+        // `discard()` stop them first, and the activation and recovery paths
+        // fail before `initializeSessionState(id:startedAt:)` starts them. So
+        // the last state the panel holds says `isCapturingFixes: false`, which
+        // it draws as *Paused*, and nothing publishes again to correct it: the
+        // panel goes on saying the walk is waiting for the hiker until the
+        // system's stale date makes it merely look old, and then goes on
+        // saying it.
+        //
+        // `.abandoned` rather than `.finished` even where `canRetrySave` is
+        // true: no `Hike` stands behind those figures yet, and a lingering
+        // final panel claims one that was saved. A walker who retries and
+        // succeeds is looking at the app, not at the Lock Screen. Harmless
+        // where no recording panel is up — `endRecordingActivity(_:)` checks —
+        // so a followed trail's activity is left where it is.
+        endRecordingActivity(.abandoned)
     }
 
     func resetSession() {

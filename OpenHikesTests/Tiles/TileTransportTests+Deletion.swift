@@ -17,10 +17,10 @@ import Testing
 
 extension TileTransportTests {
 
-    /// The other half of that guarantee, and the reason the per-key deletion
+    /// The other half of that guarantee, and the reason the per-tile deletion
     /// table can't simply be emptied when it gets big.
     ///
-    /// Every deleted key used to add an entry that was never removed, so a
+    /// Every deleted tile used to add an entry that was never removed, so a
     /// session that deletes a few covered hikes grew the table for the rest of
     /// the process's life. It is compacted now — but a token carries the
     /// version it read, and a missing entry reads back as 0, so clearing the
@@ -57,9 +57,10 @@ extension TileTransportTests {
                 forKeys: (0...keyLimit).map { index in "osm/14/\(index)/1@2.0" }
             )
         }
+        let deletedName = cache.diskName(for: deleted)
         #expect(
-            cache.mutationVersions.withLock { versions in versions.keys[deleted] } == nil,
-            "the fixture only means anything if the key's own entry was really compacted away"
+            cache.mutationVersions.withLock { versions in versions.names[deletedName] } == nil,
+            "the fixture only means anything if the tile's own entry was really compacted away"
         )
         StubTileProtocol.releaseResponses()
 
@@ -71,8 +72,8 @@ extension TileTransportTests {
     }
 
     /// And the growth itself: deleting past the limit leaves a bounded table
-    /// rather than one entry per key ever deleted.
-    @Test("the per-key deletion table stays bounded")
+    /// rather than one entry per tile ever deleted.
+    @Test("the per-tile deletion table stays bounded")
     func mutationVersionTableIsBounded() async {
         let keyLimit = 8
         let sandbox = TileSandbox(mutationKeyLimit: keyLimit)
@@ -85,7 +86,7 @@ extension TileTransportTests {
         }
 
         let (global, held) = cache.mutationVersions.withLock { versions in
-            (versions.global, versions.keys.count)
+            (versions.global, versions.names.count)
         }
         #expect(held <= keyLimit)
         #expect(global > 0, "compaction has to take the epoch with it")

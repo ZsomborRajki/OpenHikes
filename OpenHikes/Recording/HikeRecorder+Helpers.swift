@@ -471,6 +471,16 @@ extension HikeRecorder {
     /// that decides what an update is worth.
     private func publishRecordingActivity(_ snapshot: SharedRecordingSnapshot) {
         guard let liveActivityController else { return }
+        // A failed session has no panel to feed, and must not be handed a new
+        // one. `fail(_:endLocationUpdates:)` takes the activity down, but the
+        // recorder stays `isActive` afterwards, so the next scene transition
+        // still publishes — for the widget, which does want to hear that the
+        // fixes stopped. Reaching the controller with that publish would find
+        // nothing running and *start* a second activity, reporting a recording
+        // that failed as merely paused: exactly the panel `fail` just removed.
+        // Resuming leaves `.failed` before it publishes, so the walk gets its
+        // activity back the moment it is a walk again.
+        if case .failed = phase { return }
         liveActivityController.update(
             HikeActivityRequest(
                 attributes: recordingActivityAttributes(for: snapshot),
@@ -528,7 +538,8 @@ extension HikeRecorder {
         lastSharedSnapshotPointCount = 0
     }
 
-    /// Takes the recording's activity off the Lock Screen.
+    /// Takes the recording's activity off the Lock Screen — this process's own,
+    /// or one left behind by an earlier launch.
     ///
     /// Deliberately separate from ``clearSharedRecordingState(sessionID:)``,
     /// which it is always called beside: that one has to await a queue drain
@@ -539,11 +550,34 @@ extension HikeRecorder {
     /// - Parameter outcome: what to leave behind. `.finished` shows the walk's
     ///   totals for a few minutes; `.abandoned` removes the activity at once,
     ///   which is the only honest answer for a recording the walker discarded
-    ///   or one whose session turned out not to exist.
+    ///   or one whose session turned out not to exist. An unowned panel is
+    ///   always removed outright whichever is passed — see below.
     func endRecordingActivity(_ outcome: RecordingActivityOutcome) {
-        guard let liveActivityController,
-              let subject = liveActivityController.activeSubject,
-              subject.isRecording else { return }
+        guard let liveActivityController else { return }
+        guard let subject = liveActivityController.activeSubject,
+              subject.isRecording else {
+            // Nothing *this process* is presenting — which is not the same as
+            // nothing on screen. A Live Activity outlives its process, so a
+            // launch that concludes there is no recording reaches here holding
+            // no handle to the panel the previous launch left up: a journal
+            // that has gone by the time `recoverOpenSession` looks for it, or
+            // a `fail(_:endLocationUpdates:)` that lands before a session ever
+            // exists. Before this, both returned right here and the panel
+            // stayed for its full ten-minute stale window, reporting a walk
+            // that no longer exists. (Recovering and *then* discarding is not
+            // one of them: `finishRecovery` republishes on the way through, so
+            // the controller has adopted the panel by the time Discard is
+            // tapped and the ordinary branch below takes it.)
+            //
+            // `.recording` rather than everything: a followed trail from the
+            // previous launch is still a walk the walker is on, and the
+            // tracker adopts it back on the next matched fix. The controller
+            // refuses the sweep when there is nothing of that kind up, so this
+            // is a cheap no-op on the ordinary paths that reach it — including
+            // `fail(_:endLocationUpdates:)`, which calls this unconditionally.
+            liveActivityController.endUnowned(.recording)
+            return
+        }
         switch outcome {
         case .finished:
             liveActivityController.end(
