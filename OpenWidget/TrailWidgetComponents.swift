@@ -15,26 +15,21 @@ import WidgetKit
 /// The size-dependent decisions the widget draws with, pulled out of the view
 /// so they can be checked for every family without rendering one.
 struct TrailWidgetLayout: Equatable {
-    /// The small family has no room for a title above the stat line.
-    let showsTitle: Bool
     let routeLineWidth: Double
     let padding: Double
-    /// How many stat chips fit on one line without wrapping or crowding the
-    /// status text beside them. The chips are ordered most-useful-first, so
-    /// truncating to this drops the least useful ones — see
+    /// How many stat chips fit on one line without crowding the status text
+    /// under them. The chips are ordered most-useful-first, so truncating to
+    /// this drops the least useful one — see
     /// ``SharedTrailSnapshot/metrics(limit:locale:)``.
     let metricLimit: Int
 
     init(family: WidgetFamily) {
         let isSmall = family == .systemSmall
-        showsTitle = !isSmall
         routeLineWidth = isSmall ? 3 : 4
         padding = isSmall ? 12 : 14
-        metricLimit = switch family {
-        case .systemSmall: 2
-        case .systemMedium: 3
-        default: 4
-        }
+        // Two is every chip there is; the small family keeps only the first,
+        // because a 155 pt square is mostly map and one number is a glance.
+        metricLimit = isSmall ? 1 : 2
     }
 }
 

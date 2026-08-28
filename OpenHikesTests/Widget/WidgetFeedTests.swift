@@ -100,7 +100,7 @@ final class WidgetFeedTests {
             snapshot.elevationGainMeters != (snapshot.elevationHighMeters ?? 0) - (snapshot.elevationLowMeters ?? 0),
             "a span would have been the easy wrong answer"
         )
-        #expect(snapshot.metrics(limit: 4).map(\.kind) == [.ascent, .highPoint, .descent])
+        #expect(snapshot.metrics(limit: 4).map(\.kind) == [.ascent])
     }
 
     /// A GPX with no heights must publish no heights. The chips are dropped

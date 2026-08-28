@@ -434,14 +434,12 @@ struct TrailWidgetTests {
 
     // MARK: Families
 
-    /// Every size the widget offers has to have a layout to draw with, and the
-    /// small one is the only one that drops the title.
-    @Test("every supported family has a layout, and only the small one hides the title")
+    /// Every size the widget offers has to have a layout to draw with.
+    @Test("every supported family has a layout")
     func everyFamilyHasALayout() {
         #expect(TrailWidget.supportedFamilies.contains(.systemSmall))
         for family in TrailWidget.supportedFamilies {
             let layout = TrailWidgetLayout(family: family)
-            #expect(layout.showsTitle == (family != .systemSmall), "\(family)")
             #expect(layout.routeLineWidth > 0, "\(family)")
             #expect(layout.padding > 0, "\(family)")
             #expect(layout.metricLimit > 0, "\(family)")
@@ -466,9 +464,9 @@ struct TrailWidgetTests {
     }
 
     /// Chips are ordered most-useful-first and truncated to the width, so the
-    /// limit is what decides which facts a size gives up — a square 155 pt
-    /// widget cannot carry the four a large one can.
-    @Test("wider families carry more stat chips than narrower ones")
+    /// limit is what decides which fact a size gives up — a square 155 pt
+    /// widget is mostly map, and one number is a glance.
+    @Test("wider families carry more stat chips than the small one")
     func widerFamiliesCarryMoreChips() {
         let limits = [WidgetFamily.systemSmall, .systemMedium, .systemLarge]
             .map { family in TrailWidgetLayout(family: family).metricLimit }
@@ -478,7 +476,7 @@ struct TrailWidgetTests {
         #expect(
             TrailWidgetLayout(family: .systemExtraLarge).metricLimit
                 == TrailWidgetLayout(family: .systemLarge).metricLimit,
-            "there is nothing further to add past four"
+            "there is nothing further to add past the pair"
         )
     }
 
@@ -492,6 +490,27 @@ struct TrailWidgetTests {
             let metrics = stored.metrics(limit: limit)
             #expect(try #require(metrics.first).kind == .ascent, "\(family)")
             #expect(metrics.count <= limit, "\(family)")
+        }
+    }
+
+    /// The widget draws no title and no elapsed-time text; what it says in
+    /// words is one status line and, at most, two chips. Nothing here can
+    /// check pixels, so the cap the layout hands the builder is the pin.
+    @Test("no family asks for more than the two chips there are")
+    func noFamilyAsksForMoreThanThePair() {
+        let live = Self.snapshot(
+            liveFix: .init(
+                coordinate: .init(latitude: 47.6320, longitude: 12.8620),
+                distanceAlongRouteMeters: 2000,
+                offRouteMeters: 4,
+                timestamp: Date(timeIntervalSince1970: 1_750_000_000),
+                elevationMeters: 740
+            )
+        )
+        for family in TrailWidget.supportedFamilies {
+            let limit = TrailWidgetLayout(family: family).metricLimit
+            #expect(limit <= 2, "\(family)")
+            #expect(live.metrics(limit: limit).count == limit, "\(family)")
         }
     }
 
@@ -528,11 +547,16 @@ struct TrailWidgetTests {
     }
 
     /// The gallery is where a widget is chosen. A placeholder drawn emptier
-    /// than the real thing undersells it.
+    /// than the real thing undersells it — and the followed variant is the one
+    /// preview arrangement where both chips are drawn at once.
     @Test("the gallery placeholder shows the chips a real trail would")
     func placeholderIsRepresentative() {
-        let metrics = TrailWidgetProvider.placeholderEntry().snapshot?.metrics(limit: 4) ?? []
-        #expect(metrics.contains { metric in metric.kind == .ascent })
-        #expect(metrics.count > 1)
+        let limit = TrailWidgetLayout(family: .systemMedium).metricLimit
+        let gallery = TrailWidgetProvider.placeholderEntry().snapshot?.metrics(limit: limit) ?? []
+        #expect(gallery.map(\.kind) == [.ascent])
+        #expect(
+            TrailWidgetProvider.followedPlaceholderSnapshot.metrics(limit: limit).map(\.kind)
+                == [.ascent, .currentElevation]
+        )
     }
 }

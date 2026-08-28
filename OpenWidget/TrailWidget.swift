@@ -396,6 +396,7 @@ struct TrailWidgetEntryView: View {
         let family: WidgetFamily
 
         private static let stackSpacing: Double = 4
+        private static let statusSpacing: Double = 5
 
         private var layout: TrailWidgetLayout {
             TrailWidgetLayout(family: family)
@@ -415,40 +416,40 @@ struct TrailWidgetEntryView: View {
                 : "\(snapshot.statusText), \(spoken)"
         }
 
+        /// The one thing the removed title row still had to say: whether fixes
+        /// are still arriving. A different shape rather than only a different
+        /// colour, so a paused recording reads as paused without the reader
+        /// having to tell red from grey.
+        private var stateGlyph: some View {
+            Image(systemName: snapshot.isCapturingFixes ? "circle.fill" : "pause.fill")
+                .font(.caption2)
+                .foregroundStyle(snapshot.isCapturingFixes ? Color.red : Color.secondary)
+                .accessibilityHidden(true)
+        }
+
         var body: some View {
             VStack(alignment: .leading, spacing: 0) {
-                if layout.showsTitle {
-                    HStack(spacing: 7) {
-                        Circle()
-                            .fill(snapshot.isCapturingFixes ? .red : .secondary)
-                            .frame(width: 8, height: 8)
-                        Text(snapshot.title)
-                            .font(.subheadline.weight(.semibold))
-                            .lineLimit(1)
-                        Spacer()
-                        Text(snapshot.startedAt, style: .timer)
-                            .font(.caption2.monospacedDigit())
-                            .foregroundStyle(.secondary)
-                    }
-                }
-
                 Spacer(minLength: 0)
 
                 VStack(alignment: .leading, spacing: Self.stackSpacing) {
                     TrailWidgetMetricRow(metrics: metrics, onMap: false)
-                    Text(snapshot.statusText)
-                        .font(
-                            family == .systemSmall
-                                ? .caption.weight(.semibold)
-                                : .caption
-                        )
-                        .foregroundStyle(.secondary)
+                    HStack(spacing: Self.statusSpacing) {
+                        stateGlyph
+                        Text(snapshot.statusText)
+                            .font(
+                                family == .systemSmall
+                                    ? .caption.weight(.semibold)
+                                    : .caption
+                            )
+                            .foregroundStyle(.secondary)
+                    }
                 }
             }
             .padding(layout.padding)
             // The whole widget is one tap target, so it is read as one thing:
-            // the trail's name, then how the recording is going. The map
-            // behind it is a drawing of the same facts.
+            // whether a recording is running, then how it is going. The title
+            // is no longer drawn, but VoiceOver still leads with it — it is
+            // the only place the paused state is put into words.
             .accessibilityElement(children: .ignore)
             .accessibilityLabel(snapshot.title)
             .accessibilityValue(accessibilityValue)
@@ -489,15 +490,12 @@ private struct TrailWidgetContent: View {
     let family: WidgetFamily
 
     /// Text treatment for the light-on-map case, the companion to ``Scrim``:
-    /// the scrim darkens the map, these keep the glyphs legible on top of it.
+    /// the scrim darkens the map, this keeps the glyphs legible on top of it.
     private enum MapTextStyle {
         static let shadowOpacity: Double = 0.35
-        static let timestampOpacity: Double = 0.7
     }
 
     private enum Scrim {
-        static let topOpacity: Double = 0.45
-        static let topClearLocation: Double = 0.3
         static let bottomClearLocation: Double = 0.6
         /// The stat chips and the progress hairline push the text band taller,
         /// so the darkened part starts higher when they are drawn — otherwise
@@ -513,7 +511,6 @@ private struct TrailWidgetContent: View {
 
     private var layout: TrailWidgetLayout { TrailWidgetLayout(family: family) }
     private var tint: Color { Color(hex: snapshot.tintHex) ?? .green }
-    private var showsTitle: Bool { layout.showsTitle }
     private var metrics: [TrailWidgetMetric] { snapshot.metrics(limit: layout.metricLimit) }
 
     /// Whether a rendered map is actually behind the text, which is what
@@ -537,18 +534,13 @@ private struct TrailWidgetContent: View {
 
     var body: some View {
         VStack(alignment: .leading, spacing: 0) {
-            if showsTitle {
-                Text(snapshot.title)
-                    .font(.subheadline.weight(.semibold))
-                    .lineLimit(1)
-                    .foregroundStyle(hasMap ? Color.white : .primary)
-            }
-
             Spacer(minLength: 0)
 
             VStack(alignment: .leading, spacing: Stack.spacing) {
                 TrailWidgetMetricRow(metrics: metrics, onMap: hasMap)
-                statLine
+                Text(snapshot.statusText)
+                    .font(family == .systemSmall ? .caption.weight(.semibold) : .caption)
+                    .foregroundStyle(hasMap ? Color.white : .secondary)
                 if let fraction = snapshot.fractionComplete {
                     TrailWidgetProgressBar(fraction: fraction, tint: tint, onMap: hasMap)
                         .padding(.top, Stack.progressTopPadding)
@@ -557,8 +549,9 @@ private struct TrailWidgetContent: View {
         }
         .shadow(color: .black.opacity(hasMap ? MapTextStyle.shadowOpacity : 0), radius: 2, y: 1)
         .padding(layout.padding)
-        // One tap target, so one element — and the title is spoken on every
-        // family, including the small one that has no room to draw it.
+        // One tap target, so one element — and the trail's name is spoken on
+        // every family even though none of them draw it any more. The widget
+        // shows the shape of the trail; VoiceOver has to be told which one.
         .accessibilityElement(children: .ignore)
         .accessibilityLabel(snapshot.title)
         .accessibilityValue(accessibilityValue)
@@ -586,42 +579,21 @@ private struct TrailWidgetContent: View {
         }
     }
 
-    /// Darkens only the bands the text occupies, so the middle of the map —
-    /// where the trail is — keeps its own contrast. The top band is dropped
-    /// entirely on sizes with no title to darken it for.
+    /// Darkens only the band the text occupies, so the middle of the map —
+    /// where the trail is — keeps its own contrast. There is no top band any
+    /// more: nothing is drawn up there to darken it for.
     private var scrim: some View {
         let bottomClear = metrics.isEmpty
             ? Scrim.bottomClearLocation
             : Scrim.bottomClearLocationWithMetrics
         return LinearGradient(
             stops: [
-                .init(color: .black.opacity(showsTitle ? Scrim.topOpacity : 0), location: 0),
-                .init(color: .clear, location: showsTitle ? Scrim.topClearLocation : 0),
                 .init(color: .clear, location: bottomClear),
                 .init(color: .black.opacity(Scrim.bottomOpacity), location: 1),
             ],
             startPoint: .top,
             endPoint: .bottom
         )
-    }
-
-    @ViewBuilder private var statLine: some View {
-        HStack {
-            Text(snapshot.statusText)
-                .font(family == .systemSmall ? .caption.weight(.semibold) : .caption)
-                .foregroundStyle(hasMap ? Color.white : .secondary)
-            Spacer()
-            // Only where there's width for it without crowding the status.
-            if showsTitle, let timestamp = snapshot.liveFix?.timestamp {
-                Text(timestamp, style: .relative)
-                    .font(.caption2)
-                    .foregroundStyle(
-                        hasMap
-                            ? AnyShapeStyle(Color.white.opacity(MapTextStyle.timestampOpacity))
-                            : AnyShapeStyle(.tertiary)
-                    )
-            }
-        }
     }
 }
 

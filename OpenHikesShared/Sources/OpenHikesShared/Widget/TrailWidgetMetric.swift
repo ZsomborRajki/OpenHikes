@@ -94,8 +94,6 @@ public struct TrailWidgetMetric: Sendable, Equatable, Identifiable {
     public enum Kind: String, Sendable, CaseIterable {
         case ascent = "ascent"
         case currentElevation = "currentElevation"
-        case descent = "descent"
-        case highPoint = "highPoint"
         case pace = "pace"
         case points = "points"
     }
@@ -118,8 +116,6 @@ public struct TrailWidgetMetric: Sendable, Equatable, Identifiable {
         switch kind {
         case .ascent: "arrow.up.forward"
         case .currentElevation: "figure.hiking"
-        case .descent: "arrow.down.forward"
-        case .highPoint: "mountain.2.fill"
         case .pace: "speedometer"
         case .points: "point.3.connected.trianglepath.dotted"
         }
@@ -130,8 +126,6 @@ public struct TrailWidgetMetric: Sendable, Equatable, Identifiable {
         switch kind {
         case .ascent: "Ascent"
         case .currentElevation: "Elevation"
-        case .descent: "Descent"
-        case .highPoint: "High point"
         case .pace: "Average speed"
         case .points: "Track points"
         }
@@ -141,14 +135,20 @@ public struct TrailWidgetMetric: Sendable, Equatable, Identifiable {
 }
 
 public extension SharedTrailSnapshot {
-    /// The stat chips for this trail, most useful first and truncated to
-    /// whatever the widget family has width for.
+    /// The stat chips for this trail: at most two, most useful first, and
+    /// truncated to whatever the widget family has width for.
     ///
-    /// Ascent leads because it is the number that separates a stroll from a
-    /// climb, and the one the map behind it cannot show. The walker's own
-    /// elevation only earns its place while there is a live fix to read it
-    /// from, and then it outranks the summit — on the trail, "where am I" beats
-    /// "how high does this go".
+    /// A widget is a glance, not a report, so the band under the map carries
+    /// one fact about height rather than four. Ascent is that fact — it is
+    /// what separates a stroll from a climb, and the one thing the map behind
+    /// it cannot draw. The high point and the descent were dropped for saying
+    /// nearly the same thing twice over: on a loop the descent *is* the
+    /// ascent, and a summit height is a number to read in the app rather than
+    /// to glance at on a home screen.
+    ///
+    /// The walker's own elevation joins it only while there is a live fix to
+    /// read it from — on the trail, "where am I" is worth the second slot; off
+    /// it, there is nothing to put there.
     ///
     /// A missing figure is omitted rather than drawn as a dash: a route
     /// imported without elevations should show fewer chips, not a row of
@@ -178,28 +178,6 @@ public extension SharedTrailSnapshot {
                 )
             )
         }
-        if let elevationHighMeters {
-            metrics.append(
-                TrailWidgetMetric(
-                    kind: .highPoint,
-                    value: WidgetFormat.elevation(
-                        meters: elevationHighMeters,
-                        locale: locale
-                    )
-                )
-            )
-        }
-        if let elevationLossMeters, elevationLossMeters > 0 {
-            metrics.append(
-                TrailWidgetMetric(
-                    kind: .descent,
-                    value: WidgetFormat.elevation(
-                        meters: elevationLossMeters,
-                        locale: locale
-                    )
-                )
-            )
-        }
         return Array(metrics.prefix(limit))
     }
 
@@ -218,10 +196,9 @@ public extension SharedTrailSnapshot {
 public extension SharedRecordingSnapshot {
     /// The stat chips for a recording in progress, most useful first.
     ///
-    /// Distance, elapsed time and point count are already on screen — the
-    /// status line and the header timer carry those — so these are the two
-    /// facts a live recording otherwise doesn't show: how much has been
-    /// climbed, and how fast it is being walked.
+    /// Distance and point count are already on the status line beside them, so
+    /// these are the two facts a live recording otherwise doesn't show: how
+    /// much has been climbed, and how fast it is being walked.
     func metrics(limit: Int, locale: Locale = .current) -> [TrailWidgetMetric] {
         guard limit > 0 else { return [] }
         var metrics: [TrailWidgetMetric] = []

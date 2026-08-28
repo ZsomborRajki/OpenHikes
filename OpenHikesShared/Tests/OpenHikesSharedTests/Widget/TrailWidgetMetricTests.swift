@@ -106,31 +106,33 @@ struct TrailWidgetMetricTests {
 
     /// Ascent is the number the map behind the chips cannot show, so it is the
     /// one that survives the narrowest family.
-    @Test("ascent leads, and is the chip a two-slot family keeps")
-    func ascentLeads() throws {
-        let metrics = Self.snapshot().metrics(limit: 2, locale: Self.locale)
-        #expect(try #require(metrics.first).kind == .ascent)
-        #expect(metrics.count == 2)
+    @Test("ascent leads, and is the chip the narrowest family keeps")
+    func ascentLeads() {
+        let metrics = Self.snapshot().metrics(limit: 1, locale: Self.locale)
+        #expect(metrics.map(\.kind) == [.ascent])
     }
 
-    /// While there is a live fix, where the walker is standing outranks how
-    /// high the trail eventually goes.
-    @Test("a live fix's elevation outranks the summit")
-    func liveElevationOutranksTheSummit() {
+    /// The second slot is the walker's own height, and only while there is a
+    /// live fix to read it from — off the trail there is nothing to put there.
+    @Test("a live fix fills the second slot with the walker's elevation")
+    func liveElevationTakesTheSecondSlot() {
         let metrics = Self.snapshot(liveElevation: 740).metrics(limit: 2, locale: Self.locale)
         #expect(metrics.map(\.kind) == [.ascent, .currentElevation])
     }
 
-    @Test("without a fix the chips are the trail's own figures")
+    @Test("without a fix the trail's climb is the only chip")
     func withoutAFix() {
         let metrics = Self.snapshot().metrics(limit: 4, locale: Self.locale)
-        #expect(metrics.map(\.kind) == [.ascent, .highPoint, .descent])
+        #expect(metrics.map(\.kind) == [.ascent])
     }
 
-    @Test("a wide family gets every chip there is")
-    func wideFamilyGetsEverything() {
-        let metrics = Self.snapshot(liveElevation: 740).metrics(limit: 4, locale: Self.locale)
-        #expect(metrics.map(\.kind) == [.ascent, .currentElevation, .highPoint, .descent])
+    /// The summit height and the descent used to have chips of their own. They
+    /// are gone deliberately — a widget is a glance, and on a loop the descent
+    /// repeats the ascent — so no width, however generous, brings them back.
+    @Test("a wide family still gets only the pair")
+    func wideFamilyGetsOnlyThePair() {
+        let metrics = Self.snapshot(liveElevation: 740).metrics(limit: 99, locale: Self.locale)
+        #expect(metrics.map(\.kind) == [.ascent, .currentElevation])
     }
 
     // MARK: Missing and degenerate data
@@ -145,11 +147,12 @@ struct TrailWidgetMetricTests {
     }
 
     /// A dead-flat towpath climbs nothing. "Ascent 0 m" is noise where the
-    /// absence of the chip says the same thing in no space at all.
-    @Test("a flat route drops the climb and descent chips")
-    func flatRouteDropsClimbAndDescent() {
+    /// absence of the chip says the same thing in no space at all — and with
+    /// the summit chip gone there is nothing left to fall back to.
+    @Test("a flat route with no fix draws no chips at all")
+    func flatRouteDrawsNoChips() {
         let flat = Self.snapshot(gain: 0, loss: 0, high: 12, low: 12)
-        #expect(flat.metrics(limit: 4, locale: Self.locale).map(\.kind) == [.highPoint])
+        #expect(flat.metrics(limit: 4, locale: Self.locale).isEmpty)
     }
 
     @Test("a family with no room for chips is given none", arguments: [0, -1])
@@ -173,10 +176,10 @@ struct TrailWidgetMetricTests {
 
     @Test("the spoken text covers only the chips that are drawn")
     func spokenTextTracksTheLimit() {
-        let snapshot = Self.snapshot()
+        let snapshot = Self.snapshot(liveElevation: 740)
         let spoken = snapshot.metricsAccessibilityText(limit: 1, locale: Self.locale)
         #expect(spoken.contains("Ascent"))
-        #expect(!spoken.contains("Descent"))
+        #expect(!spoken.contains("Elevation"))
     }
 
     /// Every kind has to answer for itself: a chip with an empty symbol draws
