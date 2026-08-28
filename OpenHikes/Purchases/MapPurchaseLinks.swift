@@ -31,7 +31,12 @@ enum MapPurchaseLinks {
     ///   review for the whole binary rather than just the purchase. It is also
     ///   the URL that goes in the App Privacy section of App Store Connect,
     ///   and the two are expected to match.
-    static let privacyPolicy = URL(string: "https://tappium.com/openhikes/privacy")!
+    ///
+    ///   The page is served from this repository: `docs/privacy/index.html`,
+    ///   published by GitHub Pages from `main`. Edit the policy there rather
+    ///   than pointing this somewhere else, so the text a reviewer opens and
+    ///   the text in the repository cannot drift apart.
+    static let privacyPolicy = URL(string: "https://zsomborrajki.github.io/OpenHikes/privacy/")!
 
     // swiftlint:enable force_unwrapping
 }

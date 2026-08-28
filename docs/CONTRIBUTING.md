@@ -4,9 +4,9 @@ Thanks for taking an interest. OpenHikes is a small, opinionated codebase, and
 most of what a contribution needs to know is already written down — this file
 points at it rather than repeating it.
 
-- [`README.md`](README.md) — what the app is, what it needs, how to build and
+- [`README.md`](../README.md) — what the app is, what it needs, how to build and
   run it, and what lives where.
-- [`.github/copilot-instructions.md`](.github/copilot-instructions.md) — the
+- [`.github/copilot-instructions.md`](../.github/copilot-instructions.md) — the
   architecture rules, the conventions, the energy policies, and the decisions
   that have already been settled and should not be re-opened.
 - [`PERFORMANCE.md`](PERFORMANCE.md) — what the app costs and how that was
@@ -22,7 +22,7 @@ does not fit it is better discussed before it is written.
 
 ## Setting up
 
-See [Requirements](README.md#requirements) and [Setup](README.md#setup). In
+See [Requirements](../README.md#requirements) and [Setup](../README.md#setup). In
 short: Xcode 26.5 or later, iOS 26.5, and an Apple development team that can
 sign the WeatherKit entitlement, the App Group, the iCloud container and push.
 
@@ -64,7 +64,7 @@ Scripts/run-performance-tests.sh
 ## Writing code here
 
 The conventions live in
-[`.github/copilot-instructions.md`](.github/copilot-instructions.md) and the
+[`.github/copilot-instructions.md`](../.github/copilot-instructions.md) and the
 linter enforces what it can. The handful that catch people out:
 
 - **Render isolation.** High-frequency state lives in stable `@Observable`
@@ -101,4 +101,4 @@ linter enforces what it can. The handful that catch people out:
 ## Licence
 
 By contributing you agree that your contribution is licensed under the
-[MIT License](LICENSE), like the rest of the repository.
+[MIT License](../LICENSE), like the rest of the repository.

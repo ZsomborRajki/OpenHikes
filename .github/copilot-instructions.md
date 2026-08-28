@@ -186,6 +186,6 @@ Four files with distinct jobs. Keep a fact in exactly one of them.
 
 - `README.md` is for someone who just found the repository: what the app is, what it needs, how to build and run it, and how it is laid out. Engineering rationale does not belong there.
 - `.github/copilot-instructions.md` — this file — holds the durable conventions, commands, architecture rules and settled decisions.
-- `CODE_REVIEW.md` and `PERFORMANCE.md` are **live lists, not logs**. A finding that has been fixed is deleted rather than annotated, and a claim that stopped matching the code is deleted whether or not anything was done about it. Neither is a changelog; git already is one.
+- `docs/CODE_REVIEW.md` and `docs/PERFORMANCE.md` are **live lists, not logs**. A finding that has been fixed is deleted rather than annotated, and a claim that stopped matching the code is deleted whether or not anything was done about it. Neither is a changelog; git already is one.
 
 Cite these documents from source comments by *section name*, never by finding number or quoted figure. Numbered citations went stale within a single revision — comments referring to "Finding 1" and "Finding 2" survived the findings being renumbered, and quoted millisecond figures the documents no longer contained.

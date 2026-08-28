@@ -4,5 +4,5 @@ contact_links:
     url: https://github.com/ZsomborRajki/OpenHikes/security/advisories/new
     about: Report privately instead. Please do not open a public issue.
   - name: Contributing guide
-    url: https://github.com/ZsomborRajki/OpenHikes/blob/main/CONTRIBUTING.md
+    url: https://github.com/ZsomborRajki/OpenHikes/blob/main/docs/CONTRIBUTING.md
     about: How to build, lint and test before opening a pull request.
