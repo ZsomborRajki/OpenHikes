@@ -21,6 +21,30 @@
 import Foundation
 import OpenHikesShared
 
+/// Which walks a takedown applies to.
+///
+/// Coarser than ``HikeActivityAttributes/Subject`` on purpose, because the
+/// paths that need it cannot name the walk they are removing. When
+/// `HikeRecorder.cleanUpMissingSession()` runs, the journal it would have read
+/// the session identifier from is exactly what turned out not to exist — all
+/// the app knows, and all it needs to know, is that no *recording* may be on
+/// the Lock Screen.
+///
+/// Cases alphabetical rather than in precedence order; the precedence rule
+/// lives in `HikeLiveActivityController`, not in a declaration order.
+enum HikeActivityKind: CaseIterable, Equatable {
+    case following
+    case recording
+
+    func matches(_ subject: HikeActivityAttributes.Subject?) -> Bool {
+        guard let subject else { return false }
+        switch self {
+        case .following: return !subject.isRecording
+        case .recording: return subject.isRecording
+        }
+    }
+}
+
 /// What the controller needs from ActivityKit, and nothing more.
 ///
 /// `@MainActor` rather than an actor: ActivityKit's own surface is designed to
@@ -35,7 +59,15 @@ protocol HikeActivityPresenting: AnyObject {
     /// reads.
     var areActivitiesEnabled: Bool { get }
 
-    /// What is on screen right now, or `nil` if nothing is.
+    /// What the *system* is showing for this app, or `nil` if nothing is.
+    ///
+    /// Authoritative rather than remembered. A Live Activity outlives the
+    /// process that started it, so a fresh launch holds no handle to one that
+    /// is nonetheless on the walker's Lock Screen — and an implementation that
+    /// answered from its own handle would report `nil` while the panel is
+    /// plainly there. `HikeLiveActivityController.activeSubject` is the other
+    /// question, "what is *this process* presenting", and the two differ
+    /// exactly across a relaunch.
     var activeSubject: HikeActivityAttributes.Subject? { get }
 
     /// Requests a new activity. Silent on failure: a refusal is the system's
@@ -62,4 +94,20 @@ protocol HikeActivityPresenting: AnyObject {
         finalState: HikeActivityAttributes.ContentState?,
         dismissAfter: TimeInterval?
     ) async
+
+    /// Ends every activity of `kind` the system is showing for this app,
+    /// including ones this process never started.
+    ///
+    /// The rest of this protocol acts through the handle the presenter is
+    /// holding, which is the right thing while one walk runs in one process
+    /// and is simply absent after a relaunch — so `end(finalState:dismissAfter:)`
+    /// against no handle is a silent no-op, and the panel from a killed launch
+    /// survived every path that existed to remove it. This one goes to the
+    /// system's own list instead.
+    ///
+    /// No `finalState` and no `dismissAfter` by construction: there is nothing
+    /// truthful to leave behind. The figures belong to a walk this process
+    /// cannot describe, and every caller has already concluded that the walk
+    /// they name is gone.
+    func endUnowned(_ kind: HikeActivityKind) async
 }

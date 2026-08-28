@@ -47,6 +47,10 @@ enum LiveActivityHarness {
         let controller: HikeLiveActivityController
         let presenter: StubHikeActivityPresenter
         let now: Clock
+        /// The controller's own suite, exposed so a test can flip the walker's
+        /// switch the way `SettingsView`'s `@AppStorage` does — which is the
+        /// only trigger that reaches a controller with no walk to publish.
+        let defaults: UserDefaults
 
         /// A clock the test moves by hand. The controller's whole job is
         /// deciding what is worth doing *yet*, so a suite that waited out a
@@ -61,17 +65,24 @@ enum LiveActivityHarness {
     static func harness(liveActivities: Bool = true) -> Harness {
         let presenter = StubHikeActivityPresenter()
         let clock = Harness.Clock(start)
+        let suite = defaults(liveActivities: liveActivities)
         let controller = HikeLiveActivityController(
             presenter: presenter,
-            defaults: defaults(liveActivities: liveActivities),
+            defaults: suite,
             clock: { MainActor.assumeIsolated { clock.date } }
         )
-        return Harness(controller: controller, presenter: presenter, now: clock)
+        return Harness(
+            controller: controller,
+            presenter: presenter,
+            now: clock,
+            defaults: suite
+        )
     }
 
     static func recordingRequest(
         distanceMeters: Double = 1000,
         runState: HikeActivityAttributes.ContentState.RunState = .running,
+        offRouteMeters: Double? = nil,
         elapsedSeconds: TimeInterval = 600,
         at date: Date = start
     ) -> HikeActivityRequest {
@@ -84,6 +95,7 @@ enum LiveActivityHarness {
             ),
             state: .init(
                 distanceMeters: distanceMeters,
+                offRouteMeters: offRouteMeters,
                 runState: runState,
                 elapsedSeconds: elapsedSeconds,
                 updatedAt: date

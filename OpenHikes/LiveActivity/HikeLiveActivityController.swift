@@ -29,13 +29,32 @@
 //    its own, because a walker flapping on and off the route with ordinary GPS
 //    noise would otherwise take it on every fix.
 //
+//  - **The two kinds of status change are floored separately, and a change
+//    nothing will re-offer is not floored at all.** They used to share one
+//    clock, which let a walker stepping off the route consume the flip and a
+//    pause seconds later be refused by it — and a refused pause is refused for
+//    good, because `HikeRecorder.pause()` stops the location sensors, so no
+//    later fix arrives to carry the correction. The panel went on reading
+//    "Recording", with its self-ticking clock still running, until the walker
+//    resumed or stopped. Two clocks fix the interference; ``stopsTheFixStream``
+//    fixes the permanence. See ``updateReason(to:from:now:)``.
+//
 //  - **The elapsed clock is never a reason to update.** It ticks by itself —
 //    see `HikeActivityAttributes.ContentState.timerStart`.
+//
+//  Both of the walker's switches are *watched* rather than merely read, which
+//  is the one thing here that is not a policy question. Reading them on the
+//  next call is enough while a walk is running, because a walk produces fixes;
+//  it is not enough for a panel left behind by a killed launch, which produces
+//  nothing and so would never reach a call. See ``reconcileWithPreferences()``.
 //
 
 import Foundation
 import Observation
 import OpenHikesShared
+#if canImport(UIKit)
+import UIKit
+#endif
 
 /// One walk's activity, prepared by whichever subsystem owns it: the recorder
 /// for a recording, the trail tracker for a follow.
@@ -63,6 +82,11 @@ final class HikeLiveActivityController {
     /// a second one waits. Directly modelled on
     /// `BackgroundTrailTracker.statusFlipInterval`, which exists because GPS
     /// noise around the follow threshold otherwise flips on every fix.
+    ///
+    /// One value, applied to each kind of status change on a clock of its own
+    /// — so the aggregate worst case is what the repository's rate policy
+    /// already documents, one flip per ten seconds per kind, rather than a
+    /// second number nothing else in the app knows about.
     static let minimumFlipInterval: TimeInterval = 10
 
     /// When the system should start telling the walker this is old news.
@@ -91,9 +115,18 @@ final class HikeLiveActivityController {
     /// an activity outlives the process that started it — which is why
     /// ``SystemHikeActivityPresenter`` adopts a running activity rather than
     /// requesting a second one.
+    ///
+    /// That adoption happens on `start` and nowhere else, so it covers a walk
+    /// that carries on across a relaunch and not one that ends there.
+    /// ``endUnowned(_:)`` is the other half.
     @ObservationIgnored private var current: HikeActivityRequest?
     @ObservationIgnored private var lastUpdateAt: Date?
-    @ObservationIgnored private var lastFlipAt: Date?
+    /// When a run-state change last landed, and when an on/off-route change
+    /// last did. Two clocks rather than one: they are driven by different
+    /// things at wildly different rates — a deliberate tap against GPS noise —
+    /// and sharing a floor let either starve the other.
+    @ObservationIgnored private var lastRunStateFlipAt: Date?
+    @ObservationIgnored private var lastRouteFlipAt: Date?
 
     /// Chains the framework calls so they land in the order they were asked
     /// for. ActivityKit's `update` and `end` are `async`, and two of them
@@ -104,6 +137,32 @@ final class HikeLiveActivityController {
     @ObservationIgnored private var pendingWork: Task<Void, Never>?
     @ObservationIgnored private var workSequence: UInt64 = 0
 
+    /// Held so they can be torn down with the controller. A block-based
+    /// observer is retained by the notification centre until it is removed by
+    /// token, and the app-hosted test bundles build hundreds of these.
+    ///
+    /// A box rather than an array field, because `deinit` on a `@MainActor`
+    /// type is itself `nonisolated` and so may not read main-actor storage —
+    /// the same constraint that makes `SystemHikeActivityPresenter` box its
+    /// `Activity`. Letting the box own the `deinit` sidesteps the isolation
+    /// question entirely: it is released exactly when the controller is, and
+    /// whoever is releasing it holds the last reference by definition.
+    @ObservationIgnored private let observers = ObserverTokens()
+
+    /// The tokens, and the only thing that removes them.
+    ///
+    /// `nonisolated` is load-bearing, exactly as it is on
+    /// `SystemHikeActivityPresenter`'s handle: `SWIFT_DEFAULT_ACTOR_ISOLATION`
+    /// is `MainActor`, so without it the box would itself be main-actor
+    /// isolated and its own `deinit` could not read it either.
+    nonisolated private final class ObserverTokens: @unchecked Sendable {
+        var tokens: [any NSObjectProtocol] = []
+
+        deinit {
+            for token in tokens { NotificationCenter.default.removeObserver(token) }
+        }
+    }
+
     init(
         presenter: any HikeActivityPresenting,
         defaults: UserDefaults = .standard,
@@ -112,6 +171,7 @@ final class HikeLiveActivityController {
         self.presenter = presenter
         self.defaults = defaults
         self.clock = clock
+        observePreferences()
     }
 
     /// Whether the walker wants these at all. Two switches, and both have to
@@ -146,7 +206,11 @@ final class HikeLiveActivityController {
         guard isEnabled else {
             // The app switch can be turned off mid-walk, and an activity
             // already on screen has to come down with it rather than freeze.
-            if current != nil { endAll() }
+            // Unguarded now: `endAll` decides for itself whether there is
+            // anything to do, and it also reaches panels this process does not
+            // hold — which a `current != nil` test here would have hidden
+            // again on exactly the launch that needs it most.
+            endAll()
             return
         }
         guard accepts(request.attributes.subject) else { return }
@@ -161,7 +225,11 @@ final class HikeLiveActivityController {
             now: now
         ) else { return }
         RenderSignpost.mark("LiveActivityUpdate", reason.signpostDetail)
-        if reason == .statusChanged { lastFlipAt = now }
+        switch reason {
+        case .runStateChanged: lastRunStateFlipAt = now
+        case .routeStatusChanged: lastRouteFlipAt = now
+        case .intervalElapsed: break
+        }
         lastUpdateAt = now
         // The attributes are carried across too: a trail renamed mid-walk
         // keeps its running activity — ActivityKit cannot deliver new
@@ -196,12 +264,143 @@ final class HikeLiveActivityController {
         finish(finalState: finalState, dismissAfter: dismissAfter)
     }
 
-    /// Ends whatever is running, whatever it is. For leaving the feature
-    /// entirely: the switch turned off, or a store that can no longer say what
-    /// the walker is doing.
+    /// Ends whatever is running, whatever it is — including a panel this
+    /// process never started. For leaving the feature entirely: a switch
+    /// turned off, or a store that can no longer say what the walker is doing.
+    ///
+    /// **Unconditional in kind, and deliberately unlike ``endUnowned(_:)``'s
+    /// caller in `HikeRecorder.endRecordingActivity(_:)`.** That one sweeps
+    /// `.recording` only, because a followed trail left by a previous launch
+    /// is still a walk the walker is on and the tracker adopts it back on the
+    /// next matched fix. Here the walker has said they want none of this on
+    /// their Lock Screen, so there is nothing left for either kind to be
+    /// *right about*. The two are not an inconsistency to be reconciled: one
+    /// answers "this recording is gone" and the other answers "take all of it
+    /// off my screen", and they should not be made to match.
+    ///
+    /// Both kinds are swept even when ``current`` held one of them, because
+    /// ``SystemHikeActivityPresenter`` adopts on `describesSameWalk(as:)` —
+    /// the exact walk, not the kind — so a relaunch that starts recording
+    /// session B while session A's panel is still live legitimately has two
+    /// recordings on screen and holds a handle to only one.
     func endAll(dismissAfter: TimeInterval? = nil) {
-        guard current != nil else { return }
-        finish(finalState: nil, dismissAfter: dismissAfter)
+        if current != nil {
+            finish(finalState: nil, dismissAfter: dismissAfter)
+        }
+        for kind in HikeActivityKind.allCases {
+            endUnowned(kind)
+        }
+    }
+
+    /// Takes down a panel of `kind` that this process did not put there.
+    ///
+    /// The escape hatch for a relaunch. ``current`` is what *this* process
+    /// believes, and after a cold start it believes nothing — so `end` and
+    /// `endAll`, which both open by consulting it, do nothing at all against a
+    /// panel the walker can plainly see. Two paths reach exactly that: a
+    /// recording whose journal is gone by the time `recoverOpenSession` looks
+    /// for it, and a `fail(_:endLocationUpdates:)` that lands before a session
+    /// exists at all.
+    ///
+    /// Two guards and one rule, in the order they matter:
+    ///
+    /// - **Owned is not unowned.** If this process is presenting a walk of
+    ///   this kind then `end(subject:finalState:dismissAfter:)` is the path,
+    ///   and it can leave a final panel where this cannot. Read synchronously,
+    ///   because ``current`` is main-actor state the caller has just decided
+    ///   about. ``endAll(dismissAfter:)`` clears it before sweeping, which is
+    ///   what lets it through.
+    /// - **Nothing on screen, nothing to do.** ``HikeActivityPresenting``'s
+    ///   `activeSubject` answers from the system rather than from a handle,
+    ///   which is what makes this answerable at all in a fresh process. Read
+    ///   *inside* the chain rather than before it, because it is the framework
+    ///   that answers it and an `end` queued ahead of this one has not run
+    ///   yet: evaluating it early would refuse a follow that a recording is
+    ///   still shadowing, and would re-sweep something already taken down.
+    /// - **Targeted, never unconditional.** A follow started by the previous
+    ///   launch is still a walk the walker is on, and the tracker will adopt
+    ///   it back on the next matched fix; sweeping it because a *recording*
+    ///   turned out not to exist would take down something valid and then
+    ///   flicker it back. This is the same precedence rule `accepts` applies,
+    ///   read from the other end. ``endAll(dismissAfter:)`` is the deliberate
+    ///   exception and argues itself there.
+    ///
+    /// Deliberately *not* gated on ``isEnabled``. Those two switches decide
+    /// whether the app may put something on the walker's Lock Screen; nothing
+    /// about them makes it right to leave a stale panel there once it is. A
+    /// walker who turned the feature off mid-hike is the one person most
+    /// entitled to have it removed — and since ``reconcileWithPreferences()``
+    /// runs precisely when `isEnabled` has gone false, that is now
+    /// load-bearing rather than merely defensible.
+    func endUnowned(_ kind: HikeActivityKind) {
+        guard !kind.matches(current?.attributes.subject) else { return }
+        enqueue { [presenter] in
+            guard kind.matches(presenter.activeSubject) else { return }
+            RenderSignpost.mark("LiveActivityEnd", "unowned")
+            await presenter.endUnowned(kind)
+        }
+    }
+
+    /// Re-asks both of the walker's switches and takes everything down if
+    /// either has gone to no.
+    ///
+    /// The trigger this feature was missing. ``preferenceEnabled`` is read on
+    /// every call rather than captured, which is enough *while a walk is
+    /// running* because a walk produces fixes and every fix reaches
+    /// ``update(_:)``. A panel left behind by a killed launch produces
+    /// nothing: no recorder is running, no trail is being followed, so nothing
+    /// ever calls ``update(_:)`` and the switch may as well not exist. A
+    /// walker who relaunches, sees the stale panel, and goes to Settings to
+    /// turn Live Activities off is doing the most explicit thing a person can
+    /// do to ask for it to go away, and before this the app ignored them until
+    /// the panel's own ten-minute stale date expired.
+    ///
+    /// Idempotent and cheap on purpose: `UserDefaults.didChangeNotification`
+    /// fires for *every* key in the suite and for same-value rewrites, so this
+    /// runs far more often than the switch actually changes. When the feature
+    /// is on it is one boolean read; when it is off and nothing is running it
+    /// is two enqueued closures that return without touching the framework.
+    func reconcileWithPreferences() {
+        guard !isEnabled else { return }
+        endAll()
+    }
+
+    /// Watches both halves of ``isEnabled``, each by the only means that
+    /// reports it.
+    ///
+    /// The app's own switch is a `UserDefaults` key that `SettingsView` writes
+    /// through `@AppStorage`, so the defaults notification — scoped to this
+    /// controller's own suite, never the process-wide one — is what sees it.
+    /// The system's per-app switch is not a default at all and changing it
+    /// means leaving for iOS Settings, so returning to the foreground is the
+    /// only moment the app can re-ask; `UIApplication`'s notification rather
+    /// than `scenePhase` keeps this off SwiftUI's render path entirely, which
+    /// is the same choice `MapView.Coordinator` makes and for the same reason.
+    private func observePreferences() {
+        var names: [Notification.Name] = []
+        #if canImport(UIKit)
+        names.append(UIApplication.didBecomeActiveNotification)
+        #endif
+        for name in names {
+            observers.tokens.append(
+                NotificationCenter.default.addObserver(
+                    forName: name,
+                    object: nil,
+                    queue: nil
+                ) { [weak self] _ in
+                    onMainActor { self?.reconcileWithPreferences() }
+                }
+            )
+        }
+        observers.tokens.append(
+            NotificationCenter.default.addObserver(
+                forName: UserDefaults.didChangeNotification,
+                object: defaults,
+                queue: nil
+            ) { [weak self] _ in
+                onMainActor { self?.reconcileWithPreferences() }
+            }
+        )
     }
 
     // MARK: Policy
@@ -219,33 +418,77 @@ final class HikeLiveActivityController {
 
     /// Why this state is worth an update, or `nil` for "it isn't".
     ///
-    /// An enum rather than a `Bool` because the two answers have different
-    /// consequences: a status change resets the flip floor, an ordinary one
-    /// does not.
-    private enum UpdateReason: Equatable {
-        case statusChanged
+    /// An enum rather than a `Bool` because the answers have different
+    /// consequences: each kind of status change resets a floor of its own, and
+    /// an ordinary one resets neither.
+    private enum UpdateReason {
+        case runStateChanged
+        case routeStatusChanged
         case intervalElapsed
 
-        /// What the Points of Interest track says about this update. The two
-        /// cases arrive at very different rates, and a run where every mark
-        /// reads `status` is a run where something is flapping.
+        /// What the Points of Interest track says about this update. The cases
+        /// arrive at very different rates, and a run where every mark reads
+        /// `route` is a run where something is flapping.
         var signpostDetail: String {
             switch self {
-            case .statusChanged: "status"
+            case .runStateChanged: "runstate"
+            case .routeStatusChanged: "route"
             case .intervalElapsed: "interval"
             }
         }
     }
 
+    /// Whether entering `runState` stops the input that would carry a retry.
+    ///
+    /// This is the whole reason a run-state change is treated differently from
+    /// an on/off-route one. Every refusal here is silent, and the *only* thing
+    /// that ever corrects one is the next call arriving with the same
+    /// difference still outstanding — `current` is deliberately not advanced
+    /// when an update is dropped. That works for anything the fix pipeline
+    /// keeps offering. It does not work for a transition that turns the fix
+    /// pipeline off: `HikeRecorder.pause()` calls `stopLocationSensors()`, and
+    /// a finished walk has no sensors at all, so a refusal there is permanent
+    /// and the panel keeps claiming the walk is under way — with the
+    /// self-ticking `Text(timerInterval:)` still counting, because `RunState`
+    /// is what says whether that timer may run.
+    ///
+    /// Resuming is the opposite and stays floored: sensors restart, so the
+    /// very next fix re-offers the change.
+    private static func stopsTheFixStream(
+        _ runState: HikeActivityAttributes.ContentState.RunState
+    ) -> Bool {
+        switch runState {
+        case .paused, .finished: true
+        case .running: false
+        }
+    }
+
+    /// Two floors, each on its own clock, plus the unfloored escape above.
+    ///
+    /// Weighed and rejected: letting a run-state change bypass the floor
+    /// unconditionally. It cannot flap at GPS rates — it comes from a tap —
+    /// but it can be *hammered*, and `NSSupportsLiveActivitiesFrequentUpdates`
+    /// is deliberately absent, so the ordinary budget is all there is to spend.
+    /// A floor on the resume alone is enough to bound the pair: updates are
+    /// emitted only when the run state actually differs from what is on
+    /// screen, and a dropped update leaves `current` where it was, so pauses
+    /// and resumes strictly alternate. Flooring one of the two therefore
+    /// floors the alternation — at most one run-state update per
+    /// ``minimumFlipInterval``, which is exactly the ceiling the route floor
+    /// already imposes on its own kind.
     private func updateReason(
         to state: HikeActivityAttributes.ContentState,
         from previous: HikeActivityAttributes.ContentState,
         now: Date
     ) -> UpdateReason? {
-        let statusChanged = state.runState != previous.runState
-            || (state.offRouteMeters == nil) != (previous.offRouteMeters == nil)
-        if statusChanged, elapsed(since: lastFlipAt, now: now, atLeast: Self.minimumFlipInterval) {
-            return .statusChanged
+        if state.runState != previous.runState,
+           Self.stopsTheFixStream(state.runState)
+               || elapsed(since: lastRunStateFlipAt, now: now, atLeast: Self.minimumFlipInterval) {
+            return .runStateChanged
+        }
+        if (state.offRouteMeters == nil) != (previous.offRouteMeters == nil),
+           elapsed(since: lastRouteFlipAt, now: now, atLeast: Self.minimumFlipInterval) {
+            return .routeStatusChanged
         }
         guard elapsed(since: lastUpdateAt, now: now, atLeast: Self.minimumUpdateInterval),
               state.warrantsUpdate(comparedTo: previous)
@@ -280,7 +523,8 @@ final class HikeLiveActivityController {
         current = request
         let now = clock()
         lastUpdateAt = now
-        lastFlipAt = nil
+        lastRunStateFlipAt = nil
+        lastRouteFlipAt = nil
         enqueue { [presenter] in
             // Ended first and awaited, not fired alongside: two activities of
             // the same attributes type can be on screen at once, and a
@@ -307,7 +551,8 @@ final class HikeLiveActivityController {
         )
         current = nil
         lastUpdateAt = nil
-        lastFlipAt = nil
+        lastRunStateFlipAt = nil
+        lastRouteFlipAt = nil
         enqueue { [presenter] in
             await presenter.end(
                 finalState: finalState,

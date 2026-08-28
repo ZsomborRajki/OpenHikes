@@ -97,6 +97,11 @@ nonisolated extension TileCache {
         let interval = RenderSignpost.beginInterval("TileCacheClear")
         defer { RenderSignpost.endInterval("TileCacheClear", interval) }
         let cleared = mutationVersions.withLock { versions -> Int in
+            // The epoch, not a row per file: this clears both directories
+            // entirely, so there is nothing left for any token to be valid
+            // against and one bump says so in constant time. The per-file
+            // loops — `trimCache` and the durable reclaims — are the ones that
+            // must not reach for this.
             versions.invalidateAll()
             memory.removeAllObjects()
             let files = allTileFiles(in: directory) + allTileFiles(in: durableDirectory)
@@ -127,6 +132,14 @@ nonisolated extension TileCache {
         let interval = RenderSignpost.beginInterval("TileUnclaimedSweep")
         defer { RenderSignpost.endInterval("TileUnclaimedSweep", interval) }
         let removed = mutationVersions.withLock { versions -> Int in
+            // One epoch bump for the whole sweep, taken before it rather than
+            // per file. This is the user asking for the cache to be cleared,
+            // and it drops the entire memory tier in the same breath — a row
+            // per deleted file would lengthen a lock hold that already spans
+            // two full directory walks, and would compact back into this same
+            // bump the moment the sweep is large. The distinction the per-file
+            // loops care about doesn't arise here: nothing is browsing while
+            // Settings is clearing.
             versions.invalidateAll()
             memory.removeAllObjects()
             var removed = 0
@@ -236,12 +249,20 @@ nonisolated extension TileCache {
             // fetch-time mtime — so the safety here was already arithmetic.
             // The lock is what makes it an invariant instead, and what keeps
             // `trimTargetFraction` a tunable rather than a load-bearing one.
+            //
+            // The bump is the deleted tile's own row and not the epoch, which
+            // is the difference between invalidating one in-flight fetch and
+            // invalidating all of them once per tile — five hundred times over
+            // a five-hundred-tile trim, each one a correct response discarded
+            // and refetched. The file's own name is the row's key, so no
+            // reverse mapping is needed to say which tile went; see
+            // ``TileCache/MutationVersions/names``.
             let removed = mutationVersions.withLock { versions -> Bool in
                 guard removeItemIgnoringNotFound(
                     at: tile.url,
                     operation: "trim cached tile"
                 ) else { return false }
-                versions.invalidateAll()
+                versions.invalidate(tile.url.lastPathComponent)
                 return true
             }
             guard removed else { continue }
@@ -265,8 +286,11 @@ nonisolated extension TileCache {
         defer { RenderSignpost.endInterval("TileKeyedRemoval", interval) }
         RenderSignpost.mark("TilesRemoved", "keys=\(keys.count)")
         for key in keys {
+            // The row `versions` keeps for this tile is its file name, which
+            // is also what `filePaths(forKey:)` builds both tiers from.
+            let name = diskName(for: key)
             mutationVersions.withLock { versions in
-                versions.invalidate(key)
+                versions.invalidate(name)
                 // swiftlint:disable:next legacy_objc_type
                 memory.removeObject(forKey: key as NSString)
                 let paths = filePaths(forKey: key)

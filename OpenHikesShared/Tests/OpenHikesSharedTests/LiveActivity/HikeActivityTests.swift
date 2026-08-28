@@ -214,19 +214,151 @@ struct HikeActivityPayloadTests {
         #expect(recording.subject.isRecording)
     }
 
+    /// ActivityKit's combined budget for an activity's attributes and its
+    /// content state.
+    private static let activityBudgetBytes = 4096
+
+    /// What the worst case is allowed to spend of that budget: a quarter, so
+    /// three quarters of it stay unspent.
+    ///
+    /// The limit itself is the wrong threshold to test against. This payload's
+    /// whole reason for existing is that the route polyline was left out of
+    /// it, and the widget's decimated route is 180 coordinates — kilobytes on
+    /// its own. A test that only asked "under 4096?" would pass with fifty
+    /// coordinates smuggled back in, which is precisely the regression it is
+    /// here to catch, so the useful threshold is one that has no room for
+    /// geometry at all. A single `CodableCoordinate` encodes to roughly forty
+    /// bytes; the margin left under this ceiling is a handful of them.
+    ///
+    /// The fit is deliberately tight rather than lucky: ``worstCaseState``
+    /// inflates every field to the most its type can print, so the payload
+    /// sits just under this line and *any* new field has to come here and
+    /// argue for itself. Raising the ceiling is a legitimate answer to that
+    /// argument. Not noticing is not.
+    ///
+    /// The three spare kilobytes are also what covers the title's missing
+    /// bound below: they absorb a name several times longer than the one this
+    /// test defends, so a walker who types an unusually long one does not
+    /// depend on anybody having re-run these numbers.
+    private static let worstCaseCeilingBytes = activityBudgetBytes / 4
+
+    /// What a single update may cost: an eighth of the budget.
+    ///
+    /// The attributes are fixed for an activity's whole life, so what actually
+    /// crosses to the system every twenty seconds for the length of a walk is
+    /// the content state alone. That marginal figure is worth its own bound —
+    /// it is the one that recurs, and the one a geometry-carrying field on
+    /// ``HikeActivityAttributes/ContentState`` would show up in first.
+    private static let updateCeilingBytes = activityBudgetBytes / 8
+
+    /// A trail name at the worst case this test is willing to defend: 128
+    /// characters in a script where they cost three and four UTF-8 bytes
+    /// each, rather than 128 bytes of ASCII.
+    ///
+    /// Nothing in the app bounds the real one. ``Hike/displayTitle`` returns
+    /// `customName` or `title`; the rename field trims whitespace and stores
+    /// whatever is left, with no length check, and an imported GPX `<name>`
+    /// arrives unbounded too. So 128 characters is *this test's* bound and not
+    /// the app's, chosen because the job here is to catch a structural
+    /// regression — a field that carries geometry — rather than to prove that
+    /// a hostile hundred-kilobyte title fits. Nothing would make it fit; the
+    /// answer to that one is a bound on the title, not a smaller payload.
+    private static let worstCaseTitle: String = {
+        let name = "北アルプス表銀座縦走路 🏔"
+        return name + String(repeating: "🏔", count: 128 - name.count)
+    }()
+
+    /// Every optional populated, each at the largest value its type plausibly
+    /// takes — `Int.max` points, doubles that print to seventeen significant
+    /// digits, and the longest ``RunState`` raw value.
+    ///
+    /// Assembled by hand because no builder produces it: `init(following:)`
+    /// leaves the recording fields `nil` and `init(recording:)` leaves the
+    /// trail ones `nil`, so the union of the two is a state the type can
+    /// express and nothing constructs. The budget has to hold for that, not
+    /// for whichever half today's two call sites happen to build.
+    private static let worstCaseState = HikeActivityAttributes.ContentState(
+        distanceMeters: 12_345.678901234567,
+        elevationGainMeters: 1234.5678901234567,
+        currentElevationMeters: 2345.6789012345678,
+        averageSpeedMetersPerSecond: 1.2345678901234567,
+        pointCount: Int.max,
+        offRouteMeters: 3456.789012345678,
+        runState: .finished,
+        elapsedSeconds: 456_789.01234567891,
+        updatedAt: Date(timeIntervalSinceReferenceDate: 781_234_567.8912345)
+    )
+
+    /// Both subjects, because they encode differently: `sessionID` is three
+    /// characters longer than `hikeID`, so whichever is larger is not obvious
+    /// and neither is worth guessing at.
+    private static let worstCaseSubjects: [HikeActivityAttributes.Subject] = [
+        .recording(sessionID: UUID()),
+        .following(hikeID: UUID()),
+    ]
+
+    private static func worstCaseAttributes(
+        subject: HikeActivityAttributes.Subject
+    ) -> HikeActivityAttributes {
+        HikeActivityAttributes(
+            subject: subject,
+            title: worstCaseTitle,
+            // The longest form `Color(hex:)` accepts: "#RRGGBBAA".
+            tintHex: "#FF9500FF",
+            startedAt: Date(timeIntervalSinceReferenceDate: 781_234_567.8912345),
+            routeDistanceMeters: 123_456.78901234567
+        )
+    }
+
     /// ActivityKit gives an activity's attributes and content state a combined
     /// 4 KB. That budget is the reason the route polyline was left out, and a
     /// budget nothing checks is a budget that gets spent — a future field that
-    /// carries geometry would fail here rather than on a device.
-    @Test("the encoded payload stays inside ActivityKit's 4 KB budget")
+    /// carries geometry has to fail here rather than on a device.
+    ///
+    /// Measured at the worst case rather than at a typical one, and against
+    /// ``worstCaseCeilingBytes`` rather than against the limit: a twelve
+    /// character title tested against 4096 has thousands of bytes of headroom,
+    /// which is another way of saying it would not notice the thing it exists
+    /// to notice.
+    @Test("the worst-case payload spends a quarter of ActivityKit's 4 KB budget")
     func payloadFitsTheActivityBudget() throws {
-        let snapshot = Self.trailSnapshot(liveFix: Self.liveFix())
-        let attributes = HikeActivityAttributes.following(from: snapshot)
-        let state = HikeActivityAttributes.ContentState(following: snapshot)
+        // The worst case has to still be one. A source file that lost the
+        // multi-byte characters would quietly shrink it to a quarter the size
+        // and take the assertions below with it.
+        #expect(Self.worstCaseTitle.count == 128)
+        #expect(Self.worstCaseTitle.utf8.count >= 480)
+
         let encoder = JSONEncoder()
-        let total = try encoder.encode(attributes).count
-            + encoder.encode(state).count
-        #expect(total < 4096)
+        let stateBytes = try encoder.encode(Self.worstCaseState).count
+        var largestTotal = 0
+
+        for subject in Self.worstCaseSubjects {
+            let attributeBytes = try encoder.encode(
+                Self.worstCaseAttributes(subject: subject)
+            ).count
+            let total = attributeBytes + stateBytes
+            #expect(total < Self.activityBudgetBytes, "\(subject) encoded to \(total) bytes")
+            #expect(total <= Self.worstCaseCeilingBytes, "\(subject) encoded to \(total) bytes")
+            largestTotal = max(largestTotal, total)
+        }
+
+        // And it has to still *be* a worst case. A field added to
+        // `ContentState(following:)` and left `nil` up there would otherwise
+        // be weighed at nothing at all.
+        let snapshot = Self.trailSnapshot(liveFix: Self.liveFix())
+        let built = try encoder.encode(HikeActivityAttributes.following(from: snapshot)).count
+            + encoder.encode(HikeActivityAttributes.ContentState(following: snapshot)).count
+        #expect(built < largestTotal, "the builders encode \(built) bytes to the worst case's \(largestTotal)")
+    }
+
+    /// The attributes are fixed for an activity's whole life, so what recurs
+    /// on the wire every 20 seconds for the length of a walk is the content
+    /// state alone. That marginal figure is the one a geometry-carrying field
+    /// would show up in first, and it is bounded well under the total.
+    @Test("an update carries the content state alone, at a fraction of the budget")
+    func everyUpdateStaysFarInsideTheBudget() throws {
+        let stateBytes = try JSONEncoder().encode(Self.worstCaseState).count
+        #expect(stateBytes <= Self.updateCeilingBytes, "\(stateBytes) bytes")
     }
 
     @Test("the payload survives a round trip")

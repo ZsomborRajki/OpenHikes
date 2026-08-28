@@ -21,12 +21,19 @@ import Testing
 
 /// Records what the controller asked ActivityKit to do, and answers the one
 /// question ActivityKit would: whether the walker allows any of this.
+///
+/// ``subject`` models the *system's* state rather than the stub's memory of
+/// its own calls, which is what the real presenter's `activeSubject` now
+/// reports — so ``simulatePreviousLaunch(_:)`` is enough to put this stub in
+/// the position a relaunch leaves the app in: a panel on screen that no
+/// object in this process holds a handle to.
 @MainActor
 final class StubHikeActivityPresenter: HikeActivityPresenting {
     enum Call: Equatable {
         case start(HikeActivityAttributes.Subject)
         case update(HikeActivityAttributes.ContentState)
         case end(finalState: HikeActivityAttributes.ContentState?, dismissAfter: TimeInterval?)
+        case endUnowned(HikeActivityKind)
     }
 
     var areActivitiesEnabled = true
@@ -35,6 +42,13 @@ final class StubHikeActivityPresenter: HikeActivityPresenting {
     private var subject: HikeActivityAttributes.Subject?
 
     var activeSubject: HikeActivityAttributes.Subject? { subject }
+
+    /// Puts an activity on screen that this process never started, which is
+    /// what a walker sees after the app is killed mid-hike and relaunched.
+    /// Deliberately does not touch ``calls``: nothing in this process did it.
+    func simulatePreviousLaunch(_ subject: HikeActivityAttributes.Subject) {
+        self.subject = subject
+    }
 
     var startedSubjects: [HikeActivityAttributes.Subject] {
         calls.compactMap { call in
@@ -58,6 +72,13 @@ final class StubHikeActivityPresenter: HikeActivityPresenting {
         calls.count { call in
             if case .end = call { return true }
             return false
+        }
+    }
+
+    var endUnownedKinds: [HikeActivityKind] {
+        calls.compactMap { call in
+            if case .endUnowned(let kind) = call { return kind }
+            return nil
         }
     }
 
@@ -86,6 +107,11 @@ final class StubHikeActivityPresenter: HikeActivityPresenting {
     ) {
         subject = nil
         calls.append(.end(finalState: finalState, dismissAfter: dismissAfter))
+    }
+
+    func endUnowned(_ kind: HikeActivityKind) {
+        if kind.matches(subject) { subject = nil }
+        calls.append(.endUnowned(kind))
     }
 }
 
