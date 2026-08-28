@@ -45,6 +45,6 @@ control of it. In particular:
 
 Secret scanning and push protection are enabled on this repository, so a
 recognised credential is blocked at push time rather than found afterwards.
-Dependency updates come from [Dependabot](.github/dependabot.yml), and
-[CodeQL](.github/workflows/codeql.yml) analyses Swift on every push to `main`
+Dependency updates come from [Dependabot](../.github/dependabot.yml), and
+[CodeQL](../.github/workflows/codeql.yml) analyses Swift on every push to `main`
 and weekly.
