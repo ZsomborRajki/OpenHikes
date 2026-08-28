@@ -43,18 +43,44 @@ struct MapAttributionViewTests {
             .first
     }
 
-    @Test("a raster provider's credits are spoken and shown in full")
+    @Test("a raster provider's credits are shown compactly and spoken in full")
     func showsEveryCredit() {
         let (view, _) = makeView()
         let attribution = TileProvider.thunderforestOutdoors.attribution
         view.update(with: attribution)
 
         #expect(!view.isHidden)
-        #expect(label(in: view)?.text == attribution.plainText)
+        #expect(label(in: view)?.text == attribution.compactText)
         #expect(button(in: view)?.accessibilityLabel == attribution.plainText)
         // Thunderforest requires both parties named, "Maps ©" and "Data ©".
         #expect(attribution.plainText.contains("Thunderforest"))
         #expect(attribution.plainText.contains("OpenStreetMap contributors"))
+    }
+
+    /// The map is the space-constrained placement, so it drops the decoration
+    /// — and nothing else. Every party a provider's terms require stays named,
+    /// which is the half of this that is a licensing obligation rather than a
+    /// layout preference.
+    @Test(
+        "the compact line names every required party",
+        arguments: [
+            (TileProvider.openStreetMap, "© OpenStreetMap"),
+            (TileProvider.stadiaOutdoors, "© Stadia Maps, OpenMapTiles, OpenStreetMap"),
+            (TileProvider.thunderforestOutdoors, "© Thunderforest, OpenStreetMap"),
+        ]
+    )
+    func compactLineKeepsEveryParty(provider: TileProvider, expected: String) {
+        let (view, _) = makeView()
+        view.update(with: provider.attribution)
+
+        #expect(label(in: view)?.text == expected)
+        #expect(expected.count <= provider.attribution.plainText.count)
+        // A shortened credit still has to reach every licence it names.
+        #expect(
+            provider.attribution.credits.allSatisfy { credit in
+                expected.contains(credit.compactTitle) && credit.url != nil
+            }
+        )
     }
 
     /// MapKit draws its own **Legal** link over the system base map, and
@@ -69,7 +95,14 @@ struct MapAttributionViewTests {
     @Test("no source at all draws nothing")
     func hidesWithoutASource() {
         let (view, _) = makeView()
+        // Before anything has been applied at all: a view that started visible
+        // would draw an empty pill over the map on the frames before a source
+        // resolves, and `update(with:)` would return early rather than fix it.
+        #expect(view.isHidden)
+
         view.update(with: TileProvider.openStreetMap.attribution)
+        #expect(!view.isHidden)
+
         view.update(with: nil)
         #expect(view.isHidden)
     }
@@ -103,8 +136,8 @@ struct MapAttributionViewTests {
         #expect(titles == attribution.credits.map(\.title))
     }
 
-    /// Rebuilt on a change and left alone otherwise: the sheet repositions
-    /// this view at display rate, and none of those passes may rewrite it.
+    /// Rebuilt on a change and left alone otherwise: `update(with:)` is reached
+    /// from every tile-source pass, and none of those may rewrite the line.
     @Test("re-applying the same credits changes nothing")
     func repeatedUpdatesAreIdempotent() {
         let (view, _) = makeView()
@@ -113,7 +146,7 @@ struct MapAttributionViewTests {
         let first = view.subviews.first
         view.update(with: attribution)
         #expect(view.subviews.first === first)
-        #expect(label(in: view)?.text == attribution.plainText)
+        #expect(label(in: view)?.text == attribution.compactText)
     }
 }
 #endif

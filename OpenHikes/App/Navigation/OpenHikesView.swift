@@ -94,9 +94,6 @@ struct OpenHikesView: View {
     @AppStorage(SettingsKey.savePhotosToLibrary)
     var savePhotosToLibrary = SettingsDefault.savePhotosToLibrary
 
-    /// Top padding for the weather badge, sitting below the Dynamic Island/notch.
-    private static let weatherBadgeTopPadding: CGFloat = 96
-
     /// The route drawn on the map — always the currently selected hike, if any.
     /// Geometry only: its appearance reaches the map through ``routeStyle``,
     /// which is what keeps a colour or width drag out of this body.
@@ -155,7 +152,12 @@ struct OpenHikesView: View {
             tileSource: activeTileSource,
             mapController: mapController,
             photoCapture: photoCapture,
-            photoPins: photoPins
+            photoPins: photoPins,
+            // The same condition the overlay below is built on, so the credit
+            // line knows whether there is a badge above it to hang from. Read
+            // here rather than there because a `@ViewBuilder` closure cannot
+            // hand a value back to the view it decorates.
+            showsWeatherBadge: appModel.weatherManager.current != nil
         )
             .equatable()
             .accessibilityIdentifier("trail-map")
@@ -163,8 +165,8 @@ struct OpenHikesView: View {
             .overlay(alignment: .topLeading) {
                 if let current = appModel.weatherManager.current {
                     WeatherBadge(weather: current) { weatherDetail.present() }
-                        .padding(.leading)
-                        .padding(.top, Self.weatherBadgeTopPadding)
+                        .padding(.leading, WeatherBadge.leadingPadding)
+                        .padding(.top, WeatherBadge.topPadding)
                 }
             }
             // Reads nothing and draws nothing outside a measured launch; see

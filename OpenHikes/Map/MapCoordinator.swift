@@ -111,11 +111,23 @@ extension MapView {
         #endif
 
         // MARK: Attribution
-        // Stored state for `MapAttributionView.swift`. The credit line rides
-        // the sheet one row above the two controls, driven by the same
-        // `applySheetTop(on:)` arithmetic.
+        // Stored state for `MapAttributionView.swift`. The credit line hangs
+        // beneath the weather badge and does not move with the sheet — see
+        // `MapView.addAttribution`. What is stored is the one constraint that
+        // is not a constant, and the two things that move it: whether there is
+        // a badge above it at all, and how tall that badge draws.
 
-        var attributionBottomConstraint: NSLayoutConstraint?
+        var attributionTopConstraint: NSLayoutConstraint?
+
+        /// Whether the weather badge is on screen, mirrored from `MapView` so
+        /// the Dynamic Type callback can reposition the line without it.
+        var showsWeatherBadge = false
+
+        #if os(iOS)
+        /// Retains the Dynamic Type registration for the offset above; a
+        /// dropped token unregisters it.
+        var attributionTraitRegistration: (any UITraitChangeRegistration)?
+        #endif
 
         #if canImport(UIKit)
         weak var attributionView: MapAttributionView?

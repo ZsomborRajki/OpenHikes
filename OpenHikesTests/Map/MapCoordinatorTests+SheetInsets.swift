@@ -16,6 +16,10 @@
 //  the top clamp is the button's height plus its spacing. That is the point of
 //  measuring it rather than hard-coding a device's inset.
 //
+//  The credit line takes no part in any of it: it is pinned to the top of the
+//  map and does not move. `attributionStaysPutAcrossTheSheetsTravel` is what
+//  holds that, and it is the reason every number below is the button's own.
+//
 
 import CoreLocation
 import Foundation
@@ -128,7 +132,10 @@ extension MapCoordinatorTests {
         sheetMetrics.topY = 640
         await settle()
 
-        #expect(constraint.constant == 640 - spacing, "no `update` call in between")
+        #expect(
+            constraint.constant == 640 - spacing,
+            "no `update` call in between"
+        )
         #endif
     }
 
@@ -187,6 +194,69 @@ extension MapCoordinatorTests {
         coordinator.applySheetTop(on: map)
         #expect(constraint.constant == resting)
         #expect(button.alpha == 1)
+        #endif
+    }
+
+    /// The behaviour this move introduced. The credit line used to ride the
+    /// sheet as the bottom-most row of the stack; it is now pinned to the top
+    /// of the map, so a drag that moves the button through its whole travel —
+    /// including the part where the button parks and fades — leaves the line
+    /// exactly where it was.
+    ///
+    /// Asserted through the view's own frame rather than a constraint, because
+    /// "it does not move" is a claim about where it ends up and there is no
+    /// longer a constraint of its own carrying that.
+    @Test("the credit line stays put across the sheet's whole travel")
+    func attributionStaysPutAcrossTheSheetsTravel() throws {
+        #if os(iOS)
+        let coordinator = MapView.Coordinator()
+        let map = makeMap(mapView(), coordinator)
+        defer { detach(map) }
+        let credit = try #require(coordinator.attributionView)
+        let button = try #require(coordinator.trackingButton)
+
+        settle(sheetMetrics, at: map.bounds.height * 0.45)
+        coordinator.applySheetTop(on: map)
+        map.layoutIfNeeded()
+        let resting = credit.frame
+
+        #expect(!credit.isHidden, "there is a line to hold still")
+        // Above the tracking button rather than below it, which is the move.
+        #expect(resting.maxY < button.frame.minY)
+
+        for topY in stride(from: map.bounds.height, through: 40, by: -20) {
+            sheetMetrics.report(topY: topY, atMiddleDetent: true)
+            coordinator.applySheetTop(on: map)
+            map.layoutIfNeeded()
+            #expect(
+                credit.frame == resting,
+                "the credit line moved at a sheet top of \(topY)"
+            )
+            // And it is a notice rather than a control, so it does not fade
+            // out with the two that the sheet is covering.
+            #expect(credit.alpha == 1)
+        }
+        #expect(button.alpha == 0, "the button did fade, so the drag was real")
+        #endif
+    }
+
+    /// The system base map is credited by MapKit's own **Legal** link, so the
+    /// app draws no line of its own.
+    @Test("a source with no credit of ours draws nothing over the map")
+    func noCreditLineWithoutASourceOfOurs() throws {
+        #if os(iOS)
+        let coordinator = MapView.Coordinator()
+        let map = makeMap(mapView(tileSource: nil), coordinator)
+        defer { detach(map) }
+        let constraint = try #require(coordinator.trackingBottomConstraint)
+        let credit = try #require(coordinator.attributionView)
+        let spacing: CGFloat = 16
+
+        sheetMetrics.topY = 700
+        coordinator.applySheetTop(on: map)
+
+        #expect(credit.isHidden)
+        #expect(constraint.constant == 700 - spacing)
         #endif
     }
 

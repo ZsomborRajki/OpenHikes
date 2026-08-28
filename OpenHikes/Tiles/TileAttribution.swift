@@ -34,12 +34,24 @@ nonisolated struct TileAttribution: Hashable, Sendable {
         /// credited by MapKit's own **Legal** link, which is drawn by the map
         /// view and is not ours to reproduce.
         let url: URL?
+        /// The shortest naming of this party its licensor sanctions, for the
+        /// one placement that is genuinely space-constrained — see
+        /// ``TileAttribution/compactText``. Defaults to ``title``, so a credit
+        /// only carries one where a shorter form is actually permitted.
+        let compactTitle: String
 
         var id: String { title }
 
         /// The credit as one run of text, for anywhere a link cannot be drawn
         /// — VoiceOver, a share sheet, an exported file.
         var plainText: String { "\(prefix) \(title)" }
+
+        init(title: String, prefix: String, url: URL?, compactTitle: String? = nil) {
+            self.title = title
+            self.prefix = prefix
+            self.url = url
+            self.compactTitle = compactTitle ?? title
+        }
     }
 
     let credits: [Credit]
@@ -59,6 +71,24 @@ nonisolated struct TileAttribution: Hashable, Sendable {
     /// base map, whose single credit MapKit draws its own link for.
     var hasLinks: Bool {
         credits.contains { $0.url != nil }
+    }
+
+    /// The same parties, named once each behind a single `©`, for the credit
+    /// line drawn *on the map*.
+    ///
+    /// Only the decoration is dropped, never a party: the OSMF's guidelines
+    /// permit a shortened credit for a space-constrained placement but require
+    /// it to stay "legible and understandable", and Thunderforest's terms name
+    /// both parties outright. So `Maps © Thunderforest, Data © OpenStreetMap
+    /// contributors` becomes `© Thunderforest, OpenStreetMap` — two names, two
+    /// links, forty per cent of the width, and one line at most Dynamic Type
+    /// sizes instead of three.
+    ///
+    /// ``plainText`` remains the canonical form and is what Settings draws and
+    /// what VoiceOver speaks, both of which have the room. Every credit the app
+    /// draws here is a copyright notice, which is what lets one symbol lead.
+    var compactText: String {
+        "© " + credits.map(\.compactTitle).joined(separator: ", ")
     }
 }
 
@@ -97,10 +127,16 @@ nonisolated extension TileAttribution.Credit {
 
     /// Thunderforest requires the OSM credit to read "Data ©" beside its own
     /// "Maps ©", which is why this exists alongside ``openStreetMap``.
+    ///
+    /// Its compact form drops "contributors" rather than the party: that is
+    /// the shortening the OSMF's guidelines sanction for a space-constrained
+    /// placement, provided the credit still links to the copyright page — and
+    /// it is the same form ``openStreetMap`` above already uses.
     static let openStreetMapData = Self(
         title: "OpenStreetMap contributors",
         prefix: "Data ©",
-        url: URL(string: "https://www.openstreetmap.org/copyright")!
+        url: URL(string: "https://www.openstreetmap.org/copyright")!,
+        compactTitle: "OpenStreetMap"
     )
     // swiftlint:enable force_unwrapping
 

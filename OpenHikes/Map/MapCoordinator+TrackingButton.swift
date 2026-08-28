@@ -90,20 +90,15 @@ extension MapView.Coordinator {
     /// Both controls take the same constant and the same opacity, which is the
     /// reason the pill is a UIKit subview at all — see ``MapPhotoControlsView``.
     ///
-    /// The attribution line takes the same constant, centred between the two
-    /// controls rather than stacked above them: the credit is minimal chrome,
-    /// not a third control, so it rides in the gap they already leave rather
-    /// than adding a row of its own. It fades on the same schedule because
-    /// past the middle detent the sheet is covering the map, and a credit for
-    /// a map that is no longer drawn is not one anybody is owed.
+    /// The credit line is not part of this. It is pinned to the top of the map
+    /// and stays there — see ``MapView/addAttribution(to:_:alignedTo:)``.
     func applySheetTop(on mapView: MKMapView) {
         guard mapView.bounds.height > 0 else { return }
         let wanted = sheetTop(in: mapView) - Self.trackingButtonSpacing
         let limit = trackingButtonLimit(in: mapView)
-        let constant = max(wanted, limit)
-        trackingBottomConstraint?.constant = constant
-        photoControlsBottomConstraint?.constant = constant
-        attributionBottomConstraint?.constant = constant
+        let controls = max(wanted, limit)
+        trackingBottomConstraint?.constant = controls
+        photoControlsBottomConstraint?.constant = controls
         applyControlAlpha(
             encroachment: limit - wanted,
             over: fadeDistance(from: limit, in: mapView)
@@ -143,7 +138,7 @@ extension MapView.Coordinator {
     }
 
     /// Clear of the status bar and the Dynamic Island, measured from the map's
-    /// own safe area and the button's own height rather than from a fraction
+    /// own safe area and the controls' own height rather than from a fraction
     /// of the screen.
     private func clearOfStatusBar(in mapView: MKMapView) -> CGFloat {
         mapView.safeAreaInsets.top
@@ -194,9 +189,6 @@ extension MapView.Coordinator {
         )
         if let trackingButton, trackingButton.alpha != alpha {
             trackingButton.alpha = alpha
-        }
-        if let attributionView, attributionView.alpha != alpha {
-            attributionView.alpha = alpha
         }
         // The pill has a second reason to be hidden — there may be no hike to
         // photograph — so it takes this through the accessor that combines the

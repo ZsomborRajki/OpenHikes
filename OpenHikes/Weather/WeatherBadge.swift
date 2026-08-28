@@ -40,7 +40,41 @@ struct WeatherBadge: View {
     private static let staleOpacity: Double = 0.45
     private static let contentSpacing: CGFloat = 8
     private static let horizontalPadding: CGFloat = 14
-    private static let verticalPadding: CGFloat = 8
+
+    /// Where the badge sits over the map, and how tall it draws.
+    ///
+    /// Not private, and the leading inset is spelled out rather than left as
+    /// the `.padding(.leading)` default it reads like, because a second view
+    /// is positioned against this one and cannot see it: the map's credit line
+    /// hangs directly beneath the badge, and it is a subview of `MKMapView`
+    /// while this is a SwiftUI overlay drawn over the top. There is no anchor
+    /// joining the two hierarchies, so agreeing on these numbers is the only
+    /// thing keeping them from drifting apart. See `MapView.addAttribution`.
+    ///
+    /// Measured from the map's *own* top edge, not its safe area: the map
+    /// `.ignoresSafeArea()`, so this overlay is aligned to the full screen and
+    /// the padding is what clears the Dynamic Island.
+    static let topPadding: CGFloat = 96
+    static let leadingPadding: CGFloat = 16
+    static let verticalPadding: CGFloat = 8
+
+    /// The text style that decides the capsule's height.
+    ///
+    /// The symbol and the temperature are both Dynamic Type and the symbol is
+    /// the taller of the two, so this is the one to scale against — which is
+    /// what makes the badge's height, and therefore the credit line's
+    /// position, a function of the reader's text size rather than a constant.
+    ///
+    /// Twice, because SwiftUI and UIKit spell the same style differently and
+    /// there is no conversion between the two types. Kept adjacent so the pair
+    /// is read and changed together; `MapView.weatherBadgeHeight(in:)` needs
+    /// the UIKit one to measure a line height, which `Font.TextStyle` cannot
+    /// answer.
+    static let heightDrivingTextStyle: Font.TextStyle = .title3
+
+    #if canImport(UIKit)
+    static let heightDrivingUITextStyle: UIFont.TextStyle = .title3
+    #endif
 
     let weather: WeatherSnapshot
     let onTap: () -> Void
@@ -59,7 +93,7 @@ struct WeatherBadge: View {
             HStack(spacing: Self.contentSpacing) {
                 Image(systemName: weather.symbolName)
                     .symbolRenderingMode(.multicolor)
-                    .font(.title3)
+                    .font(.system(Self.heightDrivingTextStyle))
                     .accessibilityHidden(true)
                 // One formatter, two widths: this and the spoken value below
                 // are the same rounded quantity in the reader's own units.

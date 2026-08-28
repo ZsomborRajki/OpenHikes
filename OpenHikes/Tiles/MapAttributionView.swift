@@ -11,12 +11,13 @@
 //  by opening a settings screen is attribution of the app, not of the map.
 //
 //  UIKit rather than a SwiftUI overlay, for the same reason the camera pill is
-//  — see ``MapPhotoControlsView``. This has to ride the sheet's top edge, and
-//  that edge is reported by ``SheetMetrics`` at display rate throughout a drag.
-//  Reading it from a SwiftUI body would re-render the map's whole ancestry on
-//  every frame of that drag; as a subview it takes the same driven constant
-//  ``MapView/Coordinator/applySheetTop(on:)`` already computes for the other
-//  two controls.
+//  — see ``MapPhotoControlsView``. It belongs to the map, not to the screen
+//  over it: it is positioned against the map's own geometry, and as a subview
+//  it costs the root view's body nothing. The weather badge is the
+//  counter-example — an overlay in that body, and one more thing that has to
+//  be reasoned about every time the body changes. That the two end up stacked
+//  is why ``WeatherBadge`` publishes its padding and text style: nothing joins
+//  the two hierarchies, so those numbers are the whole agreement.
 //
 //  One tap target rather than one per credit. A provider can require three
 //  (Stadia credits itself, OpenMapTiles and OpenStreetMap), and three
@@ -25,21 +26,35 @@
 //  button opens the one link when there is one, and offers a menu of them when
 //  there are several.
 //
+//  What it draws is ``TileAttribution/compactText`` rather than the canonical
+//  ``TileAttribution/plainText``. This is the one placement the licences call
+//  space-constrained, so it names every required party once and drops nothing
+//  but the repeated "©", "Maps ©", "Data ©" and "contributors" decoration.
+//  Settings and VoiceOver keep the canonical form, and both have the room.
+//
 
 import Foundation
 #if canImport(UIKit)
 import UIKit
 
-/// The attribution line that hugs the sheet's top edge.
+/// The attribution line, hung beneath the weather badge at the top of the map.
 ///
 /// Rebuilt only when the provider changes — ``update(with:)`` returns early
-/// otherwise, so the sheet-driven repositioning never touches the text.
+/// otherwise, so a repeated pass over an unchanged source costs nothing.
 final class MapAttributionView: UIView {
     /// Small, but still Dynamic Type: this is a legal notice, and one that
     /// cannot be read is not one that has been given.
-    private static let font = UIFont.preferredFont(forTextStyle: .caption2)
-    private static let horizontalPadding: CGFloat = 10
-    private static let verticalPadding: CGFloat = 4
+    ///
+    /// A point under `.caption2`'s own size rather than the style itself. This
+    /// is incidental chrome over a map somebody is reading, and the smallest
+    /// built-in text style still draws it larger than any map app draws its
+    /// credit. Scaled through `UIFontMetrics` rather than fixed at
+    /// ten points, so it still grows with the system's text — a notice a
+    /// walker who needs larger text cannot read is not a notice.
+    private static let font = UIFontMetrics(forTextStyle: .caption2)
+        .scaledFont(for: .systemFont(ofSize: 10))
+    private static let horizontalPadding: CGFloat = 8
+    private static let verticalPadding: CGFloat = 3
 
     private let button = UIButton(type: .system)
     private let label = UILabel()
@@ -51,12 +66,25 @@ final class MapAttributionView: UIView {
     init(openURL: @escaping (URL) -> Void = { url in UIApplication.shared.open(url) }) {
         self.openURL = openURL
         super.init(frame: .zero)
+        // Hidden until there is something to credit. `update(with:)` returns
+        // early when the credits have not changed, and the first thing it is
+        // handed can be `nil` — no source resolved yet — so a view that started
+        // visible would draw an empty pill on the map and never be told to stop.
+        isHidden = true
         addGlassBackedButton()
     }
 
     @available(*, unavailable)
     required init?(coder: NSCoder) {
         fatalError("MapAttributionView is created in code, not from a nib")
+    }
+
+    /// The tap target is taller than the pill it is centred on, and therefore
+    /// taller than this view. Without this, UIKit would refuse every touch
+    /// landing on that overhang: `hitTest` does not descend into a subview
+    /// once its superview has said the point is outside itself.
+    override func point(inside point: CGPoint, with event: UIEvent?) -> Bool {
+        button.frame.contains(point) || super.point(inside: point, with: event)
     }
 
     /// Shows `attribution`'s credits, or hides the view when there is nothing
@@ -71,7 +99,10 @@ final class MapAttributionView: UIView {
             return
         }
         isHidden = false
-        label.text = attribution.plainText
+        // Compact on the map, canonical to VoiceOver: the line is the
+        // space-constrained placement, a spoken label is not, and dropping a
+        // word from what is read aloud would buy nothing.
+        label.text = attribution.compactText
         button.accessibilityLabel = attribution.plainText
         applyAction(for: attribution)
     }
@@ -108,8 +139,8 @@ final class MapAttributionView: UIView {
         button.showsMenuAsPrimaryAction = true
     }
 
-    /// A glass pill sized to the text, with a full-height transparent button
-    /// over it.
+    /// A glass pill sized to the text, with a taller transparent button
+    /// centred over it.
     ///
     /// Two views rather than a glass-backed button, because the two sizes
     /// disagree on purpose: a credit line is caption-sized text, and a control
@@ -117,6 +148,13 @@ final class MapAttributionView: UIView {
     /// same rule ``minimumTapTarget()`` applies on the SwiftUI side, and the
     /// one `performAccessibilityAudit` measures. The pill stays small; the
     /// thing a finger and the audit see is 44 points tall.
+    ///
+    /// The button overhangs this view rather than stretching it, which is what
+    /// keeps the credit line the height of the text it draws while the thing a
+    /// finger lands on stays 44 points tall. Sized to the button, the line
+    /// would reserve a block of empty space at the top of the map far taller
+    /// than the words in it. ``point(inside:with:)`` is what keeps the
+    /// overhang tappable.
     private func addGlassBackedButton() {
         let glass = UIVisualEffectView(effect: UIGlassEffect(style: .regular))
         glass.translatesAutoresizingMaskIntoConstraints = false
@@ -141,11 +179,17 @@ final class MapAttributionView: UIView {
         glass.contentView.addSubview(label)
         addSubview(button)
 
+        // Taller than the pill at ordinary text sizes, and exactly the pill
+        // once Dynamic Type has grown it past 44 points. Low priority so the
+        // minimum below always wins.
+        let matchesPill = button.heightAnchor.constraint(equalTo: glass.heightAnchor)
+        matchesPill.priority = .defaultLow
+
         NSLayoutConstraint.activate([
             glass.leadingAnchor.constraint(equalTo: leadingAnchor),
             glass.trailingAnchor.constraint(lessThanOrEqualTo: trailingAnchor),
-            glass.centerYAnchor.constraint(equalTo: centerYAnchor),
-            glass.topAnchor.constraint(greaterThanOrEqualTo: topAnchor),
+            glass.topAnchor.constraint(equalTo: topAnchor),
+            glass.bottomAnchor.constraint(equalTo: bottomAnchor),
 
             label.leadingAnchor.constraint(
                 equalTo: glass.contentView.leadingAnchor,
@@ -166,8 +210,8 @@ final class MapAttributionView: UIView {
 
             button.leadingAnchor.constraint(equalTo: leadingAnchor),
             button.trailingAnchor.constraint(equalTo: glass.trailingAnchor),
-            button.topAnchor.constraint(equalTo: topAnchor),
-            button.bottomAnchor.constraint(equalTo: bottomAnchor),
+            button.centerYAnchor.constraint(equalTo: glass.centerYAnchor),
+            matchesPill,
             button.heightAnchor.constraint(
                 greaterThanOrEqualToConstant: AccessibilityMetrics.minimumTapTarget
             ),
