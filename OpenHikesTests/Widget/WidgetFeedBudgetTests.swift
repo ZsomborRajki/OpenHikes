@@ -57,19 +57,45 @@ final class WidgetFeedBudgetTests {
     /// side of it to search.
     private static let midpointIndex = longRoute.count / 2
 
-    /// The budget every measurement here is held to, in milliseconds.
-    ///
-    /// A frame at 60 Hz is 16.7 ms and the work being measured is supposed to
-    /// be a value snapshot and a scheduling hop, so this is generous by design:
-    /// what it catches is a route-sized rebuild returning to the main actor,
-    /// which costs tens of milliseconds, not a few hundred microseconds of CI
-    /// timer resolution.
-    private static let mainActorBudgetMilliseconds: Double = 5
-
     private func milliseconds(_ work: () -> Void) -> Double {
         let start = ContinuousClock.now
         work()
         return Double((ContinuousClock.now - start).components.attoseconds) / 1e15
+    }
+
+    /// The budget every measurement here is held to: the cost of profiling the
+    /// same route once, measured on the machine running the test.
+    ///
+    /// Relative rather than a fixed number of milliseconds, because an
+    /// absolute figure is a statement about the host and not about the app.
+    /// This started as `elapsed < 5`, which held on a developer's machine and
+    /// went red on CI at 5.9 ms and again under ThreadSanitizer at 5.8 ms —
+    /// having moved nothing back onto the main actor. A shared runner is
+    /// several times slower, and a sanitizer that instruments every memory
+    /// access slower again. `PERFORMANCE.md` reaches the same conclusion about
+    /// footprints measured under XCUITest: only compare within a run.
+    ///
+    /// A rebuild is the yardstick because it is the route-sized work these
+    /// paths exist to keep off the frame, and it is charged to the same host
+    /// and the same instrumentation as the measurement beside it. Measured on
+    /// a quiet machine: 0.4–1.4 ms of main-actor work against a 6.4 ms
+    /// rebuild, inside a 9.0 ms selection pipeline.
+    ///
+    /// These stopwatches are the second line rather than the first. Running
+    /// the *delegated* work on the main actor trips `assertOffMainThread`,
+    /// and ``offMainSeamLeavesTheMainThread`` pins the hop itself. What only a
+    /// stopwatch catches is route-sized work done synchronously *before* that
+    /// hop, which no assertion is placed on: calling `buildSnapshot` inline in
+    /// `hikeSelectionChanged` measured 8.0 ms against a 6.2 ms budget, and
+    /// matching a background fix inline measured 36.3 ms against 6.2 ms.
+    ///
+    /// The best of three rather than one sample: a hiccup landing in the
+    /// sample that sets the budget would raise it, and this is the side that
+    /// must not be generous.
+    private func routeRebuildMilliseconds() -> Double {
+        (0..<3)
+            .map { _ in milliseconds { _ = RouteProfile(route: Self.longRoute) } }
+            .min() ?? .infinity
     }
 
     // MARK: Reload budget
@@ -183,13 +209,14 @@ final class WidgetFeedBudgetTests {
     func selectionStaysInsideAFrame() async {
         let hike = Fixture.hike(in: context, title: "Five hours", route: Self.longRoute)
 
+        let budget = routeRebuildMilliseconds()
         let elapsed = milliseconds { tracker.hikeSelectionChanged(to: hike) }
-        // CI runners can land a few hundred microseconds over the floor due to
-        // timer resolution and host load. The work is still a cheap snapshot and
-        // scheduling hop, not a frame-consuming rebuild.
         #expect(
-            elapsed < Self.mainActorBudgetMilliseconds,
-            "selection should only snapshot values and schedule the publication"
+            elapsed < budget,
+            """
+            selection should only snapshot values and schedule the publication: \
+            \(elapsed) ms against a \(budget) ms route rebuild
+            """
         )
         await tracker.waitForSelectionPublish()
         #expect(SharedStore.load()?.hikeID == hike.id, "precondition: it really published")
@@ -214,13 +241,17 @@ final class WidgetFeedBudgetTests {
         // tracked hike is known but nothing is stored for it.
         SharedStore.clear()
 
+        let budget = routeRebuildMilliseconds()
         let elapsed = milliseconds { tracker.publishLiveFix(hike: hike, profile: profile, match: match) }
 
         await tracker.waitForLiveFixPublish()
         #expect(SharedStore.load()?.liveFix != nil, "precondition: it really did publish")
         #expect(
-            elapsed < Self.mainActorBudgetMilliseconds,
-            "the load, the rebuild, the encode and the App Group write all belong off the main actor"
+            elapsed < budget,
+            """
+            the load, the rebuild, the encode and the App Group write all belong off the main actor: \
+            \(elapsed) ms against a \(budget) ms route rebuild
+            """
         )
     }
 
@@ -256,13 +287,17 @@ final class WidgetFeedBudgetTests {
             timestamp: .now
         )
 
+        let budget = routeRebuildMilliseconds()
         let elapsed = milliseconds { monitor.deliver(location) }
 
         await relaunched.waitForLiveFixPublish()
         #expect(SharedStore.load()?.liveFix != nil, "precondition: it really did publish")
         #expect(
-            elapsed < Self.mainActorBudgetMilliseconds,
-            "the delegate callback should judge the fix and schedule, not read and profile 18,000 points"
+            elapsed < budget,
+            """
+            the delegate callback should judge the fix and schedule, not read and profile 18,000 points: \
+            \(elapsed) ms against a \(budget) ms route rebuild
+            """
         )
     }
 
