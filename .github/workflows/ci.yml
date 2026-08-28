@@ -374,10 +374,20 @@ jobs:
 
       - uses: ./.github/actions/verify-xcode
 
-      - name: Boot the simulator
+      # A private device rather than the image's shared `iPhone 17 Pro`, and
+      # deleted again below. TSan's shadow memory is the heaviest thing this
+      # workflow asks a simulator to hold, and the failure it produces when the
+      # machine cannot hold it is not a test failure — it is the app dying
+      # before a single test runs. Starting from a device with no accumulated
+      # state is the cheapest way to not be that machine.
+      - name: Create a private simulator
+        id: sim
         run: |
-          xcrun simctl boot "$IOS_SIMULATOR" || true
-          xcrun simctl bootstatus "$IOS_SIMULATOR" -b
+          set -euo pipefail
+          udid="$(xcrun simctl create "tsan-${GITHUB_RUN_ID}" "$IOS_SIMULATOR")"
+          echo "udid=$udid" >> "$GITHUB_OUTPUT"
+          xcrun simctl boot "$udid"
+          xcrun simctl bootstatus "$udid" -b
 
       # The one xcodebuild call in this file that is deliberately not piped
       # through xcbeautify. A ThreadSanitizer race is reported as a plain
@@ -418,50 +428,94 @@ jobs:
       #
       # It found no races when it was widened to this list. If a run goes red
       # with no `data race` block in the log — a host-app SIGKILL landing on a
-      # different test each time — read the machine, not the code: that is what
-      # TSan's shadow memory looks like when it meets memory pressure.
+      # different test each time, or an app that dies before any test starts —
+      # read the machine, not the code: that is what TSan's shadow memory looks
+      # like when it meets memory pressure. Run 33118716508 is the second
+      # shape: `ThreadSanitizer: SEGV`, then `pointer being freed was not
+      # allocated`, then `never finished bootstrapping`, with zero tests run
+      # and no race reported, while the same command on the same commit and the
+      # same Xcode passed locally with 378 tests in 34 suites in 9.4 seconds.
+      # That is the sanitizer runtime running out of room, not a finding.
+      #
+      # So exactly that shape — and nothing else — is retried below. A reported
+      # race fails the job on the spot, and so does a failing test; only a run
+      # that never reached its first test is attempted again. Widening this
+      # condition would turn the job into one that retries until it is green,
+      # which is worth less than no job at all.
       - name: Run the concurrency suites under TSan
         run: |
+          set -uo pipefail
           mkdir -p TestResults
-          xcodebuild test \
-            -project OpenHikes.xcodeproj \
-            -scheme OpenHikes \
-            -destination "$IOS_DESTINATION" \
-            -only-testing:OpenHikesTests/GPXImportTests \
-            -only-testing:OpenHikesTests/GPXImportDateTests \
-            -only-testing:OpenHikesTests/SerialAsyncQueueTests \
-            -only-testing:OpenHikesTests/TrackJournalTests \
-            -only-testing:OpenHikesTests/HikeRecorderTests \
-            -only-testing:OpenHikesTests/RecordingPreparationTests \
-            -only-testing:OpenHikesTests/RecordingFixPolicyTests \
-            -only-testing:OpenHikesTests/RecordingTraceTests \
-            -only-testing:OpenHikesTests/RecordingEnergyPolicyTests \
-            -only-testing:OpenHikesTests/PowerStateMonitorTests \
-            -only-testing:OpenHikesTests/TrailMatcherTests \
-            -only-testing:OpenHikesTests/OverpassTrailGraphProviderTests \
-            -only-testing:OpenHikesTests/OverpassTrailGraphCancellationTests \
-            -only-testing:OpenHikesTests/TileCacheTierTests \
-            -only-testing:OpenHikesTests/TileStoreTests \
-            -only-testing:OpenHikesTests/TileLoadGateTests \
-            -only-testing:OpenHikesTests/TileOverzoomTests \
-            -only-testing:OpenHikesTests/TileRetryTests \
-            -only-testing:OpenHikesTests/TileTransportTests \
-            -only-testing:OpenHikesTests/AutoSaveDrainTests \
-            -only-testing:OpenHikesTests/AutoSaveLifecycleTests \
-            -only-testing:OpenHikesTests/TileOwnershipTests \
-            -only-testing:OpenHikesTests/TileDurableQuotaTests \
-            -only-testing:OpenHikesTests/StorageAccountingTests \
-            -only-testing:OpenHikesTests/OfflineTileEnumerationTests \
-            -only-testing:OpenHikesTests/OfflineDownloadStateTests \
-            -only-testing:OpenHikesTests/CloudSyncCoordinatorTests \
-            -only-testing:OpenHikesTests/LocationPublishingTests \
-            -only-testing:OpenHikesTests/LocationFixStreamTests \
-            -only-testing:OpenHikesTests/BackgroundTrackingAuthorizationTests \
-            -only-testing:OpenHikesTests/WidgetFeedSuites \
-            -enableThreadSanitizer YES \
-            -parallel-testing-enabled NO \
-            -resultBundlePath TestResults/ThreadSanitizer.xcresult \
-            -skipPackagePluginValidation
+
+          run_tsan() {
+            rm -rf TestResults/ThreadSanitizer.xcresult
+            xcodebuild test \
+              -project OpenHikes.xcodeproj \
+              -scheme OpenHikes \
+              -destination "id=${{ steps.sim.outputs.udid }}" \
+              -only-testing:OpenHikesTests/GPXImportTests \
+              -only-testing:OpenHikesTests/GPXImportDateTests \
+              -only-testing:OpenHikesTests/SerialAsyncQueueTests \
+              -only-testing:OpenHikesTests/TrackJournalTests \
+              -only-testing:OpenHikesTests/HikeRecorderTests \
+              -only-testing:OpenHikesTests/RecordingPreparationTests \
+              -only-testing:OpenHikesTests/RecordingFixPolicyTests \
+              -only-testing:OpenHikesTests/RecordingTraceTests \
+              -only-testing:OpenHikesTests/RecordingEnergyPolicyTests \
+              -only-testing:OpenHikesTests/PowerStateMonitorTests \
+              -only-testing:OpenHikesTests/TrailMatcherTests \
+              -only-testing:OpenHikesTests/OverpassTrailGraphProviderTests \
+              -only-testing:OpenHikesTests/OverpassTrailGraphCancellationTests \
+              -only-testing:OpenHikesTests/TileCacheTierTests \
+              -only-testing:OpenHikesTests/TileStoreTests \
+              -only-testing:OpenHikesTests/TileLoadGateTests \
+              -only-testing:OpenHikesTests/TileOverzoomTests \
+              -only-testing:OpenHikesTests/TileRetryTests \
+              -only-testing:OpenHikesTests/TileTransportTests \
+              -only-testing:OpenHikesTests/AutoSaveDrainTests \
+              -only-testing:OpenHikesTests/AutoSaveLifecycleTests \
+              -only-testing:OpenHikesTests/TileOwnershipTests \
+              -only-testing:OpenHikesTests/TileDurableQuotaTests \
+              -only-testing:OpenHikesTests/StorageAccountingTests \
+              -only-testing:OpenHikesTests/OfflineTileEnumerationTests \
+              -only-testing:OpenHikesTests/OfflineDownloadStateTests \
+              -only-testing:OpenHikesTests/CloudSyncCoordinatorTests \
+              -only-testing:OpenHikesTests/LocationPublishingTests \
+              -only-testing:OpenHikesTests/LocationFixStreamTests \
+              -only-testing:OpenHikesTests/BackgroundTrackingAuthorizationTests \
+              -only-testing:OpenHikesTests/WidgetFeedSuites \
+              -enableThreadSanitizer YES \
+              -parallel-testing-enabled NO \
+              -resultBundlePath TestResults/ThreadSanitizer.xcresult \
+              -skipPackagePluginValidation 2>&1 | tee "$1"
+            return "${PIPESTATUS[0]}"
+          }
+
+          for attempt in 1 2; do
+            log="TestResults/tsan-attempt-${attempt}.log"
+            if run_tsan "$log"; then
+              exit 0
+            fi
+
+            if grep -q 'ThreadSanitizer: data race' "$log"; then
+              echo "::error::ThreadSanitizer reported a data race — see the raw log above."
+              exit 1
+            fi
+
+            if ! grep -qE 'never finished bootstrapping|while preparing to run tests' "$log"; then
+              echo "::error::The TSan run failed with tests having started; this is a result, not the machine."
+              exit 1
+            fi
+
+            echo "::warning::Attempt ${attempt} died before running a test (no race, no test result)."
+          done
+
+          echo "::error::The app never finished bootstrapping under TSan in 2 attempts."
+          exit 1
+
+      - name: Delete the private simulator
+        if: always() && steps.sim.outputs.udid != ''
+        run: xcrun simctl delete "${{ steps.sim.outputs.udid }}" || true
 
       - name: Upload result bundle
         if: failure()

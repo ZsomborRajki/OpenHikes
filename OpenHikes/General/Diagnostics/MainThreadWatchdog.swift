@@ -158,7 +158,22 @@ nonisolated enum MainThreadWatchdog {
             }
         }
         thread.name = "MainThreadWatchdog"
-        thread.qualityOfService = .background
+        // `.utility` rather than `.background`, and the distinction is not
+        // cosmetic. The requirement is that this thread never competes with
+        // the thread it measures, and `.utility` already satisfies it — main
+        // is `.userInteractive`, two bands above. What `.background`
+        // additionally buys is the one thing a watchdog cannot afford: it is
+        // the band the scheduler is entitled to defer indefinitely, so under
+        // load the loop stops turning, and a watchdog that has stopped
+        // turning reports no stalls while scoring perfectly against every
+        // budget in `PerformanceUITests`. Measured by running
+        // `MainThreadWatchdogTests` against a machine held at load average
+        // 124–177: `.utility` finished the suite in 4.1 seconds, `.background`
+        // in 58.4 — a fourteenfold difference, and 1.6 seconds inside the
+        // 60-second deadline the suite gives up at. CI, being slower, saw the
+        // far side of it: a loop that turned three times in sixty seconds, so
+        // a main thread blocked for four seconds was never pinged at all.
+        thread.qualityOfService = .utility
         thread.start()
     }
 

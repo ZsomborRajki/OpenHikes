@@ -14,15 +14,22 @@
 //  it. The loop posts a ping, waits the warn threshold, and then sleeps the
 //  ping interval before posting again, so a blocked main thread is only
 //  observable if a post happens to land *inside* the block. Those waits are
-//  `Thread.sleep` calls on a thread deliberately running at background
-//  quality of service — it must not compete with the thread it measures — so
-//  they are lower bounds and nothing else. How weak a bound was worth
-//  measuring: on a machine carrying a load average of 200 the loop settles at
-//  roughly its nominal period, but a *cold* simulator — booting, installing
-//  and building its first stores — starved that thread badly enough to turn
-//  the loop fewer than twice in fifty seconds. At any of that a block of some
-//  fixed length fits entirely between two posts, nothing is observed, and the
-//  test fails while the watchdog is working perfectly.
+//  `Thread.sleep` calls on a thread running below the one it measures — it
+//  must not compete with it — so they are lower bounds and nothing else. How
+//  weak a bound was worth measuring: on a machine carrying a load average of
+//  200 the loop settles at roughly its nominal period, but a *cold*
+//  simulator — booting, installing and building its first stores — starved
+//  that thread badly enough to turn the loop fewer than twice in fifty
+//  seconds. At any of that a block of some fixed length fits entirely between
+//  two posts, nothing is observed, and the test fails while the watchdog is
+//  working perfectly.
+//
+//  That starvation had a cause rather than being weather, and the cause is
+//  fixed in `MainThreadWatchdog` rather than papered over here: the loop ran
+//  at `.background` quality of service, the one band the scheduler may defer
+//  indefinitely. It is `.utility` now — still below main, but actually
+//  scheduled. Everything below stays anyway, because a lower bound is still
+//  only a lower bound.
 //
 //  So the block is sized from the period the loop is *currently* running at,
 //  re-measured every attempt, and a miss provokes another block rather than
@@ -108,14 +115,13 @@ private func blockMainThread(for duration: Duration) {
 @Suite("Main thread watchdog")
 struct MainThreadWatchdogTests {
     /// Far longer than the ~0.35s a healthy cycle takes, because the watchdog
-    /// thread runs at background quality of service *by design* — it must not
-    /// compete with the thread it is measuring — so its period is not bounded
-    /// by its own sleeps on a loaded machine. Two cycles have been seen taking
-    /// 11.2s, so a tight budget here would be measuring the build machine
-    /// rather than the watchdog — an earlier 8s one failed on a busy host with
-    /// the loop turning perfectly well. It is a real deadline all the same,
-    /// because a test that gives up and says so is worth far more than one
-    /// that hangs.
+    /// thread runs *below* the thread it measures by design — it must not
+    /// compete with it — so its period is not bounded by its own sleeps on a
+    /// loaded machine. Two cycles have been seen taking 11.2s, so a tight
+    /// budget here would be measuring the build machine rather than the
+    /// watchdog — an earlier 8s one failed on a busy host with the loop
+    /// turning perfectly well. It is a real deadline all the same, because a
+    /// test that gives up and says so is worth far more than one that hangs.
     private static let cycleDeadline: Duration = .seconds(25)
 
     /// The whole provocation, however many attempts it takes.

@@ -46,7 +46,19 @@ enum SharedStoreDiagnostics {
     /// assert that a payload was refused but never that anyone was told.
     /// Bound work still logs — the sink is an additional listener, not a
     /// replacement, so a test cannot pass by silencing the thing it checks.
-    @TaskLocal static var sink: (@Sendable (SharedStoreDiagnostic) -> Void)?
+    ///
+    /// Wrapped in a struct for the same reason as
+    /// ``SharedStore/ContainerOverride``: a function-typed `@TaskLocal` value
+    /// is miscompiled under optimisation and segfaults when bound.
+    struct Sink: Sendable {
+        let receive: @Sendable (SharedStoreDiagnostic) -> Void
+
+        init(_ receive: @escaping @Sendable (SharedStoreDiagnostic) -> Void) {
+            self.receive = receive
+        }
+    }
+
+    @TaskLocal static var sink: Sink?
 
     private static let logger = Logger(subsystem: "OpenHikes", category: "SharedStore")
 
@@ -56,7 +68,7 @@ enum SharedStoreDiagnostics {
         // interpolated here is a file name, a coding key or a type name —
         // never a coordinate, a title or anything else the walker owns.
         logger.error("\(diagnostic.summary, privacy: .public)")
-        sink?(diagnostic)
+        sink?.receive(diagnostic)
     }
 
     /// `DecodingError.localizedDescription` is "The data couldn't be read

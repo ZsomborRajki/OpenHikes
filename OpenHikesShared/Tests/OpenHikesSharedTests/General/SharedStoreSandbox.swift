@@ -26,7 +26,8 @@ func withSharedStoreSandbox<Result>(
 ) throws -> Result {
     let root = SharedStoreSandbox.makeRoot()
     defer { try? FileManager.default.removeItem(at: root) }
-    return try SharedStore.$containerOverride.withValue({ root }, operation: { try body(root) })
+    return try SharedStore.$containerOverride
+        .withValue(SharedStore.ContainerOverride { root }, operation: { try body(root) })
 }
 
 /// The async twin of ``withSharedStoreSandbox(_:)``.
@@ -40,7 +41,8 @@ func withSharedStoreSandbox<Result>(
 ) async throws -> Result {
     let root = SharedStoreSandbox.makeRoot()
     defer { try? FileManager.default.removeItem(at: root) }
-    return try await SharedStore.$containerOverride.withValue({ root }, operation: { try await body(root) })
+    return try await SharedStore.$containerOverride
+        .withValue(SharedStore.ContainerOverride { root }, operation: { try await body(root) })
 }
 
 /// Runs `body` with every ``SharedStoreDiagnostic`` it provokes collected,
@@ -51,7 +53,7 @@ func withSharedStoreDiagnostics<Result>(
     _ body: () throws -> Result
 ) rethrows -> (result: Result, diagnostics: [SharedStoreDiagnostic]) {
     let collected = Mutex<[SharedStoreDiagnostic]>([])
-    let sink: @Sendable (SharedStoreDiagnostic) -> Void = { diagnostic in
+    let sink = SharedStoreDiagnostics.Sink { diagnostic in
         collected.withLock { $0.append(diagnostic) }
     }
     let result = try SharedStoreDiagnostics.$sink.withValue(sink, operation: body)
@@ -63,7 +65,7 @@ func withSharedStoreDiagnostics<Result>(
 func withoutSharedStoreContainer<Result>(
     _ body: () throws -> Result
 ) rethrows -> Result {
-    try SharedStore.$containerOverride.withValue({ nil }, operation: body)
+    try SharedStore.$containerOverride.withValue(SharedStore.ContainerOverride { nil }, operation: body)
 }
 
 // Fixture coordinates, distances and pixel sizes below are arbitrary but have

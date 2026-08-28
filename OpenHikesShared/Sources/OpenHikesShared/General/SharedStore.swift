@@ -41,10 +41,28 @@ public enum SharedStore {
     /// to the work that made it. It cannot outlive a test or leak into a suite
     /// running beside it, which a process-global `static var` on an all-static
     /// type would do under Swift Testing's parallel execution.
-    @TaskLocal static var containerOverride: (@Sendable () -> URL?)?
+    ///
+    /// The closure is wrapped in a struct rather than being the task-local's
+    /// own type. A *function*-typed `@TaskLocal` value segfaults inside
+    /// `swift_task_localValuePushImpl` when the binding is compiled with
+    /// optimisation — reproducible in twenty lines on Swift 6.2 / Xcode 26.6,
+    /// and the reason `swift test --configuration release` crashed on every
+    /// suite that bound one while the same suites passed in debug. A struct
+    /// holding the same closure is not miscompiled, so the wrapper is load
+    /// bearing: do not "simplify" it back to a bare closure without re-running
+    /// the release configuration.
+    struct ContainerOverride: Sendable {
+        let resolve: @Sendable () -> URL?
+
+        init(_ resolve: @escaping @Sendable () -> URL?) {
+            self.resolve = resolve
+        }
+    }
+
+    @TaskLocal static var containerOverride: ContainerOverride?
 
     private static var containerURL: URL? {
-        if let containerOverride { return containerOverride() }
+        if let containerOverride { return containerOverride.resolve() }
         return FileManager.default.containerURL(forSecurityApplicationGroupIdentifier: appGroupID)
     }
 
