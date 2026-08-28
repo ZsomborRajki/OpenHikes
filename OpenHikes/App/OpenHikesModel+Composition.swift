@@ -67,18 +67,21 @@ extension OpenHikesModel {
             && CloudSyncCoordinator.isEnabled(in: launchDefaults)
         let load = Self.loadDefaultContainer(syncsToCloud: syncsToCloud)
         let graphProvider = OverpassTrailGraphProvider()
+        let liveActivities = Self.makeLiveActivityController(defaults: launchDefaults)
 
         self.init(
             container: load.container,
             backgroundTracker: BackgroundTrailTracker(
                 container: load.container,
-                defaults: launchDefaults
+                defaults: launchDefaults,
+                liveActivityController: liveActivities
             ),
             autoSaveController: Self.makeAutoSaveController(defaults: launchDefaults),
             hikeRecorder: Self.makeRecorder(
                 container: load.container,
                 trailGraphProvider: graphProvider,
-                defaults: launchDefaults
+                defaults: launchDefaults,
+                liveActivityController: liveActivities
             ),
             locationManager: LocationManager(),
             weatherManager: WeatherManager(),
@@ -101,11 +104,15 @@ extension OpenHikesModel {
             .flatMap { name in
                 BundledTrailGraphProvider(fixtureName: name)
             }
+        let liveActivities = Self.makeLiveActivityController(
+            defaults: uiTestingDefaults
+        )
         self.init(
             container: testingContainer,
             backgroundTracker: BackgroundTrailTracker(
                 container: testingContainer,
-                defaults: uiTestingDefaults
+                defaults: uiTestingDefaults,
+                liveActivityController: liveActivities
             ),
             autoSaveController: Self.makeAutoSaveController(defaults: uiTestingDefaults),
             hikeRecorder: HikeRecorder(
@@ -113,6 +120,7 @@ extension OpenHikesModel {
                 saveModelContext: Self.uiTestingSave(),
                 trailGraphProvider: graphProvider,
                 defaults: uiTestingDefaults,
+                liveActivityController: liveActivities,
                 journalDirectory:
                     AppLaunchEnvironment.recordingJournalDirectory(),
                 automaticallyRecovers: false
@@ -186,7 +194,8 @@ private extension OpenHikesModel {
     static func makeRecorder(
         container: ModelContainer,
         trailGraphProvider: any TrailGraphProviding,
-        defaults: UserDefaults
+        defaults: UserDefaults,
+        liveActivityController: HikeLiveActivityController?
     ) -> HikeRecorder {
         HikeRecorder(
             container: container,
@@ -202,12 +211,37 @@ private extension OpenHikesModel {
                 TileCache.shared.networkDecision(for: purpose)
             },
             defaults: defaults,
-            sharedStateStore: AppGroupRecordingSharedStateStore()
+            sharedStateStore: AppGroupRecordingSharedStateStore(),
+            liveActivityController: liveActivityController
         )
     }
 
-    /// The auto-save controller wired to the real selected map source.
+    /// The one Live Activity controller the app has, or `nil` when it must not
+    /// have one.
     ///
+    /// One instance shared by the recorder and the trail tracker rather than
+    /// one each, because the precedence rule between them — a recording
+    /// outranks a followed trail — is only expressible by something that can
+    /// see both. Two controllers would be two activities, and the system shows
+    /// one.
+    ///
+    /// `nil` under the app-hosted unit bundles for the same reason the
+    /// mirrored container is: the host app launches and runs its startup work
+    /// before any test does, and a suite has no business putting a Live
+    /// Activity on the developer's Lock Screen. UI tests keep theirs — they
+    /// drive a real app out of process, and an activity is part of what they
+    /// are testing.
+    static func makeLiveActivityController(
+        defaults: UserDefaults
+    ) -> HikeLiveActivityController? {
+        guard !AppLaunchEnvironment.isHostingTests else { return nil }
+        return HikeLiveActivityController(
+            presenter: SystemHikeActivityPresenter(),
+            defaults: defaults
+        )
+    }
+
+    /// The auto-save controller wired to the real selected map source. ///
     /// Same argument as ``makeRecorder(container:trailGraphProvider:defaults:)``:
     /// "which map the user picked" is a choice about the environment, and the
     /// controller takes it as a closure so a suite can decide it outright

@@ -78,6 +78,11 @@ final class HikeRecorder: NSObject {
         @Sendable (TileFetchPurpose) -> TileNetworkDecision
     @ObservationIgnored let defaults: UserDefaults
     @ObservationIgnored let sharedStateStore: (any RecordingSharedStateStoring)?
+    /// The Lock Screen and Dynamic Island, when the app has one. Optional for
+    /// the same reason ``sharedStateStore`` is: a recorder built by a suite
+    /// has no business reaching ActivityKit, and one built without an opinion
+    /// simply doesn't draw an activity.
+    @ObservationIgnored let liveActivityController: HikeLiveActivityController?
     @ObservationIgnored let journal: TrackJournal?
     @ObservationIgnored let powerMonitor: PowerStateMonitor
     /// The profile the recorder last asked its source for. Kept here rather
@@ -218,6 +223,7 @@ final class HikeRecorder: NSObject {
         defaults: UserDefaults = .standard,
         powerMonitor: PowerStateMonitor? = nil,
         sharedStateStore: (any RecordingSharedStateStoring)? = nil,
+        liveActivityController: HikeLiveActivityController? = nil,
         journalDirectory: URL? = nil,
         clock: @escaping @Sendable () -> Date = { Date() },
         uptime: @escaping @Sendable () -> TimeInterval = {
@@ -244,6 +250,7 @@ final class HikeRecorder: NSObject {
         self.defaults = defaults
         self.powerMonitor = powerMonitor ?? PowerStateMonitor()
         self.sharedStateStore = sharedStateStore
+        self.liveActivityController = liveActivityController
         journal = resolvedDirectory.map { directory in
             TrackJournal(directory: directory, clock: clock)
         }
@@ -407,6 +414,7 @@ extension HikeRecorder {
         do {
             try await journal.discard()
             try deleteRecordingHike(sessionID: sessionID)
+            endRecordingActivity(.abandoned)
             await clearSharedRecordingState(sessionID: sessionID)
             resetSession()
         } catch let failure as RecordingFailure {

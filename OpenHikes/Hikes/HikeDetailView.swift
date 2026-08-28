@@ -275,6 +275,12 @@ struct HikeDetailView: View {
         .onChange(of: hike.autoFollowEnabled) { _, enabled in
             if !enabled {
                 tracker.liveTrackerDistance = nil
+                // The Lock Screen goes with it. Nothing else would take it
+                // down: the foreground feed stops publishing the moment
+                // auto-follow is off, so an activity left running would sit
+                // there reporting the walker's last known position for as
+                // long as the app lived.
+                backgroundTracker.endFollowActivity(hikeID: hike.id)
             }
             switch FollowInteractionPolicy.highlightUpdate(
                 autoFollowEnabled: enabled,

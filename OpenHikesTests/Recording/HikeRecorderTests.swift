@@ -274,6 +274,7 @@ final class HikeRecorderTests {
             TileFetchPurpose
         ) -> TileNetworkDecision = { _ in .allowed },
         sharedStateStore: (any RecordingSharedStateStoring)? = nil,
+        liveActivityController: HikeLiveActivityController? = nil,
         automaticallyRecovers: Bool = false,
         powerMonitor: PowerStateMonitor? = nil,
         saveModelContext: @escaping (ModelContext) throws -> Void = { context in
@@ -306,6 +307,7 @@ final class HikeRecorderTests {
                     observesNotifications: false
                 ),
             sharedStateStore: sharedStateStore,
+            liveActivityController: liveActivityController,
             journalDirectory: directory,
             clock: clock.read,
             journalFlushDelay: .zero,

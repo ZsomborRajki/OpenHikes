@@ -422,10 +422,27 @@ extension HikeRecorder {
     // MARK: Shared state
 
     func publishSharedRecordingSnapshot(force: Bool) {
-        guard sharedStateStore != nil,
-              let sessionID,
-              let sessionStartedAt else { return }
+        guard let sessionID, let sessionStartedAt else { return }
         let now = clock()
+        // Built without the route on purpose. Decimating the trace is real
+        // work and this runs once per accepted fix, while the Live Activity
+        // draws no map at all — so the polyline is attached below, on the path
+        // that actually renders one and only once the widget's own throttle
+        // has decided the write is happening.
+        var snapshot = SharedRecordingSnapshot(
+            sessionID: sessionID,
+            startedAt: sessionStartedAt,
+            distanceMeters: stats.distanceMeters,
+            pointCount: stats.pointCount,
+            polyline: [],
+            elevationGainMeters: stats.elevationGainMeters,
+            averageSpeedMetersPerSecond: stats.averageSpeedMetersPerSecond,
+            isCapturingFixes: isCapturingFixes,
+            updatedAt: now
+        )
+        publishRecordingActivity(snapshot)
+
+        guard sharedStateStore != nil else { return }
         let firstPoint = stats.pointCount == 1
             && lastSharedSnapshotPointCount == 0
         let intervalElapsed = lastSharedSnapshotAt.map { snapshotDate in
@@ -433,23 +450,51 @@ extension HikeRecorder {
         } ?? true
         guard force || firstPoint || intervalElapsed else { return }
 
-        let snapshot = SharedRecordingSnapshot(
-            sessionID: sessionID,
-            startedAt: sessionStartedAt,
-            distanceMeters: stats.distanceMeters,
-            pointCount: stats.pointCount,
-            polyline: trace.widgetPolyline(),
-            elevationGainMeters: stats.elevationGainMeters,
-            averageSpeedMetersPerSecond: stats.averageSpeedMetersPerSecond,
-            isCapturingFixes: isCapturingFixes,
-            updatedAt: now
-        )
+        snapshot.polyline = trace.widgetPolyline()
         lastSharedSnapshotAt = now
         lastSharedSnapshotPointCount = stats.pointCount
         let reloadWidget = force || firstPoint
+        let widgetSnapshot = snapshot
         enqueueSharedStateOperation { store in
-            try await store.save(snapshot, reloadWidget: reloadWidget)
+            try await store.save(widgetSnapshot, reloadWidget: reloadWidget)
         }
+    }
+
+    /// Hands the same figures the widget gets to the Lock Screen.
+    ///
+    /// Called on every publish rather than only on the ones that reach the
+    /// App Group, because the two surfaces answer different questions: the
+    /// widget is a glance at a phone in a pocket and can be a quarter of an
+    /// hour old, while an activity is on screen *during* the walk. The rate
+    /// this is called at is deliberately not this function's problem —
+    /// ``HikeLiveActivityController`` owns the throttle, so there is one place
+    /// that decides what an update is worth.
+    private func publishRecordingActivity(_ snapshot: SharedRecordingSnapshot) {
+        guard let liveActivityController else { return }
+        liveActivityController.update(
+            HikeActivityRequest(
+                attributes: recordingActivityAttributes(for: snapshot),
+                state: .init(
+                    recording: snapshot,
+                    elapsedSeconds: elapsedSeconds()
+                )
+            )
+        )
+    }
+
+    /// The draft hike is the title and tint the rest of the app already shows
+    /// for this recording, so the activity uses it rather than inventing a
+    /// second name. It exists from session activation onward; the snapshot's
+    /// own generic title covers the window before that and a session recovered
+    /// from a journal whose hike has not been re-read yet.
+    func recordingActivityAttributes(
+        for snapshot: SharedRecordingSnapshot
+    ) -> HikeActivityAttributes {
+        .recording(
+            from: snapshot,
+            title: currentHike?.displayTitle ?? snapshot.title,
+            tintHex: currentHike?.tintHex ?? Hike.defaultTintHex
+        )
     }
 
     func enqueueSharedStateOperation(
@@ -481,6 +526,59 @@ extension HikeRecorder {
         }
         lastSharedSnapshotAt = nil
         lastSharedSnapshotPointCount = 0
+    }
+
+    /// Takes the recording's activity off the Lock Screen.
+    ///
+    /// Deliberately separate from ``clearSharedRecordingState(sessionID:)``,
+    /// which it is always called beside: that one has to await a queue drain
+    /// and can return early when the app has no App Group, and an activity
+    /// that outlived its recording because a container was unprovisioned
+    /// would be the worst of both.
+    ///
+    /// - Parameter outcome: what to leave behind. `.finished` shows the walk's
+    ///   totals for a few minutes; `.abandoned` removes the activity at once,
+    ///   which is the only honest answer for a recording the walker discarded
+    ///   or one whose session turned out not to exist.
+    func endRecordingActivity(_ outcome: RecordingActivityOutcome) {
+        guard let liveActivityController,
+              let subject = liveActivityController.activeSubject,
+              subject.isRecording else { return }
+        switch outcome {
+        case .finished:
+            liveActivityController.end(
+                subject: subject,
+                finalState: finishedRecordingState(),
+                dismissAfter: HikeLiveActivityController.finishedDismissAfter
+            )
+        case .abandoned:
+            liveActivityController.end(
+                subject: subject,
+                finalState: nil,
+                dismissAfter: nil
+            )
+        }
+    }
+
+    enum RecordingActivityOutcome {
+        case finished
+        case abandoned
+    }
+
+    /// The final panel's figures, read from the recorder rather than from the
+    /// last state the activity happened to receive — which is up to a throttle
+    /// interval old, and would round a finished walk down by a few dozen
+    /// metres in front of the walker who just watched it happen.
+    private func finishedRecordingState() -> HikeActivityAttributes.ContentState {
+        HikeActivityAttributes.ContentState(
+            distanceMeters: stats.distanceMeters,
+            elevationGainMeters: stats.elevationGainMeters,
+            averageSpeedMetersPerSecond: stats.averageSpeedMetersPerSecond,
+            pointCount: stats.pointCount,
+            runState: .finished,
+            elapsedSeconds: elapsedSeconds(),
+            updatedAt: clock()
+        )
     }
 
     // MARK: Live state rebuild

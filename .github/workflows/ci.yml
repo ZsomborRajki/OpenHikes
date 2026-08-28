@@ -418,9 +418,9 @@ jobs:
       # a suite added to this list and never run looks exactly like one that
       # passes. Nested suites need their enclosing type — hence
       # `WidgetFeedSuites`, which is where `BackgroundDeliveryTests` lives and
-      # which is why 31 entries resolve to 34 suites rather than 31.
+      # which is why 31 entries resolve to 35 suites rather than 31.
       #
-      # 34 is the guard: after editing this list, check the suite count in the
+      # 35 is the guard: after editing this list, check the suite count in the
       # log, and if it fell, an identifier did not match. Deliberately not the
       # *test* count, which rises whenever anyone writes a test and would make
       # this comment wrong within a month — a growing test count here is the
@@ -434,7 +434,7 @@ jobs:
       # shape: `ThreadSanitizer: SEGV`, then `pointer being freed was not
       # allocated`, then `never finished bootstrapping`, with zero tests run
       # and no race reported, while the same command on the same commit and the
-      # same Xcode passed locally with 378 tests in 34 suites in 9.4 seconds.
+      # same Xcode passed locally with 391 tests in 35 suites in 9.7 seconds.
       # That is the sanitizer runtime running out of room, not a finding.
       #
       # So exactly that shape — and nothing else — is retried below. A reported

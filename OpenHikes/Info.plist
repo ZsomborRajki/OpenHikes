@@ -34,6 +34,15 @@
 	</dict>
 	<key>NSMotionUsageDescription</key>
 	<string>OpenHikes uses motion sensors to improve recorded elevation and infer the trail walked through GPS gaps.</string>
+	<!-- Without this the whole feature is silently absent: ActivityKit reports
+	     activities disabled and `Activity.request` throws, with nothing in the
+	     UI to say why. `NSSupportsLiveActivitiesFrequentUpdates` is
+	     deliberately *not* set — the app updates roughly every twenty seconds
+	     on its own throttle and asking for the frequent-update allowance would
+	     be claiming a budget it does not use. See
+	     ``HikeLiveActivityController``. -->
+	<key>NSSupportsLiveActivities</key>
+	<true/>
 	<!-- Add-only, deliberately: the copy this key covers is a one-way write
 	     into Recents, and nothing about it reads. The separate read grant
 	     below is asked for by a different feature at a different moment, and

@@ -45,6 +45,14 @@ nonisolated enum SettingsKey {
     /// only one of the three reasons sync might be idle that the app decides
     /// for itself — the other two are the Apple Account and the test guard.
     static let cloudSyncEnabled = "settings.cloudSyncEnabled"
+    /// Whether an active recording or followed trail puts a Live Activity on
+    /// the Lock Screen and in the Dynamic Island. Read by
+    /// ``HikeLiveActivityController`` on every update rather than captured, so
+    /// turning it off mid-walk takes the activity down on the next fix.
+    ///
+    /// This is the app's half of the answer; the system's per-app Live
+    /// Activities switch is the other half, and both have to say yes.
+    static let liveActivitiesEnabled = "settings.liveActivitiesEnabled"
     /// The last entitlement ``MapEntitlementStore`` resolved, remembered so a
     /// cold launch draws the right map before StoreKit answers.
     ///
@@ -71,4 +79,11 @@ nonisolated enum SettingsDefault {
     /// prevents is the one people notice: a replaced phone that opens to an
     /// empty hikes list because a switch was never found.
     static let cloudSyncEnabled = true
+    /// On. The walk is already happening and the phone is already awake for
+    /// it — the location background mode runs for the whole hike — so the
+    /// activity costs a redraw every twenty seconds rather than any new
+    /// wakeups, and it is the difference between glancing at a Lock Screen and
+    /// unlocking a phone with wet gloves on. The system's own per-app switch
+    /// is still the walker's veto.
+    static let liveActivitiesEnabled = true
 }

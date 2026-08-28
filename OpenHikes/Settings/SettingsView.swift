@@ -61,6 +61,8 @@ struct SettingsView: View {
     private var tileProviderID = TileProvider.default.id
     @AppStorage(SettingsKey.backgroundTrackingEnabled)
     private var backgroundTrackingEnabled = false
+    @AppStorage(SettingsKey.liveActivitiesEnabled)
+    private var liveActivitiesEnabled = SettingsDefault.liveActivitiesEnabled
     @AppStorage(SettingsKey.savePhotosToLibrary)
     private var savePhotosToLibrary = SettingsDefault.savePhotosToLibrary
 
@@ -106,6 +108,7 @@ struct SettingsView: View {
                 mapProviderSection
                 photosSection
                 backgroundTrackingSection
+                liveActivitySection
                 offlineStorageSection
                 FieldMetricsSection()
                 contactSection
@@ -192,29 +195,6 @@ struct SettingsView: View {
     }
 
     // MARK: Photos
-
-    /// The one switch behind photo-library access.
-    ///
-    /// Off by default, and flipping it on asks for nothing: the prompt comes
-    /// with the first photo actually saved, where the request is about
-    /// something the user is doing rather than something they might do. The
-    /// app's own copy is written either way, which is what the footer says —
-    /// otherwise "off" reads as "photos aren't kept".
-    private var photosSection: some View {
-        Section {
-            Toggle("Also Save to Photos", isOn: $savePhotosToLibrary)
-                .accessibilityIdentifier("save-photos-to-library-toggle")
-        } header: {
-            Text("Photos")
-        } footer: {
-            Text(
-                "Photos you take on a hike are always kept in OpenHikes and shown"
-                + " with that hike. Turn this on to put a copy in your photo library"
-                + " too, stamped with when and where you took it. You'll be asked"
-                + " for permission the first time one is saved."
-            )
-        }
-    }
 
     // MARK: Background tracking
 
@@ -445,6 +425,64 @@ struct SettingsView: View {
                 in: Capsule()
             )
     }
+}
+
+// MARK: - Photos
+
+/// The photo-library switch. Out of the view's own body for length, and
+/// otherwise a section like any other.
+private extension SettingsView {
+    /// The one switch behind photo-library access.
+    ///
+    /// Off by default, and flipping it on asks for nothing: the prompt comes
+    /// with the first photo actually saved, where the request is about
+    /// something the user is doing rather than something they might do. The
+    /// app's own copy is written either way, which is what the footer says —
+    /// otherwise "off" reads as "photos aren't kept".
+    var photosSection: some View {
+        Section {
+            Toggle("Also Save to Photos", isOn: $savePhotosToLibrary)
+                .accessibilityIdentifier("save-photos-to-library-toggle")
+        } header: {
+            Text("Photos")
+        } footer: {
+            Text(
+                "Photos you take on a hike are always kept in OpenHikes and shown"
+                + " with that hike. Turn this on to put a copy in your photo library"
+                + " too, stamped with when and where you took it. You'll be asked"
+                + " for permission the first time one is saved."
+            )
+        }
+    }
+}
+
+// MARK: - Live Activities
+
+/// The one switch the walker owns over the Lock Screen banner. Kept out of the
+/// view's own body for length; it is a section like any other.
+private extension SettingsView {
+    /// On by default — see ``SettingsDefault/liveActivitiesEnabled``. The
+    /// switch is the app's half of the answer, so it says so rather than
+    /// pretending it is the only one: a walker who turned Live Activities off
+    /// for OpenHikes in the system's own Settings will see nothing however
+    /// this reads, and the footer is where they find out why.
+    @ViewBuilder var liveActivitySection: some View {
+        #if os(iOS)
+        Section {
+            Toggle("Show on Lock Screen", isOn: $liveActivitiesEnabled)
+                .accessibilityIdentifier("live-activities-toggle")
+        } header: {
+            Text("Live Activity")
+        } footer: {
+            Text(
+                "Puts your distance, elapsed time and progress along the trail on the Lock Screen"
+                + " and in the Dynamic Island while you are recording or following a hike."
+                + " iOS Settings › OpenHikes can turn these off for the app entirely."
+            )
+        }
+        #endif
+    }
+
 }
 
 // MARK: - Offline storage

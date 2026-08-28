@@ -51,6 +51,17 @@ enum WidgetFormat {
         )
     }
 
+    /// Elapsed-time style — "1:03:12", "12:40". Whole seconds, because this
+    /// is a stopwatch rather than a measurement.
+    ///
+    /// Only ever the *spoken* and paused forms of a recording's clock: a
+    /// running Live Activity draws `Text(timerInterval:)` instead, which the
+    /// system ticks without the app spending an update on it.
+    static func duration(seconds: TimeInterval) -> String {
+        Duration.seconds(max(0, seconds.rounded()))
+            .formatted(.time(pattern: .hourMinuteSecond))
+    }
+
     /// Walking-pace style, to one decimal — "4.3 km/h", "2.7 mph".
     ///
     /// `UnitSpeed` has no locale-aware usage of its own, so the unit is
@@ -134,6 +145,59 @@ public struct TrailWidgetMetric: Sendable, Equatable, Identifiable {
     public var accessibilityPhrase: String { "\(spokenLabel) \(value)" }
 }
 
+/// The one place each chip is built.
+///
+/// Every surface that draws these — the widget's trail and recording bands,
+/// and both halves of the Live Activity — comes through here, so a figure
+/// cannot be rounded one way on a home screen and another on a Lock Screen.
+/// Each returns `nil` for a figure there is nothing to say about, which is
+/// what implements the "omit the chip rather than draw a dash" rule the
+/// builders below rely on.
+extension TrailWidgetMetric {
+    /// Absent for a route with no elevations, and for a flat one: "Ascent 0 m"
+    /// is a chip's width spent saying nothing.
+    static func ascent(meters: Double?, locale: Locale) -> Self? {
+        guard let meters, meters > 0 else { return nil }
+        return Self(
+            kind: .ascent,
+            value: WidgetFormat.elevation(meters: meters, locale: locale)
+        )
+    }
+
+    /// Sea level is a real height, so this one is absent only when there is no
+    /// live fix to read a height from.
+    static func currentElevation(meters: Double?, locale: Locale) -> Self? {
+        guard let meters else { return nil }
+        return Self(
+            kind: .currentElevation,
+            value: WidgetFormat.elevation(meters: meters, locale: locale)
+        )
+    }
+
+    /// Absent while standing still: a pace of zero is what every recording
+    /// reads before its second fix, and it is not a fact about the walk.
+    static func pace(metersPerSecond: Double?, locale: Locale) -> Self? {
+        guard let metersPerSecond, metersPerSecond > 0 else { return nil }
+        return Self(
+            kind: .pace,
+            value: WidgetFormat.speed(
+                metersPerSecond: metersPerSecond,
+                locale: locale
+            )
+        )
+    }
+
+    /// Absent before the first fix lands, when "0 pts" would read as a broken
+    /// recording rather than as one that has just started.
+    static func points(_ count: Int?, locale: Locale) -> Self? {
+        guard let count, count > 0 else { return nil }
+        return Self(
+            kind: .points,
+            value: count.formatted(.number.locale(locale))
+        )
+    }
+}
+
 public extension SharedTrailSnapshot {
     /// The stat chips for this trail: at most two, most useful first, and
     /// truncated to whatever the widget family has width for.
@@ -155,30 +219,20 @@ public extension SharedTrailSnapshot {
     /// placeholders.
     func metrics(limit: Int, locale: Locale = .current) -> [TrailWidgetMetric] {
         guard limit > 0 else { return [] }
-        var metrics: [TrailWidgetMetric] = []
-        if let elevationGainMeters, elevationGainMeters > 0 {
-            metrics.append(
-                TrailWidgetMetric(
-                    kind: .ascent,
-                    value: WidgetFormat.elevation(
-                        meters: elevationGainMeters,
-                        locale: locale
-                    )
-                )
-            )
-        }
-        if let elevation = liveFix?.elevationMeters {
-            metrics.append(
-                TrailWidgetMetric(
-                    kind: .currentElevation,
-                    value: WidgetFormat.elevation(
-                        meters: elevation,
-                        locale: locale
-                    )
-                )
-            )
-        }
-        return Array(metrics.prefix(limit))
+        return Array(
+            [
+                TrailWidgetMetric.ascent(
+                    meters: elevationGainMeters,
+                    locale: locale
+                ),
+                TrailWidgetMetric.currentElevation(
+                    meters: liveFix?.elevationMeters,
+                    locale: locale
+                ),
+            ]
+            .compactMap(\.self)
+            .prefix(limit)
+        )
     }
 
     /// The same chips as one phrase, for the widget's single accessibility
@@ -201,30 +255,20 @@ public extension SharedRecordingSnapshot {
     /// much has been climbed, and how fast it is being walked.
     func metrics(limit: Int, locale: Locale = .current) -> [TrailWidgetMetric] {
         guard limit > 0 else { return [] }
-        var metrics: [TrailWidgetMetric] = []
-        if let elevationGainMeters, elevationGainMeters > 0 {
-            metrics.append(
-                TrailWidgetMetric(
-                    kind: .ascent,
-                    value: WidgetFormat.elevation(
-                        meters: elevationGainMeters,
-                        locale: locale
-                    )
-                )
-            )
-        }
-        if let averageSpeedMetersPerSecond, averageSpeedMetersPerSecond > 0 {
-            metrics.append(
-                TrailWidgetMetric(
-                    kind: .pace,
-                    value: WidgetFormat.speed(
-                        metersPerSecond: averageSpeedMetersPerSecond,
-                        locale: locale
-                    )
-                )
-            )
-        }
-        return Array(metrics.prefix(limit))
+        return Array(
+            [
+                TrailWidgetMetric.ascent(
+                    meters: elevationGainMeters,
+                    locale: locale
+                ),
+                TrailWidgetMetric.pace(
+                    metersPerSecond: averageSpeedMetersPerSecond,
+                    locale: locale
+                ),
+            ]
+            .compactMap(\.self)
+            .prefix(limit)
+        )
     }
 
     /// The same chips as one phrase — see

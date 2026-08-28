@@ -13,6 +13,7 @@ There is no backend and no OpenHikes account. Everything lives on the device, an
 - **Photos.** Pictures taken on a walk or picked from the library, pinned to where on the trail they were taken, shown as a gallery strip and as map pins. Photos taken with the system camera during a recording are found afterwards from the photo library and matched against the recording's own timestamps, corroborated by the photograph's location where it has one. Granting access to only some photos is handled rather than treated as a refusal: the app searches what it was given and offers to widen the selection.
 - **Live context.** Current location, trail auto-follow with a progress readout, and search across saved hikes and MapKit place suggestions. WeatherKit conditions sit over the map as a badge that opens the forecast in full, along with how old the reading is and Apple Weather's credits; temperatures and speeds are spelled in the units the reader's own locale uses for them.
 - **Home Screen widget.** Trail progress, a climb/descent/high-point stat line, live-recording takeover, recording deep links, and sparse location anchors that help repair degraded GPS gaps.
+- **Live Activity.** The same figures on the Lock Screen and in the Dynamic Island while a recording runs or a trail is being followed, ticking their own clock so a walk costs no updates while it is simply going well. Off-route distance takes the panel over when the trail is lost, a finished recording leaves its result behind for five minutes, and a recording always outranks a follow.
 - **iCloud sync.** Hikes and their metadata follow the walker across their own devices. The tile cache is deliberately left out of it.
 
 ## Requirements
@@ -119,9 +120,10 @@ Following Apple's [Food Truck](https://github.com/apple/sample-food-truck) and [
 | `OpenHikes/Weather/` | WeatherKit polling, the badge over the map and its detail sheet, unit formatting, and Apple Weather attribution. |
 | `OpenHikes/Purchases/` | Paid-maps entitlement and its StoreKit state, the paywall, and the subscription terms and links. |
 | `OpenHikes/Settings/` | User-facing app, recording, map and storage settings. |
+| `OpenHikes/LiveActivity/` | When a Lock Screen activity starts, updates and ends, behind a seam that keeps ActivityKit out of the tests. |
 | `OpenHikes/General/` | Cross-domain extensions and diagnostics. |
 | `OpenHikesShared/` | Domain-foldered local Swift package shared by the app and widget. |
-| `OpenWidget/` | iOS Home Screen widget. |
+| `OpenWidget/` | iOS Home Screen widget and the Live Activity's Lock Screen and Dynamic Island views. |
 | `OpenHikesTests/`, `OpenWidgetTests/` | App-hosted tests mirroring the app's domain folders. |
 | `OpenHikesUITests/` | Simulator UI automation, location spoofing, launch metrics. |
 | `ci_scripts/` | Xcode Cloud hooks, run automatically by name. |

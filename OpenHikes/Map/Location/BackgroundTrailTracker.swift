@@ -108,9 +108,14 @@ extension CLLocationManager: SignificantLocationMonitor {
 final class BackgroundTrailTracker: NSObject {
     private let monitor: any SignificantLocationMonitor
     private let defaults: UserDefaults
+    /// The Lock Screen, when the app has one. A trail being followed is the
+    /// second thing this app can put there — see
+    /// ``publishFollowActivity(_:)``. Optional so a suite gets a tracker that
+    /// cannot reach ActivityKit.
+    let liveActivityController: HikeLiveActivityController?
     /// Reads the current time for the two throttles below — injectable so a
     /// test can step across a 45-second window rather than wait it out.
-    private let clock: @Sendable () -> Date
+    let clock: @Sendable () -> Date
     private let container: ModelContainer
     /// The hike background delivery should match fixes against. Seeded at
     /// launch from `SettingsKey.lastSelectedHikeID` (written by `OpenHikesModel`)
@@ -198,12 +203,14 @@ final class BackgroundTrailTracker: NSObject {
         container: ModelContainer,
         monitor: (any SignificantLocationMonitor)? = nil,
         defaults: UserDefaults = .standard,
+        liveActivityController: HikeLiveActivityController? = nil,
         clock: @escaping @Sendable () -> Date = { Date() }
     ) {
         let initialGeneration = SelectionGeneration()
         self.container = container
         self.monitor = monitor ?? CLLocationManager()
         self.defaults = defaults
+        self.liveActivityController = liveActivityController
         self.clock = clock
         selectionGeneration = initialGeneration
         snapshotWriter = SnapshotWriter(generation: initialGeneration)
@@ -246,6 +253,9 @@ final class BackgroundTrailTracker: NSObject {
     /// values on-main, then prepares and writes the widget payload off-main so
     /// a long GPX cannot consume most of the tap's frame.
     func hikeSelectionChanged(to hike: Hike?) {
+        // Before the id changes, so the activity that comes down is the one
+        // for the trail being left rather than a lookup against the new one.
+        if hike?.id != trackedHikeID { endFollowActivity(hikeID: nil) }
         trackedHikeID = hike?.id
         lastMatchedDistance = nil
         lastForegroundPublish = nil
@@ -641,6 +651,7 @@ extension BackgroundTrailTracker {
                   selectionRevision == revision
             else { return }
             WidgetCenter.shared.reloadTimelines(ofKind: TrailWidgetKind.id)
+            publishFollowActivity(write.snapshot)
             // Only when the trail itself changed. A moving position needs no
             // new basemap — that's the whole reason images are affordable here.
             if write.isNewTrail { refreshBasemaps(for: write.snapshot) }

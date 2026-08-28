@@ -33,6 +33,15 @@ extension Hike {
     private static let tintSaturation: Double = 0.65
     private static let tintBrightness: Double = 0.85
 
+    /// The tint a hike has when nothing chose one for it.
+    ///
+    /// A mirror of the literal on ``Hike/tintHex`` rather than the source of
+    /// it: a mirrored CloudKit column's default has to be an inline literal
+    /// on the declaration, so the model keeps its own copy and this exists for
+    /// the callers — the Live Activity among them — that need the same answer
+    /// without a `Hike` in hand.
+    static let defaultTintHex = "#34C759"
+
     /// A random, visually distinct route color — fixed saturation/brightness so
     /// every hue stays legible on the map and in the UI. Used to give each
     /// newly imported hike its own default tint instead of always green.

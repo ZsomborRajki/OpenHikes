@@ -425,6 +425,7 @@ extension HikeRecorder {
         _ session: TrackJournalSession,
         journal: TrackJournal
     ) async {
+        endRecordingActivity(.finished)
         await clearSharedRecordingState(
             sessionID: session.metadata.sessionID
         )
@@ -535,6 +536,7 @@ extension HikeRecorder {
             fail(error, endLocationUpdates: false)
             return
         }
+        endRecordingActivity(.abandoned)
         await clearSharedRecordingState(sessionID: nil)
         phase = .idle
     }
