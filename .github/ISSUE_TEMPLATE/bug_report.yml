@@ -7,7 +7,7 @@ body:
     attributes:
       value: >-
         Please do not report a security problem here — see
-        [SECURITY.md](https://github.com/ZsomborRajki/OpenHikes/blob/main/docs/SECURITY.md).
+        [SECURITY.md](https://github.com/ZsomborRajki/OpenHikes/blob/main/SECURITY.md).
 
   - type: textarea
     id: what-happened
