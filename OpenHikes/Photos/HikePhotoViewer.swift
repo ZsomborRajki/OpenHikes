@@ -16,6 +16,13 @@
 //  swipe and the two buttons drive the same `scrollPosition` and cannot
 //  disagree about which photo is showing.
 //
+//  A page that cannot be drawn says so. The store answers "not decoded yet"
+//  and "there is no file" with the same `nil`, and a viewer that renders a
+//  spinner for both turns a missing photo into a screen that never resolves;
+//  ``PhotoDisplay`` is what separates them, and the failed state carries the
+//  two things there are to do about it — ask again, or take the row that
+//  claims the file out of the hike.
+//
 
 import CoreLocation
 import MapKit
@@ -111,7 +118,7 @@ struct HikePhotoViewer: View {
         ScrollView(.horizontal) {
             LazyHStack(spacing: 0) {
                 ForEach(photos) { photo in
-                    HikePhotoPage(photo: photo, store: store)
+                    HikePhotoPage(photo: photo, store: store) { delete(photo) }
                         .containerRelativeFrame(.horizontal)
                         .id(photo.id)
                 }
@@ -288,27 +295,102 @@ struct HikePhotoViewer: View {
 private struct HikePhotoPage: View {
     let photo: HikePhoto
     let store: HikePhotoStore
+    /// Takes this photo's row out of the hike, for the case where its file is
+    /// not coming back.
+    ///
+    /// Handed down rather than done here so it goes through the viewer's own
+    /// `delete(_:)`, which steps the paging off this page first — a page that
+    /// removes itself while the scroll view is resting on it leaves
+    /// `scrollPosition` pointing at an id that no longer exists.
+    var onRemove: () -> Void
 
-    @State private var image: PhotoImage?
+    @State private var display = PhotoDisplay.loading
+    /// Bumped by "Try Again", and part of the load's identity below.
+    ///
+    /// Retry is worth offering rather than being a placebo: an unreadable file
+    /// is often a temporary condition — a photo whose bytes haven't finished
+    /// coming down from a restore, a volume that wasn't mounted — and the
+    /// alternative to a button is leaving the screen and coming back.
+    @State private var attempt = 0
 
     var body: some View {
         ZStack {
-            if let image {
-                Image(photoImage: image)
-                    .resizable()
-                    .scaledToFit()
-            } else {
+            switch display {
+            case .loading:
                 ProgressView()
                     .controlSize(.large)
                     .tint(.white)
+                    .accessibilityElement()
+                    .accessibilityLabel(Self.label(for: photo))
+            case .ready(let loaded):
+                Image(photoImage: loaded.image)
+                    .resizable()
+                    .scaledToFit()
+                    .accessibilityElement()
+                    .accessibilityLabel(Self.label(for: photo))
+            case .unavailable:
+                unavailable
             }
         }
         .frame(maxWidth: .infinity, maxHeight: .infinity)
-        .accessibilityElement()
-        .accessibilityLabel(Self.label(for: photo))
-        .task(id: photo.id) {
-            image = await HikePhotoLoader.displayImage(for: photo, in: store)?.image
+        .task(id: Attempt(photo: photo.id, count: attempt)) {
+            display = .loading
+            display = await HikePhotoLoader.display(for: photo, in: store)
         }
+    }
+
+    /// A photo the hike still lists and the disk cannot produce.
+    ///
+    /// Both ways out are here because neither one is always right. The file
+    /// may yet arrive, so the load can be asked for again; and when it never
+    /// will, the row claiming it is the thing to remove — the exit this state
+    /// had none of, since it was indistinguishable from a load in progress and
+    /// the toolbar's own delete was the only thing that could end it.
+    private var unavailable: some View {
+        VStack(spacing: Self.recoverySpacing) {
+            ContentUnavailableView {
+                Label("Photo Unavailable", systemImage: "exclamationmark.triangle")
+            } description: {
+                Text(
+                    """
+                    The file behind this photo is missing or couldn\u{2019}t be \
+                    read. It may not have made it onto this device.
+                    """
+                )
+            }
+            // The buttons are siblings rather than `actions:` for the reason
+            // `DiscoveryEmptyState` keeps them there: SwiftUI pushes a
+            // container's identifier onto every descendant, so a button inside
+            // this one would answer to this name instead of its own.
+            .accessibilityIdentifier("photo-unavailable")
+
+            HStack(spacing: Self.recoverySpacing) {
+                Button("Try Again") { attempt += 1 }
+                    .buttonStyle(.bordered)
+                    .accessibilityIdentifier("photo-retry-button")
+                Button("Remove Photo", role: .destructive, action: onRemove)
+                    .buttonStyle(.bordered)
+                    .accessibilityIdentifier("photo-remove-button")
+            }
+        }
+        // The backdrop is black whatever the device is set to, so this subtree
+        // has to be told which scheme it is being read against — the same
+        // thing the navigation bar is told in the viewer above, and for the
+        // same reason: without it the title and the description are black on
+        // black.
+        .environment(\.colorScheme, .dark)
+    }
+
+    private static let recoverySpacing: CGFloat = 16
+
+    /// What a page's load is keyed on: the photo, and how many times the user
+    /// has asked for it again.
+    ///
+    /// `.task(id:)` restarts on any change to this, which is what makes retry
+    /// a bump of one integer rather than a second path into the loader.
+    private struct Attempt: Hashable {
+        let photo: UUID
+        let count: Int
     }
 
     /// VoiceOver cannot describe a photograph, so it gets what the app does
