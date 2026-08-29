@@ -88,18 +88,41 @@ struct HikeSearchTests {
     }
 
     /// A rename changes the ranking without changing the list, so the cache
-    /// key has to include the titles and not just which hikes are present.
+    /// key has to include the names and not just which hikes are present.
+    ///
+    /// Renaming through the UI writes ``Hike/customName`` and leaves `title`
+    /// alone, so this goes through the same property `commitTitleEdit` does:
+    /// keying the cache on `title` would leave this pass answered from the
+    /// stale ranking.
     @Test("renaming a hike re-ranks")
     func renameInvalidatesTheCache() throws {
         let context = try Fixture.modelContext()
         let hikes = hikes(["Ridge Loop", "Valley Floor"], in: context)
         let search = HikeSearch()
 
-        #expect(search.rankedHikes(matching: "ridge", in: hikes).map(\.title) == ["Ridge Loop"])
+        #expect(search.rankedHikes(matching: "ridge", in: hikes).map(\.displayTitle) == ["Ridge Loop"])
 
-        hikes[1].title = "Ridgeback"
-        #expect(search.rankedHikes(matching: "ridge", in: hikes).map(\.title) == ["Ridge Loop", "Ridgeback"])
+        hikes[1].customName = "Ridgeback"
+        #expect(
+            search.rankedHikes(matching: "ridge", in: hikes).map(\.displayTitle)
+                == ["Ridge Loop", "Ridgeback"]
+        )
         #expect(search.rankingPasses == 2)
+    }
+
+    /// The name on screen is ``Hike/displayTitle``, so that is the name the
+    /// search has to answer to: a renamed trail is findable by what the rows
+    /// call it, and the import name it no longer shows anywhere finds nothing.
+    @Test("a renamed hike is searchable by its visible name, not its old one")
+    func renamedHikeIsSearchableByDisplayTitle() throws {
+        let context = try Fixture.modelContext()
+        let hikes = hikes(["Zermatt Ridge"], in: context)
+        let search = HikeSearch()
+
+        hikes[0].customName = "Sunrise Walk"
+
+        #expect(search.rankedHikes(matching: "sunrise", in: hikes).map(\.displayTitle) == ["Sunrise Walk"])
+        #expect(search.rankedHikes(matching: "zermatt", in: hikes).isEmpty)
     }
 
     /// An import or a deletion replaces `@Query`'s array while the query
