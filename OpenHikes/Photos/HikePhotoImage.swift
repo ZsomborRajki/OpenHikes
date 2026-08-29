@@ -52,14 +52,43 @@ nonisolated enum HikePhotoLoader {
         }
     }
 
+    /// The viewer's read, which unlike the strip's has to say *which* of two
+    /// things happened when no image comes back.
+    ///
+    /// A cancelled task reports ``PhotoDisplay/loading`` rather than a
+    /// failure: nothing was observed about the file, and the page that asked
+    /// is either going away or about to ask again for a different photo.
     @concurrent
-    static func displayImage(
+    static func display(
         for photo: HikePhoto,
         in store: HikePhotoStore
-    ) async -> LoadedPhotoImage? {
-        guard !Task.isCancelled else { return nil }
+    ) async -> PhotoDisplay {
+        guard !Task.isCancelled else { return .loading }
         return RenderSignpost.interval("PhotoImageDecoded") {
-            store.displayImage(for: photo).map(LoadedPhotoImage.init)
+            guard let image = store.displayImage(for: photo) else {
+                return PhotoDisplay.unavailable
+            }
+            return .ready(LoadedPhotoImage(image: image))
         }
     }
+}
+
+/// What one page of the full-screen viewer is showing.
+///
+/// Three cases rather than an optional image, because the optional could not
+/// tell the two empty answers apart: ``HikePhotoStore/displayImage(for:)``
+/// returns `nil` both for a decode still to come and for a file that is not
+/// there at all, and the viewer drew a spinner for both. A photo whose bytes
+/// had gone — never synced onto this device, restored from a backup that
+/// didn't carry it, deleted underneath the app — therefore spun forever, with
+/// nothing said and nothing to press.
+nonisolated enum PhotoDisplay: Sendable {
+    /// A decode is in flight, or was cancelled before it ran. The two states a
+    /// spinner is the honest answer for.
+    case loading
+    case ready(LoadedPhotoImage)
+    /// The store had nothing to give for a photo the hike still lists. Final
+    /// until the file comes back or the row goes — which is why the page that
+    /// draws this offers both.
+    case unavailable
 }
