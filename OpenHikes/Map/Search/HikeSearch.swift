@@ -8,11 +8,16 @@
 
 import Foundation
 
-/// Imported/recorded hikes whose title matches the current query, with titles
+/// Imported/recorded hikes whose name matches the current query, with names
 /// that start with the query ranked above ones that merely contain it —
 /// surfaced above map suggestions so a user's own trails come first.
 ///
-/// The ranking folds every title and sorts the survivors, so it is the one
+/// The name matched is ``Hike/displayTitle``, the one the rows and the detail
+/// view show: a renamed hike stores its new name in `customName` and leaves
+/// `title` at whatever the import called it, so ranking on `title` would make
+/// a trail unfindable by the only name the user has ever seen for it.
+///
+/// The ranking folds every name and sorts the survivors, so it is the one
 /// real cost in `MapSheetHikes.body` — and that body runs far more often than
 /// the query changes. Every detent change a sheet drag produces re-evaluates
 /// it, as does any unrelated invalidation while the field is focused (a
@@ -20,17 +25,17 @@ import Foundation
 /// here, across body passes, rather than rebuilt on each one.
 ///
 /// The cache is keyed by what the ranking actually reads: the trimmed query,
-/// and each hike's identity *and* title in order. Titles are part of the key
-/// because a rename changes the ranking without changing the list; identity is
-/// part of it because two trails can share a title, and returning the previous
-/// pass's `Hike` objects for a list that has since been replaced would hand
-/// the sheet rows pointing at deleted models.
+/// and each hike's identity *and* display title in order. Names are part of
+/// the key because a rename changes the ranking without changing the list;
+/// identity is part of it because two trails can share a name, and returning
+/// the previous pass's `Hike` objects for a list that has since been replaced
+/// would hand the sheet rows pointing at deleted models.
 final class HikeSearch {
     /// The trimmed query ``results`` answers. Empty means nothing is cached.
     private var query = ""
     /// The `hikes` argument that produced ``results``, reduced to the two
     /// properties the ranking depends on.
-    private var inputs: [(id: UUID, title: String)] = []
+    private var inputs: [(id: UUID, displayTitle: String)] = []
     private var results: [Hike] = []
 
     /// Full re-ranks performed. The memo is otherwise invisible from outside —
@@ -57,7 +62,7 @@ final class HikeSearch {
 
         rankingPasses += 1
         query = trimmedQuery
-        inputs = hikes.map { (id: $0.id, title: $0.title) }
+        inputs = hikes.map { (id: $0.id, displayTitle: $0.displayTitle) }
         results = Self.rank(inputs, matching: trimmedQuery)
             .map { hikes[$0] }
         return results
@@ -77,21 +82,22 @@ final class HikeSearch {
     /// nothing, where the ranking folds a string per hike and then sorts.
     private func isCacheValid(for hikes: [Hike]) -> Bool {
         guard inputs.count == hikes.count else { return false }
-        for (cached, hike) in zip(inputs, hikes) where cached.id != hike.id || cached.title != hike.title {
+        for (cached, hike) in zip(inputs, hikes)
+        where cached.id != hike.id || cached.displayTitle != hike.displayTitle {
             return false
         }
         return true
     }
 
     /// The ranking itself, over indices into the caller's array so the cached
-    /// key and the cached result are built from one pass over the titles.
-    private static func rank(_ inputs: [(id: UUID, title: String)], matching query: String) -> [Int] {
+    /// key and the cached result are built from one pass over the names.
+    private static func rank(_ inputs: [(id: UUID, displayTitle: String)], matching query: String) -> [Int] {
         let locale = Locale.current
         let queryKey = query.folding(options: foldingOptions, locale: locale)
 
         return inputs.indices
             .compactMap { index -> (index: Int, prefixRank: Int, titleKey: String)? in
-                let titleKey = inputs[index].title.folding(options: foldingOptions, locale: locale)
+                let titleKey = inputs[index].displayTitle.folding(options: foldingOptions, locale: locale)
                 guard titleKey.contains(queryKey) else { return nil }
                 return (index, titleKey.hasPrefix(queryKey) ? 0 : 1, titleKey)
             }
