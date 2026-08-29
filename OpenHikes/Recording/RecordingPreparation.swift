@@ -125,22 +125,22 @@ nonisolated enum RecordingPreparation {
             from: deduplicated
         )
 
-        let distanceMeters: Double
-        if usesMatchedRoute {
-            distanceMeters = matchedDistance(preparedPoints)
-        } else {
-            var accumulator = RecordingDistanceAccumulator()
-            for point in preparedPoints {
-                accumulator.append(point)
-            }
-            distanceMeters = accumulator.distanceMeters
+        // One distance rule, whether or not matching moved the line: the same
+        // accumulator the walker watched tick during the recording, replayed
+        // over whatever geometry is being saved. A plain sum over the matched
+        // legs is not the same rule — it hands back the stationary windows the
+        // live readout retracted — so the hike came out longer than the walk
+        // the walker watched, with nothing to say which figure to believe.
+        var accumulator = RecordingDistanceAccumulator()
+        for point in preparedPoints {
+            accumulator.append(point)
         }
         return PreparedRecording(
             route: preparedPoints.map(\.routeCoordinate),
             // No match means `route` already is the raw trace; a second copy
             // would double the row without preserving any additional fact.
             rawRoute: usesMatchedRoute ? rawRoute : [],
-            distanceMeters: distanceMeters,
+            distanceMeters: accumulator.distanceMeters,
             startedAt: startedAt,
             matchedTrailName: usesMatchedRoute
                 ? match?.matchedTrailName
@@ -190,21 +190,6 @@ nonisolated enum RecordingPreparation {
             deduplicated.append(point)
         }
         return deduplicated
-    }
-
-    private static func matchedDistance(
-        _ points: [RecordingPoint]
-    ) -> Double {
-        guard points.count > 1 else { return 0 }
-        var distance = 0.0
-        for index in 1..<points.count {
-            guard !points[index].flags.contains(.resumed) else { continue }
-            distance += RouteGeometry.distanceMeters(
-                from: points[index - 1].coordinate,
-                to: points[index].coordinate
-            )
-        }
-        return distance
     }
 
     private static func routeMoved(
