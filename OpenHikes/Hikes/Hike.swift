@@ -203,10 +203,23 @@ extension Hike {
     /// stored tiles and a fetch each would put the whole library's worth on the
     /// main actor during a delete — the same cost ``hasStoredTiles`` was
     /// written to avoid in the first place.
-    var localState: HikeLocalState? {
+    var localState: HikeLocalState? { try? resolveLocalState() }
+
+    /// The same record, with a sidecar fetch that failed propagated rather
+    /// than read as "this device has stored nothing for this hike".
+    ///
+    /// The passthroughs below cannot make that distinction and should not try
+    /// to — they answer twenty call sites that only ever wanted a list of tile
+    /// keys. It matters to exactly one caller, ``tileClaim()``, and it matters
+    /// there because the answer authorises a deletion.
+    ///
+    /// Resolving through here also warms the cache the passthroughs read, so a
+    /// claim set taken this way cannot be contradicted a line later by a
+    /// second fetch that happens to fail.
+    func resolveLocalState() throws -> HikeLocalState? {
         if let cachedLocalState, !cachedLocalState.isDeleted { return cachedLocalState }
         guard let modelContext else { return nil }
-        let found = HikeLocalState.existing(for: id, in: modelContext)
+        let found = try HikeLocalState.fetchExisting(for: id, in: modelContext)
         cachedLocalState = found
         return found
     }

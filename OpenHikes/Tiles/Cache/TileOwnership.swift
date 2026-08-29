@@ -113,7 +113,36 @@ nonisolated struct StoredTileDeletionPlan: Sendable {
     }
 }
 
+extension TileOwnership {
+    /// The claims of every hike in `hikes` that is holding tiles on this
+    /// device — refusing rather than under-reporting when one of them cannot
+    /// be read.
+    ///
+    /// A claim set is only ever spent whole, by something whose job is
+    /// removing what is not in it, so the difference between a short set and a
+    /// complete one is the difference between freeing browsing residue and
+    /// deleting the map a walker downloaded for a valley with no signal. Both
+    /// ways a hike can go missing therefore arrive here as an error instead of
+    /// as a shorter array: the fetch that produced `hikes`, and the sidecar
+    /// read behind ``Hike/tileClaim()``.
+    static func claims(of hikes: [Hike]) throws -> [Self] {
+        try hikes.compactMap { try $0.tileClaim() }
+    }
+}
+
 extension Hike {
+    /// This hike's tile claim, or `nil` if it holds no tiles on this device.
+    ///
+    /// Throws where ``hasStoredTiles`` would merely answer `false`. That
+    /// property reads through ``localState``, which swallows a failed sidecar
+    /// fetch, and a hike answering "no tiles" because its record could not be
+    /// read is — to a claim set — indistinguishable from one that genuinely
+    /// holds none. Resolving the record here is what tells the two apart.
+    func tileClaim() throws -> TileOwnership? {
+        guard try resolveLocalState() != nil, hasStoredTiles else { return nil }
+        return TileOwnership(self)
+    }
+
     /// Whether this hike has any stored tiles — answered from two small
     /// arrays, without touching `route`.
     ///

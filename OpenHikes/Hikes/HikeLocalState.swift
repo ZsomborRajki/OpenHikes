@@ -74,15 +74,28 @@ extension HikeLocalState {
     /// hikes list into a writer, and a library of three hundred hikes into
     /// three hundred inserts on the first delete.
     static func existing(for hikeID: UUID, in context: ModelContext) -> HikeLocalState? {
+        // `try?` because every caller of *this* spelling is a property
+        // accessor with a meaningful empty answer — no stored tiles — and the
+        // alternative is making `hike.autoSavedTileKeys` throwing at twenty
+        // call sites to report a failure none of them could act on.
+        try? fetchExisting(for: hikeID, in: context)
+    }
+
+    /// The same row, with a fetch that *failed* reported rather than answered.
+    ///
+    /// The two answers above are not interchangeable everywhere. A screen
+    /// asking what a hike has downloaded can read "no row" as "no tiles" and
+    /// be no worse than out of date; anything building a tile *claim set*
+    /// cannot, because a hike missing from that set is not a hike that claims
+    /// nothing — it is a hike whose tiles are about to be deleted while it
+    /// goes on listing them. ``Hike/tileClaim()`` is the caller that needs the
+    /// distinction, and it needs it in the type.
+    static func fetchExisting(for hikeID: UUID, in context: ModelContext) throws -> HikeLocalState? {
         var descriptor = FetchDescriptor<HikeLocalState>(
             predicate: #Predicate { $0.hikeID == hikeID }
         )
         descriptor.fetchLimit = 1
-        // `try?` because every caller is a property accessor with a meaningful
-        // empty answer — no stored tiles — and the alternative is making
-        // `hike.autoSavedTileKeys` throwing at twenty call sites to report a
-        // failure none of them could act on.
-        return (try? context.fetch(descriptor))?.first
+        return try context.fetch(descriptor).first
     }
 
     /// The row for `hikeID`, created and inserted if this is the first time
