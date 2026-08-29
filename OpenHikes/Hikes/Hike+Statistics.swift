@@ -255,6 +255,12 @@ nonisolated struct HikeRouteStatistics: Sendable {
         var movingTime = MovingTimeAccumulator()
         var fastestMetersPerSecond = 0.0
         var inferredMeters = 0.0
+        private var walkedMeters = 0.0
+        private var timedMeters = 0.0
+        /// Metres walked since the last stamped point, held until a later
+        /// stamp claims them. Whatever is left here when the route ends is
+        /// the untimed tail, and is never claimed.
+        private var pendingMeters = 0.0
         var previousPoint: RouteCoordinate?
 
         var duration: TimeInterval? {
@@ -264,31 +270,63 @@ nonisolated struct HikeRouteStatistics: Sendable {
             return lastTimestamp.timeIntervalSince(firstTimestamp)
         }
 
+        /// The share of the walked length that lies between the first and the
+        /// last stamped point — the only stretch ``duration`` is a clock for.
+        ///
+        /// A partly stamped GPX otherwise divides a whole route by part of a
+        /// walk: ten kilometres with a clock on the last two report the pace
+        /// of a runner. Cutting the distance by this keeps the numerator and
+        /// the denominator describing the same ground.
+        ///
+        /// It is exactly 1 — and so exactly the number this app has always
+        /// reported — for a route stamped throughout, and also for one that
+        /// loses its stamps only in the middle, where the elapsed clock spans
+        /// the gap regardless.
+        var timedDistanceFraction: Double {
+            guard walkedMeters > 0 else { return 1 }
+            return min(timedMeters / walkedMeters, 1)
+        }
+
         /// - Parameter segmentMeters: distance from the previous point, or 0
         ///   for the first. A closure because the caller that already has the
-        ///   number — ``RouteProfile``'s walk — should hand it over for free,
-        ///   while the caller that doesn't shouldn't pay for the trigonometry
-        ///   on the segments speed can't use anyway.
+        ///   number — ``RouteProfile``'s walk — should hand it over for free.
+        ///   It is read once per point rather than only for the segments that
+        ///   carry a speed: timestamp coverage counts every metre, including
+        ///   the ones no clock reaches.
         mutating func consume(
             _ point: RouteCoordinate,
             segmentMeters: () -> Double
         ) {
-            // Two consumers now want the same number, and for the caller that
-            // doesn't have it lying around it costs trigonometry — so the
-            // first one to ask pays and the second one doesn't.
-            var measured: Double?
-            let meters = {
-                if let measured { return measured }
-                let value = segmentMeters()
-                measured = value
-                return value
-            }
+            let meters = segmentMeters()
+            // Before the timestamp is recorded, so that the segment arriving
+            // at the first stamped point is still outside the clock.
+            recordCoverage(point, segmentMeters: meters)
             record(timestamp: point.timestamp)
             elevation.record(point.elevation)
             movingTime.record(point)
             recordSpeed(to: point, segmentMeters: meters)
             recordInferred(to: point, segmentMeters: meters)
             previousPoint = point
+        }
+
+        /// Books the segment against the walked length, and against the timed
+        /// length once the clock has reached it.
+        ///
+        /// Metres between two stamped points count even when the points
+        /// between them carry no stamp — the elapsed clock spans them either
+        /// way — so they wait in `pendingMeters` for the next stamp to claim
+        /// them. Metres before the first stamp are never pending, and the ones
+        /// after the last stamp are pending forever, which is how a leading
+        /// and a trailing untimed stretch both fall out of the total.
+        private mutating func recordCoverage(
+            _ point: RouteCoordinate,
+            segmentMeters meters: Double
+        ) {
+            walkedMeters += meters
+            if firstTimestamp != nil { pendingMeters += meters }
+            guard point.timestamp != nil else { return }
+            timedMeters += pendingMeters
+            pendingMeters = 0
         }
 
         private mutating func record(timestamp: Date?) {
@@ -322,14 +360,14 @@ nonisolated struct HikeRouteStatistics: Sendable {
         /// across the app.
         private mutating func recordSpeed(
             to point: RouteCoordinate,
-            segmentMeters: () -> Double
+            segmentMeters meters: Double
         ) {
             guard let previousPoint,
                   let previousTimestamp = previousPoint.timestamp,
                   let timestamp = point.timestamp else { return }
             let elapsed = timestamp.timeIntervalSince(previousTimestamp)
             guard elapsed > 0 else { return }
-            let speed = segmentMeters() / elapsed
+            let speed = meters / elapsed
             guard speed <= RecordingFixPolicy.maximumSpeed else { return }
             fastestMetersPerSecond = max(fastestMetersPerSecond, speed)
         }
@@ -340,10 +378,10 @@ nonisolated struct HikeRouteStatistics: Sendable {
         /// excluded by requiring a predecessor.
         private mutating func recordInferred(
             to point: RouteCoordinate,
-            segmentMeters: () -> Double
+            segmentMeters meters: Double
         ) {
             guard previousPoint != nil, point.isInferred else { return }
-            inferredMeters += segmentMeters()
+            inferredMeters += meters
         }
     }
 
@@ -364,6 +402,10 @@ nonisolated struct HikeRouteStatistics: Sendable {
     /// Distance over the whole clock, lunch and all. Kept exactly as it was:
     /// it is what every hike this app has already saved reports, and quietly
     /// redefining it would rewrite the history of walks nobody re-recorded.
+    ///
+    /// The distance is the part of the route the clock actually covers — all
+    /// of it for a route stamped throughout, less for a GPX whose stamps start
+    /// late or stop early. See ``Accumulator/timedDistanceFraction``.
     let averageSpeed: Measurement<UnitSpeed>?
     /// The same distance over ``movingDuration`` instead. Always at least
     /// ``averageSpeed``, and equal to it for a walk with no stop long enough
@@ -392,8 +434,8 @@ nonisolated struct HikeRouteStatistics: Sendable {
         }
 
         /// - Parameter segmentMeters: distance from the previously consumed
-        ///   point, or 0 for the first. Evaluated only for the segments that
-        ///   can carry a speed — see ``Accumulator/consume(_:segmentMeters:)``.
+        ///   point, or 0 for the first. Evaluated once per point — see
+        ///   ``Accumulator/consume(_:segmentMeters:)``.
         mutating func consume(
             _ point: RouteCoordinate,
             segmentMeters: @autoclosure () -> Double
@@ -475,15 +517,22 @@ nonisolated struct HikeRouteStatistics: Sendable {
             elevationGain = nil
             elevationLoss = nil
         }
+        // Both clocks measure the stretch between the first and the last
+        // stamped point, so both are divided into the length of that stretch
+        // rather than the length of the whole route. For a route stamped
+        // throughout — every hike this app has recorded — the cut is the whole
+        // route and neither number moves. See
+        // ``Accumulator/timedDistanceFraction``.
+        let timedDistanceMeters = distanceMeters * accumulator.timedDistanceFraction
         averageSpeed = accumulator.duration.map { duration in
             Measurement(
-                value: distanceMeters / duration,
+                value: timedDistanceMeters / duration,
                 unit: .metersPerSecond
             )
         }
         movingAverageSpeed = movingDuration.map { moving in
             Measurement(
-                value: distanceMeters / moving,
+                value: timedDistanceMeters / moving,
                 unit: .metersPerSecond
             )
         }
