@@ -30,10 +30,16 @@ import SwiftData
 extension OpenHikesModel {
     /// Every hike that is holding tiles, as the ownership records a trim is
     /// measured against.
+    ///
+    /// Two reads can fail here, not one: the fetch, and the device-local
+    /// sidecar each claim is actually stored in. ``TileOwnership/claims(of:)``
+    /// propagates both — a hike that reports no tiles because its sidecar
+    /// could not be read is as absent from a claim set as one the fetch never
+    /// returned, and just as destructive.
     static func tileClaims(
         fetchingHikes fetch: () throws -> [Hike]
-    ) rethrows -> [TileOwnership] {
-        try fetch().filter(\.hasStoredTiles).map(TileOwnership.init)
+    ) throws -> [TileOwnership] {
+        try TileOwnership.claims(of: fetch())
     }
 
     /// Every file name any hike's photos occupy — the picture and its
