@@ -18,6 +18,19 @@ nonisolated extension TrailMatcher {
         let start: RecordingPoint
         let end: RecordingPoint
         let carriesNonPedestrianMotion: Bool
+        /// Whether Core Motion called both ends of an observed segment
+        /// stationary, so the points interpolated between them should say so
+        /// too.
+        ///
+        /// ``RecordingDistanceAccumulator`` is the only reader, and it treats
+        /// a *run* of stationary fixes as evidence — one unflagged point ends
+        /// the run. Interpolating a matched leg multiplies two fixes into a
+        /// dozen points, so without this the run never survives matching and
+        /// the saved distance keeps a stationary window the live readout
+        /// retracted. Never set across an inferred segment: nothing was
+        /// observed between those two fixes, so a stationary verdict at each
+        /// end says nothing about the walk between them.
+        let carriesMotionStationary: Bool
         /// Whether this whole segment spans ground the recording never
         /// observed — see ``RecordingPointFlags/inferred``.
         let isInferred: Bool
@@ -57,6 +70,9 @@ nonisolated extension TrailMatcher {
             end: end,
             carriesNonPedestrianMotion: start.flags.contains(.nonPedestrian)
                 || end.flags.contains(.nonPedestrian),
+            carriesMotionStationary: !inferred
+                && start.flags.contains(.motionStationary)
+                && end.flags.contains(.motionStationary),
             isInferred: inferred
         )
         return coordinates.indices.map { index in
@@ -85,6 +101,9 @@ nonisolated extension TrailMatcher {
         var flags: RecordingPointFlags = context.carriesNonPedestrianMotion
             ? [.nonPedestrian]
             : []
+        if context.carriesMotionStationary {
+            flags.formUnion(.motionStationary)
+        }
         // From index 1 onward, never on index 0: the flag describes the
         // stretch arriving at a point, and index 0 is the anchor the *previous*
         // leg's stretch already arrived at.
