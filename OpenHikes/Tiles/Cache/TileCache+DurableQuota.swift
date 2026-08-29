@@ -371,8 +371,14 @@ nonisolated extension TileCache {
 
         guard total > limit else {
             // Nothing to do, but the walk above is the same one the lazy
-            // measurement would perform, so install its answer.
-            durableProviderBytes.withLock { $0[providerID] = total }
+            // measurement would perform, so install its answer — unless a
+            // reservation or promotion has installed one since this walk
+            // began, in which case that total already accounts for bytes
+            // this walk could not have seen and must not be overwritten.
+            durableProviderBytes.withLock { bytes in
+                guard bytes[providerID] == nil else { return }
+                bytes[providerID] = total
+            }
             return 0
         }
 
@@ -395,7 +401,19 @@ nonisolated extension TileCache {
             freed += tile.size
         }
 
-        durableProviderBytes.withLock { $0[providerID] = total - freed }
+        // Apply the trim as a relative delta, matching
+        // ``reclaimDurableBytes(forProviderID:protecting:byteCount:)``: a tile
+        // reserved or promoted between the walk above and this lock is in the
+        // current total but absent from `total`, so installing `total - freed`
+        // absolutely would erase it and let the ceiling over-admit. Only when
+        // no measurement is live does the freshly walked figure stand in.
+        durableProviderBytes.withLock { bytes in
+            if let current = bytes[providerID] {
+                bytes[providerID] = max(0, current - freed)
+            } else {
+                bytes[providerID] = max(0, total - freed)
+            }
+        }
         Self.logger.notice(
             // swiftlint:disable:next line_length
             "Trimmed \(freed, privacy: .public) durable bytes for \(providerID, privacy: .public) (was \(total, privacy: .public), limit \(limit, privacy: .public))"

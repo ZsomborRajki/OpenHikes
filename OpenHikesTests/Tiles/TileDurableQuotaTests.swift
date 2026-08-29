@@ -12,6 +12,7 @@
 
 import Foundation
 @testable import OpenHikes
+import Synchronization
 import Testing
 
 @Suite("Durable tile quota")
@@ -22,11 +23,31 @@ struct TileDurableQuotaTests {
         Double(TileStore.tileByteCount * 3) / Double(TileProvider.stadiaDurableByteLimit)
     }
 
+    /// Stadia's real ceiling divided by this leaves room for six fixture
+    /// tiles — enough that an eight-tile store is over by two and the launch
+    /// trim has deletions to make.
+    nonisolated private static var scaleForSixTiles: Double {
+        Double(TileStore.tileByteCount * 6) / Double(TileProvider.stadiaDurableByteLimit)
+    }
+
     nonisolated private static let stadia = TileProvider.stadiaOutdoors.id
     nonisolated private static let osm = TileProvider.openStreetMap.id
 
     nonisolated private static func key(_ providerID: String, _ index: Int) -> String {
         "\(providerID)/14/\(8000 + index)/5000@2x"
+    }
+
+    /// The maintained total, read without measuring.
+    private static func maintainedBytes(_ cache: TileCache, _ providerID: String = stadia) -> Int64? {
+        cache.durableProviderBytes.withLock { $0[providerID] }
+    }
+
+    /// What a fresh walk of the durable directory says the provider holds.
+    private static func measuredBytes(_ cache: TileCache, _ providerID: String = stadia) async -> Int64? {
+        await offMain {
+            cache.invalidateDurableMeasurements()
+            return cache.durableSpace(forProviderID: providerID)?.used
+        }
     }
 
     // MARK: Ownership of a tile file
@@ -256,6 +277,62 @@ struct TileDurableQuotaTests {
         #expect(!sandbox.isSaved(Self.key(Self.stadia, 0)))
         // An uncapped provider is not swept by this at all.
         #expect(sandbox.isSaved(osmKey))
+    }
+
+    /// Bytes reserved for a promotion that has not reached disk are held in the
+    /// running total, not on the directory. The launch trim walks the directory
+    /// off-lock and then installs what it found; a reservation taken in that
+    /// window is in the locked total but not in the walk. Installing the walk's
+    /// figure absolutely — as the trim used to — erases that reservation, so
+    /// reported storage drifts below actual and the ceiling can over-admit. The
+    /// trim now applies its result as a relative delta, the way reclaim does.
+    ///
+    /// Both branches are exercised by pre-loading the running total above what a
+    /// walk can see (a live reservation for an in-flight promotion) and checking
+    /// the trim moves it rather than overwriting it.
+    @Test("the launch trim moves the running total by a delta, not an absolute")
+    func launchTrimPreservesAnInFlightReservation() async throws {
+        let tile = TileStore.tileByteCount
+        let reservation = tile // one promotion's worth, reserved but not yet written
+
+        // Under the ceiling: the trim deletes nothing and takes the no-op branch.
+        try await withOverfullStore(tileCount: 4, scale: Self.scaleForSixTiles) { sandbox in
+            let freed = await offMain { sandbox.cache.enforceDurableByteLimits() }
+            #expect(freed == 0)
+            #expect(
+                Self.maintainedBytes(sandbox.cache) == tile * 4 + reservation,
+                "the no-op branch must not overwrite the reservation"
+            )
+        }
+
+        // Over the ceiling: the trim deletes and takes the accounting branch.
+        try await withOverfullStore(tileCount: 8, scale: Self.scaleForSixTiles) { sandbox in
+            let freed = await offMain { sandbox.cache.enforceDurableByteLimits() }
+            #expect(freed > 0)
+            #expect(
+                Self.maintainedBytes(sandbox.cache) == tile * 8 + reservation - freed,
+                "the trim subtracts what it freed from the live total, reservation and all"
+            )
+        }
+    }
+
+    /// Saves `tileCount` aged Stadia tiles, measures them, then adds one tile's
+    /// worth to the running total to stand in for a promotion that has reserved
+    /// its bytes but not yet written its file, and runs `body`.
+    private func withOverfullStore(
+        tileCount: Int,
+        scale: Double,
+        _ body: (TileSandbox) async throws -> Void
+    ) async throws {
+        let sandbox = TileSandbox(durableByteLimitScale: scale)
+        for index in 0..<tileCount {
+            let key = Self.key(Self.stadia, index)
+            try sandbox.save(key: key)
+            try sandbox.age(key: key, byDays: Double(tileCount - index))
+        }
+        _ = await offMain { sandbox.cache.durableSpace(forProviderID: Self.stadia) }
+        sandbox.cache.durableProviderBytes.withLock { $0[Self.stadia, default: 0] += TileStore.tileByteCount }
+        try await body(sandbox)
     }
 
     @Test("launch enforcement leaves a store under the ceiling alone")
