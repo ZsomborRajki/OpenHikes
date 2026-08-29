@@ -185,14 +185,26 @@ nonisolated struct MovingTimeAccumulator: Sendable {
 
     private(set) var seconds: TimeInterval = 0
 
+    /// A sample that does not advance the clock is dropped whole — it is not
+    /// measured, and it does not become the reference the next one measures
+    /// against.
+    ///
+    /// The second half is the one that matters. A GPX with a timestamp out of
+    /// order used to be rejected as an interval and accepted as a reference,
+    /// so the sample after it was measured from the wrong place: `0, 100, 50,
+    /// 200` booked 100 seconds and then another 150, which is 250 seconds of
+    /// walking inside a 200-second hike. Holding the reference where it was
+    /// makes that last interval the 100 seconds it really is, and keeps the
+    /// window in the order ``trim(newest:)`` assumes it is in.
     mutating func record(_ point: RouteCoordinate) {
         guard let timestamp = point.timestamp else { return }
+        let elapsed = previous.map { timestamp.timeIntervalSince($0.timestamp) }
+        guard elapsed.map({ $0 > 0 }) ?? true else { return }
         let sample = Sample(timestamp: timestamp, coordinate: point.clCoordinate)
-        let elapsed = previous.map { timestamp.timeIntervalSince($0.timestamp) } ?? 0
         previous = sample
         window.append(sample)
         trim(newest: timestamp)
-        guard elapsed > 0, isMoving(at: sample) else { return }
+        guard let elapsed, isMoving(at: sample) else { return }
         seconds += elapsed
     }
 
@@ -435,9 +447,15 @@ nonisolated struct HikeRouteStatistics: Sendable {
         // are the one distance seen through two clocks, and a walker who found
         // them disagreeing about how far they went would be right to stop
         // believing either.
-        movingDuration = accumulator.movingTime.seconds > 0
-            ? accumulator.movingTime.seconds
-            : nil
+        // Moving time is a part of the elapsed clock, so it is reported only
+        // alongside one and never longer than one. The accumulator refuses to
+        // measure backwards, but a route whose last timestamp precedes its own
+        // high-water mark still ends earlier than it walked, and the row would
+        // otherwise claim more movement than the hike lasted.
+        movingDuration = accumulator.duration.flatMap { duration in
+            let moving = min(accumulator.movingTime.seconds, duration)
+            return moving > 0 ? moving : nil
+        }
         maxElevation = accumulator.elevation.maximumMeters.map { meters in
             Measurement(value: meters, unit: .meters)
         }

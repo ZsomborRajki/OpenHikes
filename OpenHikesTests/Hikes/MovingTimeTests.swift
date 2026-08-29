@@ -61,6 +61,20 @@ struct MovingTimeTests {
         return points
     }
 
+    /// A due-north line stamped with the seconds given, in the order given.
+    /// Consecutive points are far enough apart that every window the rule can
+    /// judge is a walk, so the only thing under test is the arithmetic on the
+    /// clock.
+    private static func walk(seconds: [Double]) -> [RouteCoordinate] {
+        seconds.enumerated().map { index, second in
+            RouteCoordinate(
+                latitude: 47.63 + Double(index) * 140 / metersPerDegreeLatitude,
+                longitude: 12.86,
+                timestamp: start.addingTimeInterval(second)
+            )
+        }
+    }
+
     private static func statistics(for route: [RouteCoordinate]) -> HikeRouteStatistics {
         var meters = 0.0
         for (previous, next) in zip(route, route.dropFirst()) {
@@ -217,6 +231,35 @@ struct MovingTimeTests {
         #expect(stats.duration == nil)
         #expect(stats.movingDuration == nil)
         #expect(stats.movingAverageSpeed == nil)
+    }
+
+    /// A GPX with its points out of order. The offending sample used to be
+    /// refused as an interval and kept as a reference, so the sample after it
+    /// was measured from a point 50 seconds in the past: `0, 100, 50, 200`
+    /// booked 250 seconds of walking inside a 200-second hike.
+    @Test("a timestamp out of order cannot be double-counted")
+    func aReversedTimestampIsNotAReference() throws {
+        let stats = Self.statistics(for: Self.walk(seconds: [0, 100, 50, 200]))
+        let duration = try #require(stats.duration)
+        let moving = try #require(stats.movingDuration)
+
+        #expect(duration == 200)
+        #expect(moving <= duration)
+        // Every interval the route can support, measured once: 0→100 and
+        // 100→200, with the sample between them ignored entirely.
+        #expect(moving == 200)
+    }
+
+    /// And when the reversal is the last thing in the file, the hike ends
+    /// before the furthest point of its own clock. There is less elapsed time
+    /// to report than there was movement, and the smaller number wins.
+    @Test("a route that ends early reports no more movement than clock")
+    func aRouteEndingBackwardsIsBoundedByItsClock() throws {
+        let stats = Self.statistics(for: Self.walk(seconds: [0, 100, 50]))
+        let duration = try #require(stats.duration)
+
+        #expect(duration == 50)
+        #expect((stats.movingDuration ?? 0) <= duration)
     }
 
     /// A hike the walker brought with them carries timestamps and coordinates
