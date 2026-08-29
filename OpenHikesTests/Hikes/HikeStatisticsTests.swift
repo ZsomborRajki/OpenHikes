@@ -153,6 +153,80 @@ struct HikeStatisticsTests {
         #expect(abs(speed - expected) < 1e-9)
     }
 
+    /// A GPX whose stamps only start partway in used to divide the whole
+    /// route by the part of the walk that carries a clock. Here three of the
+    /// four legs are untimed, so the naive number is four times the pace the
+    /// timed leg was actually walked at.
+    @Test("leading untimed points don't inflate the average speed")
+    func averageSpeedWithLeadingUntimedPoints() throws {
+        let start = Date(timeIntervalSince1970: 1_750_000_000)
+        // Four legs of ~111 m; the clock covers the last one, at ~1 m/s.
+        let route = [
+            RouteCoordinate(latitude: 47.630, longitude: 12.86),
+            RouteCoordinate(latitude: 47.631, longitude: 12.86),
+            RouteCoordinate(latitude: 47.632, longitude: 12.86),
+            RouteCoordinate(latitude: 47.633, longitude: 12.86, timestamp: start),
+            RouteCoordinate(latitude: 47.634, longitude: 12.86, timestamp: start.addingTimeInterval(111)),
+        ]
+        let stats = Fixture.hike(in: context, route: route).routeStatistics
+        let timedMeters = RouteGeometry.distanceMeters(
+            from: route[3].clCoordinate,
+            to: route[4].clCoordinate
+        )
+        let speed = try #require(stats.averageSpeed).converted(to: .metersPerSecond).value
+        #expect(try #require(stats.duration) == 111)
+        #expect(
+            abs(speed - timedMeters / 111) < 1e-6,
+            """
+            \(speed) m/s over the leg the clock covers, which was walked at \
+            \(timedMeters / 111) m/s. Dividing the whole route by the timed \
+            leg's clock gives ~4x that.
+            """
+        )
+        // Both rows are the one distance seen through two clocks, so the
+        // moving row takes the same cut. Nothing here is a stop.
+        let moving = try #require(stats.movingAverageSpeed).converted(to: .metersPerSecond).value
+        #expect(abs(moving - speed) < 1e-6)
+    }
+
+    /// The mirror image: a recorder whose clock stops before the walk does.
+    @Test("trailing untimed points don't inflate the average speed")
+    func averageSpeedWithTrailingUntimedPoints() throws {
+        let start = Date(timeIntervalSince1970: 1_750_000_000)
+        let route = [
+            RouteCoordinate(latitude: 47.630, longitude: 12.86, timestamp: start),
+            RouteCoordinate(latitude: 47.631, longitude: 12.86, timestamp: start.addingTimeInterval(111)),
+            RouteCoordinate(latitude: 47.632, longitude: 12.86),
+            RouteCoordinate(latitude: 47.633, longitude: 12.86),
+            RouteCoordinate(latitude: 47.634, longitude: 12.86),
+        ]
+        let stats = Fixture.hike(in: context, route: route).routeStatistics
+        let timedMeters = RouteGeometry.distanceMeters(
+            from: route[0].clCoordinate,
+            to: route[1].clCoordinate
+        )
+        let speed = try #require(stats.averageSpeed).converted(to: .metersPerSecond).value
+        #expect(abs(speed - timedMeters / 111) < 1e-6)
+    }
+
+    /// An interior gap is not a coverage gap: the elapsed clock spans the
+    /// unstamped points as surely as the stamped ones, so the whole route
+    /// still counts and the number is the one it has always been.
+    @Test("untimed points in the middle still count toward the average speed")
+    func averageSpeedWithInteriorUntimedPoints() throws {
+        let start = Date(timeIntervalSince1970: 1_750_000_000)
+        let route = [
+            RouteCoordinate(latitude: 47.630, longitude: 12.86, timestamp: start),
+            RouteCoordinate(latitude: 47.631, longitude: 12.86),
+            RouteCoordinate(latitude: 47.632, longitude: 12.86),
+            RouteCoordinate(latitude: 47.633, longitude: 12.86, timestamp: start.addingTimeInterval(333)),
+        ]
+        let hike = Fixture.hike(in: context, route: route)
+        let stats = hike.routeStatistics
+        let speed = try #require(stats.averageSpeed).converted(to: .metersPerSecond).value
+        #expect(abs(speed - hike.distanceMeters / 333) < 1e-6)
+    }
+
     /// Max speed is per-segment, so a single fast stretch has to surface even
     /// when the walk as a whole is slow.
     @Test("max speed finds the fastest single segment")
