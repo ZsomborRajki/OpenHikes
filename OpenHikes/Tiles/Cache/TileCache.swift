@@ -98,10 +98,17 @@ nonisolated final class TileCache: @unchecked Sendable {
     /// Bytes the decoded bitmap for `image` occupies.
     ///
     /// The number that matters, and not the one the cache used to be bounded
-    /// by. A tile arrives as a compressed PNG of a few tens of kilobytes and is
-    /// held as an uncompressed bitmap — 256×256 at `@3x` is 768×768×4 bytes,
-    /// about 2.25 MB, roughly seventy times its file size. Counting *tiles*
-    /// therefore said almost nothing about the memory being used.
+    /// by. A tile arrives as a compressed PNG of a few tens of kilobytes and
+    /// is held as an uncompressed bitmap: every raster template in
+    /// ``TileProvider`` asks for a plain 256×256 tile — none of them carries a
+    /// scale placeholder — so a tile decodes to 256×256×4 bytes, 256 KB, five
+    /// to ten times its file size. Counting *tiles* therefore said little
+    /// about the memory being used, and nothing at all about a decode that
+    /// came back a different size.
+    ///
+    /// Which is why this measures the bitmap rather than assuming one. A
+    /// provider template that later asks for a retina tile is charged the four
+    /// times as much it costs, with nothing here to update.
     static func decodedByteCost(of image: TileImage) -> Int {
         #if canImport(UIKit)
         let bitmap = image.cgImage
@@ -130,15 +137,23 @@ nonisolated final class TileCache: @unchecked Sendable {
 
     /// Ceiling on the decoded bytes held in the memory tier.
     ///
-    /// About 57 tiles at `@3x` or 128 at `@2x` — five or so screenfuls, which
-    /// is the working set panning and zooming actually reuse, plus the
-    /// lower-zoom ancestors the overzoom fallback draws while they load.
+    /// 512 tiles, at the 256 KB every raster provider actually serves. A
+    /// screenful is eight or so tiles on a phone, so this is deep pan and zoom
+    /// headroom: the level either side of the one being read stays resident
+    /// for the zoom back, and the lower-zoom ancestors the overzoom fallback
+    /// draws while children load are never the thing evicted.
     ///
-    /// The tier was previously bounded only by `countLimit = 1_024`, which at
-    /// `@3x` is an effective ceiling near 2 GB. `NSCache` does evict under
-    /// memory pressure, so that was pressure-driven rather than a hard leak —
-    /// but a limit expressed in tiles says nothing about the resource being
-    /// spent, and left the app relying on the system noticing.
+    /// Deliberately left at 128 MB rather than trimmed to the working set.
+    /// This is a ceiling, not a reservation — a session reaches it only after
+    /// sustained browsing, and `NSCache` evicts under memory pressure before
+    /// the app is the one killed for it. What the ceiling buys on the way
+    /// there is refetches not made over a connection a walker may not have.
+    ///
+    /// The tier was previously bounded only by `countLimit = 1_024`, an
+    /// effective ceiling of 256 MB — twice this, and expressed in a unit that
+    /// says nothing about the resource being spent. That count limit survives
+    /// as a backstop for pathologically small tiles; at any real tile size the
+    /// byte limit is the one that binds.
     static let memoryByteLimit = 64 * 2 * 1024 * 1024
 
     // swiftlint:disable:next legacy_objc_type
