@@ -20,8 +20,79 @@ env:
   IOS_DESTINATION: platform=iOS Simulator,name=iPhone 17 Pro
 
 jobs:
+  # Branch protection requires six of the jobs below, and a required check
+  # that never reports is not a pass — it is a pull request that can never
+  # merge. That is what a `paths-ignore:` on the trigger would produce: the
+  # workflow would not run, the six contexts would sit at "Expected", and a
+  # README typo would be stuck forever. A *job* skipped by an `if:` reports
+  # success instead, which is why the filtering happens here and every job
+  # keeps its trigger.
+  #
+  # The list is an allow-list, so it fails towards running CI: a path nobody
+  # thought about is code until someone says otherwise, and one code file
+  # among a hundred prose ones puts the whole run back. `docs/` is the
+  # published Pages site, which no job reads and no target compiles.
+  #
+  # Only `pull_request` is filtered. A push to `main` and a manual dispatch
+  # build everything, because the point of this is to spare review of a
+  # change that cannot break the app, not to leave `main` unverified.
+  changes:
+    name: Detect what changed
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    permissions:
+      contents: read
+      pull-requests: read
+    outputs:
+      code: ${{ steps.filter.outputs.code }}
+    steps:
+      - name: Decide whether anything but documentation changed
+        id: filter
+        env:
+          GH_TOKEN: ${{ github.token }}
+          EVENT_NAME: ${{ github.event_name }}
+          REPOSITORY: ${{ github.repository }}
+          PR_NUMBER: ${{ github.event.number }}
+        run: |
+          set -euo pipefail
+
+          if [ "$EVENT_NAME" != "pull_request" ]; then
+            echo "$EVENT_NAME builds everything."
+            echo "code=true" >> "$GITHUB_OUTPUT"
+            exit 0
+          fi
+
+          # `--paginate` because the default page is 30 files: a large prose
+          # pull request would otherwise look docs-only on the strength of
+          # its first page.
+          files="$(gh api --paginate \
+            "repos/${REPOSITORY}/pulls/${PR_NUMBER}/files" \
+            --jq '.[].filename')"
+
+          if [ -z "$files" ]; then
+            echo "::warning::No changed files reported; building everything."
+            echo "code=true" >> "$GITHUB_OUTPUT"
+            exit 0
+          fi
+
+          code=false
+          while IFS= read -r file; do
+            case "$file" in
+              *.md|LICENSE|docs/*) ;;
+              *) code=true; echo "code: $file" ;;
+            esac
+          done <<< "$files"
+
+          if [ "$code" = false ]; then
+            echo "Documentation only; the build and test jobs will skip." \
+              >> "$GITHUB_STEP_SUMMARY"
+          fi
+          echo "code=$code" >> "$GITHUB_OUTPUT"
+
   quality:
     name: Lint and shared package
+    needs: changes
+    if: needs.changes.outputs.code == 'true'
     runs-on: macos-26
     timeout-minutes: 20
     steps:
@@ -112,6 +183,8 @@ jobs:
 
   unit-tests:
     name: App and widget tests
+    needs: changes
+    if: needs.changes.outputs.code == 'true'
     runs-on: macos-26
     timeout-minutes: 30
     steps:
@@ -260,6 +333,8 @@ jobs:
   # one target that can be tested that way.
   builds:
     name: ${{ matrix.name }}
+    needs: changes
+    if: needs.changes.outputs.code == 'true'
     runs-on: macos-26
     timeout-minutes: 30
     strategy:
@@ -324,6 +399,8 @@ jobs:
   # something nothing can symbolicate.
   archive:
     name: Unsigned iOS archive
+    needs: changes
+    if: needs.changes.outputs.code == 'true'
     runs-on: macos-26
     timeout-minutes: 30
     steps:
@@ -378,6 +455,8 @@ jobs:
 
   thread-sanitizer:
     name: Thread sanitizer
+    needs: changes
+    if: needs.changes.outputs.code == 'true'
     runs-on: macos-26
     timeout-minutes: 30
     steps:
@@ -621,6 +700,8 @@ jobs:
 
   accessibility-ui-tests:
     name: Accessibility UI tests
+    needs: changes
+    if: needs.changes.outputs.code == 'true'
     runs-on: macos-26
     timeout-minutes: 30
     # Reporting, not gating. UI automation on a shared runner has to earn a
