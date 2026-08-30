@@ -38,10 +38,18 @@ nonisolated enum CloudAccountStatus: Equatable, Sendable {
 
 /// What sync is doing right now.
 nonisolated enum CloudSyncActivity: Equatable, Sendable {
+    /// This launch's store was never built to mirror: the switch is off, or
+    /// storage fell back to memory.
+    ///
+    /// Its own case rather than ``paused`` because of what it says about the
+    /// account: nothing asked iCloud about one, and nothing is going to. A
+    /// launch in this state is settled, so the row answers from here instead
+    /// of waiting on a round-trip nobody started.
+    case disabled
     /// Something went wrong that isn't going to fix itself by waiting.
     case failed(String)
     case idle
-    /// Sync is off, or there is no Apple Account signed in on this device.
+    /// There is no Apple Account this device can sync with.
     case paused
     /// A pass ended on a transient failure — no signal, rate limiting, a busy
     /// zone — that mirroring will retry on its own.
@@ -97,6 +105,10 @@ final class CloudSyncStatus {
     /// The headline the settings row shows.
     var title: String {
         if pendingRelaunch { return "Restart to Apply" }
+        // Ahead of the account, which on a launch that does not mirror is
+        // still `.unknown` and always will be: nothing asked iCloud about it,
+        // and "Checking iCloud…" over a settled row is a wait that never ends.
+        if activity == .disabled { return activityTitle }
         switch account {
         case .available: return activityTitle
         case .noAccount: return "No Apple Account"
@@ -111,6 +123,7 @@ final class CloudSyncStatus {
         if pendingRelaunch {
             return "Quit and reopen OpenHikes to finish changing this setting."
         }
+        if activity == .disabled { return activityDetail }
         switch account {
         case .available:
             return activityDetail
@@ -125,6 +138,7 @@ final class CloudSyncStatus {
 
     private var activityTitle: String {
         switch activity {
+        case .disabled: "Sync Off"
         case .failed: "Sync Problem"
         case .idle: "Synced with iCloud"
         case .paused: "Sync Off"
@@ -135,6 +149,8 @@ final class CloudSyncStatus {
 
     private var activityDetail: String {
         switch activity {
+        case .disabled:
+            "Your hikes stay on this device only."
         case .failed(let reason):
             reason
         case .idle:
@@ -182,6 +198,31 @@ final class CloudSyncStatus {
         activity = .retrying
     }
 
+    /// There is a usable account, mirroring is set up, and no event has
+    /// arrived to say anything about it.
+    ///
+    /// The state the row opens in is ``CloudSyncActivity/paused``, and a quiet
+    /// launch — everything already uploaded, nothing new to fetch — posts no
+    /// mirroring event at all. Without an explicit transition here, a store
+    /// that was mirroring perfectly well went on saying "Sync Off" until
+    /// something happened to sync.
+    ///
+    /// Only ever moves a resting row forward: a pass in flight, or one that
+    /// left a problem standing, has more to say than this does.
+    func ready() {
+        guard activity == .disabled || activity == .paused else { return }
+        activity = .idle
+    }
+
+    /// Sync is off because this launch's store cannot mirror at all.
+    ///
+    /// See ``CloudSyncActivity/disabled`` for why that is not ``paused()``.
+    func disabled() {
+        passProblem = nil
+        activity = .disabled
+    }
+
+    /// Sync is off because this device has no account it can use.
     func paused() {
         passProblem = nil
         activity = .paused

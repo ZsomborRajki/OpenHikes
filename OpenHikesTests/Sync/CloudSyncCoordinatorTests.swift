@@ -199,6 +199,38 @@ struct CloudSyncCoordinatorTests {
         #expect(coordinator.status.lastSyncedAt == nil)
     }
 
+    /// A launch that deliberately does not mirror used to pause without ever
+    /// resolving the account, and the account is what the row answers from —
+    /// so the section read "Checking iCloud…" about a check nobody had
+    /// started, for as long as the app stayed open.
+    @Test("a launch with sync switched off says so instead of checking iCloud")
+    func disabledLaunchSettlesTheRow() throws {
+        let defaults = try Self.defaults()
+        defaults.set(false, forKey: SettingsKey.cloudSyncEnabled)
+        let coordinator = Self.coordinator(defaults: defaults, isSyncingThisLaunch: false)
+
+        coordinator.start()
+
+        #expect(!coordinator.pendingRelaunch)
+        #expect(coordinator.status.activity == .disabled)
+        #expect(coordinator.status.title == "Sync Off")
+        #expect(coordinator.status.detail == "Your hikes stay on this device only.")
+    }
+
+    /// Foregrounding re-runs the same path, and must not undo the answer it
+    /// gave a moment ago.
+    @Test("coming back to a switched-off launch keeps saying the same thing")
+    func returningToADisabledLaunchSaysTheSameThing() throws {
+        let defaults = try Self.defaults()
+        defaults.set(false, forKey: SettingsKey.cloudSyncEnabled)
+        let coordinator = Self.coordinator(defaults: defaults, isSyncingThisLaunch: false)
+        coordinator.start()
+
+        coordinator.sceneDidBecomeActive()
+
+        #expect(coordinator.status.title == "Sync Off")
+    }
+
     /// The regression that shipped: `CKContainer(identifier:)` is not the
     /// cheap construction it looks like — the first one in a process loads
     /// CloudKit and shakes hands with its daemon, synchronously — and a

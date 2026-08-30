@@ -132,7 +132,6 @@ final class CloudSyncCoordinator {
     func start() {
         updateSettingsMirror()
         guard canSync else {
-            status.paused()
             refreshStatus()
             return
         }
@@ -248,13 +247,13 @@ final class CloudSyncCoordinator {
     /// describing the older of the two.
     private func refreshStatus() {
         status.pendingRelaunch = pendingRelaunch
-        guard canSync else {
-            status.account = .available
-            status.paused()
-            return
-        }
-        guard isSyncingThisLaunch else {
-            status.paused()
+        // Nothing to ask iCloud about: this launch's store does not mirror,
+        // whatever the account would have said. Saying so outright is what
+        // keeps the row off "Checking iCloud…" for the rest of the session —
+        // the account check below is the only thing that ever resolves it,
+        // and it is precisely what this branch skips.
+        guard canSync, isSyncingThisLaunch else {
+            status.disabled()
             return
         }
         let previous = accountTask
@@ -264,7 +263,11 @@ final class CloudSyncCoordinator {
             let account = await Self.accountStatus(making: makeContainer)
             guard let self else { return }
             status.account = account
-            if !account.isUsable { status.paused() }
+            // A usable account is the last thing standing between a mirroring
+            // store and a truthful row: mirroring posts no event on a launch
+            // with nothing to carry, so waiting for one left the row reading
+            // "Sync Off" over a store that was syncing all along.
+            if account.isUsable { status.ready() } else { status.paused() }
         }
     }
 
