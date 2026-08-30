@@ -248,11 +248,18 @@ struct TileProviderTests {
     /// the worst available answer, so the resolution step falls back instead —
     /// and the fallback has to be a provider that needs no key, or it would
     /// just move the problem.
+    ///
+    /// Entitled explicitly, like every case in `MapEntitlementTests`: the two
+    /// gates in `renderable` are independent, and reading the process-wide one
+    /// instead would let an unentitled host keep this green after the key gate
+    /// itself had been removed — the fallback would still happen, for the
+    /// other reason.
     @Test("a provider that can't load tiles resolves to the default")
     func unusableProviderFallsBack() {
         for provider in TileProvider.all where !Secrets.canLoadTiles(provider) {
             #expect(
-                TileProvider.renderable(id: provider.id).id == TileProvider.default.id,
+                TileProvider.renderable(id: provider.id, entitlement: .entitled).id
+                    == TileProvider.default.id,
                 "\(provider.name) has no key in this build, so the map must not be asked to draw it"
             )
         }
@@ -261,10 +268,17 @@ struct TileProviderTests {
 
     /// The other half: resolution only ever *substitutes* a provider it can't
     /// draw, never one it can.
+    ///
+    /// "Can't draw" means both gates, so both are stated: the key is checked
+    /// against this build, and the entitlement is passed rather than read. The
+    /// process-wide answer is `.notEntitled` for the whole unit run — the app
+    /// host stubs it to `AppLaunchEnvironment.grantsPaidMaps`, which only a UI
+    /// test can set — so reading it made this case fail on any machine that
+    /// has a real `Secrets.plist`, for a reason the assertion isn't about.
     @Test("a usable provider resolves to itself", arguments: TileProvider.all)
     func usableProviderIsKept(provider: TileProvider) {
         guard Secrets.canLoadTiles(provider) else { return }
-        #expect(TileProvider.renderable(id: provider.id).id == provider.id)
+        #expect(TileProvider.renderable(id: provider.id, entitlement: .entitled).id == provider.id)
     }
 
     /// Keyless providers ignore whatever they're handed.
