@@ -11,7 +11,7 @@
 //  next, not to this test's hop, so "8 turns" buys an amount of progress that
 //  depends entirely on how busy the machine is. On a developer's machine it
 //  passed. On CI it did not — `Map coordinator` and `Location publishing`
-//  both failed in run 31834514456 with a `hasCentered` that was still false
+//  both failed in run 31834514456 with a first-fix flag still false
 //  and a `routeFix` that was still nil, in tests that had by then been running
 //  for 34 and 42 seconds without touching disk or network.
 //

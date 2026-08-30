@@ -44,7 +44,9 @@ struct MapCoordinatorTests {
     /// one by the gap between reports, so both would otherwise depend on how
     /// long the preceding assertions took.
     let clock = TestClock()
-    private let locationManager: LocationManager
+    /// Internal, like `clock` above, so the centring tests get their own file
+    /// — see `MapCoordinatorTests+Recentering.swift`.
+    let locationManager: LocationManager
 
     init() {
         locationManager = LocationManager(clock: clock.read)
@@ -536,65 +538,7 @@ extension MapCoordinatorTests {
         #expect(renderer.lineDashPattern == [10, 6])
     }
 
-    // MARK: Recentering
-
-    /// The map centres on the user's first fix — once. A second fix a second
-    /// later must not drag the map back while they're panning it.
-    @Test("the first fix centres the map, and only the first")
-    func firstFixCentresOnce() async {
-        let coordinator = MapView.Coordinator()
-        let view = mapView()
-        let map = makeMap(view, coordinator)
-        defer { detach(map) }
-        view.update(map, coordinator)
-
-        locationManager.locationManager(
-            CLLocationManager(),
-            didUpdateLocations: [CLLocation(latitude: 47.6300, longitude: 12.8600)]
-        )
-        // Waits for the region, not just for the flag: `centerOnUser` sets
-        // `hasCentered` and then calls `setRegion(_:animated: true)`, so the
-        // map can still be moving when the flag is already true. Capturing
-        // `centred` mid-animation would make the comparison below fail for a
-        // reason that has nothing to do with the second fix.
-        await settleDelegateHop(until: "the first fix to centre the map") {
-            coordinator.hasCentered && abs(map.region.center.latitude - 47.6300) < Self.centreTolerance
-        }
-        #expect(coordinator.hasCentered)
-        let centred = map.region.center.latitude
-
-        // Past the publish throttle, so the map really is offered this one.
-        clock.advance(by: 1.1)
-        locationManager.locationManager(
-            CLLocationManager(),
-            didUpdateLocations: [CLLocation(latitude: 47.6400, longitude: 12.8600)]
-        )
-        await settleDelegateHop(until: "the second fix to be published") {
-            locationManager.coordinate?.latitude == 47.6400
-        }
-
-        #expect(locationManager.coordinate?.latitude == 47.6400, "precondition: the second fix was published")
-        #expect(map.region.center.latitude == centred, "a later fix must not drag the map back")
-    }
-
-    /// A selected route owns the viewport. Centring on the user as well would
-    /// yank the map off the trail the moment a fix arrives.
-    @Test("a fix doesn't recentre while a route is selected")
-    func routeOwnsTheViewport() async {
-        let coordinator = MapView.Coordinator()
-        let view = mapView(route: Self.route())
-        let map = makeMap(view, coordinator)
-        defer { detach(map) }
-        view.update(map, coordinator)
-
-        locationManager.locationManager(
-            CLLocationManager(),
-            didUpdateLocations: [CLLocation(latitude: 47.6300, longitude: 12.8600)]
-        )
-        await settle()
-
-        #expect(!coordinator.hasCentered, "the route decides what's on screen")
-    }
+    // MARK: Fitting
 
     /// The Zoom button, and the initial draw, both go through this: fitting
     /// has to bring the trail's bounding rect into the visible one.
