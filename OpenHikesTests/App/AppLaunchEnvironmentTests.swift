@@ -54,6 +54,49 @@ struct AppLaunchEnvironmentTests {
         #expect(!configuration.usesLiveLocation)
     }
 
+    /// The launch that hosts this suite is the subject: both unit bundles run
+    /// inside the app, which reaches `.onAppear` — and `locationManager.start()`
+    /// with it — before the first test does.
+    @Test("app-hosted test launches keep Core Location dormant")
+    func hostedTestLaunchHasNoLiveLocation() {
+        let configuration = AppLaunchEnvironment.Configuration(
+            arguments: ["OpenHikes"],
+            isHostingTests: true
+        )
+
+        #expect(!configuration.isUITesting)
+        #expect(!configuration.usesLiveLocation)
+    }
+
+    /// The UI-test flag says "this launch wants the live feed"; hosting a test
+    /// bundle says "this launch must not have it". A hosted launch cannot
+    /// legitimately carry both, but the refusal is worth pinning: the flag is
+    /// the only way `usesLiveLocation` was ever true under `--ui-testing`, and
+    /// an ordering that let it win here would put an authorization alert in
+    /// front of a suite.
+    @Test("the live-location argument does not override a hosted launch")
+    func hostedTestLaunchIgnoresLiveLocationArgument() {
+        let configuration = AppLaunchEnvironment.Configuration(
+            arguments: ["OpenHikes", "--ui-testing", "--ui-test-enable-location"],
+            isHostingTests: true
+        )
+
+        #expect(!configuration.usesLiveLocation)
+    }
+
+    /// The one assertion here that reads the real process rather than a parsed
+    /// argument list, because the bug this closes was in the wiring between the
+    /// two: the configuration was right about arguments and never asked about
+    /// hosting, so the app host started the real manager underneath every unit
+    /// run. Running at all proves `isHostingTests`; the point is what follows
+    /// from it.
+    @Test("this very launch is hosted, and therefore uses no live location")
+    func thisLaunchUsesNoLiveLocation() {
+        #expect(AppLaunchEnvironment.isHostingTests)
+        #expect(AppLaunchEnvironment.isRunningTests)
+        #expect(!AppLaunchEnvironment.usesLiveLocation)
+    }
+
     @Test("fixture names cannot escape the app bundle")
     func fixtureNameRejectsPaths() {
         let configuration = AppLaunchEnvironment.Configuration(
