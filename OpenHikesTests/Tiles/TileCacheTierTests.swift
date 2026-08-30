@@ -102,6 +102,35 @@ struct TileCacheTierTests {
         #expect(!sandbox.isBrowsed(key), "one tile should not sit in two directories")
     }
 
+    /// The same reconciliation one instruction later. Two threads drawing the
+    /// same tile both reach `promoteCachedTile`, and the loser can arrive
+    /// between the two tier checks: it saw no durable copy, and by the time it
+    /// looks for the cached one the winner's move has taken it. Answering
+    /// "not saved" there is a lie the caller acts on — ``AutoSaveTileStore``
+    /// hands back a claim whose bytes are on disk, so the hike stops owning a
+    /// tile that is saved, and nothing reconsiders it because the browsing
+    /// copy it would be re-saved from is the file that moved. A stochastic
+    /// concurrency test found this once in CI; the seam pins it every run.
+    @Test("a promotion overtaken mid-check still reports the tile saved")
+    func promotionOvertakenByAnotherWriterReportsSaved() async throws {
+        let key = makeKey()
+        try sandbox.browse(key: key)
+        let tiles = sandbox
+
+        let promoted = await offMain {
+            tiles.cache.promoteCachedTile(forKey: key) {
+                // Exactly what the winning writer's move leaves behind: the
+                // bytes durable, the browsing copy gone.
+                try? tiles.save(key: key)
+                try? FileManager.default.removeItem(at: tiles.browsedFile(for: key))
+            }
+        }
+
+        #expect(promoted, "the tile is durably stored, whichever call moved it")
+        #expect(sandbox.isSaved(key))
+        #expect(!sandbox.isBrowsed(key))
+    }
+
     /// What that duplication did to the number the user reads. The hike sheet
     /// measures its offline coverage with `bytes(forKeys:)`, which takes one
     /// tier per key — summing both would bill a duplicated tile twice.
