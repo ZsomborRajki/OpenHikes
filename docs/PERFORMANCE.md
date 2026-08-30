@@ -31,7 +31,16 @@ Scripts/run-performance-tests.sh --test testBackgroundRecordingCostsNothingPerFi
 Scripts/run-performance-tests.sh --keep-going   # still report when a budget fails
 Scripts/run-performance-tests.sh --baseline <file>
 Scripts/run-performance-tests.sh --update-baseline
+Scripts/run-performance-tests.sh --device <name|udid>
 ```
+
+`--device` is resolved to a single UDID before anything runs, and the
+`xcodebuild` destination, the location clear, the location grant and the
+container read all address that UDID. `simctl booted` is not a device — with
+two simulators up it is whichever one simctl picks — so the report could
+otherwise be assembled out of files belonging to a device that ran nothing. A
+run that collects no scenario logs fails on that alone, however green the suite
+was: a measurement that did not happen passes every budget in it.
 
 Debug is mandatory rather than incidental: `RenderSignpost`, `PerformanceLog`
 and `MainThreadWatchdog` all compile to nothing in Release, so a Release run

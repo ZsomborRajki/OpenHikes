@@ -78,6 +78,9 @@ Scripts/run-performance-tests.sh
 
 # Strict SwiftLint, the same one CI runs; --fix applies what it can correct
 Scripts/lint.sh
+
+# Smoke tests for the two scripts above, against a stubbed xcrun/xcodebuild
+Scripts/run-script-tests.sh
 ```
 
 Unit and integration tests use Swift Testing; `OpenHikesUITests` uses XCUITest, because Apple's UI automation and launch metrics are not available through Swift Testing. UI-test launches use an in-memory SwiftData store and isolated preferences.

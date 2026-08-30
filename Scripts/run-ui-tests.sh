@@ -5,6 +5,8 @@ set -euo pipefail
 repository_root="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 # shellcheck source=lib/xcodebuild-output.sh
 source "$repository_root/Scripts/lib/xcodebuild-output.sh"
+# shellcheck source=lib/simulator.sh
+source "$repository_root/Scripts/lib/simulator.sh"
 project="$repository_root/OpenHikes.xcodeproj"
 scheme="OpenHikesUI"
 bundle="OpenHikesUITests"
@@ -48,7 +50,7 @@ PerformanceUITests lives in the same bundle but is measurement rather than
 automation; run it through Scripts/run-performance-tests.sh instead.
 
 Options:
-  --device <name>         Simulator name (default: $device)
+  --device <name|udid>    Simulator name or UDID (default: $device)
   --suite <name>          Test class to run (default: $default_suite)
   --test <name>           Test method to run (default: $default_test)
   --all                   Run every functional test in every class
@@ -168,9 +170,21 @@ command -v xcodebuild >/dev/null 2>&1 || {
     exit 1
 }
 
+command -v xcrun >/dev/null 2>&1 || {
+    echo "xcrun is required. Install the Xcode command-line tools first." >&2
+    exit 1
+}
+
 if [[ ! -d "$project" ]]; then
     echo "Project not found: $project" >&2
     exit 1
+fi
+
+# Resolved once, and used for both the destination and the simctl call below.
+# `name=` plus `simctl booted` let the test run and the location it clears
+# belong to different devices whenever more than one simulator is up.
+if ! device_udid="$(resolve_simulator_udid "$device")"; then
+    exit 2
 fi
 
 # Scoped to the named classes rather than to the bundle, because the bundle
@@ -214,7 +228,7 @@ command=(
     xcodebuild test
     -project "$project"
     -scheme "$scheme"
-    -destination "platform=iOS Simulator,name=$device"
+    -destination "platform=iOS Simulator,id=$device_udid"
     # A machine that has not trusted SwiftLintPlugins' fingerprint — any fresh
     # CI runner — cannot build the app target without this.
     -skipPackagePluginValidation
@@ -230,7 +244,7 @@ if [[ -n "$result_bundle" ]]; then
 fi
 
 echo "Scheme: $scheme"
-echo "Simulator: $device"
+echo "Simulator: $device ($device_udid)"
 echo "Running: ${only_testing[*]#-only-testing:}"
 
 if [[ "$dry_run" == true ]]; then
@@ -241,7 +255,7 @@ fi
 
 # UI automation drives Core Location, so a location left over from
 # Scripts/simulate-hike.sh would fight the test for the simulator's position.
-xcrun simctl location booted clear >/dev/null 2>&1 || true
+xcrun simctl location "$device_udid" clear >/dev/null 2>&1 || true
 
 status=0
 if [[ "$verbose" == true ]]; then
