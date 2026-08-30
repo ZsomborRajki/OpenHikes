@@ -113,16 +113,30 @@ nonisolated enum FieldSignpost {
 // MARK: - Extended launch
 
 extension MXLaunchTaskID {
-    /// The span `PERFORMANCE.md`'s launch finding measures as the gap between
-    /// the first SwiftUI body and a free main thread, most of which is
-    /// `MKMapView` construction and a sheet that renders several times before
-    /// it settles.
+    /// The span `PERFORMANCE.md`'s launch finding measures: from
+    /// `didFinishLaunchingWithOptions` to the moment SwiftUI asks the map
+    /// representable to build its `MKMapView`. Opening the SwiftData store,
+    /// building the model and evaluating the view tree down to the map all sit
+    /// inside it — the app's own share of the time a walker spends looking at
+    /// a screen with no map on it.
     ///
-    /// `histogrammedTimeToFirstDraw` stops at the first CA commit and so ends
-    /// *before* any of that; on its own it would report the app as launching
-    /// faster than it becomes usable. Registering the map's construction as an
-    /// extended launch task is what makes `histogrammedExtendedLaunch` measure
-    /// the thing a walker actually waits for — a map they can read.
+    /// It ends *before* `MKMapView()` runs:
+    /// ``LaunchMeasurement/finish()`` is the first statement of
+    /// `MapView.makeMapView(_:)`, above the constructor. The boundary is the
+    /// hand-off to MapKit, not MapKit being ready, so map construction and the
+    /// sheet's first few renders are outside the metric by design — they are
+    /// not this app's work to shorten, and folding them in would make the
+    /// histogram move with a framework version.
+    ///
+    /// `histogrammedTimeToFirstDraw` stops earlier still, at the first CA
+    /// commit, which on this app is a sheet over an empty map; on its own it
+    /// would report the app as launching faster than it becomes usable.
+    /// Extending the launch past it is what makes `histogrammedExtendedLaunch`
+    /// measure something a change to this app can move.
+    ///
+    /// The `FirstMapFrame` identifier is kept as it is: it is the key field
+    /// reports are already keyed by, and renaming it would split the histogram
+    /// across app versions.
     static let firstMapFrame = MXLaunchTaskID("FirstMapFrame")
 }
 
@@ -167,8 +181,9 @@ enum LaunchMeasurement {
         }
     }
 
-    /// Call when the map exists and has been handed its first content — the
-    /// moment the app stops being a launch and starts being a map.
+    /// Call when the app has finished its own launch work and is about to
+    /// hand off to MapKit — in practice the first statement of
+    /// `MapView.makeMapView(_:)`, above `MKMapView()` itself.
     ///
     /// Idempotent, and safe to call from a path that may never have begun: a
     /// launch that failed to open its SwiftData store never builds a map, and
