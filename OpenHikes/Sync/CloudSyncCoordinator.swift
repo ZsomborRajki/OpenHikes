@@ -203,7 +203,11 @@ final class CloudSyncCoordinator {
         }
     }
 
-    private func apply(_ outcome: CloudSyncOutcome) {
+    /// Not `private`: this is the reducer the mirroring observer feeds, and
+    /// the one place the transient/succeeded distinction is made. Tests drive
+    /// it directly because `NSPersistentCloudKitContainer.Event` cannot be
+    /// constructed to post a notification with.
+    func apply(_ outcome: CloudSyncOutcome) {
         switch outcome {
         case .began:
             status.began()
@@ -213,10 +217,11 @@ final class CloudSyncCoordinator {
             Self.logger.error(
                 "Transient iCloud mirroring error: \(reason, privacy: .public)"
             )
-            // Reported as a completed pass rather than a failure: mirroring
-            // retries these itself, and a device in a tunnel is not a device
-            // with a sync problem.
-            status.finished()
+            // Neither a success nor a problem to report: mirroring retries
+            // these itself, so a device in a tunnel is not a device with a
+            // sync problem — but nothing was transferred either, so the pass
+            // must not go idle and stamp a fresh "last synced" time.
+            status.retrying()
         case .failed(let reason):
             Self.logger.error("iCloud mirroring failed: \(reason, privacy: .public)")
             status.failed(reason)

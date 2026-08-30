@@ -161,6 +161,44 @@ struct CloudSyncCoordinatorTests {
         #expect(!mirror.isRunning)
     }
 
+    /// The reducer the mirroring observer feeds, on the branch that used to
+    /// call `finished()`: an offline or rate-limited pass reported itself as a
+    /// completed sync, so the row read "Synced with iCloud" with a time that
+    /// nothing had earned.
+    @Test("a transient mirroring failure does not advance the sync time")
+    func transientOutcomeKeepsTheSyncTime() throws {
+        let defaults = try Self.defaults()
+        let coordinator = Self.coordinator(defaults: defaults, isSyncingThisLaunch: true)
+        coordinator.status.account = .available
+
+        coordinator.apply(.began)
+        coordinator.apply(.succeeded)
+        let earned = try #require(coordinator.status.lastSyncedAt)
+
+        coordinator.apply(.began)
+        coordinator.apply(.transientFailure("The Internet connection appears to be offline."))
+        coordinator.apply(.succeeded)
+
+        #expect(coordinator.status.lastSyncedAt == earned)
+        #expect(coordinator.status.activity == .retrying)
+        #expect(coordinator.status.title != "Synced with iCloud")
+    }
+
+    /// And a device that has never managed a pass does not get a first sync
+    /// time out of one that failed transiently.
+    @Test("a transient mirroring failure never stamps a first sync time")
+    func transientOutcomeStampsNoFirstSyncTime() throws {
+        let defaults = try Self.defaults()
+        let coordinator = Self.coordinator(defaults: defaults, isSyncingThisLaunch: true)
+        coordinator.status.account = .available
+
+        coordinator.apply(.began)
+        coordinator.apply(.transientFailure("Request rate limited."))
+        coordinator.apply(.succeeded)
+
+        #expect(coordinator.status.lastSyncedAt == nil)
+    }
+
     /// The regression that shipped: `CKContainer(identifier:)` is not the
     /// cheap construction it looks like — the first one in a process loads
     /// CloudKit and shakes hands with its daemon, synchronously — and a

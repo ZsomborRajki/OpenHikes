@@ -58,6 +58,82 @@ struct CloudSyncStatusTests {
         #expect(status.lastSyncedAt == nil)
     }
 
+    /// A pass the network cut short transferred nothing, so it has no more
+    /// claim on "last synced" than a permanent failure does.
+    @Test("A transient failure does not claim a sync time it did not earn")
+    func transientPassStampsNoTime() {
+        let status = CloudSyncStatus()
+        status.account = .available
+        status.began()
+        status.retrying()
+        status.finished()
+
+        #expect(status.activity == .retrying)
+        #expect(status.lastSyncedAt == nil)
+        #expect(status.title == "Waiting for iCloud")
+    }
+
+    /// And it does not roll back the time an earlier pass did earn.
+    @Test("A transient failure leaves an earned sync time alone")
+    func transientPassKeepsThePreviousTime() throws {
+        let status = CloudSyncStatus()
+        status.account = .available
+        status.began()
+        status.finished()
+        let earned = try #require(status.lastSyncedAt)
+
+        status.began()
+        status.retrying()
+        status.finished()
+
+        #expect(status.lastSyncedAt == earned)
+        #expect(status.activity == .retrying)
+        #expect(status.detail.contains("Last synced"))
+    }
+
+    /// "Waiting for iCloud" is not "Sync Problem": there is nothing for the
+    /// user to do, and the retry that succeeds is silent.
+    @Test("A transient failure is not reported as a problem")
+    func transientPassIsNotAFailure() {
+        let status = CloudSyncStatus()
+        status.account = .available
+        status.began()
+        status.retrying()
+
+        #expect(status.title != "Sync Problem")
+        #expect(status.title != "Synced with iCloud")
+    }
+
+    /// Within one pass the actionable problem wins, in either order: a full
+    /// iCloud account is not made better by a dropped connection after it.
+    @Test("A permanent failure outranks a transient one in the same pass")
+    func permanentFailureOutranksTransient() {
+        let status = CloudSyncStatus()
+        status.account = .available
+        status.began()
+        status.failed("Out of iCloud storage")
+        status.retrying()
+        status.finished()
+
+        #expect(status.activity == .failed("Out of iCloud storage"))
+        #expect(status.lastSyncedAt == nil)
+    }
+
+    /// One dropped connection must not leave the row waiting forever.
+    @Test("The next pass clears the last one's transient failure")
+    func nextPassClearsTheTransientFailure() {
+        let status = CloudSyncStatus()
+        status.account = .available
+        status.began()
+        status.retrying()
+
+        status.began()
+        status.finished()
+
+        #expect(status.activity == .idle)
+        #expect(status.lastSyncedAt != nil)
+    }
+
     /// A failure outlives its own pass, but not the next attempt — otherwise
     /// one bad pass would leave the row saying "Sync Problem" forever.
     @Test("The next pass clears the last one's failure")
