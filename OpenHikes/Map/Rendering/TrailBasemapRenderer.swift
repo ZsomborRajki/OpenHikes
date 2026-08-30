@@ -205,6 +205,32 @@ actor TrailBasemapRenderer {
 
     // MARK: Rendering
 
+    /// One corner of the region asked for, in both of the spellings the
+    /// measuring step needs.
+    ///
+    /// A region crossing the antimeridian runs past `x = 1`, and its two
+    /// spellings part company there: the corner has to be *asked about* at a
+    /// longitude inside ±180°, because that is the only kind `point(for:)`
+    /// takes, and *measured* at the longitude the region names it by, so the
+    /// east corner stays east of the west one instead of reappearing a world
+    /// to its left and turning a valley into a hemisphere.
+    private struct Corner {
+        let latitude: Double
+        /// As the region names it — may run past ±180°.
+        let longitude: Double
+        /// The same place, inside ±180°.
+        let coordinate: CLLocationCoordinate2D
+
+        init(latitude: Double, unitX: Double) {
+            self.latitude = latitude
+            longitude = Mercator.longitude(unitX: unitX)
+            coordinate = CLLocationCoordinate2D(
+                latitude: latitude,
+                longitude: Mercator.longitude(unitX: Mercator.wrappedUnitX(unitX))
+            )
+        }
+    }
+
     private struct Rendered: Sendable {
         let data: Data
         let pixelWidth: Int
@@ -245,14 +271,15 @@ actor TrailBasemapRenderer {
         #endif
 
         // Two opposite corners of what we asked for, kept as coordinates so
-        // the finished snapshot can be measured in its own terms below.
-        let northWest = CLLocationCoordinate2D(
+        // the finished snapshot can be measured in its own terms below. Each
+        // carries two longitudes; see ``Corner`` for which is for what.
+        let northWest = Corner(
             latitude: Mercator.latitude(unitY: unitRect.originY),
-            longitude: Mercator.longitude(unitX: unitRect.originX)
+            unitX: unitRect.originX
         )
-        let southEast = CLLocationCoordinate2D(
+        let southEast = Corner(
             latitude: Mercator.latitude(unitY: unitRect.originY + unitRect.height),
-            longitude: Mercator.longitude(unitX: unitRect.originX + unitRect.width)
+            unitX: unitRect.originX + unitRect.width
         )
 
         let snapshotter = MKMapSnapshotter(options: options)
@@ -300,11 +327,11 @@ actor TrailBasemapRenderer {
     /// will project with, and it costs nothing to verify rather than assume.
     private static func measure(
         _ snapshot: MKMapSnapshotter.Snapshot,
-        northWest: CLLocationCoordinate2D,
-        southEast: CLLocationCoordinate2D
+        northWest: Corner,
+        southEast: Corner
     ) -> Rendered? {
-        let pointNW = snapshot.point(for: northWest)
-        let pointSE = snapshot.point(for: southEast)
+        let pointNW = snapshot.point(for: northWest.coordinate)
+        let pointSE = snapshot.point(for: southEast.coordinate)
         let imageSize = snapshot.image.size
 
         guard let visibleRect = UnitMercatorRect(
