@@ -429,14 +429,27 @@ jobs:
       # a suite added to this list and never run looks exactly like one that
       # passes. Nested suites need their enclosing type — hence
       # `WidgetFeedSuites`, which is where `BackgroundDeliveryTests` lives and
-      # which is why 31 entries resolve to 35 suites rather than 31.
+      # which is why 32 entries resolve to 36 suites rather than 32.
       #
-      # 35 is the guard, and the step after the run is what enforces it: an
+      # 36 is the guard, and the step after the run is what enforces it: an
       # identifier that resolves to nothing changes nothing about the exit
       # status, so the count has to be read out of the result bundle or it is
       # not a guard at all. Deliberately not the *test* count, which rises
       # whenever anyone writes a test — that one is checked as a floor, so a
       # suite quietly vanishing is red while a suite gaining a test is not.
+      #
+      # `WidgetFeedSuites` is `.enabled(if: SharedStoreProbe.isAvailable)`, so
+      # on a runner that cannot reach the App Group container the one suite
+      # here that exercises cross-process writes does not run. The count gate
+      # below sees the shortfall, but it reads every shortfall as an
+      # identifier that stopped resolving — which sends whoever gets the red
+      # build looking for a typo in this list rather than for a dropped
+      # entitlement. `REQUIRE_ALL_SUITES` records the skip as a failure that
+      # names the container instead, and `SuitePreconditionTests` is the
+      # unconditional suite that reports it; without both, strict mode has
+      # nothing to run. The `unit-tests` job is built the same way, at
+      # `build-for-testing` — this job compiles as it tests, so the setting
+      # goes on the `test` action instead.
       #
       # It found no races when it was widened to this list. If a run goes red
       # with no `data race` block in the log — a host-app SIGKILL landing on a
@@ -496,10 +509,12 @@ jobs:
               -only-testing:OpenHikesTests/LocationFixStreamTests \
               -only-testing:OpenHikesTests/BackgroundTrackingAuthorizationTests \
               -only-testing:OpenHikesTests/WidgetFeedSuites \
+              -only-testing:OpenHikesTests/SuitePreconditionTests \
               -enableThreadSanitizer YES \
               -parallel-testing-enabled NO \
               -resultBundlePath TestResults/ThreadSanitizer.xcresult \
-              -skipPackagePluginValidation 2>&1 | tee "$1"
+              -skipPackagePluginValidation \
+              'SWIFT_ACTIVE_COMPILATION_CONDITIONS=$(inherited) REQUIRE_ALL_SUITES' 2>&1 | tee "$1"
             return "${PIPESTATUS[0]}"
           }
 
@@ -543,7 +558,7 @@ jobs:
       # number rises.
       - name: Check the sanitized selection actually ran
         env:
-          EXPECTED_SUITES: "35"
+          EXPECTED_SUITES: "36"
           TEST_FLOOR: "390"
         run: |
           set -o pipefail
