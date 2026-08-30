@@ -322,9 +322,10 @@ extension HikeRecorder {
                 // `prefetch` now propagates cancellation, so this path is
                 // reachable where it previously was not. A cancelled prefetch
                 // must not leave its region pinned in `.fetching`: that is the
-                // state `prefetchTrailGraph` reads to decide the region is
-                // already being handled, so a stranded one is never retried
-                // and the region silently never gets a graph.
+                // state `prefetchTrailGraphIfNeeded(around:)` reads to
+                // decide the region is already being handled, so a stranded
+                // one is never retried and the region silently never gets a
+                // graph.
                 guard let self,
                       sessionID == expectedSessionID,
                       trailGraphPrefetchTasks[region]?.id == taskID,
