@@ -98,9 +98,11 @@ nonisolated extension TileCache {
     }
 
     func notifyReconnect() {
-        // MKOverlayRenderer.setNeedsDisplay must run on the main thread; the path
-        // handler fires on a background queue, so hop first, then read observers
-        // there — the listener list is only ever touched on the main thread.
+        // MKOverlayRenderer.setNeedsDisplay must run on the main thread and the
+        // path handler fires on a background queue, so hop first and deliver
+        // there. The list itself does not need the hop: `observers` is a
+        // `Mutex`, and that — not this queue — is what makes `addObserver` and
+        // `removeObserver` safe to call from wherever a renderer happens to be.
         DispatchQueue.main.async { [weak self] in
             guard let self else { return }
             let live = observers.withLock { boxes -> [TileCacheObserver] in

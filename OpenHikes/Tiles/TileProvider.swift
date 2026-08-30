@@ -178,8 +178,15 @@ nonisolated extension TileProvider {
     /// All selectable providers, in display order.
     static let all: [TileProvider] = [openStreetMap, appleMaps, stadiaOutdoors, thunderforestOutdoors]
 
-    /// The entries that actually fetch raster tiles. Everything that reasons
-    /// about templates, zoom ceilings, cache keys or downloads means these.
+    /// The entries that actually fetch raster tiles — ``all`` minus whatever
+    /// draws through the system base map.
+    ///
+    /// A view, not a chokepoint: today only the tests take it. Production code
+    /// that reasons about cache keys and download ceilings still filters
+    /// ``all`` itself — see `TileCache+DurableQuota.swift`. Routing those
+    /// through here would be worth doing and is a change to production
+    /// behaviour, not a rename, so until it happens do not read this as the
+    /// single definition its name suggests.
     static let rasterSources: [TileProvider] = all.filter { !$0.usesSystemBaseMap }
 
     static let `default` = openStreetMap

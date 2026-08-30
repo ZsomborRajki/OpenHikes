@@ -248,9 +248,15 @@ nonisolated enum GPXImport {
 
     /// Parses and prepares a picked file without occupying the main actor.
     ///
-    /// `@concurrent` rather than a detached task: the parse stays part of the
-    /// importing task, so abandoning the import cancels it, and the caller's
-    /// priority carries through instead of being pinned here.
+    /// `@concurrent` rather than a detached task: the parse stays inside the
+    /// importing task's tree, and the caller's priority carries through
+    /// instead of being pinned here.
+    ///
+    /// What that does not buy is cancellation. `XMLParser.parse()` is
+    /// synchronous and checks nothing, so abandoning the import abandons the
+    /// *result* — the parse runs to completion regardless. What bounds it is
+    /// ``Limits``: the file-size check before this, and the point ceiling the
+    /// delegate aborts on.
     @concurrent
     static func loadOffMain(
         from url: URL,
