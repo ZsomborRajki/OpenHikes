@@ -192,11 +192,19 @@ final class CloudSyncCoordinator {
             object: nil,
             queue: .main
         ) { [weak self] notification in
-            // Reduced to a `Sendable` value *here*, on the posting thread,
-            // rather than carried across the hop: `Event` is a class and its
-            // `error` is an existential, so neither can cross an isolation
-            // boundary. Everything the row can say about a pass is in the four
-            // cases of ``CloudSyncOutcome`` anyway.
+            // `queue: .main` above is load-bearing, not a formality. Core
+            // Data posts these from its own threads, `apply(_:)` is
+            // main-actor, and asking for the main queue is the whole reason
+            // the `assumeIsolated` below is sound rather than a crash waiting
+            // for a background post. So this block runs on the main queue —
+            // there is no hop here, and nothing crosses an isolation
+            // boundary.
+            //
+            // The reduction happens here anyway, for a different reason:
+            // `Event` is a class whose `error` is an existential, and keeping
+            // it out of `apply(_:)` is what lets that reducer take a
+            // `Sendable` value a test can construct. Everything the row can
+            // say about a pass is in the four cases of ``CloudSyncOutcome``.
             guard let outcome = CloudSyncOutcome(notification: notification) else { return }
             MainActor.assumeIsolated { self?.apply(outcome) }
         }
