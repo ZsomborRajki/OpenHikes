@@ -135,10 +135,17 @@ nonisolated enum TrailBreakdownAnalyzer {
     /// correctly mapped trail under tree cover, and attributing a tag is a
     /// much cheaper claim than relocating a route.
     static let defaultToleranceMeters = 25.0
-    /// Upper bound on the spacing between samples — a route segment shorter
-    /// than this still contributes one. Small enough to catch the short paved
-    /// connectors between trail sections, large enough that a five-hour track
-    /// is a few thousand grid lookups rather than one per metre.
+    /// Target spacing between samples — a route segment shorter than this
+    /// still contributes one. Small enough to catch the short paved connectors
+    /// between trail sections, large enough that a five-hour track is a few
+    /// thousand grid lookups rather than one per metre.
+    ///
+    /// A target rather than a bound, because ``maximumStepsPerSegment`` wins
+    /// where the two disagree: past 512 × 20 m the segment is divided into 512
+    /// steps of whatever that comes to instead. A segment here is the straight
+    /// line between two consecutive route coordinates, so reaching 10.24 km of
+    /// it takes a gap in the fixes — a tunnel, a lost signal, an imported
+    /// track logged once a minute — and never a long walk.
     static let samplingStepMeters = 20.0
     /// How much closer a rival way has to be before a sample abandons the way
     /// the previous sample used. Without it a route running between a path and

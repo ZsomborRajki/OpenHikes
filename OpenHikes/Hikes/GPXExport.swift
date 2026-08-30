@@ -288,9 +288,15 @@ nonisolated extension GPXExport {
     /// earlier export of the same hike still staged in a shared directory.
     ///
     /// `@concurrent` rather than a detached task, as in ``GPXImport``: the
-    /// work stays part of the sharing task, so abandoning the share sheet
-    /// cancels it, and a multi-day route's few megabytes of XML are never
-    /// built — or written — on the thread drawing the sheet.
+    /// work stays inside the sharing task's tree and carries its priority, and
+    /// a multi-day route's few megabytes of XML are never built — or written —
+    /// on the thread drawing the sheet.
+    ///
+    /// Not cancellable, for the same reason the import is not: building the
+    /// markup and writing it are both synchronous and check nothing, so
+    /// dismissing the share sheet abandons the staged file rather than the
+    /// work. ``purgeStagedExports(in:before:)`` is what clears up after a
+    /// share nobody completed.
     @concurrent
     static func writeTemporaryFile(for track: Track) async throws -> URL {
         assertOffMainThread("GPX serialization must stay off the main thread")

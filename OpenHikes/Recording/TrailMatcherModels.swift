@@ -24,8 +24,11 @@ nonisolated struct TrailMatchAmbiguity: Equatable, Identifiable, Sendable {
 ///
 /// `matched` is the geometry the matcher produced — snapped to the trail graph
 /// where it was confident, an anchored straight line where it abstained.
-/// `gps` is the pair of fixes as they were recorded, so choosing it always
-/// gives back a measurement rather than an inference.
+/// `gps` is the pair of fixes as they were recorded — a measurement rather
+/// than an inference — for every leg that has them. A leg whose `rawPoints`
+/// are empty has nothing to give back, and ``TrailMatchLeg/points(for:)``
+/// answers with `defaultPoints` instead, since dropping the leg would open a
+/// hole in the route.
 nonisolated enum TrailRouteChoice: Equatable, Sendable {
     case alternative(Int)
     case gps
