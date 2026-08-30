@@ -431,11 +431,12 @@ jobs:
       # `WidgetFeedSuites`, which is where `BackgroundDeliveryTests` lives and
       # which is why 31 entries resolve to 35 suites rather than 31.
       #
-      # 35 is the guard: after editing this list, check the suite count in the
-      # log, and if it fell, an identifier did not match. Deliberately not the
-      # *test* count, which rises whenever anyone writes a test and would make
-      # this comment wrong within a month — a growing test count here is the
-      # expected outcome, not a failure.
+      # 35 is the guard, and the step after the run is what enforces it: an
+      # identifier that resolves to nothing changes nothing about the exit
+      # status, so the count has to be read out of the result bundle or it is
+      # not a guard at all. Deliberately not the *test* count, which rises
+      # whenever anyone writes a test — that one is checked as a floor, so a
+      # suite quietly vanishing is red while a suite gaining a test is not.
       #
       # It found no races when it was widened to this list. If a run goes red
       # with no `data race` block in the log — a host-app SIGKILL landing on a
@@ -523,6 +524,88 @@ jobs:
 
           echo "::error::The app never finished bootstrapping under TSan in 2 attempts."
           exit 1
+
+      # The list above is an allow-list of identifiers `xcodebuild` never
+      # validates: one that resolves to nothing is dropped without a warning
+      # and the run still exits 0, which is a green job with less sanitizer
+      # coverage than it claims. The exit status cannot see that; the result
+      # bundle can, so the pinned count is asserted against what actually ran.
+      #
+      # Suites are exact in both directions. A fall means an identifier
+      # stopped matching — renamed, moved into an `extension`, misspelt. A
+      # rise means the list grew without this number growing with it, and the
+      # next fall would then be measured against a stale pin.
+      #
+      # Tests are a floor for the reason the comment above gives: 407 ran when
+      # this gate was added, and 390 sits far enough below that removing a
+      # test does not turn the build red on its own, while a suite emptied out
+      # under a name that still resolves does. Raise it when the measured
+      # number rises.
+      - name: Check the sanitized selection actually ran
+        env:
+          EXPECTED_SUITES: "35"
+          TEST_FLOOR: "390"
+        run: |
+          set -o pipefail
+          xcrun xcresulttool get test-results tests \
+            --path TestResults/ThreadSanitizer.xcresult \
+            --compact > TestResults/tsan-tests.json
+          python3 - <<'PY'
+          import json
+          import os
+          import sys
+
+          expected_suites = int(os.environ["EXPECTED_SUITES"])
+          test_floor = int(os.environ["TEST_FLOOR"])
+          report = json.load(open("TestResults/tsan-tests.json"))
+
+          suites = []
+          tests = []
+
+          def visit(node, trail):
+              kind = node.get("nodeType")
+              name = node.get("name", "?")
+              if kind == "Test Suite":
+                  suites.append("/".join(trail + [name]))
+              elif kind == "Test Case":
+                  tests.append("/".join(trail + [name]))
+              for child in node.get("children", []):
+                  visit(child, trail + [name])
+
+          for node in report.get("testNodes", []):
+              visit(node, [])
+
+          line = (
+              f"ThreadSanitizer ran **{len(tests)} tests** in "
+              f"**{len(suites)} suites** "
+              f"(pinned at {expected_suites} suites, floor {test_floor} tests)."
+          )
+          print(line)
+          for suite in sorted(suites):
+              print(f"  {suite}")
+
+          summary = os.environ.get("GITHUB_STEP_SUMMARY")
+          if summary:
+              with open(summary, "a", encoding="utf-8") as handle:
+                  handle.write(line + "\n")
+
+          if len(suites) != expected_suites:
+              direction = "fell to" if len(suites) < expected_suites else "rose to"
+              sys.exit(
+                  f"::error::The sanitized suite count {direction} {len(suites)}, "
+                  f"against the {expected_suites} pinned in "
+                  ".github/workflows/ci.yml. A fall means an -only-testing: "
+                  "identifier no longer resolves and its suite was silently "
+                  "skipped; a rise means the list grew and the pin did not."
+              )
+
+          if len(tests) < test_floor:
+              sys.exit(
+                  f"::error::Only {len(tests)} tests ran under ThreadSanitizer, "
+                  f"under the {test_floor} floor set in "
+                  ".github/workflows/ci.yml."
+              )
+          PY
 
       - name: Delete the private simulator
         if: always() && steps.sim.outputs.udid != ''
