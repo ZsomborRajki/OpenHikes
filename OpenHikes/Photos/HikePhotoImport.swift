@@ -15,9 +15,18 @@
 //  A file left behind by a failed delete is wasted space; a `Hike` still
 //  claiming a file that is gone is a broken gallery tile.
 //
+//  Which is why the detach is *saved* before the files go, rather than left to
+//  the next autosave. The two halves cannot be made simultaneous, so the only
+//  choice is which way an interruption between them falls: a row that is gone
+//  from disk leaves an unclaimed file, which
+//  ``OpenHikesModel/reclaimOrphanedPhotos(in:store:)`` sweeps at the next
+//  launch, while erasing first would leave the row back in the hike after a
+//  kill — pointing at pixels that no sweep can bring back.
+//
 
 import CoreLocation
 import Foundation
+import os
 import SwiftData
 
 nonisolated enum HikePhotoImport {
@@ -106,15 +115,60 @@ nonisolated enum HikePhotoImport {
         )
     }
 
-    /// Detaches one photo and deletes its files.
+    /// Detaches one photo, persists the detach, and only then deletes its
+    /// files.
+    ///
+    /// The save is what makes this durable rather than merely started — see
+    /// this file's header for why the order is this way round and not the
+    /// other.
+    ///
+    /// A save that fails puts the photo back. The row and the file are the two
+    /// halves of one picture, and a gallery that has forgotten a photo whose
+    /// file is still on disk is a photo that returns at the next launch: the
+    /// removal the user asked for would have undone itself, quietly, later.
+    /// Leaving it in place is the same answer given at once.
+    ///
+    /// - Parameter save: The seam the commit goes through, so a test can watch
+    ///   what is on disk at the moment the detach lands, or refuse it.
     @MainActor
     static func remove(
         _ photo: HikePhoto,
         from hike: Hike,
-        store: HikePhotoStore = .shared
+        store: HikePhotoStore = .shared,
+        save: (ModelContext) throws -> Void = { try $0.save() }
     ) {
         guard let removed = hike.removePhoto(id: photo.id) else { return }
+        guard persisted(hike, save) else {
+            hike.addPhoto(removed)
+            return
+        }
         discardFiles([removed], from: store)
+    }
+
+    /// Commits the store `hike` lives in, and reports whether the change is on
+    /// disk.
+    ///
+    /// `true` for a hike with no context at all: nothing persisted the row in
+    /// the first place, so nothing can bring it back and the files are free to
+    /// go.
+    @MainActor
+    private static func persisted(
+        _ hike: Hike,
+        _ save: (ModelContext) throws -> Void
+    ) -> Bool {
+        guard let context = hike.modelContext else { return true }
+        do {
+            try save(context)
+            return true
+        } catch {
+            HikePhotoStore.logger.error(
+                """
+                Kept a photo whose removal could not be saved: \
+                \(error.localizedDescription, privacy: .public)
+                """
+            )
+            return false
+        }
     }
 
     /// Deletes every file behind a hike that is being deleted.
@@ -127,9 +181,10 @@ nonisolated enum HikePhotoImport {
         discardFiles(hike.photos, from: store)
     }
 
-    /// Fire-and-forget: a delete that fails costs disk space and nothing else,
-    /// and there is no screen where waiting for it would tell the user
-    /// anything.
+    /// Fire-and-forget: by the time this is reached the metadata half is
+    /// already settled, so a delete that fails costs disk space until the next
+    /// launch sweep and nothing else — and there is no screen where waiting
+    /// for it would tell the user anything.
     @MainActor
     static func discardFiles(
         _ photos: [HikePhoto],
