@@ -129,6 +129,12 @@ struct HikeDetailView: View {
     let mapController: MapController
     /// Owns whether this hike is passively auto-saving OSM tiles while browsed.
     let autoSave: AutoSaveController
+    /// The Pro unlock, observed rather than read from the process-wide
+    /// ``MapEntitlement``. The offline controls below resolve a provider *and*
+    /// capture its ``ActiveTileSource`` into the download button's action, so a
+    /// snapshot that cannot invalidate this body is a snapshot that lets a
+    /// lapsed subscription start a bulk download against a paid key.
+    let entitlement: MapEntitlementStore
     /// Source of the user's live location. Auto-follow consumes
     /// ``LocationManager/fixes``, so it is driven per published fix, not by a timer.
     let locationManager: LocationManager
@@ -446,7 +452,7 @@ private extension HikeDetailView {
 
     /// `renderable`, not `provider`: this drives whether a bulk download is
     /// offered at all, so it has to name the source the map is really drawing.
-    private var activeProvider: TileProvider { .renderable(id: tileProviderID) }
+    private var activeProvider: TileProvider { .renderable(id: tileProviderID, entitlement: entitlement.state) }
 
     /// `nil` when the selected map draws no raster tiles, which is also when
     /// there is nothing a download could fetch.

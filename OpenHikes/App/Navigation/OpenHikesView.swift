@@ -127,8 +127,22 @@ struct OpenHikesView: View {
     /// Resolves the selected provider (with API key substituted) for the map.
     /// `nil` when the selection draws MapKit's own base map, which installs no
     /// overlay and starts none of the tile pipeline.
+    ///
+    /// Reads `entitlement.state` rather than letting `renderable` default to
+    /// the process-wide ``MapEntitlement``, and that is what the parameter is
+    /// for. The global is a `Mutex`, not an observable: a subscription
+    /// resolving to `.notEntitled` after launch — or lapsing while the app is
+    /// running — changed the answer here without invalidating this body, so
+    /// the paid overlay stayed on screen until something unrelated re-rendered
+    /// the map. An observable read inside a computed var is an input of the
+    /// body that calls it, which is precisely what makes the overlay be
+    /// replaced. Not a render-isolation cost: entitlement settles once per
+    /// launch and changes at most on a purchase or a lapse.
     private var activeTileSource: ActiveTileSource? {
-        TileProvider.renderable(id: tileProviderID).renderedSource
+        TileProvider.renderable(
+            id: tileProviderID,
+            entitlement: appModel.entitlement.state
+        ).renderedSource
     }
 
     var body: some View {
