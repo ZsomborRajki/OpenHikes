@@ -39,15 +39,20 @@ nonisolated enum CloudAccountStatus: Equatable, Sendable {
 /// What sync is doing right now.
 nonisolated enum CloudSyncActivity: Equatable, Sendable {
     /// Something went wrong that isn't going to fix itself by waiting.
-    ///
-    /// The transient failures — no signal, rate limiting, a busy zone — do
-    /// reach ``CloudSyncCoordinator``; its `isWorthReporting(_:)` filter is
-    /// what keeps them from reaching here. Mirroring retries those itself, so
-    /// they are logged rather than turned into a headline nobody can act on.
     case failed(String)
     case idle
     /// Sync is off, or there is no Apple Account signed in on this device.
     case paused
+    /// A pass ended on a transient failure — no signal, rate limiting, a busy
+    /// zone — that mirroring will retry on its own.
+    ///
+    /// Its own case rather than ``idle`` because the two differ in the only
+    /// way that matters here: nothing was transferred. Folding it into
+    /// ``idle`` put "Synced with iCloud" and a freshly stamped time on a pass
+    /// that never left the device. It is deliberately not ``failed`` either —
+    /// the retry is silent and succeeds on its own, so "Sync Problem" would
+    /// be a headline nobody can act on and nothing would come along to clear.
+    case retrying
     case working
 }
 
@@ -67,7 +72,7 @@ final class CloudSyncStatus {
     /// a lie.
     var pendingRelaunch = false
 
-    /// Whether the pass currently running has raised anything.
+    /// What the pass currently running has raised, if anything.
     ///
     /// A pass is one mirroring event's start/end bracket. Without this,
     /// ``finished()`` had no way to tell a clean pass from one that failed a
@@ -75,7 +80,19 @@ final class CloudSyncStatus {
     /// the event immediately after it: "Sync Problem", its detail line and
     /// ``CloudSyncSection``'s warning icon were unreachable, and
     /// ``lastSyncedAt`` was stamped for passes that had just failed.
-    private var passRaisedAFailure = false
+    ///
+    /// Transient problems are held here too, for the same reason and with the
+    /// same consequence: a pass the network cut short has not synced, so it
+    /// must not stamp a time either.
+    private var passProblem: PassProblem?
+
+    /// The two kinds of thing a pass can raise, ranked. A permanent failure
+    /// outranks a transient one within the same pass: the user can act on the
+    /// first and there is nothing to act on in the second.
+    private enum PassProblem {
+        case transient
+        case permanent
+    }
 
     /// The headline the settings row shows.
     var title: String {
@@ -111,6 +128,7 @@ final class CloudSyncStatus {
         case .failed: "Sync Problem"
         case .idle: "Synced with iCloud"
         case .paused: "Sync Off"
+        case .retrying: "Waiting for iCloud"
         case .working: "Syncing…"
         }
     }
@@ -125,6 +143,11 @@ final class CloudSyncStatus {
             } ?? "Your hikes and photos are kept in your private iCloud storage."
         case .paused:
             "Your hikes stay on this device only."
+        case .retrying:
+            lastSyncedAt.map { date in
+                "iCloud can't be reached right now. This will finish on its own. "
+                    + "Last synced \(HikeFormat.timestamp(date))."
+            } ?? "iCloud can't be reached right now. This will finish on its own."
         case .working:
             "Sending and receiving your hikes and photos."
         }
@@ -134,25 +157,33 @@ final class CloudSyncStatus {
     /// what lets a failure outlive the pass that raised it while still being
     /// cleared by the next attempt.
     func began() {
-        passRaisedAFailure = false
+        passProblem = nil
         activity = .working
     }
 
     /// Ends a pass. One that raised something goes on saying so, and does not
     /// claim a sync time it did not earn.
     func finished() {
-        guard !passRaisedAFailure else { return }
+        guard passProblem == nil else { return }
         activity = .idle
         lastSyncedAt = .now
     }
 
     func failed(_ reason: String) {
-        passRaisedAFailure = true
+        passProblem = .permanent
         activity = .failed(reason)
     }
 
+    /// Records a transient failure: the pass is over, nothing was transferred,
+    /// and mirroring will try again without being asked.
+    func retrying() {
+        guard passProblem != .permanent else { return }
+        passProblem = .transient
+        activity = .retrying
+    }
+
     func paused() {
-        passRaisedAFailure = false
+        passProblem = nil
         activity = .paused
     }
 }

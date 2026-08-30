@@ -67,6 +67,7 @@ struct CloudSyncSection: View {
         case .failed: return "exclamationmark.icloud.fill"
         case .idle: return "checkmark.icloud.fill"
         case .paused: return "icloud.slash.fill"
+        case .retrying: return "arrow.trianglehead.2.clockwise.rotate.90.icloud.fill"
         case .working: return "arrow.trianglehead.2.clockwise.rotate.90.icloud.fill"
         }
     }
@@ -77,6 +78,9 @@ struct CloudSyncSection: View {
         case .failed: return .orange
         case .idle: return .accentColor
         case .paused: return .secondary
+        // Not the accent colour: waiting on the network is not the tick of a
+        // finished pass, and not orange either — there is nothing to fix.
+        case .retrying: return .secondary
         case .working: return .accentColor
         }
     }
