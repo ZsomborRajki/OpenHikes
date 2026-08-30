@@ -700,7 +700,17 @@ nonisolated extension TileCache {
     /// promoted to coverage. ``AutoSaveTileStore`` treats that refusal exactly
     /// as it treats a missing cached copy — the claim is given back, so the
     /// tile is reconsidered rather than recorded as saved.
-    @discardableResult func promoteCachedTile(forKey key: String) -> Bool {
+    ///
+    /// - Parameter racingWriter: **test seam**, like `referenceDate` elsewhere
+    ///   in this file. Runs in the window between the two tier checks below —
+    ///   the interleaving where another writer promoting the same key moves
+    ///   the cached copy out from under this call. Only a scheduler can open
+    ///   that window in production, and a test that waits for one to open by
+    ///   chance is not a regression test.
+    @discardableResult func promoteCachedTile(
+        forKey key: String,
+        racingWriter: () -> Void = { /* no-op */ }
+    ) -> Bool {
         assertOffMainThread(
             "promoteCachedTile(forKey:) stats and moves tile files synchronously — call it off the main thread"
         )
@@ -715,7 +725,20 @@ nonisolated extension TileCache {
                 return true
             }
         }
-        guard freshModificationDate(for: paths.cached, in: .browsing) != nil else { return false }
+        racingWriter()
+        guard freshModificationDate(for: paths.cached, in: .browsing) != nil else {
+            // No cached copy is not the same answer as "not saved". A racer
+            // promoting the same key moves that copy away, and between the
+            // durable check above and this one it can complete the move —
+            // leaving this call looking at a key with neither a cached copy
+            // nor (as it last looked) a durable one. Reporting `false` there
+            // makes ``AutoSaveTileStore`` give back a claim whose bytes are on
+            // disk: the tile is saved, the hike no longer owns it, and nothing
+            // reconsiders it because the browsing copy it would be re-saved
+            // from is gone. The move is a rename, so a missing cached copy
+            // means it has already landed.
+            return freshModificationDate(for: paths.durable, in: .durable) != nil
+        }
 
         let byteCount = fileSize(paths.cached)
         guard reserveDurableBytes(forKey: key, byteCount: byteCount) else { return false }
