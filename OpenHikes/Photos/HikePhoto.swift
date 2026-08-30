@@ -72,20 +72,24 @@ nonisolated struct HikePhoto: Codable, Hashable, Identifiable, Sendable {
     var latitude: Double?
     var longitude: Double?
 
-    /// The `PHAsset` this photo was copied out of, for a photo found in the
-    /// system photo library rather than taken or picked in the app.
+    /// The `PHAsset` this photo was copied out of, for a photo that came from
+    /// the system photo library rather than being taken in the app.
     ///
-    /// Recorded for one job: a second scan of the library must offer only what
-    /// the first one did not take. Matching on the moment instead would be
-    /// wrong twice over — two frames of a burst share a second, and a photo
-    /// the user imported and then deliberately deleted from the hike would be
-    /// offered again forever.
+    /// Recorded for one job: the same picture must not be attached to one walk
+    /// twice, whichever surface offers it — a second scan of the library, or
+    /// the picker opened again on a selection that overlaps the first.
+    /// Matching on the moment instead would be wrong twice over: two frames of
+    /// a burst share a second, and a photo the user imported and then
+    /// deliberately deleted from the hike would be refused forever.
     ///
-    /// Optional because most photos have no library asset behind them at all:
-    /// a capture exists only inside OpenHikes unless the user opted into the
-    /// mirror, and a `PhotosPicker` import deliberately never learns the
-    /// asset's identity — that would be a photo-library read, which the picker
-    /// path exists to avoid.
+    /// Both library surfaces fill it in. `PhotosPickerItem/itemIdentifier`
+    /// carries it for a picked photo — the picker still runs out of process
+    /// and still costs no photo-library permission, because the identifier is
+    /// handed back with the selection rather than looked up in the library.
+    ///
+    /// Optional because a capture has no library asset behind it at all: it
+    /// exists only inside OpenHikes unless the user opted into the mirror, and
+    /// the mirrored copy is a new asset this app never sees the identity of.
     var assetLocalIdentifier: String?
 
     /// How this photo came to be pinned where it is, for a photo the app did

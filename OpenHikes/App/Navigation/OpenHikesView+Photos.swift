@@ -67,6 +67,15 @@ extension OpenHikesView {
     ///
     /// Nothing is mirrored to the photo library here either — it is already
     /// there.
+    ///
+    /// Each asset's identity travels with its bytes, which is what stops the
+    /// same photograph being attached twice. The picker shows no sign of what
+    /// this walk already holds, so re-picking one is an ordinary thing to do —
+    /// and the identifier is also what keeps a later scan of the library from
+    /// offering a picture that was imported by hand. It costs nothing to know:
+    /// `itemIdentifier` is handed back with the selection by the same
+    /// out-of-process picker, rather than looked up in the library this path
+    /// still never opens.
     func attachPickedPhotos(_ items: [PhotosPickerItem]) {
         guard let subject = photoCapture.currentSubject() else { return }
         photoCapture.runLibraryImport {
@@ -84,7 +93,8 @@ extension OpenHikesView {
                     data,
                     to: subject.hike,
                     coordinate: subject.coordinate,
-                    savesToPhotoLibrary: false
+                    savesToPhotoLibrary: false,
+                    assetLocalIdentifier: item.itemIdentifier
                 )
                 if stored == nil, subject.hike.isAttached {
                     photoPresentation.failure = .importFailed

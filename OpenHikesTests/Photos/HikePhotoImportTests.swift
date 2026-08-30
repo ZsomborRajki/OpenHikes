@@ -175,6 +175,70 @@ struct HikePhotoImportTests {
         #expect(Self.fileCount(in: sandbox.store.directory) == 0)
     }
 
+    /// Re-picking a photograph the walk already holds. The picker shows no
+    /// sign of what has been imported before, so a second selection that
+    /// overlaps the first is an ordinary thing for somebody to do — and
+    /// without the identifier travelling with the bytes it produced a second
+    /// copy of the same picture, in the gallery and on disk.
+    ///
+    /// The already-attached photo comes back rather than `nil`, because the
+    /// asset is in the walk: that is what the caller asked for, and the two
+    /// import surfaces treat `nil` as something to report as a failure.
+    @Test("an asset already in the hike is not imported twice")
+    func addRefusesADuplicateAsset() async throws {
+        let sandbox = Sandbox()
+        let context = try Fixture.modelContext()
+        let hike = Fixture.hike(in: context)
+
+        let first = try #require(
+            await HikePhotoImport.add(
+                Self.sampleImageData(),
+                to: hike,
+                coordinate: nil,
+                savesToPhotoLibrary: false,
+                assetLocalIdentifier: "asset-1",
+                store: sandbox.store
+            )
+        )
+        let second = await HikePhotoImport.add(
+            Self.sampleImageData(),
+            to: hike,
+            coordinate: nil,
+            savesToPhotoLibrary: false,
+            assetLocalIdentifier: "asset-1",
+            store: sandbox.store
+        )
+
+        #expect(second?.id == first.id, "the picture already in the walk")
+        #expect(hike.photos.map(\.id) == [first.id])
+        #expect(
+            Self.fileCount(in: sandbox.store.directory) == 1,
+            "and no second copy of it on disk"
+        )
+    }
+
+    /// The other side of the same guard: a photo with no library asset behind
+    /// it — every capture, and a pick the picker gave no identifier for — is
+    /// still free to be added as many times as the user takes it.
+    @Test("photos with no asset behind them are never treated as duplicates")
+    func addAllowsRepeatsWithoutAnAsset() async throws {
+        let sandbox = Sandbox()
+        let context = try Fixture.modelContext()
+        let hike = Fixture.hike(in: context)
+
+        for _ in 0..<2 {
+            _ = await HikePhotoImport.add(
+                Self.sampleImageData(),
+                to: hike,
+                coordinate: nil,
+                savesToPhotoLibrary: false,
+                store: sandbox.store
+            )
+        }
+
+        #expect(hike.photos.count == 2)
+    }
+
     @Test("removing a photo detaches it and deletes its file")
     func removeDetachesAndErases() async throws {
         let sandbox = Sandbox()

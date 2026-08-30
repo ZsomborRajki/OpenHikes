@@ -94,6 +94,9 @@ final class PhotoDiscoveryController {
     private(set) var importFailed = false
 
     private let reader: any PhotoLibraryReading
+    /// The one import in flight, held so the sheet can cancel it — see
+    /// ``runImport(into:store:)``.
+    @ObservationIgnored private var importTask: Task<Int, Never>?
 
     init(reader: some PhotoLibraryReading = PhotosLibraryReader()) {
         self.reader = reader
@@ -204,6 +207,47 @@ final class PhotoDiscoveryController {
         )
     }
 
+    /// Runs an import as *the* import, so the sheet that started it can stop
+    /// it on the way out.
+    ///
+    /// Held here rather than in the button's own `Task` for the reason
+    /// ``PhotoCaptureController/runLibraryImport(_:)`` holds the other one: a
+    /// `Task` started in a button action is owned by nobody, and a view going
+    /// away does not touch it. The Add button's did exactly that — dismissing
+    /// the sheet mid-import left it reading full-size assets, possibly down
+    /// from iCloud, for a screen that no longer existed, and still writing
+    /// ``phase`` and ``matches`` that nothing was drawing.
+    ///
+    /// Which is worse than wasted work, because this controller outlives its
+    /// sheet: it is created once per hike screen so that reopening the sheet
+    /// doesn't lose what a scan already found. An abandoned import was
+    /// therefore free to land its tail on top of the fresh ``search(in:)``
+    /// that reopening starts — resetting a phase mid-search, and clearing
+    /// matches the new search had just found.
+    @discardableResult func runImport(
+        into hike: Hike,
+        store: HikePhotoStore = .shared
+    ) async -> Int {
+        importTask?.cancel()
+        let task = Task { await importSelected(into: hike, store: store) }
+        importTask = task
+        let landed = await task.value
+        if importTask == task { importTask = nil }
+        return landed
+    }
+
+    /// Stops an import whose sheet has gone away.
+    ///
+    /// What already landed stays: each photo is written through
+    /// ``HikePhotoImport``, which puts the app's own copy on disk before
+    /// anything else, so a picture that made it is a picture the user has.
+    /// Everything the user did not wait for is still in their library,
+    /// untouched, and a reopened sheet offers it again.
+    func cancelImport() {
+        importTask?.cancel()
+        importTask = nil
+    }
+
     /// Copies the chosen photos into `hike`, and returns how many landed.
     ///
     /// Sequential rather than concurrent, deliberately. Each import reads a
@@ -211,6 +255,9 @@ final class PhotoDiscoveryController {
     /// what it is, and writes it twice; a dozen of those in parallel is a
     /// memory spike on the one device this runs on, for a wait the user is
     /// already watching a counter for.
+    ///
+    /// Reached through ``runImport(into:store:)`` in the app, which is what
+    /// makes the cancellation checks below something more than decoration.
     @discardableResult func importSelected(
         into hike: Hike,
         store: HikePhotoStore = .shared
@@ -226,14 +273,19 @@ final class PhotoDiscoveryController {
             // The user can pop back and delete the hike while this runs; there
             // is nothing left to attach the rest of the selection to.
             guard hike.isAttached else { break }
-            if await attach(match, to: hike, store: store) {
-                landed.insert(match.id)
-            } else {
-                importFailed = true
-            }
+            let stored = await attach(match, to: hike, store: store)
+            if stored { landed.insert(match.id) }
+            // Asked again on this side of the copy, because everything below
+            // writes state a sheet draws — and a cancelled import has no sheet
+            // left to draw it. Whatever replaced it owns those properties now,
+            // and a stale counter or a stale failure notice landing on top of
+            // a fresh search is the one thing cancelling has to prevent.
+            guard !Task.isCancelled else { break }
+            if !stored { importFailed = true }
             phase = .importing(completed: landed.count, total: chosen.count)
         }
 
+        guard !Task.isCancelled else { return landed.count }
         // Exactly what landed leaves the list, so a sheet left open offers the
         // rest — including anything that failed, which is the one case where
         // trying again is the right thing to do.
