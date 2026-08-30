@@ -16,6 +16,8 @@ set -euo pipefail
 repository_root="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 # shellcheck source=lib/xcodebuild-output.sh
 source "$repository_root/Scripts/lib/xcodebuild-output.sh"
+# shellcheck source=lib/simulator.sh
+source "$repository_root/Scripts/lib/simulator.sh"
 project="$repository_root/OpenHikes.xcodeproj"
 scheme="OpenHikesUI"
 bundle="OpenHikesUITests"
@@ -47,7 +49,7 @@ Runs $bundle/$suite against a simulator, pulls the app's
 performance event files out of its container, and writes a markdown report.
 
 Options:
-  --device <name>     Simulator name (default: $device)
+  --device <name|udid> Simulator name or UDID (default: $device)
   --test <name>       Run one test method instead of the whole suite
   --output <dir>      Where reports are written (default: PerformanceReports)
   --keep <n>          Run directories to retain (default: $retained_runs)
@@ -180,6 +182,20 @@ command -v xcodebuild >/dev/null 2>&1 || {
     exit 1
 }
 
+command -v xcrun >/dev/null 2>&1 || {
+    echo "xcrun is required. Install the Xcode command-line tools first." >&2
+    exit 1
+}
+
+# Resolved once, and used for the destination and for every simctl call below.
+# `name=` plus `simctl booted` let the run, the location it clears, the
+# permission it grants and the container it reads back belong to four
+# different devices whenever more than one simulator is up — which is how a
+# report gets assembled out of a device that ran nothing.
+if ! device_udid="$(resolve_simulator_udid "$device")"; then
+    exit 2
+fi
+
 only_testing="$bundle/$suite"
 if [[ -n "$test_name" ]]; then
     if ! list_tests | grep -qx "$test_name"; then
@@ -198,20 +214,26 @@ prune_old_runs "$output_root"
 mkdir -p "$run_directory/events"
 build_log="$run_directory/xcodebuild.log"
 
-echo "Simulator: $device"
+echo "Simulator: $device ($device_udid)"
 echo "Running:   $only_testing"
 echo "Report:    $run_directory"
 
+# Booted here rather than left to xcodebuild, because the two simctl calls
+# below need the device up: a privacy grant against a shut-down simulator does
+# nothing, and the run would then measure an app that was never given location.
+xcrun simctl boot "$device_udid" >/dev/null 2>&1 || true
+xcrun simctl bootstatus "$device_udid" -b >/dev/null 2>&1 || true
+
 # UI automation drives Core Location, so a location left over from
 # Scripts/simulate-hike.sh would fight the test for the simulator's position.
-xcrun simctl location booted clear >/dev/null 2>&1 || true
+xcrun simctl location "$device_udid" clear >/dev/null 2>&1 || true
 
 # Granted out-of-band rather than through the permission dialog. A measurement
 # run that silently collects nothing because an alert went unhandled is worse
 # than one that fails, and the recording scenario has no fixes to measure
 # without this — the test keeps its interruption monitor as a fallback for a
 # simulator where the grant does not take.
-xcrun simctl privacy booted grant location-always "$app_bundle_id" >/dev/null 2>&1 || true
+xcrun simctl privacy "$device_udid" grant location-always "$app_bundle_id" >/dev/null 2>&1 || true
 
 status=0
 set +e
@@ -223,7 +245,7 @@ xcodebuild test \
     -project "$project" \
     -scheme "$scheme" \
     -configuration Debug \
-    -destination "platform=iOS Simulator,name=$device" \
+    -destination "platform=iOS Simulator,id=$device_udid" \
     -only-testing:"$only_testing" \
     -resultBundlePath "$run_directory/result.xcresult" \
     -skipPackagePluginValidation \
@@ -239,12 +261,16 @@ print_measurement_lines "$build_log"
 # Pulled after the run rather than streamed during it: the app writes into its
 # own container, which only exists on the simulator, and reading it while the
 # app is up would catch a partially flushed batch.
-container="$(xcrun simctl get_app_container booted "$app_bundle_id" data 2>/dev/null || true)"
-if [[ -n "$container" && -d "$container/Documents/PerformanceLogs" ]]; then
-    cp "$container/Documents/PerformanceLogs"/*.tsv "$run_directory/events/" 2>/dev/null || true
-    echo "Collected $(ls -1 "$run_directory/events" | wc -l | tr -d ' ') event file(s)."
+collected=0
+container="$(xcrun simctl get_app_container "$device_udid" "$app_bundle_id" data 2>/dev/null || true)"
+if [[ -z "$container" ]]; then
+    echo "No container for $app_bundle_id on $device ($device_udid)." >&2
+elif [[ ! -d "$container/Documents/PerformanceLogs" ]]; then
+    echo "No PerformanceLogs directory in $container/Documents." >&2
 else
-    echo "No event files found in the app container." >&2
+    cp "$container/Documents/PerformanceLogs"/*.tsv "$run_directory/events/" 2>/dev/null || true
+    collected="$(find "$run_directory/events" -maxdepth 1 -name '*.tsv' | wc -l | tr -d ' ')"
+    echo "Collected $collected event file(s)."
 fi
 
 if (( status != 0 )) && [[ "$keep_going" == false ]]; then
@@ -274,6 +300,18 @@ fi
 python3 "$repository_root/Scripts/perf-report.py" "${report_arguments[@]}"
 
 echo "Report written to $run_directory/report.md"
+
+# A suite that measured nothing passes every budget in it, so a run with no
+# scenario logs used to print one informational line and exit 0 — the shape of
+# a green run, from a report with no measurements in it. --keep-going relaxes a
+# failing test into a written report; it does not make an empty run a passing
+# one.
+if (( collected == 0 )); then
+    echo "No scenario logs were collected, so this run measured nothing." >&2
+    echo "Check that the suite ran against $device ($device_udid) and wrote to Documents/PerformanceLogs." >&2
+    exit 1
+fi
+
 if [[ -z "$test_name" && ! -f "$baseline" && "$update_baseline" == false ]]; then
     echo "No baseline at $baseline — run again with --update-baseline to record one."
 fi

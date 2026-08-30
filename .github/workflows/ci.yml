@@ -55,7 +55,7 @@ jobs:
       # Each script is parsed by the interpreter its own shebang names.
       # ci_post_clone.sh is `#!/bin/sh` and the rest are bash; checking them all
       # with `sh -n` would reject bash process substitution that is legal where
-      # it is written (Scripts/run-ui-tests.sh:102, verified).
+      # it is written (Scripts/run-ui-tests.sh:104, verified).
       - name: Check shell scripts parse
         run: |
           set -euo pipefail
@@ -74,6 +74,15 @@ jobs:
             fi
           done < <(find Scripts ci_scripts -name '*.sh' | sort)
           exit "$status"
+
+      # Parsing is not behaviour. Scripts/run-ui-tests.sh and
+      # Scripts/run-performance-tests.sh decide which simulator a run lands on
+      # and whether a performance report was assembled out of anything at all,
+      # and no suite in this repository can cover them — they are what runs the
+      # suites. These cases run them for real against a stubbed xcrun and
+      # xcodebuild, so nothing is built and no simulator is touched.
+      - name: Run script smoke tests
+        run: Scripts/run-script-tests.sh
 
       - name: Test shared package
         run: |
