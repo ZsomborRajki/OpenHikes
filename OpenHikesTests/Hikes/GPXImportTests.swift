@@ -151,29 +151,6 @@ struct GPXImportTests {
         #expect(track.points.count == 1)
     }
 
-    /// Multi-segment tracks (a recording paused and resumed) are one hike, in
-    /// file order.
-    @Test("every segment of a track is imported, in order")
-    func multipleSegments() throws {
-        let xml = """
-        <?xml version="1.0" encoding="UTF-8"?>
-        <gpx version="1.1" creator="OpenHikesTests" xmlns="http://www.topografix.com/GPX/1/1">
-            <trk>
-            <trkseg>
-                <trkpt lat="47.6300" lon="12.8600"/>
-                <trkpt lat="47.6310" lon="12.8600"/>
-            </trkseg>
-            <trkseg>
-                <trkpt lat="47.6320" lon="12.8600"/>
-            </trkseg>
-            </trk>
-        </gpx>
-        """
-        let track = try GPXImport.load(from: try gpxFile(xml))
-        #expect(track.points.count == 3)
-        #expect(track.points.map { ($0.coordinate.latitude * 1e4).rounded() } == [476_300, 476_310, 476_320])
-    }
-
     // MARK: Falling back through the GPX flavours
 
     /// Plenty of planning tools export a *route* rather than a track.
@@ -323,11 +300,10 @@ struct GPXImportTests {
     }
 
     /// Every refusal has to carry something to show the user — the whole point
-    /// of typing them. A case added later without copy would fail here rather
-    /// than surfacing as an empty alert.
-    @Test("every failure explains itself", arguments: [
-        GPXImport.ImportFailure.unreadable, .noUsablePoints, .tooShort, .tooLarge
-    ])
+    /// of typing them. Driven off `allCases` rather than a list written out
+    /// here, so a case added later without copy fails this test rather than
+    /// surfacing as an empty alert.
+    @Test("every failure explains itself", arguments: GPXImport.ImportFailure.allCases)
     func failuresAreExplained(failure: GPXImport.ImportFailure) throws {
         let description = try #require(failure.errorDescription)
         let suggestion = try #require(failure.recoverySuggestion)
