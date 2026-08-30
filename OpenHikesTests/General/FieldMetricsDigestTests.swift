@@ -108,8 +108,9 @@ nonisolated struct FieldMetricsDigestTests {
 
     @Test("the conserving share is the coarse accuracy classes over the whole time")
     func conservingShare() {
-        // The assertion Energy Finding E1 is waiting on: how much of a real
-        // walk's GPS duty actually ran in the conserving profile.
+        // The assertion `PERFORMANCE.md`'s *Blind spots* section is waiting
+        // on: how much of a real walk's GPS duty actually ran in the
+        // conserving profile.
         let breakdown = LocationAccuracyBreakdown(
             bestSeconds: 300,
             bestForNavigationSeconds: 100,

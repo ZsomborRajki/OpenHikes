@@ -8,15 +8,15 @@
 //  Everything else in `Diagnostics/` measures a *simulator*, in *Debug*, on a
 //  *synthetic* route, before a change is merged. That is the right shape for a
 //  budget you want to fail a pull request, and it is the wrong shape — in
-//  fact it is structurally incapable — for the two questions `PERFORMANCE.md`
-//  leaves open:
+//  fact it is structurally incapable — for two of the gaps `PERFORMANCE.md`
+//  lists under *Blind spots*:
 //
-//  * "Measure a real hike-length recording's energy. Every number above
-//    extrapolates from a three-fix scenario … it is the one measurement this
-//    harness structurally cannot make."
-//  * Finding E1's admission that `RecordingEnergyPolicy`'s conserving profile
-//    "has never been exercised anywhere but in unit tests", because a
-//    simulator's `thermalState` is always `.nominal`.
+//  * A real hike-length recording's energy. Every energy number that harness
+//    produces extrapolates from a three-fix scenario, and the walk that would
+//    settle whether the per-fix cost is flat has not been taken.
+//  * Whether `RecordingEnergyPolicy`'s conserving profile is ever reached. A
+//    simulator's thermal state never leaves `.nominal`, so that profile has
+//    never been exercised outside unit tests.
 //
 //  MetricKit answers both, from the only place they can be answered: a real
 //  phone, in Release, on a real walk. It is the opposite instrument to the
