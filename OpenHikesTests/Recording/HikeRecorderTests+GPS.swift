@@ -412,4 +412,54 @@ extension HikeRecorderTests {
         #expect(hikeRecorder.phase == .idle)
         #expect(!FileManager.default.fileExists(atPath: journal.journalURL.path))
     }
+
+    /// Whether the walker is standing still is derived state: a function of
+    /// the points before this one, which the accumulator answers live and
+    /// nothing persists. This says so from both ends — the recorder writes no
+    /// verdict of its own onto the fixes it journals, and a replay of exactly
+    /// those fixes reaches the verdict anyway, which is what every reader of
+    /// it does after a recovery or a save.
+    @Test("a stationary window is recomputed from the journal, not stored in it")
+    func stationaryVerdictIsRecomputedFromTheJournal() async throws {
+        let hikeRecorder = makeRecorder()
+        await hikeRecorder.start()
+
+        // Ten seconds apart, so `maximumInterval` accepts every one of them,
+        // and never more than eight metres from the first, so the
+        // thirty-second window closes on less ground than
+        // `stationaryNetDisplacement`.
+        let fixCount = 6
+        for step in 0..<fixCount {
+            clock.advance(by: 10)
+            source.deliver(
+                fix(latitude: 47.63 + Double((step % 2) * 8) / 111_000)
+            )
+        }
+
+        #expect(
+            hikeRecorder.accumulator.isStationary,
+            "precondition: the jitter has to have closed a stationary window"
+        )
+
+        let journal = TrackJournal(directory: directory)
+        var session = try await journal.loadSession()
+        let deadline = ContinuousClock.now + .seconds(5)
+        while (session?.points.count ?? 0) < fixCount, ContinuousClock.now < deadline {
+            try await Task.sleep(for: .milliseconds(5))
+            session = try await journal.loadSession()
+        }
+
+        let flushed = try #require(session, "the fixes never reached the journal")
+        #expect(flushed.points.count == fixCount)
+        let carriesAFlag = flushed.points.contains { !$0.flags.isEmpty }
+        #expect(
+            !carriesAFlag,
+            "the recorder wrote its own stationary verdict back onto the fixes"
+        )
+
+        var replay = RecordingDistanceAccumulator()
+        for point in flushed.points { replay.append(point) }
+        #expect(replay.isStationary)
+        #expect(replay.distanceMeters == hikeRecorder.stats.distanceMeters)
+    }
 }
