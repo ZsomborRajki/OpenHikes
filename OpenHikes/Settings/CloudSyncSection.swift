@@ -62,22 +62,27 @@ struct CloudSyncSection: View {
     }
 
     private var symbolName: String {
+        // Ahead of the account for the reason ``CloudSyncStatus/title`` gives:
+        // a launch that never mirrors leaves the account unresolved, and an
+        // unasked question is not a warning to raise.
+        if sync.status.activity == .disabled { return "icloud.slash.fill" }
         guard sync.status.account.isUsable else { return "exclamationmark.icloud.fill" }
         switch sync.status.activity {
+        case .disabled, .paused: return "icloud.slash.fill"
         case .failed: return "exclamationmark.icloud.fill"
         case .idle: return "checkmark.icloud.fill"
-        case .paused: return "icloud.slash.fill"
         case .retrying: return "arrow.trianglehead.2.clockwise.rotate.90.icloud.fill"
         case .working: return "arrow.trianglehead.2.clockwise.rotate.90.icloud.fill"
         }
     }
 
     private var symbolStyle: Color {
+        if sync.status.activity == .disabled { return .secondary }
         guard sync.status.account.isUsable else { return .orange }
         switch sync.status.activity {
+        case .disabled, .paused: return .secondary
         case .failed: return .orange
         case .idle: return .accentColor
-        case .paused: return .secondary
         // Not the accent colour: waiting on the network is not the tick of a
         // finished pass, and not orange either — there is nothing to fix.
         case .retrying: return .secondary
