@@ -273,8 +273,16 @@ nonisolated extension TileCache {
     // MARK: Reservation
 
     /// Claims `byteCount` of `key`'s provider's ceiling, or reports that there
-    /// is no room. Always balance a `true` with either ``commitDurableBytes``
-    /// (a no-op that documents the write landed) or ``releaseDurableBytes``.
+    /// is no room. There is no commit call: a `true` reservation *is* the
+    /// accounting for those bytes, so a caller whose write lands is already
+    /// balanced and does nothing further.
+    ///
+    /// A `true` that does not end with `byteCount` newly on disk must be given
+    /// back with ``releaseDurableBytes(forKey:byteCount:)``. That covers the
+    /// write failing, and also the write finding another writer's durable copy
+    /// already there — those bytes are counted against the ceiling once
+    /// already, and keeping this reservation too would spend it twice for one
+    /// tile.
     ///
     /// Returns `true` immediately for a provider with no ceiling, which is
     /// every provider but Stadia — so the common path is one dictionary lookup
@@ -294,7 +302,9 @@ nonisolated extension TileCache {
         }
     }
 
-    /// Gives back a reservation whose bytes never reached disk.
+    /// Gives back a reservation that this caller's write did not account
+    /// for — because it failed, or because the bytes were already on disk
+    /// and already counted by the writer that put them there.
     func releaseDurableBytes(forKey key: String, byteCount: Int64) {
         guard let providerID = Self.providerID(forKey: key),
               durableByteLimit(forProviderID: providerID) != nil
