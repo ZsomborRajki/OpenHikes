@@ -43,6 +43,36 @@ public enum Mercator {
         (longitude + 180) / 360
     }
 
+    /// `unitX` brought back inside the one world every bounded region and
+    /// every tile grid is expressed in: `0..<1`.
+    ///
+    /// The companion to ``unitX(longitude:)`` leaving longitude alone. The
+    /// projection keeps the extra turns so nothing is lost on the way in, and
+    /// callers that want a *place* rather than a winding count drop them
+    /// here. `SlippyTileMath.wrap` is the same idea in tile columns.
+    ///
+    /// Non-finite input is returned untouched: it names no place, and there
+    /// is no meridian to bring it back to.
+    public static func wrappedUnitX(_ unitX: Double) -> Double {
+        guard unitX.isFinite else { return unitX }
+        let wrapped = unitX - floor(unitX)
+        // A tiny negative x rounds up to exactly 1 here — the same meridian
+        // as 0, but outside the half-open range this promises.
+        return wrapped < 1 ? wrapped : 0
+    }
+
+    /// Distance from `start` to `end` in unit x, signed, the short way round:
+    /// `-0.5..<0.5`.
+    ///
+    /// x is cyclic — 0 and 1 name the same meridian — so two points either
+    /// side of the antimeridian are a hair apart, not a world. Plain
+    /// subtraction is what says otherwise, and it is wrong every time a route
+    /// crosses ±180°.
+    public static func unitXOffset(from start: Double, to end: Double) -> Double {
+        let delta = wrappedUnitX(end - start)
+        return delta < 0.5 ? delta : delta - 1
+    }
+
     /// Latitude → unit y. Clamped, because unlike longitude this is a real
     /// domain boundary rather than a wrap point — beyond it the projection
     /// has no answer to give.

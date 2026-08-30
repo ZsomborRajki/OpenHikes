@@ -109,6 +109,44 @@ struct MercatorTests {
         #expect(Mercator.unitX(longitude: -190) < 0)
     }
 
+    /// The other half of that bargain: whoever wants a *place* rather than a
+    /// winding count says so, and gets one meridian's worth of world back.
+    @Test("unit x wraps back into one world")
+    func unitXWraps() {
+        #expect(abs(Mercator.wrappedUnitX(Mercator.unitX(longitude: 190)) - Mercator.unitX(longitude: -170)) < 1e-12)
+        #expect(abs(Mercator.wrappedUnitX(Mercator.unitX(longitude: -190)) - Mercator.unitX(longitude: 170)) < 1e-12)
+        // ±180° is one meridian, and the half-open range names it 0.
+        #expect(Mercator.wrappedUnitX(1) == 0)
+        #expect(Mercator.wrappedUnitX(0) == 0)
+        // Whole turns, which reach this from a framed rect rather than from
+        // any coordinate, land back where they started.
+        #expect(abs(Mercator.wrappedUnitX(7.25) - 0.25) < 1e-12)
+        #expect(abs(Mercator.wrappedUnitX(-7.25) - 0.75) < 1e-12)
+        // A hair west of the antimeridian is on the antimeridian, not a whole
+        // world east of it.
+        #expect(Mercator.wrappedUnitX(-1e-18) == 0)
+        #expect(Mercator.wrappedUnitX(.nan).isNaN)
+    }
+
+    /// The whole point of the wrap: two fixes either side of ±180° are a
+    /// stone's throw apart, and anything measuring them by subtraction says a
+    /// world.
+    @Test("the offset between two unit x values takes the short way round")
+    func unitXOffsetIsCyclic() {
+        let west = Mercator.unitX(longitude: 179.99)
+        let east = Mercator.unitX(longitude: -179.99)
+        #expect(abs(Mercator.unitXOffset(from: west, to: east) - 0.02 / 360) < 1e-12)
+        #expect(abs(Mercator.unitXOffset(from: east, to: west) + 0.02 / 360) < 1e-12)
+
+        // Ordinary neighbours are plain subtraction, sign and all.
+        #expect(abs(Mercator.unitXOffset(from: 0.25, to: 0.30) - 0.05) < 1e-12)
+        #expect(abs(Mercator.unitXOffset(from: 0.30, to: 0.25) + 0.05) < 1e-12)
+        // Exactly half a world apart is a tie, and the range is half-open, so
+        // it comes out as the westward half.
+        #expect(Mercator.unitXOffset(from: 0.25, to: 0.75) == -0.5)
+        #expect(abs(Mercator.unitXOffset(from: 0.1, to: 0.1)) < 1e-15)
+    }
+
     @Test("scale is largest at the equator and shrinks toward the poles")
     func metersPerUnit() {
         #expect(abs(Mercator.metersPerUnit(atLatitude: 0) - Mercator.equatorialCircumferenceMeters) < 1e-6)

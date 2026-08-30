@@ -414,6 +414,39 @@ extension TrailBasemapRendererTests {
             )
         }
     }
+
+    /// The antimeridian shape survives the pass, above — this is the other
+    /// half of it: that what the pass would render is the trail rather than
+    /// the ocean it sits in.
+    ///
+    /// Asserted on the region instead of on the image because the image needs
+    /// a network round-trip this suite is not allowed to take. The region is
+    /// decided before any of that, from the same two calls
+    /// `refreshIfNeeded(hikeID:polyline:)` makes — and it is the whole of what
+    /// getting this wrong costs: `MKMapSnapshotter` asked for a rect spanning
+    /// nearly the entire world, and a widget drawing a 1 km walk across two
+    /// pixels of the Pacific.
+    @Test("a trail across the antimeridian is framed at walking scale")
+    func antimeridianCoverageStaysTight() throws {
+        let coverage = try #require(UnitMercatorRect(bounding: Self.antimeridian))
+        let metersPerUnit = Mercator.metersPerUnit(atLatitude: coverage.centerLatitude)
+        // The trail is ~1.5 km of longitude. Anything approaching a world
+        // (40,000 km) is the bug this guards.
+        #expect(coverage.width * metersPerUnit < 10_000, "the box came out \(coverage.width) of the world wide")
+
+        for variant in TrailBasemapVariant.allCases {
+            let framed = coverage.framed(toAspectRatio: variant.aspectRatio)
+            #expect(
+                framed.width * metersPerUnit < 10_000,
+                "\(variant.rawValue) was framed \(framed.width) of the world wide"
+            )
+            for point in Self.antimeridian {
+                let normalized = framed.normalizedPoint(latitude: point.latitude, longitude: point.longitude)
+                #expect((0...1).contains(normalized.x), "\(variant.rawValue) framed \(point.longitude)° out")
+                #expect((0...1).contains(normalized.y), "\(variant.rawValue) framed \(point.latitude)° out")
+            }
+        }
+    }
 }
 
 // MARK: - Overlap

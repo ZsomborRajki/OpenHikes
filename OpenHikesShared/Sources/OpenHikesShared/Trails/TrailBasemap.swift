@@ -67,6 +67,15 @@ public struct UnitMercatorRect: Codable, Sendable, Equatable {
     /// one of them is non-finite. A single coordinate yields a zero-sized
     /// rect — callers pad it out.
     ///
+    /// The box may run past `x = 1`: x is cyclic, so a route crossing the
+    /// antimeridian is bounded the short way round, from a west edge inside
+    /// `0..<1` to an east edge beyond it. A plain min/max would answer the
+    /// long way instead — two points a kilometre apart either side of ±180°
+    /// come out as almost the entire world, which is then what the widget's
+    /// basemap gets rendered at.
+    ///
+    /// Latitude is not cyclic and takes the ordinary min/max.
+    ///
     /// One bad coordinate refuses the whole box rather than being skipped.
     /// Skipping is what used to happen, by accident and only sometimes:
     /// `min`/`max` return their first argument when the comparison is false,
@@ -78,17 +87,50 @@ public struct UnitMercatorRect: Codable, Sendable, Equatable {
     public init?(bounding coordinates: [SharedTrailSnapshot.CodableCoordinate]) {
         guard let first = coordinates.first, first.latitude.isFinite, first.longitude.isFinite else { return nil }
         let start = Mercator.unitPoint(latitude: first.latitude, longitude: first.longitude)
-        var minX = start.x, maxX = start.x, minY = start.y, maxY = start.y
+        var minY = start.y, maxY = start.y
+        var unitXs: [Double] = []
+        unitXs.reserveCapacity(coordinates.count)
+        unitXs.append(Mercator.wrappedUnitX(start.x))
         for coordinate in coordinates.dropFirst() {
             // Checked per point rather than in a pass of its own: a route is
             // tens of thousands of points, and this way a bad one at index 3
             // stops there.
             guard coordinate.latitude.isFinite, coordinate.longitude.isFinite else { return nil }
             let point = Mercator.unitPoint(latitude: coordinate.latitude, longitude: coordinate.longitude)
-            minX = min(minX, point.x); maxX = max(maxX, point.x)
             minY = min(minY, point.y); maxY = max(maxY, point.y)
+            unitXs.append(Mercator.wrappedUnitX(point.x))
         }
-        self.init(originX: minX, originY: minY, width: maxX - minX, height: maxY - minY)
+        let span = Self.cyclicSpan(ofUnitX: unitXs)
+        self.init(originX: span.origin, originY: minY, width: span.width, height: maxY - minY)
+    }
+
+    /// West edge and width of the narrowest arc of the world containing every
+    /// one of `unitXs`, each already inside `0..<1`.
+    ///
+    /// The arc is the complement of the widest gap between neighbouring x
+    /// values around the circle — including the gap that runs through `x = 0`,
+    /// which is the one an ordinary route falls in and the one a plain
+    /// min/max mistakes for the route itself. `TileBoundingBox` finds an
+    /// offline download's columns the same way, in degrees.
+    ///
+    /// Sorting costs an array the length of the route, which a min/max pass
+    /// does not. Affordable here and nowhere near the live-fix path: a box is
+    /// bounded when a trail's geometry changes, and the four network
+    /// round-trips that follow it dwarf the sort.
+    private static func cyclicSpan(ofUnitX unitXs: [Double]) -> (origin: Double, width: Double) {
+        let sorted = unitXs.sorted()
+        guard let west = sorted.first, let east = sorted.last else { return (origin: 0, width: 0) }
+
+        var widestGap = west + 1 - east
+        var arcStart = west
+        for index in 1..<sorted.count {
+            let gap = sorted[index] - sorted[index - 1]
+            if gap > widestGap {
+                widestGap = gap
+                arcStart = sorted[index]
+            }
+        }
+        return (origin: arcStart, width: 1 - widestGap)
     }
 
     /// A coordinate whose position within a rendered image is known — the
@@ -182,10 +224,18 @@ public struct UnitMercatorRect: Codable, Sendable, Equatable {
     /// Where a coordinate falls inside this rect, as a fraction of its size:
     /// `(0, 0)` is the north-west corner, `(1, 1)` the south-east one.
     /// Values outside `0...1` are simply off-image.
+    ///
+    /// x is measured from the rect's centre the short way round the world, so
+    /// a rect that runs past `x = 1` places a point on the far side of the
+    /// antimeridian right next to it rather than a whole world to its left.
+    /// Nothing changes for a rect that doesn't cross: a point more than half
+    /// the world from the centre is off-image either way, and everything
+    /// nearer is unaffected.
     public func normalizedPoint(latitude: Double, longitude: Double) -> CGPoint {
         let unit = Mercator.unitPoint(latitude: latitude, longitude: longitude)
+        let offsetX = Mercator.unitXOffset(from: midX, to: unit.x) + width / 2
         return CGPoint(
-            x: (unit.x - originX) / max(width, .leastNormalMagnitude),
+            x: offsetX / max(width, .leastNormalMagnitude),
             y: (unit.y - originY) / max(height, .leastNormalMagnitude)
         )
     }
@@ -226,11 +276,14 @@ public struct UnitMercatorRect: Codable, Sendable, Equatable {
         newHeight = min(newHeight, 1)
 
         return Self(
-            originX: midX - newWidth / 2,
+            // Longitude wraps, so the west edge is brought back inside the
+            // world and the width is left to run past it — the shape MapKit
+            // reads as a region crossing the antimeridian, rather than one
+            // starting a lap short of it.
+            originX: Mercator.wrappedUnitX(midX - newWidth / 2),
             // Latitude doesn't wrap: a trail near the top or bottom of the
             // projection gets a shifted window rather than one running off
-            // the edge of the world. (Longitude does wrap, and MapKit handles
-            // that itself, so x is left alone.)
+            // the edge of the world.
             originY: min(max(midY - newHeight / 2, 0), 1 - newHeight),
             width: newWidth,
             height: newHeight
