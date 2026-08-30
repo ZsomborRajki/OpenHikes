@@ -36,6 +36,11 @@ struct HikePhotoImportTests {
     nonisolated private static let sampleSide = 8
     private static let latitude: Double = 47.63
     private static let longitude: Double = 12.86
+    /// Fixed, so nothing here depends on when it is run.
+    private static let shutter = Date(timeIntervalSince1970: 1_750_000_000)
+    /// How long the camera's review screen can be up before Use Photo is
+    /// tapped. Arbitrary, and that is the point: nothing bounds it.
+    private static let reviewInterval: TimeInterval = 90
 
     /// A genuinely decodable PNG — the store asks ImageIO what the bytes are,
     /// so filler wouldn't get past it.
@@ -49,6 +54,24 @@ struct HikePhotoImportTests {
         return image.pngData() ?? Data()
         #else
         return Data()
+        #endif
+    }
+
+    /// A frame the way the camera hands one over: pixels, plus whatever the
+    /// camera reported about when they were taken.
+    ///
+    /// `nil` off UIKit, where there is no `PhotoImage` to build and no camera
+    /// path to test.
+    nonisolated private static func sampleFrame(capturedAt: Date?) -> CapturedFrame? {
+        #if canImport(UIKit)
+        let size = CGSize(width: sampleSide, height: sampleSide)
+        let image = UIGraphicsImageRenderer(size: size).image { context in
+            UIColor.systemTeal.setFill()
+            context.fill(CGRect(origin: .zero, size: size))
+        }
+        return CapturedFrame(image: image, capturedAt: capturedAt)
+        #else
+        return nil
         #endif
     }
 
@@ -331,6 +354,56 @@ struct HikePhotoImportTests {
         HikePhotoImport.discardFiles(of: hike, store: sandbox.store)
 
         #expect(hike.photos.isEmpty)
+    }
+
+    /// The gap the camera opens between the two: the shutter fires, the shot
+    /// is held up for review, and the delegate is not called until Use Photo
+    /// is tapped — which may be a minute later, on a walk that has moved on.
+    /// Dating the picture from that tap puts it a minute further along the
+    /// elevation profile than the place it shows.
+    @Test("a capture keeps the shutter time, not the moment it was accepted")
+    func addCapturedKeepsTheShutterTime() async throws {
+        let sandbox = Sandbox()
+        let context = try Fixture.modelContext()
+        let hike = Fixture.hike(in: context)
+        let frame = try #require(Self.sampleFrame(capturedAt: Self.shutter))
+
+        let photo = try #require(
+            await HikePhotoImport.add(
+                captured: frame,
+                to: hike,
+                coordinate: nil,
+                savesToPhotoLibrary: false,
+                capturedAt: Self.shutter.addingTimeInterval(Self.reviewInterval),
+                store: sandbox.store
+            )
+        )
+
+        #expect(photo.capturedAt == Self.shutter)
+    }
+
+    /// And the other half of it: a frame the camera dated with nothing is
+    /// still worth keeping, dated by the only clock left.
+    @Test("a capture the camera didn't date falls back to the import's clock")
+    func addCapturedFallsBackWithoutAShutterTime() async throws {
+        let sandbox = Sandbox()
+        let context = try Fixture.modelContext()
+        let hike = Fixture.hike(in: context)
+        let accepted = Self.shutter.addingTimeInterval(Self.reviewInterval)
+        let frame = try #require(Self.sampleFrame(capturedAt: nil))
+
+        let photo = try #require(
+            await HikePhotoImport.add(
+                captured: frame,
+                to: hike,
+                coordinate: nil,
+                savesToPhotoLibrary: false,
+                capturedAt: accepted,
+                store: sandbox.store
+            )
+        )
+
+        #expect(photo.capturedAt == accepted)
     }
 
     /// Files directly under the photo directory, which is the full-size tier;

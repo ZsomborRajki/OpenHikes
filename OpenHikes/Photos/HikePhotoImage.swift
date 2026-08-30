@@ -26,6 +26,20 @@ nonisolated struct LoadedPhotoImage: @unchecked Sendable {
 /// A frame on its way *out* of the camera, for the same reason.
 nonisolated struct CapturedFrame: @unchecked Sendable {
     let image: PhotoImage
+    /// When the shutter fired, as the camera reported it — see
+    /// ``CameraCaptureMetadata``. `nil` when it reported nothing readable,
+    /// which is the only case where the import has to fall back to a clock.
+    ///
+    /// It travels with the frame rather than being read later because the
+    /// image itself carries none of it: a `UIImage` is pixels, and the
+    /// dictionary this comes from is handed over once, to the delegate, and
+    /// then gone.
+    let capturedAt: Date?
+
+    init(image: PhotoImage, capturedAt: Date? = nil) {
+        self.image = image
+        self.capturedAt = capturedAt
+    }
 }
 
 /// The two reads a photo view makes, each on the concurrent executor.

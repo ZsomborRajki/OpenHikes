@@ -105,7 +105,19 @@ struct CameraPicker: UIViewControllerRepresentable {
                 onCancel()
                 return
             }
-            onCapture(CapturedFrame(image: image))
+            // The metadata is the other half of what the camera produced, and
+            // this is the only place it is offered: the `UIImage` above has
+            // none of it, so a shutter time not taken here is one the app can
+            // never ask for again. See ``CameraCaptureMetadata``.
+            let metadata = info[.mediaMetadata] as? [String: Any]
+            onCapture(
+                CapturedFrame(
+                    image: image,
+                    capturedAt: metadata.flatMap { properties in
+                        CameraCaptureMetadata.capturedAt(in: properties)
+                    }
+                )
+            )
         }
 
         func imagePickerControllerDidCancel(_ picker: UIImagePickerController) {

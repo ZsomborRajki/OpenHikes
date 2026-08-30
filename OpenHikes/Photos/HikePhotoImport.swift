@@ -93,6 +93,14 @@ nonisolated enum HikePhotoImport {
     }
 
     /// Encodes a frame straight off the camera, then stores it as above.
+    ///
+    /// - Parameter capturedAt: Only the fallback. The frame's own shutter time
+    ///   wins whenever the camera reported one, because it is the truthful
+    ///   answer and this is not: a capture reaches here when the user accepts
+    ///   the shot, which is after an unbounded look at it in the review
+    ///   screen, and ``HikePhoto/capturedAt`` is what places the picture on
+    ///   the elevation profile and orders the gallery. See
+    ///   ``CameraCaptureMetadata``.
     @MainActor
     @discardableResult static func add(
         captured frame: CapturedFrame,
@@ -109,7 +117,7 @@ nonisolated enum HikePhotoImport {
             to: hike,
             coordinate: coordinate,
             savesToPhotoLibrary: savesToPhotoLibrary,
-            capturedAt: capturedAt,
+            capturedAt: frame.capturedAt ?? capturedAt,
             store: store,
             libraryWriter: libraryWriter
         )
