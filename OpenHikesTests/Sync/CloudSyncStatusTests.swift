@@ -166,6 +166,73 @@ struct CloudSyncStatusTests {
         #expect(status.activity == .idle)
     }
 
+    /// The row opens paused, and a launch with nothing to carry posts no
+    /// mirroring event at all — so without this transition the section said
+    /// "Sync Off" about a store that was mirroring the whole time.
+    @Test("A usable account with no event to report says it is synced")
+    func readyGoesIdleWithoutAnEvent() {
+        let status = CloudSyncStatus()
+        status.account = .available
+
+        status.ready()
+
+        #expect(status.activity == .idle)
+        #expect(status.title == "Synced with iCloud")
+        // Being ready is not having synced: nothing has come back with a time
+        // to show, so the row must not invent one.
+        #expect(status.lastSyncedAt == nil)
+        #expect(status.detail == "Your hikes and photos are kept in your private iCloud storage.")
+    }
+
+    /// A foregrounding re-runs the account check, so this arrives on top of
+    /// whatever the last pass left behind. It has less to say than any of it.
+    @Test(
+        "Being ready does not overwrite what a pass has already said",
+        arguments: [CloudSyncActivity.failed("Zone missing"), .retrying, .working]
+    )
+    func readyLeavesAPassAlone(activity: CloudSyncActivity) {
+        let status = CloudSyncStatus()
+        status.account = .available
+        status.began()
+        switch activity {
+        case .failed(let reason): status.failed(reason)
+        case .retrying: status.retrying()
+        default: break
+        }
+
+        status.ready()
+
+        #expect(status.activity == activity)
+    }
+
+    /// A launch that never mirrors asks iCloud nothing, so the account stays
+    /// `.unknown` forever. Ranking it above the row's answer left the section
+    /// reading "Checking iCloud…" for the rest of the session.
+    @Test("A launch that cannot mirror settles the row without asking iCloud")
+    func disabledSettlesTheRow() {
+        let status = CloudSyncStatus()
+
+        status.disabled()
+
+        #expect(status.account == .unknown)
+        #expect(status.activity == .disabled)
+        #expect(status.title == "Sync Off")
+        #expect(status.detail == "Your hikes stay on this device only.")
+    }
+
+    /// And turning it back on is the one thing that gets it moving again,
+    /// without needing an event either.
+    @Test("A disabled row can be told it is ready")
+    func disabledRowCanBecomeReady() {
+        let status = CloudSyncStatus()
+        status.disabled()
+        status.account = .available
+
+        status.ready()
+
+        #expect(status.activity == .idle)
+    }
+
     /// No account outranks whatever the engine last managed to do: there is
     /// nothing actionable in "Sync Problem" when the real answer is "sign in".
     @Test("A missing account outranks the activity")
