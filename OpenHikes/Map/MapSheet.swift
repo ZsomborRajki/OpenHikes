@@ -260,6 +260,7 @@ struct MapSheet: View {
                 highlight: highlight,
                 mapController: mapController,
                 autoSave: appModel.autoSaveController,
+                entitlement: appModel.entitlement,
                 locationManager: appModel.locationManager,
                 backgroundTracker: appModel.backgroundTracker,
                 trailGraphProvider: appModel.trailGraphProvider,

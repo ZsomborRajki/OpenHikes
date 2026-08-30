@@ -36,17 +36,57 @@ nonisolated enum MapEntitlementState: Sendable, Equatable {
     /// that a non-paying user sees a paid map until StoreKit answers, which
     /// takes a moment and costs a handful of tiles; the cost of being wrong in
     /// the other direction is that every paying user watches their map change
-    /// underneath them on every launch. Settings resolves before it offers the
-    /// choice, so this window cannot be used to *select* a paid source.
+    /// underneath them on every launch. Selecting is stricter — see
+    /// ``tapAction(for:)``, which is what keeps this window from being used to
+    /// *choose* a paid source.
     func allows(_ provider: TileProvider) -> Bool {
         guard provider.requiresPaidAccess else { return true }
         return self != .notEntitled
     }
 
-    /// Whether the answer is settled. Settings waits for this before deciding
-    /// which rows to lock, so a row never flips from unlocked to locked under
-    /// the user's finger.
+    /// What a tap on `provider`'s row in Settings should do.
+    ///
+    /// Stricter than ``allows(_:)`` in exactly one state, and that asymmetry is
+    /// the point. Drawing a paid source through the unresolved window costs a
+    /// handful of tiles and is undone the moment StoreKit answers; *selecting*
+    /// one writes an id that outlives the window. ``SettingsKey/tileProviderID``
+    /// is persisted and travels through iCloud, and ``TileProvider/renderable(id:entitlement:)``
+    /// deliberately never rewrites it — so a tap taken before the answer
+    /// arrives leaves a paid id on every device of a user who may never have
+    /// been entitled to it.
+    ///
+    /// Three answers rather than a `Bool` because "not selectable" covers two
+    /// different rows: one that has not been bought, where the tap has
+    /// somewhere useful to go, and one whose entitlement has not resolved,
+    /// where it has not.
+    func tapAction(for provider: TileProvider) -> MapProviderTap {
+        guard provider.requiresPaidAccess else { return .select }
+        switch self {
+        case .entitled: return .select
+        case .notEntitled: return .unlock
+        case .unknown: return .wait
+        }
+    }
+
+    /// Whether the answer is settled — the name for the window `unknown`
+    /// stands for, which is what both halves of the gate above are shaped
+    /// around and what the store's own suites assert against.
     var isResolved: Bool { self != .unknown }
+}
+
+/// What tapping a provider's row in Settings should do.
+///
+/// Switched over exhaustively in ``MapEntitlementState/tapAction(for:)``, so a
+/// fourth entitlement state cannot be added without deciding what a tap on a
+/// paid row does while the app is in it.
+nonisolated enum MapProviderTap: Equatable {
+    /// Persist the tapped provider as the selection.
+    case select
+    /// Open the paywall: the source is real and available, just not bought.
+    case unlock
+    /// Nothing, yet. StoreKit has not answered, so the row is disabled until it
+    /// does rather than swallowing the tap and looking broken.
+    case wait
 }
 
 /// The process-wide entitlement, readable from any thread.

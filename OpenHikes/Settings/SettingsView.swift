@@ -358,22 +358,31 @@ struct SettingsView: View {
     ///
     /// A locked commercial source is shown for the opposite reason: it *is*
     /// available, just not yet bought, so tapping it opens the paywall rather
-    /// than doing nothing. Locking waits for `entitlement.state.isResolved`,
-    /// so a paying user's row never flips from unlocked to locked under their
+    /// than doing nothing. Locking still waits for a resolved entitlement, so
+    /// a paying user's row never flips from unlocked to locked under their
     /// finger while StoreKit is still answering.
+    ///
+    /// A paid row in that unresolved window is neither: it is dimmed and
+    /// disabled, because the one thing it must not do is *select*. The id is
+    /// persisted and synced, so a tap taken before StoreKit answers would
+    /// outlive the window on every device — see
+    /// ``MapEntitlementState/tapAction(for:)``. Disabled rather than a tap
+    /// that quietly does nothing, which is the same dead end the keyless rows
+    /// were fixed for.
     private func providerRow(_ provider: TileProvider) -> some View {
         let isUsable = Secrets.canLoadTiles(provider)
-        let isLocked = provider.requiresPaidAccess
-            && entitlement.state.isResolved
-            && !entitlement.isEntitled
+        let tap = entitlement.state.tapAction(for: provider)
+        let isLocked = tap == .unlock
         // Against the *effective* provider, so a stored id that has since lost
         // its key doesn't leave a checkmark on a row the map is ignoring.
         let isSelected = provider.id == selectedProvider.id
         return Button {
-            if isLocked {
-                showPaywall = true
-            } else {
-                tileProviderID = provider.id
+            switch tap {
+            case .select: tileProviderID = provider.id
+            case .unlock: showPaywall = true
+            // Unreachable while the row is disabled below, and kept so the
+            // rule survives that `.disabled` ever being loosened.
+            case .wait: break
             }
         } label: {
             HStack(alignment: .top, spacing: 12) {
@@ -404,8 +413,8 @@ struct SettingsView: View {
         }
         .buttonStyle(.plain)
         .foregroundStyle(.primary)
-        .opacity(isUsable ? 1 : Self.disabledOpacity)
-        .disabled(!isUsable)
+        .opacity(isUsable && tap != .wait ? 1 : Self.disabledOpacity)
+        .disabled(!isUsable || tap == .wait)
         // Which provider is in use was drawn as a checkmark and nothing else,
         // and that checkmark is hidden from VoiceOver as decoration — so the
         // selection was unreadable without it.
@@ -413,8 +422,19 @@ struct SettingsView: View {
         // The badge is a `Text` inside a composite row, so it is spoken only
         // if the row says it: "Pro" alone would also not explain that the
         // tap opens a purchase screen rather than switching the map.
-        .accessibilityHint(isLocked ? "Requires OpenHikes Pro. Opens the unlock screen." : "")
+        .accessibilityHint(Self.providerRowHint(tap))
         .accessibilityIdentifier("provider-row-\(provider.id)")
+    }
+
+    /// Spoken after the row, because the badge is a `Text` inside a composite
+    /// element and the disabled state of a waiting row explains itself to
+    /// nobody.
+    private static func providerRowHint(_ tap: MapProviderTap) -> String {
+        switch tap {
+        case .select: ""
+        case .unlock: "Requires OpenHikes Pro. Opens the unlock screen."
+        case .wait: "Checking your subscription."
+        }
     }
 
     private func badge(_ title: String, tinted: Bool = false) -> some View {
