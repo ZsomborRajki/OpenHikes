@@ -5,9 +5,15 @@
 //  What the settings screen is allowed to say about sync, and the only place
 //  that decides how to say it.
 //
-//  Separate from the engine because the engine is an `actor` — the delegate
-//  protocol requires `Sendable` — and a SwiftUI body cannot await one. This is
-//  the small, main-actor, observable surface it publishes into.
+//  Separate from ``CloudSyncCoordinator`` because the two answer different
+//  questions. The coordinator owns the container, the switch and the mirroring
+//  observer; this owns the sentence. Splitting them is what lets the reducer
+//  be driven straight from a test — see ``CloudSyncCoordinator/apply(_:)`` —
+//  without a settings screen, and keeps every string the row can show in one
+//  file.
+//
+//  Both are `@MainActor` and `@Observable`, and the coordinator holds this as
+//  a plain `let`, so a SwiftUI body reads it directly with nothing to await.
 //
 
 import CloudKit
