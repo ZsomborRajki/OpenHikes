@@ -308,4 +308,91 @@ struct PhotoDiscoveryControllerTests {
         #expect(imported == 0)
         #expect(library.calls.withLock(\.dataReads) == 0)
     }
+
+    /// Tapping Done while the copy loop is running.
+    ///
+    /// The import starts in a button's own `Task`, which a dismissed sheet
+    /// does not touch — so it used to keep reading full-size assets for a
+    /// screen that had gone, and keep writing `phase`, `matches` and
+    /// `importFailed` that nothing was drawing. This controller outlives its
+    /// sheet by design, so those writes were not merely wasted: reopening the
+    /// sheet starts a fresh ``PhotoDiscoveryController/search(in:)``, and the
+    /// abandoned import's tail was free to land on top of it.
+    ///
+    /// The gate is what puts the dismissal *during* the loop rather than
+    /// before or after it, and both halves are asserted: the second asset is
+    /// never read, and nothing the sheet draws is written after the cancel.
+    @Test("dismissing the sheet mid-import stops it and leaves its state alone")
+    func dismissedSheetCancelsTheImport() async throws {
+        let sandbox = PhotoStoreSandbox()
+        let gate = TestGate()
+        let library = StubPhotoLibraryFixture(
+            assets: [
+                PhotoDiscoveryFixture.asset("a", atStep: 2),
+                PhotoDiscoveryFixture.asset("b", atStep: 5),
+            ],
+            dataGate: gate
+        )
+        let controller = PhotoDiscoveryController(reader: library)
+        let context = try Fixture.modelContext()
+        let hike = Fixture.hike(in: context, route: PhotoDiscoveryFixture.route)
+        await controller.search(in: hike)
+
+        let importing = Task { @MainActor in
+            await controller.runImport(into: hike, store: sandbox.store)
+        }
+        await settleDelegateHop(until: "the import to reach its first asset") {
+            gate.isHolding
+        }
+        // What the sheet's `onDisappear` does.
+        controller.cancelImport()
+        gate.open()
+        _ = await importing.value
+
+        #expect(
+            library.calls.withLock(\.dataReads) == 1,
+            "the second asset is never read"
+        )
+        #expect(!controller.importFailed, "an abandoned import is not a failed one")
+        #expect(
+            controller.matches.map(\.id) == ["a", "b"],
+            "and the grid is left as it was, for the search a reopen will run"
+        )
+    }
+
+    /// The half of the cancellation that must *not* be undone: a picture whose
+    /// bytes already reached the app is the user's, and closing the sheet is
+    /// not a request to give it back.
+    @Test("a cancelled import keeps what already landed")
+    func cancelledImportKeepsWhatLanded() async throws {
+        let sandbox = PhotoStoreSandbox()
+        let gate = TestGate()
+        let library = StubPhotoLibraryFixture(
+            assets: [
+                PhotoDiscoveryFixture.asset("a", atStep: 2),
+                PhotoDiscoveryFixture.asset("b", atStep: 5),
+            ],
+            dataGate: gate
+        )
+        let controller = PhotoDiscoveryController(reader: library)
+        let context = try Fixture.modelContext()
+        let hike = Fixture.hike(in: context, route: PhotoDiscoveryFixture.route)
+        await controller.search(in: hike)
+
+        let importing = Task { @MainActor in
+            await controller.runImport(into: hike, store: sandbox.store)
+        }
+        await settleDelegateHop(until: "the import to reach its first asset") {
+            gate.isHolding
+        }
+        controller.cancelImport()
+        gate.open()
+        _ = await importing.value
+
+        #expect(hike.photos.map(\.assetLocalIdentifier) == ["a"])
+        // And a search run when the sheet is reopened offers only what was
+        // left, because the one that landed is now claimed by the hike.
+        await controller.search(in: hike)
+        #expect(controller.matches.map(\.id) == ["b"])
+    }
 }

@@ -27,8 +27,10 @@ nonisolated enum HikePhotoImport {
     ///   ``SettingsKey/savePhotosToLibrary``. Off by default, and the reason
     ///   the library permission prompt appears here rather than at launch.
     /// - Parameter assetLocalIdentifier: The library asset these bytes were
-    ///   copied out of, for a photo found by ``LibraryPhotoMatcher``. Recorded
-    ///   so a later scan doesn't offer the same picture twice.
+    ///   copied out of, for a photo that came out of the user's photo library
+    ///   — found by ``LibraryPhotoMatcher``, or handed over by the picker.
+    ///   Recorded so the same picture cannot be attached to one walk twice,
+    ///   and checked here before anything is written.
     /// - Parameter matchEvidence: How the coordinate above was arrived at, for
     ///   the same case. `nil` for every photo the app itself placed.
     /// - Parameter libraryWriter: The seam the mirrored copy goes through, so
@@ -36,7 +38,9 @@ nonisolated enum HikePhotoImport {
     ///   into.
     /// - Returns: The stored photo, or `nil` when the bytes were not an image,
     ///   could not be written, or the hike went away while they were being
-    ///   written.
+    ///   written. A photo this hike already holds for `assetLocalIdentifier`
+    ///   comes back as-is: the asset is in the walk, which is what the caller
+    ///   asked for, so this is a success and not a failure to report.
     @MainActor
     @discardableResult static func add(
         _ data: Data,
@@ -49,6 +53,16 @@ nonisolated enum HikePhotoImport {
         store: HikePhotoStore = .shared,
         libraryWriter: any PhotoLibraryWriting = PhotoLibraryWriter()
     ) async -> HikePhoto? {
+        // Asked before the bytes are written rather than after, so a repeat
+        // costs no file and no decode. The scan filters its own offers by the
+        // same identifiers, but the picker cannot: it hands over whatever the
+        // user tapped, and a selection that overlaps an earlier one is an
+        // ordinary thing to do — the picker shows no sign of what this app
+        // already has.
+        if let assetLocalIdentifier,
+           let existing = hike.importedPhoto(forAsset: assetLocalIdentifier) {
+            return existing
+        }
         guard let photo = await stored(
             data,
             capturedAt: capturedAt,
@@ -65,6 +79,15 @@ nonisolated enum HikePhotoImport {
         guard hike.isAttached else {
             discardFiles([photo], from: store)
             return nil
+        }
+        // And long enough for the other library surface to have attached this
+        // very asset in the meantime — the scan and the picker are two ways to
+        // reach the same photograph, and only a check on this side of the
+        // suspension can see the one that got there first.
+        if let assetLocalIdentifier,
+           let existing = hike.importedPhoto(forAsset: assetLocalIdentifier) {
+            discardFiles([photo], from: store)
+            return existing
         }
         hike.addPhoto(photo)
         if savesToPhotoLibrary {

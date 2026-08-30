@@ -113,6 +113,11 @@ nonisolated final class StubPhotoLibraryFixture: PhotoLibraryReading {
     /// Held at, so a test can arrange something while the flow is genuinely
     /// mid-fetch rather than before or after one.
     private let fetchGate: TestGate?
+    /// The same trick one step later: held at the *first* asset an import
+    /// reads, so a test can act while the copy loop is genuinely part-way
+    /// through rather than before or after it. One-shot, like the gate itself
+    /// — every read after the first goes straight through.
+    private let dataGate: TestGate?
     private let state: Mutex<State>
 
     init(
@@ -120,11 +125,13 @@ nonisolated final class StubPhotoLibraryFixture: PhotoLibraryReading {
         assets: [PhotoLibraryAsset] = [],
         unreadable: Set<String> = [],
         assetsSharedByPicker: [PhotoLibraryAsset] = [],
-        fetchGate: TestGate? = nil
+        fetchGate: TestGate? = nil,
+        dataGate: TestGate? = nil
     ) {
         self.unreadable = unreadable
         self.assetsSharedByPicker = assetsSharedByPicker
         self.fetchGate = fetchGate
+        self.dataGate = dataGate
         state = Mutex(State(access: access, assets: assets))
     }
 
@@ -184,6 +191,7 @@ nonisolated final class StubPhotoLibraryFixture: PhotoLibraryReading {
 
     func imageData(for localIdentifier: String) async -> Data? {
         calls.withLock { $0.dataReads += 1 }
+        await dataGate?.wait()
         guard !unreadable.contains(localIdentifier) else { return nil }
         return PhotoDiscoveryFixture.sampleImageData()
     }
