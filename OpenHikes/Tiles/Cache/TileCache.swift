@@ -629,7 +629,7 @@ nonisolated extension TileCache {
     /// ``fetchTileOnce(forKey:url:)`` rather than calling this directly.
     private func fetchTile(forKey key: String, url: URL) async -> FetchedTile? {
         #if DEBUG
-        Self.logger.debug("Requesting tile \(key, privacy: .public) from \(url.absoluteString, privacy: .public)")
+        Self.logger.debug("Requesting tile \(key, privacy: .public) from \(url.redactedForLogging, privacy: .public)")
         #endif
         // The counter an offline-first app is judged on. Everything else in
         // this file is about *not* reaching here; this is the one place that
@@ -652,7 +652,7 @@ nonisolated extension TileCache {
                 recordRetryAdvice(from: http, forKey: key)
                 #if DEBUG
                 let tileErrMsg = "Tile \(key) failed: HTTP \(http.statusCode)"
-                    + " (\(data.count)b) from \(url.absoluteString)"
+                    + " (\(data.count)b) from \(url.redactedForLogging)"
                 Self.logger.error("\(tileErrMsg, privacy: .public)")
                 #endif
                 return nil
