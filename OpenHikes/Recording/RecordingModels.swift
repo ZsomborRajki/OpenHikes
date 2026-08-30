@@ -17,7 +17,17 @@ nonisolated struct RecordingPointFlags: OptionSet, Codable, Hashable, Sendable {
     let rawValue: UInt32
 
     static let resumed = Self(rawValue: 1 << 0)
-    static let stationary = Self(rawValue: 1 << 1)
+    // Bit 1 is spent, and stays spent. It carried `stationary`: the distance
+    // accumulator's own verdict, written back onto the point it had just been
+    // handed. Nothing ever read it, and nothing could have learned anything
+    // from it — the verdict is a function of the points before it, so every
+    // reader either holds the live accumulator
+    // (``HikeRecorder/resolvedEnergyProfile()``) or replays them
+    // (``HikeRecorder/rebuildLiveState(from:)``,
+    // ``RecordingPreparation``). Journals recorded before it was dropped still
+    // have the bit set and still decode, the flags field being a raw `UInt32`
+    // — which is exactly why a new flag must not be given the bit. Every one
+    // of those old stationary fixes would arrive making the new claim.
     static let widgetSourced = Self(rawValue: 1 << 2)
     static let motionStationary = Self(rawValue: 1 << 3)
     static let nonPedestrian = Self(rawValue: 1 << 4)

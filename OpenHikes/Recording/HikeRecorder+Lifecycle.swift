@@ -210,9 +210,6 @@ extension HikeRecorder {
         var point = RecordingPoint(location: location, flags: consumeFlagsForNextPoint())
         point.elevation = elevationFilter.elevation(for: location)
         let distance = accumulator.append(point)
-        if accumulator.isStationary {
-            point.flags.insert(.stationary)
-        }
         // An immutable copy: the journal append below hands this to a
         // `@Sendable` closure, which cannot capture the mutable `point`.
         let accepted = point

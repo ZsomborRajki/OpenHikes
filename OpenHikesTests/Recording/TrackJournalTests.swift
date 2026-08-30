@@ -72,6 +72,37 @@ struct TrackJournalTests {
         )
     }
 
+    /// Bit 1 carried `stationary` until it was dropped for being a verdict
+    /// the accumulator recomputes anyway. Journals written before that still
+    /// have it set, and the record's flags field is a raw `UInt32`, so those
+    /// points decode with the bit for as long as they exist. The failure this
+    /// guards is the one that would follow from renumbering: a new flag handed
+    /// bit 1 would find every stationary fix ever recorded already claiming it.
+    @Test("a retired flag bit decodes as itself and belongs to no flag")
+    func retiredFlagBitIsNotReused() async throws {
+        let directory = try sandbox()
+        defer { try? FileManager.default.removeItem(at: directory) }
+        let journal = TrackJournal(directory: directory)
+        let retired = RecordingPointFlags(rawValue: 1 << 1)
+
+        try await journal.start(sessionID: UUID(), startedAt: start)
+        var legacy = point(0)
+        legacy.flags = retired
+        try await journal.append(legacy)
+        try await journal.flush()
+
+        let session = try #require(try await journal.loadSession())
+        let decoded = try #require(session.points.first)
+        #expect(decoded.flags == retired)
+        let named: RecordingPointFlags = [
+            .resumed, .widgetSourced, .motionStationary, .nonPedestrian, .inferred
+        ]
+        #expect(
+            decoded.flags.isDisjoint(with: named),
+            "bit 1 was handed to a new flag, which old journals already set"
+        )
+    }
+
     @Test("widget anchors merge once and retain their source flag")
     func widgetFixMerge() async throws {
         let directory = try sandbox()
