@@ -52,6 +52,14 @@ struct PhotoDiscoverySheet: View {
         .task {
             await controller.search(in: hike)
         }
+        // The search above is cancelled for us — a `.task` is tied to the view
+        // that declares it. An import is not: it starts in a button action, in
+        // a `Task` the sheet's disappearance does not reach. So it is stopped
+        // by hand, here, and for more than tidiness — the controller is owned
+        // by the screen behind this sheet rather than by the sheet, so an
+        // import left running would still be writing into the state that a
+        // reopened sheet's search is filling.
+        .onDisappear { controller.cancelImport() }
     }
 
     @ViewBuilder private var content: some View {
@@ -427,7 +435,10 @@ private struct DiscoveryAddButton: View {
         let count = controller.selectedCount
         return Button(count > 0 ? String(localized: "Add \(count)") : String(localized: "Add")) {
             Task {
-                let added = await controller.importSelected(into: hike)
+                // Through the controller rather than straight to
+                // `importSelected`, so the work has an owner that outlives
+                // this button and can be cancelled when the sheet goes.
+                let added = await controller.runImport(into: hike)
                 // Something landed and nothing is left to review: the sheet
                 // has finished its job, and leaving it up on its empty state
                 // would read as an import that found nothing rather than as

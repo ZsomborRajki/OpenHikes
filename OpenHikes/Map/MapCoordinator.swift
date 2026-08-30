@@ -15,7 +15,11 @@ import UIKit
 
 extension MapView {
     final class Coordinator: NSObject, MKMapViewDelegate {
-        var hasCentered = false
+        /// Whether the user's first fix has been dealt with — either by
+        /// centring the map on it, or by deliberately leaving the viewport to
+        /// a selected route. Recorded either way, so a later deselection
+        /// doesn't hand the next fix a recentre the user never asked for.
+        var hasHandledFirstFix = false
         /// Guards `observeLocation` so `update(_:_:)` — called on every
         /// SwiftUI-driven pass — only starts the location-tracking loop once.
         private var isObservingLocation = false
@@ -302,10 +306,13 @@ extension MapView {
         }
 
         /// Centers the map on the user's first fix, once. A route, once
-        /// present, owns the viewport — don't also recenter on the user.
+        /// present, owns the viewport — that fix is spent rather than saved,
+        /// so deselecting the route later doesn't let the next fix recentre a
+        /// map the user has since panned somewhere else.
         private func centerOnUser(_ coordinate: CLLocationCoordinate2D?, on mapView: MKMapView) {
-            guard routeID == nil, let coordinate, !hasCentered else { return }
-            hasCentered = true
+            guard let coordinate, !hasHandledFirstFix else { return }
+            hasHandledFirstFix = true
+            guard routeID == nil else { return }
             RenderSignpost.mark("MapCentered")
             let region = MKCoordinateRegion(
                 center: coordinate,

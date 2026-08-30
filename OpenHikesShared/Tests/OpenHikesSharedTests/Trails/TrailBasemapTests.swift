@@ -30,6 +30,15 @@ struct TrailBasemapTests {
         UnitMercatorRect(bounding: trail) ?? UnitMercatorRect(originX: 0, originY: 0, width: 0, height: 0)
     }
 
+    /// A short walk on Taveuni, which the 180th meridian runs straight
+    /// through — the shape a bounding box has to answer the short way round.
+    static let antimeridianTrail: [SharedTrailSnapshot.CodableCoordinate] = [
+        .init(latitude: -16.7500, longitude: 179.9800),
+        .init(latitude: -16.7600, longitude: 179.9950),
+        .init(latitude: -16.7700, longitude: -179.9900),
+        .init(latitude: -16.7800, longitude: -179.9750),
+    ]
+
     /// Real widget point sizes, so variant selection is exercised against
     /// what the system actually hands the view.
     static let widgetSizes: [(name: String, size: CGSize)] = [
@@ -364,5 +373,72 @@ struct TrailBasemapTests {
         )
         let decoded = try JSONDecoder().decode(TrailBasemapSet.self, from: JSONEncoder().encode(set))
         #expect(decoded == set)
+    }
+}
+
+// MARK: - Across the antimeridian
+
+extension TrailBasemapTests {
+    /// A route crossing ±180° is the one case where a plain min/max of unit x
+    /// answers with the rest of the world instead of the route: the two ends
+    /// sit at either edge of the projection, so the box that "contains" them
+    /// spans very nearly the whole globe — and that box is what the widget's
+    /// basemap gets rendered at, leaving a continent-wide map with a trail
+    /// too small to see. Measured in metres, because that is the claim: the
+    /// box is as wide as the walk, not as wide as the earth.
+    @Test("a trail across the antimeridian is bounded the short way round")
+    func boundingAcrossTheAntimeridian() throws {
+        let box = try #require(UnitMercatorRect(bounding: Self.antimeridianTrail))
+        let widthMeters = box.width * Mercator.metersPerUnit(atLatitude: box.centerLatitude)
+        #expect(widthMeters > 1000)
+        #expect(widthMeters < 20_000)
+
+        // West edge inside the world, east edge past it — the shape that says
+        // "crosses the antimeridian" rather than "starts a lap short of it".
+        #expect((0..<1).contains(box.originX))
+        #expect(box.originX + box.width > 1)
+
+        for point in Self.antimeridianTrail {
+            let normalized = box.normalizedPoint(latitude: point.latitude, longitude: point.longitude)
+            #expect((-1e-9...(1 + 1e-9)).contains(normalized.x), "\(point.longitude)° fell outside the box")
+            #expect((-1e-9...(1 + 1e-9)).contains(normalized.y))
+        }
+    }
+
+    /// The same route framed for a real widget shape still has to be a walk
+    /// rather than a hemisphere — framing is what the renderer actually hands
+    /// the snapshotter.
+    @Test("framing a trail across the antimeridian stays tight", arguments: TrailBasemapVariant.allCases)
+    func framedAcrossTheAntimeridian(variant: TrailBasemapVariant) throws {
+        let box = try #require(UnitMercatorRect(bounding: Self.antimeridianTrail))
+        let framed = box.framed(toAspectRatio: variant.aspectRatio)
+        #expect(framed.width < 0.01, "the frame grew to \(framed.width) of the world")
+        #expect((0..<1).contains(framed.originX))
+
+        for point in Self.antimeridianTrail {
+            let normalized = framed.normalizedPoint(latitude: point.latitude, longitude: point.longitude)
+            #expect((0...1).contains(normalized.x), "\(point.longitude)° was framed out of the image")
+            #expect((0...1).contains(normalized.y))
+        }
+    }
+
+    /// The control. Every route that does *not* cross ±180° has to keep the
+    /// box it always had — a cyclic span is only an improvement if it agrees
+    /// with the ordinary answer everywhere else, including a route that
+    /// straddles the prime meridian, where the wrap does not apply.
+    @Test("an ordinary trail is bounded exactly as before")
+    func boundingIsUnchangedAwayFromTheAntimeridian() throws {
+        let greenwich: [SharedTrailSnapshot.CodableCoordinate] = [
+            .init(latitude: 51.4780, longitude: -0.0050),
+            .init(latitude: 51.4790, longitude: 0.0000),
+            .init(latitude: 51.4800, longitude: 0.0060),
+        ]
+        let box = try #require(UnitMercatorRect(bounding: greenwich))
+        #expect(abs(box.originX - Mercator.unitX(longitude: -0.0050)) < 1e-15)
+        #expect(abs(box.width - (0.0110 / 360)) < 1e-12)
+
+        let cupertino = try #require(UnitMercatorRect(bounding: Self.trail))
+        #expect(abs(cupertino.originX - Mercator.unitX(longitude: -122.0140)) < 1e-15)
+        #expect(abs(cupertino.width - (0.0120 / 360)) < 1e-12)
     }
 }

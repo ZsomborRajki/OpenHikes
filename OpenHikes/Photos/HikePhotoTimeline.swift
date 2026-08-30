@@ -202,4 +202,16 @@ extension Hike {
     var importedPhotoAssetIdentifiers: Set<String> {
         Set(photos.compactMap(\.assetLocalIdentifier))
     }
+
+    /// The photo this hike already holds for a library asset, if it holds one.
+    ///
+    /// The scan's filter above answers the same question in bulk, before
+    /// anything is offered. This one answers it for a single asset at the
+    /// moment it is about to be written, which is where the picker's own
+    /// duplicates have to be caught: that surface has no list to filter — it
+    /// hands over whatever the user tapped, including a photograph they
+    /// already imported on a previous pick.
+    func importedPhoto(forAsset localIdentifier: String) -> HikePhoto? {
+        photos.first { $0.assetLocalIdentifier == localIdentifier }
+    }
 }
