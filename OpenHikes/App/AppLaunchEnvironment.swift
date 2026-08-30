@@ -42,10 +42,16 @@ nonisolated enum AppLaunchEnvironment {
         /// arguments parses to.
         static let production = Self()
 
-        private init() {
+        // periphery:ignore - as above: only the `#else` branch reads this.
+        /// What a release-configuration launch that is hosting a test bundle
+        /// gets. Production in every respect except that Core Location stays
+        /// dormant — see ``usesLiveLocation``.
+        static let hostedTests = Self(usesLiveLocation: false)
+
+        private init(usesLiveLocation: Bool = true) {
             isUITesting = false
             startsWithExpandedSheet = false
-            usesLiveLocation = true
+            self.usesLiveLocation = usesLiveLocation
             importedGPXFixtureName = nil
             trailGraphFixtureName = nil
             performanceLogScenario = nil
@@ -81,12 +87,26 @@ nonisolated enum AppLaunchEnvironment {
         /// the screen draws; past that a scenario is only re-reading itself.
         private static let maximumSeededMetricsReports = 8
 
-        init(arguments: [String]) {
+        /// - Parameters:
+        ///   - arguments: the process arguments to parse.
+        ///   - isHostingTests: whether this process was launched to host a
+        ///     test bundle. Not derivable from `arguments` — it is an
+        ///     environment variable — so it is passed in, which is also what
+        ///     lets a suite parse a hosted launch without being one.
+        init(arguments: [String], isHostingTests: Bool = false) {
             isUITesting = arguments.contains(Self.uiTestingArgument)
             startsWithExpandedSheet = isUITesting
                 && arguments.contains(Self.expandedSheetArgument)
-            usesLiveLocation = !isUITesting
-                || arguments.contains(Self.liveLocationArgument)
+            // A hosted test bundle never drives the real Core Location stack.
+            // Both unit bundles are hosted by the app, so the host reaches
+            // `.onAppear` before any test runs: it would put an authorization
+            // alert in front of the run, and re-arm significant-change
+            // monitoring against whatever the developer's own defaults say the
+            // last selected trail was. UI tests are the opposite case — they
+            // drive a real app out of process, and the scenarios that record a
+            // hike ask for the live feed by name.
+            usesLiveLocation = !isHostingTests
+                && (!isUITesting || arguments.contains(Self.liveLocationArgument))
             simulatesOffline = isUITesting
                 && arguments.contains(Self.offlineArgument)
             importedGPXFixtureName = Self.fixtureName(
@@ -182,9 +202,12 @@ nonisolated enum AppLaunchEnvironment {
 
     private static let configuration: Configuration = {
         #if DEBUG
-        Configuration(arguments: ProcessInfo.processInfo.arguments)
+        Configuration(
+            arguments: ProcessInfo.processInfo.arguments,
+            isHostingTests: isHostingTests
+        )
         #else
-        .production
+        isHostingTests ? .hostedTests : .production
         #endif
     }()
     private static let uiTestingDefaultsSuite =
@@ -208,6 +231,15 @@ nonisolated enum AppLaunchEnvironment {
     static let isRunningTests = isHostingTests || isUITesting
     static let startsWithExpandedSheet =
         configuration.startsWithExpandedSheet
+    /// Whether this launch should drive the real Core Location stack.
+    ///
+    /// False for a hosted test launch and for any UI-test launch that did not
+    /// ask for the live feed. A launch this is false for gets no fixes *and*
+    /// no live manager: see ``DormantLocationSource``, which is what the app
+    /// composes in place of `CLLocationManager`. Not calling `start()` is a
+    /// weaker guarantee than not having one — the background tracker arms
+    /// itself from `UserDefaults` in its own `init`, with nobody calling
+    /// anything.
     static let usesLiveLocation = configuration.usesLiveLocation
     static let importedGPXFixtureName =
         configuration.importedGPXFixtureName

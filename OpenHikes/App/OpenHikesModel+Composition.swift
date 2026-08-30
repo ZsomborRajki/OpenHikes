@@ -73,6 +73,7 @@ extension OpenHikesModel {
             container: load.container,
             backgroundTracker: BackgroundTrailTracker(
                 container: load.container,
+                monitor: Self.dormantLocationSource(),
                 defaults: launchDefaults,
                 liveActivityController: liveActivities
             ),
@@ -83,7 +84,7 @@ extension OpenHikesModel {
                 defaults: launchDefaults,
                 liveActivityController: liveActivities
             ),
-            locationManager: LocationManager(),
+            locationManager: LocationManager(manager: Self.dormantLocationSource()),
             weatherManager: WeatherManager(),
             trailGraphProvider: graphProvider,
             defaults: launchDefaults,
@@ -111,6 +112,7 @@ extension OpenHikesModel {
             container: testingContainer,
             backgroundTracker: BackgroundTrailTracker(
                 container: testingContainer,
+                monitor: Self.dormantLocationSource(),
                 defaults: uiTestingDefaults,
                 liveActivityController: liveActivities
             ),
@@ -125,7 +127,7 @@ extension OpenHikesModel {
                     AppLaunchEnvironment.recordingJournalDirectory(),
                 automaticallyRecovers: false
             ),
-            locationManager: LocationManager(),
+            locationManager: LocationManager(manager: Self.dormantLocationSource()),
             weatherManager: WeatherManager(),
             trailGraphProvider: graphProvider,
             defaults: uiTestingDefaults
@@ -239,6 +241,22 @@ private extension OpenHikesModel {
             presenter: SystemHikeActivityPresenter(),
             defaults: defaults
         )
+    }
+
+    /// The location stack for a launch that must not have one, or `nil` when
+    /// this launch should build the real `CLLocationManager`.
+    ///
+    /// A fresh instance per call: the foreground feed and the background
+    /// tracker deliberately hold separate managers — see the file comment on
+    /// ``BackgroundTrailTracker`` — and sharing one stand-in would quietly make
+    /// that untrue for exactly the launches this is here to protect.
+    ///
+    /// Read through ``AppLaunchEnvironment/usesLiveLocation`` rather than
+    /// through `isHostingTests`, because the question is the same one
+    /// ``OpenHikesView`` asks before calling `start()`: two answers to "does
+    /// this launch use location?" is how one of them ends up wrong.
+    static func dormantLocationSource() -> DormantLocationSource? {
+        AppLaunchEnvironment.usesLiveLocation ? nil : DormantLocationSource()
     }
 
     /// The auto-save controller wired to the real selected map source. ///
