@@ -31,28 +31,58 @@ nonisolated enum GPXImport {
         /// Total length in meters, computed once while preparing the import.
         let distanceMeters: Double
 
+        /// Built from `<trkseg>`-shaped runs rather than one flat list, so the
+        /// file's own boundaries survive into the route.
+        ///
+        /// A track paused and resumed is still one hike and still one line —
+        /// the app has a single `route` per hike and nothing to draw a hole in
+        /// it with — but the leg joining two segments crosses ground the file
+        /// never recorded, and saying so is exactly what ``RouteProvenance``
+        /// exists for. Marking it `.inferred` is what makes the map draw that
+        /// leg as a guess and the statistics count it as unobserved, instead
+        /// of presenting a stretch nobody walked with the same authority as
+        /// the fixes on either side of it.
+        ///
+        /// Its length still counts towards ``distanceMeters``, for the same
+        /// reason a recording's own gaps do: the walker covered that ground
+        /// somehow, and a total that silently omitted it would be shorter than
+        /// the walk. What the hike then says about it is how much of the
+        /// length was inferred.
         init(
             name: String?,
             trackDescription: String?,
             author: String?,
             keywords: String?,
             startTime: Date?,
-            points: [Point]
+            segments: [[Point]]
         ) {
             self.name = name
             self.trackDescription = trackDescription
             self.author = author
             self.keywords = keywords
             self.startTime = startTime
-            self.points = points
-            route = points.map { point in
-                RouteCoordinate(
-                    latitude: point.coordinate.latitude,
-                    longitude: point.coordinate.longitude,
-                    elevation: point.elevation,
-                    timestamp: point.time
-                )
+            points = Array(segments.joined())
+
+            var coordinates: [RouteCoordinate] = []
+            coordinates.reserveCapacity(points.count)
+            for (offset, segment) in segments.enumerated() {
+                for (index, point) in segment.enumerated() {
+                    coordinates.append(
+                        RouteCoordinate(
+                            latitude: point.coordinate.latitude,
+                            longitude: point.coordinate.longitude,
+                            elevation: point.elevation,
+                            timestamp: point.time,
+                            // The mark belongs to the point a segment *opens*
+                            // with, because provenance describes the leg
+                            // arriving at a point. The very first point of the
+                            // route arrives from nowhere, so it stays measured.
+                            provenance: offset > 0 && index == 0 ? .inferred : nil
+                        )
+                    )
+                }
             }
+            route = coordinates
 
             var cumulativeDistance = 0.0
             for (start, end) in points.adjacentPairs() {
@@ -115,12 +145,23 @@ nonisolated enum GPXImport {
 
     /// Why a file couldn't be turned into a hike.
     ///
-    /// Worth distinguishing rather than collapsing to "import failed": the
-    /// four mean genuinely different things to whoever picked the file, and
-    /// send them somewhere different to fix it. The import used to say nothing
+    /// Worth distinguishing rather than collapsing to "import failed": each
+    /// means something genuinely different to whoever picked the file, and
+    /// sends them somewhere different to fix it. The import used to say nothing
     /// at all — a picked file that produced no hike looked exactly like a
     /// picked file that was ignored.
-    enum ImportFailure: LocalizedError, Equatable, Sendable {
+    ///
+    /// `CaseIterable` so the suite can walk every case and insist it carries
+    /// copy: a case added here without a sentence to show is an empty alert,
+    /// and a hand-written list of cases in a test cannot notice the omission.
+    enum ImportFailure: LocalizedError, CaseIterable, Equatable, Sendable {
+        /// More than one `<trk>` (or more than one `<rte>`) carrying usable
+        /// points. Each is a separate activity, and a hike here holds exactly
+        /// one route, so the file has no single answer to "which walk is
+        /// this?". Refused rather than answered by guessing: joining them
+        /// invents a leg between two places nobody travelled between, and
+        /// picking one silently throws the others away.
+        case multipleTracks
         /// Parsed, but nothing in it carried a coordinate this app can project
         /// — no points at all, points missing `lat`/`lon`, or points outside
         /// Web Mercator's range.
@@ -142,6 +183,7 @@ nonisolated enum GPXImport {
 
         var errorDescription: String? {
             switch self {
+            case .multipleTracks: "This GPX file holds more than one track."
             case .noUsablePoints: "No track points were found in this file."
             case .tooLarge: "This GPX file is too large to import."
             case .tooShort: "This GPX file has only one track point."
@@ -151,6 +193,13 @@ nonisolated enum GPXImport {
 
         var recoverySuggestion: String? {
             switch self {
+            // Says what the app would otherwise have had to invent, because
+            // that is the part the walker can't see for themselves: the file
+            // opens fine everywhere else, and the damage would only show up
+            // later as a straight line across the map and a length nobody
+            // walked.
+            case .multipleTracks: "Each track is a separate walk, and joining them would draw a line between "
+                + "places you never travelled. Split the file so each track imports as its own hike."
             // Deliberately covers "it isn't GPX at all" as well — see the case's
             // own note for why that lands here.
             case .noUsablePoints: "It may not be a GPX file, or its points are missing coordinates or out of range."
@@ -194,8 +243,7 @@ nonisolated enum GPXImport {
         guard parser.parse() else {
             throw documentParser.hasExceededPointLimit ? .tooLarge : .unreadable
         }
-        guard let track = track(from: documentParser.document) else { throw .noUsablePoints }
-        return track
+        return try track(from: documentParser.document)
     }
 
     /// Parses and prepares a picked file without occupying the main actor.
@@ -219,17 +267,34 @@ nonisolated enum GPXImport {
         }
     }
 
-    private static func track(from document: ParsedDocument) -> Track? {
-        let source = if !document.trackPoints.isEmpty {
-            document.trackPoints
-        } else if !document.routePoints.isEmpty {
-            document.routePoints
+    private static func track(from document: ParsedDocument) throws(ImportFailure) -> Track {
+        // Chosen on what the file *contains*, not on what survives validation,
+        // which is what keeps a file full of unprojectable `<trkpt>` reporting
+        // that its track is unusable instead of quietly importing a route's
+        // handful of turn markers in its place.
+        let source = if document.trackSegments.contains(where: { !$0.points.isEmpty }) {
+            document.trackSegments
+        } else if document.routeSegments.contains(where: { !$0.points.isEmpty }) {
+            document.routeSegments
         } else {
-            document.waypoints
+            // Waypoints have no container to belong to — they are loose
+            // children of `<gpx>` — so the whole file is the one container.
+            [ParsedSegment(containerIndex: 0, points: document.waypoints)]
         }
-        let points = source.compactMap(point)
-        guard !points.isEmpty else { return nil }
 
+        let usable: [(container: Int, points: [Point])] = source.compactMap { segment in
+            let points = segment.points.compactMap(point)
+            return points.isEmpty ? nil : (segment.containerIndex, points)
+        }
+        guard let first = usable.first else { throw .noUsablePoints }
+        // Judged on the segments that survived, so a `<trk>` holding only
+        // unprojectable points — or none at all, which plenty of exporters
+        // leave behind — doesn't make a perfectly ordinary file unimportable.
+        guard usable.allSatisfy({ $0.container == first.container }) else {
+            throw .multipleTracks
+        }
+
+        let segments = usable.map(\.points)
         return Track(
             name: nonEmpty(document.firstTrackName)
                 ?? nonEmpty(document.metadataName),
@@ -238,9 +303,12 @@ nonisolated enum GPXImport {
                 ?? nonEmpty(document.metadataDescription),
             author: nonEmpty(document.metadataAuthor),
             keywords: nonEmpty(document.metadataKeywords),
+            // Read through the segments rather than off a flattened copy:
+            // `Track` builds that copy itself, and a second one costs a
+            // half-million-point file another array for one timestamp.
             startTime: document.metadataTime
-                ?? points.first { $0.time != nil }?.time,
-            points: points
+                ?? segments.lazy.joined().first { $0.time != nil }?.time,
+            segments: segments
         )
     }
 
@@ -286,6 +354,22 @@ nonisolated private extension GPXImport {
         var time: Date?
     }
 
+    /// One run of points that the file itself kept together: a `<trkseg>`, or
+    /// a `<rte>`.
+    ///
+    /// The parse used to hand back one flat array per flavour, which threw
+    /// away the only thing that says whether two consecutive points are a step
+    /// apart or a country apart. Both boundaries matter, and they matter
+    /// differently — segments of one track are a paused recording, separate
+    /// tracks are separate walks — so the container each run came from is
+    /// carried alongside the run rather than inferred from it afterwards.
+    private struct ParsedSegment {
+        /// Which `<trk>`/`<rte>` this run came from. Segments of the same
+        /// track share it; the number itself means nothing beyond that.
+        let containerIndex: Int
+        var points: [ParsedPoint] = []
+    }
+
     private struct ParsedDocument {
         var metadataName: String?
         var metadataDescription: String?
@@ -295,8 +379,8 @@ nonisolated private extension GPXImport {
         var firstTrackName: String?
         var firstTrackDescription: String?
         var firstTrackComment: String?
-        var trackPoints: [ParsedPoint] = []
-        var routePoints: [ParsedPoint] = []
+        var trackSegments: [ParsedSegment] = []
+        var routeSegments: [ParsedSegment] = []
         var waypoints: [ParsedPoint] = []
     }
 
@@ -306,7 +390,9 @@ nonisolated private extension GPXImport {
         /// these are compared as-is.
         private enum Element {
             static let track = "trk"
+            static let trackSegment = "trkseg"
             static let trackPoint = "trkpt"
+            static let route = "rte"
             static let routePoint = "rtept"
             static let waypoint = "wpt"
             static let metadata = "metadata"
@@ -351,6 +437,14 @@ nonisolated private extension GPXImport {
         private var path: [String] = []
         private var text = ""
         private var currentTrackIndex = -1
+        private var currentRouteIndex = -1
+        /// Whether a run is open to append to, per flavour. A `<trkseg>` or
+        /// `<rte>` start opens one and its end tag closes it; a point that
+        /// arrives with none open opens one implicitly, which is what keeps
+        /// `<trk><trkpt/></trk>` — legal GPX, and what a stray `</trkseg>`
+        /// leaves behind — from being dropped for want of a container.
+        private var hasOpenTrackSegment = false
+        private var hasOpenRouteSegment = false
         private var pendingPoint: PendingPoint?
         private var parsedPointCount = 0
 
@@ -382,7 +476,17 @@ nonisolated private extension GPXImport {
             text = ""
 
             switch elementName {
-            case Element.track: currentTrackIndex += 1
+            case Element.track:
+                currentTrackIndex += 1
+                // A `<trk>` opening mid-track means the previous one never
+                // closed. Its run ends here either way; what must not happen
+                // is the next track's points landing in it.
+                hasOpenTrackSegment = false
+            case Element.trackSegment: openTrackSegment()
+            case Element.route:
+                currentRouteIndex += 1
+                hasOpenRouteSegment = false
+                openRouteSegment()
             case Element.trackPoint: pendingPoint = PendingPoint(
                 kind: .track,
                 element: elementName,
@@ -423,6 +527,11 @@ nonisolated private extension GPXImport {
             let value = text.trimmingCharacters(in: .whitespacesAndNewlines)
             updatePendingPoint(element: elementName, value: value)
             apply(value: value, for: elementName)
+            switch elementName {
+            case Element.trackSegment, Element.track: hasOpenTrackSegment = false
+            case Element.route: hasOpenRouteSegment = false
+            default: break
+            }
             path.removeLast()
             text = ""
             // Stopping here rather than inside `finishPoint` because this is
@@ -485,11 +594,33 @@ nonisolated private extension GPXImport {
             )
         }
 
+        /// Starts a fresh run for the track being read, keeping the empty ones
+        /// an exporter leaves behind: `track(from:)` drops those, and dropping
+        /// them here instead would lose the `<trk>` they belong to along the
+        /// way.
+        private func openTrackSegment() {
+            document.trackSegments.append(
+                ParsedSegment(containerIndex: max(currentTrackIndex, 0))
+            )
+            hasOpenTrackSegment = true
+        }
+
+        private func openRouteSegment() {
+            document.routeSegments.append(
+                ParsedSegment(containerIndex: max(currentRouteIndex, 0))
+            )
+            hasOpenRouteSegment = true
+        }
+
         private func finishPoint(_ element: String) {
             guard let point = pendingPoint, point.element == element else { return }
             switch point.kind {
-            case .track: document.trackPoints.append(point.value)
-            case .route: document.routePoints.append(point.value)
+            case .track:
+                if !hasOpenTrackSegment { openTrackSegment() }
+                document.trackSegments[document.trackSegments.count - 1].points.append(point.value)
+            case .route:
+                if !hasOpenRouteSegment { openRouteSegment() }
+                document.routeSegments[document.routeSegments.count - 1].points.append(point.value)
             case .waypoint: document.waypoints.append(point.value)
             }
             pendingPoint = nil
