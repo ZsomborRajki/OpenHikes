@@ -1,16 +1,20 @@
 #!/usr/bin/env bash
 #
-# Smoke tests for the two scripts that drive a simulator.
+# Smoke tests for the shell scripts no Swift suite can reach.
 #
 # Neither Scripts/run-ui-tests.sh nor Scripts/run-performance-tests.sh can be
 # exercised by any suite in this repository: they *are* the thing that runs the
 # suites. What they decide — which device the run lands on, whether a report was
 # assembled out of anything at all — is invisible until a developer reads a
 # number that came from the wrong machine, so it is asserted here instead.
+# Scripts/lint.sh is here for the same reason: it is what decides whether a
+# change is clean, and a run that accepted an option it did not understand
+# reports "clean" about a lint it never configured the way it was asked to.
 #
-# `xcrun`, `xcodebuild` and `python3` are replaced with recording stubs on PATH
-# and the scripts are run for real against them. Nothing is built, nothing is
-# booted, and no simulator on this machine is touched.
+# `xcrun`, `xcodebuild`, `python3` and `swiftlint` are replaced with recording
+# stubs on PATH and the scripts are run for real against them. Nothing is built,
+# nothing is booted, no simulator on this machine is touched, and no file in the
+# working tree is rewritten.
 #
 # Exit status:
 #   0  every case passed
@@ -24,8 +28,8 @@ usage() {
     cat <<'EOF'
 Usage: Scripts/run-script-tests.sh [--verbose]
 
-Runs the simulator-facing shell scripts against stubbed xcrun/xcodebuild and
-asserts what they sent where.
+Runs the repository's shell scripts against stubbed xcrun/xcodebuild/swiftlint
+and asserts what they sent where.
 
 Options:
   --verbose       Print each script's own output as it runs
@@ -92,6 +96,21 @@ for argument in "$@"; do
     fi
     previous="$argument"
 done
+STUB
+
+# Records every swiftlint invocation and reports whatever outcome a case asks
+# for. `swiftlint version` answers with the pin, so the version-drift warning
+# stays out of the output these cases read; STUB_SWIFTLINT_STATUS and
+# STUB_SWIFTLINT_OUTPUT stand in for the lint's own verdict.
+cat > "$stub_bin/swiftlint" <<'STUB'
+#!/usr/bin/env bash
+printf 'swiftlint %s\n' "$*" >> "$STUB_CALL_LOG"
+if [[ "${1:-}" == "version" ]]; then
+    printf '%s\n' "$STUB_SWIFTLINT_VERSION"
+    exit 0
+fi
+printf '%s' "${STUB_SWIFTLINT_OUTPUT:-}"
+exit "${STUB_SWIFTLINT_STATUS:-0}"
 STUB
 
 chmod +x "$stub_bin"/*
@@ -268,6 +287,62 @@ STUB_CONTAINER="$logless_container" \
 if [[ "$status" == 0 ]]; then
     fail "a passing run that collected nothing exited 0" "$output"
 elif expect_contains "$output" "Collected 0 event file(s)" "the output"; then
+    pass
+fi
+
+echo "Lint argument handling"
+
+lint="$repository_root/Scripts/lint.sh"
+export STUB_SWIFTLINT_VERSION="$(cat "$repository_root/.swiftlint-version")"
+unset STUB_SWIFTLINT_STATUS STUB_SWIFTLINT_OUTPUT || true
+
+run_script "lint with no arguments lints once and reports clean" "$lint"
+if expect_status 0 \
+    && expect_contains "$calls" "swiftlint lint --strict --quiet --force-exclude" "the recorded calls" \
+    && expect_absent "$calls" "--fix" "the recorded calls" \
+    && expect_contains "$output" "SwiftLint clean" "the output"; then
+    pass
+fi
+
+run_script "lint --fix corrects and then re-lints" "$lint" --fix
+if expect_status 0 \
+    && expect_contains "$calls" "swiftlint lint --fix --quiet --force-exclude" "the recorded calls" \
+    && expect_contains "$calls" "swiftlint lint --strict --quiet --force-exclude" "the recorded calls" \
+    && expect_contains "$output" "SwiftLint clean" "the output"; then
+    pass
+fi
+
+run_script "lint --help prints the options without linting" "$lint" --help
+if expect_status 0 \
+    && expect_contains "$output" "Usage: Scripts/lint.sh" "the help" \
+    && expect_absent "$calls" "swiftlint lint" "the recorded calls"; then
+    pass
+fi
+
+# The four below are the ones an argument parser that reads only $1 gets wrong:
+# it acts on the first token and never looks at the rest, so a typo rides along
+# with a valid option and the run still exits 0.
+run_script "lint rejects an unknown option after --help" "$lint" --help --not-a-real-option
+if expect_status 2 \
+    && expect_contains "$output" "unknown option '--not-a-real-option'" "the error" \
+    && expect_absent "$calls" "swiftlint lint" "the recorded calls"; then
+    pass
+fi
+
+run_script "lint rejects an unknown option after --fix" "$lint" --fix --not-a-real-option
+if expect_status 2 \
+    && expect_contains "$output" "unknown option '--not-a-real-option'" "the error" \
+    && expect_absent "$calls" "swiftlint lint" "the recorded calls"; then
+    pass
+fi
+
+run_script "lint rejects a trailing operand" "$lint" --fix Sources
+if expect_status 2 && expect_contains "$output" "unknown option 'Sources'" "the error"; then
+    pass
+fi
+
+run_script "lint rejects a single unknown option" "$lint" --strict
+if expect_status 2 && expect_contains "$output" "unknown option '--strict'" "the error"; then
     pass
 fi
 

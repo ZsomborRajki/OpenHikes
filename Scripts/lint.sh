@@ -47,19 +47,36 @@ EOF
 }
 
 fix=false
-case "${1:-}" in
-    "") ;;
-    --fix) fix=true ;;
-    -h|--help) usage; exit 0 ;;
-    *)
-        # Not silently ignored: an unrecognised flag used to lint without
-        # fixing and then report success, which reads exactly like a clean
-        # --fix run that corrected nothing.
-        echo "error: unknown option '$1'." >&2
-        usage >&2
-        exit 2
-        ;;
-esac
+show_help=false
+# Every argument, not just the first. Reading one and ignoring the rest let a
+# typo ride along with a valid option: `--fix --not-a-real-option` linted
+# without fixing and still exited 0, which reads exactly like a clean --fix run
+# that corrected nothing, and `--help --not-a-real-option` printed the help that
+# promises unknown options are rejected while doing the opposite.
+while [[ $# -gt 0 ]]; do
+    case "$1" in
+        --fix)
+            fix=true
+            shift
+            ;;
+        -h|--help)
+            show_help=true
+            shift
+            ;;
+        *)
+            echo "error: unknown option '$1'." >&2
+            usage >&2
+            exit 2
+            ;;
+    esac
+done
+
+# After the loop, not inside it: --help is only honoured once the whole command
+# line has been checked, so a bad token anywhere still fails the run.
+if [[ "$show_help" == true ]]; then
+    usage
+    exit 0
+fi
 
 pinned="$(cat .swiftlint-version)"
 
