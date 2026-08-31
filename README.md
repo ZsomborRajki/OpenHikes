@@ -79,7 +79,7 @@ Scripts/run-performance-tests.sh
 # Strict SwiftLint, the same one CI runs; --fix applies what it can correct
 Scripts/lint.sh
 
-# Smoke tests for the two scripts above, against a stubbed xcrun/xcodebuild
+# Smoke tests for the three scripts above, against stubbed xcrun/xcodebuild/swiftlint
 Scripts/run-script-tests.sh
 ```
 
