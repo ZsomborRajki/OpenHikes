@@ -115,7 +115,13 @@ struct MapEntitlementStoreLaunchTests {
     /// This is the ordinary offline case, and it is also what every test in
     /// this bundle sees: no StoreKit configuration is synced to the simulator,
     /// so `Product.products(for:)` returns an empty array here by construction.
-    @Test("a product the App Store cannot serve leaves the paywall without terms")
+    ///
+    /// The swallowed failure is asserted through the two properties the
+    /// paywall's buttons are actually bound to, rather than through `isWorking`
+    /// alone: it must not move the entitlement, and it must leave Restore
+    /// pressable even though there is nothing left to buy. Failing to load a
+    /// product is precisely the case where a returning subscriber needs it.
+    @Test("a product the App Store cannot serve leaves the paywall with nothing to buy")
     func loadProductWithNoStoreLeavesTermsUnset() async throws {
         defer { Self.restoreProcessEntitlement() }
         let store = MapEntitlementStore(defaults: try Self.defaults()) { false }
@@ -125,9 +131,9 @@ struct MapEntitlementStoreLaunchTests {
 
         #expect(store.product == nil)
         #expect(store.terms == nil)
-        // The failure is swallowed on purpose: it must not move the entitlement
-        // or leave the paywall's buttons disabled.
         #expect(store.state == .notEntitled)
         #expect(!store.isWorking)
+        #expect(!store.canPurchase)
+        #expect(store.canRestore)
     }
 }

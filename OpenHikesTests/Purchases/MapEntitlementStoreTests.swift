@@ -179,6 +179,32 @@ struct MapEntitlementStoreTests {
         #expect(MapEntitlement.current == .notEntitled)
     }
 
+    // MARK: - What the paywall's buttons do without a product
+
+    /// The rule ``MapPaywallView`` binds both of its buttons to, pinned where
+    /// it can be asserted without StoreKit: a store that has never loaded a
+    /// product has nothing to buy, and still has something to restore.
+    ///
+    /// Not the same assertion as the unavailable-product test in
+    /// ``MapEntitlementStoreLaunchTests``. That one drives a real, failing
+    /// `loadProduct()` and checks the rule still holds afterwards; this one is
+    /// the rule itself, and holds with no App Store behind it at all.
+    ///
+    /// Only the false half of `canPurchase` is reachable from this bundle. The
+    /// true half needs a real `Product`, which is constraint 2 in this file's
+    /// header — nothing here can put one in the store.
+    @Test("a paywall with no product offers nothing to buy but still offers restore")
+    func noProductDisablesPurchaseButNotRestore() async throws {
+        defer { Self.restoreProcessEntitlement() }
+        let store = Self.store(defaults: try Self.defaults()) { false }
+
+        await store.refresh()
+
+        #expect(store.product == nil)
+        #expect(!store.canPurchase)
+        #expect(store.canRestore)
+    }
+
     // MARK: - What the next cold launch starts from
 
     /// The leak this remembering exists to close. Without it every launch
