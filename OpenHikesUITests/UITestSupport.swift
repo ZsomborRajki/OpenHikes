@@ -224,6 +224,26 @@ extension XCTestCase {
         return row
     }
 
+    /// A photo tile in a hike's gallery, found by the position it reports
+    /// rather than by the identifier it carries — that identifier is the
+    /// photo's UUID, which is generated at import and cannot be known from out
+    /// of process.
+    @MainActor
+    func photoTile(
+        at index: Int,
+        of count: Int,
+        in app: XCUIApplication
+    ) -> XCUIElement {
+        app.descendants(matching: .any)
+            .matching(
+                NSPredicate(
+                    format: "label BEGINSWITH %@",
+                    "Photo \(index) of \(count)"
+                )
+            )
+            .firstMatch
+    }
+
     /// Opens the fixture hike and waits for its detail view to be pushed.
     @MainActor
     func openHikeDetail(

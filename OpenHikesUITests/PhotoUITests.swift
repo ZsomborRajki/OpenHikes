@@ -402,23 +402,4 @@ nonisolated final class PhotoUITests: XCTestCase {
     /// anything below four fifths is unambiguously it while leaving room for
     /// the home indicator and for a taller device.
     private static let collapsedSheetFraction: CGFloat = 0.8
-
-    /// A photo tile, found by the position it reports rather than by the
-    /// identifier it carries — that identifier is the photo's UUID, which is
-    /// generated at import and cannot be known from out of process.
-    @MainActor
-    private func photoTile(
-        at index: Int,
-        of count: Int,
-        in app: XCUIApplication
-    ) -> XCUIElement {
-        app.descendants(matching: .any)
-            .matching(
-                NSPredicate(
-                    format: "label BEGINSWITH %@",
-                    "Photo \(index) of \(count)"
-                )
-            )
-            .firstMatch
-    }
 }
