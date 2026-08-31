@@ -38,16 +38,33 @@ EOF
 }
 
 verbose=false
-case "${1:-}" in
-    "") ;;
-    --verbose) verbose=true ;;
-    -h|--help) usage; exit 0 ;;
-    *)
-        echo "error: unknown option '$1'." >&2
-        usage >&2
-        exit 2
-        ;;
-esac
+show_help=false
+# Every argument, not just the first, and --help only once the whole line has
+# been checked — the same rule this suite asserts of Scripts/lint.sh below. A
+# harness that quietly accepts an option it does not understand is the last
+# place to learn that lesson twice.
+while [[ $# -gt 0 ]]; do
+    case "$1" in
+        --verbose)
+            verbose=true
+            shift
+            ;;
+        -h|--help)
+            show_help=true
+            shift
+            ;;
+        *)
+            echo "error: unknown option '$1'." >&2
+            usage >&2
+            exit 2
+            ;;
+    esac
+done
+
+if [[ "$show_help" == true ]]; then
+    usage
+    exit 0
+fi
 
 work="$(mktemp -d -t openhikes-script-tests)"
 trap 'rm -rf "$work"' EXIT
@@ -287,6 +304,29 @@ STUB_CONTAINER="$logless_container" \
 if [[ "$status" == 0 ]]; then
     fail "a passing run that collected nothing exited 0" "$output"
 elif expect_contains "$output" "Collected 0 event file(s)" "the output"; then
+    pass
+fi
+
+echo "This suite's own arguments"
+
+# Only invocations that exit before any test runs: this script is the one being
+# run, and a case that let it reach the suite proper would run it again.
+script_tests="$repository_root/Scripts/run-script-tests.sh"
+
+run_script "run-script-tests --help prints the options" "$script_tests" --help
+if expect_status 0 && expect_contains "$output" "Usage: Scripts/run-script-tests.sh" "the help"; then
+    pass
+fi
+
+run_script "run-script-tests rejects an unknown option after --verbose" \
+    "$script_tests" --verbose --not-a-real-option
+if expect_status 2 && expect_contains "$output" "unknown option '--not-a-real-option'" "the error"; then
+    pass
+fi
+
+run_script "run-script-tests rejects an unknown option after --help" \
+    "$script_tests" --help --not-a-real-option
+if expect_status 2 && expect_contains "$output" "unknown option '--not-a-real-option'" "the error"; then
     pass
 fi
 
