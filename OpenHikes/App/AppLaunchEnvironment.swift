@@ -30,6 +30,7 @@ nonisolated enum AppLaunchEnvironment {
         let seededPhotoCount: Int
         let seededMetricsReportCount: Int
         let failsFirstSave: Bool
+        let losesImportSelection: Bool
         let stubsWeather: Bool
         let grantsPaidMaps: Bool
         /// `nil` when the real photo library should be read — see
@@ -59,6 +60,7 @@ nonisolated enum AppLaunchEnvironment {
             seededPhotoCount = 0
             seededMetricsReportCount = 0
             failsFirstSave = false
+            losesImportSelection = false
             stubsWeather = false
             grantsPaidMaps = false
             stubbedLibraryPhotoCount = nil
@@ -75,6 +77,8 @@ nonisolated enum AppLaunchEnvironment {
         private static let seedPhotosPrefix = "--ui-test-seed-photos="
         private static let seedMetricsPrefix = "--ui-test-seed-metrics="
         private static let failFirstSaveArgument = "--ui-test-fail-first-save"
+        private static let loseImportSelectionArgument =
+            "--ui-test-lose-import-selection"
         private static let stubWeatherArgument = "--ui-test-weather"
         private static let entitledArgument = "--ui-test-entitled"
         private static let photoLibraryPrefix = "--ui-test-photo-library="
@@ -138,6 +142,8 @@ nonisolated enum AppLaunchEnvironment {
             )
             failsFirstSave = isUITesting
                 && arguments.contains(Self.failFirstSaveArgument)
+            losesImportSelection = isUITesting
+                && arguments.contains(Self.loseImportSelectionArgument)
             stubsWeather = isUITesting
                 && arguments.contains(Self.stubWeatherArgument)
             grantsPaidMaps = isUITesting
@@ -292,6 +298,19 @@ nonisolated enum AppLaunchEnvironment {
     /// seam exists for the unit suites — so this is that closure, failing
     /// once, and everything downstream of it is the shipping state machine.
     static let failsFirstSave = configuration.failsFirstSave
+
+    /// Whether an import should give up the selection it would otherwise
+    /// take.
+    ///
+    /// The gate in `OpenHikesView` decides whether an import that started a
+    /// moment ago may still take over the map when its parse finishes, and
+    /// losing that decision is unreachable from automation: it needs a tap to
+    /// land inside the milliseconds a parse takes. Everything that happens to
+    /// the imported hike *after* the gate — the launch fixture photographing
+    /// it, for one — has to work on the losing side too, and this is how a
+    /// scenario gets to stand there. The hike is persisted either way; only
+    /// its claim on the map is dropped.
+    static let losesImportSelection = configuration.losesImportSelection
 
     /// Whether the weather badge should be drawn from a fixed reading.
     ///

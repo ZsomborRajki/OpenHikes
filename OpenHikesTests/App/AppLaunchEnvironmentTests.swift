@@ -158,13 +158,14 @@ struct AppLaunchEnvironmentTests {
         #expect(unrequested.stubbedLibraryPhotoCount == nil)
     }
 
-    @Test("the failure and weather seams are opt-in")
+    @Test("the failure, weather and import-selection seams are opt-in")
     func failureAndWeatherSeams() {
         let requested = AppLaunchEnvironment.Configuration(
             arguments: [
                 "OpenHikes",
                 "--ui-testing",
                 "--ui-test-fail-first-save",
+                "--ui-test-lose-import-selection",
                 "--ui-test-weather",
             ]
         )
@@ -173,8 +174,12 @@ struct AppLaunchEnvironmentTests {
         )
 
         #expect(requested.failsFirstSave)
+        #expect(requested.losesImportSelection)
         #expect(requested.stubsWeather)
         #expect(!quiet.failsFirstSave)
+        // An import takes the selection on every launch that did not ask for
+        // the losing side of that race.
+        #expect(!quiet.losesImportSelection)
         #expect(!quiet.stubsWeather)
     }
 
@@ -189,6 +194,7 @@ struct AppLaunchEnvironmentTests {
                 "--ui-test-seed-photos=8",
                 "--ui-test-seed-metrics=2",
                 "--ui-test-fail-first-save",
+                "--ui-test-lose-import-selection",
                 "--ui-test-weather",
             ]
         )
@@ -196,6 +202,7 @@ struct AppLaunchEnvironmentTests {
         #expect(configuration.seededPhotoCount == 0)
         #expect(configuration.seededMetricsReportCount == 0)
         #expect(!configuration.failsFirstSave)
+        #expect(!configuration.losesImportSelection)
         #expect(!configuration.stubsWeather)
     }
 }

@@ -87,8 +87,15 @@ list_tests() {
     fi
     local name
     for name in "${target_suites[@]}"; do
-        sed -nE "s/^[[:space:]]*func (test[A-Za-z0-9_]+)\(\).*/$name\/\1/p" \
-            "$repository_root/$bundle/$name.swift"
+        # Every file the class is written across, not just the one named after
+        # it: a suite that outgrows the type-body limit is split into
+        # `Suite+Something.swift` extensions, and reading only `$name.swift`
+        # made --list under-report and --test reject the name of a test that
+        # exists. Scripts/run-performance-tests.sh reads its own suite the same
+        # way, for the same reason.
+        cat "$repository_root/$bundle/$name"*.swift \
+            | sed -nE "s/^[[:space:]]*func (test[A-Za-z0-9_]+)\(\).*/$name\/\1/p" \
+            | sort -u
     done
 }
 

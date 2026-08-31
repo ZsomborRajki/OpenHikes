@@ -462,7 +462,11 @@ struct OpenHikesView: View {
     /// A file that can't become a hike raises ``importFailure`` rather than
     /// leaving the user looking at an unchanged screen.
     private func importGPX(from url: URL) {
-        Task { await performImport(from: url) }
+        // Discarded explicitly rather than by `@discardableResult`: a
+        // single-expression closure returns its value, and a `Task` carrying
+        // a `Hike` is a task carrying something SwiftData does not let cross
+        // an isolation boundary.
+        Task { _ = await performImport(from: url) }
     }
 
     private func importRequestedGPXFixture() async {
@@ -476,15 +480,31 @@ struct OpenHikesView: View {
             importFailure = .unreadable
             return
         }
-        await performImport(from: url)
-        await seedRequestedPhotos()
+        let importedHike = await performImport(from: url)
+        await seedRequestedPhotos(for: importedHike)
     }
 
-    private func performImport(from url: URL) async {
+    /// Imports `url`, and hands back the hike it persisted — whether or not
+    /// that hike went on to win the selection below. A caller with something
+    /// left to do to the new hike needs the hike itself; reading the selection
+    /// afterwards would hand it whatever won the race instead.
+    ///
+    /// `nil` only when the file could not become a hike, which the alert this
+    /// raises is already the report of.
+    @discardableResult private func performImport(from url: URL) async -> Hike? {
         let selectionToken = importSelectionGate.token(
             selectedHikeID: selectedHike?.id,
             path: sheet.path
         )
+        #if DEBUG
+        // Losing this race needs a navigation or selection change to land in
+        // the moment a GPX parse takes, which is not something automation can
+        // aim at. A scenario that is about the losing side asks for it here
+        // instead; see ``AppLaunchEnvironment/losesImportSelection``.
+        if AppLaunchEnvironment.losesImportSelection {
+            importSelectionGate.invalidate()
+        }
+        #endif
         let importedHike: Hike
         // Typed, so the catch below can't quietly widen to `any Error` and
         // start swallowing something this screen has no message for.
@@ -495,7 +515,7 @@ struct OpenHikesView: View {
             )
         } catch {
             importFailure = error
-            return
+            return nil
         }
 
         // The imported row remains persisted when another action won the
@@ -507,10 +527,11 @@ struct OpenHikesView: View {
             path: sheet.path,
             currentRecordingHikeID: currentRecordingHikeID,
             recordingPresented: sheet.isRecordingPresented
-        ) else { return }
+        ) else { return importedHike }
         selectedHike = importedHike
         // The selection draws the imported route; expanding reveals it.
         withAnimation { sheet.detent = .medium }
+        return importedHike
     }
 }
 
@@ -524,11 +545,14 @@ private extension OpenHikesView {
     ///
     /// After the import rather than inside it, because the selection race
     /// `performImport` arbitrates is about which hike owns the map — a hike
-    /// that lost it still persisted, and is still the one to photograph.
-    func seedRequestedPhotos() async {
+    /// that lost it still persisted, and is still the one to photograph. Which
+    /// is why the hike is passed in: reading the selection here would
+    /// photograph whatever won that race, and on a launch where the import
+    /// lost it there is nothing selected to photograph at all.
+    func seedRequestedPhotos(for hike: Hike?) async {
         #if DEBUG
         let count = AppLaunchEnvironment.seededPhotoCount
-        guard count > 0, let hike = selectedHike else { return }
+        guard count > 0, let hike else { return }
         await SeededPhotoFixture.attach(count: count, to: hike)
         #endif
     }
