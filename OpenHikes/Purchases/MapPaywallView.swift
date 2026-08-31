@@ -150,15 +150,18 @@ struct MapPaywallView: View {
             .buttonStyle(.borderedProminent)
             .controlSize(.large)
             // The store may still be loading, or unreachable. A tap that could
-            // only fail is worse than a button that says "not yet".
-            .disabled(store.product == nil || store.isWorking)
+            // only fail is worse than a button that says "not yet" — the rule
+            // and its reasoning live on ``MapEntitlementStore/canPurchase``.
+            .disabled(!store.canPurchase)
             .accessibilityIdentifier("paywall-purchase-button")
 
             Button("Restore Purchases") {
                 Task { await restore() }
             }
             .font(.subheadline)
-            .disabled(store.isWorking)
+            // Unlike the button above, this one survives a product that never
+            // loaded: restoring does not need one.
+            .disabled(!store.canRestore)
             .accessibilityIdentifier("paywall-restore-button")
         }
         .alert("Nothing to Restore", isPresented: $showRestoreFailed) {

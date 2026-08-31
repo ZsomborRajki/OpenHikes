@@ -66,6 +66,28 @@ final class MapEntitlementStore {
 
     var isEntitled: Bool { state == .entitled }
 
+    /// Whether the paywall's purchase button is live, and the one place that
+    /// rule is written down.
+    ///
+    /// Two ways it is not, and they fail differently. `isWorking` is a
+    /// purchase or a restore already running, where a second tap would only
+    /// start a second one. A missing `product` is the App Store having
+    /// answered with nothing — offline, or a product not configured yet — and
+    /// there ``purchase()`` has nothing to buy and returns `.failed` without
+    /// reaching StoreKit, so an enabled button could only produce an error the
+    /// user never asked for. The screen says "not yet" instead, and goes on
+    /// describing the unlock without a price; see ``loadProduct()``.
+    var canPurchase: Bool { product != nil && !isWorking }
+
+    /// Whether the paywall's Restore button is live.
+    ///
+    /// Deliberately *not* gated on the product. ``restore()`` reads what this
+    /// Apple Account already owns, through `AppStore.sync()` and
+    /// `currentEntitlements`, and never touches `product` — and a returning
+    /// subscriber whose product query just failed is exactly the person who
+    /// needs the button, so a failed load must not take it away.
+    var canRestore: Bool { !isWorking }
+
     /// Never cancelled: the store is created once by ``OpenHikesModel`` and
     /// lives as long as the process, and a `deinit` cannot touch a main-actor
     /// property anyway. `guard updatesTask == nil` is what keeps ``start()``
