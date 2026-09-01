@@ -20,6 +20,12 @@
 //  recorder uses them (see `HikeRecorder+State`). That's what keeps this feed
 //  battery-friendly and free of the persistent background-location indicator.
 //
+//  It does not make the feed free, though: iOS's periodic "has been using
+//  your location in the background" reminder is keyed on background location
+//  *use*, not on the indicator, and every significant change wakes or
+//  relaunches this app. So monitoring is armed only while it has something to
+//  do — see ``syncMonitoring(trackingEnabled:)``.
+//
 
 import CoreLocation
 import Foundation
@@ -219,10 +225,11 @@ final class BackgroundTrailTracker: NSObject {
         trackedHikeID = UUID(uuidString: defaults.string(forKey: SettingsKey.lastSelectedHikeID) ?? "")
         // Re-arm on every launch: the system wakes the app specifically so it
         // can call this again and receive the pending event — monitoring
-        // doesn't itself persist across process launches.
-        if defaults.bool(forKey: SettingsKey.backgroundTrackingEnabled) {
-            startIfAuthorized()
-        }
+        // doesn't itself persist across process launches. The same call is
+        // what stands monitoring *down* on a launch that shouldn't have it,
+        // which is the one place a registration left over from a previous
+        // launch can be cancelled.
+        syncMonitoring()
     }
 
     // MARK: Settings toggle
@@ -233,18 +240,50 @@ final class BackgroundTrailTracker: NSObject {
             return
         }
         if monitor.isAlwaysAuthorized {
-            monitor.startSignificantLocationUpdates()
+            syncMonitoring(trackingEnabled: true)
         } else if monitor.canRequestAlwaysAccess {
-            // The grant, if it comes, arrives at `authorizationChanged()` —
-            // the user has to leave the app to answer the prompt.
+            // Asked for even with no hike selected: the toggle is a standing
+            // preference, and the grant is a trip out of the app the user
+            // shouldn't have to make again the moment they pick a trail. The
+            // answer arrives at `authorizationChanged()`.
             monitor.requestAlwaysAccess()
         }
         // Denied or restricted: nothing to ask and nothing to start.
     }
 
-    private func startIfAuthorized() {
-        guard monitor.isAlwaysAuthorized else { return }
-        monitor.startSignificantLocationUpdates()
+    /// Brings monitoring in line with the one condition under which it is
+    /// worth having armed.
+    ///
+    /// Three conditions, not two: the selection belongs here as much as the
+    /// toggle and the authorization do. Armed without a hike, every
+    /// significant change — one every few hundred metres of driving — wakes
+    /// or relaunches the app only for `handleBackgroundFix` to return at its
+    /// `trackedHikeID` guard, having already paid for the launch. A long
+    /// drive's worth of those is precisely the usage iOS's periodic
+    /// background-location reminder exists to surface, so an idle armed feed
+    /// costs the user prompts as well as battery.
+    ///
+    /// Every arming site goes through here rather than calling the monitor
+    /// directly, so the condition can't drift apart between them — the bug
+    /// this replaces was three `start` sites agreeing with each other and
+    /// none of them agreeing with the fix handler. Both calls are idempotent,
+    /// so re-stating the state monitoring is already in is free.
+    ///
+    /// - Parameter trackingEnabled: the settings toggle's value. `setEnabled`
+    ///   passes its own argument, so arming doesn't depend on whether the
+    ///   `@AppStorage` binding behind the switch has written the new value yet.
+    private func syncMonitoring(trackingEnabled: Bool) {
+        if trackingEnabled, monitor.isAlwaysAuthorized, trackedHikeID != nil {
+            monitor.startSignificantLocationUpdates()
+        } else {
+            monitor.stopSignificantLocationUpdates()
+        }
+    }
+
+    /// The same, for the callers with no toggle value in hand — a launch, an
+    /// authorization change, a selection — which read the stored one.
+    private func syncMonitoring() {
+        syncMonitoring(trackingEnabled: defaults.bool(forKey: SettingsKey.backgroundTrackingEnabled))
     }
 
     // MARK: Selection
@@ -257,6 +296,10 @@ final class BackgroundTrailTracker: NSObject {
         // for the trail being left rather than a lookup against the new one.
         if hike?.id != trackedHikeID { endFollowActivity(hikeID: nil) }
         trackedHikeID = hike?.id
+        // The selection is half of what decides whether monitoring should be
+        // running at all, so deselecting is what stands it down: nothing else
+        // will, and the settings toggle deliberately stays on across it.
+        syncMonitoring()
         lastMatchedDistance = nil
         lastForegroundPublish = nil
         lastStatusFlipPublish = nil
@@ -458,6 +501,8 @@ final class BackgroundTrailTracker: NSObject {
             maximumAge: LocationFixPolicy.backgroundMaximumAge,
             maximumHorizontalAccuracy: RouteProfile.followMatchThresholdMeters
         ) else { return }
+        // Kept even though monitoring is now disarmed on deselection: a fix
+        // already in flight can still land in the window between the two.
         guard let hikeID = trackedHikeID else { return }
 
         let modelContainer = container
@@ -870,10 +915,9 @@ extension BackgroundTrailTracker: CLLocationManagerDelegate {
 
     /// Arms monitoring the moment Always is granted — the grant arrives long
     /// after `setEnabled(true)` asked for it, because the user has to leave
-    /// the app and answer a system prompt in between.
+    /// the app and answer a system prompt in between — and stands it down
+    /// again if the grant is later taken away in Settings.
     private func authorizationChanged() {
-        guard monitor.isAlwaysAuthorized,
-              defaults.bool(forKey: SettingsKey.backgroundTrackingEnabled) else { return }
-        monitor.startSignificantLocationUpdates()
+        syncMonitoring()
     }
 }
