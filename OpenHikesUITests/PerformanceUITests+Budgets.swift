@@ -4,11 +4,16 @@
 //
 //  How a budget is stated, and what a violated one says.
 //
-//  Kept apart from the scenarios because these five are the whole vocabulary
-//  the suite has: a ceiling, a floor, a per-fix ratio, a stall count, and a
-//  worst-case stall length. A new scenario should be expressible in them, and
-//  one that needs a sixth is usually measuring something it has not finished
-//  thinking about.
+//  Kept apart from the scenarios because these six are the whole vocabulary
+//  the suite has: a ceiling, a floor, a per-fix ratio, a stall count inside a
+//  phase, a stall count across a whole run, and a worst-case stall length. A
+//  new scenario should be expressible in them, and one that needs a seventh is
+//  usually measuring something it has not finished thinking about.
+//
+//  Five of the six are scoped to a phase, which is the shape that makes them
+//  comparable across machines — and it is also a blind spot, because a run is
+//  mostly not inside a phase. ``assertStalls(atMost:in:scenario:)`` is the one
+//  that covers the gaps.
 //
 
 import XCTest
@@ -67,6 +72,41 @@ extension PerformanceUITests {
             stalls,
             0,
             "the main thread stalled \(stalls) times during \(phase)"
+        )
+    }
+
+    /// A ceiling on how many times the main thread stalled across the *whole*
+    /// scenario, measured phase or not.
+    ///
+    /// ``assertNoStall(in:phase:)`` is scoped to a phase, and a scenario is
+    /// mostly not in one: the navigation that reaches a screen, the wait for a
+    /// search to fill a grid, and the backgrounding that ends every run all sit
+    /// between phases. Every stall this suite has recorded after launch landed
+    /// in one of those gaps — 203–207 ms pushing Settings, 218–222 ms starting
+    /// a recording, 216–372 ms backgrounding the photo-discovery sheet — and
+    /// the per-phase budgets counted zero for all of them while the suite
+    /// reported 10/10 green. A budget stated per phase can only ever see the
+    /// moments somebody already thought to bracket.
+    ///
+    /// Absolute rather than a delta, like ``assertLaunchStall(atMost:in:)`` and
+    /// for the same reason: the point is to cover the parts of the run no
+    /// reading brackets, and launch is the first of them. Every scenario
+    /// therefore carries one stall it did not do anything to earn — the launch
+    /// stall, whose *length* is what ``assertLaunchStall(atMost:in:)`` bounds —
+    /// so a budget of one means "nothing beyond launch", and anything above
+    /// that is a stall a scenario is knowingly carrying and should name.
+    func assertStalls(
+        atMost limit: Double,
+        in counters: PerformanceCounters,
+        scenario: String
+    ) {
+        let stalls = counters.value(of: "MainThread")
+        XCTAssertLessThanOrEqual(
+            stalls,
+            limit,
+            "the main thread stalled \(stalls) times across \(scenario), budget \(limit) — "
+                + "the worst was \(counters.maximum(of: "MainThread")) ms; "
+                + "the scenario's event file says which gap it landed in"
         )
     }
 

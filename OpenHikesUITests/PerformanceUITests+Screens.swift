@@ -112,7 +112,7 @@ extension PerformanceUITests {
             // Nothing cached means nothing to flush and nothing to measure.
             // Skipped rather than failed: which tiles a scenario happens to
             // have drawn is not this test's subject.
-            finish()
+            finish(in: app)
             return
         }
         let clearing = measurePhase(named: "settings-clear-cache", in: app, seconds: 2) {
@@ -125,7 +125,7 @@ extension PerformanceUITests {
         assertNoMoreThan(4, of: "SettingsBody", in: clearing, phase: "settings-clear-cache")
         assertNoMoreThan(0, of: "MapSheetHikesBody", in: clearing, phase: "settings-clear-cache")
         assertNoStall(in: clearing, phase: "settings-clear-cache")
-        finish()
+        finish(in: app)
     }
 
     // MARK: - Photo discovery
@@ -220,6 +220,6 @@ extension PerformanceUITests {
         }
         assertNoMoreThan(1, of: "PhotoDiscoveryBody", in: bulk, phase: "discovery-select-all")
         assertNoStall(in: bulk, phase: "discovery-select-all")
-        finish()
+        finish(in: app)
     }
 }
