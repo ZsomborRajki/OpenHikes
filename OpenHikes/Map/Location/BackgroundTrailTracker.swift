@@ -927,7 +927,5 @@ extension BackgroundTrailTracker: CLLocationManagerDelegate {
     /// after `setEnabled(true)` asked for it, because the user has to leave
     /// the app and answer a system prompt in between — and stands it down
     /// again if the grant is later taken away in Settings.
-    private func authorizationChanged() {
-        syncMonitoring()
-    }
+    private func authorizationChanged() { syncMonitoring() }
 }
