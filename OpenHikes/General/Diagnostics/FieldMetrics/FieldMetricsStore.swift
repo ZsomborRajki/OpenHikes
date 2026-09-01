@@ -156,8 +156,12 @@ actor FieldMetricsStore {
     /// of ``FieldMetricsReport`` — is skipped rather than thrown, because a
     /// diagnostics screen that fails to open is strictly worse than one
     /// missing a stale entry, and there is nothing here worth migrating.
+    ///
+    /// Skipped for *display* only. Deletion and the retention budget go by
+    /// ownership instead, so a file this list cannot show is still a file this
+    /// store removes.
     func reports() -> [FieldMetricsReport] {
-        stored().map(\.report)
+        stored().compactMap(\.report)
     }
 
     @discardableResult func save(_ report: FieldMetricsReport) -> Bool {
@@ -184,6 +188,9 @@ actor FieldMetricsStore {
         }
     }
 
+    /// Removes every file this store owns, decodable or not. Going by
+    /// decodability instead would leave the undecodable ones behind, which is
+    /// the one case a walker clearing their diagnostics most needs gone.
     func deleteAll() {
         for entry in stored() {
             try? FileManager.default.removeItem(at: entry.url)
@@ -191,7 +198,7 @@ actor FieldMetricsStore {
     }
 
     func delete(_ id: UUID) {
-        guard let entry = stored().first(where: { entry in entry.report.id == id }) else { return }
+        guard let entry = stored().first(where: { entry in entry.report?.id == id }) else { return }
         try? FileManager.default.removeItem(at: entry.url)
     }
 
@@ -200,7 +207,7 @@ actor FieldMetricsStore {
     /// nothing to export — a share sheet offering an empty file is a bug
     /// report waiting to happen.
     func exportArchive(into directory: URL, named name: String) -> URL? {
-        let reports = stored().map(\.report)
+        let reports = stored().compactMap(\.report)
         guard !reports.isEmpty else { return nil }
         do {
             let encoder = JSONEncoder()
@@ -223,35 +230,56 @@ actor FieldMetricsStore {
 
     // MARK: Private
 
+    /// One file in the directory. Membership is ownership — a `.json` file
+    /// here was written by this store — and decoding is a separate, optional
+    /// step, so a file whose contents this build no longer understands still
+    /// occupies a retention slot and still costs its bytes.
     private struct Entry {
         let url: URL
-        let report: FieldMetricsReport
+        /// `nil` for a file that no longer decodes.
+        let report: FieldMetricsReport?
         let byteCount: Int
+        /// Newest-first sort key. A report says when it was received; a file
+        /// that cannot say falls back to when it was last written, which for
+        /// this directory is the same moment.
+        let receivedAt: Date
     }
 
     private func stored() -> [Entry] {
+        let keys: [URLResourceKey] = [.fileSizeKey, .contentModificationDateKey]
         let urls = (try? FileManager.default.contentsOfDirectory(
             at: directory,
-            includingPropertiesForKeys: [.fileSizeKey],
+            includingPropertiesForKeys: keys,
             options: [.skipsHiddenFiles]
         )) ?? []
         let decoder = JSONDecoder()
         decoder.dateDecodingStrategy = .iso8601
         return urls
             .filter { $0.pathExtension == Self.fileExtension }
-            .compactMap { url -> Entry? in
-                guard let data = try? Data(contentsOf: url),
-                      let report = try? decoder.decode(FieldMetricsReport.self, from: data)
-                else { return nil }
-                return Entry(url: url, report: report, byteCount: data.count)
+            .map { url -> Entry in
+                let values = try? url.resourceValues(forKeys: Set(keys))
+                let report = (try? Data(contentsOf: url))
+                    .flatMap { try? decoder.decode(FieldMetricsReport.self, from: $0) }
+                return Entry(
+                    url: url,
+                    report: report,
+                    byteCount: values?.fileSize ?? 0,
+                    receivedAt: report?.receivedAt
+                        ?? values?.contentModificationDate
+                        ?? .distantPast
+                )
             }
-            .sorted { $0.report.receivedAt > $1.report.receivedAt }
+            .sorted { $0.receivedAt > $1.receivedAt }
     }
 
     /// Trims oldest-first against both budgets. Runs after every write rather
     /// than on a schedule: this directory only ever grows when something is
     /// added to it, so the moment of the write is the only moment it can
     /// exceed a limit.
+    ///
+    /// Counts every file in the directory, not just the ones that decode. A
+    /// budget that ignores what it cannot read is not a budget: undecodable
+    /// files would accumulate untouched and the ceiling would be a fiction.
     private func enforceLimits() {
         var entries = stored()
         while entries.count > retentionLimit, let oldest = entries.popLast() {
