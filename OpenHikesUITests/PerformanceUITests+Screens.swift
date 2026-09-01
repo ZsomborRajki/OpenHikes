@@ -160,14 +160,21 @@ extension PerformanceUITests {
             scrollIntoView(discover, in: app),
             "a hike with a timed route should offer to look for photos of it"
         )
-        discover.tap()
-
         let grid = element("photo-discovery-grid", in: app)
         // Presenting the sheet has to build it. Measured only so the budgets
         // below cannot pass by saying nothing: if `PhotoDiscoveryBody` is ever
         // renamed or removed, every "no more than" assertion in this test
         // reads zero and succeeds, and this one fails instead.
+        //
+        // The tap is inside the window rather than before it, because the
+        // presentation is the whole of what this phase measures. It used to
+        // sit outside, and the floor below still passed — on a re-evaluation
+        // the sheet owed to `@Environment(\.dismiss)` rather than to the
+        // gesture. With that gone the phase measured zero, which is the
+        // assertion doing its job: the sheet's own build had always been
+        // finishing before the baseline reading was taken.
         let opening = measurePhase(named: "discovery-open", in: app, seconds: 2) {
+            discover.tap()
             XCTAssertTrue(
                 grid.waitForExistence(timeout: UITestTimeout.launch),
                 "the seeded library photos should reach the review grid"
@@ -220,6 +227,29 @@ extension PerformanceUITests {
         }
         assertNoMoreThan(1, of: "PhotoDiscoveryBody", in: bulk, phase: "discovery-select-all")
         assertNoStall(in: bulk, phase: "discovery-select-all")
-        finish(in: app)
+
+        // Leaving and returning must not rebuild this sheet at all. It is the
+        // one screen in the suite that is still up when the run ends, which is
+        // what made it the place a scene transition's render cost showed:
+        // `@Environment(\.dismiss)` declared on the sheet had it re-evaluated
+        // 27 times across the four transitions below — eight of them inside a
+        // single backgrounding, rebuilding a twelve-cell grid and every cell's
+        // accessibility label for a screen that was on its way off the
+        // display. It reads 0 now.
+        //
+        // Budgeted against the transitions rather than at zero, on the same
+        // argument `background-recording` makes: one pass through the
+        // hierarchy per transition is a cost this app has always paid and may
+        // pay again, and what must not come back is a cost *per frame of the
+        // transition*.
+        let closing = finish(in: app)
+        let transitions = closing.count(of: "ScenePhaseChanged")
+        XCTAssertGreaterThan(transitions, 0, "the app never actually backgrounded")
+        assertNoMoreThan(
+            transitions,
+            of: "PhotoDiscoveryBody",
+            in: closing,
+            phase: "finish"
+        )
     }
 }

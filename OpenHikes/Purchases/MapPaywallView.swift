@@ -17,9 +17,6 @@ import StoreKit
 import SwiftUI
 
 struct MapPaywallView: View {
-    @Environment(\.dismiss)
-    private var dismiss
-
     let store: MapEntitlementStore
 
     @State private var message: String?
@@ -82,12 +79,10 @@ struct MapPaywallView: View {
             #endif
             .toolbar {
                 ToolbarItem(placement: .cancellationAction) {
-                    Button("Close") { dismiss() }
+                    DismissButton("Close")
                 }
             }
-            .onChange(of: store.isEntitled) { _, entitled in
-                if entitled { dismiss() }
-            }
+            .dismiss(when: store.isEntitled)
         }
         .accessibilityIdentifier("map-paywall")
     }

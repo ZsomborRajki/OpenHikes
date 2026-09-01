@@ -76,19 +76,29 @@ nonisolated final class PerformanceUITests: XCTestCase {
     ///
     /// The second slot is not slack. It is a finding held open, and it is
     /// stated once here rather than per scenario because the stall *moves*.
-    /// Four whole-suite runs on one machine produced one 203–372 ms
-    /// interaction stall in six different scenarios — `recording`, `settings`,
-    /// `photo-discovery`, `background-recording`, `chart-scrub`,
-    /// `photo-gallery` — with only `photo-discovery` reproducing every time
-    /// and no scenario ever showing two of them. A per-scenario budget of one
-    /// would therefore go red somewhere on nearly every run, in a different
-    /// place each time, which is the shape of test everybody learns to re-run
-    /// rather than read.
+    /// It used to move a long way: four whole-suite runs put one 203–372 ms
+    /// interaction stall in six different scenarios, and most of that was the
+    /// app's own rendering. A screen declaring `@Environment(\.dismiss)` was
+    /// re-evaluated five to eight times per scene transition — see
+    /// ``DismissButton`` — and removing the read took `settings`,
+    /// `photo-gallery`, `recording` and `background-recording` down to the
+    /// launch stall alone across the two whole-suite runs since.
     ///
-    /// So this is the tripwire it can honestly be: a second interaction stall
-    /// inside one scenario has never happened, and would fail. Lower this to
-    /// ``launchStalls`` the day the app stops blocking the main thread through
-    /// a scene transition, rather than raising it when a new scenario trips.
+    /// What is left is not this app's rendering. `chart-scrub` and
+    /// `photo-discovery` still stall 277–384 ms going to the background, and
+    /// their event files say the same thing every time: a ~300 ms window
+    /// containing *no mark at all*, opening after the last body of the
+    /// transition and closing on the `@Query` refresh that follows the
+    /// resign-time save. Nothing this suite instruments is running in it, so a
+    /// budget of one would go red on work no assertion here can attribute —
+    /// which is the shape of test everybody learns to re-run rather than read.
+    ///
+    /// So this stays the tripwire it can honestly be: it fails on a *second*
+    /// stall inside the window it reads, which no run has produced. That
+    /// window ends at the first backgrounding, since the tally is read there;
+    /// `chart-scrub` has stalled in the second one too, and this cannot see
+    /// it. Lower this to ``launchStalls`` when that gap has an owner, rather
+    /// than raising it when a new scenario trips.
     private static let stallBudget: Double = launchStalls + 1
 
     // MARK: - Idle
@@ -648,7 +658,7 @@ extension PerformanceUITests {
     /// without it the log's own tail, this phase included, never reaches disk
     /// and the report cannot say what the stall was.
     @MainActor
-    func finish(in app: XCUIApplication) {
+    @discardableResult func finish(in app: XCUIApplication) -> PerformanceCounterDelta {
         let before = counters(in: app)
         let started = Date().timeIntervalSince1970
         XCUIDevice.shared.press(.home)
@@ -656,11 +666,13 @@ extension PerformanceUITests {
         bringToForeground(app)
         let after = counters(in: app)
         printPhase("finish", from: started, to: Date().timeIntervalSince1970)
-        report(PerformanceCounterDelta(before: before, after: after), phase: "finish", perEvent: nil)
+        let delta = PerformanceCounterDelta(before: before, after: after)
+        report(delta, phase: "finish", perEvent: nil)
         assertStalls(atMost: Self.stallBudget, in: after, scenario: scenario)
 
         XCUIDevice.shared.press(.home)
         Thread.sleep(forTimeInterval: Self.flushSeconds)
+        return delta
     }
 }
 

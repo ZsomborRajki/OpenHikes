@@ -21,8 +21,6 @@ import UIKit
 #endif
 
 struct SettingsView: View {
-    @Environment(\.dismiss)
-    private var dismiss
     @Environment(\.modelContext)
     private var modelContext
 
@@ -124,7 +122,12 @@ struct SettingsView: View {
             #endif
             .toolbar {
                 ToolbarItem(placement: .confirmationAction) {
-                    Button("Done") { dismiss() }
+                    // A view rather than `Button("Done") { dismiss() }`: a
+                    // `.toolbar` closure is inlined into the body around it,
+                    // and this body is the seven-section `Form` above. See
+                    // ``DismissButton`` for what the environment's dismiss
+                    // action costs a screen that declares it.
+                    DismissButton()
                 }
             }
             .task { await refreshUsage() }

@@ -41,9 +41,6 @@ struct HikePhotoViewer: View {
     var onShowOnMap: () -> Void = { /* no-op default */ }
     var store: HikePhotoStore = .shared
 
-    @Environment(\.dismiss)
-    private var dismiss
-
     @State private var currentID: UUID?
     @State private var didRestoreStart = false
 
@@ -106,10 +103,12 @@ struct HikePhotoViewer: View {
                 : photos.first?.id
         }
         // A viewer with nothing left to view is a dead end; deleting the last
-        // photo returns to the hike.
-        .onChange(of: photos.isEmpty) { _, isEmpty in
-            if isEmpty { dismiss() }
-        }
+        // photo returns to the hike. Through the modifier rather than an
+        // `.onChange` closing over `dismiss`, because the environment's
+        // dismiss action would then be an input of this body — see
+        // ``DismissButton``. It cost seven passes of this screen, each one
+        // re-sorting the gallery, for a single backgrounding.
+        .dismiss(when: photos.isEmpty)
     }
 
     // MARK: - Pages
@@ -198,13 +197,12 @@ struct HikePhotoViewer: View {
     private func toolbarContent(_ current: HikePhoto?) -> some ToolbarContent {
         ToolbarItemGroup(placement: .topBarTrailing) {
             if let current, let coordinate = current.coordinate {
-                Button {
-                    show(coordinate)
-                } label: {
-                    Image(systemName: "mappin.and.ellipse")
-                }
-                .accessibilityLabel("Show where this photo was taken")
-                .accessibilityIdentifier("photo-show-on-map-button")
+                ShowPhotoOnMapButton(
+                    coordinate: coordinate,
+                    highlight: highlight,
+                    mapController: mapController,
+                    onShowOnMap: onShowOnMap
+                )
             }
             if let current {
                 Button(role: .destructive) {
@@ -244,35 +242,6 @@ struct HikePhotoViewer: View {
         withAnimation { currentID = photos[target].id }
     }
 
-    /// Moves the map's selection dot to the photo's place on the trail and
-    /// gets out of the way so it can be seen.
-    ///
-    /// The camera is framed on the coordinate at a fixed, close span rather
-    /// than re-fitted to the whole route: the point of the button is to see
-    /// where one photo was taken, and a route-wide fit would put it back in
-    /// the middle of everything.
-    ///
-    /// "Out of the way" is the whole sheet, not just this screen. Popping
-    /// alone restores the height the hike was being read at, which on a screen
-    /// that had been at `.large` is a sheet closing straight back over the
-    /// pin — so the sheet is asked to collapse first, and the pop then finds
-    /// that decision already made.
-    private func show(_ coordinate: CLLocationCoordinate2D) {
-        highlight.move(to: coordinate)
-        mapController.show(
-            MKCoordinateRegion(
-                center: coordinate,
-                latitudinalMeters: Self.photoRegionMeters,
-                longitudinalMeters: Self.photoRegionMeters
-            )
-        )
-        onShowOnMap()
-        dismiss()
-    }
-
-    /// Close enough to see the bend in the trail the photo was taken from.
-    private static let photoRegionMeters: CLLocationDistance = 500
-
     private func delete(_ photo: HikePhoto) {
         // Step off the photo first: removing the one the scroll view is
         // resting on leaves `scrollPosition` pointing at an id that no longer
@@ -283,6 +252,55 @@ struct HikePhotoViewer: View {
             ?? destination(from: currentIndex, by: -1, in: photos)
         currentID = successor.map { photos[$0].id }
         HikePhotoImport.remove(photo, from: hike, store: store)
+    }
+}
+
+/// Moves the map's selection dot to the photo's place on the trail and gets
+/// out of the way so it can be seen.
+///
+/// A view rather than a button in the viewer's toolbar closure, because it is
+/// the second of that screen's two readers of the environment's dismiss action
+/// — see ``DismissButton`` for what declaring it costs the body around it.
+///
+/// The camera is framed on the coordinate at a fixed, close span rather than
+/// re-fitted to the whole route: the point of the button is to see where one
+/// photo was taken, and a route-wide fit would put it back in the middle of
+/// everything.
+///
+/// "Out of the way" is the whole sheet, not just this screen. Popping alone
+/// restores the height the hike was being read at, which on a screen that had
+/// been at `.large` is a sheet closing straight back over the pin — so the
+/// sheet is asked to collapse first, and the pop then finds that decision
+/// already made.
+private struct ShowPhotoOnMapButton: View {
+    let coordinate: CLLocationCoordinate2D
+    var highlight: RouteHighlight
+    var mapController: MapController
+    let onShowOnMap: () -> Void
+
+    @Environment(\.dismiss)
+    private var dismiss
+
+    /// Close enough to see the bend in the trail the photo was taken from.
+    private static let regionMeters: CLLocationDistance = 500
+
+    var body: some View {
+        Button {
+            highlight.move(to: coordinate)
+            mapController.show(
+                MKCoordinateRegion(
+                    center: coordinate,
+                    latitudinalMeters: Self.regionMeters,
+                    longitudinalMeters: Self.regionMeters
+                )
+            )
+            onShowOnMap()
+            dismiss()
+        } label: {
+            Image(systemName: "mappin.and.ellipse")
+        }
+        .accessibilityLabel("Show where this photo was taken")
+        .accessibilityIdentifier("photo-show-on-map-button")
     }
 }
 
