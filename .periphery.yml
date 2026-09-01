@@ -4,8 +4,7 @@
 # indexing enabled and takes minutes, and its output is a list of candidates to
 # read rather than a pass/fail signal. It exists because the class of finding it
 # produces — a declaration nothing references any more — is otherwise found only
-# by a person noticing, which is how CODE_REVIEW.md has had to collect them one
-# at a time.
+# by a person noticing, one at a time.
 #
 # Read a result before acting on it. Periphery reasons about references, not
 # intent, so a declaration kept deliberately is indistinguishable to it from

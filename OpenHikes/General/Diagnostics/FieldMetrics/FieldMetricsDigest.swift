@@ -266,7 +266,7 @@ nonisolated struct SignpostDigest: Codable, Sendable, Equatable, Identifiable {
 
 /// One MetricKit metric payload, reduced to what this app asks of it.
 ///
-/// Every field maps to an open question in `PERFORMANCE.md` or `CODE_REVIEW.md`.
+/// Every field maps to an open question in `PERFORMANCE.md` or to a tracked issue.
 /// Nothing is collected because MetricKit happens to offer it.
 nonisolated struct FieldMetricsDigest: Codable, Sendable, Equatable {
     // Energy — the question the app exists for.

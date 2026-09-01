@@ -6,21 +6,21 @@ There is no backend and no OpenHikes account. Everything lives on the device, an
 
 ## Features
 
-- **GPX import and export.** A downloaded `.gpx` opens straight into the app from Files, AirDrop or any share sheet, with track metadata, route statistics — overall and moving-time average speed side by side, so a long lunch stop does not read as a slow walk — elevation-chart scrubbing, route styling and direction chevrons. The Share button hands a hike back out as GPX 1.1, serialized off the main thread once a destination is picked.
-- **Live recording.** Balanced location accuracy, background location, pause and resume, crash-safe recovery, motion-aware fix handling and barometric elevation fusion, saved to SwiftData once.
-- **Trail matching and review.** Bounded live matching against an extending cached OpenStreetMap walking graph, then a post-recording review where every section the matcher moved or found ambiguous can be kept as the mapped trail, handed back to the raw GPS trace, or swapped for an alternative. Unavailable matches preserve the GPS trace.
-- **Maps.** OpenStreetMap, Stadia Outdoors and Thunderforest Outdoors tile providers, plus an Apple Maps option that draws MapKit's own base map and starts none of the tile pipeline. Passive tile auto-save for browsed areas, and bulk offline downloads where the provider's terms permit them.
-- **Photos.** Pictures taken on a walk or picked from the library, pinned to where on the trail they were taken, shown as a gallery strip and as map pins. Photos taken with the system camera during a recording are found afterwards from the photo library and matched against the recording's own timestamps, corroborated by the photograph's location where it has one. Granting access to only some photos is handled rather than treated as a refusal: the app searches what it was given and offers to widen the selection.
-- **Live context.** Current location, trail auto-follow with a progress readout, and search across saved hikes and MapKit place suggestions. WeatherKit conditions sit over the map as a badge that opens the forecast in full, along with how old the reading is and Apple Weather's credits; temperatures and speeds are spelled in the units the reader's own locale uses for them.
+- **GPX import and export.** A downloaded `.gpx` opens straight into the app from Files, AirDrop or any share sheet, with track metadata, route statistics — overall and moving-time average speed side by side, so a long lunch stop does not read as a slow walk — elevation-chart scrubbing, route styling and direction chevrons. The Share button hands a hike back out as GPX 1.1.
+- **Live recording.** Background location, pause and resume, crash-safe recovery, motion-aware fix handling and barometric elevation fusion.
+- **Trail matching and review.** Bounded live matching against a cached OpenStreetMap walking graph, then a post-recording review where every section the matcher moved or found ambiguous can be kept, handed back to the raw GPS trace, or swapped for an alternative.
+- **Maps.** OpenStreetMap, Stadia Outdoors and Thunderforest Outdoors tile providers, plus an Apple Maps option that draws MapKit's own base map. Passive tile auto-save for browsed areas, and bulk offline downloads where the provider's terms permit them.
+- **Photos.** Pictures taken on a walk or picked from the library, pinned to where on the trail they were taken, shown as a gallery strip and as map pins. Photos taken with the system camera during a recording are found afterwards and matched against the recording's own timestamps. Granting access to only some photos is handled rather than treated as a refusal.
+- **Live context.** Current location, trail auto-follow with a progress readout, and search across saved hikes and MapKit place suggestions. WeatherKit conditions sit over the map as a badge that opens the forecast in full; temperatures and speeds are spelled in the units the reader's own locale uses.
 - **Home Screen widget.** Trail progress, a climb/descent/high-point stat line, live-recording takeover, recording deep links, and sparse location anchors that help repair degraded GPS gaps.
-- **Live Activity.** The same figures on the Lock Screen and in the Dynamic Island while a recording runs or a trail is being followed, ticking their own clock so a walk costs no updates while it is simply going well. Off-route distance takes the panel over when the trail is lost, a finished recording leaves its result behind for five minutes, and a recording always outranks a follow.
-- **iCloud sync.** Hikes and their metadata follow the walker across their own devices. The tile cache is deliberately left out of it.
+- **Live Activity.** The same figures on the Lock Screen and in the Dynamic Island while a recording runs or a trail is being followed, ticking their own clock so a walk costs no updates while it is simply going well.
+- **iCloud sync.** Hikes and their metadata follow the walker across their own devices, through their own private CloudKit database. Photo files and the tile cache stay on the device that produced them.
 
 ## Requirements
 
 - Xcode 26.5 or later, and iOS 26.5.
 - An Apple development team that can sign the WeatherKit entitlement, the shared App Group, the iCloud container and the push entitlement.
-- iPhone only. Every target sets `TARGETED_DEVICE_FAMILY = 1`; the sources still carry their `canImport(AppKit)` and `#if os(iOS)` guards, but no iPad, Mac or visionOS destination is built or tested.
+- iPhone only. Every target sets `TARGETED_DEVICE_FAMILY = 1`.
 
 OpenStreetMap is the keyless default and Apple Maps needs no key either. Stadia and Thunderforest require build-time API keys *and* a paid subscription with each vendor, whose terms forbid using them free of charge in a shipping app — in OpenHikes they sit behind a yearly subscription, which is what pays for them. A build without keys shows them locked, and OpenStreetMap keeps working.
 
@@ -28,7 +28,7 @@ OpenStreetMap is the keyless default and Apple Maps needs no key either. Stadia 
 
 1. Open `OpenHikes.xcodeproj` and set your development team for `OpenHikes` and `OpenWidgetExtension`.
 2. If your team cannot use `group.tappium.com.OpenHikes`, replace it in both entitlement files and in `SharedStore.appGroupID`.
-3. iCloud sync needs a CloudKit container. Xcode creates `iCloud.tappium.com.OpenHikes` on the first signed build; to use another identifier, replace it in `OpenHikes/OpenHikes.entitlements` and in `CloudSyncCoordinator.containerIdentifier`. SwiftData's mirroring creates the development schema from the model on first run, so there is nothing to configure in the CloudKit dashboard until you ship.
+3. iCloud sync needs a CloudKit container. Xcode creates `iCloud.tappium.com.OpenHikes` on the first signed build; to use another identifier, replace it in `OpenHikes/OpenHikes.entitlements` and in `CloudSyncCoordinator.containerIdentifier`. SwiftData's mirroring creates the development schema from the model on first run.
 4. Optionally enable Stadia or Thunderforest:
 
    ```sh
@@ -37,11 +37,9 @@ OpenStreetMap is the keyless default and Apple Maps needs no key either. Stadia 
 
    Add your keys to the copied file. `OpenHikes/Secrets.plist` is gitignored and must never be committed; unavailable providers stay disabled in Settings.
 
-5. Build and run. Nothing else is required — `OpenHikes.storekit` at the repository root describes the paid-maps purchase and the shared scheme already points its Run action at it, so a local build has a working paywall with no Apple account involved.
+5. Build and run. `OpenHikes.storekit` at the repository root describes the paid-maps purchase and the shared scheme already points its Run action at it, so a local build has a working paywall with no Apple account involved.
 
-Shipping the paid maps for real additionally needs an auto-renewable subscription in App Store Connect, in a group named `Pro Maps`, with a yearly duration, a 1-week free-trial introductory offer, and a product ID exactly equal to `MapEntitlementStore.productID`. It also needs an active Paid Apps agreement — without one, `Product.products(for:)` returns nothing and the buy button stays disabled. That product ID is written into every past purchase and can never change without stranding existing customers; it appears in the constant, in `OpenHikes.storekit` and in App Store Connect, and all three have to agree. `MapPurchaseLinks.privacyPolicy` must resolve to a real page before submission, because Guideline 3.1.2(a) requires it and a 404 there fails the binary.
-
-`OpenHikes/PrivacyInfo.xcprivacy` declares the required-reason APIs the app uses — its own `UserDefaults`, file timestamps inside its own containers and via the document picker, and system uptime for elapsed-time measurement — and states that the app collects no data and contains no tracking. App Store Connect rejects an upload without it (ITMS-91053). Adding a required-reason API means adding its reason code there in the same change.
+Shipping the paid maps for real additionally needs a matching auto-renewable subscription in App Store Connect and an active Paid Apps agreement; `.github/copilot-instructions.md` carries the exact contract, including the product ID that can never change.
 
 ## Recording demo
 
@@ -71,41 +69,27 @@ swift test --package-path OpenHikesShared
 
 # Simulator UI automation; --list shows the available tests
 Scripts/run-ui-tests.sh --all
-Scripts/run-ui-tests.sh --test testReviewsSnappedRouteAfterStopping
 
 # Render, main-thread and resource measurement; writes a markdown report
 Scripts/run-performance-tests.sh
 
 # Strict SwiftLint, the same one CI runs; --fix applies what it can correct
 Scripts/lint.sh
-
-# Smoke tests for the three scripts above, against stubbed xcrun/xcodebuild/swiftlint
-Scripts/run-script-tests.sh
 ```
 
-Unit and integration tests use Swift Testing; `OpenHikesUITests` uses XCUITest, because Apple's UI automation and launch metrics are not available through Swift Testing. UI-test launches use an in-memory SwiftData store and isolated preferences.
+Unit and integration tests use Swift Testing; `OpenHikesUITests` uses XCUITest, because Apple's UI automation and launch metrics are not available through Swift Testing.
 
-### Optional tooling
+`brew install xcbeautify periphery xcode-build-server` installs the optional tooling. None of it is required: each tool is used if present and skipped if not. `xcode-build-server` is per-machine — run `xcode-build-server config -project OpenHikes.xcodeproj -scheme OpenHikes` locally, and again after adding or renaming a target.
 
-None of these are required to build, test or contribute; each one is used if present and skipped if not.
+CI runs strict SwiftLint, the shared package suite in both debug and release, the app and widget unit tests with a coverage floor, warning-free debug and release builds, an unsigned device archive, the concurrency suites under Thread Sanitizer, and both accessibility UI classes. CodeQL and a dependency review run beside it. The functional UI automation and the performance suite stay out, because both lean on real gestures and timing-sensitive waits that a shared runner makes slow and flaky — run them locally before a change that touches recording, the map or render isolation.
 
-```sh
-brew install xcbeautify periphery xcode-build-server
-```
+## Documentation
 
-[`xcbeautify`](https://github.com/cpisciotta/xcbeautify) formats `xcodebuild` output. `Scripts/run-ui-tests.sh` and `Scripts/run-performance-tests.sh` use it when it is installed and fall back to their previous `grep` filter when it is not, and CI pipes through it to get compiler diagnostics as inline annotations. It is preinstalled on the `macos-26` runner at the version Homebrew installs, so local and CI output match. Both scripts keep the raw log as well, because xcbeautify does not emit `measured [...]` lines or the performance suite's `PERF-` markers.
-
-[`periphery`](https://github.com/peripheryapp/periphery) reports declarations nothing references any more. `periphery scan` reads the checked-in `.periphery.yml`; it builds the whole project with indexing enabled, so it takes minutes and is deliberately not part of CI. Its output is a list of candidates to read rather than a pass/fail signal.
-
-[`xcode-build-server`](https://github.com/SolaWing/xcode-build-server) lets an editor's `sourcekit-lsp` resolve symbols across the app target rather than only the shared package. It is per-machine — the generated `buildServer.json` records absolute DerivedData paths and is gitignored — so generate it locally, and again after adding or renaming a target:
-
-```sh
-xcode-build-server config -project OpenHikes.xcodeproj -scheme OpenHikes
-```
-
-CI runs strict SwiftLint, the shared package suite in both debug and release, the app and widget unit tests with a coverage floor, warning-free debug and release builds, an unsigned device archive, the recording, tile, sync and GPX concurrency suites under Thread Sanitizer, and both accessibility UI classes. Two more workflows run beside it: CodeQL analyses Swift on every push to `main` and weekly, and a dependency review runs on any pull request that moves a package. The functional UI automation and the performance suite stay out, because both lean on real gestures and timing-sensitive waits that a shared runner makes slow and flaky — run them locally before a change that touches recording, the map or render isolation.
-
-[`PERFORMANCE.md`](docs/PERFORMANCE.md) records what the app costs in frames and in battery, how that was measured, and what is still open. [`CODE_REVIEW.md`](docs/CODE_REVIEW.md) is the open code-quality list. [`.github/copilot-instructions.md`](.github/copilot-instructions.md) holds the architecture and the repository conventions, including the launch arguments the UI suites use. [`CONTRIBUTING.md`](docs/CONTRIBUTING.md) is the short version for a first change, and [`SECURITY.md`](SECURITY.md) says how to report a vulnerability privately.
+- [`AGENTS.md`](AGENTS.md) and [`.github/copilot-instructions.md`](.github/copilot-instructions.md) — the architecture, the conventions, the energy policies, and the decisions already settled.
+- [`CONTRIBUTING.md`](docs/CONTRIBUTING.md) — the short version for a first change.
+- [`PERFORMANCE.md`](docs/PERFORMANCE.md) — what the app costs in frames and in battery, and how that was measured.
+- [`SECURITY.md`](SECURITY.md) — how to report a vulnerability privately.
+- [Issues](https://github.com/ZsomborRajki/OpenHikes/issues) — the open work: bugs, missing features, and product decisions that are still open.
 
 ## Project layout
 
@@ -130,43 +114,6 @@ Following Apple's [Food Truck](https://github.com/apple/sample-food-truck) and [
 | `OpenHikesTests/`, `OpenWidgetTests/` | App-hosted tests mirroring the app's domain folders. |
 | `OpenHikesUITests/` | Simulator UI automation, location spoofing, launch metrics. |
 | `ci_scripts/` | Xcode Cloud hooks, run automatically by name. |
-
-## iCloud sync
-
-Hikes follow the walker rather than the phone. There is no OpenHikes account and no server: everything travels through the user's own private CloudKit database, so the app never sees it and nobody has to sign up for anything.
-
-SwiftData does the syncing. `Hike` lives in a store configured with `cloudKitDatabase: .automatic`, and mirroring uploads, downloads, merges and deletes from inside Core Data — there is no queue this app owns, no change token it persists and no record mapping it writes. `OpenHikes/Sync/` is what mirroring does *not* do: report what is happening, and remember whether the user wanted it.
-
-| Travels | Stays on the device |
-|---|---|
-| Hike title, custom name, date, distance, style, symbol, auto-follow and GPX metadata | Auto-saved and offline tiles, and the download records that describe them |
-| The matched route and the raw GPS trace | Whether tile auto-save is on for a hike |
-| Surface and difficulty breakdowns | Photo pixels — only a photo's metadata travels |
-| Photo metadata, including the trail anchor | Whether Background Trail Tracking is on |
-| Map tile provider, and the save-to-photo-library switch | Which hike this device has selected, and where it is along it |
-
-Anything describing files in *this* device's Application Support has to live where the mirror cannot reach, because mirroring syncs a whole row last-writer-wins with no way to hold a column back. That is `HikeLocalState`, a second model in a second unmirrored store. It is not tidiness: the tile claim set is built from exactly those fields, and a second device's inventory overwriting this one's would silently strip this device of offline maps it really had downloaded.
-
-Sync is on by default and can be turned off in Settings, where the same section says what it is doing and, when it isn't, why. A store decides whether it mirrors when it is built, so the switch takes effect on the next launch. Turning it off never deletes a hike. Settings ride separately on `NSUbiquitousKeyValueStore` as an allowlist, so a preference describing *this* device deliberately does not travel.
-
-Letting SwiftData own sync gave up things a hand-written engine had, deliberately:
-
-- **Photo pixels do not travel.** They are files, and mirroring only carries columns. A second device gets a photo's metadata and finds no file behind it.
-- **Whole-row uploads.** Renaming a hike re-uploads its routes and photo metadata.
-- **No draft filtering.** A recording in progress is a row like any other, so a second device shows a hike whose line is still being drawn.
-- **Last-writer-wins.** There is no hook to prefer an unsent local edit.
-- **The CloudKit schema is permanent.** It is append-only in production, so a column added to `Hike` cannot later change type or go away.
-
-## Current limitations
-
-- Offline trail matching only covers Overpass graph regions that were cached previously; prebuilt regional graph bundles are not shipped.
-- Photo pixels and downloaded map tiles stay on the device that produced them, by design.
-- Turning iCloud sync on or off takes effect on the next launch.
-- The Simulator cannot receive CloudKit push notifications, so a second simulator only picks up changes when it is brought to the foreground.
-- The SwiftData store is not migrated across schema changes.
-- Third-party tile keys can only be supplied at build time.
-- GPX import refuses a file above 32 MB or beyond 500,000 track points. Both are far above any real walk, and the ceilings exist so an absurd file fails with a reason rather than exhausting memory.
-- The app is English-only; there is no string catalog yet.
 
 ## License
 

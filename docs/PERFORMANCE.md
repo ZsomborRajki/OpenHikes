@@ -4,8 +4,8 @@ What the app costs — in frames and in battery — and what is still wrong with
 Every number here was produced by `Scripts/run-performance-tests.sh` on an
 iPhone 17 Pro simulator (iOS 26.5, Xcode 26.6, Debug); none of it is estimated.
 
-**This is a live list, not a log**, on the same terms as `CODE_REVIEW.md`. A
-finding that has been fixed is deleted rather than annotated. What stays is what
+**This is a live list, not a log.** A finding that has been fixed is deleted
+rather than annotated. What stays is what
 is still open, and how to read a measurement correctly — not a table of last
 week's numbers, which has to be re-measured to stay true and which nobody can
 act on. A run's own report carries its figures; `Scripts/performance-baseline.json`
