@@ -10,7 +10,7 @@ says which commands to run.
 
 ## Why
 
-<!-- The problem, not the patch. If it comes from CODE_REVIEW.md, name the finding. -->
+<!-- The problem, not the patch. If it comes from an open issue, link it. -->
 
 ## How it was verified
 

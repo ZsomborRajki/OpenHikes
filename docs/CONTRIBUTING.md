@@ -11,8 +11,9 @@ points at it rather than repeating it.
   that have already been settled and should not be re-opened.
 - [`PERFORMANCE.md`](PERFORMANCE.md) — what the app costs and how that was
   measured.
-- [`CODE_REVIEW.md`](CODE_REVIEW.md) — the open code-quality list. A good place
-  to find something worth doing.
+- [GitHub issues](https://github.com/ZsomborRajki/OpenHikes/issues) — the open
+  work: bugs, missing features, and product decisions that are still open. A
+  good place to find something worth doing.
 
 ## Before you start
 
@@ -93,8 +94,9 @@ linter enforces what it can. The handful that catch people out:
   works. The template asks for exactly that.
 - Documentation is owned by exactly one file each — see the *Documentation*
   section of `.github/copilot-instructions.md` before adding a fact to two
-  places. `CODE_REVIEW.md` and `PERFORMANCE.md` are live lists, not logs: a
-  finding that has been fixed is deleted, not annotated.
+  places. `PERFORMANCE.md` is a live list, not a log: a finding that has been
+  fixed is deleted, not annotated. Open work belongs in an issue, not in a
+  checked-in list.
 - Do not commit `OpenHikes/Secrets.plist`, API keys, or anything else that
   belongs to you rather than to the repository.
 

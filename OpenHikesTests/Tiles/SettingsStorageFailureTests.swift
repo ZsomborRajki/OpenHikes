@@ -32,7 +32,7 @@
 //  claim is stored in `HikeLocalState`, whose own fetch is not injectable, so
 //  what a test can prove is the hike fetch; the sidecar failure is refused by
 //  type, through `Hike.tileClaim()` throwing where the passthroughs answer "no
-//  tiles". `docs/CODE_REVIEW.md` records that as an unobserved claim.
+//  tiles". That half is asserted rather than observed.
 //
 
 import Foundation
