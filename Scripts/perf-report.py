@@ -236,12 +236,41 @@ NETWORK_SIGNPOSTS = ("TileNetworkFetch", "WeatherFetch", "TrailGraphFetch")
 # dropped; reading them as a funnel is what distinguishes "CoreLocation is
 # quiet" from "CoreLocation is loud and we are throwing the results away",
 # which cost very different amounts of battery and need opposite fixes.
-LOCATION_FUNNEL = (
-    ("LocationFixDelivered", "CoreLocation delivered"),
-    ("LocationPublished", "published to the app"),
-    ("RecordingFixReceived", "reached the recorder"),
-    ("LiveFixAccepted", "accepted into the route"),
-    ("RecordingFixRejected", "rejected by policy"),
+#
+# One funnel per `CLLocationManager`, because the app runs three of them and
+# they neither share fixes nor cost the same. Counting them into a single
+# funnel produced tables that *widened* — more fixes reaching the recorder than
+# CoreLocation ever delivered — because the delivery was counted on the map's
+# manager and the acceptance on the recorder's. A stage is only ever comparable
+# against the stream it came from, so each source narrows on its own.
+# Each step is ``(signpost, description, narrows)``. ``narrows`` marks the
+# steps that must not exceed the step above them — the funnel proper. A step
+# with ``False`` is a branch off the stage before it, not a stage of its own:
+# a rejected fix is the complement of an accepted one, not a narrowing of it.
+LOCATION_FUNNELS = (
+    (
+        "map (`LocationManager`)",
+        (
+            ("LocationFixDelivered", "CoreLocation delivered", True),
+            ("LocationPublished", "published to the app", True),
+        ),
+    ),
+    (
+        "recording (`SystemRecordingLocationSource`)",
+        (
+            ("RecordingFixDelivered", "CoreLocation delivered", True),
+            ("RecordingFixReceived", "reached a live recording", True),
+            ("LiveFixAccepted", "accepted into the route", True),
+            ("RecordingFixRejected", "rejected by policy", False),
+        ),
+    ),
+    (
+        "background (`BackgroundTrailTracker`)",
+        (
+            ("BackgroundFixDelivered", "CoreLocation delivered", True),
+            ("BackgroundFixMatched", "matched against the trail", True),
+        ),
+    ),
 )
 
 
@@ -363,14 +392,15 @@ def energy_section(scenario: Scenario) -> list[str]:
             )
         )
 
-    funnel = []
-    for name, description in LOCATION_FUNNEL:
-        count = sum(1 for event in events if event.name == name)
-        if count:
-            funnel.append([description, f"`{name}`", str(count)])
-    if funnel:
-        lines.extend(["**Location funnel**", ""])
-        lines.extend(markdown_table(["Step", "Signpost", "Count"], funnel))
+    for source, steps in LOCATION_FUNNELS:
+        funnel = []
+        for name, description, _ in steps:
+            count = sum(1 for event in events if event.name == name)
+            if count:
+                funnel.append([description, f"`{name}`", str(count)])
+        if funnel:
+            lines.extend([f"**Location funnel — {source}**", ""])
+            lines.extend(markdown_table(["Step", "Signpost", "Count"], funnel))
 
     profiles = [event for event in events if event.name == "RecordingEnergyProfileApplied"]
     if profiles:
@@ -452,6 +482,33 @@ def findings(scenarios: dict[str, Scenario]) -> list[str]:
     return notes or ["Nothing exceeded a reporting threshold."]
 
 
+def widening_funnels(scenario: Scenario) -> list[str]:
+    """Funnels where a stage counted more fixes than the stage above it.
+
+    A funnel can only narrow: every fix at a stage came through the one before
+    it. A report that widens is therefore never news about the GPS — it is two
+    `CLLocationManager`s being read as one stream, which is exactly how this
+    report spent months claiming five fixes reached the recorder out of three
+    CoreLocation ever delivered. Said out loud here rather than left for a
+    reader to notice, because nobody did.
+    """
+    notes: list[str] = []
+    for source, steps in LOCATION_FUNNELS:
+        previous: tuple[str, int] | None = None
+        for name, _, narrows in steps:
+            count = sum(1 for event in scenario.events if event.name == name)
+            if not narrows:
+                continue
+            if previous and count > previous[1]:
+                notes.append(
+                    f"`{scenario.name}`'s {source} funnel widened: "
+                    f"`{name}` counted {count} against `{previous[0]}`'s {previous[1]} — "
+                    "a stage is being counted on a stream it did not come from."
+                )
+            previous = (name, count)
+    return notes
+
+
 def energy_findings(scenario: Scenario) -> list[str]:
     """The battery-shaped regressions, which look like nothing in a frame count.
 
@@ -481,14 +538,19 @@ def energy_findings(scenario: Scenario) -> list[str]:
             f"`{scenario.name}` woke the radio {woken} time(s) while backgrounded — "
             "nothing it fetched could be seen."
         )
-    delivered = sum(1 for event in scenario.events if event.name == "LocationFixDelivered")
+    notes.extend(widening_funnels(scenario))
+    # Both counts off the recorder's own manager. `LocationFixDelivered` is the
+    # map's, and dividing one stream's rejections by another's deliveries is a
+    # rate about nothing: it read 50% for a recording that in fact kept 4 of
+    # the 5 fixes it was handed, and rose as the denominator shrank.
+    received = sum(1 for event in scenario.events if event.name == "RecordingFixReceived")
     rejected = sum(1 for event in scenario.events if event.name == "RecordingFixRejected")
-    if delivered and rejected / delivered > 0.5:
+    if received and rejected / received > 0.5:
         # Fixes are the expensive part of a recording. Paying for them and
         # then discarding most is the worst of both: full GPS duty, half a
         # route. It means the filter is wrong, not that the walker is slow.
         notes.append(
-            f"`{scenario.name}` rejected {rejected} of {delivered} delivered fixes — "
+            f"`{scenario.name}` rejected {rejected} of {received} fixes that reached the recorder — "
             "GPS duty paid for, route not recorded."
         )
     return notes
