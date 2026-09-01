@@ -250,8 +250,23 @@ xcodebuild test \
     -resultBundlePath "$run_directory/result.xcresult" \
     -skipPackagePluginValidation \
     2>&1 | format_xcodebuild_stream "$build_log"
-status="${PIPESTATUS[0]}"
+statuses=("${PIPESTATUS[@]}")
 set -e
+status="${statuses[0]}"
+
+# The raw log is this script's product, not a side effect of printing one:
+# print_measurement_lines re-emits from it and perf-report.py parses it, so a
+# run that could not write it has no report to build and no measurements to
+# show. xcodebuild's own status still comes first when both went wrong — it is
+# the more useful of the two answers.
+if (( statuses[1] != 0 )); then
+    if (( status != 0 )); then
+        echo "Performance tests failed, and $build_log could not be written." >&2
+        exit "$status"
+    fi
+    echo "Performance tests ran, but $build_log could not be written, so this run measured nothing." >&2
+    exit 1
+fi
 
 # xcbeautify does not emit `measured [...]` or the suite's PERF- markers, and
 # those are what this script exists to produce. $build_log holds the raw

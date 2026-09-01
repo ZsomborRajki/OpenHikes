@@ -346,6 +346,69 @@ elif expect_contains "$output" "Collected 0 event file(s)" "the output"; then
     pass
 fi
 
+echo "Raw log handling"
+
+# Drives Scripts/lib/xcodebuild-output.sh the way both test scripts do — as the
+# last element of a pipeline, under `set +e`, reading both halves of
+# PIPESTATUS — and prints the two statuses so a case can assert them. The
+# upstream half exits with whatever status the case asks for, standing in for
+# xcodebuild.
+cat > "$work/format-stream.sh" <<'CASE'
+#!/usr/bin/env bash
+set -uo pipefail
+# shellcheck source=/dev/null
+source "$1/Scripts/lib/xcodebuild-output.sh"
+raw_log="$2"
+upstream_status="${3:-0}"
+set +e
+{
+    echo "Building for testing..."
+    echo "note: a line neither the formatter nor the fallback filter prints"
+    exit "$upstream_status"
+} | format_xcodebuild_stream "$raw_log"
+statuses=("${PIPESTATUS[@]}")
+printf 'upstream=%s log=%s\n' "${statuses[0]}" "${statuses[1]}"
+CASE
+chmod +x "$work/format-stream.sh"
+
+# A directory that does not exist rather than one chmod'd unwritable: this
+# suite has to fail tee the same way when it is run as root, which a mode-500
+# directory would not.
+missing_log="$work/no-such-directory/xcodebuild.log"
+written_log="$work/written.log"
+
+run_script "format_xcodebuild_stream reports a raw log it could not write" \
+    "$work/format-stream.sh" "$repository_root" "$missing_log"
+if expect_status 0 \
+    && expect_contains "$output" "could not write the raw xcodebuild log to $missing_log" "the error" \
+    && expect_contains "$output" "log=1" "the reported statuses"; then
+    pass
+fi
+
+# The point of reading the two halves separately: a failed write must not be
+# read as a failed run, and a failed run must not be read as a failed write.
+run_script "format_xcodebuild_stream keeps xcodebuild's status while reporting the write" \
+    "$work/format-stream.sh" "$repository_root" "$missing_log" 65
+if expect_status 0 && expect_contains "$output" "upstream=65 log=1" "the reported statuses"; then
+    pass
+fi
+
+# The fallback filter matches none of these lines and exits 1 for it. That is
+# the status the old `|| true` was there for, and it still has to pass as a
+# written log.
+rm -f "$written_log"
+run_script "format_xcodebuild_stream tolerates a filter that matched nothing" \
+    "$work/format-stream.sh" "$repository_root" "$written_log"
+if expect_status 0 \
+    && expect_contains "$output" "log=0" "the reported statuses" \
+    && expect_absent "$output" "could not write" "the output"; then
+    if [[ -s "$written_log" ]] && grep -q "neither the formatter nor the fallback filter" "$written_log"; then
+        pass
+    else
+        fail "the raw log at $written_log did not get the unformatted line"
+    fi
+fi
+
 echo "This suite's own arguments"
 
 # Only invocations that exit before any test runs: this script is the one being

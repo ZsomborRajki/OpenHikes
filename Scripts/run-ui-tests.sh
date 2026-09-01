@@ -264,6 +264,7 @@ fi
 xcrun simctl location "$device_udid" clear >/dev/null 2>&1 || true
 
 status=0
+raw_log_status=0
 if [[ "$verbose" == true ]]; then
     "${command[@]}" || status=$?
 else
@@ -275,8 +276,10 @@ else
 
     set +e
     "${command[@]}" 2>&1 | format_xcodebuild_stream "$raw_log"
-    status="${PIPESTATUS[0]}"
+    statuses=("${PIPESTATUS[@]}")
     set -e
+    status="${statuses[0]}"
+    raw_log_status="${statuses[1]}"
 
     print_measurement_lines "$raw_log"
 fi
@@ -284,6 +287,17 @@ fi
 if (( status != 0 )); then
     echo "UI tests failed. Re-run with --verbose for the full log." >&2
     exit "$status"
+fi
+
+# Reached only when xcodebuild itself passed, so nothing here can hide its
+# status. A run whose raw log never landed still printed whatever xcbeautify
+# could parse, and everything it could not — a crash with no diagnostic, a
+# sanitizer report, the launch measurement — is simply gone; "UI tests passed"
+# would be a claim about output nobody can go back and read.
+if (( raw_log_status != 0 )); then
+    echo "The raw xcodebuild log could not be written, so this run kept no full output." >&2
+    echo "Re-run with --verbose to see it." >&2
+    exit 1
 fi
 
 echo "UI tests passed."
