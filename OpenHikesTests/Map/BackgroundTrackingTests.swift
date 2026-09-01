@@ -115,9 +115,19 @@ final class BackgroundTrackingAuthorizationTests {
         return newTracker
     }
 
+    /// Records a selection the way a previous launch would have left one.
+    ///
+    /// Monitoring is armed only when there is a trail to match fixes against,
+    /// and these tests are about the other two conditions — so the id is all
+    /// they need, and it never has to name a hike that exists.
+    private func seedSelection() {
+        defaults.set(UUID().uuidString, forKey: SettingsKey.lastSelectedHikeID)
+    }
+
     @Test("turning tracking on with Always already granted starts monitoring")
     func enablingWhenAuthorizedStarts() {
         monitor.authorization = .always
+        seedSelection()
         let tracker = makeTracker()
 
         tracker.setEnabled(true)
@@ -138,6 +148,9 @@ final class BackgroundTrackingAuthorizationTests {
 
             localTracker.setEnabled(true)
 
+            // Nothing is selected here, and the prompt still goes up: the
+            // toggle is a standing preference, and answering it is a trip out
+            // of the app the user shouldn't repeat when they pick a trail.
             #expect(localMonitor.alwaysAccessRequests == 1, "\(authorization)")
             #expect(!localMonitor.isMonitoring, "monitoring without Always would never deliver anything")
         }
@@ -159,13 +172,18 @@ final class BackgroundTrackingAuthorizationTests {
     @Test("turning tracking off stops monitoring")
     func disablingStops() {
         monitor.authorization = .always
+        seedSelection()
         let tracker = makeTracker()
         tracker.setEnabled(true)
+        // Not zero: the launch above found the toggle off and stood monitoring
+        // down, which is how a registration left over from a previous launch
+        // is cancelled. This test is about the *next* stop.
+        let stopsBeforeDisabling = monitor.stopCount
 
         tracker.setEnabled(false)
 
         #expect(!monitor.isMonitoring)
-        #expect(monitor.stopCount == 1)
+        #expect(monitor.stopCount == stopsBeforeDisabling + 1)
     }
 
     /// The grant arrives minutes later, from a system prompt shown after the
@@ -173,6 +191,7 @@ final class BackgroundTrackingAuthorizationTests {
     @Test("granting Always afterwards arms monitoring")
     func grantingAlwaysLaterStarts() {
         defaults.set(true, forKey: SettingsKey.backgroundTrackingEnabled)
+        seedSelection()
         let tracker = makeTracker()
         tracker.setEnabled(true)
         #expect(!monitor.isMonitoring, "precondition: the prompt is still open")
@@ -202,6 +221,7 @@ final class BackgroundTrackingAuthorizationTests {
     func launchReArmsMonitoring() {
         defaults.set(true, forKey: SettingsKey.backgroundTrackingEnabled)
         monitor.authorization = .always
+        seedSelection()
 
         makeTracker()
 
@@ -211,8 +231,35 @@ final class BackgroundTrackingAuthorizationTests {
     @Test("a launch with tracking off re-arms nothing")
     func launchWithoutTrackingDoesNotArm() {
         monitor.authorization = .always
+        seedSelection()
         makeTracker()
         #expect(!monitor.isMonitoring)
+    }
+
+    /// The toggle and the grant are not enough on their own. Armed with
+    /// nothing selected, every significant change relaunches the app only to
+    /// find no hike to match against — which over a long drive is hundreds of
+    /// wasted wakes, and the iOS background-location reminder that follows
+    /// them.
+    @Test("a launch with tracking on but nothing selected arms nothing")
+    func launchWithoutSelectionDoesNotArm() {
+        defaults.set(true, forKey: SettingsKey.backgroundTrackingEnabled)
+        monitor.authorization = .always
+
+        makeTracker()
+
+        #expect(monitor.startCount == 0, "there is no trail to match a fix against")
+    }
+
+    /// …and the grant arriving later doesn't change that.
+    @Test("granting Always with nothing selected starts nothing")
+    func grantingAlwaysWithoutSelectionStartsNothing() {
+        defaults.set(true, forKey: SettingsKey.backgroundTrackingEnabled)
+        makeTracker()
+
+        monitor.grantAlways()
+
+        #expect(monitor.startCount == 0)
     }
 }
 
@@ -428,6 +475,106 @@ final class BackgroundDeliveryTests {
 
         let persisted = defaults.object(forKey: SettingsKey.lastMatchedDistance) as? Double
         #expect(abs(try #require(persisted) - profile.distances[3]) < 1)
+    }
+}
+}
+
+// MARK: - Selection arming
+
+extension WidgetFeedSuites {
+/// Monitoring follows the *selection*, not just the settings toggle.
+///
+/// Serialized with the other feed suites: selecting a hike publishes a
+/// snapshot to the App Group file they share, even though nothing here
+/// asserts on it.
+@Suite("Background tracking selection arming", .serialized)
+final class BackgroundTrackingSelectionTests {
+    private let container: ModelContainer
+    private let context: ModelContext
+    private let defaults: UserDefaults
+    private let monitor = StubLocationMonitor()
+    // periphery:ignore - assigned and never read on purpose; it is the strong
+    // reference that keeps the tracker alive.
+    private var retainedTracker: BackgroundTrailTracker?
+
+    init() throws {
+        container = try Fixture.modelContainer()
+        context = ModelContext(container)
+        defaults = try makeScratchDefaults()
+        SharedStore.clear()
+    }
+
+    deinit {
+        SharedStore.clear()
+    }
+
+    /// The state a user who has turned the feature on and answered the prompt
+    /// is in: everything armed except for the selection each test supplies.
+    private func makeTracker(selecting hike: Hike? = nil) -> BackgroundTrailTracker {
+        defaults.set(true, forKey: SettingsKey.backgroundTrackingEnabled)
+        monitor.authorization = .always
+        if let hike { defaults.set(hike.id.uuidString, forKey: SettingsKey.lastSelectedHikeID) }
+        let newTracker = BackgroundTrailTracker(container: container, monitor: monitor, defaults: defaults)
+        retainedTracker = newTracker
+        return newTracker
+    }
+
+    private func hike() -> Hike {
+        let newHike = Fixture.hike(in: context)
+        try? context.save()
+        return newHike
+    }
+
+    /// The reported bug: closing the trail left significant-change monitoring
+    /// armed for good, because the only thing that ever stopped it was the
+    /// settings toggle — which the user has no reason to touch.
+    @Test("deselecting the trail stops monitoring")
+    func deselectingStops() {
+        let tracker = makeTracker(selecting: hike())
+        #expect(monitor.isMonitoring, "precondition: a launch with a selection arms")
+
+        tracker.hikeSelectionChanged(to: nil)
+
+        #expect(monitor.stopCount == 1)
+        #expect(!monitor.isMonitoring, "no trail, nothing for a wake-up to do")
+    }
+
+    /// And the toggle stays on across it: it is a standing preference, so
+    /// picking a trail again has to arm monitoring without the user going
+    /// back to Settings.
+    @Test("selecting a trail with tracking already on arms monitoring")
+    func selectingArms() {
+        let tracker = makeTracker()
+        #expect(monitor.startCount == 0, "precondition: nothing selected, nothing armed")
+
+        tracker.hikeSelectionChanged(to: hike())
+
+        #expect(monitor.startCount == 1)
+        #expect(monitor.isMonitoring)
+    }
+
+    /// The selection is one of three conditions, not a replacement for the
+    /// other two.
+    @Test("selecting a trail with tracking off arms nothing")
+    func selectingWithTrackingOffArmsNothing() {
+        let tracker = makeTracker()
+        defaults.set(false, forKey: SettingsKey.backgroundTrackingEnabled)
+
+        tracker.hikeSelectionChanged(to: hike())
+
+        #expect(monitor.startCount == 0)
+    }
+
+    /// Swapping one trail for another is a selection the feed can serve, so
+    /// it must not stand monitoring down on the way through.
+    @Test("swapping one trail for another leaves monitoring armed")
+    func swappingTrailsStaysArmed() {
+        let tracker = makeTracker(selecting: hike())
+
+        tracker.hikeSelectionChanged(to: hike())
+
+        #expect(monitor.isMonitoring)
+        #expect(monitor.stopCount == 0)
     }
 }
 }
