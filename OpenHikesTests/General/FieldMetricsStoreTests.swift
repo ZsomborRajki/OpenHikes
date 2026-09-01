@@ -65,6 +65,31 @@ nonisolated struct FieldMetricsStoreTests {
         )
     }
 
+    /// Every file the store owns, decodable or not. `reports()` cannot answer
+    /// this: it hides exactly the files these tests are about.
+    private static func storedFiles(in directory: URL) throws -> [URL] {
+        try FileManager.default.contentsOfDirectory(
+            at: directory,
+            includingPropertiesForKeys: [.fileSizeKey]
+        )
+        .filter { $0.pathExtension == "json" }
+    }
+
+    /// Writes a file the current ``FieldMetricsReport`` cannot decode, as an
+    /// older shape of the type would leave behind.
+    @discardableResult private static func writeUndecodableFile(
+        in directory: URL,
+        bytes: Int = 8
+    ) throws -> URL {
+        try FileManager.default.createDirectory(at: directory, withIntermediateDirectories: true)
+        let url = directory.appending(
+            path: "\(UUID().uuidString).json",
+            directoryHint: .notDirectory
+        )
+        try Data(repeating: 0x41, count: bytes).write(to: url)
+        return url
+    }
+
     @Test("an empty store reports nothing and exports nothing")
     func emptyStore() async {
         let sandbox = Sandbox()
@@ -198,15 +223,66 @@ nonisolated struct FieldMetricsStoreTests {
     }
 
     @Test("deleting everything empties the directory")
-    func deleteAll() async {
+    func deleteAll() async throws {
         let sandbox = Sandbox()
         let store = FieldMetricsStore(directory: sandbox.directory)
 
         await store.save(Self.report(receivedAt: Date()))
         await store.save(Self.report(receivedAt: Date().addingTimeInterval(60)))
+        // A file from an older shape of the type. Deleting by what decodes
+        // would leave this one on disk for good, and `reports()` would keep
+        // saying the store is empty while it sat there.
+        try Self.writeUndecodableFile(in: sandbox.directory)
         await store.deleteAll()
 
         #expect(await store.reports().isEmpty)
+        #expect(try Self.storedFiles(in: sandbox.directory).isEmpty)
+    }
+
+    @Test("a file that no longer decodes still occupies a retention slot")
+    func undecodableFilesCountTowardRetention() async throws {
+        let sandbox = Sandbox()
+        let store = FieldMetricsStore(directory: sandbox.directory, retentionLimit: 2)
+
+        for _ in 0..<4 {
+            try Self.writeUndecodableFile(in: sandbox.directory)
+        }
+        // Newest by a clear margin, so the sweep has to reach past it into the
+        // undecodable files rather than the other way round.
+        await store.save(Self.report(receivedAt: Date().addingTimeInterval(3600), version: "good"))
+
+        #expect(try Self.storedFiles(in: sandbox.directory).count == 2)
+        #expect(await store.reports().map(\.appVersion) == ["good"])
+    }
+
+    @Test("a file that no longer decodes still costs its bytes")
+    func undecodableFilesCountTowardByteLimit() async throws {
+        let sandbox = Sandbox()
+        // Generous count, tight bytes: only the byte budget can prune here.
+        let byteLimit = 40_000
+        let store = FieldMetricsStore(
+            directory: sandbox.directory,
+            retentionLimit: 100,
+            byteLimit: byteLimit
+        )
+
+        // Three old-schema files that between them already blow the budget.
+        for _ in 0..<3 {
+            try Self.writeUndecodableFile(in: sandbox.directory, bytes: 20_000)
+        }
+        await store.save(
+            Self.bulkyDiagnosticReport(
+                receivedAt: Date().addingTimeInterval(3600),
+                bytes: 12_000
+            )
+        )
+
+        let total = try Self.storedFiles(in: sandbox.directory)
+            .reduce(0) { sum, url in
+                sum + ((try? url.resourceValues(forKeys: [.fileSizeKey]))?.fileSize ?? 0)
+            }
+        #expect(total <= byteLimit)
+        #expect(await store.reports().count == 1)
     }
 
     @Test("an export contains every stored report")
@@ -236,9 +312,7 @@ nonisolated struct FieldMetricsStoreTests {
         let store = FieldMetricsStore(directory: sandbox.directory)
 
         await store.save(Self.report(receivedAt: Date(), version: "good"))
-        try Data("not json".utf8).write(
-            to: sandbox.directory.appending(path: "\(UUID().uuidString).json")
-        )
+        try Self.writeUndecodableFile(in: sandbox.directory)
 
         // A diagnostics screen that refuses to open is strictly worse than one
         // missing a stale entry, and there is nothing here worth migrating.
