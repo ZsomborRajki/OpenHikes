@@ -49,18 +49,35 @@ xcodebuild_output_renderer() {
 #
 # Call it as the last element of a pipeline so ${PIPESTATUS[0]} still reports
 # xcodebuild's exit status: the pipeline inside this function runs in its own
-# subshell and does not disturb the caller's.
+# subshell and does not disturb the caller's. This function's own status is
+# then ${PIPESTATUS[1]}, and it means one thing only — whether the raw log was
+# written. Call it under `set +e`, because the formatter is allowed to fail and
+# a caller running with errexit would not survive that long enough to be told.
 format_xcodebuild_stream() {
     local raw_log="$1"
+    local statuses
 
     if command -v xcbeautify >/dev/null 2>&1; then
         tee "$raw_log" \
-            | xcbeautify --renderer "$(xcodebuild_output_renderer)" --disable-logging \
-            || true
+            | xcbeautify --renderer "$(xcodebuild_output_renderer)" --disable-logging
     else
         tee "$raw_log" \
-            | grep -E "$XCODEBUILD_FALLBACK_PATTERN" \
-            || true
+            | grep -E "$XCODEBUILD_FALLBACK_PATTERN"
+    fi
+    statuses=("${PIPESTATUS[@]}")
+
+    # Only the second half of that pipeline is allowed to fail: xcbeautify
+    # exits non-zero on a run it read as failing, and grep exits 1 when a short
+    # run matched none of the fallback patterns. Neither adds anything to the
+    # xcodebuild status the caller already holds, and a blanket `|| true` used
+    # to tolerate them by tolerating the whole pipeline — which quietly covered
+    # tee as well. tee is the half that must not fail: the raw log is the only
+    # record of the lines the formatter drops, so losing it loses the
+    # measurements, the sanitizer reports, and every crash that produces no
+    # formatted line at all.
+    if (( statuses[0] != 0 )); then
+        echo "error: could not write the raw xcodebuild log to $raw_log." >&2
+        return 1
     fi
 }
 
