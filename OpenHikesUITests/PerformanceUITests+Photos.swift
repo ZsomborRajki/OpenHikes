@@ -173,7 +173,7 @@ extension PerformanceUITests {
             per: paging.count(of: "PhotoViewerBody"),
             in: paging
         )
-        finish()
+        finish(in: app)
     }
 
 }

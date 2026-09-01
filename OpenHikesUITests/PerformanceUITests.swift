@@ -68,6 +68,28 @@ nonisolated final class PerformanceUITests: XCTestCase {
     /// A tripwire above the noise, not a target — the target is the launch
     /// finding in `PERFORMANCE.md`.
     private static let launchStallCeilingMilliseconds: Double = 1200
+    /// What every scenario stalls for without doing anything: the launch
+    /// stall, which happens once and is bounded by length rather than by
+    /// count — see `assertLaunchStall(atMost:in:)`.
+    private static let launchStalls: Double = 1
+    /// The whole-run stall budget, checked in ``finish(in:)``.
+    ///
+    /// The second slot is not slack. It is a finding held open, and it is
+    /// stated once here rather than per scenario because the stall *moves*.
+    /// Four whole-suite runs on one machine produced one 203–372 ms
+    /// interaction stall in six different scenarios — `recording`, `settings`,
+    /// `photo-discovery`, `background-recording`, `chart-scrub`,
+    /// `photo-gallery` — with only `photo-discovery` reproducing every time
+    /// and no scenario ever showing two of them. A per-scenario budget of one
+    /// would therefore go red somewhere on nearly every run, in a different
+    /// place each time, which is the shape of test everybody learns to re-run
+    /// rather than read.
+    ///
+    /// So this is the tripwire it can honestly be: a second interaction stall
+    /// inside one scenario has never happened, and would fail. Lower this to
+    /// ``launchStalls`` the day the app stops blocking the main thread through
+    /// a scene transition, rather than raising it when a new scenario trips.
+    private static let stallBudget: Double = launchStalls + 1
 
     // MARK: - Idle
 
@@ -100,7 +122,7 @@ nonisolated final class PerformanceUITests: XCTestCase {
         // scenario and every scenario pays the same one. Ceiling rather than
         // expectation — see `assertLaunchStall`.
         assertLaunchStall(atMost: Self.launchStallCeilingMilliseconds, in: counters(in: app))
-        finish()
+        finish(in: app)
     }
 
     // MARK: - Map browsing
@@ -136,7 +158,7 @@ nonisolated final class PerformanceUITests: XCTestCase {
         assertNoMoreThan(4, of: "MapSheetHikesBody", in: browsing, phase: "browsing")
         assertNoMoreThan(0, of: "MapRouteRebuilt", in: browsing, phase: "browsing")
         assertNoMoreThan(0, of: "MapViewCreated", in: browsing, phase: "browsing")
-        finish()
+        finish(in: app)
     }
 
     // MARK: - Offline
@@ -205,7 +227,7 @@ nonisolated final class PerformanceUITests: XCTestCase {
             0,
             "no connection was opened at any point in the run"
         )
-        finish()
+        finish(in: app)
     }
 
     // MARK: - Background recording
@@ -308,7 +330,7 @@ nonisolated final class PerformanceUITests: XCTestCase {
             "the elapsed clock ticked \(delta.count(of: "RecordingClockTick")) times over "
                 + "\(seconds) backgrounded seconds — a 1 Hz redraw is running with no screen to draw on"
         )
-        finish()
+        finish(in: app)
     }
 
     // MARK: - Chart scrubbing
@@ -384,7 +406,7 @@ nonisolated final class PerformanceUITests: XCTestCase {
         // detail re-preparing itself.
         assertNoMoreThan(0, of: "MapRouteRebuilt", in: taps, phase: "scrub-taps")
         assertNoMoreThan(0, of: "HikeDetailPrepared", in: taps, phase: "scrub-taps")
-        finish()
+        finish(in: app)
     }
 
     // MARK: - Live recording
@@ -468,7 +490,7 @@ nonisolated final class PerformanceUITests: XCTestCase {
                 + "\(Int(elapsed)) foreground seconds — a 1 Hz readout has stopped updating"
         )
         assertNoStall(in: delta, phase: "recording")
-        finish()
+        finish(in: app)
     }
 
     // MARK: - XCTest metrics
@@ -608,8 +630,35 @@ extension PerformanceUITests {
 
     /// Backgrounding is what makes the app flush its log; terminating without
     /// it loses the last second of the scenario.
+    ///
+    /// It is also a phase in its own right, and for a while it was the only
+    /// part of a run nothing looked at. Going to the background is the window
+    /// iOS gives an app to reach a suspendable state, and `photo-discovery`
+    /// spends 216–372 ms of it on the main thread — in all four runs measured
+    /// — redrawing a sheet nobody can see. All of that landed after the last
+    /// measured phase had closed, so every budget in the scenario counted
+    /// zero. So the transition is bracketed like any other, and the whole
+    /// run's stall tally is read at the end of it. The report now names
+    /// `finish` as the phase a stall fell in, where it used to say "outside a
+    /// measured phase" and stop there.
+    ///
+    /// Reading the counters brings the app back to the front, necessarily: the
+    /// probe is an accessibility element and a backgrounded process answers no
+    /// query. That is why the app is put down a second time afterwards —
+    /// without it the log's own tail, this phase included, never reaches disk
+    /// and the report cannot say what the stall was.
     @MainActor
-    func finish() {
+    func finish(in app: XCUIApplication) {
+        let before = counters(in: app)
+        let started = Date().timeIntervalSince1970
+        XCUIDevice.shared.press(.home)
+        Thread.sleep(forTimeInterval: Self.flushSeconds)
+        bringToForeground(app)
+        let after = counters(in: app)
+        printPhase("finish", from: started, to: Date().timeIntervalSince1970)
+        report(PerformanceCounterDelta(before: before, after: after), phase: "finish", perEvent: nil)
+        assertStalls(atMost: Self.stallBudget, in: after, scenario: scenario)
+
         XCUIDevice.shared.press(.home)
         Thread.sleep(forTimeInterval: Self.flushSeconds)
     }
