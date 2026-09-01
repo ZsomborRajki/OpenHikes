@@ -25,9 +25,6 @@ struct PhotoDiscoverySheet: View {
     let hike: Hike
     let controller: PhotoDiscoveryController
 
-    @Environment(\.dismiss)
-    private var dismiss
-
     private static let cellSize: CGFloat = 104
     private static let cellSpacing: CGFloat = 8
     private static let cornerRadius: CGFloat = 12
@@ -77,7 +74,14 @@ struct PhotoDiscoverySheet: View {
 
     @ToolbarContentBuilder private var toolbarContent: some ToolbarContent {
         ToolbarItem(placement: .cancellationAction) {
-            Button("Done") { dismiss() }
+            // ``DismissButton`` rather than a `Button` closing over
+            // `dismiss`, and the same reason the Add button below is a view:
+            // a `.toolbar` closure is evaluated with the body around it, so
+            // reading the environment's dismiss action here would make it an
+            // input of the whole sheet. It is replaced on every pass through
+            // the presentation machinery, which is how backgrounding the app
+            // came to rebuild this grid eight times.
+            DismissButton()
                 .accessibilityIdentifier("photo-discovery-done-button")
         }
         ToolbarItem(placement: .primaryAction) {
@@ -93,7 +97,7 @@ struct PhotoDiscoverySheet: View {
                 // whole thing the cells were moved out for. A `.toolbar`
                 // closure is evaluated with the body around it, so a toolbar
                 // item is no more insulated than a row is.
-                DiscoveryAddButton(controller: controller, hike: hike, onFinished: dismiss.callAsFunction)
+                DiscoveryAddButton(controller: controller, hike: hike)
             }
         }
     }
@@ -426,10 +430,17 @@ private struct DiscoverySelectionBar: View {
 }
 
 /// The toolbar's Add button, which counts the selection in its own title.
+///
+/// It closes the sheet itself rather than being handed a closure that does,
+/// for the reason ``DismissButton`` exists: the sheet's own body must not read
+/// the dismiss action, and `dismiss.callAsFunction` passed down from there
+/// would be exactly that read.
 private struct DiscoveryAddButton: View {
     let controller: PhotoDiscoveryController
     let hike: Hike
-    let onFinished: () -> Void
+
+    @Environment(\.dismiss)
+    private var dismiss
 
     var body: some View {
         let count = controller.selectedCount
@@ -444,7 +455,7 @@ private struct DiscoveryAddButton: View {
                 // would read as an import that found nothing rather than as
                 // one that just succeeded. Anything that failed stays in
                 // `matches`, which keeps the sheet open to be retried.
-                if added > 0, controller.matches.isEmpty { onFinished() }
+                if added > 0, controller.matches.isEmpty { dismiss() }
             }
         }
         .disabled(!controller.canImport)

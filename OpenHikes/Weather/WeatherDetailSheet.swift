@@ -84,8 +84,6 @@ struct WeatherDetailView: View {
 
     let weather: WeatherManager
 
-    @Environment(\.dismiss)
-    private var dismiss
     @Environment(\.colorScheme)
     private var colorScheme
 
@@ -110,7 +108,7 @@ struct WeatherDetailView: View {
             #endif
             .toolbar {
                 ToolbarItem(placement: .confirmationAction) {
-                    Button("Done") { dismiss() }
+                    DismissButton()
                         .accessibilityIdentifier("weather-detail-done")
                 }
             }

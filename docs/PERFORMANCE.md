@@ -237,6 +237,34 @@ against the actual view, not another reading.
 Low priority, since nobody taps a chart repeatedly, but it is where a scrub's
 start/stop edges would show a regression first.
 
+### P4 — Backgrounding blocks the main thread for ~300 ms, in nothing the app marks
+
+Two of the nine scenarios — `chart-scrub` and `photo-discovery` — stall the main
+thread **277–384 ms** on the way to the background, in both of two whole-suite
+runs. The event file has the same shape every time: the transition's own renders
+finish, then a **~300 ms window with no mark in it at all**, closing on the
+`MapSheetHikesBody` `@Query` refresh that follows the resign-time save. The
+process is not idle through it — the 1 Hz sampler reads 0.13 and 0.19 CPU
+seconds in the two seconds the window straddles — but that figure is
+process-wide and does not settle whether the main thread was computing or
+waiting. Only `.background` produces it: the `.inactive` and `.active` steps of
+the same round trip run the identical resign path in under 50 ms.
+
+Most of what used to be measured here was the app's own rendering, and is gone:
+a screen declaring `@Environment(\.dismiss)` was re-evaluated five to eight
+times per scene transition, which took `photo-discovery`'s twelve-cell grid,
+`HikePhotoViewer` and `SettingsView`'s seven-section `Form` through a full
+rebuild each time. With the read moved into `DismissButton`, `settings`,
+`photo-gallery`, `recording` and `background-recording` read the launch stall
+and nothing else. What remains is unattributed.
+
+*Next step:* three candidates, and nothing separates them yet — the `@Query`
+refetch, the `mainContext.save()` in `sceneWillResignActive`, and UIKit's own
+snapshot of the window for the app switcher. A signpost interval around each, or
+a Time Profiler trace across a `press(.home)`, would say which.
+`assertStalls(atMost:in:scenario:)` holds a whole-run budget of launch + 1 until
+one of them owns it.
+
 ## Blind spots
 
 Things this harness structurally cannot see, listed so nobody mistakes silence
@@ -315,19 +343,33 @@ to chase one you cannot name.
    run action and use the app. Every body evaluation, map update and matcher run
    prints as it happens; if something re-renders when you touch an unrelated
    control, you will see it before you can measure it.
-2. **Watch it in Instruments.** The same marks are `os_signpost` events, so
+2. **Ask SwiftUI which property changed.** `RenderSignpost` says a body ran; it
+   cannot say why. `let _ = Self._logChanges()` at the top of that body makes
+   SwiftUI name the inputs that differed, and it logs rather than prints, so it
+   is readable from a headless UI-test run:
+
+   ```sh
+   xcrun simctl spawn <udid> log stream --level debug \
+       --predicate 'category == "Changed Body Properties"'
+   ```
+
+   That is how `@Environment(\.dismiss)` was caught re-rendering five screens on
+   every scene transition — seven of eight passes named `_dismiss` and nothing
+   else. Take it out again once the question is answered; it is a debugging
+   line, not instrumentation.
+3. **Watch it in Instruments.** The same marks are `os_signpost` events, so
    *File › Recording Options › os_signpost* plus the **Energy Log** and
    **Location Energy Impact** instruments give the render stream and the battery
    cost on one timeline. This is the only way to see a radio wake-up you did not
    cause.
-3. **Reproduce it as a scenario.** Add a `test…` to `PerformanceUITests`, launch
+4. **Reproduce it as a scenario.** Add a `test…` to `PerformanceUITests`, launch
    with `--ui-test-performance-log=<name>`, wrap the interaction in
    `measurePhase(named:in:seconds:)`, and read the counter deltas. If the number
    is stable, assert it; if it is not, the instability is the finding.
-4. **Drive a real route.** `Scripts/simulate-hike.sh` plays a GPX through the
+5. **Drive a real route.** `Scripts/simulate-hike.sh` plays a GPX through the
    simulator for long-running behaviour a three-fix scenario cannot show —
    drift, growth per fix, the accumulator deciding you have stopped.
-5. **Read the energy section.** Radio wake-ups, refused fetches by reason, the
+6. **Read the energy section.** Radio wake-ups, refused fetches by reason, the
    location funnel, and every GPS reconfiguration with a timestamp. A scenario
    that renders perfectly and opens forty connections is a bug this document
    cares about just as much.
