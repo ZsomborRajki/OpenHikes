@@ -504,6 +504,11 @@ final class BackgroundTrailTracker: NSObject {
         // Kept even though monitoring is now disarmed on deselection: a fix
         // already in flight can still land in the window between the two.
         guard let hikeID = trackedHikeID else { return }
+        // The other end of the funnel `BackgroundFixDelivered` opens: a fix
+        // this tracker is about to spend a match on. The gap between the two
+        // is wake-ups that bought nothing — a stale cached fix on relaunch, or
+        // a wake with no hike selected to match against.
+        RenderSignpost.mark("BackgroundFixMatched")
 
         let modelContainer = container
         let coordinate = location.coordinate
@@ -903,6 +908,11 @@ extension BackgroundTrailTracker {
 extension BackgroundTrailTracker: CLLocationManagerDelegate {
     nonisolated func locationManager(_ manager: CLLocationManager, didUpdateLocations locations: [CLLocation]) {
         guard let location = locations.last else { return }
+        // The head of this manager's own funnel. Significant-change delivery
+        // is cheap per fix and rare, but it is not free, and counting it here
+        // is the only way a report can tell that energy apart from the map's
+        // and the recorder's — the other two managers count themselves.
+        RenderSignpost.mark("BackgroundFixDelivered")
         onMainActor { [weak self] in self?.handleBackgroundFix(location) }
     }
 

@@ -121,20 +121,34 @@ pocket halves the per-fix cost, which is the right shape — and since that is h
 the app is used for all but a few minutes of a walk, the backgrounded number is
 the one that decides whether the battery lasts.
 
-Every scenario's report also includes the location funnel, because "the GPS is
+Every scenario's report also includes the location funnels, because "the GPS is
 busy" and "the GPS is busy and we are throwing the results away" cost identical
-energy and need opposite fixes:
+energy and need opposite fixes. One funnel per `CLLocationManager`, and the app
+runs three: they do not share fixes and do not cost the same, so a stage is
+only ever compared against the stream it came from.
 
 ```
-LocationFixDelivered   → CoreLocation handed us a fix
-LocationPublished      → it passed LocationManager's filters
-RecordingFixReceived   → it reached the recorder
-LiveFixAccepted        → it became part of the route
-RecordingFixRejected   → it did not
+map — LocationManager
+  LocationFixDelivered   → CoreLocation handed the map a fix
+  LocationPublished      → it passed LocationManager's filters
+
+recording — SystemRecordingLocationSource
+  RecordingFixDelivered  → CoreLocation handed the recorder a fix
+  RecordingFixReceived   → it reached a live recording
+  LiveFixAccepted        → it became part of the route
+  RecordingFixRejected   → it did not
+
+background — BackgroundTrailTracker
+  BackgroundFixDelivered → a significant-change wake delivered a fix
+  BackgroundFixMatched   → it was worth matching against the trail
 ```
 
-`Scripts/perf-report.py` raises a rejection rate above 50% as a finding: full
-GPS duty paid, half a route recorded.
+The recording funnel is the one that decides the battery: it is the manager
+that keeps running with the screen off.
+
+`Scripts/perf-report.py` raises a rejection rate above 50% as a finding — of
+the fixes that reached the recorder, not of the map's deliveries — full GPS
+duty paid, half a route recorded.
 
 ## Open findings
 
