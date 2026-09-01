@@ -246,7 +246,6 @@ if [[ "$retry" == true ]]; then
     command+=(-retry-tests-on-failure -test-iterations 2)
 fi
 if [[ -n "$result_bundle" ]]; then
-    rm -rf "$result_bundle"
     command+=(-resultBundlePath "$result_bundle")
 fi
 
@@ -258,6 +257,13 @@ if [[ "$dry_run" == true ]]; then
     printf '%q ' "${command[@]}"
     printf '\n'
     exit 0
+fi
+
+# xcodebuild refuses to write over an existing bundle, so a stale one has to go
+# first. It happens here, past the dry-run exit above, because a mode that only
+# prints its invocation must leave the path the caller named exactly as it was.
+if [[ -n "$result_bundle" ]]; then
+    rm -rf "$result_bundle"
 fi
 
 # UI automation drives Core Location, so a location left over from

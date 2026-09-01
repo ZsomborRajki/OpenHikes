@@ -255,6 +255,45 @@ if expect_status 2 && expect_contains "$output" "More than one" "the error"; the
     pass
 fi
 
+echo "Result bundle handling"
+
+# --dry-run is documented as printing the invocation and exiting, so the path
+# handed to --result-bundle has to survive it untouched: the option takes a
+# directory the caller names, and the run that only prints is not the one
+# allowed to delete it. A real run still clears the stale bundle, because
+# xcodebuild refuses to write over one that already exists.
+sentinel_bundle="$work/sentinel.xcresult"
+make_sentinel_bundle() {
+    rm -rf "$sentinel_bundle"
+    mkdir -p "$sentinel_bundle"
+    printf 'sentinel\n' > "$sentinel_bundle/Info.plist"
+}
+
+make_sentinel_bundle
+run_script "run-ui-tests --dry-run leaves the result bundle in place" \
+    "$ui_tests" --device "iPhone 17 Pro" --dry-run --result-bundle "$sentinel_bundle"
+if expect_status 0 \
+    && expect_contains "$output" "-resultBundlePath" "the printed invocation" \
+    && expect_absent "$calls" "xcodebuild" "the recorded calls"; then
+    if [[ -f "$sentinel_bundle/Info.plist" ]]; then
+        pass
+    else
+        fail "--dry-run deleted $sentinel_bundle"
+    fi
+fi
+
+make_sentinel_bundle
+run_script "run-ui-tests clears a stale result bundle on a real run" \
+    "$ui_tests" --device "iPhone 17 Pro" --result-bundle "$sentinel_bundle"
+if expect_status 0 \
+    && expect_contains "$calls" "-resultBundlePath $sentinel_bundle" "the xcodebuild call"; then
+    if [[ -e "$sentinel_bundle" ]]; then
+        fail "the stale bundle at $sentinel_bundle was not removed"
+    else
+        pass
+    fi
+fi
+
 echo "Performance collection"
 
 # The app container the stubbed get_app_container hands back.
