@@ -517,9 +517,9 @@ jobs:
       # a suite added to this list and never run looks exactly like one that
       # passes. Nested suites need their enclosing type — hence
       # `WidgetFeedSuites`, which is where `BackgroundDeliveryTests` lives and
-      # which is why 32 entries resolve to 36 suites rather than 32.
+      # which is why 32 entries resolve to 37 suites rather than 32.
       #
-      # 36 is the guard, and the step after the run is what enforces it: an
+      # 37 is the guard, and the step after the run is what enforces it: an
       # identifier that resolves to nothing changes nothing about the exit
       # status, so the count has to be read out of the result bundle or it is
       # not a guard at all. Deliberately not the *test* count, which rises
@@ -639,15 +639,14 @@ jobs:
       # rise means the list grew without this number growing with it, and the
       # next fall would then be measured against a stale pin.
       #
-      # Tests are a floor for the reason the comment above gives: 407 ran when
-      # this gate was added, and 390 sits far enough below that removing a
-      # test does not turn the build red on its own, while a suite emptied out
-      # under a name that still resolves does. Raise it when the measured
-      # number rises.
+      # Tests are a floor for the reason the comment above gives: 415 run
+      # today, and 398 sits far enough below that removing a test does not
+      # turn the build red on its own, while a suite emptied out under a name
+      # that still resolves does. Raise it when the measured number rises.
       - name: Check the sanitized selection actually ran
         env:
-          EXPECTED_SUITES: "36"
-          TEST_FLOOR: "390"
+          EXPECTED_SUITES: "37"
+          TEST_FLOOR: "398"
         run: |
           set -o pipefail
           xcrun xcresulttool get test-results tests \
