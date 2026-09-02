@@ -29,9 +29,23 @@ nonisolated enum FieldMetricsFormat {
     private static let ratioFractionDigits = 4
     private static let secondsPerMinute = 60.0
     private static let secondsPerHour = 3600.0
+    private static let millisecondsPerSecond = 1000.0
 
+    /// A span of time in the largest unit that still says something: hours,
+    /// minutes, seconds, or — below a second — milliseconds.
     static func duration(_ seconds: Double?) -> String {
         guard let seconds else { return notReported }
+        if seconds == 0 { return "0s" }
+        if seconds < 1 {
+            // Seconds at one fraction digit rounds everything under 50 ms to
+            // "0s", which is the same string a span that cost nothing gets —
+            // and a signpost's CPU cost per occurrence lives down here: an
+            // import is a parse and a prefetch is a decode. Written in
+            // milliseconds, at significant digits rather than a fixed fraction
+            // length, so a fraction of a millisecond still reads as something.
+            let milliseconds = seconds * millisecondsPerSecond
+            return "\(milliseconds.formatted(.number.precision(.significantDigits(1...3)))) ms"
+        }
         if seconds < secondsPerMinute {
             return "\(seconds.formatted(.number.precision(.fractionLength(0...1))))s"
         }
