@@ -198,11 +198,10 @@ extension Hike {
     /// This hike's device-local storage record, or `nil` if it has never
     /// claimed a tile on this device.
     ///
-    /// Resolved once and remembered, because the pre-filter in
-    /// ``StoredTileDeletionPlan`` asks every hike in the library whether it has
-    /// stored tiles and a fetch each would put the whole library's worth on the
-    /// main actor during a delete — the same cost ``hasStoredTiles`` was
-    /// written to avoid in the first place.
+    /// Resolved once and remembered, because ``StoredTileDeletionPlan`` asks
+    /// every hike in the library for its claim and a fetch each would put the
+    /// whole library's worth on the main actor during a delete — the same cost
+    /// ``hasStoredTiles`` was written to avoid in the first place.
     var localState: HikeLocalState? { try? resolveLocalState() }
 
     /// The same record, with a sidecar fetch that failed propagated rather

@@ -155,9 +155,9 @@ struct StorageAccountingTests {
     }
 
     /// The delete-a-hike path from `MapSheet.delete(_:among:)`, minus the SwiftUI.
-    func deleteHike(_ hike: Hike, using controller: AutoSaveController, survivors: [Hike] = []) async {
+    func deleteHike(_ hike: Hike, using controller: AutoSaveController, survivors: [Hike] = []) async throws {
         controller.hikeWillBeDeleted(hike)
-        let deletionPlan = StoredTileDeletionPlan(removing: hike, among: [hike] + survivors)
+        let deletionPlan = try #require(StoredTileDeletionPlan(removing: hike, among: [hike] + survivors))
         await deletionPlan.removeExclusiveTiles(from: sandbox.cache)
         context.delete(hike)
     }
@@ -167,9 +167,9 @@ struct StorageAccountingTests {
         for hike: Hike,
         among hikes: [Hike],
         using controller: AutoSaveController
-    ) async {
+    ) async throws {
         controller.setEnabled(false, for: hike)
-        let deletionPlan = StoredTileDeletionPlan(removing: hike, among: hikes)
+        let deletionPlan = try #require(StoredTileDeletionPlan(removing: hike, among: hikes))
         hike.offlineDownloads.removeAll()
         hike.autoSavedTileKeys.removeAll()
         await deletionPlan.removeExclusiveTiles(from: sandbox.cache)
@@ -369,7 +369,7 @@ struct StorageAccountingTests {
         controller.flushPendingKeys()
         #expect(try await bytes([saved]) > 0, "precondition: the tile is on disk")
 
-        await deleteHike(hike, using: controller)
+        try await deleteHike(hike, using: controller)
         #expect(try await bytes([saved]) == 0)
     }
 
@@ -390,7 +390,7 @@ struct StorageAccountingTests {
         let browsed = key(16, 93, 93)
         try sandbox.browse(key: browsed)
 
-        await deleteHike(hike, using: controller)
+        try await deleteHike(hike, using: controller)
 
         // What Settings computes with no hikes left to claim anything.
         let usage = await diskUsage(claimedBy: [])

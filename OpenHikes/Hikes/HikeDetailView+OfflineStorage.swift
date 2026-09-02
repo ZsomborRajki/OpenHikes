@@ -112,7 +112,16 @@ extension HikeDetailView {
             return
         }
         autoSave.setEnabled(false, for: hike)
-        let deletionPlan = StoredTileDeletionPlan(removing: hike, among: hikes)
+        // Before a single manifest is touched: a plan that cannot be built is
+        // a claim set that is short by at least one hike, and emptying this
+        // hike's manifest against it would either strip a neighbour's offline
+        // map or — if this hike's own sidecar is the unreadable one — write
+        // the removals through to a freshly materialised empty row, leaving
+        // the real one behind still claiming everything.
+        guard let deletionPlan = StoredTileDeletionPlan(removing: hike, among: hikes) else {
+            storageDeletionFailed = true
+            return
+        }
         hike.offlineDownloads.removeAll()
         hike.autoSavedTileKeys.removeAll()
         invalidateStoredBytesMeasurement()
