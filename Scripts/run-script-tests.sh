@@ -14,9 +14,12 @@
 # after a performance run, and a finding about the instrument rather than about
 # the app reads exactly like a regression until somebody checks it against the
 # event file by hand. Those cases run the real script against a fixture.
+# Scripts/periphery.sh is the fourth, and for the same reason as lint.sh: a
+# Periphery that read none of .periphery.yml scans on anyway and prints a
+# result, and on this project the result it prints is a clean one.
 #
-# `xcrun`, `xcodebuild`, `python3` and `swiftlint` are replaced with recording
-# stubs on PATH and the scripts are run for real against them. Nothing is built,
+# `xcrun`, `xcodebuild`, `python3`, `swiftlint` and `periphery` are replaced
+# with recording stubs on PATH and the scripts are run for real against them. Nothing is built,
 # nothing is booted, no simulator on this machine is touched, and no file in the
 # working tree is rewritten.
 #
@@ -32,8 +35,8 @@ usage() {
     cat <<'EOF'
 Usage: Scripts/run-script-tests.sh [--verbose]
 
-Runs the repository's shell scripts against stubbed xcrun/xcodebuild/swiftlint
-and asserts what they sent where.
+Runs the repository's shell scripts against stubbed
+xcrun/xcodebuild/swiftlint/periphery and asserts what they sent where.
 
 Options:
   --verbose       Print each script's own output as it runs
@@ -132,6 +135,22 @@ if [[ "${1:-}" == "version" ]]; then
 fi
 printf '%s' "${STUB_SWIFTLINT_OUTPUT:-}"
 exit "${STUB_SWIFTLINT_STATUS:-0}"
+STUB
+
+# Records every periphery invocation and reports whatever a case asks for.
+# `periphery version` answers with the pin, so the version check passes unless
+# a case sets STUB_PERIPHERY_VERSION to something else; STUB_PERIPHERY_OUTPUT
+# stands in for what the scan printed, which is the only thing the script reads
+# to decide whether .periphery.yml was honoured.
+cat > "$stub_bin/periphery" <<'STUB'
+#!/usr/bin/env bash
+printf 'periphery %s\n' "$*" >> "$STUB_CALL_LOG"
+if [[ "${1:-}" == "version" ]]; then
+    printf '%s\n' "$STUB_PERIPHERY_VERSION"
+    exit 0
+fi
+printf '%s' "${STUB_PERIPHERY_OUTPUT:-* No unused code detected.}"
+exit "${STUB_PERIPHERY_STATUS:-0}"
 STUB
 
 chmod +x "$stub_bin"/*
@@ -572,6 +591,91 @@ fi
 
 run_script "lint rejects a single unknown option" "$lint" --strict
 if expect_status 2 && expect_contains "$output" "unknown option '--strict'" "the error"; then
+    pass
+fi
+
+echo "Periphery configuration"
+
+periphery="$repository_root/Scripts/periphery.sh"
+export STUB_PERIPHERY_VERSION="$(cat "$repository_root/.periphery-version")"
+unset STUB_PERIPHERY_STATUS STUB_PERIPHERY_OUTPUT || true
+
+run_script "periphery scans at the pinned version" "$periphery"
+if expect_status 0 \
+    && expect_contains "$calls" "periphery scan --quiet --disable-update-check" \
+        "the recorded calls" \
+    && expect_absent "$calls" "--exclude-tests" "the recorded calls" \
+    && expect_contains "$output" "No unused code detected" "the output"; then
+    pass
+fi
+
+run_script "periphery --exclude-tests reaches the scan" "$periphery" --exclude-tests
+if expect_status 0 \
+    && expect_contains "$calls" "--exclude-tests" "the recorded calls"; then
+    pass
+fi
+
+# The one the suite is here for. A Periphery that did not understand the
+# configuration says so in a line above an otherwise ordinary result, and
+# "* No unused code detected." underneath it is what a scan that indexed
+# nothing prints too.
+export STUB_PERIPHERY_OUTPUT="warning: .periphery.yml: invalid key 'retain_hashable_properties'
+* No unused code detected."
+run_script "periphery fails a scan that did not read .periphery.yml" "$periphery"
+if expect_status 1 \
+    && expect_contains "$output" "did not read .periphery.yml as written" "the error"; then
+    pass
+fi
+
+export STUB_PERIPHERY_OUTPUT="error: The '--targets' option is required."
+export STUB_PERIPHERY_STATUS=1
+run_script "periphery reports a missing option as a broken config, not a finding" "$periphery"
+if expect_status 1 \
+    && expect_contains "$output" "did not read .periphery.yml as written" "the error"; then
+    pass
+fi
+unset STUB_PERIPHERY_OUTPUT STUB_PERIPHERY_STATUS
+
+export STUB_PERIPHERY_STATUS=1
+run_script "periphery reports a scan that could not complete" "$periphery"
+if expect_status 1 \
+    && expect_contains "$output" "nothing was analysed" "the error"; then
+    pass
+fi
+unset STUB_PERIPHERY_STATUS
+
+# An error rather than the warning Scripts/lint.sh settles for: 2.21.2 reads
+# none of .periphery.yml and still prints a clean result, so a run that reached
+# the scan would report the code was checked when it was not.
+export STUB_PERIPHERY_VERSION="2.21.2"
+run_script "periphery refuses a version older than the pin" "$periphery"
+if expect_status 1 \
+    && expect_contains "$output" "2.21.2 installed" "the error" \
+    && expect_absent "$calls" "periphery scan" "the recorded calls"; then
+    pass
+fi
+
+export STUB_PERIPHERY_VERSION="3.9.0"
+run_script "periphery warns about a version newer than the pin and scans on" "$periphery"
+if expect_status 0 \
+    && expect_contains "$output" "3.9.0 installed" "the warning" \
+    && expect_contains "$calls" "periphery scan" "the recorded calls"; then
+    pass
+fi
+export STUB_PERIPHERY_VERSION="$(cat "$repository_root/.periphery-version")"
+
+run_script "periphery --help prints the options without scanning" "$periphery" --help
+if expect_status 0 \
+    && expect_contains "$output" "Usage: Scripts/periphery.sh" "the help" \
+    && expect_absent "$calls" "periphery scan" "the recorded calls"; then
+    pass
+fi
+
+run_script "periphery rejects an unknown option after --exclude-tests" \
+    "$periphery" --exclude-tests --not-a-real-option
+if expect_status 2 \
+    && expect_contains "$output" "unknown option '--not-a-real-option'" "the error" \
+    && expect_absent "$calls" "periphery scan" "the recorded calls"; then
     pass
 fi
 

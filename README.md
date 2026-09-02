@@ -79,7 +79,7 @@ Scripts/lint.sh
 
 Unit and integration tests use Swift Testing; `OpenHikesUITests` uses XCUITest, because Apple's UI automation and launch metrics are not available through Swift Testing.
 
-`brew install xcbeautify periphery xcode-build-server` installs the optional tooling. None of it is required: each tool is used if present and skipped if not. `xcode-build-server` is per-machine — run `xcode-build-server config -project OpenHikes.xcodeproj -scheme OpenHikes` locally, and again after adding or renaming a target.
+`brew install xcbeautify periphery xcode-build-server` installs the optional tooling. None of it is required: each tool is used if present and skipped if not. `periphery` has to be the version in `.periphery-version` or newer — run it through `Scripts/periphery.sh`, which checks that first, because an older Periphery reads none of `.periphery.yml` and reports a clean scan anyway. `xcode-build-server` is per-machine — run `xcode-build-server config -project OpenHikes.xcodeproj -scheme OpenHikes` locally, and again after adding or renaming a target.
 
 CI runs strict SwiftLint, the shared package suite in both debug and release, the app and widget unit tests with a coverage floor, warning-free debug and release builds, an unsigned device archive, the concurrency suites under Thread Sanitizer, and both accessibility UI classes. CodeQL and a dependency review run beside it. The functional UI automation and the performance suite stay out, because both lean on real gestures and timing-sensitive waits that a shared runner makes slow and flaky — run them locally before a change that touches recording, the map or render isolation.
 
