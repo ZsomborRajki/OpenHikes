@@ -252,8 +252,8 @@ struct TileRetryAfterTests {
         let path = MKTileOverlayPath(x: 9500, y: 14_600, z: 15, contentScaleFactor: 2)
 
         #expect(overlay.retryDeadline(at: path) == nil, "precondition: nothing has failed yet")
-        let loaded = await offMainAsync { await overlay.cacheTile(at: path) }
-        #expect(!loaded, "precondition: a 503 is a miss")
+        let disposition = await offMainAsync { await overlay.cacheTile(at: path) }
+        #expect(disposition == .failed, "precondition: a 503 is a failed load")
         #expect(overlay.retryDeadline(at: path) != nil)
     }
 

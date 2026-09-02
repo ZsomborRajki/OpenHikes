@@ -20,15 +20,16 @@ import AppKit
 typealias TileImage = NSImage
 #endif
 
-/// A reconnect listener. Renderers adopt this to retry tiles once the network
-/// is back; the callback always lands on the main queue.
+/// A network-policy listener. Renderers adopt this to retry tiles once
+/// interactive fetching becomes allowed; the callback always lands on the
+/// main queue.
 ///
 /// `Sendable` because ``TileCache`` holds these across the network monitor's
 /// queue and the main thread: the notification is raised off-main and
 /// delivered on-main, so the reference itself crosses an isolation boundary
 /// even though every call to it lands on the main thread.
 protocol TileCacheObserver: AnyObject, Sendable {
-    func tileCacheDidReconnect()
+    func tileCacheDidUnblockInteractiveFetches()
 }
 
 /// Caches map tiles in memory (`NSCache`) and on disk, fetching missing tiles
@@ -200,8 +201,8 @@ nonisolated final class TileCache: @unchecked Sendable {
     /// name — see ``MutationVersions/names``.
     let mutationVersions: Mutex<MutationVersions>
 
-    /// Weakly-held reconnect listeners. A boxed array keeps the reference weak so
-    /// a deallocated renderer drops out without needing to unregister.
+    /// Weakly-held network-policy listeners. A boxed array keeps the reference
+    /// weak so a deallocated renderer drops out without unregistering.
     struct WeakObserver: Sendable { weak var value: TileCacheObserver? }
 
     let observers = Mutex([WeakObserver]())
@@ -358,17 +359,21 @@ nonisolated extension TileCache {
     /// for any caller that happens to be there. A render miss must not become
     /// main-thread I/O, so the hop is in the callee rather than trusted to
     /// every call site.
+    /// The display load with its policy outcome preserved for the renderer.
+    /// Most callers only need ``loadTile(forKey:url:purpose:)``'s image; the
+    /// overlay also needs to know whether a missing image represents a real
+    /// request failure or a request that was deliberately not attempted.
     @concurrent
-    @discardableResult func loadTile(
+    func loadTileResult(
         forKey key: String,
         url: URL,
         purpose: TileFetchPurpose = .interactive
-    ) async -> TileImage? {
+    ) async -> TileLoadResult {
         assertOffMainThread(
             "loadTile(forKey:url:purpose:) stats and reads tile files synchronously — call it off the main thread"
         )
         let mutationToken = mutationToken(forKey: key)
-        if let cached = memoryImage(forKey: key) { return cached }
+        if let cached = memoryImage(forKey: key) { return .loaded(cached) }
 
         // Which tier holds this key, read *before* `diskImage` — it deletes an
         // expired file as it finds it, and the answer decides where a refetched
@@ -381,8 +386,8 @@ nonisolated extension TileCache {
                 tile,
                 forKey: key,
                 token: mutationToken
-            ) else { return nil }
-            return tile.image
+            ) else { return .failed }
+            return .loaded(tile.image)
         }
 
         // Offline, metered, or asked to conserve: the tile isn't cached and
@@ -401,10 +406,10 @@ nonisolated extension TileCache {
                 "Skipped tile \(key, privacy: .public): \(decision.reason ?? "", privacy: .public)"
             )
             #endif
-            return nil
+            return .suppressed
         }
 
-        guard let fetched = await fetchTileOnce(forKey: key, url: url) else { return nil }
+        guard let fetched = await fetchTileOnce(forKey: key, url: url) else { return .failed }
         // Back into the tier it came from. A tile that was durable is offline
         // coverage some hike is counting on; writing its replacement to the
         // browsing tier instead would leave the manifest still claiming it while
@@ -416,8 +421,8 @@ nonisolated extension TileCache {
             forKey: key,
             in: wasDurable ? .durable : .browsing,
             token: mutationToken
-        ) else { return nil }
-        return fetched.image
+        ) else { return .failed }
+        return .loaded(fetched.image)
     }
 
     /// Fetches a tile straight into durable storage — the bulk-download path.

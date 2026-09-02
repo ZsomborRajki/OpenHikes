@@ -5,9 +5,9 @@
 //  `TileOverlay` takes its ``TileCache`` and its ``AutoSaveTileStore`` as
 //  initializer arguments specifically so a test's overlay can be wired to a
 //  stub transport and its own directories instead of the app's singletons.
-//  `CachingTileOverlayRenderer` reached past that: it registered its reconnect
-//  listener on `TileCache.shared`, and read `isOnline` from it, whatever cache
-//  the overlay it was constructed with was actually serving.
+//  `CachingTileOverlayRenderer` reached past that: it registered its network-
+//  policy listener on `TileCache.shared`, and read `isOnline` from it, whatever
+//  cache the overlay it was constructed with was actually serving.
 //
 //  That is invisible in the app, where the two are the same object, and wrong
 //  everywhere else: an offline test wired to its own cache still had its
@@ -39,9 +39,9 @@ struct TileRendererWiringTests {
         }
     }
 
-    /// The headline. The reconnect listener is what clears a renderer's failed
+    /// The headline. The policy listener is what clears a renderer's failed
     /// tiles, so registering it on the wrong cache means a renderer never
-    /// hears about the reconnect of the network it is actually fetching over.
+    /// hears that its actual cache can fetch again.
     @Test("the renderer listens to its overlay's cache")
     func rendererObservesTheInjectedCache() {
         let sandbox = TileSandbox(reachable: false)

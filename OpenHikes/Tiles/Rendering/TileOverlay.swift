@@ -55,11 +55,12 @@ nonisolated final class TileOverlay: MKTileOverlay, @unchecked Sendable {
         cache.memoryImage(forKey: cacheKey(for: path))
     }
 
-    /// Asynchronously ensures the tile is cached (network if needed). Returns
-    /// whether a tile is now available, so the renderer only redraws on success.
-    func cacheTile(at path: MKTileOverlayPath) async -> Bool {
+    /// Asynchronously ensures the tile is cached (network if needed), keeping
+    /// policy suppression distinct from a failed request for renderer backoff.
+    func cacheTile(at path: MKTileOverlayPath) async -> TileLoadDisposition {
         let key = cacheKey(for: path)
-        guard await cache.loadTile(forKey: key, url: url(forTilePath: path)) != nil else { return false }
+        let result = await cache.loadTileResult(forKey: key, url: url(forTilePath: path))
+        guard case .loaded = result else { return result.disposition }
 
         // Opportunistically keep tiles the user actually views — never a
         // synthetic prefetch, just what MapKit already asked for. Runs for
@@ -69,7 +70,7 @@ nonisolated final class TileOverlay: MKTileOverlay, @unchecked Sendable {
         // providers that support both. Takes only the key: the tile's bytes are
         // in the cache the load above just populated, and get moved, not re-encoded.
         autoSaveStore.considerPersisting(key: key, z: path.z, x: path.x, y: path.y)
-        return true
+        return .loaded
     }
 
     /// When the tile server last said this tile may be asked for again, if it

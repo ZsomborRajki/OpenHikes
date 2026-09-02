@@ -18,8 +18,8 @@ import Synchronization
 
 nonisolated extension TileCache {
 
-    /// Tracks reachability and, on each offline→online transition, notifies
-    /// renderers so they clear failed tiles and try again.
+    /// Tracks network conditions and notifies renderers whenever interactive
+    /// fetching changes from blocked to allowed.
     ///
     /// `isExpensive` and `isConstrained` come from the same path update and
     /// cost nothing extra to record — the app simply never asked for them
@@ -39,16 +39,20 @@ nonisolated extension TileCache {
         monitor.start(queue: DispatchQueue(label: "TileCache.network"))
     }
 
-    /// Records conditions, notifying renderers only on an offline→online
-    /// edge. Shared by the monitor and by ``setReachable(_:)`` so the two
-    /// can't disagree about what a reconnect is.
+    /// Records conditions, notifying renderers when interactive fetching
+    /// becomes allowed. Shared by the monitor and the test seams so leaving
+    /// Low Data Mode and reconnecting cannot disagree about what unblocks a
+    /// renderer.
     private func applyPath(_ next: TileNetworkConditions) {
-        let wasOnline = conditions.withLock { previous in
-            let old = previous.isOnline
+        let old = conditions.withLock { previous in
+            let old = previous
             previous = next
             return old
         }
-        if next.isOnline, !wasOnline { notifyReconnect() }
+        let power = readPower()
+        let wasAllowed = TileNetworkPolicy.decide(.interactive, conditions: old, power: power).isAllowed
+        let isAllowed = TileNetworkPolicy.decide(.interactive, conditions: next, power: power).isAllowed
+        if isAllowed, !wasAllowed { notifyInteractiveFetchUnblocked() }
     }
 
     /// Whether a fetch for `purpose` may open a connection right now, and why
@@ -82,8 +86,8 @@ nonisolated extension TileCache {
     }
     #endif
 
-    /// Registers a reconnect listener; held weakly, so no explicit removal is
-    /// required (though ``removeObserver(_:)`` is available).
+    /// Registers an interactive-fetch listener; held weakly, so no explicit
+    /// removal is required (though ``removeObserver(_:)`` is available).
     func addObserver(_ observer: TileCacheObserver) {
         observers.withLock { boxes in
             boxes.removeAll { $0.value == nil }
@@ -97,7 +101,7 @@ nonisolated extension TileCache {
         }
     }
 
-    func notifyReconnect() {
+    func notifyInteractiveFetchUnblocked() {
         // MKOverlayRenderer.setNeedsDisplay must run on the main thread and the
         // path handler fires on a background queue, so hop first and deliver
         // there. The list itself does not need the hop: `observers` is a
@@ -109,7 +113,7 @@ nonisolated extension TileCache {
                 boxes.removeAll { $0.value == nil }
                 return boxes.compactMap(\.value)
             }
-            live.forEach { $0.tileCacheDidReconnect() }
+            live.forEach { $0.tileCacheDidUnblockInteractiveFetches() }
         }
     }
 }

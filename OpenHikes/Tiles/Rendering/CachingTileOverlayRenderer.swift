@@ -63,8 +63,9 @@ nonisolated final class CachingTileOverlayRenderer: MKOverlayRenderer, TileCache
     /// until an unrelated pan or zoom happened to redraw them.
     private let inFlight = Mutex([String: [MKMapRect]]())
 
-    /// Tiles that failed to load (offline, 500, timeout, undecodable, 404),
-    /// and when each may be asked for again. Skipping them is what stops a
+    /// Tiles whose requests failed (500, timeout, undecodable, 404), and when
+    /// each may be asked for again. Policy-suppressed loads never enter this
+    /// log. Skipping failures is what stops a
     /// failed tile spinning a request/redraw loop; expiring the skip is what
     /// stops a transient server error leaving a permanent hole in the map.
     /// See ``TileFailureLog``.
@@ -86,14 +87,14 @@ nonisolated final class CachingTileOverlayRenderer: MKOverlayRenderer, TileCache
     /// singleton. ``TileOverlay/cache`` is injectable precisely so a test can
     /// hand over one wired to a stub transport and its own directories, and a
     /// renderer that reached for `TileCache.shared` instead would register its
-    /// reconnect listener on, and read `isOnline` from, a cache the overlay
-    /// has nothing to do with.
+    /// network-policy listener on, and read `isOnline` from, a cache the
+    /// overlay has nothing to do with.
     private var cache: TileCache { tileOverlay.cache }
 
     init(overlay: TileOverlay) {
         tileOverlay = overlay
         super.init(overlay: overlay)
-        // Retry tiles once the network is back (delivered on the main queue).
+        // Retry tiles once interactive fetching is allowed (on the main queue).
         overlay.cache.addObserver(self)
     }
 
@@ -102,18 +103,20 @@ nonisolated final class CachingTileOverlayRenderer: MKOverlayRenderer, TileCache
         retryWake.withLock { $0.task?.cancel() }
     }
 
-    /// `TileCacheObserver` — network is back: forget past failures and redraw so
-    /// the now-reachable tiles get requested again.
+    /// `TileCacheObserver` — network policy allows interactive requests again:
+    /// forget past failures and redraw so the tiles get requested immediately.
     ///
     /// Still a wholesale clear rather than a backoff reset, because this is
     /// the one event that invalidates every past failure at once: they were
     /// all recorded against a network that no longer applies.
-    func tileCacheDidReconnect() {
+    func tileCacheDidUnblockInteractiveFetches() {
         let clearedCount = failures.withLock { $0.removeAll() }
         cancelRetryWake()
         #if DEBUG
         if clearedCount > 0 {
-            Self.logger.debug("Reconnected — clearing \(clearedCount, privacy: .public) failed tile(s) for retry")
+            Self.logger.debug(
+                "Interactive fetching restored — clearing \(clearedCount, privacy: .public) failed tile(s)"
+            )
         }
         #endif
         setNeedsDisplay()
@@ -324,11 +327,12 @@ nonisolated final class CachingTileOverlayRenderer: MKOverlayRenderer, TileCache
         // scroll/zoom.
         Task { [weak self] in
             await TileLoadGate.shared.acquire(.interactive)
-            let loaded = await overlay.cacheTile(at: fetchPath)
+            let disposition = await overlay.cacheTile(at: fetchPath)
             await TileLoadGate.shared.release(.interactive)
             guard let self else { return }
             let waiting = inFlight.withLock { $0.removeValue(forKey: key) ?? [tileRect] }
-            if loaded {
+            switch disposition {
+            case .loaded:
                 // A tile that loads clears its own failure history, so a later
                 // failure starts its backoff fresh rather than inheriting the
                 // last run of bad luck.
@@ -340,7 +344,7 @@ nonisolated final class CachingTileOverlayRenderer: MKOverlayRenderer, TileCache
                 await MainActor.run {
                     for rect in waiting { self.setNeedsDisplay(rect) }
                 }
-            } else {
+            case .failed:
                 // Deliberately no redraw here: redrawing *on* failure is what
                 // spun the request loop. The retry instead rides a wake-up
                 // scheduled for when the backoff expires.
@@ -360,6 +364,10 @@ nonisolated final class CachingTileOverlayRenderer: MKOverlayRenderer, TileCache
                     "Tile \(key, privacy: .public) failed — retry in \(seconds, privacy: .public)s (TileRequests log)"
                 )
                 #endif
+            case .suppressed:
+                // No request was made, so there is no server failure to back
+                // off. The cache observer redraws when policy allows the load.
+                break
             }
         }
     }
