@@ -15,8 +15,9 @@
 //
 //  So failures now expire. A tile that failed once is worth another try in a
 //  few seconds; a tile that has failed five times is probably a real 404 and
-//  is worth one every few minutes. Reconnecting still clears the lot at once,
-//  because that is the one event that invalidates every past failure.
+//  is worth one every few minutes. A network-policy transition that restores
+//  interactive fetching still clears the lot at once, because the conditions
+//  those failures were recorded against no longer apply.
 //
 //  Split out of the renderer so the policy can be tested without a network,
 //  a map, or a draw pass — the renderer keeps only the MapKit glue.
@@ -78,8 +79,8 @@ nonisolated struct TileFailureLog: Sendable {
     /// A tile with no failure behind it always may. One that has failed waits
     /// out its backoff — and, while the app is offline, waits indefinitely:
     /// `TileCache` would short-circuit the request anyway, and
-    /// ``removeAll()`` on reconnect is what heals every tile at once rather
-    /// than one backoff at a time.
+    /// ``removeAll()`` when interactive fetching returns is what heals every
+    /// tile at once rather than one backoff at a time.
     func mayAttempt(_ key: String, at now: ContinuousClock.Instant, isOnline: Bool) -> Bool {
         guard let entry = entries[key] else { return true }
         guard isOnline else { return false }
@@ -114,8 +115,8 @@ nonisolated struct TileFailureLog: Sendable {
         entries.removeValue(forKey: key)
     }
 
-    /// Forgets everything, and reports how much — the reconnect path, where
-    /// every past failure is equally out of date.
+    /// Forgets everything, and reports how much — the network-policy path,
+    /// where every past failure is equally out of date.
     @discardableResult mutating func removeAll() -> Int {
         let cleared = entries.count
         entries.removeAll()

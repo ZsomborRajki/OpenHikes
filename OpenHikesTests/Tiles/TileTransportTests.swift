@@ -274,7 +274,7 @@ struct TileTransportTests {
         final class Listener: TileCacheObserver, @unchecked Sendable {
             var reconnects = 0
 
-            func tileCacheDidReconnect() { reconnects += 1 }
+            func tileCacheDidUnblockInteractiveFetches() { reconnects += 1 }
         }
 
         let listener = Listener()
@@ -299,9 +299,9 @@ struct TileTransportTests {
     }
 
     /// One trip through the main *dispatch* queue, which is where
-    /// `TileCache.notifyReconnect()` hands its work over. Enqueued after
-    /// anything that call posted, and serviced after it for the same reason:
-    /// the queue is serial.
+    /// `TileCache.notifyInteractiveFetchUnblocked()` hands its work over.
+    /// Enqueued after anything that call posted, and serviced after it for the
+    /// same reason: the queue is serial.
     private func mainQueueRoundTrip() async {
         await withCheckedContinuation { continuation in
             DispatchQueue.main.async {
@@ -466,8 +466,8 @@ struct TileTransportTests {
         )
         let path = MKTileOverlayPath(x: 9500, y: 14_600, z: 15, contentScaleFactor: 2)
 
-        let loaded = await offMain { await overlay.cacheTile(at: path) }
-        #expect(loaded, "a loaded tile clears the renderer's backoff for that key")
+        let disposition = await offMain { await overlay.cacheTile(at: path) }
+        #expect(disposition == .loaded, "a loaded tile clears the renderer's backoff for that key")
         #expect(StubTileProtocol.requestCount == 1)
     }
 
@@ -485,8 +485,8 @@ struct TileTransportTests {
         )
         let path = MKTileOverlayPath(x: 9500, y: 14_600, z: 15, contentScaleFactor: 2)
 
-        let loaded = await offMain { await overlay.cacheTile(at: path) }
-        #expect(!loaded, "a 500 is what makes the renderer record a failure and schedule a retry")
+        let disposition = await offMain { await overlay.cacheTile(at: path) }
+        #expect(disposition == .failed, "a 500 makes the renderer record a failure and schedule a retry")
     }
 }
 
