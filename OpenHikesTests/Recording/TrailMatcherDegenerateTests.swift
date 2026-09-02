@@ -94,7 +94,7 @@ struct TrailMatcherDegenerateTests {
         #expect(result.ambiguousLegCount == 0)
         #expect(result.ambiguities.isEmpty)
         #expect(result.matchedTrailName == nil)
-        #expect(result.currentTrailName == nil)
+        #expect(result.currentTrail == nil)
         #expect(!result.didMoveRoute)
     }
 

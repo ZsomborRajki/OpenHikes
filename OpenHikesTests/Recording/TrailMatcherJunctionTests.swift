@@ -124,7 +124,7 @@ struct TrailMatcherJunctionTests {
         let result = TrailMatcher.match(points: points, graph: parallelPairGraph())
 
         #expect(result.matchedTrailName == "Upper Trail")
-        #expect(result.currentTrailName == "Upper Trail")
+        #expect(result.currentTrail?.name == "Upper Trail")
         #expect(result.matchedLegCount == 4)
         #expect(result.ambiguousLegCount == 0)
         // Every drawn coordinate is on the upper trail. A metre of tolerance
@@ -149,7 +149,7 @@ struct TrailMatcherJunctionTests {
         let result = TrailMatcher.match(points: points, graph: parallelPairGraph())
 
         #expect(result.matchedTrailName == "Lower Trail")
-        #expect(result.currentTrailName == "Lower Trail")
+        #expect(result.currentTrail?.name == "Lower Trail")
         #expect(result.matchedLegCount == 4)
         #expect(result.points.allSatisfy { abs($0.latitude - 47.63000) < 0.00001 })
     }
@@ -193,7 +193,7 @@ struct TrailMatcherJunctionTests {
         let result = TrailMatcher.match(points: points, graph: forkGraph())
 
         #expect(result.matchedTrailName == "East Branch")
-        #expect(result.currentTrailName == "East Branch")
+        #expect(result.currentTrail?.name == "East Branch")
         #expect(result.matchedLegCount == 4)
         #expect(result.ambiguousLegCount == 0)
         #expect(result.points.allSatisfy { $0.longitude >= 12.8600 - 0.000001 })
@@ -220,7 +220,7 @@ struct TrailMatcherJunctionTests {
         let result = TrailMatcher.match(points: points, graph: forkGraph())
 
         #expect(result.matchedTrailName == "West Branch")
-        #expect(result.currentTrailName == "West Branch")
+        #expect(result.currentTrail?.name == "West Branch")
         #expect(result.matchedLegCount == 4)
         #expect(result.points.allSatisfy { $0.longitude <= 12.8600 + 0.000001 })
     }
@@ -365,7 +365,7 @@ struct TrailMatcherJunctionTests {
         // side of the turn.
         #expect(result.legs[0].trailNames == ["West Zag"])
         #expect(result.legs[4].trailNames == ["East Zag"])
-        #expect(result.currentTrailName == "East Zag")
+        #expect(result.currentTrail?.name == "East Zag")
         #expect(result.matchedTrailName == "West Zag")
 
         // The corner is now disclosed, and the count matches what is offered.

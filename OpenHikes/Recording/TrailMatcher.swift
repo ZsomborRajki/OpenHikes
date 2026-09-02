@@ -179,20 +179,12 @@ nonisolated enum TrailMatcher {
             if lhs.value == rhs.value { return lhs.key > rhs.key }
             return lhs.value < rhs.value
         }?.key
-        let currentTrailName: String?
-        if let last = legsResult.legs.last,
-           last.isConfident,
-           let transition = last.transition {
-            currentTrailName = transition.trailNames.min()
-        } else {
-            currentTrailName = nil
-        }
         return TrailMatchResult(
             points: output,
             matchedLegCount: legsResult.matchedCount,
             ambiguousLegCount: ambiguities.count,
             matchedTrailName: matchedTrailName,
-            currentTrailName: currentTrailName,
+            currentTrail: currentTrail(legs: legsResult.legs, selected: selected, index: index),
             didMoveRoute: legsResult.didMoveRoute,
             ambiguities: ambiguities,
             legs: matchLegs

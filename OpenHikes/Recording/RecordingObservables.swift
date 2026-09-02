@@ -16,18 +16,76 @@ final class RecordingStats {
     var distanceMeters = 0.0
     var pointCount = 0
     var horizontalAccuracy: Double?
-    var matchedTrailName: String?
+    /// The trail under the walker now, as the live matcher last saw it.
+    ///
+    /// Split from ``dominantTrailName`` because the two were one property
+    /// holding two facts: the live matcher wrote the *current* trail into it
+    /// on every match, and saving overwrote that with the trail the finished
+    /// walk had *mostly* followed. Nothing could tell which meaning was on
+    /// screen, and the screen said "Following:" for both.
+    var currentTrail: RecordingTrailContext?
+    /// Whether ``currentTrail`` describes a match that has since been
+    /// overtaken by newer fixes.
+    ///
+    /// It is not cleared when that happens. A live match runs against a
+    /// snapshot of the window, and fixes keep arriving while it runs, so on a
+    /// walk with any density of fixes the "is this still current" answer is
+    /// routinely no — and blanking the trail on it made the name flicker off
+    /// and on for the whole hike. A trail a minute old is still the trail the
+    /// walker is on; what is honest is to keep saying so quietly.
+    var isCurrentTrailStale = false
+    /// The trail the finished walk mostly followed, written once when the
+    /// recording is persisted. `nil` for a walk still in progress.
+    var dominantTrailName: String?
     var averageSpeedMetersPerSecond: Double?
+    /// Speed over the last few minutes — see
+    /// ``RecordingDistanceAccumulator/recentSpeedMetersPerSecond``.
+    var recentSpeedMetersPerSecond: Double?
+    /// Seconds spent walking rather than standing still, by the same rule a
+    /// saved hike's moving time is measured with.
+    var movingSeconds: TimeInterval = 0
+    /// Whether the walker is currently being treated as stationary, which is
+    /// also what stops distance accumulating.
+    var isStationary = false
     /// Metres climbed so far, `nil` until the recording has two trusted
     /// altitudes to subtract. Published to the widget alongside distance.
     var elevationGainMeters: Double?
+
+    /// Takes every figure the accumulator owns in one call.
+    ///
+    /// One method rather than a run of assignments at each call site: there
+    /// are two — the live fix path and the replay that rebuilds state from
+    /// the journal — and they have to publish the same set. They were already
+    /// two copies of five assignments, which is the drift this exists to
+    /// prevent, and a sixth was about to be added to both.
+    func update(from accumulator: RecordingDistanceAccumulator) {
+        distanceMeters = accumulator.distanceMeters
+        averageSpeedMetersPerSecond = accumulator.averageSpeedMetersPerSecond
+        recentSpeedMetersPerSecond = accumulator.recentSpeedMetersPerSecond
+        movingSeconds = accumulator.movingSeconds
+        isStationary = accumulator.isStationary
+        elevationGainMeters = accumulator.elevationGainMeters
+    }
+
+    /// Forgets the live trail, leaving ``dominantTrailName`` alone.
+    ///
+    /// The asymmetry is deliberate: this runs when live matching stops, which
+    /// includes the stop that is about to *write* the dominant name.
+    func clearCurrentTrail() {
+        currentTrail = nil
+        isCurrentTrailStale = false
+    }
 
     func reset() {
         distanceMeters = 0
         pointCount = 0
         horizontalAccuracy = nil
-        matchedTrailName = nil
+        clearCurrentTrail()
+        dominantTrailName = nil
         averageSpeedMetersPerSecond = nil
+        recentSpeedMetersPerSecond = nil
+        movingSeconds = 0
+        isStationary = false
         elevationGainMeters = nil
     }
 }

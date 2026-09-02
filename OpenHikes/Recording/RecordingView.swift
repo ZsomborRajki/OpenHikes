@@ -349,24 +349,34 @@ private struct RecordingStatsGrid: View {
     var body: some View {
         StatGrid {
             StatTile(label: "Distance", value: distance)
+            StatTile(label: "Elevation Gain", value: elevationGain)
+            StatTile(label: "Moving", value: HikeFormat.duration(stats.movingSeconds))
+            StatTile(label: "Current Speed", value: currentSpeed)
+            StatTile(label: "Avg Speed", value: averageSpeed)
+            StatTile(label: "Accuracy", value: accuracy)
             // `StatTile` already exposes itself as one label/value element;
             // only the identifier UI automation waits on is added here.
             StatTile(label: "Points", value: stats.pointCount.formatted())
                 .accessibilityIdentifier("recording-point-count")
-            StatTile(label: "Avg Speed", value: averageSpeed)
-            StatTile(label: "Accuracy", value: accuracy)
         }
 
-        if let trail = stats.matchedTrailName {
-            Text("Following: \(trail)")
-                .font(.subheadline)
-                .foregroundStyle(.secondary)
-        }
+        RecordingTrailCard(
+            trail: stats.currentTrail,
+            isStale: stats.isCurrentTrailStale,
+            dominantTrailName: stats.dominantTrailName
+        )
     }
 
     private var distance: String {
         Measurement(value: stats.distanceMeters, unit: UnitLength.meters)
             .formatted(.measurement(width: .abbreviated, usage: .road))
+    }
+
+    private var elevationGain: String {
+        guard let gain = stats.elevationGainMeters else { return "—" }
+        return HikeFormat.length(
+            Measurement(value: gain, unit: UnitLength.meters)
+        )
     }
 
     private var averageSpeed: String {
@@ -376,10 +386,81 @@ private struct RecordingStatsGrid: View {
         )
     }
 
+    /// The last few minutes rather than the whole walk — and the word
+    /// "Stopped" rather than a rounded-down number, because a walker standing
+    /// at a viewpoint is not travelling at 0.1 km/h, they have stopped, and
+    /// the distance beside this has stopped counting for the same reason.
+    private var currentSpeed: String {
+        if stats.isStationary { return "Stopped" }
+        guard let speed = stats.recentSpeedMetersPerSecond else { return "—" }
+        return HikeFormat.speed(
+            Measurement(value: speed, unit: UnitSpeed.metersPerSecond)
+        )
+    }
+
     private var accuracy: String {
         guard let horizontalAccuracy = stats.horizontalAccuracy else { return "Searching…" }
         guard horizontalAccuracy <= RecordingFixPolicy.maximumHorizontalAccuracy else { return "Weak signal" }
         return "±\(Int(horizontalAccuracy.rounded())) m"
+    }
+}
+
+/// What OpenStreetMap knows about the ground underfoot, while the walk is
+/// still happening.
+///
+/// The graph this reads was already being downloaded, matched against and
+/// then thrown away: live matching resolves the way under every fix in order
+/// to snap the line, and only the trail's *name* ever reached the screen. The
+/// grade and the surface come from the same edge at no additional cost.
+private struct RecordingTrailCard: View {
+    private static let symbolName =
+        "point.topleft.down.to.point.bottomright.curvepath"
+    /// How far the card fades while the match behind it is being overtaken.
+    /// Enough to read as "a moment out of date" and not so far as to read as
+    /// disabled.
+    private static let staleOpacity: CGFloat = 0.6
+
+    let trail: RecordingTrailContext?
+    let isStale: Bool
+    let dominantTrailName: String?
+
+    var body: some View {
+        if let trail, !trail.isEmpty {
+            VStack(alignment: .leading, spacing: 4) {
+                Label(
+                    trail.name ?? "On a mapped trail",
+                    systemImage: Self.symbolName
+                )
+                .font(.subheadline.weight(.medium))
+                if !trail.descriptors.isEmpty {
+                    Text(trail.descriptors.joined(separator: " · "))
+                        .font(.caption)
+                        .foregroundStyle(.secondary)
+                }
+            }
+            .frame(maxWidth: .infinity, alignment: .leading)
+            // Dimmed rather than removed while the match is being overtaken by
+            // newer fixes, so the card never blinks — see
+            // ``RecordingStats/isCurrentTrailStale``.
+            .opacity(isStale ? Self.staleOpacity : 1)
+            .accessibilityElement(children: .combine)
+            .accessibilityLabel(accessibilityLabel(for: trail))
+        } else if let dominantTrailName {
+            // Past tense: the live trail is cleared when matching stops, so
+            // the only way to reach this is a walk that has finished.
+            Text("Followed: \(dominantTrailName)")
+                .font(.subheadline)
+                .foregroundStyle(.secondary)
+        }
+    }
+
+    /// One sentence rather than a glyph, a name and a middle dot. The symbol
+    /// is decorative and `·` is spoken, both of which `Label` and the
+    /// interpolation above would otherwise hand to VoiceOver verbatim.
+    private func accessibilityLabel(for trail: RecordingTrailContext) -> String {
+        let name = trail.name.map { "On \($0)" } ?? "On a mapped trail"
+        guard !trail.descriptors.isEmpty else { return name }
+        return "\(name). \(trail.descriptors.joined(separator: ", "))"
     }
 }
 

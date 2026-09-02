@@ -13,10 +13,39 @@ nonisolated extension TrailMatcher {
             matchedLegCount: 0,
             ambiguousLegCount: 0,
             matchedTrailName: nil,
-            currentTrailName: nil,
+            currentTrail: nil,
             didMoveRoute: false,
             ambiguities: [],
             legs: []
+        )
+    }
+
+    /// What to say about the trail the walker is on at the end of the window.
+    ///
+    /// Gated on the *last* leg being confidently matched, which is the same
+    /// bar the trail name has always been held to: a walker who has stepped
+    /// off the path should be told nothing rather than told about the path
+    /// they left. The tags are read from the way under the final fix rather
+    /// than from the leg, for the reason ``RecordingTrailContext`` gives.
+    ///
+    /// A confident leg whose ways are all unnamed still produces a context —
+    /// "gravel, T2, no name" is a real answer about real ground — so the
+    /// caller asks ``RecordingTrailContext/isEmpty`` rather than assuming a
+    /// name is what makes one worth drawing.
+    static func currentTrail(
+        legs: [MatchLeg],
+        selected: [TrailMatcherCandidate?],
+        index: GraphIndex
+    ) -> RecordingTrailContext? {
+        guard let last = legs.last,
+              last.isConfident,
+              let transition = last.transition,
+              let candidate = selected.last.flatMap(\.self),
+              index.edges.indices.contains(candidate.edgeIndex)
+        else { return nil }
+        return RecordingTrailContext(
+            name: transition.trailNames.min(),
+            edge: index.edges[candidate.edgeIndex]
         )
     }
 
