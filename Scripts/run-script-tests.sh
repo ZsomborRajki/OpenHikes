@@ -10,6 +10,10 @@
 # Scripts/lint.sh is here for the same reason: it is what decides whether a
 # change is clean, and a run that accepted an option it did not understand
 # reports "clean" about a lint it never configured the way it was asked to.
+# Scripts/perf-report.py is the third: it decides what a person reads first
+# after a performance run, and a finding about the instrument rather than about
+# the app reads exactly like a regression until somebody checks it against the
+# event file by hand. Those cases run the real script against a fixture.
 #
 # `xcrun`, `xcodebuild`, `python3` and `swiftlint` are replaced with recording
 # stubs on PATH and the scripts are run for real against them. Nothing is built,
@@ -406,6 +410,89 @@ if expect_status 0 \
         pass
     else
         fail "the raw log at $written_log did not get the unformatted line"
+    fi
+fi
+
+echo "Report findings"
+
+# One fixture carrying one of each artefact the findings list used to report:
+# the sampler's own 1 Hz counter and its two gauges, a body count that is
+# entirely the phase's scene transitions, a decode kept off the main thread,
+# and a launch cost every scenario pays. Run against the real
+# Scripts/perf-report.py rather than the stub above, on a PATH without it.
+report_work="$work/report"
+mkdir -p "$report_work/events"
+
+{
+    printf "Test Case '\-[PerformanceUITests testBackgroundRecording]' passed\n"
+    printf 'PERF-PHASE\tbackground-recording\tbackground-recording\t1000.0\t1016.7\n'
+    # Four bodies for four scene transitions and three fixes: the app rendered
+    # nothing a fix paid for.
+    printf 'PERF-COUNT\tbackground-recording\tbackground-recording\tMapSheetBody\t4.0\t1.3333333333333333\n'
+    printf 'PERF-COUNT\tbackground-recording\tbackground-recording\tScenePhaseChanged\t4.0\t1.3333333333333333\n'
+    printf 'PERF-COUNT\tbackground-recording\tbackground-recording\tLiveFixAccepted\t3.0\t1.0\n'
+    # Nine for the same four transitions: five of them are the fixes'.
+    printf 'PERF-COUNT\tbackground-recording\tbackground-recording\tMapSheetHikesBody\t9.0\t3.0\n'
+    printf 'PERF-PHASE\tidle\tidle\t1000.0\t1010.0\n'
+    printf 'PERF-COUNT\tidle\tidle\tProcess\t7.0\t\n'
+    printf 'PERF-COUNT\tidle\tidle\tFootprint.MB\t12.0\t\n'
+} > "$report_work/build.log"
+
+write_events() {
+    printf '# epoch_s\telapsed_s\tkind\tname\tvalue\tdetail\n' > "$1"
+    printf '1000.1\t0.1\tinterval\tModelContainerInit\t%s\tthread=main\n' "$2" >> "$1"
+    printf '1000.2\t0.2\tinterval\tPhotoImageDecoded\t67.0\tthread=off-main\n' >> "$1"
+    printf '1000.3\t0.3\tinterval\tTileUnclaimedSweep\t43.8\tthread=off-main\n' >> "$1"
+}
+write_events "$report_work/events/photo-gallery.tsv" 40.2
+write_events "$report_work/events/settings.tsv" 43.8
+
+# Sets `findings` to the report's findings list alone, which is the section
+# these cases are about.
+run_report() {
+    current="$1"
+    status=0
+    output="$(python3 "$repository_root/Scripts/perf-report.py" \
+        --log "$report_work/build.log" \
+        --events "$report_work/events" \
+        --out "$report_work/report.md" 2>&1)" || status=$?
+    findings="$(awk '/^## Findings/{inside=1; next} /^## /{inside=0} inside' \
+        "$report_work/report.md")"
+    if [[ "$verbose" == true ]]; then
+        printf '\n--- %s ---\n%s\n' "$current" "$findings"
+    fi
+}
+
+run_report "perf-report keeps the sampler's own counters out of the findings"
+if expect_status 0 \
+    && expect_absent "$findings" "Process" "the findings" \
+    && expect_absent "$findings" "Footprint.MB" "the findings"; then
+    pass
+fi
+
+run_report "perf-report charges scene transitions to nobody's fixes"
+if expect_status 0 \
+    && expect_absent "$findings" "MapSheetBody" "the findings" \
+    && expect_contains "$findings" "MapSheetHikesBody" "the findings"; then
+    pass
+fi
+
+run_report "perf-report applies the frame budget to main-thread work only"
+if expect_status 0 \
+    && expect_absent "$findings" "PhotoImageDecoded" "the findings" \
+    && expect_absent "$findings" "TileUnclaimedSweep" "the findings" \
+    && expect_contains "$findings" "ModelContainerInit" "the findings"; then
+    pass
+fi
+
+run_report "perf-report states a finding two scenarios share once"
+if expect_status 0 \
+    && expect_contains "$findings" "in 2 scenarios — worst 43.8 ms in \`settings\`" \
+        "the findings"; then
+    if [[ "$(grep -c 'ModelContainerInit' <<< "$findings")" == 1 ]]; then
+        pass
+    else
+        fail "the shared launch cost was stated more than once" "$findings"
     fi
 fi
 
