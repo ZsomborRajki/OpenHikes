@@ -1,10 +1,19 @@
-# Periphery — unused-code analysis. Run with `periphery scan`.
+# Periphery — unused-code analysis. Run with `Scripts/periphery.sh`.
 #
 # Not part of the build or of CI: a scan compiles the whole project with
 # indexing enabled and takes minutes, and its output is a list of candidates to
 # read rather than a pass/fail signal. It exists because the class of finding it
 # produces — a declaration nothing references any more — is otherwise found only
 # by a person noticing, one at a time.
+#
+# The version is pinned in `.periphery-version`, and Scripts/periphery.sh
+# refuses to scan below it. Periphery 2.x cannot read this file: `--targets`
+# was still required for an .xcodeproj, the two `retain_*_properties` keys
+# below did not exist and are reported as `invalid key`, and — because every
+# target here is an Xcode synchronized folder group rather than a list of file
+# references — a 2.x scan with `--targets` supplied by hand indexes no Swift
+# file at all and reports "No unused code detected" having read none of the
+# code. That last one is why the pin is checked as an error.
 #
 # Read a result before acting on it. Periphery reasons about references, not
 # intent, so a declaration kept deliberately is indistinguishable to it from
@@ -50,6 +59,9 @@ retain_objc_annotated: true
 # SelectedHikeState, RenderRequest, MutationToken, StorageStartupIssue and
 # TrailMatchAmbiguity are compared with `==`, and Traversal and NodePair are
 # used as dictionary keys.
+#
+# Both options landed in Periphery 3.8.0, which is what `.periphery-version`
+# names.
 retain_equatable_properties: true
 retain_hashable_properties: true
 
@@ -60,7 +72,7 @@ retain_hashable_properties: true
 # reported — `RouteMotion`, written by `RecordingPoint.routeCoordinate` and
 # read by nothing but tests, is the known example of what that hides.
 #
-# `periphery scan --exclude-tests` is how to go looking for that class of
+# `Scripts/periphery.sh --exclude-tests` is how to go looking for that class of
 # finding, but it is an explicit choice rather than the default because it also
 # reports every deliberate test seam: the injectable transports, clocks,
 # defaults, location sources and containers on OverpassTrailGraphProvider,
