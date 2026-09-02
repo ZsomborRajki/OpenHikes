@@ -35,12 +35,13 @@ extension ModelConfiguration {
     ///   own switch, which is read once at launch because a
     ///   `ModelConfiguration` is fixed for the life of its container.
     static func openHikes(
+        schema: Schema,
         isStoredInMemoryOnly: Bool = false,
         syncsToCloud: Bool = true
     ) -> ModelConfiguration {
         ModelConfiguration(
             "Hikes",
-            schema: Schema([Hike.self]),
+            schema: schema,
             isStoredInMemoryOnly: isStoredInMemoryOnly,
             cloudKitDatabase: isStoredInMemoryOnly || !syncsToCloud ? .none : .automatic
         )
@@ -50,10 +51,13 @@ extension ModelConfiguration {
     ///
     /// Always `.none`, with no parameter to say otherwise. The point of this
     /// store is that it is the one place the answer is not a choice.
-    static func openHikesLocal(isStoredInMemoryOnly: Bool = false) -> ModelConfiguration {
+    static func openHikesLocal(
+        schema: Schema,
+        isStoredInMemoryOnly: Bool = false
+    ) -> ModelConfiguration {
         ModelConfiguration(
             "HikeLocalState",
-            schema: Schema([HikeLocalState.self]),
+            schema: schema,
             isStoredInMemoryOnly: isStoredInMemoryOnly,
             cloudKitDatabase: .none
         )
@@ -64,15 +68,15 @@ extension ModelConfiguration {
     ///
     /// Never mirrored: a test that writes into the user's real iCloud database
     /// is a test that has already failed.
-    static func openHikes(url: URL) -> ModelConfiguration {
-        ModelConfiguration("Hikes", schema: Schema([Hike.self]), url: url, cloudKitDatabase: .none)
+    static func openHikes(schema: Schema, url: URL) -> ModelConfiguration {
+        ModelConfiguration("Hikes", schema: schema, url: url, cloudKitDatabase: .none)
     }
 
     /// The sidecar store at a chosen location, alongside ``openHikes(url:)``.
-    static func openHikesLocal(url: URL) -> ModelConfiguration {
+    static func openHikesLocal(schema: Schema, url: URL) -> ModelConfiguration {
         ModelConfiguration(
             "HikeLocalState",
-            schema: Schema([HikeLocalState.self]),
+            schema: schema,
             url: url,
             cloudKitDatabase: .none
         )
@@ -80,6 +84,13 @@ extension ModelConfiguration {
 }
 
 extension ModelContainer {
+    private static func schema(
+        _ modelTypes: [any PersistentModel.Type],
+        version: Schema.Version
+    ) -> Schema {
+        Schema(modelTypes, version: version)
+    }
+
     /// The app's container: both stores, one context, one place that knows
     /// they come as a pair.
     ///
@@ -92,22 +103,52 @@ extension ModelContainer {
         isStoredInMemoryOnly: Bool = false,
         syncsToCloud: Bool = true
     ) throws -> ModelContainer {
-        try ModelContainer(
-            for: Schema([Hike.self, HikeLocalState.self]),
+        let version = OpenHikesSchemaV2.self
+        return try ModelContainer(
+            for: Schema(versionedSchema: version),
+            migrationPlan: OpenHikesMigrationPlan.self,
             configurations: .openHikes(
+                schema: schema(version.hikeModels, version: version.versionIdentifier),
                 isStoredInMemoryOnly: isStoredInMemoryOnly,
                 syncsToCloud: syncsToCloud
             ),
-            .openHikesLocal(isStoredInMemoryOnly: isStoredInMemoryOnly)
+            .openHikesLocal(
+                schema: schema(version.localStateModels, version: version.versionIdentifier),
+                isStoredInMemoryOnly: isStoredInMemoryOnly
+            )
         )
     }
 
     /// Both stores at chosen locations, for the reopen suites.
     static func openHikes(url: URL, localURL: URL) throws -> ModelContainer {
+        try openHikes(
+            schemaVersion: OpenHikesSchemaV2.self,
+            url: url,
+            localURL: localURL,
+            migrationPlan: OpenHikesMigrationPlan.self
+        )
+    }
+
+    /// A chosen schema version over both stores. The migration suite uses this
+    /// to write a genuine previous-version fixture through the same store
+    /// configuration boundary as production.
+    static func openHikes(
+        schemaVersion: any OpenHikesVersionedSchema.Type,
+        url: URL,
+        localURL: URL,
+        migrationPlan: (any SchemaMigrationPlan.Type)? = nil
+    ) throws -> ModelContainer {
         try ModelContainer(
-            for: Schema([Hike.self, HikeLocalState.self]),
-            configurations: .openHikes(url: url),
-            .openHikesLocal(url: localURL)
+            for: Schema(versionedSchema: schemaVersion),
+            migrationPlan: migrationPlan,
+            configurations: .openHikes(
+                schema: schema(schemaVersion.hikeModels, version: schemaVersion.versionIdentifier),
+                url: url
+            ),
+            .openHikesLocal(
+                schema: schema(schemaVersion.localStateModels, version: schemaVersion.versionIdentifier),
+                url: localURL
+            )
         )
     }
 }

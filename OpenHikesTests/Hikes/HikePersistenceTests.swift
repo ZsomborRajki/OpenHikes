@@ -4,61 +4,15 @@
 //
 //  Every other suite builds its hikes in an in-memory store, which is the
 //  right trade for testing behaviour — but it means the one thing that can
-//  lose a user's data has never been exercised: opening a store that is
-//  already on disk.
-//
-//  `Hike`'s non-optional columns added after the first release carry inline
-//  declaration defaults (`= []`, `= false`, `= true`, `= [:]`) specifically
-//  so SwiftData's lightweight migration can backfill them on existing rows;
-//  the comment there records that without them the app fails to open with
-//  "missing attribute values on mandatory destination attribute" for anyone
-//  who already has hikes saved. That is a claim about a real store and an
-//  older schema, so it is checked here against exactly that: a store written
-//  by the previous shape of the model, then opened by the current one.
+//  lose a user's data has to be exercised: opening a store that is already on
+//  disk. Version-to-version coverage lives in `SchemaMigrationTests`; this
+//  suite owns ordinary round trips and deletion durability.
 //
 
 import Foundation
 @testable import OpenHikes
 import SwiftData
 import Testing
-
-/// `Hike` as it was before auto-save, auto-follow, and recording drafts
-/// existed. The same entity name with those later attributes absent makes a
-/// store written by it a genuine "existing install" for the current model.
-enum HikeSchemaBeforeAutoSave: VersionedSchema {
-    static var versionIdentifier: Schema.Version { Schema.Version(1, 0, 0) }
-    static var models: [any PersistentModel.Type] { [Hike.self] }
-
-    @Model
-    final class Hike {
-        var id = UUID()
-        var title: String = ""
-        var distanceMeters: Double = 0
-        var date = Date.now
-        var tintHex: String = "#34C759"
-        var routeWidth: Double = 3
-        var symbol: String = "figure.hiking"
-        var route: [RouteCoordinate] = []
-        var offlineDownloads: [OfflineDownloadRecord] = []
-        var trackDescription: String?
-        var author: String?
-        var keywords: String?
-
-        init(
-            title: String,
-            distanceMeters: Double,
-            id: UUID = UUID(),
-            date: Date = .now,
-            route: [RouteCoordinate] = []
-        ) {
-            self.id = id
-            self.title = title
-            self.distanceMeters = distanceMeters
-            self.date = date
-            self.route = route
-        }
-    }
-}
 
 @Suite("Hike persistence")
 struct HikePersistenceTests {
@@ -88,21 +42,6 @@ struct HikePersistenceTests {
     /// `isStoredInMemoryOnly` — the point is the disk.
     private func openContainer() throws -> ModelContainer {
         try ModelContainer.openHikes(url: storeURL, localURL: localStoreURL)
-    }
-
-    /// The hike store alone, in its older shape. The sidecar is deliberately
-    /// absent: a store written before the split had no second file, which is
-    /// exactly the starting point the migration tests need.
-    private func openLegacyContainer() throws -> ModelContainer {
-        try ModelContainer(
-            for: HikeSchemaBeforeAutoSave.Hike.self,
-            configurations: ModelConfiguration(
-                "Hikes",
-                schema: Schema([HikeSchemaBeforeAutoSave.Hike.self]),
-                url: storeURL,
-                cloudKitDatabase: .none
-            )
-        )
     }
 
     // MARK: Round trip
@@ -218,107 +157,6 @@ struct HikePersistenceTests {
         )
 
         #expect(point.motion == nil)
-    }
-
-    // MARK: Migration
-
-    /// The case `Hike`'s comment is about: a store written before the
-    /// auto-save and auto-follow columns existed. Opening it with the current
-    /// model must migrate rather than throw, and must leave the older hike
-    /// with the defaults a new one would have.
-    @Test("a store from before auto-save opens and backfills its defaults")
-    func lightweightMigrationBackfillsDefaults() throws {
-        try makeDirectory()
-        defer { removeDirectory() }
-
-        let id = UUID()
-        let date = Date(timeIntervalSince1970: 1_700_000_000)
-        do {
-            let container = try openLegacyContainer()
-            let context = ModelContext(container)
-            let legacy = HikeSchemaBeforeAutoSave.Hike(
-                title: "Imported last year",
-                distanceMeters: 4200,
-                id: id,
-                date: date,
-                route: Fixture.ridgeRoute
-            )
-            legacy.tintHex = "#34C759FF"
-            legacy.offlineDownloads = [OfflineDownloadRecord(providerID: "osm", scale: 2, maxZoom: 12)]
-            context.insert(legacy)
-            try context.save()
-        }
-
-        let container = try openContainer()
-        let context = ModelContext(container)
-        let migrated = try #require(
-            try context.fetch(FetchDescriptor<Hike>(predicate: #Predicate { $0.id == id })).first
-        )
-
-        // What the migration had to invent.
-        #expect(migrated.rawRoute.isEmpty, "an imported legacy hike has no recorded GPS trace")
-        #expect(!migrated.isRecording, "an imported legacy hike is already finished")
-        #expect(migrated.autoSavedTileKeys.isEmpty, "an old hike has auto-saved nothing yet")
-        #expect(migrated.autoSaveTilesEnabled, "and gets the same default a new hike does")
-        #expect(migrated.autoFollowEnabled)
-        #expect(
-            migrated.routeLinePattern == .default,
-            "a hike saved before line patterns existed keeps the line it was drawn with"
-        )
-
-        // What it had to keep.
-        #expect(migrated.title == "Imported last year")
-        #expect(migrated.distanceMeters == 4200)
-        #expect(migrated.date == date)
-        #expect(migrated.tintHex == "#34C759FF")
-        #expect(migrated.route == Fixture.ridgeRoute)
-
-        // And what it deliberately does not: the tile inventory moved out of
-        // `Hike` and into ``HikeLocalState``'s own store when mirroring took
-        // over, so a legacy row's copy is dropped rather than carried across.
-        // Tiles are re-fetchable by definition — this costs a download, and it
-        // is the price of keeping a column that names *this* device's files
-        // out of a row that syncs.
-        #expect(
-            migrated.offlineDownloads.isEmpty,
-            "the legacy tile manifest does not survive the move to the sidecar store"
-        )
-    }
-
-    /// And the migration is durable: the backfilled values are written back,
-    /// not just materialised in memory for the session that migrated.
-    @Test("backfilled defaults are still there on the next launch")
-    func migratedDefaultsPersist() throws {
-        try makeDirectory()
-        defer { removeDirectory() }
-
-        let id = UUID()
-        do {
-            let container = try openLegacyContainer()
-            let context = ModelContext(container)
-            context.insert(
-                HikeSchemaBeforeAutoSave.Hike(title: "Old", distanceMeters: 10, id: id, route: Fixture.ridgeRoute)
-            )
-            try context.save()
-        }
-        do {
-            let container = try openContainer()
-            let context = ModelContext(container)
-            let migrated = try #require(
-                try context.fetch(FetchDescriptor<Hike>(predicate: #Predicate { $0.id == id })).first
-            )
-            migrated.autoSavedTileKeys = ["osm/16/1/1@2.0"]
-            try context.save()
-        }
-
-        let container = try openContainer()
-        let context = ModelContext(container)
-        let reopened = try #require(
-            try context.fetch(FetchDescriptor<Hike>(predicate: #Predicate { $0.id == id })).first
-        )
-        #expect(reopened.autoSavedTileKeys == ["osm/16/1/1@2.0"])
-        #expect(reopened.autoSaveTilesEnabled)
-        #expect(!reopened.isRecording)
     }
 
     /// Deleting is the other half of owning a file: the row has to actually go,
