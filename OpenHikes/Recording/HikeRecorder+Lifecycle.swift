@@ -211,7 +211,7 @@ extension HikeRecorder {
         }
         var point = RecordingPoint(location: location, flags: consumeFlagsForNextPoint())
         point.elevation = elevationFilter.elevation(for: location)
-        let distance = accumulator.append(point)
+        accumulator.append(point)
         // An immutable copy: the journal append below hands this to a
         // `@Sendable` closure, which cannot capture the mutable `point`.
         let accepted = point
@@ -222,11 +222,9 @@ extension HikeRecorder {
             liveMatchWindow.append(accepted)
         }
         trace.append(accepted.coordinate, provisional: liveMatchingEnabled)
-        stats.distanceMeters = distance
+        stats.update(from: accumulator)
         stats.pointCount += 1
         stats.horizontalAccuracy = accepted.horizontalAccuracy
-        stats.averageSpeedMetersPerSecond = accumulator.averageSpeedMetersPerSecond
-        stats.elevationGainMeters = accumulator.elevationGainMeters
         // Explicitly conditional, not `phase = .recording`. `@Observable`'s
         // expansion happens to skip a write that compares equal, so the
         // unconditional form is quiet *today* — but only because `Phase` is

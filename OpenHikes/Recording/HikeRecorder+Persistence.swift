@@ -167,7 +167,7 @@ extension HikeRecorder {
         customName: String? = nil
     ) throws(RecordingFailure) -> Hike {
         let hikeID = session.metadata.sessionID
-        stats.matchedTrailName = prepared.matchedTrailName
+        stats.dominantTrailName = prepared.matchedTrailName
         if let existing = try existingHike(sessionID: hikeID) {
             guard existing.isRecording else { return existing }
 

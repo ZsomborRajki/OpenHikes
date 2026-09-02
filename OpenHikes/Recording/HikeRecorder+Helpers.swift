@@ -23,7 +23,7 @@ extension HikeRecorder {
         guard phase == .waitingForFix || phase == .recording,
               let trailGraphProvider,
               liveMatchWindow.count > 1 else {
-            stats.matchedTrailName = nil
+            stats.clearCurrentTrail()
             return
         }
         guard liveMatchingTask == nil else {
@@ -109,11 +109,38 @@ extension HikeRecorder {
             return
         }
 
-        stats.matchedTrailName = newerPoints.isEmpty ? match.currentTrailName : nil
+        applyCurrentTrail(match.currentTrail, isCurrent: newerPoints.isEmpty)
         RenderSignpost.mark("LiveTrailMatchApplied")
         if liveMatchNeedsRun || !newerPoints.isEmpty {
             scheduleLiveMatching()
         }
+    }
+
+    /// Publishes what a finished match found about the trail underfoot.
+    ///
+    /// `isCurrent` is false when fixes arrived while the match was running, so
+    /// its verdict describes ground the walker has already left. That used to
+    /// blank the trail outright, which is why the name flickered: matching a
+    /// window takes long enough that on any densely-sampled walk a fix lands
+    /// mid-match routinely, so the readout spent much of the hike alternating
+    /// between the trail and nothing. The overtaken verdict is kept and
+    /// marked instead — a trail from thirty seconds ago is still very likely
+    /// the trail — and only a match that *is* current may clear it, which is
+    /// what still lets stepping off the path say so.
+    func applyCurrentTrail(
+        _ trail: RecordingTrailContext?,
+        isCurrent: Bool
+    ) {
+        if isCurrent {
+            stats.currentTrail = trail
+            stats.isCurrentTrailStale = false
+            return
+        }
+        // A stale match that found *something* still beats holding an older
+        // answer, and it beats holding none at all on the first match of a
+        // walk that started with fixes already arriving.
+        stats.currentTrail = trail ?? stats.currentTrail
+        stats.isCurrentTrailStale = stats.currentTrail != nil
     }
 
     func loadLiveGraph(
@@ -199,7 +226,7 @@ extension HikeRecorder {
         liveMatchingTask = nil
         liveMatchingTaskID = nil
         liveMatchNeedsRun = false
-        stats.matchedTrailName = nil
+        stats.clearCurrentTrail()
         if clearWindow {
             liveMatchWindow = []
         }
@@ -623,11 +650,9 @@ extension HikeRecorder {
         for point in points {
             accumulator.append(point)
         }
-        stats.distanceMeters = accumulator.distanceMeters
+        stats.update(from: accumulator)
         stats.pointCount = points.count
         stats.horizontalAccuracy = points.last?.horizontalAccuracy
-        stats.averageSpeedMetersPerSecond = accumulator.averageSpeedMetersPerSecond
-        stats.elevationGainMeters = accumulator.elevationGainMeters
         if trailGraphProvider != nil, !points.isEmpty {
             let windowStart = Self.liveWindowRetainedStart(in: points)
             liveMatchWindow = Array(points[windowStart...])

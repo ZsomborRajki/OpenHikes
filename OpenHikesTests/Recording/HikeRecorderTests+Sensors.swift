@@ -76,9 +76,9 @@ extension HikeRecorderTests {
         source.deliver(fix(latitude: 47.6302))
 
         await settleDelegateHop(until: "the live match to name the trail") {
-            recorder.stats.matchedTrailName == "Matched Path"
+            recorder.stats.currentTrail?.name == "Matched Path"
         }
-        #expect(recorder.stats.matchedTrailName == "Matched Path")
+        #expect(recorder.stats.currentTrail?.name == "Matched Path")
         #expect(recorder.trace.tail.allSatisfy { coord in
             abs(coord.longitude - 12.8599) < 0.00001
         })
@@ -113,21 +113,21 @@ extension HikeRecorderTests {
         clock.advance(by: 10)
         source.deliver(fix(latitude: 47.6302))
 
-        // `matchedTrailName` is written after the matched geometry it
-        // describes, so naming it also settles the trace behind it.
+        // `currentTrail` is written after the matched geometry it describes,
+        // so naming the trail also settles the trace behind it.
         await settleDelegateHop(until: "the live match to name the trail") {
-            recorder.stats.matchedTrailName == "Live Path"
+            recorder.stats.currentTrail?.name == "Live Path"
         }
-        #expect(recorder.stats.matchedTrailName == "Live Path")
+        #expect(recorder.stats.currentTrail?.name == "Live Path")
 
         clock.advance(by: 30)
         source.deliver(fix(latitude: 47.632))
         await settleDelegateHop(until: "the unmatchable tail to clear the trail name") {
-            recorder.stats.matchedTrailName == nil
+            recorder.stats.currentTrail == nil
         }
 
         #expect(recorder.stats.pointCount == 3)
-        #expect(recorder.stats.matchedTrailName == nil)
+        #expect(recorder.stats.currentTrail == nil)
         await recorder.discard()
     }
 
@@ -147,13 +147,13 @@ extension HikeRecorderTests {
         source.deliver(fix(latitude: 47.6304))
 
         await settleDelegateHop(until: "the delayed match to catch up with every fix") {
-            recorder.stats.matchedTrailName == "Live Path"
+            recorder.stats.currentTrail?.name == "Live Path"
                 && recorder.trace.tail.allSatisfy { coord in
                     abs(coord.longitude - 12.8599) < 0.00001
                 }
         }
 
-        #expect(recorder.stats.matchedTrailName == "Live Path")
+        #expect(recorder.stats.currentTrail?.name == "Live Path")
         #expect(recorder.trace.tail.allSatisfy { coord in
             abs(coord.longitude - 12.8599) < 0.00001
         })

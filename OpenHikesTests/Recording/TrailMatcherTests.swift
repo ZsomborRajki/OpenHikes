@@ -139,7 +139,7 @@ extension TrailMatcherTests {
         #expect(result.matchedLegCount == 2)
         #expect(result.didMoveRoute)
         #expect(result.matchedTrailName == "Ridge Path")
-        #expect(result.currentTrailName == "Ridge Path")
+        #expect(result.currentTrail?.name == "Ridge Path")
         #expect(result.points.allSatisfy { point in
             abs(point.longitude - 12.8600) < 0.00001
         })
@@ -177,7 +177,7 @@ extension TrailMatcherTests {
 
         #expect(result.matchedLegCount == 0)
         #expect(result.ambiguousLegCount == 1)
-        #expect(result.currentTrailName == nil)
+        #expect(result.currentTrail == nil)
         #expect(!result.didMoveRoute)
         #expect(measured(result.points) == points)
         #expect(result.points.last?.flags.contains(.inferred) == true)
