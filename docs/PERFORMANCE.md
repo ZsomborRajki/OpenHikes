@@ -100,6 +100,41 @@ a single phase mean anything, and even those are contaminated by however much
 querying the phase does — a scenario that ends below where it started has
 leaked nothing, whatever its peak said.
 
+## What the findings list will not say
+
+`## Findings` is the first thing in the generated report and the only part of it
+anyone reads in a hurry, so what it is allowed to flag is a decision rather than
+a leftover. Three rules keep it about the app rather than about the instrument,
+and a fourth keeps it short enough to finish.
+
+The 16 ms frame budget applies only to intervals that **held the main thread**.
+`RenderSignpost` stamps every interval it records with the thread it ran on, and
+work deliberately kept off the frame — a `@concurrent` photo decode, a tile
+sweep under an `assertOffMainThread` — cannot miss a frame however long it
+takes. Unstamped, it lands in the same undifferentiated list as
+`ModelContainerInit` and `AppModelInit`, which do hold the main thread and are
+the launch cost *Open findings* below leads with: the one class of finding that
+should stand out, formatted identically to the class that should not appear.
+
+A per-accepted-fix body ratio counts only what is left after the phase's **scene
+transitions**. Backgrounding and re-foregrounding redraw the tree once each and
+always will, so charging a phase's whole body count to the fixes inside it reads
+a backgrounded phase that evaluated *zero* bodies between its fixes as 1.33
+evaluations per fix — the same error the network side deprecated as "requests
+per accepted fix". `testBackgroundRecordingCostsNothingPerFix` asserts against
+the transition count rather than the fix count for that reason, and the report
+now agrees with it.
+
+The sampler's own entries — `Process`, `Footprint.MB` and `CPU.s` — are not
+counters about the app. `Process` is emitted once a second for the length of a
+scenario, so reading it as work done while idle flags every scenario longer than
+two seconds whatever the app is doing; the other two are gauges whose "count" is
+a number of megabytes and a number of seconds.
+
+A finding the whole app shares is stated **once**, naming the scenarios that saw
+it and the worst number among them. Nine scenarios run against one app, so a
+launch cost every one of them pays is one fact, not nine findings.
+
 ## What a hike costs a battery
 
 Battery has no single counter an app can read — `UIDevice.batteryLevel` is

@@ -64,6 +64,9 @@ nonisolated enum RenderSignpost {
     struct IntervalState {
         let signpost: OSSignpostIntervalState
         let start: ContinuousClock.Instant?
+        /// Whether the span opened on the main thread. Half of what decides
+        /// the `thread=` stamp — see ``endInterval(_:_:)``.
+        let beganOnMain: Bool
     }
 
     /// Echoes every mark/interval to the console in addition to emitting the
@@ -129,10 +132,26 @@ nonisolated enum RenderSignpost {
         let measuring = consoleLoggingEnabled || PerformanceLog.shared != nil
         return IntervalState(
             signpost: signposter.beginInterval(name),
-            start: measuring ? ContinuousClock.now : nil
+            start: measuring ? ContinuousClock.now : nil,
+            beganOnMain: Thread.isMainThread
         )
     }
 
+    /// Records the span, stamped with the thread it held.
+    ///
+    /// The stamp is what lets a report apply a frame budget to the intervals a
+    /// frame actually waited on. Without it every long span read the same, so
+    /// a photo decode inside a `@concurrent` function and a tile sweep sitting
+    /// under an `assertOffMainThread` were reported as "over one frame"
+    /// alongside `ModelContainerInit` and `AppModelInit` — which do hold the
+    /// main thread, and are the launch cost `docs/PERFORMANCE.md` leads its
+    /// *Open findings* with. The one class of finding that should stand out
+    /// was formatted identically to the class that should not appear at all.
+    ///
+    /// Both ends have to agree before a span is called main-thread work: an
+    /// `async` span that opens on the main actor and suspends did not hold the
+    /// main thread for its duration, and calling it a missed frame would put
+    /// the artefact back with the thread names spelled correctly.
     static func endInterval(_ name: StaticString, _ state: IntervalState) {
         signposter.endInterval(name, state.signpost)
         guard let start = state.start else { return }
@@ -140,7 +159,8 @@ nonisolated enum RenderSignpost {
         PerformanceLog.shared?.record(
             kind: .interval,
             name: "\(name)",
-            value: Self.milliseconds(elapsed)
+            value: Self.milliseconds(elapsed),
+            detail: "thread=\(state.beganOnMain && Thread.isMainThread ? "main" : "off-main")"
         )
         guard consoleLoggingEnabled else { return }
         logToConsole(

@@ -29,6 +29,19 @@ TEST_CASE = re.compile(r"Test Case '-\[(\S+) (\S+)\]' (passed|failed)")
 # A body that runs at most this often during a phase is not what a report
 # should lead with; the interesting entries are the ones that repeat.
 NOISE_FLOOR = 2
+# What the sampler says about itself rather than about the app. `Process` is
+# the 1 Hz resource sample's own event, emitted for the length of a scenario,
+# so counting it as work the app did while idle flagged every scenario longer
+# than two seconds, permanently, whatever the app was doing. `Footprint.MB` and
+# `CPU.s` are worse than a miscount: they are gauges that ride along in the
+# same tally, so their "count" is a number of megabytes and a number of
+# seconds. `PerformanceCounters.isEquivalent(to:)` excludes the same three, for
+# the same reason.
+SAMPLER_COUNTERS = frozenset({"Process", "Footprint.MB", "CPU.s"})
+# One frame at 60 Hz. An interval longer than this cost the app a frame it owed
+# the screen — but only if it ran on the main thread, which is why the rule
+# reads the thread `RenderSignpost` stamps on every interval it records.
+FRAME_BUDGET_MS = 16.0
 # Deliberately tight. These counters are exact — an idle app with a map on
 # screen evaluates zero bodies, and a chart scrub moves the map a specific
 # number of times — so a wide band would let a real regression through while
@@ -65,6 +78,27 @@ class Scenario:
     events: list[Event] = field(default_factory=list)
     phases: list[Phase] = field(default_factory=list)
     counts: list[tuple[str, str, float, str]] = field(default_factory=list)
+
+
+@dataclass(frozen=True)
+class Finding:
+    """One line of the findings list, and what it takes to say it once.
+
+    Every finding is made about a scenario, and the suite runs nine of them
+    against one app — so a launch cost the whole app pays was stated nine
+    times, and twenty-seven lines of a thirty-eight-line list were three facts
+    repeated. ``key`` is what lets two scenarios' identical finding collapse
+    into one line, ``group`` is how that line reads with no scenario in it, and
+    ``measure`` keeps the worst scenario's own number in it rather than
+    averaging the scenarios into a figure none of them measured.
+    """
+
+    key: tuple[str, ...]
+    scenario: str
+    single: str
+    group: str
+    magnitude: float = 0.0
+    measure: str = ""
 
 
 def parse_build_log(
@@ -453,36 +487,182 @@ def stall_section(scenario: Scenario) -> list[str]:
 
 
 def findings(scenarios: dict[str, Scenario]) -> list[str]:
-    notes: list[str] = []
+    """Everything worth a look, said once each.
+
+    Two rules shaped this list after a run produced thirty-eight lines of which
+    three were news. A finding has to be about the app rather than about the
+    instrument that recorded it — the sampler's own event, the scene transition
+    a phase pays at its edges, and a decode deliberately kept off the main
+    thread are all things this list used to report as regressions. And a fact
+    the whole app shares gets one line however many scenarios observed it,
+    because a list nobody finishes reading is a list that flags nothing.
+    """
+    collected: list[Finding] = []
     for scenario in scenarios.values():
-        for phase, name, count, ratio in scenario.counts:
-            if phase == "idle" and count > NOISE_FLOOR:
-                notes.append(
-                    f"`{scenario.name}` ran `{name}` {count:g} times while idle."
+        collected.extend(scenario_findings(scenario))
+    return collapse(collected) or ["Nothing exceeded a reporting threshold."]
+
+
+def collapse(collected: list[Finding]) -> list[str]:
+    """One line per distinct finding, naming the scenarios that saw it."""
+    grouped: dict[tuple[str, ...], list[Finding]] = defaultdict(list)
+    for finding in collected:
+        grouped[finding.key].append(finding)
+
+    lines: list[str] = []
+    for items in grouped.values():
+        if len(items) == 1:
+            lines.append(items[0].single)
+            continue
+        scenarios = list(dict.fromkeys(item.scenario for item in items))
+        where = (
+            f"{len(scenarios)} scenarios" if len(scenarios) > 1 else f"`{scenarios[0]}`"
+        )
+        # Only when a scenario saw it more than once, so the common case reads
+        # "in 9 scenarios" rather than "9 times in 9 scenarios".
+        repeats = "" if len(items) == len(scenarios) else f" {len(items)} times"
+        worst = max(items, key=lambda item: item.magnitude)
+        tail = ""
+        if worst.measure:
+            tail = f" — worst {worst.measure}"
+            if len(scenarios) > 1:
+                tail += f" in `{worst.scenario}`"
+        lines.append(f"{items[0].group}{repeats} in {where}{tail}.")
+    return lines
+
+
+def scenario_findings(scenario: Scenario) -> list[Finding]:
+    collected: list[Finding] = []
+    transitions = {
+        phase: count
+        for phase, name, count, _ in scenario.counts
+        if name == "ScenePhaseChanged"
+    }
+    for phase, name, count, ratio in scenario.counts:
+        if name in SAMPLER_COUNTERS:
+            continue
+        if phase == "idle" and count > NOISE_FLOOR:
+            collected.append(
+                Finding(
+                    key=("idle", name),
+                    scenario=scenario.name,
+                    single=f"`{scenario.name}` ran `{name}` {count:g} times while idle.",
+                    group=f"`{name}` ran while idle",
+                    magnitude=count,
+                    measure=f"{count:g} times",
                 )
-            if ratio and float(ratio) > 1.0 and name.endswith("Body"):
-                notes.append(
-                    f"`{scenario.name}` re-evaluated `{name}` {float(ratio):.2f}× per accepted fix."
-                )
-        for stall in (event for event in scenario.events if event.kind == "stall"):
-            notes.append(
-                f"`{scenario.name}` stalled the main thread for {stall.value:.0f} ms."
             )
-        intervals: dict[str, list[float]] = defaultdict(list)
-        for event in scenario.events:
-            if event.kind == "interval" and event.value is not None:
-                intervals[event.name].append(event.value)
-        for name, values in intervals.items():
-            frame_budget_ms = 16.0
-            if max(values) > frame_budget_ms:
-                notes.append(
-                    f"`{scenario.name}` spent {max(values):.1f} ms in `{name}`, over one frame."
+        if (
+            finding := body_ratio_finding(
+                scenario, phase, name, count, ratio, transitions.get(phase, 0.0)
+            )
+        ) is not None:
+            collected.append(finding)
+
+    for stall in (event for event in scenario.events if event.kind == "stall"):
+        collected.append(
+            Finding(
+                key=("stall",),
+                scenario=scenario.name,
+                single=(
+                    f"`{scenario.name}` stalled the main thread for {stall.value:.0f} ms."
+                ),
+                group="the main thread stalled",
+                magnitude=stall.value or 0.0,
+                measure=f"{stall.value:.0f} ms",
+            )
+        )
+
+    # Only the intervals that ran on the main thread: a frame budget is a claim
+    # about the frame, and work moved off it deliberately cannot miss one.
+    # `PhotoImageDecoded` (a `@concurrent` function) and `TileUnclaimedSweep`
+    # (below an `assertOffMainThread` that would crash this very build) were
+    # reported here for months, in the same undifferentiated list as
+    # `ModelContainerInit` and `AppModelInit` — which are on the main thread,
+    # are the app's largest documented cost, and are the reason this rule
+    # exists. An interval with no stamp is read as main: an event file written
+    # by a build older than the stamp should keep flagging what it used to.
+    intervals: dict[str, list[float]] = defaultdict(list)
+    for event in scenario.events:
+        if event.kind != "interval" or event.value is None:
+            continue
+        if detail_fields(event.detail).get("thread", "main") != "main":
+            continue
+        intervals[event.name].append(event.value)
+    for name, values in intervals.items():
+        if max(values) > FRAME_BUDGET_MS:
+            collected.append(
+                Finding(
+                    key=("over-frame", name),
+                    scenario=scenario.name,
+                    single=(
+                        f"`{scenario.name}` spent {max(values):.1f} ms in `{name}`, "
+                        "over one frame."
+                    ),
+                    group=f"`{name}` held the main thread over one frame",
+                    magnitude=max(values),
+                    measure=f"{max(values):.1f} ms",
                 )
-        notes.extend(energy_findings(scenario))
-    return notes or ["Nothing exceeded a reporting threshold."]
+            )
+
+    collected.extend(energy_findings(scenario))
+    return collected
 
 
-def widening_funnels(scenario: Scenario) -> list[str]:
+def body_ratio_finding(
+    scenario: Scenario,
+    phase: str,
+    name: str,
+    count: float,
+    ratio: str,
+    transitions: float,
+) -> Finding | None:
+    """The body evaluations the accepted fixes are actually answerable for.
+
+    Dividing a phase's whole body count by the fixes it accepted charges the
+    scene-phase transitions at the phase's *edges* against the fixes inside it.
+    Backgrounding and re-foregrounding redraw the tree once each and always
+    will, so `background-recording` — which ran zero bodies of any kind between
+    its three fixes, which is exactly the behaviour the scenario exists to
+    defend — reported 1.33 evaluations per fix for four separate views. That is
+    the same error the network side already deprecated as "requests per
+    accepted fix" (see ``energy_findings``), with the same cause.
+
+    What is left after the transitions is the part a fix paid for, which is
+    also what `testBackgroundRecordingCostsNothingPerFix` asserts. The fix
+    count is not in the counter line, but it divides out of it: the ratio the
+    suite printed is this count over it.
+    """
+    if not name.endswith("Body") or not ratio:
+        return None
+    try:
+        per_fix = float(ratio)
+    except ValueError:
+        return None
+    fixes = count / per_fix if per_fix > 0 else 0.0
+    attributable = count - transitions
+    if fixes <= 0 or attributable <= 0:
+        return None
+    adjusted = attributable / fixes
+    if adjusted <= 1.0:
+        return None
+    # A phase named after its scenario would otherwise say so twice.
+    where = "" if phase == scenario.name else f" in `{phase}`"
+    return Finding(
+        key=("body-per-fix", name),
+        scenario=scenario.name,
+        single=(
+            f"`{scenario.name}` re-evaluated `{name}` {adjusted:.2f}× per accepted fix"
+            f"{where}, beyond the {transitions:g} scene transition(s) it paid at "
+            "the edges."
+        ),
+        group=f"`{name}` re-evaluated more than once per accepted fix",
+        magnitude=adjusted,
+        measure=f"{adjusted:.2f}×",
+    )
+
+
+def widening_funnels(scenario: Scenario) -> list[Finding]:
     """Funnels where a stage counted more fixes than the stage above it.
 
     A funnel can only narrow: every fix at a stage came through the one before
@@ -492,7 +672,7 @@ def widening_funnels(scenario: Scenario) -> list[str]:
     CoreLocation ever delivered. Said out loud here rather than left for a
     reader to notice, because nobody did.
     """
-    notes: list[str] = []
+    collected: list[Finding] = []
     for source, steps in LOCATION_FUNNELS:
         previous: tuple[str, int] | None = None
         for name, _, narrows in steps:
@@ -500,31 +680,52 @@ def widening_funnels(scenario: Scenario) -> list[str]:
             if not narrows:
                 continue
             if previous and count > previous[1]:
-                notes.append(
-                    f"`{scenario.name}`'s {source} funnel widened: "
-                    f"`{name}` counted {count} against `{previous[0]}`'s {previous[1]} — "
-                    "a stage is being counted on a stream it did not come from."
+                collected.append(
+                    Finding(
+                        key=("widening-funnel", source, name),
+                        scenario=scenario.name,
+                        single=(
+                            f"`{scenario.name}`'s {source} funnel widened: "
+                            f"`{name}` counted {count} against `{previous[0]}`'s "
+                            f"{previous[1]} — a stage is being counted on a stream it "
+                            "did not come from."
+                        ),
+                        group=(
+                            f"the {source} funnel widened at `{name}` — a stage is "
+                            "being counted on a stream it did not come from"
+                        ),
+                    )
                 )
             previous = (name, count)
-    return notes
+    return collected
 
 
-def energy_findings(scenario: Scenario) -> list[str]:
+def energy_findings(scenario: Scenario) -> list[Finding]:
     """The battery-shaped regressions, which look like nothing in a frame count.
 
     A radio that wakes on a schedule and a GPS that never steps down cost a
     hike its afternoon without ever dropping a frame, so neither shows up in
     the counters above. These are the shapes worth a look.
     """
-    notes: list[str] = []
+    collected: list[Finding] = []
     network = [
         event
         for event in scenario.events
         if event.name in NETWORK_SIGNPOSTS and event.kind == "interval"
     ]
     if "offline" in scenario.name and network:
-        notes.append(
-            f"`{scenario.name}` opened {len(network)} connection(s) in a scenario that claims to be offline."
+        collected.append(
+            Finding(
+                key=("offline-connection",),
+                scenario=scenario.name,
+                single=(
+                    f"`{scenario.name}` opened {len(network)} connection(s) in a "
+                    "scenario that claims to be offline."
+                ),
+                group="a scenario that claims to be offline opened a connection",
+                magnitude=len(network),
+                measure=f"{len(network)} connection(s)",
+            )
         )
     # Deliberately not "requests per accepted fix". That ratio charges the
     # tiles a foreground map loads at launch against the handful of fixes a
@@ -534,11 +735,20 @@ def energy_findings(scenario: Scenario) -> list[str]:
     # any of it.
     pocket = backgrounded_windows(scenario.events)
     if woken := count_within(pocket, network):
-        notes.append(
-            f"`{scenario.name}` woke the radio {woken} time(s) while backgrounded — "
-            "nothing it fetched could be seen."
+        collected.append(
+            Finding(
+                key=("radio-backgrounded",),
+                scenario=scenario.name,
+                single=(
+                    f"`{scenario.name}` woke the radio {woken} time(s) while "
+                    "backgrounded — nothing it fetched could be seen."
+                ),
+                group="the radio woke while backgrounded — nothing it fetched could be seen",
+                magnitude=woken,
+                measure=f"{woken} time(s)",
+            )
         )
-    notes.extend(widening_funnels(scenario))
+    collected.extend(widening_funnels(scenario))
     # Both counts off the recorder's own manager. `LocationFixDelivered` is the
     # map's, and dividing one stream's rejections by another's deliveries is a
     # rate about nothing: it read 50% for a recording that in fact kept 4 of
@@ -549,11 +759,23 @@ def energy_findings(scenario: Scenario) -> list[str]:
         # Fixes are the expensive part of a recording. Paying for them and
         # then discarding most is the worst of both: full GPS duty, half a
         # route. It means the filter is wrong, not that the walker is slow.
-        notes.append(
-            f"`{scenario.name}` rejected {rejected} of {received} fixes that reached the recorder — "
-            "GPS duty paid for, route not recorded."
+        collected.append(
+            Finding(
+                key=("rejection-rate",),
+                scenario=scenario.name,
+                single=(
+                    f"`{scenario.name}` rejected {rejected} of {received} fixes that "
+                    "reached the recorder — GPS duty paid for, route not recorded."
+                ),
+                group=(
+                    "more than half the fixes that reached the recorder were rejected "
+                    "— GPS duty paid for, route not recorded"
+                ),
+                magnitude=rejected / received,
+                measure=f"{100 * rejected / received:.0f}% rejected",
+            )
         )
-    return notes
+    return collected
 
 
 def baseline_snapshot(
