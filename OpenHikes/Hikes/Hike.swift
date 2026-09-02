@@ -29,9 +29,9 @@ final class Hike {
     /// uniqueness constraint turns inserting an existing id into a silent
     /// upsert, which would convert a duplicate-id bug from two visible rows
     /// into one row and lost data — and it is the kind of constraint that can
-    /// refuse to open a store that already violates it, which for this app
-    /// means the user reinstalls and loses every saved hike. The code already
-    /// treats the id as unique by looking a hike up before creating one.
+    /// refuse to open a store that already violates it, making every saved
+    /// hike unavailable. The code already treats the id as unique by looking
+    /// a hike up before creating one.
     /// CloudKit mirroring forbids one outright, so this is now settled rather
     /// than merely chosen.
     #Index<Hike>([\.id], [\.date], [\.isRecording])

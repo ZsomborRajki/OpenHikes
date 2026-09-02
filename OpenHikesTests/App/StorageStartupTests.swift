@@ -5,14 +5,14 @@
 //  The store-open failure path: what the app does when SwiftData will not open
 //  the store the user's hikes live in.
 //
-//  Worth a suite of its own because of the policy around it. The store is
-//  deliberately not migrated across schema changes — a store written by an
-//  older shape of `Hike` is not a supported input, and the documented answer is
-//  that the user reinstalls. That is only tolerable because the *failing*
-//  launch is survivable: the app has to come up, say so, and leave what is on
-//  disk alone. A crash here turns "your saved hikes are unavailable this
-//  launch" into "the app is broken", and a silent fallback is worse still — a
-//  user editing an in-memory store all day and losing it at the next launch.
+//  Worth a suite of its own because of the policy around it. Supported schema
+//  versions migrate before this path is reached; `SchemaMigrationTests` owns
+//  that contract. This suite starts with a genuinely unreadable store. That
+//  failing launch still has to be survivable: the app has to come up, say so,
+//  and leave what is on disk alone. A crash here turns "your saved hikes are
+//  unavailable this launch" into "the app is broken", and a silent fallback
+//  is worse still — a user editing an in-memory store all day and losing it at
+//  the next launch.
 //
 //  These suites drive real SwiftData failures — a store file that is not a
 //  store — rather than a synthetic `Error`, because the questions worth asking
@@ -183,9 +183,9 @@ struct StoreFailureAttributionTests {
     ///
     /// Left as it is on purpose: attributing it means opening each
     /// configuration separately to find out which one throws, which is a second
-    /// store-open on the launch path to produce a message the user cannot act
-    /// on either way — the answer to both is the same reinstall. Recorded here
-    /// so it stays a known cost rather than becoming a surprise.
+    /// store-open on the launch path to produce detail that cannot help the
+    /// user recover. Recorded here so it stays a known cost rather than
+    /// becoming a surprise.
     @Test("the two failures are reported identically, so the alert cannot name a cause")
     func failuresAreIndistinguishable() throws {
         let mirrored = try issue(corrupting: \.hikesURL)
