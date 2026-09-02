@@ -87,12 +87,19 @@ if ! command -v swiftlint >/dev/null 2>&1; then
 fi
 
 installed="$(swiftlint version)"
+# The verdict below names the version that produced it, never the pin: the
+# warning this branch prints is that rules differ between versions, and a
+# result credited to the version that did not run contradicts it. When they
+# differ the pin is worth naming in the same line, so a local pass cannot be
+# read as the CI-authoritative one.
+verdict_scope="$installed, --strict"
 if [[ "$installed" != "$pinned" ]]; then
     # A warning, not an error: a developer on a slightly different build should
     # still be able to lint. CI installs the pin exactly, so it is the version
     # that decides whether the push is green.
     echo "warning: swiftlint $installed installed, but CI runs $pinned." >&2
     echo "         Rules differ between versions; CI is the authority." >&2
+    verdict_scope="$installed, --strict; CI pins $pinned"
 fi
 
 # `--force-exclude` makes `excluded:` authoritative. It is inert while no paths
@@ -131,10 +138,10 @@ fi
 
 case "$status" in
     0)
-        echo "SwiftLint clean ($pinned, --strict)."
+        echo "SwiftLint clean ($verdict_scope)."
         ;;
     2)
-        echo "error: SwiftLint found violations ($pinned, --strict)." >&2
+        echo "error: SwiftLint found violations ($verdict_scope)." >&2
         exit 2
         ;;
     *)

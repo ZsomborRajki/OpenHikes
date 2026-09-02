@@ -123,9 +123,11 @@ done
 STUB
 
 # Records every swiftlint invocation and reports whatever outcome a case asks
-# for. `swiftlint version` answers with the pin, so the version-drift warning
-# stays out of the output these cases read; STUB_SWIFTLINT_STATUS and
-# STUB_SWIFTLINT_OUTPUT stand in for the lint's own verdict.
+# for. `swiftlint version` answers with STUB_SWIFTLINT_VERSION, which most
+# cases set to the pin so the version-drift warning stays out of the output
+# they read; the drift cases set it to something else on purpose.
+# STUB_SWIFTLINT_STATUS and STUB_SWIFTLINT_OUTPUT stand in for the lint's own
+# verdict.
 cat > "$stub_bin/swiftlint" <<'STUB'
 #!/usr/bin/env bash
 printf 'swiftlint %s\n' "$*" >> "$STUB_CALL_LOG"
@@ -593,6 +595,34 @@ run_script "lint rejects a single unknown option" "$lint" --strict
 if expect_status 2 && expect_contains "$output" "unknown option '--strict'" "the error"; then
     pass
 fi
+
+# The verdict has to name the version that ran. Crediting it to the pin tells a
+# reader a clean run happened at the version CI will use when it did not, and
+# the drift warning printed just above says in so many words that the two
+# versions do not agree on the rules.
+pinned_version="$(cat "$repository_root/.swiftlint-version")"
+export STUB_SWIFTLINT_VERSION="$pinned_version-drifted"
+
+run_script "lint credits a clean verdict to the version that ran" "$lint"
+if expect_status 0 \
+    && expect_contains "$output" "swiftlint $STUB_SWIFTLINT_VERSION installed" "the warning" \
+    && expect_contains "$output" \
+        "SwiftLint clean ($STUB_SWIFTLINT_VERSION, --strict; CI pins $pinned_version)." \
+        "the output"; then
+    pass
+fi
+
+export STUB_SWIFTLINT_STATUS=2
+run_script "lint credits a violation verdict to the version that ran" "$lint"
+if expect_status 2 \
+    && expect_contains "$output" \
+        "found violations ($STUB_SWIFTLINT_VERSION, --strict; CI pins $pinned_version)." \
+        "the error"; then
+    pass
+fi
+unset STUB_SWIFTLINT_STATUS
+
+export STUB_SWIFTLINT_VERSION="$pinned_version"
 
 echo "Periphery configuration"
 
