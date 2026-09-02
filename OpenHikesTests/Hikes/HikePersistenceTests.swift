@@ -5,8 +5,12 @@
 //  Every other suite builds its hikes in an in-memory store, which is the
 //  right trade for testing behaviour — but it means the one thing that can
 //  lose a user's data has to be exercised: opening a store that is already on
-//  disk. Version-to-version coverage lives in `SchemaMigrationTests`; this
-//  suite owns ordinary round trips and deletion durability.
+//  disk. This suite owns ordinary round trips and deletion durability, at the
+//  current schema version.
+//
+//  Opening an *older* store — and with it the inline-default contract that
+//  `Hike`'s comments describe, which only a store missing those columns can
+//  exercise — lives in `SchemaMigrationTests`.
 //
 
 import Foundation

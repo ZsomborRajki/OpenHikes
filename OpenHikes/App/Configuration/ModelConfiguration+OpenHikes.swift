@@ -129,26 +129,38 @@ extension ModelContainer {
         )
     }
 
-    /// A chosen schema version over both stores. The migration suite uses this
-    /// to write a genuine previous-version fixture through the same store
-    /// configuration boundary as production.
+    /// A chosen schema version over the stores that version had. The migration
+    /// suite uses this to write a genuine previous-version fixture through the
+    /// same store configuration boundary as production.
+    ///
+    /// The sidecar configuration is opened only when the version actually has
+    /// one. A version predating the split — see ``OpenHikesSchemaV1`` — left no
+    /// second file behind, and writing a fixture that has one would be writing
+    /// a store no install ever had.
     static func openHikes(
         schemaVersion: any OpenHikesVersionedSchema.Type,
         url: URL,
         localURL: URL,
         migrationPlan: (any SchemaMigrationPlan.Type)? = nil
     ) throws -> ModelContainer {
-        try ModelContainer(
-            for: Schema(versionedSchema: schemaVersion),
-            migrationPlan: migrationPlan,
-            configurations: .openHikes(
+        var configurations: [ModelConfiguration] = [
+            .openHikes(
                 schema: schema(schemaVersion.hikeModels, version: schemaVersion.versionIdentifier),
                 url: url
             ),
-            .openHikesLocal(
-                schema: schema(schemaVersion.localStateModels, version: schemaVersion.versionIdentifier),
-                url: localURL
+        ]
+        if !schemaVersion.localStateModels.isEmpty {
+            configurations.append(
+                .openHikesLocal(
+                    schema: schema(schemaVersion.localStateModels, version: schemaVersion.versionIdentifier),
+                    url: localURL
+                )
             )
+        }
+        return try ModelContainer(
+            for: Schema(versionedSchema: schemaVersion),
+            migrationPlan: migrationPlan,
+            configurations: configurations
         )
     }
 }
