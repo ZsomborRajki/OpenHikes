@@ -333,8 +333,14 @@ private func delete(_ hike: Hike, among hikes: [Hike]) {
     // deleting this hike's keys outright would strip coverage from any
     // trail sharing the area (and at low zoom, that's most of them) while
     // leaving their manifests claiming tiles that are gone.
-    if hike.hasStoredTiles {
-        let deletionPlan = StoredTileDeletionPlan(removing: hike, among: hikes)
+    //
+    // A plan that cannot be built frees nothing, the way the launch trim and
+    // Settings refuse theirs: a survivor whose sidecar read failed is missing
+    // from the claim set, and spending a set that is short by one hike is how
+    // a neighbour loses the map it downloaded for a valley with no signal.
+    // The hike is still deleted either way; its own tiles are then unclaimed,
+    // and the next launch trim reclaims them.
+    if hike.hasStoredTiles, let deletionPlan = StoredTileDeletionPlan(removing: hike, among: hikes) {
         // Enumerating a route's tile grid is real CPU work, per download
         // record, for every hike involved — all of it belongs off the
         // main thread.

@@ -79,7 +79,7 @@ extension StorageAccountingTests {
         #expect(try await bytes([saved]) > 0, "precondition: the tile is durably on disk")
 
         // No flush first: the delete path is responsible for that itself.
-        await deleteHike(hike, using: controller)
+        try await deleteHike(hike, using: controller)
         #expect(try await bytes([saved]) == 0)
     }
 
@@ -99,7 +99,7 @@ extension StorageAccountingTests {
         controller.flushPendingKeys()
         survivor.autoSavedTileKeys = [shared]
 
-        await deleteHike(doomed, using: controller, survivors: [survivor])
+        try await deleteHike(doomed, using: controller, survivors: [survivor])
         #expect(try await bytes([shared]) > 0, "the surviving hike still lists this tile")
     }
 
@@ -116,7 +116,7 @@ extension StorageAccountingTests {
         controller.flushPendingKeys()
         survivor.autoSavedTileKeys = [shared]
 
-        await clearStoredTiles(for: cleared, among: [cleared, survivor], using: controller)
+        try await clearStoredTiles(for: cleared, among: [cleared, survivor], using: controller)
 
         #expect(cleared.autoSavedTileKeys.isEmpty)
         #expect(cleared.offlineDownloads.isEmpty)

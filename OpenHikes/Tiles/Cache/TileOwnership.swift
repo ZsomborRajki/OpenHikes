@@ -78,15 +78,58 @@ nonisolated struct TileOwnership: Sendable {
 
 /// Snapshots one hike's tile claims and every surviving claim in one
 /// main-actor pass, then answers the expensive deletion question off-main.
+///
+/// The third site that spends a tile claim set, beside
+/// ``OpenHikesModel/trimTileCache(_:limit:fetchingHikes:)`` and
+/// ``OfflineStorageActions``, and it follows their rule: a claim that could
+/// not be read refuses the plan rather than shortening it. A survivor missing
+/// from `survivors` is not a hike that claims nothing — it is a hike whose
+/// downloaded map is about to be deleted while its manifest goes on listing
+/// it, with nothing left to re-download it and nothing able to see the hole.
 nonisolated struct StoredTileDeletionPlan: Sendable {
     private let doomed: TileOwnership
     private let survivors: [TileOwnership]
 
-    init(removing hike: Hike, among hikes: [Hike]) {
-        doomed = TileOwnership(hike)
-        survivors = hikes
-            .filter { $0.id != hike.id && $0.hasStoredTiles }
-            .map(TileOwnership.init) // swiftlint:disable:this prefer_self_in_static_references
+    /// Snapshots `hike`'s claim and every surviving claim, or `nil` if either
+    /// read failed.
+    ///
+    /// Built through ``Hike/tileClaim()`` rather than the ``Hike/hasStoredTiles``
+    /// pre-filter, which reads through ``Hike/localState`` and so answers
+    /// `false` for a hike whose sidecar fetch *threw* — indistinguishable,
+    /// once it is absent from `survivors`, from one that genuinely holds no
+    /// tiles.
+    ///
+    /// `@MainActor` where the rest of this type is `nonisolated`: reading a
+    /// claim is reading SwiftData, which is what the snapshot exists to get
+    /// out of the way before the expensive part runs off-main.
+    @MainActor
+    init?(removing hike: Hike, among hikes: [Hike]) {
+        self.init(
+            // A doomed hike with no sidecar row claims nothing, which is a
+            // plan that deletes nothing rather than a refusal; the throwing
+            // read above it is what tells that apart from a failure.
+            doomedClaim: { try hike.tileClaim() ?? TileOwnership(hike) },
+            survivingClaims: { try TileOwnership.claims(of: hikes.filter { $0.id != hike.id }) }
+        )
+    }
+
+    /// The rule itself, with both claim reads handed in.
+    ///
+    /// Closure-driven for the reason ``OpenHikesModel/trimTileCache(_:limit:fetchingHikes:)``
+    /// is: the branch that matters is the failing one, and nothing makes a
+    /// `ModelContext` throw on demand — a fetch against a schema it does not
+    /// know returns an empty result rather than an error. Without this seam
+    /// the refusal below could be rewritten as `try?` with a fallback and
+    /// every test in the bundle would still pass, while a delete stripped a
+    /// neighbouring hike's offline map.
+    init?(
+        doomedClaim: () throws -> TileOwnership,
+        survivingClaims: () throws -> [TileOwnership]
+    ) {
+        guard let claim = try? doomedClaim(),
+              let claims = try? survivingClaims() else { return nil }
+        doomed = claim
+        survivors = claims
     }
 
     func exclusiveTileKeys() throws(CancellationError) -> Set<String> {
@@ -146,9 +189,10 @@ extension Hike {
     /// Whether this hike has any stored tiles — answered from two small
     /// arrays, without touching `route`.
     ///
-    /// The pre-filter for building ``TileOwnership`` snapshots: a delete has
-    /// to consider every *other* hike, and faulting in a few hundred full
-    /// routes to discover that none of them ever saved a tile is work worth
-    /// not doing on the main actor.
+    /// The cheap half of ``tileClaim()``, and the short-circuit a delete opens
+    /// with: it has to consider every *other* hike, and faulting in a few
+    /// hundred full routes to discover that none of them ever saved a tile is
+    /// work worth not doing on the main actor. Not a filter anything builds a
+    /// claim set with — see ``tileClaim()`` for why the difference matters.
     var hasStoredTiles: Bool { !offlineDownloads.isEmpty || !autoSavedTileKeys.isEmpty }
 }
