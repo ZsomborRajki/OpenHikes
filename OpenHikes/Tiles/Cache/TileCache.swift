@@ -196,6 +196,20 @@ nonisolated final class TileCache: @unchecked Sendable {
     /// request for every visible tile — and a metered or Low Data Mode
     /// connection doesn't quietly become the most expensive part of a hike.
     let conditions = Mutex(TileNetworkConditions())
+
+    /// Stale saved coverage admitted to the memory tier before this moment may
+    /// no longer answer for it.
+    ///
+    /// Moved forward whenever interactive fetching becomes allowed again. The
+    /// entries it governs were admitted precisely because nothing could refresh
+    /// them, and the event that makes a refresh possible is the event that
+    /// should retire them: renderers answer the same notification with a
+    /// redraw, `draw` consults ``memoryImage(forKey:referenceDate:)`` first,
+    /// and entries still standing there would answer it. A walker who regains
+    /// signal over a map they are not panning would go on being shown week-old
+    /// ground, with nothing scheduled to ask again.
+    let staleCoverageInvalidatedAt = Mutex(Date.distantPast)
+
     var isOnline: Bool { conditions.withLock { $0.isOnline } }
     var networkConditions: TileNetworkConditions { conditions.withLock { $0 } }
 
@@ -412,28 +426,45 @@ nonisolated extension TileCache {
         // than only in a debug log nobody is reading on a mountain.
         let decision = networkDecision(for: purpose)
         guard decision.isAllowed else {
-            // Unless the walker saved this ground for exactly this moment. A
-            // week-old tile of a valley is the same valley; a blank square is
-            // not, and the phone that can't refresh it is the phone least able
-            // to do without it.
-            if hasStaleCoverage,
-               let stale = staleCoverage(
-                   forKey: key,
-                   reason: decision.reason ?? "suppressed",
-                   token: mutationToken
-               ) {
-                return .loaded(stale)
-            }
-            RenderSignpost.mark(
-                "TileFetchSuppressed",
-                "purpose=\(purpose.rawValue) reason=\(decision.reason ?? "unknown")"
-            )
             #if DEBUG
             Self.logger.debug(
                 "Skipped tile \(key, privacy: .public): \(decision.reason ?? "", privacy: .public)"
             )
             #endif
-            return .suppressed
+            // Saved coverage stands in where there is any: a week-old tile of a
+            // valley is the same valley, a blank square is not, and the phone
+            // that can't refresh it is the phone least able to do without it.
+            return withheldFetch(
+                forKey: key,
+                purpose: purpose,
+                reason: decision.reason ?? "unknown",
+                hasStaleCoverage: hasStaleCoverage,
+                token: mutationToken,
+                otherwise: .suppressed
+            )
+        }
+
+        // A 429 or an overloaded 503 named its own deadline, and stale coverage
+        // is the one thing that can reach the network with nothing holding it
+        // back: serving the saved copy reports `.loaded`, so the renderer
+        // records a success, clears its failure log, and never feeds that
+        // deadline into the backoff built to honour it. The memory entry then
+        // expires on ``staleCoverageRecheckInterval`` and the tile is asked for
+        // again — five minutes into a fifteen-minute `Retry-After`, which on
+        // OSM's community-funded servers is the request pattern that header
+        // exists to stop. Honoured here instead, and the saved bytes are drawn
+        // for as long as it stands. With no coverage to draw this is `.failed`,
+        // which is the same miss the server itself would have produced, so the
+        // renderer records it and reads the deadline as its floor as usual.
+        if retryDeadline(forKey: key) != nil {
+            return withheldFetch(
+                forKey: key,
+                purpose: purpose,
+                reason: "retry-after",
+                hasStaleCoverage: hasStaleCoverage,
+                token: mutationToken,
+                otherwise: .failed
+            )
         }
 
         guard let fetched = await fetchTileOnce(forKey: key, url: url) else {
@@ -739,8 +770,15 @@ nonisolated extension TileCache {
         // reservation below — which may walk the durable directory to take its
         // first measurement — is never taken with `mutationVersions` held.
         if storedModificationDate(for: paths.durable, in: .durable) != nil {
+            let name = diskName(for: key)
             return mutationVersions.withLock { _ in
-                discardRedundantCachedCopy(forKey: key)
+                // Already saved, so nothing here reserves or claims. The only
+                // question left is which of the two copies the durable tier
+                // should be holding — see
+                // ``adoptNewerCachedCopy(cached:durable:diskName:)``.
+                if !adoptNewerCachedCopy(cached: paths.cached, durable: paths.durable, diskName: name) {
+                    discardRedundantCachedCopy(forKey: key)
+                }
                 return true
             }
         }
@@ -896,14 +934,30 @@ nonisolated extension TileCache {
 
         for file in allTileFiles(in: directory) {
             mutationVersions.withLock { _ in
-                guard isStale(file) || durableNames.contains(file.lastPathComponent)
-                else { return }
+                let name = file.lastPathComponent
+                let isDuplicate = durableNames.contains(name)
+                guard isStale(file) || isDuplicate else { return }
+                // A duplicate whose browsing copy is the *newer* of the two is
+                // promoted rather than dropped — the same rule
+                // ``promoteCachedTile(forKey:racingWriter:)`` applies, and for
+                // the same reason. Either way the browsing tier is one file
+                // lighter for it.
+                if isDuplicate,
+                   adoptNewerCachedCopy(
+                       cached: file,
+                       durable: durableDirectory.appendingPathComponent(name),
+                       diskName: name
+                   ) {
+                    removed += 1
+                    return
+                }
                 if remove(file) { removed += 1 }
             }
         }
 
-        // No durable measurement to invalidate: everything removed above came
-        // out of the browsing tier, which no provider ceiling counts.
+        // Any adoption above adjusted the durable measurement as it went;
+        // everything else that went came out of the browsing tier, which no
+        // provider ceiling counts.
         return removed
     }
 
@@ -928,23 +982,6 @@ nonisolated extension TileCache {
 
     func diskName(for key: String) -> String {
         key.replacingOccurrences(of: "/", with: "_").replacingOccurrences(of: "@", with: "_")
-    }
-
-    /// Enforces the one-file-per-key rule in the one direction it can go wrong:
-    /// a browsing-tier copy of a tile that is also stored durably.
-    ///
-    /// Durable wins because it's the stronger claim — the bytes are identical,
-    /// so the only question is which file is allowed to be reclaimed by the OS,
-    /// and a hike is counting on the answer being "not this one". Called after
-    /// every write, since the map's write and a download's write are ordered
-    /// only by chance.
-    func discardRedundantCachedCopy(forKey key: String) {
-        let (cached, durable) = filePaths(forKey: key)
-        guard FileManager.default.fileExists(atPath: durable.path) else { return }
-        _ = removeItemIgnoringNotFound(
-            at: cached,
-            operation: "remove redundant cached tile"
-        )
     }
 
     /// Where a key's tile may sit, in each tier.

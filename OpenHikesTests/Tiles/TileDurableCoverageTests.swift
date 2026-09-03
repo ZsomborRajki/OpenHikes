@@ -52,6 +52,17 @@ struct TileDurableCoverageTests {
         )
     }
 
+    /// Whether `file` carries `date` as its fetch time, to the second.
+    ///
+    /// Not `==`: the date is written through `setAttributes` and read back
+    /// through a different API than the one that wrote it, and a comparison
+    /// that fails on the last bit of a `TimeInterval` would be testing
+    /// Foundation rather than which of two files was kept. A second is far
+    /// finer than the seven days the answer turns on.
+    private static func isDated(_ file: URL, like date: Date) throws -> Bool {
+        try abs(modificationDate(of: file).timeIntervalSince(date)) < 1
+    }
+
     /// A sandbox holding one piece of saved coverage that went stale a day past
     /// its TTL, with the transport scripted by the caller.
     private static func sandboxWithStaleCoverage(
@@ -212,6 +223,124 @@ struct TileDurableCoverageTests {
 
         #expect(image != nil, "the saved tile is the usable one here, not the response")
         #expect(try Self.modificationDate(of: file) == placed)
+    }
+
+    // MARK: - What serving stale coverage must not cost
+
+    /// Serving the saved copy reports `.loaded`, which is a *success* to the
+    /// renderer: it clears the failure log and never records the deadline the
+    /// server named. So the deadline has to be honoured before the request is
+    /// made, or the recheck five minutes later goes back to a server that asked
+    /// for fifteen — the request pattern `Retry-After` exists to stop, aimed at
+    /// the community-funded infrastructure it exists to protect.
+    @Test("a standing Retry-After is honoured even while stale coverage is drawn")
+    func retryAfterOutlivesTheStaleRecheck() async throws {
+        let stub = try Self.sandboxWithStaleCoverage()
+        defer { stub.tearDown() }
+        let key = Self.key(0)
+        StubTileProtocol.alwaysRespond(
+            with: .init(
+                statusCode: RetryAfterHeader.tooManyRequests,
+                data: Data("slow down".utf8),
+                headers: [RetryAfterHeader.name: "900"]
+            )
+        )
+
+        #expect(await stub.cache.loadTile(forKey: key, url: Self.url(0)) != nil)
+        #expect(StubTileProtocol.requestCount == 1, "precondition: the refresh was attempted once")
+        #expect(stub.cache.retryDeadline(forKey: key) != nil, "precondition: the server named a deadline")
+
+        // What a redraw past the recheck window does. The memory entry is gone
+        // by then, so this is the load that used to go back to the server.
+        stub.cache.memory.removeAllObjects()
+        let image = await stub.cache.loadTile(forKey: key, url: Self.url(0))
+
+        #expect(StubTileProtocol.requestCount == 1, "the server said fifteen minutes and meant it")
+        #expect(image != nil, "and the walker still gets the map they saved while it waits")
+    }
+
+    /// Regaining signal has to reach the tiles already on screen. The renderer
+    /// answers the unblock notification with a redraw, and a redraw reads the
+    /// memory tier first — so coverage admitted while offline has to stop
+    /// answering there, or a map nobody pans stays a week old with nothing
+    /// scheduled to ask again.
+    @Test("stale coverage stops answering from memory once fetching is unblocked")
+    func reconnectRetiresServedStaleCoverage() async throws {
+        let stub = try Self.sandboxWithStaleCoverage(reachable: false)
+        defer { stub.tearDown() }
+        let key = Self.key(0)
+        #expect(await stub.cache.loadTile(forKey: key, url: Self.url(0)) != nil)
+        #expect(stub.cache.memoryImage(forKey: key) != nil, "precondition: it was drawn")
+
+        stub.cache.setReachable(true)
+
+        #expect(
+            stub.cache.memoryImage(forKey: key) == nil,
+            "the next draw has to go back down to the load path, not repaint the offline answer"
+        )
+        #expect(stub.isSaved(key), "retiring the memory entry does not touch the saved bytes")
+    }
+
+    /// The duplicate an older build could leave: the same key in both tiers.
+    /// Now that durable coverage is never dropped for age, "durable wins" over
+    /// one of those means deleting the only fresh tile on the device and
+    /// keeping the week-old one. The newer bytes are the coverage.
+    @Test("a browsing copy newer than its durable twin is promoted, not discarded")
+    func promoteKeepsTheNewerDuplicate() async throws {
+        let stub = try Self.sandboxWithStaleCoverage()
+        defer { stub.tearDown() }
+        let key = Self.key(0)
+        let browsed = stub.browsedFile(for: key)
+        try stub.place(in: browsed, agedByDays: 1)
+        let browsedAt = try Self.modificationDate(of: browsed)
+
+        let cache = stub.cache
+        let saved = await offMain { cache.promoteCachedTile(forKey: key) }
+
+        #expect(saved, "the key is durable either way")
+        #expect(!stub.isBrowsed(key), "and only one file is left behind")
+        #expect(
+            try Self.isDated(stub.savedFile(for: key), like: browsedAt),
+            "the day-old bytes are the ones kept, dated as they were fetched"
+        )
+    }
+
+    /// And the launch sweep applies the same rule, or it would undo the above
+    /// at the next launch — its duplicate branch is what heals installs that
+    /// have one, so it is the branch that most has to get this right.
+    @Test("the launch sweep keeps the newer duplicate too")
+    func launchSweepKeepsTheNewerDuplicate() async throws {
+        let stub = try Self.sandboxWithStaleCoverage(reachable: false)
+        defer { stub.tearDown() }
+        let key = Self.key(0)
+        let browsed = stub.browsedFile(for: key)
+        try stub.place(in: browsed, agedByDays: 1)
+        let browsedAt = try Self.modificationDate(of: browsed)
+        let cache = stub.cache
+
+        let removed = await offMain { cache.removeExpiredTiles() }
+
+        #expect(removed == 1, "the browsing tier is one file lighter either way")
+        #expect(stub.isSaved(key))
+        #expect(!stub.isBrowsed(key))
+        #expect(try Self.isDated(stub.savedFile(for: key), like: browsedAt))
+    }
+
+    /// The other direction is unchanged: identical bytes, durable newer or the
+    /// same age, and the browsing copy is simply dropped.
+    @Test("an older browsing duplicate is still discarded")
+    func promoteDiscardsTheOlderDuplicate() async throws {
+        let stub = try Self.sandboxWithStaleCoverage()
+        defer { stub.tearDown() }
+        let key = Self.key(0)
+        try stub.place(in: stub.browsedFile(for: key), agedByDays: Self.staleByDays + 1)
+        let savedAt = try Self.modificationDate(of: stub.savedFile(for: key))
+        let cache = stub.cache
+
+        #expect(await offMain { cache.promoteCachedTile(forKey: key) })
+
+        #expect(!stub.isBrowsed(key))
+        #expect(try Self.modificationDate(of: stub.savedFile(for: key)) == savedAt, "nothing rewrote the saved copy")
     }
 
     // MARK: - What the hike's manifest is allowed to promise

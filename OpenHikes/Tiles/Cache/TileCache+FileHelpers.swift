@@ -67,6 +67,35 @@ nonisolated extension TileCache {
         }
     }
 
+    /// The file's modification date, read flat — no tier rules, no deletion,
+    /// and no substitute for a date that cannot be read.
+    ///
+    /// ``storedModificationDate(for:in:referenceDate:)`` is the answer to "how
+    /// old is this tile, and is that allowed"; this is the answer to "which of
+    /// these two files is the newer one", where a missing date has to mean
+    /// *unknown* rather than `.distantPast` — the comparison would otherwise
+    /// invent an ordering out of a failed stat.
+    ///
+    /// The cached resource value is cleared first: a directory enumerated with
+    /// `includingPropertiesForKeys:` hands back the date read during the walk,
+    /// which may predate a write this call is meant to see.
+    func modificationDate(of file: URL) -> Date? {
+        var file = file
+        file.removeAllCachedResourceValues()
+        do {
+            return try file.resourceValues(
+                forKeys: [.contentModificationDateKey]
+            ).contentModificationDate
+        } catch {
+            logFileError(
+                error,
+                operation: "read tile modification date",
+                url: file
+            )
+            return nil
+        }
+    }
+
     /// Returns the file's fetch date, or `nil` when there is no usable file.
     /// Modification time is the fetch time because tile files are written
     /// atomically and never rewritten except by a fresh response.
