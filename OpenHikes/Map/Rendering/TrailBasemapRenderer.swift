@@ -57,12 +57,18 @@ actor TrailBasemapRenderer {
         qos: .utility
     )
 
+    /// What one snapshot is asked for: a framed region, the shape it is being
+    /// rendered at, and which appearance. Internal rather than private
+    /// because ``Render`` names it — see there for why that seam exists.
     struct RenderInput: Sendable {
         let unitRect: UnitMercatorRect
         let variant: TrailBasemapVariant
         let appearance: TrailBasemapAppearance
     }
 
+    /// What one snapshot produced: encoded bytes, the pixel dimensions they
+    /// decode to, and the region the snapshotter *actually* covered, which is
+    /// not always the region it was asked for — see ``measure(_:northWest:southEast:)``.
     struct Rendered: Sendable {
         let data: Data
         let pixelWidth: Int
@@ -70,6 +76,21 @@ actor TrailBasemapRenderer {
         let visibleRect: UnitMercatorRect
     }
 
+    /// The snapshot boundary, as a function, so a suite can decide what a
+    /// render returns instead of a Maps server deciding it.
+    ///
+    /// A deliberate test seam rather than production indirection: the only
+    /// caller that supplies one is `TrailBasemapRendererTests`, and
+    /// ``shared`` — the single instance the app builds — takes the default.
+    /// It exists because everything worth asserting about this actor is what
+    /// it does with a result, and reaching any of it used to mean four live
+    /// round-trips per pass. Unreachable ones cost the suite 570 seconds of
+    /// `maps.snapshot.timeout` against a 30-minute CI budget, and failed
+    /// nothing while doing it.
+    ///
+    /// `nil` means this snapshot did not land. It is an ordinary outcome —
+    /// offline, or a background launch with no network — and the pass
+    /// publishes whatever else did.
     typealias Render = @Sendable (RenderInput) async -> Rendered?
 
     private let render: Render
@@ -93,6 +114,8 @@ actor TrailBasemapRenderer {
     /// cleared.
     private var generation = 0
 
+    /// - Parameter render: the snapshot boundary, defaulting to the real
+    ///   `MKMapSnapshotter` pass. Supplied only by tests; see ``Render``.
     init(render: Render? = nil) {
         self.render = render ?? TrailBasemapRenderer.renderWithMapKit
     }
@@ -160,6 +183,15 @@ actor TrailBasemapRenderer {
                     variant: variant,
                     appearance: appearance
                 )
+                // A `continue` rather than an abort, here and at the render
+                // above: the four snapshots are four separate requests, so
+                // one failing while the others land is what a flaky
+                // connection looks like. The widget picks one image by shape
+                // and appearance, and a set holding the one it is being asked
+                // for draws a map where an all-or-nothing set draws the line
+                // glyph. The combinations that failed fall back until the
+                // next selection change re-renders — which is what
+                // discarding the whole pass would have given all four.
                 guard SharedStore.writeBasemapImage(rendered.data, named: fileName) else { continue }
                 written.insert(fileName)
                 images.append(
