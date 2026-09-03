@@ -56,7 +56,7 @@ final class HikeIntentCoordinatorTests {
 
         #expect(report.isPaused == false)
         #expect(source.startCount == 1)
-        #expect(throws: Never.self) { try coordinator.currentRecording() }
+        await #expect(throws: Never.self) { try await coordinator.currentRecording() }
     }
 
     @Test("starting a second time is refused rather than restarting")
@@ -110,6 +110,37 @@ final class HikeIntentCoordinatorTests {
         #expect(makeCoordinator().authorization == .undecided)
     }
 
+    /// Reduced accuracy is authorized as far as `CLAuthorizationStatus` is
+    /// concerned, and starting on it still meets a prompt — the recorder asks
+    /// for temporary full accuracy and fails with `.preciseLocationRequired`
+    /// when it does not land. That prompt is as foreground-only as the first,
+    /// so it cannot be reported as `.granted`.
+    @Test("reduced accuracy is not reported as a grant to record on")
+    func reducedAccuracyIsItsOwnAnswer() {
+        source.hasFullAccuracy = false
+
+        let coordinator = makeCoordinator()
+
+        #expect(coordinator.authorization == .reducedAccuracy)
+        #expect(coordinator.authorization.needsForeground)
+    }
+
+    /// A launch that recovers automatically is in `.recovering` from the
+    /// instant the recorder is built, whether or not there is anything to
+    /// recover — and the launch these intents exist for is the one the system
+    /// makes to perform one. Reading the phase without waiting answers about
+    /// the launch: "still finishing your last recording" to a walker with
+    /// nothing to finish.
+    @Test("a recovering launch is waited out rather than reported as busy")
+    func aRecoveringLaunchIsWaitedOut() async throws {
+        let coordinator = makeCoordinator(automaticallyRecovers: true)
+
+        let report = try await coordinator.startRecording()
+
+        #expect(report.isPaused == false)
+        #expect(source.startCount == 1)
+    }
+
     // MARK: - Pausing and resuming
 
     @Test("pausing reports the distance walked so far")
@@ -118,7 +149,7 @@ final class HikeIntentCoordinatorTests {
         _ = try await coordinator.startRecording()
         walk()
 
-        let report = try coordinator.pauseRecording()
+        let report = try await coordinator.pauseRecording()
 
         #expect(report.isPaused)
         #expect(report.distance.value > 0)
@@ -126,11 +157,11 @@ final class HikeIntentCoordinatorTests {
     }
 
     @Test("pausing nothing is refused")
-    func pausingWithoutARecordingIsRefused() {
+    func pausingWithoutARecordingIsRefused() async {
         let coordinator = makeCoordinator()
 
-        #expect(throws: HikeIntentFailure.noActiveRecording) {
-            try coordinator.pauseRecording()
+        await #expect(throws: HikeIntentFailure.noActiveRecording) {
+            try await coordinator.pauseRecording()
         }
     }
 
@@ -139,7 +170,7 @@ final class HikeIntentCoordinatorTests {
         let coordinator = makeCoordinator()
         _ = try await coordinator.startRecording()
         walk()
-        _ = try coordinator.pauseRecording()
+        _ = try await coordinator.pauseRecording()
         await settleJournal()
 
         let report = try await coordinator.resumeRecording()
@@ -169,8 +200,8 @@ final class HikeIntentCoordinatorTests {
         let hike = try await coordinator.stopRecording()
 
         #expect(hike.distance.value > 0)
-        #expect(throws: HikeIntentFailure.noActiveRecording) {
-            try coordinator.currentRecording()
+        await #expect(throws: HikeIntentFailure.noActiveRecording) {
+            try await coordinator.currentRecording()
         }
         // Saved, not merely stopped: the row has to be in the store and no
         // longer flagged as a draft, which is what makes it the answer to
@@ -191,11 +222,11 @@ final class HikeIntentCoordinatorTests {
     // MARK: - Reporting on a live recording
 
     @Test("no recording means no progress to report")
-    func noRecordingHasNoProgress() {
+    func noRecordingHasNoProgress() async {
         let coordinator = makeCoordinator()
 
-        #expect(throws: HikeIntentFailure.noActiveRecording) {
-            try coordinator.currentRecording()
+        await #expect(throws: HikeIntentFailure.noActiveRecording) {
+            try await coordinator.currentRecording()
         }
     }
 
@@ -207,14 +238,15 @@ final class HikeIntentCoordinatorTests {
         // The walker started it and the GPS is on. "Nothing is being recorded"
         // would be a lie told during exactly the seconds they are most likely
         // to ask.
-        let report = try coordinator.currentRecording()
+        let report = try await coordinator.currentRecording()
         #expect(report.distance.value == 0)
     }
 
     // MARK: - Harness
 
     private func makeCoordinator(
-        calendar: Calendar = Calendar(identifier: .gregorian)
+        calendar: Calendar = Calendar(identifier: .gregorian),
+        automaticallyRecovers: Bool = false
     ) -> HikeIntentCoordinator {
         let instance = HikeRecorder(
             container: container,
@@ -229,7 +261,7 @@ final class HikeIntentCoordinatorTests {
             journalDirectory: directory,
             clock: clock.read,
             journalFlushDelay: .zero,
-            automaticallyRecovers: false
+            automaticallyRecovers: automaticallyRecovers
         )
         recorder = instance
         return HikeIntentCoordinator(

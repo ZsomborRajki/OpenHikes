@@ -39,6 +39,30 @@ nonisolated enum HikeFormat {
             : duration.formatted(shortStyle)
     }
 
+    /// The same two shapes, in words, for a sentence that is read aloud.
+    ///
+    /// ``duration(_:)`` is `.narrow` because that is what a stat tile has room
+    /// for, and a voice answer has no tile: a speech synthesiser handed "1h
+    /// 25m" is being asked to guess, exactly as one handed "2.4 km" is. The
+    /// allowed units are the same, so the same hike is described in the same
+    /// terms on the screen and out loud — only the spelling differs.
+    private static let spokenLongStyle = Duration.UnitsFormatStyle(
+        allowedUnits: [.hours, .minutes],
+        width: .wide
+    )
+    private static let spokenShortStyle = Duration.UnitsFormatStyle(
+        allowedUnits: [.minutes, .seconds],
+        width: .wide
+    )
+
+    static func spokenDuration(_ interval: TimeInterval) -> String {
+        guard interval.isFinite else { return "—" }
+        let duration = Duration.seconds(interval)
+        return interval >= 3600
+            ? duration.formatted(spokenLongStyle)
+            : duration.formatted(spokenShortStyle)
+    }
+
     /// The date and the time to the minute — what a photograph, a map pin and
     /// the sync status all put beside themselves.
     ///

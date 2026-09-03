@@ -259,13 +259,14 @@ final class TrailBasemapRendererTests {
         }
     }
 
-    private static func basemap(named fileName: String) -> TrailBasemap {
-        TrailBasemap(
+    private static func basemap(named fileName: String, _ image: Image) -> TrailBasemap {
+        let pixels = TrailBasemapRenderer.intendedPixelSize(for: image.variant)
+        return TrailBasemap(
             fileName: fileName,
-            variant: .square,
-            appearance: .light,
-            pixelWidth: 640,
-            pixelHeight: 640,
+            variant: image.variant,
+            appearance: image.appearance,
+            pixelWidth: pixels.width,
+            pixelHeight: pixels.height,
             visibleRect: UnitMercatorRect(bounding: trail) ?? UnitMercatorRect(
                 originX: 0,
                 originY: 0,
@@ -278,12 +279,23 @@ final class TrailBasemapRendererTests {
     /// Publishes a manifest for `hikeID` covering `coverage`, with every image
     /// it advertises actually on disk — the state the renderer's own
     /// short-circuit is entitled to trust.
+    ///
+    /// Every combination by default, because that is what "already done" means
+    /// to `refreshIfNeeded`: a manifest short of one is *not* entitled to that
+    /// trust, and `partialManifestIsRenderedAgain` seeds one deliberately to
+    /// say so.
     @discardableResult private static func seedPublishedSet(
         hikeID: UUID,
         coverage: UnitMercatorRect,
+        holding combinations: [Image] = everyImage,
         generatedAt: Date = Date(timeIntervalSince1970: 1_750_000_000)
     ) -> TrailBasemapSet {
-        let images = [basemap(named: "\(hikeID.uuidString)-seed-square-light.jpg")]
+        let images = combinations.map { image in
+            basemap(
+                named: "\(hikeID.uuidString)-seed-\(image.variant.rawValue)-\(image.appearance.rawValue).jpg",
+                image
+            )
+        }
         for image in images {
             SharedStore.writeBasemapImage(imageBytes, named: image.fileName)
         }
@@ -463,6 +475,33 @@ extension TrailBasemapRendererTests {
         #expect(SharedStore.loadBasemapSet(for: hikeID) == seeded)
         #expect(Self.Container.fileNames == Set(seeded.images.map(\.fileName)))
         #expect(SharedStore.basemapImageData(named: seeded.images[0].fileName) == Self.imageBytes)
+    }
+
+    /// The other three questions the short-circuit asks — same coverage, files
+    /// on disk, intended scale — are all asked of the manifest's *own* images,
+    /// so a manifest holding three of four answers yes to every one of them.
+    /// Without a fourth question, re-selecting the same trail returns before
+    /// rendering anything and the missing combination draws the line glyph
+    /// until the trail's geometry changes or `invalidate()` runs.
+    @Test("a manifest missing a combination is rendered again rather than trusted")
+    func partialManifestIsRenderedAgain() async throws {
+        let hikeID = UUID()
+        let coverage = try #require(UnitMercatorRect(bounding: Self.trail))
+        Self.seedPublishedSet(
+            hikeID: hikeID,
+            coverage: coverage,
+            holding: Self.everyImage.filter { $0.appearance == .light }
+        )
+        let renderer = TrailBasemapRenderer { Self.rendered(for: $0) }
+
+        await renderer.refreshIfNeeded(hikeID: hikeID, polyline: Self.trail)
+
+        let published = try #require(SharedStore.loadBasemapSet(for: hikeID))
+        #expect(
+            Set(published.images.map { Self.Image($0.variant, $0.appearance) })
+                == Set(Self.everyImage)
+        )
+        Self.expectConsistentStore(for: [hikeID], "after re-rendering a partial manifest")
     }
 
     /// The manifest is keyed by hike, so another trail's images can never be

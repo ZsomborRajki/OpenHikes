@@ -27,7 +27,6 @@ final class HikeIntentPerformTests {
             "intent-perform-\(UUID().uuidString)",
             isDirectory: true
         )
-    // periphery:ignore - as in `HikeIntentCoordinatorTests`.
     private var recorder: HikeRecorder?
 
     init() throws {
@@ -78,21 +77,46 @@ final class HikeIntentPerformTests {
         }
     }
 
-    @Test("starting before location has ever been asked does not begin a recording")
+    /// The prompt is a foreground event, so the intent asks to be continued
+    /// there before it starts anything. What can be pinned from here is the
+    /// half that does not need the system: that the intent reads the
+    /// authorization *before* touching the recorder, and so never starts a
+    /// recording behind a prompt nobody saw. Whether the hand-off succeeds is
+    /// the system's business — outside a real intent execution it does not —
+    /// and either way `start()` must not have been reached first.
+    @Test("starting before location has ever been asked defers to the foreground")
     func startIntentDefersWhenPermissionWasNeverAsked() async throws {
         source.authorization = .notDetermined
 
         try await withCoordinator {
-            // The thrown error is AppIntents' own "continue in the foreground",
-            // not a `HikeIntentFailure`, so what is asserted is the guarantee
-            // rather than the type: nothing was started behind a prompt the
-            // walker never saw.
             await #expect(throws: (any Error).self) {
                 _ = try await StartHikeRecordingIntent().perform()
             }
         }
 
         #expect(source.startCount == 0)
+        // The recorder is untouched: an intent that had already called
+        // `start()` would have left it in `.waitingForFix` behind a prompt
+        // that was never shown.
+        #expect(recorder?.phase == .idle)
+    }
+
+    /// Reduced accuracy is the *second* prompt location can put up, and the
+    /// recorder meets it inside `start()`. Reporting it as a grant is what
+    /// turned "start a hike" into "turn on Precise Location in Settings" for a
+    /// walker with the phone in their pocket.
+    @Test("starting at reduced accuracy defers to the foreground too")
+    func startIntentDefersWhenAccuracyIsReduced() async throws {
+        source.hasFullAccuracy = false
+
+        try await withCoordinator {
+            await #expect(throws: (any Error).self) {
+                _ = try await StartHikeRecordingIntent().perform()
+            }
+        }
+
+        #expect(source.startCount == 0)
+        #expect(recorder?.phase == .idle)
     }
 
     // MARK: - Harness

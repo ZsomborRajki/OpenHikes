@@ -14,7 +14,7 @@
 
 import Foundation
 
-/// Whether Core Location has been asked yet, which is the one thing that
+/// What Core Location will do to a recording started right now, which is what
 /// decides whether "start a hike" can be answered without the app on screen.
 ///
 /// A separate type from ``RecordingLocationAuthorization`` so the intents do
@@ -23,10 +23,28 @@ import Foundation
 nonisolated enum HikeIntentAuthorization: Equatable, Sendable {
     case denied
     case granted
+    /// Authorized, but at reduced accuracy — which is a *second* prompt, and
+    /// one the recorder walks into on both the start and the resume path. It
+    /// is as foreground-only as the first, so it is reported as its own answer
+    /// rather than folded into ``granted``.
+    case reducedAccuracy
     /// Nobody has been asked. The prompt is a foreground event, so an intent
-    /// that finds this has to hand the walker back to the app rather than
-    /// silently fail to start.
+    /// that finds this has to bring the app forward rather than silently fail
+    /// to start.
     case undecided
+
+    /// Whether starting or resuming from here would meet a prompt that only
+    /// exists in the foreground.
+    var needsForeground: Bool {
+        switch self {
+        case .reducedAccuracy, .undecided: true
+        // `.denied` deliberately not: nothing on screen can undo a refusal
+        // either, so bringing the app forward would buy an interruption and
+        // no prompt. The recorder's own "allow location access in Settings"
+        // is the whole answer.
+        case .denied, .granted: false
+        }
+    }
 }
 
 /// A recording as it stands right now.
@@ -38,6 +56,12 @@ nonisolated struct LiveRecordingReport: Equatable, Sendable {
     /// because "2.4 km along the Kalvarienberg path" is the answer somebody
     /// asks a phone in their pocket for.
     let trailName: String?
+    /// Whether ``trailName`` describes a match newer fixes have already
+    /// overtaken — ``RecordingStats/isCurrentTrailStale``, which the recording
+    /// screen dims the trail card for. Carried here so the sentence can hedge
+    /// the same way the screen does; a walker who stepped off the path a
+    /// minute ago must not be told flatly that they are still on it.
+    let isTrailNameStale: Bool
 }
 
 /// A hike that is finished and saved.
@@ -65,19 +89,26 @@ nonisolated extension LiveRecordingReport {
     /// `width: .wide` rather than the `.abbreviated` every screen in the app
     /// uses: this string is read aloud as often as it is displayed, and a
     /// speech synthesiser handed "2.4 km" is being asked to guess. `usage:
-    /// .road` is kept, so the reader still hears their own region's units.
+    /// .road` is kept, so the reader still hears their own region's units. The
+    /// duration beside it goes through ``HikeFormat/spokenDuration(_:)`` for
+    /// the same reason — half a wide sentence reads worse than none of one.
     var spokenSummary: String {
         let length = distance.formatted(
             .measurement(width: .wide, usage: .road)
         )
-        let clock = HikeFormat.duration(elapsed)
+        let clock = HikeFormat.spokenDuration(elapsed)
         let lead = isPaused
             ? "Your hike is paused at \(length)"
             : "You're \(length) in"
         guard let trailName, !trailName.isEmpty else {
             return "\(lead), \(clock) elapsed."
         }
-        return "\(lead) on \(trailName), \(clock) elapsed."
+        // "last on" rather than "on" for a match newer fixes have overtaken.
+        // It is the sentence's whole hedge, and it is the difference between
+        // telling somebody where they are and telling them where they were.
+        return isTrailNameStale
+            ? "\(lead), last on \(trailName), \(clock) elapsed."
+            : "\(lead) on \(trailName), \(clock) elapsed."
     }
 }
 
@@ -90,7 +121,7 @@ nonisolated extension FinishedHikeReport {
         guard let duration else {
             return "\(title): \(length) on \(day)."
         }
-        return "\(title): \(length) in \(HikeFormat.duration(duration)) on \(day)."
+        return "\(title): \(length) in \(HikeFormat.spokenDuration(duration)) on \(day)."
     }
 }
 

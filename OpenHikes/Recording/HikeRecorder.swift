@@ -130,6 +130,18 @@ final class HikeRecorder: NSObject {
     @ObservationIgnored let journalQueue = SerialAsyncQueue()
     @ObservationIgnored var journalFlushTask: Task<Void, Never>?
     @ObservationIgnored var pendingFixMergeTask: Task<Void, Never>?
+    /// The recovery pass ``init`` starts on a launch that recovers
+    /// automatically, held rather than fired and forgotten so a caller that
+    /// has to switch on ``phase`` can wait for it to settle first. `nil` on a
+    /// launch that started none — a suite, or a process with no journal.
+    ///
+    /// It has to be waited on because `.recovering` is entered
+    /// *synchronously*, whether or not there is anything to recover, and is
+    /// left only when this task finishes. Anything reading the phase in
+    /// between — an App Intent performed on a launch the system made in order
+    /// to perform it — sees a recorder that looks busy on a device with no
+    /// interrupted hike at all. See ``settleAutomaticRecovery()``.
+    @ObservationIgnored private(set) var automaticRecoveryTask: Task<Void, Never>?
     @ObservationIgnored let sharedStateQueue = SerialAsyncQueue()
     @ObservationIgnored var lastSharedSnapshotAt: Date?
     @ObservationIgnored var lastSharedSnapshotPointCount = 0
@@ -154,6 +166,17 @@ final class HikeRecorder: NSObject {
         case .recovering: true
         case .waitingForFix, .recording, .paused, .saving, .reviewing, .failed: sessionID != nil || startRequested
         }
+    }
+
+    /// Waits out the automatic recovery pass, so ``phase`` answers about the
+    /// walker's hike rather than about the launch.
+    ///
+    /// Cheap and idempotent: a finished task returns its value immediately,
+    /// and a launch that started no pass has nothing to await. Suspending here
+    /// releases the main actor, which is what lets the pass — also on the main
+    /// actor — run to completion rather than deadlock against this call.
+    func settleAutomaticRecovery() async {
+        await automaticRecoveryTask?.value
     }
 
     var canRetrySave: Bool {
@@ -262,7 +285,7 @@ final class HikeRecorder: NSObject {
         observePowerState()
         if automaticallyRecovers, journal != nil {
             phase = .recovering
-            Task { [weak self] in
+            automaticRecoveryTask = Task { [weak self] in
                 await self?.recoverOpenSession()
             }
         }

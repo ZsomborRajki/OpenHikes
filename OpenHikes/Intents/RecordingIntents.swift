@@ -7,9 +7,9 @@
 //  All four run in the background: the walker's hands are busy and the phone
 //  is in a pocket, so an intent that insisted on bringing the app to the front
 //  would be answering a different request than the one asked. The exception is
-//  the very first start on a fresh install, where Core Location has never been
-//  asked — that prompt is a foreground event and cannot be shown from here, so
-//  the intent hands the walker to the app instead of quietly failing to record.
+//  a prompt only the foreground can show — Core Location never asked, or asked
+//  and answered at reduced accuracy — where start and resume hand the walker
+//  to the app *and carry on there* rather than quietly failing to record.
 //
 
 import AppIntents
@@ -27,14 +27,15 @@ struct StartHikeRecordingIntent: AppIntent, HikeCoordinatingIntent {
     @Dependency var appCoordinator: HikeIntentCoordinator
 
     func perform() async throws -> some IntentResult & ProvidesDialog {
-        guard await coordinator.authorization != .undecided else {
-            // Not an error the walker can act on from here: the system prompt
-            // only exists in the foreground, and a recording started without
-            // it would sit in `waitingForFix` forever.
-            throw needsToContinueInForegroundError(
+        if await coordinator.authorization.needsForeground {
+            try await continueInForeground(
                 IntentDialog("OpenHikes needs your location before it can record a hike.")
             )
         }
+        // Reached in the foreground when the branch above ran, which is the
+        // whole point of it: `recorder.start()` is the only call that asks
+        // Core Location anything, and the prompt it puts up cannot be shown
+        // from the background.
         let recording = try await coordinator.startRecording()
         return .result(dialog: IntentDialog("\(Self.confirmation(for: recording))"))
     }
@@ -78,6 +79,15 @@ struct ResumeHikeRecordingIntent: AppIntent, HikeCoordinatingIntent {
     @Dependency var appCoordinator: HikeIntentCoordinator
 
     func perform() async throws -> some IntentResult & ProvidesDialog {
+        // Resuming meets the accuracy prompt on the same two lines starting
+        // does — `HikeRecorder.resume()` calls `requestTemporaryFullAccuracy()`
+        // and then fails with `.preciseLocationRequired` when it did not land
+        // — so it earns the same foreground hand-off.
+        if await coordinator.authorization.needsForeground {
+            try await continueInForeground(
+                IntentDialog("OpenHikes needs your location before it can pick your hike back up.")
+            )
+        }
         let recording = try await coordinator.resumeRecording()
         return .result(dialog: IntentDialog("\(recording.spokenSummary)"))
     }
