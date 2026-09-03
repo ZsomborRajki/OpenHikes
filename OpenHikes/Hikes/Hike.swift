@@ -301,10 +301,11 @@ extension Hike {
     /// records for repeated attempts at the same provider/depth.
     ///
     /// Deliberately does not compare ``OfflineDownloadRecord/scale``, which no
-    /// longer describes anything — see ``TileCacheKey``. Ignoring it is also
-    /// what retires records written before that change: a re-download at the
-    /// same provider and depth absorbs the old `2.0`/`3.0` record instead of
-    /// sitting beside it re-deriving keys for tiles that are no longer there.
+    /// longer describes anything — see ``TileCacheKey``. A provider and a
+    /// depth is all a record is now, which is the same rule
+    /// ``LegacyTileKeyMigration`` folds stored records by: whichever of the
+    /// two runs first, a device ends up with one record per provider and
+    /// depth rather than one per scale it happened to download at.
     func mergeOfflineDownload(_ record: OfflineDownloadRecord) {
         let matches: (OfflineDownloadRecord) -> Bool = { existing in
             existing.providerID == record.providerID

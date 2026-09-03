@@ -30,8 +30,10 @@ nonisolated struct OfflineDownloadRecord: Codable, Hashable, Sendable {
     /// `OpenHikesSchemaV2` is the live version: dropping a column from an
     /// inline `Codable` value type is a change to a persisted shape, which
     /// means freezing V2 and adding a V3 stage for a field no code consults.
-    /// Records written before the change still carry their `2.0` or `3.0`
-    /// here, and decode unchanged.
+    /// A record written before the change decodes with its `2.0` or `3.0`
+    /// intact, and keeps it until ``LegacyTileKeyMigration`` rewrites that
+    /// record at the next launch — which puts this back to zero, so nothing
+    /// on the device is left saying it predates the change.
     var scale: Double
 
     init(providerID: String, maxZoom: Int, savedTileKeys: [String] = [], scale: Double = 0) {
