@@ -44,10 +44,11 @@ extension [SwiftSetting] {
     /// `DisableOutwardActorInference`) are on as of Swift 6 and warn if named
     /// again. Without it a `nonisolated` `async` function hops to the global
     /// executor; with it the function runs on the caller's actor unless it
-    /// opts back out with `@concurrent`. The package has no `async` code
-    /// today, so enabling it changes nothing now — it means the first one
-    /// added here behaves the way the same code would in the app rather than
-    /// the opposite way.
+    /// opts back out with `@concurrent`. The package's only `async` code is
+    /// `ToggleHikeRecordingIntent.perform()` and the handler protocol behind
+    /// it, which is exactly what this setting is for: the intent is performed
+    /// in the app's process, and it runs there the way the same code written
+    /// in the app would rather than the opposite way.
     ///
     /// Deliberately *not* `defaultIsolation(MainActor.self)`, which the app
     /// does set. This package is read by the widget extension off the main

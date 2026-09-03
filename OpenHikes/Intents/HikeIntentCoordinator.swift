@@ -218,10 +218,28 @@ extension HikeIntentCoordinator: HikeRecordingControlHandling {
     /// Re-checks the recorder when the action runs rather than trusting the
     /// control's last projected value, which may have been rendered before a
     /// recording transition finished.
-    func toggleHikeRecording() async throws -> HikeRecordingControlOutcome {
+    ///
+    /// The settle comes first for the reason it does in every other
+    /// phase-reading entry point, and more so here: a Control Center tap is
+    /// the likeliest way of all to launch this process purely to perform an
+    /// intent, and the branch below is the one that reads ``phase`` *before*
+    /// delegating. Unsettled, a cold tap lands in `.recovering` and answers
+    /// "still finishing your last recording" to a walker who wanted to start
+    /// one.
+    func toggleHikeRecording(
+        canPromptForLocation: Bool
+    ) async throws -> HikeRecordingControlOutcome {
+        await settleRecorder()
         switch recorder.phase {
         case .idle, .failed:
-            guard authorization != .undecided else {
+            // `needsForeground` rather than a test against `.undecided`:
+            // reduced accuracy meets a prompt just as foreground-only as an
+            // unasked one, and starting anyway would fail with
+            // `.preciseLocationRequired` for somebody whose phone is still in
+            // their pocket. Skipped once the intent has brought the app
+            // forward, which is where `recorder.start()` can put the prompt up
+            // for real.
+            guard canPromptForLocation || !authorization.needsForeground else {
                 return .requiresForegroundAuthorization
             }
             _ = try await startRecording()
