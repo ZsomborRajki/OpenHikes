@@ -147,6 +147,25 @@ struct ElevationChartView: View, Equatable {
         }
     }
 
+    /// The area and the line, as two series rather than one interleaved loop.
+    ///
+    /// The styling is applied to each `ForEach` instead of to the marks inside
+    /// it, which is the whole reason for the split: a modifier on a mark is
+    /// evaluated per mark, so the previous spelling built a `LinearGradient` —
+    /// and the two `Color.opacity` calls behind it — once for every plotted
+    /// sample, up to ``RouteProfile/plottedSampleBudget`` of them. Applied to
+    /// the series it is built once and the fill is identical, because both
+    /// spellings paint the same gradient over the same area.
+    ///
+    /// That cost is paid on every pass of this body, and the app does not
+    /// control how often that is: going to the background, UIKit lays the
+    /// hosting view out twice for the app-switcher snapshot, and both passes
+    /// go through here. See P4 in `docs/PERFORMANCE.md`.
+    ///
+    /// Drawing order is unchanged. Swift Charts groups marks into series
+    /// before it draws, so "every area, then every line" and "each sample's
+    /// area then its line" are the same picture — and it is the one the line
+    /// has to be on top of.
     @ChartContentBuilder
     private func routeMarks(domain: ClosedRange<Double>) -> some ChartContent {
         ForEach(profile.samples) { sample in
@@ -155,22 +174,24 @@ struct ElevationChartView: View, Equatable {
                 yStart: .value("Base", domain.lowerBound),
                 yEnd: .value("Elevation", sample.elevation)
             )
-            .interpolationMethod(.catmullRom)
-            .foregroundStyle(
-                LinearGradient(
-                    colors: [tint.opacity(Self.areaGradientTopOpacity), tint.opacity(Self.areaGradientBottomOpacity)],
-                    startPoint: .top,
-                    endPoint: .bottom
-                )
+        }
+        .interpolationMethod(.catmullRom)
+        .foregroundStyle(
+            LinearGradient(
+                colors: [tint.opacity(Self.areaGradientTopOpacity), tint.opacity(Self.areaGradientBottomOpacity)],
+                startPoint: .top,
+                endPoint: .bottom
             )
+        )
+        ForEach(profile.samples) { sample in
             LineMark(
                 x: .value("Distance", sample.distanceMeters),
                 y: .value("Elevation", sample.elevation)
             )
-            .interpolationMethod(.catmullRom)
-            .foregroundStyle(tint)
-            .lineStyle(StrokeStyle(lineWidth: 2))
         }
+        .interpolationMethod(.catmullRom)
+        .foregroundStyle(tint)
+        .lineStyle(StrokeStyle(lineWidth: 2))
     }
 
     @ChartContentBuilder

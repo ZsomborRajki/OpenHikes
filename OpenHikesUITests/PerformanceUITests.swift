@@ -84,22 +84,36 @@ nonisolated final class PerformanceUITests: XCTestCase {
     /// `photo-gallery`, `recording` and `background-recording` down to the
     /// launch stall alone across the two whole-suite runs since.
     ///
-    /// What is left is not this app's rendering. `chart-scrub` and
-    /// `photo-discovery` still stall 277–384 ms going to the background, and
-    /// their event files say the same thing every time: a ~300 ms window
-    /// containing *no mark at all*, opening after the last body of the
-    /// transition and closing on the `@Query` refresh that follows the
-    /// resign-time save. Nothing this suite instruments is running in it, so a
-    /// budget of one would go red on work no assertion here can attribute —
-    /// which is the shape of test everybody learns to re-run rather than read.
+    /// What is left is not this app's rendering either, and it now has an owner:
+    /// UIKit lays the hosting view out twice for the app-switcher snapshot
+    /// after the app's own resign handler has returned, which is P4 in
+    /// `docs/PERFORMANCE.md`. The two whole-suite runs since read the launch
+    /// stall alone in all nine scenarios — but a stall is only recorded when
+    /// the watchdog's ping lands inside the blocked window, and at 226–272 ms
+    /// `chart-scrub` and `photo-discovery` are under the ~350 ms the loop takes
+    /// to come round. A budget of one would therefore be green on a good run
+    /// and red on an unlucky one, which is the shape of test everybody learns
+    /// to re-run rather than read.
     ///
-    /// So this stays the tripwire it can honestly be: it fails on a *second*
-    /// stall inside the window it reads, which no run has produced. That
-    /// window ends at the first backgrounding, since the tally is read there;
-    /// `chart-scrub` has stalled in the second one too, and this cannot see
-    /// it. Lower this to ``launchStalls`` when that gap has an owner, rather
-    /// than raising it when a new scenario trips.
+    /// So this stays the tripwire it can honestly be, and
+    /// ``sceneTurnCeilingMilliseconds`` is what actually holds that window:
+    /// timing the turn does not depend on catching it in the act. Lower this to
+    /// ``launchStalls`` when the turn is short enough that a stall in one is a
+    /// real regression, rather than raising it when a new scenario trips.
     private static let stallBudget: Double = launchStalls + 1
+
+    /// The ceiling on the longest main-thread turn a scene-phase change opened,
+    /// checked in ``finish(in:)`` — see ``assertSceneTurn(atMost:in:scenario:)``
+    /// for why the suite needs a duration here as well as a stall count.
+    ///
+    /// The whole suite reads 115–272 ms today, and the spread is the finding
+    /// rather than noise: it is a bare map at one end and the elevation chart at
+    /// the other, with UIKit laying the hosting view out twice for the
+    /// app-switcher snapshot in both. One constant rather than one per scenario,
+    /// for the same reason ``stallBudget`` is one — a per-scenario number would
+    /// have to be re-measured on every machine that runs this, whereas a
+    /// tripwire only has to sit above all of them. Lower it as P4 comes down.
+    private static let sceneTurnCeilingMilliseconds: Double = 450
 
     // MARK: - Idle
 
@@ -643,14 +657,16 @@ extension PerformanceUITests {
     ///
     /// It is also a phase in its own right, and for a while it was the only
     /// part of a run nothing looked at. Going to the background is the window
-    /// iOS gives an app to reach a suspendable state, and `photo-discovery`
-    /// spends 216–372 ms of it on the main thread — in all four runs measured
-    /// — redrawing a sheet nobody can see. All of that landed after the last
-    /// measured phase had closed, so every budget in the scenario counted
-    /// zero. So the transition is bracketed like any other, and the whole
-    /// run's stall tally is read at the end of it. The report now names
-    /// `finish` as the phase a stall fell in, where it used to say "outside a
-    /// measured phase" and stop there.
+    /// iOS gives an app to reach a suspendable state, and it is the most
+    /// expensive transition the app makes: 115–272 ms of main thread, most of
+    /// it in the two app-switcher snapshots UIKit takes once the app's own
+    /// handler has returned. All of that used to land after the last measured
+    /// phase had closed, so every budget in the scenario counted zero. So the
+    /// transition is bracketed like any other, the whole run's stall tally is
+    /// read at the end of it, and ``assertSceneTurn(atMost:in:scenario:)``
+    /// bounds the turn itself. The report now names `finish` as the phase a
+    /// stall fell in, where it used to say "outside a measured phase" and stop
+    /// there.
     ///
     /// Reading the counters brings the app back to the front, necessarily: the
     /// probe is an accessibility element and a backgrounded process answers no
@@ -669,6 +685,10 @@ extension PerformanceUITests {
         let delta = PerformanceCounterDelta(before: before, after: after)
         report(delta, phase: "finish", perEvent: nil)
         assertStalls(atMost: Self.stallBudget, in: after, scenario: scenario)
+        // Read here rather than per phase because the transition worth timing is
+        // the one this method just performed: backgrounding is where the turn is
+        // longest, and it is the reading `assertStalls` above can only sample.
+        assertSceneTurn(atMost: Self.sceneTurnCeilingMilliseconds, in: after, scenario: scenario)
 
         XCUIDevice.shared.press(.home)
         Thread.sleep(forTimeInterval: Self.flushSeconds)
