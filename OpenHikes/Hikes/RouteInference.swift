@@ -4,6 +4,10 @@
 //
 //  Which parts of a saved route were measured and which were reasoned about.
 //
+//  Also which parts of it the walker chose not to record at all: a pause is
+//  neither a measurement nor an inference, and ``RouteBoundary`` is what the
+//  map and the elevation profile read to say so.
+//
 //  A recording that loses its fixes still has to produce a continuous line, so
 //  something gets drawn across the stretch nobody observed — a mapped trail
 //  ``TrailMatcher`` bridged the gap with, or a straight line where it found
@@ -64,5 +68,32 @@ nonisolated extension [RouteCoordinate] {
     /// for the callers that only need to decide whether to say anything.
     var containsInferredGeometry: Bool {
         dropFirst().contains(where: \.isInferred)
+    }
+
+    /// The stretches the recording was paused across, as runs of coordinates
+    /// ready to hand to `MKPolyline`.
+    ///
+    /// One per boundary rather than per run: ``RouteBoundary`` marks the leg
+    /// arriving at a point, and a resume produces exactly one such leg — the
+    /// straight line from the last fix before the pause to the first fix
+    /// after it. The predecessor is included for the same reason
+    /// ``inferredSegments`` includes it, so the drawn stretch meets the rest
+    /// of the line rather than floating beside it.
+    ///
+    /// Deliberately separate from ``inferredSegments``: the two say different
+    /// things — "nobody watched this" against "nobody was asked to" — and a
+    /// route can carry both. See ``RouteBoundary``.
+    var pausedSegments: [[CLLocationCoordinate2D]] {
+        guard count > 1 else { return [] }
+        return (1..<count).compactMap { index in
+            guard self[index].isPauseBoundary else { return nil }
+            return [self[index - 1].clCoordinate, self[index].clCoordinate]
+        }
+    }
+
+    /// Whether the recording was ever paused mid-walk. The first point is
+    /// excluded because nothing precedes it to have been paused across.
+    var containsPause: Bool {
+        dropFirst().contains(where: \.isPauseBoundary)
     }
 }

@@ -102,6 +102,29 @@ nonisolated enum RouteProvenance: String, Codable, Hashable, Sendable {
     case inferred = "inferred"
 }
 
+/// Why a track point does not continue the stretch before it.
+///
+/// A pause is the walker's own decision to stop recording, so the ground
+/// between the last fix before it and the first fix after it is not a lost
+/// signal — nothing was *meant* to be observed there. That is why it is not
+/// ``RouteProvenance/inferred``: the app has not reasoned about where the
+/// walker went, it has been told not to ask. ``TrailMatcher/isGap(from:to:)``
+/// has always drawn that distinction live, refusing to bridge across a
+/// resume; this is the same fact surviving into the saved route, where the
+/// map, the elevation profile and the GPX export can each say it.
+///
+/// Like ``RouteProvenance``, it describes the stretch *leading to* the point
+/// that carries it — the pause ended when this fix arrived — which is what
+/// lets a boundary survive the join between two matched legs.
+///
+/// `nil` is the overwhelming majority of points, and the only thing a route
+/// saved before this existed can decode to. A hike recorded through a pause
+/// under an earlier build therefore reads as one continuous walk, which is
+/// what it has always claimed to be.
+nonisolated enum RouteBoundary: String, Codable, Hashable, Sendable {
+    case paused = "paused"
+}
+
 /// A single Codable track point. Stored inline by SwiftData as part of ``Hike/route``.
 nonisolated struct RouteCoordinate: Codable, Hashable, Sendable {
     var latitude: Double
@@ -113,6 +136,9 @@ nonisolated struct RouteCoordinate: Codable, Hashable, Sendable {
     var motion: RouteMotion?
     /// `nil` for a measured point — see ``RouteProvenance``.
     var provenance: RouteProvenance?
+    /// `nil` for a point that simply continues the one before it — see
+    /// ``RouteBoundary``.
+    var boundary: RouteBoundary?
 
     init(
         latitude: Double,
@@ -120,7 +146,8 @@ nonisolated struct RouteCoordinate: Codable, Hashable, Sendable {
         elevation: Double? = nil,
         timestamp: Date? = nil,
         motion: RouteMotion? = nil,
-        provenance: RouteProvenance? = nil
+        provenance: RouteProvenance? = nil,
+        boundary: RouteBoundary? = nil
     ) {
         self.latitude = latitude
         self.longitude = longitude
@@ -128,6 +155,7 @@ nonisolated struct RouteCoordinate: Codable, Hashable, Sendable {
         self.timestamp = timestamp
         self.motion = motion
         self.provenance = provenance
+        self.boundary = boundary
     }
 
     init(_ coordinate: CLLocationCoordinate2D) {
@@ -135,6 +163,7 @@ nonisolated struct RouteCoordinate: Codable, Hashable, Sendable {
         longitude = coordinate.longitude
         motion = nil
         provenance = nil
+        boundary = nil
     }
 
     var clCoordinate: CLLocationCoordinate2D {
@@ -143,6 +172,10 @@ nonisolated struct RouteCoordinate: Codable, Hashable, Sendable {
 
     /// Whether this point's position was reasoned about rather than measured.
     var isInferred: Bool { provenance == .inferred }
+
+    /// Whether the recording was paused over the stretch arriving at this
+    /// point.
+    var isPauseBoundary: Bool { boundary == .paused }
 }
 
 nonisolated enum RouteGeometry {

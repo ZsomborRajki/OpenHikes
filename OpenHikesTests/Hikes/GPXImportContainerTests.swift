@@ -74,24 +74,35 @@ struct GPXImportContainerTests {
 
     /// The point that opens the second segment arrives across ground the file
     /// never recorded, and the route has to say so. Otherwise the map draws a
-    /// solid line over a stretch nobody walked and the statistics count it as
-    /// measured — which is exactly the "teleport leg" a paused recording used
-    /// to produce silently.
-    @Test("the leg joining two segments is marked as unobserved, not measured")
-    func segmentBoundaryIsInferred() throws {
+    /// solid line over a stretch nobody walked and the moving clock counts it
+    /// as walking — which is exactly the "teleport leg" a paused recording
+    /// used to produce silently.
+    ///
+    /// Read as a pause rather than as an inference: `<trkseg>` is what a
+    /// pause is written as, here and by ``GPXExport``.
+    @Test("the leg joining two segments is marked as a pause")
+    func segmentBoundaryIsAPause() throws {
         let track = try GPXImport.load(from: try gpxFile(Self.pausedTrack))
-        #expect(track.route.map(\.isInferred) == [false, false, true])
-        // The gap is ~1 km against ~111 m of walking, so a total that counted
-        // it as measured would be mostly invention.
-        #expect(track.route.inferredDistanceMeters > 900)
-        #expect(track.route.inferredSegments.count == 1)
+        #expect(track.route.map(\.isPauseBoundary) == [false, false, true])
+        // Nothing was reasoned about here — the file said the recording
+        // stopped — so the route claims no inference either.
+        #expect(!track.route.containsInferredGeometry)
+        let segments = track.route.pausedSegments
+        #expect(segments.count == 1)
+        let segment = try #require(segments.first)
+        // The gap is ~1 km against ~111 m of walking, so a line drawn over it
+        // without saying anything would be mostly invention.
+        #expect(
+            RouteGeometry.distanceMeters(from: segment[0], to: segment[1]) > 900
+        )
     }
 
     /// Nothing is marked when the file never split the track: an ordinary
-    /// single-segment recording is measured end to end.
-    @Test("an unbroken track carries no inferred legs")
-    func singleSegmentHasNoInferredLegs() throws {
+    /// single-segment recording is one uninterrupted walk.
+    @Test("an unbroken track carries no boundaries")
+    func singleSegmentHasNoBoundaries() throws {
         let track = try GPXImport.load(from: try gpxFile(Self.unbrokenTrack))
+        #expect(!track.route.containsPause)
         #expect(!track.route.containsInferredGeometry)
     }
 
@@ -113,7 +124,7 @@ struct GPXImportContainerTests {
         """
         let track = try GPXImport.load(from: try gpxFile(xml))
         #expect(track.points.count == 2)
-        #expect(!track.route.containsInferredGeometry)
+        #expect(!track.route.containsPause)
     }
 
     /// Two `<trk>` elements are two walks, and a hike holds one route. Joining

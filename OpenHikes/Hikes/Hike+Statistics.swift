@@ -197,6 +197,17 @@ nonisolated struct MovingTimeAccumulator: Sendable {
     /// makes that last interval the 100 seconds it really is, and keeps the
     /// window in the order ``trim(newest:)`` assumes it is in.
     mutating func record(_ point: RouteCoordinate) {
+        // A pause is not a stop this rule has to judge — the walker declared
+        // it. Neither the span it opened nor the displacement across it says
+        // anything about walking, so the leg is dropped whole and the window
+        // starts again at the resume. Without this a walker who paused at the
+        // trailhead, drove to the next one and resumed is credited with the
+        // whole drive as moving time, because the rule sees only a long span
+        // and a large displacement and calls that walking.
+        if point.isPauseBoundary {
+            resetSegment()
+            return
+        }
         guard let timestamp = point.timestamp else { return }
         let elapsed = previous.map { timestamp.timeIntervalSince($0.timestamp) }
         guard elapsed.map({ $0 > 0 }) ?? true else { return }
@@ -206,6 +217,17 @@ nonisolated struct MovingTimeAccumulator: Sendable {
         trim(newest: timestamp)
         guard let elapsed, isMoving(at: sample) else { return }
         seconds += elapsed
+    }
+
+    /// Forgets what came before, keeping what has already been counted.
+    ///
+    /// Every measurement here is made *between* two samples, so a boundary the
+    /// clock must not cross is expressed by dropping the reference and the
+    /// window rather than by starting a new accumulator: the seconds already
+    /// booked belong to the same walk and are still owed to the walker.
+    mutating func resetSegment() {
+        window.removeAll(keepingCapacity: true)
+        previous = nil
     }
 
     private mutating func trim(newest: Date) {
@@ -362,7 +384,10 @@ nonisolated struct HikeRouteStatistics: Sendable {
             to point: RouteCoordinate,
             segmentMeters meters: Double
         ) {
-            guard let previousPoint,
+            // A pause leg has a length and a span but no walk between them, so
+            // dividing one by the other measures the walker's lunch break.
+            guard !point.isPauseBoundary,
+                  let previousPoint,
                   let previousTimestamp = previousPoint.timestamp,
                   let timestamp = point.timestamp else { return }
             let elapsed = timestamp.timeIntervalSince(previousTimestamp)

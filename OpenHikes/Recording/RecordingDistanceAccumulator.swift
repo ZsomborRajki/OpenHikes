@@ -132,8 +132,14 @@ nonisolated struct RecordingDistanceAccumulator: Sendable {
         // measure across the gap between consecutive points, so carrying
         // either one over a pause would book the whole pause — an hour at
         // lunch, on a walk that recorded none of it — as walking.
+        //
+        // The moving clock resets itself: the point below carries the pause
+        // through as a ``RouteBoundary``, and ``MovingTimeAccumulator/record(_:)``
+        // drops the leg and its window there. Replacing the accumulator
+        // outright — which is what this used to do — also discarded the
+        // seconds already walked, so the live readout fell back to zero the
+        // moment a walker resumed.
         if point.flags.contains(.resumed) {
-            movingTime = MovingTimeAccumulator()
             recentWindow.removeAll(keepingCapacity: true)
         }
         let distance = accumulate(point)
