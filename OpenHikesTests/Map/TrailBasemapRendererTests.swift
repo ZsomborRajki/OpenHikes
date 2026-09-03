@@ -9,19 +9,12 @@
 //  contract worth pinning here is not "the picture is pretty", it is that the
 //  *store* is never left in a shape the widget cannot survive.
 //
-//  Three limits shape what is asserted below, and they are worth stating
-//  rather than discovering.
+//  Two limits shape what is asserted below, and they are worth stating rather
+//  than discovering.
 //
-//  `MKMapSnapshotter` has no injectable seam. The renderer builds one
-//  directly, so a render is a live network round-trip and its result is not
-//  the test's to decide. Everything here is therefore written to hold
-//  identically whether or not a snapshot lands — the repository's rule that
-//  no test depends on a real connection is what rules out asserting on
-//  rendered output. So the render pass's interior is uncovered, not covered
-//  quietly: the framed region, the measured `visibleRect`, the JPEG bytes and
-//  the pixel dimensions recorded in the manifest are all asserted by nothing.
-//  Reaching them needs a snapshotter the caller supplies, which is a change to
-//  the renderer rather than to this file.
+//  `MKMapSnapshotter` remains the production boundary. Tests inject its result
+//  at that boundary, so no assertion or completion time depends on a network
+//  service. The separate encoding tests still exercise the real JPEG path.
 //
 //  Ordering is not a promise an actor makes. `TrailBasemapRenderer`
 //  serializes, it does not queue: a pass suspends at every snapshot, and
@@ -38,6 +31,7 @@ import CoreGraphics
 import Foundation
 @testable import OpenHikes
 import OpenHikesShared
+import Synchronization
 import Testing
 import UIKit
 
@@ -68,6 +62,22 @@ final class TrailBasemapRendererTests {
     /// suite only needs a file of a known length to notice it surviving or
     /// disappearing.
     nonisolated static let imageBytes = Data("not-a-jpeg".utf8)
+
+    nonisolated static func rendered(
+        for input: TrailBasemapRenderer.RenderInput
+    ) -> TrailBasemapRenderer.Rendered {
+        let pixels = TrailBasemapRenderer.intendedPixelSize(for: input.variant)
+        return TrailBasemapRenderer.Rendered(
+            data: Data("\(input.variant.rawValue)-\(input.appearance.rawValue)".utf8),
+            pixelWidth: pixels.width,
+            pixelHeight: pixels.height,
+            visibleRect: input.unitRect
+        )
+    }
+
+    nonisolated static func failingRenderer() -> TrailBasemapRenderer {
+        TrailBasemapRenderer { _ in nil }
+    }
 
     /// One name per shape rather than coordinates written inline in
     /// ``degenerateShapes``: a literal nested inside a tuple is no longer part
@@ -352,6 +362,72 @@ extension TrailBasemapRendererTests {
     }
 }
 
+// MARK: - Deterministic render outcomes
+
+extension TrailBasemapRendererTests {
+    @Test("a successful render publishes every variant with controlled metadata")
+    func successfulRenderPublishesControlledMetadata() async throws {
+        let hikeID = UUID()
+        let coverage = try #require(UnitMercatorRect(bounding: Self.trail))
+        let renderer = TrailBasemapRenderer { input in Self.rendered(for: input) }
+
+        await renderer.refreshIfNeeded(hikeID: hikeID, polyline: Self.trail)
+
+        let published = try #require(SharedStore.loadBasemapSet(for: hikeID))
+        #expect(published.coverage == coverage)
+        #expect(published.images.count == 4)
+        for image in published.images {
+            let expectedRect = coverage.framed(toAspectRatio: image.variant.aspectRatio)
+            let expectedPixels = TrailBasemapRenderer.intendedPixelSize(for: image.variant)
+            #expect(image.visibleRect == expectedRect)
+            #expect(image.pixelWidth == expectedPixels.width)
+            #expect(image.pixelHeight == expectedPixels.height)
+            #expect(
+                SharedStore.basemapImageData(named: image.fileName)
+                    == Data("\(image.variant.rawValue)-\(image.appearance.rawValue)".utf8)
+            )
+        }
+        Self.expectConsistentStore(for: [hikeID], "after a successful render")
+    }
+
+    @Test("forced snapshot failures return without replacing the previous set")
+    func failedRenderLeavesThePreviousSetIntact() async throws {
+        let previousHike = UUID()
+        let seeded = Self.seedPublishedSet(
+            hikeID: previousHike,
+            coverage: try #require(UnitMercatorRect(bounding: Self.trail))
+        )
+        let subject = UUID()
+
+        await Self.failingRenderer().refreshIfNeeded(hikeID: subject, polyline: Self.trail)
+
+        #expect(SharedStore.loadBasemapSet(for: previousHike) == seeded)
+        #expect(SharedStore.loadBasemapSet(for: subject) == nil)
+        #expect(Self.Container.fileNames == Set(seeded.images.map(\.fileName)))
+    }
+
+    @Test("partial success publishes only complete render results")
+    func partialSuccessPublishesOnlySuccessfulImages() async throws {
+        let previousHike = UUID()
+        Self.seedPublishedSet(
+            hikeID: previousHike,
+            coverage: try #require(UnitMercatorRect(bounding: Self.trail))
+        )
+        let subject = UUID()
+        let renderer = TrailBasemapRenderer { input in
+            input.appearance == .light ? Self.rendered(for: input) : nil
+        }
+
+        await renderer.refreshIfNeeded(hikeID: subject, polyline: Self.trail)
+
+        let published = try #require(SharedStore.loadBasemapSet(for: subject))
+        #expect(published.images.count == TrailBasemapVariant.allCases.count)
+        #expect(published.images.allSatisfy { $0.appearance == .light })
+        #expect(SharedStore.loadBasemapSet(for: previousHike) == nil)
+        Self.expectConsistentStore(for: [previousHike, subject], "after partial success")
+    }
+}
+
 // MARK: - Geometry that has no business being a map
 
 extension TrailBasemapRendererTests {
@@ -369,7 +445,7 @@ extension TrailBasemapRendererTests {
         shape: (name: String, polyline: [SharedTrailSnapshot.CodableCoordinate])
     ) async {
         let hikeID = UUID()
-        await TrailBasemapRenderer().refreshIfNeeded(hikeID: hikeID, polyline: shape.polyline)
+        await Self.failingRenderer().refreshIfNeeded(hikeID: hikeID, polyline: shape.polyline)
 
         Self.expectConsistentStore(for: [hikeID], Comment(rawValue: shape.name))
     }
@@ -397,7 +473,7 @@ extension TrailBasemapRendererTests {
         )
         let subject = UUID()
 
-        await TrailBasemapRenderer().refreshIfNeeded(hikeID: subject, polyline: shape.polyline)
+        await Self.failingRenderer().refreshIfNeeded(hikeID: subject, polyline: shape.polyline)
 
         Self.expectConsistentStore(for: [neighbour, subject], Comment(rawValue: shape.name))
 
@@ -419,13 +495,10 @@ extension TrailBasemapRendererTests {
     /// half of it: that what the pass would render is the trail rather than
     /// the ocean it sits in.
     ///
-    /// Asserted on the region instead of on the image because the image needs
-    /// a network round-trip this suite is not allowed to take. The region is
-    /// decided before any of that, from the same two calls
-    /// `refreshIfNeeded(hikeID:polyline:)` makes — and it is the whole of what
-    /// getting this wrong costs: `MKMapSnapshotter` asked for a rect spanning
-    /// nearly the entire world, and a widget drawing a 1 km walk across two
-    /// pixels of the Pacific.
+    /// Asserted on the region because this is the bounding and framing
+    /// contract rather than MapKit's raster output. Getting it wrong asks
+    /// `MKMapSnapshotter` for nearly the entire world and leaves the widget
+    /// drawing a 1 km walk across two pixels of the Pacific.
     @Test("a trail across the antimeridian is framed at walking scale")
     func antimeridianCoverageStaysTight() throws {
         let coverage = try #require(UnitMercatorRect(bounding: Self.antimeridian))
@@ -452,48 +525,49 @@ extension TrailBasemapRendererTests {
 // MARK: - Overlap
 
 extension TrailBasemapRendererTests {
-    /// A user flicking through a list changes the selection faster than four
-    /// network snapshots complete, so passes overlap by design. The renderer
-    /// promises the store survives that, not that a particular pass wins:
-    /// each one suspends at every snapshot, and an actor gives mutual
-    /// exclusion but no ordering across those suspensions. Asserting a winner
-    /// here would be asserting a scheduling accident.
-    @Test("overlapping refreshes never leave the store half-written")
-    func overlappingRefreshesLeaveAConsistentStore() async {
-        let renderer = TrailBasemapRenderer()
-        let hikeIDs = (0..<4).map { _ in UUID() }
-
-        await withTaskGroup(of: Void.self) { group in
-            for (offset, hikeID) in hikeIDs.enumerated() {
-                group.addTask {
-                    await renderer.refreshIfNeeded(
-                        hikeID: hikeID,
-                        polyline: Self.trail.map { point in
-                            .init(
-                                latitude: point.latitude + Double(offset) / 100,
-                                longitude: point.longitude
-                            )
-                        }
-                    )
-                }
-            }
-            group.addTask { await renderer.invalidate() }
+    @Test("a superseded render cannot publish after the newer render")
+    func supersededRenderCannotPublish() async throws {
+        let olderHike = UUID()
+        let newerHike = UUID()
+        let newerTrail = Self.trail.map { point in
+            SharedTrailSnapshot.CodableCoordinate(
+                latitude: point.latitude + 0.01,
+                longitude: point.longitude
+            )
         }
+        let rendererSlot = Mutex<TrailBasemapRenderer?>(nil)
+        let isFirstRender = Mutex(true)
+        let renderer = TrailBasemapRenderer { input in
+            let shouldSupersede = isFirstRender.withLock { isFirst in
+                defer { isFirst = false }
+                return isFirst
+            }
+            if shouldSupersede, let renderer = rendererSlot.withLock({ $0 }) {
+                await renderer.refreshIfNeeded(hikeID: newerHike, polyline: newerTrail)
+            }
+            return Self.rendered(for: input)
+        }
+        rendererSlot.withLock { $0 = renderer }
 
-        Self.expectConsistentStore(for: hikeIDs, "after an interrupted burst")
+        await renderer.refreshIfNeeded(hikeID: olderHike, polyline: Self.trail)
+
+        let published = try #require(SharedStore.loadBasemapSet(for: newerHike))
+        #expect(published.coverage == UnitMercatorRect(bounding: newerTrail))
+        #expect(SharedStore.loadBasemapSet(for: olderHike) == nil)
+        Self.expectConsistentStore(for: [olderHike, newerHike], "after overlapping renders")
     }
 
-    /// The deselect path in `BackgroundTrailTracker`: a render finishes, and
-    /// the trail it was for is cleared straight afterwards. Awaiting the
-    /// render first is what makes this the sequential case rather than the
-    /// racing one above — here the store really must end up empty.
-    @Test("a completed render is still dropped by a later invalidate")
-    func aCompletedRenderIsStillDroppedByInvalidate() async {
-        let renderer = TrailBasemapRenderer()
+    @Test("invalidation discards a render suspended at the snapshot boundary")
+    func invalidationDiscardsSuspendedRender() async {
         let hikeID = UUID()
+        let rendererSlot = Mutex<TrailBasemapRenderer?>(nil)
+        let renderer = TrailBasemapRenderer { input in
+            await rendererSlot.withLock({ $0 })?.invalidate()
+            return Self.rendered(for: input)
+        }
+        rendererSlot.withLock { $0 = renderer }
 
         await renderer.refreshIfNeeded(hikeID: hikeID, polyline: Self.trail)
-        await renderer.invalidate()
 
         #expect(SharedStore.loadBasemapSet(for: hikeID) == nil)
         #expect(Self.Container.fileNames.isEmpty)
