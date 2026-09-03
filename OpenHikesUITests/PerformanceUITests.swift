@@ -688,6 +688,14 @@ extension PerformanceUITests {
         // Read here rather than per phase because the transition worth timing is
         // the one this method just performed: backgrounding is where the turn is
         // longest, and it is the reading `assertStalls` above can only sample.
+        //
+        // Proved present before it is bounded, because a ceiling on a missing
+        // counter is not a budget: an absent name reads as a maximum of zero,
+        // so a renamed span or one whose end never runs would leave every
+        // scenario passing this by measuring nothing at all. Every phase change
+        // opens a turn — the redundant ones included — so the backgrounding
+        // this method just performed guarantees at least one.
+        assertAtLeast(1, of: "ScenePhaseTurn", in: delta, phase: "finish")
         assertSceneTurn(atMost: Self.sceneTurnCeilingMilliseconds, in: after, scenario: scenario)
 
         XCUIDevice.shared.press(.home)
