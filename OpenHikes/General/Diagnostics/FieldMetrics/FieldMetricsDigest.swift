@@ -229,7 +229,6 @@ nonisolated struct SignpostDigest: Codable, Sendable, Equatable, Identifiable {
     var cpuSeconds: Double?
     var averageMemoryBytes: Double?
     var logicalWriteBytes: Double?
-    var hitchTimeRatio: Double?
 
     var id: String { "\(category)/\(name)" }
 
@@ -240,8 +239,7 @@ nonisolated struct SignpostDigest: Codable, Sendable, Equatable, Identifiable {
         duration: HistogramSummary? = nil,
         cpuSeconds: Double? = nil,
         averageMemoryBytes: Double? = nil,
-        logicalWriteBytes: Double? = nil,
-        hitchTimeRatio: Double? = nil
+        logicalWriteBytes: Double? = nil
     ) {
         self.name = name
         self.category = category
@@ -250,7 +248,6 @@ nonisolated struct SignpostDigest: Codable, Sendable, Equatable, Identifiable {
         self.cpuSeconds = cpuSeconds
         self.averageMemoryBytes = averageMemoryBytes
         self.logicalWriteBytes = logicalWriteBytes
-        self.hitchTimeRatio = hitchTimeRatio
     }
 
     /// CPU seconds per occurrence — the comparable figure across periods, since

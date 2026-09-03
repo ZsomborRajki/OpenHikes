@@ -35,7 +35,7 @@
 //  than about the feature it names". This is that table, without the warning,
 //  from a phone in somebody's pocket.
 //
-//  Two caveats it is cheaper to know than to rediscover:
+//  Three caveats it is cheaper to know than to rediscover:
 //
 //  * A span that is still open when MetricKit closes its 24-hour period is not
 //    reported. Every span here is comfortably shorter than a day, but a
@@ -44,6 +44,14 @@
 //    `os_signpost` — visible in Instruments — but carries "NO_METRICS" instead
 //    of a metrics snapshot. Nothing here can be verified anywhere but on a
 //    device.
+//  * `MXSignpostIntervalData` has a fourth nullable column,
+//    `cumulativeHitchTimeRatio`, and it is deliberately not read. Its header
+//    says it aggregates over the *`MXSignpostAnimation`* intervals, where the
+//    three above all say `MXSignpost`; `begin` emits plain `mxSignpost`, so
+//    the ratio is always nil for these spans. Emitting animation intervals
+//    instead would populate it, but none of the four spans is an animation —
+//    a half-hour recording least of all — so the column stays off
+//    `SignpostDigest` rather than being decoded with nothing to read it.
 //
 //  Unlike the rest of `Diagnostics/`, this is *not* `#if DEBUG`: a signpost
 //  compiled out of the shipping build produces no field telemetry, which is

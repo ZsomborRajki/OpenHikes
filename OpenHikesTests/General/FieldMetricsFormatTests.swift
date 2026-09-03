@@ -85,8 +85,7 @@ nonisolated struct FieldMetricsFormatTests {
             duration: duration,
             cpuSeconds: 0.030,
             averageMemoryBytes: 4_194_304,
-            logicalWriteBytes: 1_048_576,
-            hitchTimeRatio: 0.0021
+            logicalWriteBytes: 1_048_576
         )
         let expected = [
             "2×",
@@ -94,7 +93,6 @@ nonisolated struct FieldMetricsFormatTests {
             "\(FieldMetricsFormat.duration(0.015)) CPU each",
             "\(FieldMetricsFormat.bytes(1_048_576)) written",
             "\(FieldMetricsFormat.bytes(4_194_304)) average",
-            "\(FieldMetricsFormat.ratio(0.0021)) hitch ratio",
         ].joined(separator: " · ")
 
         #expect(FieldMetricsFormat.signpostValue(signpost) == expected)

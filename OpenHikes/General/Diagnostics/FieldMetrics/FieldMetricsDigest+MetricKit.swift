@@ -95,8 +95,7 @@ nonisolated extension SignpostDigest {
             },
             cpuSeconds: interval?.cumulativeCPUTime?.seconds,
             averageMemoryBytes: interval?.averageMemory?.averageMeasurement.bytes,
-            logicalWriteBytes: interval?.cumulativeLogicalWrites?.bytes,
-            hitchTimeRatio: interval?.cumulativeHitchTimeRatio?.ratio
+            logicalWriteBytes: interval?.cumulativeLogicalWrites?.bytes
         )
     }
 }
