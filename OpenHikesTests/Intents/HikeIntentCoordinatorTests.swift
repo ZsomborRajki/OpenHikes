@@ -17,6 +17,7 @@
 import CoreLocation
 import Foundation
 @testable import OpenHikes
+import OpenHikesShared
 import SwiftData
 import Testing
 
@@ -217,6 +218,34 @@ final class HikeIntentCoordinatorTests {
         await #expect(throws: HikeIntentFailure.noActiveRecording) {
             try await coordinator.stopRecording()
         }
+    }
+
+    @Test("the control action starts and then stops the recording")
+    func controlTogglesTheRecording() async throws {
+        let coordinator = makeCoordinator()
+
+        let startOutcome = try await coordinator.toggleHikeRecording()
+        #expect(startOutcome == .completed)
+        #expect(source.startCount == 1)
+        walk()
+
+        let stopOutcome = try await coordinator.toggleHikeRecording()
+        #expect(stopOutcome == .completed)
+        await #expect(throws: HikeIntentFailure.noActiveRecording) {
+            try await coordinator.currentRecording()
+        }
+        #expect(try coordinator.lastFinishedHike().distance.value > 0)
+    }
+
+    @Test("the control opens the app for an unasked location permission")
+    func controlDefersAnUnaskedPermission() async throws {
+        source.authorization = .notDetermined
+        let coordinator = makeCoordinator()
+
+        let outcome = try await coordinator.toggleHikeRecording()
+
+        #expect(outcome == .requiresForegroundAuthorization)
+        #expect(source.startCount == 0)
     }
 
     // MARK: - Reporting on a live recording

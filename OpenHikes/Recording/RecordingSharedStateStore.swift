@@ -33,6 +33,7 @@ actor AppGroupRecordingSharedStateStore: RecordingSharedStateStoring {
         try SharedStore.saveRecording(snapshot)
         if reloadWidget {
             WidgetCenter.shared.reloadTimelines(ofKind: TrailWidgetKind.id)
+            ControlCenter.shared.reloadControls(ofKind: HikeRecordingControlKind.id)
         }
     }
 
@@ -42,6 +43,7 @@ actor AppGroupRecordingSharedStateStore: RecordingSharedStateStoring {
         )
         try SharedStore.clearRecording(sessionID: sessionID)
         WidgetCenter.shared.reloadTimelines(ofKind: TrailWidgetKind.id)
+        ControlCenter.shared.reloadControls(ofKind: HikeRecordingControlKind.id)
     }
 
     func pendingFixes(

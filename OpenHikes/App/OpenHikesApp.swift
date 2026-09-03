@@ -6,6 +6,7 @@
 //
 
 import AppIntents
+import OpenHikesShared
 import SwiftData
 import SwiftUI
 
@@ -79,6 +80,8 @@ struct OpenHikesApp: App {
                 container: appModel.container
             )
             AppDependencyManager.shared.add(dependency: coordinator)
+            let recordingControl: any HikeRecordingControlHandling = coordinator
+            AppDependencyManager.shared.add(dependency: recordingControl)
         }
     }
 
