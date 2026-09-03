@@ -57,6 +57,23 @@ actor TrailBasemapRenderer {
         qos: .utility
     )
 
+    struct RenderInput: Sendable {
+        let unitRect: UnitMercatorRect
+        let variant: TrailBasemapVariant
+        let appearance: TrailBasemapAppearance
+    }
+
+    struct Rendered: Sendable {
+        let data: Data
+        let pixelWidth: Int
+        let pixelHeight: Int
+        let visibleRect: UnitMercatorRect
+    }
+
+    typealias Render = @Sendable (RenderInput) async -> Rendered?
+
+    private let render: Render
+
     private struct RenderRequest: Equatable {
         let hikeID: UUID
         let coverage: UnitMercatorRect
@@ -75,6 +92,10 @@ actor TrailBasemapRenderer {
     /// drops its results instead of resurrecting a trail the user just
     /// cleared.
     private var generation = 0
+
+    init(render: Render? = nil) {
+        self.render = render ?? TrailBasemapRenderer.renderWithMapKit
+    }
 
     /// Whether this pass is still the one whose results are wanted.
     private func stillCurrent(_ request: RenderRequest, since generation: Int) -> Bool {
@@ -129,11 +150,8 @@ actor TrailBasemapRenderer {
         for variant in TrailBasemapVariant.allCases {
             let framed = coverage.framed(toAspectRatio: variant.aspectRatio)
             for appearance in TrailBasemapAppearance.allCases {
-                guard let rendered = await Self.render(
-                    unitRect: framed,
-                    size: variant.pointSize,
-                    appearance: appearance
-                ) else { continue }
+                let input = RenderInput(unitRect: framed, variant: variant, appearance: appearance)
+                guard let rendered = await render(input) else { continue }
                 guard stillCurrent(request, since: startedAt) else { return }
 
                 let fileName = Self.fileName(
@@ -231,27 +249,16 @@ actor TrailBasemapRenderer {
         }
     }
 
-    private struct Rendered: Sendable {
-        let data: Data
-        let pixelWidth: Int
-        let pixelHeight: Int
-        let visibleRect: UnitMercatorRect
-    }
-
-    private static func render(
-        unitRect: UnitMercatorRect,
-        size: CGSize,
-        appearance: TrailBasemapAppearance
-    ) async -> Rendered? {
+    private static func renderWithMapKit(_ input: RenderInput) async -> Rendered? {
         let options = MKMapSnapshotter.Options()
         let world = MKMapSize.world.width
         options.mapRect = MKMapRect(
-            x: unitRect.originX * world,
-            y: unitRect.originY * world,
-            width: unitRect.width * world,
-            height: unitRect.height * world
+            x: input.unitRect.originX * world,
+            y: input.unitRect.originY * world,
+            width: input.unitRect.width * world,
+            height: input.unitRect.height * world
         )
-        options.size = size
+        options.size = input.variant.pointSize
 
         // `.muted` is the emphasis style Apple designed for exactly this —
         // a basemap that stays legible with someone else's data drawn over
@@ -262,24 +269,24 @@ actor TrailBasemapRenderer {
         options.preferredConfiguration = configuration
 
         #if canImport(UIKit)
-        options.traitCollection = await snapshotTraits(for: appearance)
+        options.traitCollection = await snapshotTraits(for: input.appearance)
         #elseif canImport(AppKit)
         // No scale knob here — AppKit renders at the screen's backing scale
         // and `encode` reports whatever pixel size that produced, so the
         // widget's registration doesn't care either way.
-        options.appearance = NSAppearance(named: appearance == .dark ? .darkAqua : .aqua)
+        options.appearance = NSAppearance(named: input.appearance == .dark ? .darkAqua : .aqua)
         #endif
 
         // Two opposite corners of what we asked for, kept as coordinates so
         // the finished snapshot can be measured in its own terms below. Each
         // carries two longitudes; see ``Corner`` for which is for what.
         let northWest = Corner(
-            latitude: Mercator.latitude(unitY: unitRect.originY),
-            unitX: unitRect.originX
+            latitude: Mercator.latitude(unitY: input.unitRect.originY),
+            unitX: input.unitRect.originX
         )
         let southEast = Corner(
-            latitude: Mercator.latitude(unitY: unitRect.originY + unitRect.height),
-            unitX: unitRect.originX + unitRect.width
+            latitude: Mercator.latitude(unitY: input.unitRect.originY + input.unitRect.height),
+            unitX: input.unitRect.originX + input.unitRect.width
         )
 
         let snapshotter = MKMapSnapshotter(options: options)
@@ -362,8 +369,8 @@ actor TrailBasemapRenderer {
 
     /// Internal rather than private so the suite can hand ``encode(_:)`` an
     /// image at a chosen device scale and read back what reaches disk. The
-    /// snapshotter has no injectable seam, so this is the only way the pixel
-    /// dimensions a manifest records are asserted by anything.
+    /// injected render boundary covers manifest bookkeeping; this seam keeps
+    /// the production JPEG conversion covered too.
     struct Encoded {
         let data: Data
         let pixelWidth: Int
