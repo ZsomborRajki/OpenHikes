@@ -191,6 +191,17 @@ struct OpenHikesView: View {
                 #endif
             }
             .onAppear {
+                // Before the selection below, and before either sweep: it
+                // rewrites the manifests both of them read, and the hike
+                // restored here is the one whose auto-save store is seeded
+                // from one. See ``LegacyTileKeyMigration``.
+                //
+                // Guarded exactly as the sweeps below are, and for the reason
+                // spelled out there: this writes to the store and renames
+                // files in it.
+                if !AppLaunchEnvironment.isRunningTests, appModel.startupIssue == nil {
+                    LegacyTileKeyMigration.run(in: modelContext)
+                }
                 restoreLastSelectedHike()
                 if AppLaunchEnvironment.usesLiveLocation {
                     appModel.locationManager.start()

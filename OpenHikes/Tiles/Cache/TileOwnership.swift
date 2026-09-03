@@ -4,7 +4,7 @@
 //
 //  Which cached tiles a hike lays claim to.
 //
-//  Tile cache keys are purely geographic — `providerID/z/x/y@scale`, with no
+//  Tile cache keys are purely geographic — `providerID/z/x/y`, with no
 //  hike identity in them — so two hikes in the same area claim literally the
 //  same keys, and at low zoom (where one tile spans a region) *every* hike in
 //  the same country claims the same handful. That makes "delete this hike's
