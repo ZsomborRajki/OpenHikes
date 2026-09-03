@@ -31,7 +31,8 @@ default_test="testReviewsSnappedRouteAfterStopping"
 # 787s serial `--all`. Three workers already reach that floor (787/3 = 262s);
 # a fourth only adds a simulator to boot, install into and contend with. The
 # shape holds wherever one class dominates, which is why the number is a
-# considered default rather than a function of `sysctl hw.ncpu`.
+# considered default rather than a function of `sysctl hw.ncpu`. It is what a
+# bare `--all` uses; `--parallel N` overrides it and `--serial` turns it off.
 default_parallel_workers=3
 
 device="${OPENHIKES_SIMULATOR_NAME:-iPhone 17 Pro}"
@@ -43,6 +44,7 @@ dry_run=false
 retry=false
 result_bundle=""
 parallel_workers=""
+serial=false
 
 usage() {
     cat <<EOF
@@ -63,8 +65,8 @@ Options:
   --test <name>           Test method to run (default: $default_test)
   --all                   Run every functional test in every class
   --retry                 Re-run a failing test once (for CI)
-  --parallel [N]          Spread the classes across N simulator clones
-                          (default $default_parallel_workers; needs --all without --suite)
+  --parallel [N]          Override the worker count (needs --all without --suite)
+  --serial                Run in one simulator, the way --all used to
   --result-bundle <path>  Write an .xcresult bundle for inspection
   --verbose               Show the full xcodebuild output
   --list                  List the available test methods
@@ -76,7 +78,7 @@ Examples:
   Scripts/run-ui-tests.sh --test testImportsBundledGPXAndOpensItsDetails
   Scripts/run-ui-tests.sh --suite AccessibilityUITests --all
   Scripts/run-ui-tests.sh --all --device 'iPhone 17'
-  Scripts/run-ui-tests.sh --all --parallel
+  Scripts/run-ui-tests.sh --all --serial
 EOF
 }
 
@@ -163,6 +165,10 @@ while [[ $# -gt 0 ]]; do
                 shift
             fi
             ;;
+        --serial)
+            serial=true
+            shift
+            ;;
         --result-bundle)
             require_value "$1" "${2:-}"
             result_bundle="$2"
@@ -198,17 +204,34 @@ if [[ -n "$suite" ]] && ! printf '%s\n' "${suites[@]}" | grep -qx "$suite"; then
     exit 2
 fi
 
+if [[ "$serial" == true && -n "$parallel_workers" ]]; then
+    echo "--serial and --parallel contradict each other; pass one." >&2
+    exit 2
+fi
+
 # xcodebuild distributes test *classes*, never the methods inside one, so a run
 # already scoped to a single class or a single method has nothing to spread:
 # the extra clones boot, install the app and sit idle, and the run gets slower
-# rather than faster. Refusing beats accepting. A run that announced "3 workers"
-# and served one is the same kind of quiet wrong answer as a report assembled
-# from a device the tests never touched, which is what lib/simulator.sh exists
-# to stop, and it would be discovered as "parallel testing did nothing for us".
+# rather than faster. An explicit --parallel that cannot be honoured is refused
+# rather than quietly downgraded. A run that announced "3 workers" and served
+# one is the same kind of quiet wrong answer as a report assembled from a device
+# the tests never touched, which is what lib/simulator.sh exists to stop, and it
+# would be discovered as "parallel testing did nothing for us".
 if [[ -n "$parallel_workers" ]] && { [[ "$run_all" != true ]] || [[ -n "$suite" ]]; }; then
     echo "--parallel needs --all without --suite." >&2
     echo "xcodebuild spreads whole classes, so one class or one test cannot be spread." >&2
     exit 2
+fi
+
+# A bare `--all` is the run worth making fast — thirteen minutes serial against
+# 5m49s across three clones — and it is the line every document already tells a
+# contributor to run, so it parallelises without being asked. `--serial` is the
+# way back. Everything narrower stays serial with no comment, because there is
+# genuinely nothing to spread; that is also what keeps CI untouched, since the
+# `accessibility-ui-tests` job always passes `--suite`.
+if [[ -z "$parallel_workers" && "$serial" != true ]] \
+    && [[ "$run_all" == true && -z "$suite" ]]; then
+    parallel_workers="$default_parallel_workers"
 fi
 
 command -v xcodebuild >/dev/null 2>&1 || {

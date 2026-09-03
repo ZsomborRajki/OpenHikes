@@ -62,12 +62,14 @@ xcodebuild build -project OpenHikes.xcodeproj -scheme OpenHikes \
 
 # Unit and integration tests, app and widget
 xcodebuild test -project OpenHikes.xcodeproj -scheme OpenHikes \
-  -destination 'platform=iOS Simulator,name=iPhone 17 Pro'
+  -destination 'platform=iOS Simulator,name=iPhone 17 Pro' \
+  -only-testing:OpenHikesTests -only-testing:OpenWidgetTests
 
 # The standalone shared-package suite
 swift test --package-path OpenHikesShared
 
-# Simulator UI automation; --list shows the available tests
+# Simulator UI automation, across three simulator clones; --serial for one,
+# and --list shows the available tests
 Scripts/run-ui-tests.sh --all
 
 # Render, main-thread and resource measurement; writes a markdown report

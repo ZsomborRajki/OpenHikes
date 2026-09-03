@@ -42,10 +42,13 @@ minutes of simulator automation and stops the run matching the one CI gates on.
 
 `Scripts/run-ui-tests.sh --all` and `Scripts/run-performance-tests.sh` stay out
 of CI and are run locally for a change to recording, the map, or anything on
-the render path. `--parallel` spreads the UI classes across simulator clones and
-brings `--all` to under six; the performance suite has no such flag and
-must not get one. Rebase before trusting any of these timings — a branch cut
-before a fix that made a suite faster still pays the old cost.
+the render path. `--all` spreads its classes across three simulator clones on
+its own — 5m49s against thirteen minutes serial — so the line above is already
+the fast one; `--serial` goes back to a single device and `--parallel N`
+changes the count. Anything narrower than a bare `--all` stays serial, which is
+what keeps CI's `--suite` runs on one simulator. The performance suite has no
+such flag and must not get one. Rebase before trusting any of these timings —
+a branch cut before a fix that made a suite faster still pays the old cost.
 
 Check the exit code rather than the printed summary: `xcodebuild` will relaunch
 a crashed test host and still print a green summary.
