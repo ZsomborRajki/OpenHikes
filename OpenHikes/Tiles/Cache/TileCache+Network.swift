@@ -108,6 +108,13 @@ nonisolated extension TileCache {
     }
 
     func notifyInteractiveFetchUnblocked() {
+        // Stale saved coverage stops answering from the memory tier here —
+        // synchronously, before any listener is told. What a listener does with
+        // this is redraw, and a redraw reads that tier first: entries admitted
+        // while there was no way to refresh them would answer it, and the map
+        // the walker just regained signal for would go on showing the ground it
+        // was showing offline until they panned it.
+        staleCoverageInvalidatedAt.withLock { $0 = Date() }
         // MKOverlayRenderer.setNeedsDisplay must run on the main thread and the
         // path handler fires on a background queue, so hop first and deliver
         // there. The list itself does not need the hop: `observers` is a

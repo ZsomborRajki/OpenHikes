@@ -93,6 +93,34 @@ nonisolated extension TileCache {
         return image
     }
 
+    /// What a load that will not open a connection returns: saved coverage
+    /// where there is any, and `otherwise` where there is not.
+    ///
+    /// Both reasons a load withholds a request come through here — network
+    /// policy, and a deadline a server named for itself in `Retry-After` — so
+    /// the `TileFetchSuppressed` signpost is emitted for either, *before*
+    /// anything is drawn. The signpost describes the refusal, not what the map
+    /// managed to put on screen in spite of it: a walker browsing downloaded
+    /// ground offline would otherwise emit none at all, and a tile that
+    /// silently never loads is the hardest thing in this pipeline to debug.
+    func withheldFetch(
+        forKey key: String,
+        purpose: TileFetchPurpose,
+        reason: String,
+        hasStaleCoverage: Bool,
+        token: MutationToken,
+        otherwise: TileLoadResult
+    ) -> TileLoadResult {
+        RenderSignpost.mark(
+            "TileFetchSuppressed",
+            "purpose=\(purpose.rawValue) reason=\(reason)"
+        )
+        guard hasStaleCoverage,
+              let stale = staleCoverage(forKey: key, reason: reason, token: token)
+        else { return otherwise }
+        return .loaded(stale)
+    }
+
     private func decodedTile(at file: URL) -> TileImage? {
         do {
             let data = try Data(contentsOf: file)

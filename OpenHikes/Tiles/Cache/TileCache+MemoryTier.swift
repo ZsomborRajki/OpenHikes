@@ -63,6 +63,11 @@ nonisolated extension TileCache {
     /// the network again. The TTL is not consulted for them at all: it is the
     /// reason they are here.
     ///
+    /// They are also retired early by ``staleCoverageInvalidatedAt``, which
+    /// moves whenever interactive fetching is unblocked — the recheck interval
+    /// is a ceiling on how long staleness may stand, not a delay to serve out
+    /// after the phone has signal again.
+    ///
     /// `referenceDate` is defaulted for the same reason it is on
     /// ``removeExpiredTiles(referenceDate:)``: a test can't wait out a
     /// seven-day TTL, and a memory entry's age comes from when it was cached
@@ -72,7 +77,8 @@ nonisolated extension TileCache {
         let cacheKey = key as NSString
         guard let tile = memory.object(forKey: cacheKey) else { return nil }
         let isUsable = if let servedStaleAt = tile.servedStaleAt {
-            referenceDate.timeIntervalSince(servedStaleAt) < Self.staleCoverageRecheckInterval
+            servedStaleAt > staleCoverageInvalidatedAt.withLock({ $0 })
+                && referenceDate.timeIntervalSince(servedStaleAt) < Self.staleCoverageRecheckInterval
         } else {
             !isExpired(tile.storedAt, referenceDate: referenceDate)
         }
