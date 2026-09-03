@@ -87,7 +87,7 @@ nonisolated final class PerformanceUITests: XCTestCase {
     /// What is left is not this app's rendering either, and it now has an owner:
     /// UIKit lays the hosting view out twice for the app-switcher snapshot
     /// after the app's own resign handler has returned, which is P4 in
-    /// `docs/PERFORMANCE.md`. The two whole-suite runs since read the launch
+    /// `PERFORMANCE.md`. The two whole-suite runs since read the launch
     /// stall alone in all nine scenarios — but a stall is only recorded when
     /// the watchdog's ping lands inside the blocked window, and at 226–272 ms
     /// `chart-scrub` and `photo-discovery` are under the ~350 ms the loop takes

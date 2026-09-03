@@ -147,7 +147,7 @@ extension PerformanceUITests {
     /// only recorded when the watchdog's ping happens to land inside the
     /// blocked window, and the loop turns every ~350 ms, so a *reliable* 270 ms
     /// block is caught perhaps half the time — which is precisely why
-    /// `docs/PERFORMANCE.md` reported the same finding as "216–372 ms" moving
+    /// `PERFORMANCE.md` reported the same finding as "216–372 ms" moving
     /// between six scenarios rather than as one number belonging to all of
     /// them. Counting stalls samples the problem; timing the turn measures it.
     ///

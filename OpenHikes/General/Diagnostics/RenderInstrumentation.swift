@@ -144,7 +144,7 @@ nonisolated enum RenderSignpost {
     /// a photo decode inside a `@concurrent` function and a tile sweep sitting
     /// under an `assertOffMainThread` were reported as "over one frame"
     /// alongside `ModelContainerInit` and `AppModelInit` — which do hold the
-    /// main thread, and are the launch cost `docs/PERFORMANCE.md` leads its
+    /// main thread, and are the launch cost `PERFORMANCE.md` leads its
     /// *Open findings* with. The one class of finding that should stand out
     /// was formatted identically to the class that should not appear at all.
     ///
