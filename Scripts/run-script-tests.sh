@@ -319,6 +319,78 @@ if expect_status 0 \
     fi
 fi
 
+# --parallel hands the fan-out to xcodebuild rather than starting a second run
+# against the same device, so what these cases pin is the flag pair reaching
+# xcodebuild and, just as importantly, its absence when nobody asked: a default
+# run that quietly cloned simulators would change what every existing timing in
+# this repository means.
+run_script "run-ui-tests runs serially unless asked otherwise" \
+    "$ui_tests" --device "iPhone 17 Pro" --all --dry-run
+if expect_status 0 \
+    && expect_absent "$output" "-parallel-testing-enabled" "the printed invocation" \
+    && expect_absent "$output" "Workers:" "the printed summary"; then
+    pass
+fi
+
+run_script "run-ui-tests --parallel defaults to three workers" \
+    "$ui_tests" --device "iPhone 17 Pro" --all --parallel --dry-run
+if expect_status 0 \
+    && expect_contains "$output" "-parallel-testing-enabled YES" "the printed invocation" \
+    && expect_contains "$output" "-parallel-testing-worker-count 3" "the printed invocation" \
+    && expect_contains "$output" "Workers: 3 simulator clones" "the printed summary"; then
+    pass
+fi
+
+# The count is optional, which is the part that can go wrong quietly: a parser
+# that consumed the next argument regardless would read `--parallel --all` as a
+# worker count of "--all" and drop the flag that makes parallelism legal here.
+run_script "run-ui-tests --parallel takes an explicit count" \
+    "$ui_tests" --device "iPhone 17 Pro" --all --parallel 5 --dry-run
+if expect_status 0 \
+    && expect_contains "$output" "-parallel-testing-worker-count 5" "the printed invocation"; then
+    pass
+fi
+
+run_script "run-ui-tests --parallel does not swallow the flag after it" \
+    "$ui_tests" --device "iPhone 17 Pro" --parallel --all --dry-run
+if expect_status 0 \
+    && expect_contains "$output" "-parallel-testing-worker-count 3" "the printed invocation" \
+    && expect_contains "$output" "RecordingUITests" "the selected tests"; then
+    pass
+fi
+
+# xcodebuild spreads classes, never the methods in one, so these two would boot
+# clones that install the app and then sit idle. Refusing says so; accepting
+# would report "Workers: 3" over a run that was serial in everything but name.
+run_script "run-ui-tests refuses --parallel for a single test" \
+    "$ui_tests" --device "iPhone 17 Pro" --parallel --dry-run
+if expect_status 2 \
+    && expect_contains "$output" "needs --all without --suite" "the error" \
+    && expect_absent "$calls" "xcodebuild" "the recorded calls"; then
+    pass
+fi
+
+run_script "run-ui-tests refuses --parallel for a single class" \
+    "$ui_tests" --device "iPhone 17 Pro" --suite SettingsUITests --all --parallel --dry-run
+if expect_status 2 \
+    && expect_contains "$output" "needs --all without --suite" "the error"; then
+    pass
+fi
+
+run_script "run-ui-tests rejects a worker count that cannot parallelise" \
+    "$ui_tests" --device "iPhone 17 Pro" --all --parallel 1 --dry-run
+if expect_status 2 \
+    && expect_contains "$output" "worker count of 2 or more" "the error"; then
+    pass
+fi
+
+run_script "run-ui-tests rejects a worker count that is not a number" \
+    "$ui_tests" --device "iPhone 17 Pro" --all --parallel two --dry-run
+if expect_status 2 \
+    && expect_contains "$output" "worker count of 2 or more" "the error"; then
+    pass
+fi
+
 echo "Performance collection"
 
 # The app container the stubbed get_app_container hands back.

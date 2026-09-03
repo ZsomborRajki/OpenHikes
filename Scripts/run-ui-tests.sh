@@ -26,6 +26,13 @@ suites=(
 measurement_tests=(OpenHikesUITests/testLaunchPerformance)
 default_suite="RecordingUITests"
 default_test="testReviewsSnappedRouteAfterStopping"
+# Three, not "one per core". xcodebuild spreads whole *classes*, so the floor of
+# a parallel run is the longest single class, and RecordingUITests is 274s of a
+# 787s serial `--all`. Three workers already reach that floor (787/3 = 262s);
+# a fourth only adds a simulator to boot, install into and contend with. The
+# shape holds wherever one class dominates, which is why the number is a
+# considered default rather than a function of `sysctl hw.ncpu`.
+default_parallel_workers=3
 
 device="${OPENHIKES_SIMULATOR_NAME:-iPhone 17 Pro}"
 test_name="$default_test"
@@ -35,6 +42,7 @@ verbose=false
 dry_run=false
 retry=false
 result_bundle=""
+parallel_workers=""
 
 usage() {
     cat <<EOF
@@ -55,6 +63,8 @@ Options:
   --test <name>           Test method to run (default: $default_test)
   --all                   Run every functional test in every class
   --retry                 Re-run a failing test once (for CI)
+  --parallel [N]          Spread the classes across N simulator clones
+                          (default $default_parallel_workers; needs --all without --suite)
   --result-bundle <path>  Write an .xcresult bundle for inspection
   --verbose               Show the full xcodebuild output
   --list                  List the available test methods
@@ -66,6 +76,7 @@ Examples:
   Scripts/run-ui-tests.sh --test testImportsBundledGPXAndOpensItsDetails
   Scripts/run-ui-tests.sh --suite AccessibilityUITests --all
   Scripts/run-ui-tests.sh --all --device 'iPhone 17'
+  Scripts/run-ui-tests.sh --all --parallel
 EOF
 }
 
@@ -137,6 +148,21 @@ while [[ $# -gt 0 ]]; do
             retry=true
             shift
             ;;
+        --parallel)
+            # The count is optional, so the next argument is only consumed when
+            # it looks like one. `--parallel --all` must not swallow `--all`.
+            if [[ -n "${2:-}" && "$2" != -* ]]; then
+                if [[ ! "$2" =~ ^[0-9]+$ ]] || (( $2 < 2 )); then
+                    echo "--parallel takes a worker count of 2 or more, not '$2'." >&2
+                    exit 2
+                fi
+                parallel_workers="$2"
+                shift 2
+            else
+                parallel_workers="$default_parallel_workers"
+                shift
+            fi
+            ;;
         --result-bundle)
             require_value "$1" "${2:-}"
             result_bundle="$2"
@@ -169,6 +195,19 @@ done
 if [[ -n "$suite" ]] && ! printf '%s\n' "${suites[@]}" | grep -qx "$suite"; then
     echo "Unknown suite: $suite" >&2
     echo "Available suites: ${suites[*]}" >&2
+    exit 2
+fi
+
+# xcodebuild distributes test *classes*, never the methods inside one, so a run
+# already scoped to a single class or a single method has nothing to spread:
+# the extra clones boot, install the app and sit idle, and the run gets slower
+# rather than faster. Refusing beats accepting. A run that announced "3 workers"
+# and served one is the same kind of quiet wrong answer as a report assembled
+# from a device the tests never touched, which is what lib/simulator.sh exists
+# to stop, and it would be discovered as "parallel testing did nothing for us".
+if [[ -n "$parallel_workers" ]] && { [[ "$run_all" != true ]] || [[ -n "$suite" ]]; }; then
+    echo "--parallel needs --all without --suite." >&2
+    echo "xcodebuild spreads whole classes, so one class or one test cannot be spread." >&2
     exit 2
 fi
 
@@ -245,6 +284,28 @@ command=(
 if [[ "$retry" == true ]]; then
     command+=(-retry-tests-on-failure -test-iterations 2)
 fi
+# Clones, not a second xcodebuild against the same device. The distinction is
+# the whole reason this is safe: two `xcodebuild test` runs sharing a simulator
+# install the same bundle identifier over each other, which is the failure the
+# instructions file describes at length. Here xcodebuild owns the fan-out, each
+# worker gets its own cloned device, and the clones are made *from* the device
+# resolved above — so the location cleared below, and any `simctl privacy` grant
+# made before this script runs, are inherited rather than bypassed.
+#
+# The clones live in their own device set, `~/Library/Developer/XCTestDevices`,
+# named `Clone N of <device>`, and `xcodebuild` deletes them when the run ends
+# (verified on Xcode 26.6: three during the run, none after). Two consequences
+# worth knowing: `simctl list devices` never shows them, so they cannot make
+# `resolve_simulator_udid` ambiguous, and a run killed part-way can leave some
+# behind. That set is the only place to look for them:
+#
+#   xcrun simctl --set ~/Library/Developer/XCTestDevices list devices
+if [[ -n "$parallel_workers" ]]; then
+    command+=(
+        -parallel-testing-enabled YES
+        -parallel-testing-worker-count "$parallel_workers"
+    )
+fi
 if [[ -n "$result_bundle" ]]; then
     command+=(-resultBundlePath "$result_bundle")
 fi
@@ -252,6 +313,9 @@ fi
 echo "Scheme: $scheme"
 echo "Simulator: $device ($device_udid)"
 echo "Running: ${only_testing[*]#-only-testing:}"
+if [[ -n "$parallel_workers" ]]; then
+    echo "Workers: $parallel_workers simulator clones"
+fi
 
 if [[ "$dry_run" == true ]]; then
     printf '%q ' "${command[@]}"

@@ -26,17 +26,26 @@ Supporting documents, each owning its own facts:
 # Strict SwiftLint, the pinned version, the same script CI runs
 Scripts/lint.sh
 
-# App and widget unit tests
+# App and widget unit tests — the two bundles, and nothing else
 xcodebuild test -project OpenHikes.xcodeproj -scheme OpenHikes \
-  -destination 'platform=iOS Simulator,name=iPhone 17 Pro'
+  -destination 'platform=iOS Simulator,name=iPhone 17 Pro' \
+  -only-testing:OpenHikesTests -only-testing:OpenWidgetTests
 
 # The standalone shared package
 swift test --package-path OpenHikesShared
 ```
 
-Those three are what CI gates on. `Scripts/run-ui-tests.sh --all` and
-`Scripts/run-performance-tests.sh` stay out of CI and are run locally for a
-change to recording, the map, or anything on the render path.
+Those three are what CI gates on. **The `-only-testing:` scoping is part of the
+command, not a refinement of it** — `OpenHikes.xctestplan` also carries
+`OpenHikesUITests`, so dropping it turns a twenty-second gate into thirteen
+minutes of simulator automation and stops the run matching the one CI gates on.
+
+`Scripts/run-ui-tests.sh --all` and `Scripts/run-performance-tests.sh` stay out
+of CI and are run locally for a change to recording, the map, or anything on
+the render path. `--parallel` spreads the UI classes across simulator clones and
+brings `--all` to under six; the performance suite has no such flag and
+must not get one. Rebase before trusting any of these timings — a branch cut
+before a fix that made a suite faster still pays the old cost.
 
 Check the exit code rather than the printed summary: `xcodebuild` will relaunch
 a crashed test host and still print a green summary.
