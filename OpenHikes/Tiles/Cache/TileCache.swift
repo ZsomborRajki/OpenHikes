@@ -341,17 +341,19 @@ nonisolated extension TileCache {
         return tile.image
     }
 
-    /// Loads a tile for display, checking memory, then disk (ephemeral, then
-    /// durable), then the network, and populating the faster tiers as it goes.
+    /// Loads a tile for display — memory, then disk (ephemeral, then durable),
+    /// then the network — populating the faster tiers as it goes, and reports
+    /// which of those answered.
+    ///
+    /// Most callers want ``loadTile(forKey:url:purpose:)``, which keeps only
+    /// the image. The overlay needs the rest: whether a missing image is a
+    /// request that failed or one the policy never allowed, because only the
+    /// first is a tile server misbehaving and only the first earns a backoff.
     ///
     /// The browsing path: a tile fetched to draw the map is cached where the OS
     /// may reclaim it, which is the right trade for something nobody asked to
     /// keep. Tiles that *are* meant to survive go through
     /// ``saveTileDurably(forKey:url:)`` or ``promoteCachedTile(forKey:)``.
-    /// - Parameter purpose: whether the map is drawing this tile now, which is
-    ///   what ``TileNetworkPolicy`` weighs against the connection's cost.
-    ///   Defaults to `.interactive`, because the only caller that isn't is the
-    ///   bulk downloader, and it goes through `saveTileDurably` anyway.
     ///
     /// `@concurrent` rather than plain `nonisolated`: everything below the
     /// first memory hit is synchronous disk work, and an `async` function that
@@ -359,10 +361,10 @@ nonisolated extension TileCache {
     /// for any caller that happens to be there. A render miss must not become
     /// main-thread I/O, so the hop is in the callee rather than trusted to
     /// every call site.
-    /// The display load with its policy outcome preserved for the renderer.
-    /// Most callers only need ``loadTile(forKey:url:purpose:)``'s image; the
-    /// overlay also needs to know whether a missing image represents a real
-    /// request failure or a request that was deliberately not attempted.
+    /// - Parameter purpose: whether the map is drawing this tile now, which is
+    ///   what ``TileNetworkPolicy`` weighs against the connection's cost.
+    ///   Defaults to `.interactive`, because the only caller that isn't is the
+    ///   bulk downloader, and it goes through `saveTileDurably` anyway.
     @concurrent
     func loadTileResult(
         forKey key: String,
@@ -370,7 +372,7 @@ nonisolated extension TileCache {
         purpose: TileFetchPurpose = .interactive
     ) async -> TileLoadResult {
         assertOffMainThread(
-            "loadTile(forKey:url:purpose:) stats and reads tile files synchronously — call it off the main thread"
+            "loadTileResult(forKey:url:purpose:) stats and reads tile files synchronously — call it off the main thread"
         )
         let mutationToken = mutationToken(forKey: key)
         if let cached = memoryImage(forKey: key) { return .loaded(cached) }

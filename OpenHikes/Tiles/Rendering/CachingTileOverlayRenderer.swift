@@ -64,12 +64,40 @@ nonisolated final class CachingTileOverlayRenderer: MKOverlayRenderer, TileCache
     private let inFlight = Mutex([String: [MKMapRect]]())
 
     /// Tiles whose requests failed (500, timeout, undecodable, 404), and when
-    /// each may be asked for again. Policy-suppressed loads never enter this
-    /// log. Skipping failures is what stops a
-    /// failed tile spinning a request/redraw loop; expiring the skip is what
-    /// stops a transient server error leaving a permanent hole in the map.
-    /// See ``TileFailureLog``.
+    /// each may be asked for again. Skipping them is what stops a failed tile
+    /// spinning a request/redraw loop; expiring the skip is what stops a
+    /// transient server error leaving a permanent hole in the map. See
+    /// ``TileFailureLog``.
+    ///
+    /// A load ``TileNetworkPolicy`` refused never enters this log — no server
+    /// was asked, so there is nothing to back off from. Those go in
+    /// ``suppressed`` instead.
     private let failures = Mutex(TileFailureLog())
+
+    /// Tiles the network policy declined to request, and that are not in the
+    /// cache either. Skipped until the policy changes its mind.
+    ///
+    /// Without this the offline map is undamped: `draw` misses on every
+    /// uncached tile every pass, and each miss spends an unstructured `Task`,
+    /// two ``TileLoadGate`` hops and a failed disk stat to be told the same
+    /// "no" again — the per-tile-per-pass cost the failure log exists to
+    /// avoid, and it lands hardest on the case this app is built for, panning
+    /// the edge of a downloaded region with no signal, where these no-ops
+    /// queue through the gate ahead of the cached neighbours' real loads.
+    ///
+    /// Held with no expiry, exactly as ``TileFailureLog/mayAttempt(_:at:isOnline:)``
+    /// holds failures offline: the policy transition is the only thing that
+    /// can make one of these loadable, and it always arrives as a path update
+    /// — a tile cannot quietly appear on disk in the meantime, because a
+    /// policy blocking the map blocks the bulk downloader first.
+    private let suppressed = Mutex(Set<String>())
+
+    /// The point past which remembering suppressed tiles costs more than the
+    /// re-asking it saves. Dropping the lot is safe — it buys one extra pass
+    /// of misses, not a wrong tile — so this needs no eviction order, unlike
+    /// ``TileRetryPolicy/maximumTrackedFailures``, whose entries carry
+    /// deadlines that differ.
+    private static let maximumSuppressedTiles = 1024
 
     /// The pending "a backoff has elapsed, redraw" wake-up, and when it fires.
     /// At most one is scheduled at a time: a redraw retries every tile that
@@ -111,6 +139,7 @@ nonisolated final class CachingTileOverlayRenderer: MKOverlayRenderer, TileCache
     /// all recorded against a network that no longer applies.
     func tileCacheDidUnblockInteractiveFetches() {
         let clearedCount = failures.withLock { $0.removeAll() }
+        suppressed.withLock { $0.removeAll() }
         cancelRetryWake()
         #if DEBUG
         if clearedCount > 0 {
@@ -269,6 +298,19 @@ nonisolated final class CachingTileOverlayRenderer: MKOverlayRenderer, TileCache
         return isCached(ancestor) ? nil : ancestor
     }
 
+    /// Whether this pass should ask for `key` at all.
+    ///
+    /// Two reasons not to, and they are not the same reason. A tile whose
+    /// request failed waits out a backoff — until it expires, or until the
+    /// policy transition clears the log outright. A tile the policy refused
+    /// was never asked for, so it has no backoff to wait out and only that
+    /// transition can release it.
+    private func mayAsk(for key: String) -> Bool {
+        let isOnline = cache.isOnline
+        guard failures.withLock({ $0.mayAttempt(key, at: .now, isOnline: isOnline) }) else { return false }
+        return !suppressed.withLock { $0.contains(key) }
+    }
+
     private func loadTileIfNeeded(
         for path: MKTileOverlayPath,
         in tileRect: MKMapRect,
@@ -298,11 +340,7 @@ nonisolated final class CachingTileOverlayRenderer: MKOverlayRenderer, TileCache
 
         let key = fetchPath.cacheKey
 
-        // Skip tiles we already know we can't get — until their backoff runs
-        // out, or a reconnect clears them outright.
-        let now = ContinuousClock.now
-        let isOnline = cache.isOnline
-        guard failures.withLock({ $0.mayAttempt(key, at: now, isOnline: isOnline) }) else { return }
+        guard mayAsk(for: key) else { return }
 
         let isNew = inFlight.withLock { pending -> Bool in
             guard pending[key] == nil else {
@@ -366,11 +404,43 @@ nonisolated final class CachingTileOverlayRenderer: MKOverlayRenderer, TileCache
                 #endif
             case .suppressed:
                 // No request was made, so there is no server failure to back
-                // off. The cache observer redraws when policy allows the load.
-                break
+                // off — just a tile not worth asking about again until the
+                // policy changes. The cache observer clears these and redraws
+                // when it does.
+                suppressed.withLock { keys in
+                    if keys.count >= Self.maximumSuppressedTiles { keys.removeAll() }
+                    keys.insert(key)
+                }
             }
         }
     }
+
+    #if DEBUG
+    /// Test seam: the skip decision a draw pass makes and discards. Exposed
+    /// rather than restated, so a test that loses the suppression check fails
+    /// instead of agreeing with a copy of it.
+    func mayAskForTile(at path: MKTileOverlayPath) -> Bool {
+        mayAsk(for: path.cacheKey)
+    }
+
+    /// Test seam: how many tiles are being skipped, and for which of the two
+    /// reasons — the distinction this renderer exists to keep straight.
+    var skipCounts: (failed: Int, suppressed: Int) {
+        (failures.withLock { $0.count }, suppressed.withLock { $0.count })
+    }
+
+    /// Test seam: one tile's worth of what `draw(_:zoomScale:in:)` does on a
+    /// miss. Reaching that branch through the real pass costs a bitmap
+    /// context and a screenful of grid arithmetic for the one call underneath.
+    func loadTileForTesting(at path: MKTileOverlayPath) {
+        loadTileIfNeeded(
+            for: path,
+            in: tileOverlay.boundingMapRect,
+            overlay: tileOverlay,
+            drewSomething: false
+        )
+    }
+    #endif
 
     /// Finds the nearest cached lower-zoom tile and identifies the relevant
     /// source region without allocating a cropped image.
