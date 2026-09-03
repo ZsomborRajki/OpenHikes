@@ -17,7 +17,7 @@ says which commands to run.
 <!-- Which commands you ran, and what you saw. Delete the lines that do not apply. -->
 
 - [ ] `Scripts/lint.sh` passes
-- [ ] `xcodebuild test -project OpenHikes.xcodeproj -scheme OpenHikes -destination 'platform=iOS Simulator,name=iPhone 17 Pro'` passes
+- [ ] `xcodebuild test -project OpenHikes.xcodeproj -scheme OpenHikes -destination 'platform=iOS Simulator,name=iPhone 17 Pro' -only-testing:OpenHikesTests -only-testing:OpenWidgetTests` passes
 - [ ] `swift test --package-path OpenHikesShared` passes
 - [ ] `Scripts/run-ui-tests.sh --all` — needed for a change to recording, the map or the sheet
 - [ ] `Scripts/run-performance-tests.sh` — needed for a change on the render path

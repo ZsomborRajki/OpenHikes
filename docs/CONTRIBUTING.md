@@ -42,9 +42,12 @@ there:
 # runs. --fix applies what SwiftLint can correct on its own.
 Scripts/lint.sh
 
-# The app and widget unit suites
+# The app and widget unit suites. The -only-testing: scoping is what makes
+# this the run CI gates on: the scheme's test plan carries OpenHikesUITests
+# too, and without it this becomes thirteen extra minutes of UI automation.
 xcodebuild test -project OpenHikes.xcodeproj -scheme OpenHikes \
-  -destination 'platform=iOS Simulator,name=iPhone 17 Pro'
+  -destination 'platform=iOS Simulator,name=iPhone 17 Pro' \
+  -only-testing:OpenHikesTests -only-testing:OpenWidgetTests
 
 # The standalone shared package
 swift test --package-path OpenHikesShared
@@ -58,6 +61,7 @@ timing-sensitive waits slow and unreliable. Run them locally when you touch
 recording, the map, or anything on the render path:
 
 ```sh
+# Spreads its classes across three simulator clones; --serial for one
 Scripts/run-ui-tests.sh --all
 Scripts/run-performance-tests.sh
 ```
