@@ -110,6 +110,7 @@ Following Apple's [Food Truck](https://github.com/apple/sample-food-truck) and [
 | `OpenHikes/Purchases/` | Paid-maps entitlement and its StoreKit state, the paywall, and the subscription terms and links. |
 | `OpenHikes/Settings/` | User-facing app, recording, map and storage settings. |
 | `OpenHikes/LiveActivity/` | When a Lock Screen activity starts, updates and ends, behind a seam that keeps ActivityKit out of the tests. |
+| `OpenHikes/Intents/` | App Intents for controlling and querying a recording, the Siri and Spotlight shortcuts they are offered through, and the seam they perform behind. |
 | `OpenHikes/General/` | Cross-domain extensions and diagnostics. |
 | `OpenHikesShared/` | Domain-foldered local Swift package shared by the app and widget. |
 | `OpenWidget/` | iOS Home Screen widget and the Live Activity's Lock Screen and Dynamic Island views. |

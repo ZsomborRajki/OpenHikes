@@ -5,6 +5,7 @@
 //  Created by Zsombor Rajki on 2026. 06. 18..
 //
 
+import AppIntents
 import SwiftData
 import SwiftUI
 
@@ -53,9 +54,32 @@ struct OpenHikesApp: App {
         // has to already be re-armed and delegated by the time this returns,
         // or the relaunch's one pending location event has nothing to deliver
         // to.
-        _model = State(initialValue: RenderSignpost.interval("AppModelInit") {
+        let appModel = RenderSignpost.interval("AppModelInit") {
             OpenHikesModel()
-        })
+        }
+        _model = State(initialValue: appModel)
+
+        // The system may launch this process purely to run an App Intent, in
+        // which case no view is ever built and nothing else registers the
+        // coordinator — so it happens here, beside the model it is built from,
+        // rather than in a `.task`.
+        //
+        // Behind the test guard for the reason the startup writers above are:
+        // both unit-test bundles are hosted by the app, and a coordinator
+        // registered here would hold the host's own recorder and store while
+        // the suites run against theirs. Intent tests supply their own through
+        // `HikeIntentContext.$override` and never read the registration.
+        //
+        // Built here and handed over, rather than inside the call: `add` takes
+        // its dependency as an `@autoclosure @Sendable` the framework may run
+        // anywhere, and a main-actor type cannot be constructed in one.
+        if !AppLaunchEnvironment.isRunningTests {
+            let coordinator = HikeIntentCoordinator(
+                recorder: appModel.hikeRecorder,
+                container: appModel.container
+            )
+            AppDependencyManager.shared.add(dependency: coordinator)
+        }
     }
 
     var body: some Scene {
