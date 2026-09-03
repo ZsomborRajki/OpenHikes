@@ -68,6 +68,14 @@ nonisolated struct RouteProfile: Sendable {
     /// for what that keeps; in particular the route's true high and low points
     /// always survive, so ``elevationRange`` is exact however long the track is.
     let samples: [ElevationSample]
+    /// Where along the route the recording was paused, in metres from the
+    /// start — one entry per resume, in order.
+    ///
+    /// Kept as distances rather than as indices because that is the axis the
+    /// elevation chart is drawn against, and bounded by the number of times
+    /// the walker reached for the pause button rather than by the length of
+    /// the walk. See ``RouteBoundary``.
+    let pauseDistances: [Double]
     /// What the route's *undownsampled* elevations add up to.
     ///
     /// Distinct from ``elevationRange``, which is derived from the plotted
@@ -112,11 +120,13 @@ nonisolated struct RouteProfile: Sendable {
         coordinates: [CLLocationCoordinate2D],
         distances: [Double],
         samples: [ElevationSample],
+        pauseDistances: [Double],
         elevation: RouteElevationSummary
     ) {
         self.coordinates = coordinates
         self.distances = distances
         self.samples = samples
+        self.pauseDistances = pauseDistances
         self.elevation = elevation
         sampleDistances = samples.map(\.distanceMeters)
     }
@@ -129,6 +139,7 @@ nonisolated struct RouteProfile: Sendable {
         var routeCoordinates: [CLLocationCoordinate2D] = []
         var routeDistances: [Double] = []
         var routeSamples: [ElevationSample] = []
+        var routePauseDistances: [Double] = []
         var elevations = ElevationAccumulator()
         routeCoordinates.reserveCapacity(route.count)
         routeDistances.reserveCapacity(route.count)
@@ -146,6 +157,12 @@ nonisolated struct RouteProfile: Sendable {
             previous = coordinate
             routeCoordinates.append(coordinate)
             routeDistances.append(cumulative)
+            // `index > 0` for the reason ``[RouteCoordinate]/pausedSegments``
+            // starts at 1: a boundary describes the leg arriving at a point,
+            // and the first point of a route arrives from nowhere.
+            if index > 0, point.isPauseBoundary {
+                routePauseDistances.append(cumulative)
+            }
             elevations.record(point.elevation)
             if let pointElevation = point.elevation {
                 routeSamples.append(ElevationSample(distanceMeters: cumulative, elevation: pointElevation))
@@ -158,6 +175,7 @@ nonisolated struct RouteProfile: Sendable {
             coordinates: routeCoordinates,
             distances: routeDistances,
             samples: plotted,
+            pauseDistances: routePauseDistances,
             elevation: RouteElevationSummary(elevations)
         )
     }

@@ -402,6 +402,10 @@ struct MapView: MapViewRepresentable, Equatable {
             mapView.removeOverlays(coordinator.inferredRouteOverlays)
             coordinator.inferredRouteOverlays = []
         }
+        if !coordinator.pausedRouteOverlays.isEmpty {
+            mapView.removeOverlays(coordinator.pausedRouteOverlays)
+            coordinator.pausedRouteOverlays = []
+        }
 
         guard let route, route.coordinates.count > 1 else { return }
 
@@ -416,6 +420,16 @@ struct MapView: MapViewRepresentable, Equatable {
             mapView.addOverlay(polyline, level: .aboveLabels)
         }
         addInferredOverlays(route, on: mapView, coordinator, above: polyline)
+        // Above the inferred stretches rather than above the line, because
+        // `insertOverlay(_:above:)` inserts *just* above what it is given: two
+        // calls naming the same base would stack the second one under the
+        // first.
+        addPausedOverlays(
+            route,
+            on: mapView,
+            coordinator,
+            above: coordinator.inferredRouteOverlays.last ?? polyline
+        )
 
         coordinator.fitToCurrentRoute(mapView, animated: true)
     }
@@ -438,6 +452,31 @@ struct MapView: MapViewRepresentable, Equatable {
             MKPolyline(coordinates: segment, count: segment.count)
         }
         coordinator.inferredRouteOverlays = overlays
+        for overlay in overlays {
+            mapView.insertOverlay(overlay, above: base)
+        }
+    }
+
+    /// Overlays the stretches the recording was paused across, on top of the
+    /// solid line they belong to.
+    ///
+    /// Drawn over rather than instead of the route for the same reasons as the
+    /// inferred stretches: the geometry the map fits and the chart scrubs
+    /// against stays one continuous line, and the dots read as a qualification
+    /// of that line. A pause and a lost signal can both fall on the same walk,
+    /// and this goes on last so a stretch that is somehow both shows the pause
+    /// — the stronger statement, since it says why nothing was recorded.
+    private func addPausedOverlays(
+        _ route: DisplayedRoute,
+        on mapView: MKMapView,
+        _ coordinator: Coordinator,
+        above base: MKPolyline
+    ) {
+        guard !route.pausedSegments.isEmpty else { return }
+        let overlays = route.pausedSegments.map { segment in
+            MKPolyline(coordinates: segment, count: segment.count)
+        }
+        coordinator.pausedRouteOverlays = overlays
         for overlay in overlays {
             mapView.insertOverlay(overlay, above: base)
         }

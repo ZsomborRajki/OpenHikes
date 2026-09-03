@@ -48,6 +48,14 @@ struct ElevationChartView: View, Equatable {
     private static let areaGradientBottomOpacity: Double = 0.05
     /// Opacity for the scrub rule line.
     private static let ruleOpacity: Double = 0.4
+    /// Opacity for the pause rules. Fainter than the scrub line: the scrub
+    /// line answers a finger and should follow it plainly, while these are
+    /// part of the trail's own story and must not compete with the profile
+    /// they annotate.
+    private static let pauseRuleOpacity: Double = 0.35
+    /// Dotted rather than dashed, which is what tells it apart from the scrub
+    /// rule above at a glance.
+    private static let pauseRuleDash: [CGFloat] = [2, 4]
     /// Symbol sizes for the "my location" live-dot: outer white halo and inner blue fill.
     private static let liveHaloSymbolSize: CGFloat = 170
     private static let liveFillSymbolSize: CGFloat = 110
@@ -72,8 +80,15 @@ struct ElevationChartView: View, Equatable {
     // two different trails of the same size pass as equal and froze the graph
     // on the old one. It's bounded work by construction: `RouteProfile` caps
     // the plotted samples at `plottedSampleBudget`.
+    //
+    // The pause distances are compared alongside them because they are the one
+    // thing this body draws that is *not* derived from the samples: two routes
+    // can plot the same elevations and have been walked with and without a
+    // break in the middle.
     static func == (lhs: Self, rhs: Self) -> Bool {
-        lhs.tint == rhs.tint && lhs.profile.samples == rhs.profile.samples
+        lhs.tint == rhs.tint
+            && lhs.profile.samples == rhs.profile.samples
+            && lhs.profile.pauseDistances == rhs.profile.pauseDistances
     }
 
     var body: some View {
@@ -88,6 +103,7 @@ struct ElevationChartView: View, Equatable {
         let liveSample = tracker.liveTrackerDistance.flatMap { profile.sample(atDistance: $0) }
         return Chart {
             routeMarks(domain: domain)
+            pauseMarks()
             trackerMarks(sample: trackerSample)
             liveMarks(sample: liveSample)
         }
@@ -192,6 +208,23 @@ struct ElevationChartView: View, Equatable {
         .interpolationMethod(.catmullRom)
         .foregroundStyle(tint)
         .lineStyle(StrokeStyle(lineWidth: 2))
+    }
+
+    /// Where the walker stopped recording, as a rule through the profile.
+    ///
+    /// A rule rather than a break in the line: the pause took time out of the
+    /// walk but no distance out of it, so the x-axis runs on and the profile
+    /// stays continuous across it — see ``RouteBoundary``. Declared before the
+    /// tracker so a scrub landing on a pause draws over it rather than under.
+    ///
+    /// Bounded by the number of pauses, not by the length of the route.
+    @ChartContentBuilder
+    private func pauseMarks() -> some ChartContent {
+        ForEach(profile.pauseDistances, id: \.self) { distance in
+            RuleMark(x: .value("Distance", distance))
+                .foregroundStyle(.secondary.opacity(Self.pauseRuleOpacity))
+                .lineStyle(StrokeStyle(lineWidth: 1, dash: Self.pauseRuleDash))
+        }
     }
 
     @ChartContentBuilder

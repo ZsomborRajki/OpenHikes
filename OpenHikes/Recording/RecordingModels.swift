@@ -113,7 +113,13 @@ nonisolated struct RecordingPoint: Equatable, Sendable {
             motion: flags.contains(.nonPedestrian)
                 ? .nonPedestrian
                 : nil,
-            provenance: flags.contains(.inferred) ? .inferred : nil
+            provenance: flags.contains(.inferred) ? .inferred : nil,
+            // The one flag that outlives the recording it was written in. Every
+            // reader of `.resumed` above this line is live — the matcher
+            // declining to bridge, the accumulator restarting its clock — and
+            // a saved route that dropped it had no way to say a walk with an
+            // hour's lunch in it was ever interrupted. See ``RouteBoundary``.
+            boundary: flags.contains(.resumed) ? .paused : nil
         )
     }
 }

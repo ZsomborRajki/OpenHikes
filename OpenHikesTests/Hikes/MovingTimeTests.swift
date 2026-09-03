@@ -120,6 +120,55 @@ struct MovingTimeTests {
         #expect(movingAverage > elapsedAverage * 2)
     }
 
+    /// The case a persisted pause exists for, and the one this rule cannot
+    /// judge on its own: paused at one trailhead, driven to the next, resumed.
+    /// The span is long *and* the displacement is large, which is precisely
+    /// what walking looks like from here — so without the boundary the drive
+    /// is booked as an hour of moving time.
+    @Test("a pause is not moving time, however far the walker went during it")
+    func aPauseIsNotMovingTime() throws {
+        let walkedOut = Self.walk([Leg(seconds: 600, metersPerSecond: Self.walkingSpeed)])
+        let lastPoint = try #require(walkedOut.last)
+        let drivenLatitude = lastPoint.latitude + 5000 / Self.metersPerDegreeLatitude
+        let resumeTime = Self.start.addingTimeInterval(600 + 3600)
+        var route = walkedOut
+        route.append(
+            RouteCoordinate(
+                latitude: drivenLatitude,
+                longitude: 12.86,
+                timestamp: resumeTime,
+                boundary: .paused
+            )
+        )
+        for second in 1...600 {
+            route.append(
+                RouteCoordinate(
+                    latitude: drivenLatitude
+                        + Double(second) * Self.walkingSpeed / Self.metersPerDegreeLatitude,
+                    longitude: 12.86,
+                    timestamp: resumeTime.addingTimeInterval(Double(second))
+                )
+            )
+        }
+
+        let moving = try #require(Self.statistics(for: route).movingDuration)
+        #expect(
+            abs(moving - 1200) <= RecordingDistanceAccumulator.stationaryInterval * 2,
+            "expected about 1200 s of walking either side of the pause, got \(moving)"
+        )
+
+        // The same points with the boundary rubbed out — which is what every
+        // hike recorded before it existed looks like, and what this is worth
+        // measuring against.
+        let flattened = route.map { point -> RouteCoordinate in
+            var stripped = point
+            stripped.boundary = nil
+            return stripped
+        }
+        let flattenedMoving = try #require(Self.statistics(for: flattened).movingDuration)
+        #expect(flattenedMoving > moving + 3000)
+    }
+
     /// A walk with nothing to subtract has to report the same number twice.
     /// The presumption is what buys this: an unjudgeable window counts as
     /// movement, so the head of a route is not quietly deducted.

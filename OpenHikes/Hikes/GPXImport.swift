@@ -35,19 +35,27 @@ nonisolated enum GPXImport {
         /// file's own boundaries survive into the route.
         ///
         /// A track paused and resumed is still one hike and still one line —
-        /// the app has a single `route` per hike and nothing to draw a hole in
-        /// it with — but the leg joining two segments crosses ground the file
-        /// never recorded, and saying so is exactly what ``RouteProvenance``
-        /// exists for. Marking it `.inferred` is what makes the map draw that
-        /// leg as a guess and the statistics count it as unobserved, instead
-        /// of presenting a stretch nobody walked with the same authority as
-        /// the fixes on either side of it.
+        /// the app has a single `route` per hike — but the leg joining two
+        /// segments crosses ground the file never recorded, and a
+        /// ``RouteBoundary`` is how the route says so. `<trkseg>` is what a
+        /// recording's pause is written as on the way out (see
+        /// ``GPXExport/appendTrack(_:to:)``), so reading it back as a pause is
+        /// what makes an exported hike survive the round trip instead of
+        /// returning as one uninterrupted walk.
+        ///
+        /// Read as a pause rather than as ``RouteProvenance/inferred``, which
+        /// is what this used to mark. The two are close but not the same, and
+        /// the file itself decides which: an inference is the app reasoning
+        /// about ground nobody watched, while a segment break is the *writer*
+        /// saying the recording was stopped there. A file from another app
+        /// that segments for its own reasons is taken at its word, on the
+        /// principle that inventing a claim about unrecorded ground is the
+        /// worse of the two errors.
         ///
         /// Its length still counts towards ``distanceMeters``, for the same
-        /// reason a recording's own gaps do: the walker covered that ground
+        /// reason a recording's own pauses do: the walker covered that ground
         /// somehow, and a total that silently omitted it would be shorter than
-        /// the walk. What the hike then says about it is how much of the
-        /// length was inferred.
+        /// the walk.
         init(
             name: String?,
             trackDescription: String?,
@@ -74,10 +82,10 @@ nonisolated enum GPXImport {
                             elevation: point.elevation,
                             timestamp: point.time,
                             // The mark belongs to the point a segment *opens*
-                            // with, because provenance describes the leg
+                            // with, because a boundary describes the leg
                             // arriving at a point. The very first point of the
-                            // route arrives from nowhere, so it stays measured.
-                            provenance: offset > 0 && index == 0 ? .inferred : nil
+                            // route arrives from nowhere, so it opens nothing.
+                            boundary: offset > 0 && index == 0 ? .paused : nil
                         )
                     )
                 }

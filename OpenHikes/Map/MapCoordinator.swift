@@ -30,6 +30,11 @@ extension MapView {
         /// whole, and this is the one part of the line that has to be drawn
         /// differently from the rest of it — see ``RouteProvenance``.
         var inferredRouteOverlays: [MKPolyline] = []
+        /// The stretches of the drawn route the recording was paused across.
+        /// Separate overlays for the same reason the inferred ones are, and
+        /// styled differently from them because they say a different thing —
+        /// see ``RouteBoundary``.
+        var pausedRouteOverlays: [MKPolyline] = []
         var recordingChunkOverlays: [MKPolyline] = []
         var recordingTailOverlay: MKPolyline?
         var recordingReviewOverlay: MKPolyline?
@@ -176,6 +181,12 @@ extension MapView {
         /// fading it doesn't also make it thinner to the eye.
         private static let inferredRouteWidthFactor: CGFloat = 1.35
         private static let inferredRouteDashPattern: [Int] = [2, 7]
+        /// A pause is drawn fainter still than an inferred stretch: the app
+        /// has no claim at all about this ground, not merely a weak one.
+        private static let pausedRouteAlpha: CGFloat = 0.4
+        /// Dotted where the inferred line is dashed, which is what separates
+        /// the two at a glance on a route that carries both.
+        private static let pausedRouteDashPattern: [Int] = [1, 6]
 
         /// Edge padding used whenever the map is fitted to the route.
         #if os(macOS)
@@ -383,6 +394,13 @@ extension MapView {
                 guard let renderer = mapView.renderer(for: overlay)
                     as? MKPolylineRenderer else { continue }
                 applyInferredStyle(to: renderer)
+                renderer.setNeedsDisplay()
+            }
+            // And the paused ones, which follow the tint for the same reason.
+            for overlay in pausedRouteOverlays {
+                guard let renderer = mapView.renderer(for: overlay)
+                    as? MKPolylineRenderer else { continue }
+                applyPausedStyle(to: renderer)
                 renderer.setNeedsDisplay()
             }
             // The dot and the photo markers mirror the tint (opaque); only
@@ -671,6 +689,11 @@ extension MapView.Coordinator {
             if inferredRouteOverlays.contains(where: { $0 === polyline }) {
                 return inferredRouteRenderer(for: polyline)
             }
+            if pausedRouteOverlays.contains(where: { $0 === polyline }) {
+                let renderer = MKPolylineRenderer(polyline: polyline)
+                applyPausedStyle(to: renderer)
+                return renderer
+            }
             let renderer = DirectionalPolylineRenderer(polyline: polyline)
             applyStyle(to: renderer)
             routeRenderer = renderer
@@ -695,6 +718,30 @@ extension MapView.Coordinator {
         let renderer = MKPolylineRenderer(polyline: polyline)
         applyInferredStyle(to: renderer)
         return renderer
+    }
+
+    /// Applies the paused-stretch appearance.
+    ///
+    /// Built on the inferred one rather than beside it: both are the route's
+    /// own tint drawn weakly over ground the line crosses without evidence,
+    /// and the walker should not have to learn two visual languages for that.
+    /// The dots and the extra fade are what say which of the two this is —
+    /// nobody was watching, versus nobody was asked to.
+    ///
+    /// Left a plain `MKPolylineRenderer` for the reason the inferred one is:
+    /// a direction along this stretch is precisely what isn't known.
+    func applyPausedStyle(to renderer: MKPolylineRenderer) {
+        applyInferredStyle(to: renderer)
+        #if os(macOS)
+        renderer.strokeColor = NSColor(routeTint)
+            .withAlphaComponent(Self.pausedRouteAlpha)
+        #else
+        renderer.strokeColor = UIColor(routeTint)
+            .withAlphaComponent(Self.pausedRouteAlpha)
+        #endif
+        // swiftlint:disable:next legacy_objc_type
+        renderer.lineDashPattern = Self.pausedRouteDashPattern.map { NSNumber(value: $0) }
+        renderer.lineCap = .round
     }
 
     /// Applies the inferred-stretch appearance, derived from the route's

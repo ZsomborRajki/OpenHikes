@@ -18,25 +18,31 @@ struct DisplayedRoute: Equatable {
     /// drawn as their own overlays so a guess doesn't look like a
     /// measurement — see ``RouteProvenance``.
     let inferredSegments: [[CLLocationCoordinate2D]]
+    /// The stretches of `coordinates` the recording was paused across, drawn
+    /// as their own overlays so a walk with a break in it doesn't read as one
+    /// continuous line — see ``RouteBoundary``.
+    let pausedSegments: [[CLLocationCoordinate2D]]
 
-    /// Defaulted because most callers — every test and every caller that draws
-    /// a fully measured route — have nothing to declare here, and a route with
-    /// no inferred stretches is the ordinary case.
+    /// Both segment lists are defaulted because most callers — every test and
+    /// every caller that draws a fully measured, uninterrupted route — have
+    /// nothing to declare here, and that is the ordinary case.
     init(
         id: UUID,
         coordinates: [CLLocationCoordinate2D],
-        inferredSegments: [[CLLocationCoordinate2D]] = []
+        inferredSegments: [[CLLocationCoordinate2D]] = [],
+        pausedSegments: [[CLLocationCoordinate2D]] = []
     ) {
         self.id = id
         self.coordinates = coordinates
         self.inferredSegments = inferredSegments
+        self.pausedSegments = pausedSegments
     }
 
     /// Coordinates are intentionally excluded: they only ever change together
     /// with `id` (a new hike selection), so comparing `id` is both sufficient
     /// and avoids an O(n) array diff on every SwiftUI update. The inferred
-    /// segments are derived from those same coordinates and excluded for the
-    /// same reason.
+    /// segments and the paused ones are derived from those same coordinates
+    /// and excluded for the same reason.
     ///
     /// Tint and width are excluded because they aren't here: they live in
     /// ``RouteStyle``, so a colour, width or pattern drag never reaches this
@@ -63,7 +69,8 @@ struct DisplayedRoute: Equatable {
         return Self(
             id: hike.id,
             coordinates: drawn.coordinates,
-            inferredSegments: drawn.inferredSegments
+            inferredSegments: drawn.inferredSegments,
+            pausedSegments: drawn.pausedSegments
         )
     }
 }
@@ -76,8 +83,13 @@ final class DisplayedRouteCoordinateCache {
     struct DrawnRoute {
         let coordinates: [CLLocationCoordinate2D]
         let inferredSegments: [[CLLocationCoordinate2D]]
+        let pausedSegments: [[CLLocationCoordinate2D]]
 
-        static let empty = Self(coordinates: [], inferredSegments: [])
+        static let empty = Self(
+            coordinates: [],
+            inferredSegments: [],
+            pausedSegments: []
+        )
     }
 
     private var hikeID: UUID?
@@ -87,15 +99,17 @@ final class DisplayedRouteCoordinateCache {
         drawnRoute(for: hike).coordinates
     }
 
-    /// The projected line and the inferred stretches within it, derived
-    /// together because they come from one walk of the same route — and cached
-    /// together so a body pass that asks for either pays for neither twice.
+    /// The projected line and the stretches within it the map has to draw
+    /// differently — inferred and paused — derived together because they come
+    /// from one walk of the same route, and cached together so a body pass
+    /// that asks for any of them pays for none of them twice.
     func drawnRoute(for hike: Hike) -> DrawnRoute {
         guard hike.id != hikeID else { return cached }
         hikeID = hike.id
         cached = DrawnRoute(
             coordinates: hike.coordinates,
-            inferredSegments: hike.route.inferredSegments
+            inferredSegments: hike.route.inferredSegments,
+            pausedSegments: hike.route.pausedSegments
         )
         return cached
     }

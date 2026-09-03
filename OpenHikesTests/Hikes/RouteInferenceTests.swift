@@ -169,6 +169,57 @@ struct RouteInferenceTests {
         #expect(drawn.inferredSegments.first?.count == 2)
     }
 
+    /// The two claims are drawn by different overlays and mean different
+    /// things, so a route carrying both has to hand the map two lists rather
+    /// than one merged one — see ``RouteBoundary``.
+    @Test("a pause and an inferred stretch reach the map as separate lines")
+    func pausesAndInferencesDoNotMerge() throws {
+        let hike = Hike(
+            title: "Broken",
+            distanceMeters: 5000,
+            route: [
+                measured(47.63, 12.86),
+                inferred(47.64, 12.86),
+                measured(47.65, 12.86),
+                RouteCoordinate(latitude: 47.70, longitude: 12.86, boundary: .paused),
+                measured(47.71, 12.86),
+            ]
+        )
+
+        let drawn = try #require(
+            DisplayedRoute.forSelection(
+                hike,
+                cache: DisplayedRouteCoordinateCache()
+            )
+        )
+
+        #expect(drawn.inferredSegments.count == 1)
+        #expect(drawn.pausedSegments.count == 1)
+        #expect(drawn.inferredSegments.first?.first?.latitude == 47.63)
+        #expect(drawn.pausedSegments.first?.first?.latitude == 47.65)
+        #expect(drawn.pausedSegments.first?.last?.latitude == 47.70)
+    }
+
+    /// A pause travels the way an inference does — as a flag on the live point
+    /// and a mark on the saved one — and nothing else in a saved route could
+    /// reconstruct it.
+    @Test("a resume survives a round trip through a recording point")
+    func recordingPointCarriesPauseBoundary() {
+        var point = RecordingPoint(
+            latitude: 47.63,
+            longitude: 12.86,
+            timestamp: .now,
+            horizontalAccuracy: 8
+        )
+        #expect(point.routeCoordinate.boundary == nil)
+
+        point.flags.insert(.resumed)
+        #expect(point.routeCoordinate.isPauseBoundary)
+        // Two different statements about one leg; setting one must not set the
+        // other.
+        #expect(!point.routeCoordinate.isInferred)
+    }
+
     @Test("provenance survives a round trip through a recording point")
     func recordingPointCarriesProvenance() {
         var point = RecordingPoint(

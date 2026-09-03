@@ -140,7 +140,22 @@ nonisolated private extension GPXExport {
             xml += "    <desc>\(escaped(trackDescription))</desc>\n"
         }
         xml += "    <trkseg>\n"
-        for point in track.route {
+        for (index, point) in track.route.enumerated() {
+            // GPX 1.1's own way of saying the recording stopped and started
+            // again, and the reason a pause is worth persisting at all: it is
+            // the one thing about a walk this format can carry that a single
+            // flat list of points cannot. ``GPXImport`` reads it straight back
+            // as a pause, so a hike exported and re-imported keeps its breaks
+            // rather than flattening into one uninterrupted line.
+            //
+            // Never before the first point: a boundary describes the leg
+            // arriving at a point, so opening a segment there would write an
+            // empty one. A route with no pauses writes exactly the single
+            // segment this always wrote.
+            if index > 0, point.isPauseBoundary {
+                xml += "    </trkseg>\n"
+                xml += "    <trkseg>\n"
+            }
             appendPoint(point, to: &xml)
         }
         xml += "    </trkseg>\n"
