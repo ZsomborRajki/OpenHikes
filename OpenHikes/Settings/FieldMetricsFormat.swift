@@ -122,8 +122,8 @@ nonisolated enum FieldMetricsFormat {
         }
     }
 
-    /// The three columns worth reading off a signpost, in the order they
-    /// answer a question: how often, what it cost the processor, what it wrote.
+    /// Count always leads. Median duration, CPU per occurrence, logical writes,
+    /// average memory and hitch ratio follow, in that order, when reported.
     static func signpostValue(_ signpost: SignpostDigest) -> String {
         var parts = ["\(signpost.count)×"]
         if let median = signpost.duration?.medianUpperBound {
@@ -137,6 +137,9 @@ nonisolated enum FieldMetricsFormat {
         }
         if let memory = signpost.averageMemoryBytes {
             parts.append("\(bytes(memory)) average")
+        }
+        if let hitchTimeRatio = signpost.hitchTimeRatio {
+            parts.append("\(ratio(hitchTimeRatio)) hitch ratio")
         }
         return parts.joined(separator: " · ")
     }

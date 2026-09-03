@@ -72,4 +72,31 @@ nonisolated struct FieldMetricsFormatTests {
         #expect(signpost.cpuSecondsPerOccurrence == 0.015)
         #expect(FieldMetricsFormat.signpostValue(signpost).contains("15 ms CPU each"))
     }
+
+    @Test("a fully populated span emits every decoded measurement in order")
+    func fullyPopulatedSignpost() {
+        let duration = HistogramSummary(buckets: [
+            .init(start: 100, end: 200, count: 2),
+        ])
+        let signpost = SignpostDigest(
+            name: FieldSignpost.Span.recordingSession.rawValue,
+            category: FieldSignpost.category,
+            count: 2,
+            duration: duration,
+            cpuSeconds: 0.030,
+            averageMemoryBytes: 4_194_304,
+            logicalWriteBytes: 1_048_576,
+            hitchTimeRatio: 0.0021
+        )
+        let expected = [
+            "2×",
+            "≤ \(FieldMetricsFormat.milliseconds(200)) median",
+            "\(FieldMetricsFormat.duration(0.015)) CPU each",
+            "\(FieldMetricsFormat.bytes(1_048_576)) written",
+            "\(FieldMetricsFormat.bytes(4_194_304)) average",
+            "\(FieldMetricsFormat.ratio(0.0021)) hitch ratio",
+        ].joined(separator: " · ")
+
+        #expect(FieldMetricsFormat.signpostValue(signpost) == expected)
+    }
 }
