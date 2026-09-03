@@ -18,6 +18,7 @@
 //
 
 import Foundation
+import OpenHikesShared
 import os
 import SwiftData
 
@@ -210,6 +211,28 @@ extension HikeIntentCoordinator {
     private func throwIfRecorderFailed() throws(HikeIntentFailure) {
         guard case .failed(let failure) = recorder.phase else { return }
         throw .recording(failure)
+    }
+}
+
+extension HikeIntentCoordinator: HikeRecordingControlHandling {
+    /// Re-checks the recorder when the action runs rather than trusting the
+    /// control's last projected value, which may have been rendered before a
+    /// recording transition finished.
+    func toggleHikeRecording() async throws -> HikeRecordingControlOutcome {
+        switch recorder.phase {
+        case .idle, .failed:
+            guard authorization != .undecided else {
+                return .requiresForegroundAuthorization
+            }
+            _ = try await startRecording()
+        case .waitingForFix, .recording, .paused:
+            _ = try await stopRecording()
+        case .reviewing:
+            throw HikeIntentFailure.awaitingRouteReview
+        case .saving, .recovering:
+            throw HikeIntentFailure.busyFinishing
+        }
+        return .completed
     }
 }
 
