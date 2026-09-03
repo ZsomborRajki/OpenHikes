@@ -4,16 +4,20 @@
 //
 //  How a budget is stated, and what a violated one says.
 //
-//  Kept apart from the scenarios because these six are the whole vocabulary
+//  Kept apart from the scenarios because these seven are the whole vocabulary
 //  the suite has: a ceiling, a floor, a per-fix ratio, a stall count inside a
-//  phase, a stall count across a whole run, and a worst-case stall length. A
-//  new scenario should be expressible in them, and one that needs a seventh is
-//  usually measuring something it has not finished thinking about.
+//  phase, a stall count across a whole run, a worst-case stall length, and a
+//  worst-case span. A new scenario should be expressible in them, and one that
+//  needs an eighth is usually measuring something it has not finished thinking
+//  about.
 //
-//  Five of the six are scoped to a phase, which is the shape that makes them
+//  Five of the seven are scoped to a phase, which is the shape that makes them
 //  comparable across machines — and it is also a blind spot, because a run is
 //  mostly not inside a phase. ``assertStalls(atMost:in:scenario:)`` is the one
-//  that covers the gaps.
+//  that covers the gaps, and ``assertSceneTurn(atMost:in:scenario:)`` is the
+//  one that covers a gap a stall count cannot: work that blocks the main
+//  thread reliably enough to matter but is only *sometimes* long enough for
+//  the watchdog's ping to land inside it.
 //
 
 import XCTest
@@ -134,6 +138,48 @@ extension PerformanceUITests {
             milliseconds,
             "the longest main-thread stall was \(worst) ms, ceiling \(milliseconds) ms — "
                 + "launch is blocking longer than it used to"
+        )
+    }
+
+    /// A ceiling on the longest main-thread turn a scene-phase change opened.
+    ///
+    /// The budget the backgrounding stall needed and could not have. A stall is
+    /// only recorded when the watchdog's ping happens to land inside the
+    /// blocked window, and the loop turns every ~350 ms, so a *reliable* 270 ms
+    /// block is caught perhaps half the time — which is precisely why
+    /// `docs/PERFORMANCE.md` reported the same finding as "216–372 ms" moving
+    /// between six scenarios rather than as one number belonging to all of
+    /// them. Counting stalls samples the problem; timing the turn measures it.
+    ///
+    /// ``OpenHikesModel/scenePhaseChanged(to:)`` closes the span on the next
+    /// main-queue drain, so it covers what the app cannot bracket from the
+    /// inside: UIKit lays the hosting view out twice for the app-switcher
+    /// snapshot after the app's handler has already returned. The turn is
+    /// therefore the only reading that includes it, and it scales with what is
+    /// on screen — ~120 ms on the bare map, ~270 ms with the elevation chart up.
+    ///
+    /// A maximum rather than a count, for the reason
+    /// ``assertLaunchStall(atMost:in:)`` is: one turn per transition is a cost
+    /// every app pays and the number that matters is how long. Absolute rather
+    /// than a delta, because the launch transition is over before any phase
+    /// begins.
+    ///
+    /// A tripwire above the range measured today, not a target. The whole suite
+    /// reads 115–272 ms, worst case `chart-scrub`; the ceiling is set where an
+    /// old machine's noise cannot reach it but a screen that doubled its layout
+    /// cost cannot hide either. Lower it as P4 comes down.
+    func assertSceneTurn(
+        atMost milliseconds: Double,
+        in counters: PerformanceCounters,
+        scenario: String
+    ) {
+        let worst = counters.maximum(of: "ScenePhaseTurn")
+        XCTAssertLessThanOrEqual(
+            worst,
+            milliseconds,
+            "the longest scene-phase turn in \(scenario) was \(worst) ms, ceiling \(milliseconds) ms — "
+                + "the main thread is blocked longer on a transition than it used to be; "
+                + "SceneResignActive in the event file says how much of it is the app's own"
         )
     }
 }

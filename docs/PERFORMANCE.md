@@ -272,33 +272,78 @@ against the actual view, not another reading.
 Low priority, since nobody taps a chart repeatedly, but it is where a scrub's
 start/stop edges would show a regression first.
 
-### P4 — Backgrounding blocks the main thread for ~300 ms, in nothing the app marks
+### P4 — Backgrounding blocks the main thread for 115–272 ms, in UIKit's snapshot
 
-Two of the nine scenarios — `chart-scrub` and `photo-discovery` — stall the main
-thread **277–384 ms** on the way to the background, in both of two whole-suite
-runs. The event file has the same shape every time: the transition's own renders
-finish, then a **~300 ms window with no mark in it at all**, closing on the
-`MapSheetHikesBody` `@Query` refresh that follows the resign-time save. The
-process is not idle through it — the 1 Hz sampler reads 0.13 and 0.19 CPU
-seconds in the two seconds the window straddles — but that figure is
-process-wide and does not settle whether the main thread was computing or
-waiting. Only `.background` produces it: the `.inactive` and `.active` steps of
-the same round trip run the identical resign path in under 50 ms.
+Going to the background, the main thread is busy for **115–272 ms** in a single
+run-loop turn, in every scenario. It is not the app's resign handler:
+`SceneResignActive` runs in **1–2 ms** and the `mainContext.save()` inside it in
+**0.7–1.2 ms**. Almost all of it happens *after* that handler has returned.
 
-Most of what used to be measured here was the app's own rendering, and is gone:
-a screen declaring `@Environment(\.dismiss)` was re-evaluated five to eight
-times per scene transition, which took `photo-discovery`'s twelve-cell grid,
-`HikePhotoViewer` and `SettingsView`'s seven-section `Form` through a full
-rebuild each time. With the read moved into `DismissButton`, `settings`,
-`photo-gallery`, `recording` and `background-recording` read the launch stall
-and nothing else. What remains is unattributed.
+`ScenePhaseTurn` is what reads it. The span opens in
+`OpenHikesModel.scenePhaseChanged(to:)` and closes on the next main-queue drain,
+which is a different run-loop stage from the scene-settings callout the handler
+is called inside — so it covers everything the main thread goes on to do before
+it is free again, including the part the app has no callback for. Worst turn per
+scenario, in each of two whole-suite runs:
 
-*Next step:* three candidates, and nothing separates them yet — the `@Query`
-refetch, the `mainContext.save()` in `sceneWillResignActive`, and UIKit's own
-snapshot of the window for the app switcher. A signpost interval around each, or
-a Time Profiler trace across a `press(.home)`, would say which.
-`assertStalls(atMost:in:scenario:)` holds a whole-run budget of launch + 1 until
-one of them owns it.
+| Scenario | Worst turn, two runs | What is on screen |
+|---|---|---|
+| `chart-scrub` | **272, 271 ms** | hike detail, elevation chart |
+| `photo-discovery` | **231, 226 ms** | discovery sheet over hike detail |
+| `settings` | 186, 184 ms | Settings pushed |
+| `recording` | 143, 138 ms | recording |
+| `background-recording` | 140, 138 ms | recording |
+| `idle` | 133, 136 ms | bare map |
+| `photo-gallery` | 129, 129 ms | photo strip |
+| `map-browsing` | 117, 123 ms | bare map |
+| `offline-browsing` | 115, 123 ms | bare map |
+
+**What it is.** A `sample` of the process across a `press(.home)` puts the main
+thread, in every sample taken inside the window, under
+`-[UIApplication _performSnapshotsWithAction:forScene:completion:]` →
+`_applyOverrideSettings:forActions:` → `CA::Transaction::commit()` →
+`_UIHostingView.layoutSubviews()`. iOS renders the app-switcher card by applying
+an override trait collection to the scene and laying the hosting view out —
+**twice**, once per appearance, as two `FBSSceneSnapshotAction` requests. There
+is no callback inside it, which is why the window used to read as blank.
+
+So the cost is a full layout pass of whatever is on screen, paid twice, at a
+moment the app does not choose. That is why it tracks the screen rather than the
+scenario: ~120 ms for the map alone, ~270 ms with the elevation chart up. Only
+`.background` does it — `.inactive` and `.active` run the same handler in 2–4 ms
+and their own turns are 100 ms or less.
+
+**None of the three candidates this section used to list owns it.** The
+`mainContext.save()` is 0.7–1.2 ms of a 272 ms turn. The `MapSheetHikesBody`
+`@Query` refresh the window appeared to close on happens *after* the turn ends,
+not inside it — the block is one run-loop turn and the refetch is the next one.
+UIKit's snapshot was the third guess and it is the whole of it.
+
+**What came off it.** `ElevationChartView` applied `.foregroundStyle` to each
+mark rather than to the series, so a `LinearGradient` and the two
+`Color.opacity` calls behind it were built once per plotted sample — up to
+`RouteProfile.plottedSampleBudget`, 500 of them — on every pass of that body,
+including both snapshot passes. Applied to the two `ForEach`es instead it is
+built once and the picture is identical. `chart-scrub`'s background turn went
+**301 → 265 ms** and its `.inactive` turn **123 → 102 ms**, in two runs either
+side; `photo-discovery` reads 231 ms because the same chart is behind its sheet.
+
+**What is left is the system's, and a device would say how much.** A layout pass
+of the visible screen, twice, is what iOS costs an app for the switcher card;
+the ~120 ms the bare map reads is the floor this app can reach without changing
+what it draws. How much of *that* is the Simulator's synchronous round trip to
+its render server is not answerable here — see *Blind spots* — and it is the
+first thing to check on a device before anyone spends more on the screens above
+the floor.
+
+`assertSceneTurn(atMost:in:scenario:)` holds a ceiling of 450 ms. It replaces
+nothing: `assertStalls(atMost:in:scenario:)` still holds launch + 1, and the two
+answer different questions. A stall is only recorded when the watchdog's ping
+lands inside the blocked window, and the loop turns every ~350 ms — so a
+reliable 270 ms block is caught about half the time, which is exactly why this
+finding was reported here as "216–372 ms" moving between six scenarios instead
+of as one number belonging to all of them. Counting stalls samples the
+problem; timing the turn measures it.
 
 ## Blind spots
 
@@ -392,19 +437,34 @@ to chase one you cannot name.
    every scene transition — seven of eight passes named `_dismiss` and nothing
    else. Take it out again once the question is answered; it is a debugging
    line, not instrumentation.
-3. **Watch it in Instruments.** The same marks are `os_signpost` events, so
+3. **Sample the process, when nothing the app marks is running.** Some windows
+   belong to no mark because nothing in them is the app's to mark. The
+   Simulator's app is an ordinary macOS process, so `sample` reaches it:
+
+   ```sh
+   sample $(pgrep -x OpenHikes) 9 1 -mayDie -f /tmp/turn.txt
+   ```
+
+   Start it a few seconds before the moment in question, then read the main
+   thread's tree and correlate the timestamps against the scenario's event file.
+   That is how P4's blank ~300 ms was identified as UIKit's app-switcher
+   snapshot — every sample inside the window was under
+   `_performSnapshotsWithAction:`, which no signpost of ours could have named.
+   A `Time Profiler` trace answers the same question with a nicer timeline and a
+   lot more setup.
+4. **Watch it in Instruments.** The same marks are `os_signpost` events, so
    *File › Recording Options › os_signpost* plus the **Energy Log** and
    **Location Energy Impact** instruments give the render stream and the battery
    cost on one timeline. This is the only way to see a radio wake-up you did not
    cause.
-4. **Reproduce it as a scenario.** Add a `test…` to `PerformanceUITests`, launch
+5. **Reproduce it as a scenario.** Add a `test…` to `PerformanceUITests`, launch
    with `--ui-test-performance-log=<name>`, wrap the interaction in
    `measurePhase(named:in:seconds:)`, and read the counter deltas. If the number
    is stable, assert it; if it is not, the instability is the finding.
-5. **Drive a real route.** `Scripts/simulate-hike.sh` plays a GPX through the
+6. **Drive a real route.** `Scripts/simulate-hike.sh` plays a GPX through the
    simulator for long-running behaviour a three-fix scenario cannot show —
    drift, growth per fix, the accumulator deciding you have stopped.
-6. **Read the energy section.** Radio wake-ups, refused fetches by reason, the
+7. **Read the energy section.** Radio wake-ups, refused fetches by reason, the
    location funnel, and every GPS reconfiguration with a timestamp. A scenario
    that renders perfectly and opens forty connections is a bug this document
    cares about just as much.
