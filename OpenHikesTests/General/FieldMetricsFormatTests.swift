@@ -19,13 +19,21 @@
 //  2. **A histogram statistic is an upper bound.** `HistogramSummary` cannot
 //     produce a true median, so every statistic drawn from one keeps its "≤".
 //
-//  Everything here is pinned to one region through the formatter's `locale`
-//  seam. Separators, grouping and byte units are all regional, so a suite that
-//  read `Locale.current` would agree with whatever the machine was set to —
-//  which is how a formatting bug survives a green run. Pinning is also what
-//  lets the assertions be whole strings rather than "contains", so a change to
-//  a unit, a rounding or a separator has to be argued for rather than
-//  discovered.
+//  Everything here is pinned through the formatter's `locale` seam rather than
+//  read from the host. Separators, grouping and byte units are all regional,
+//  so a suite that took `Locale.current` as its input would agree with
+//  whatever the machine was set to — which is how a formatting bug survives a
+//  green run. Pinning is also what lets the assertions be whole strings rather
+//  than "contains", so a change to a unit, a rounding or a separator has to be
+//  argued for rather than discovered.
+//
+//  Most of them read `en_US`, which on its own proves nothing about the seam:
+//  on an American runner, a formatter that took the `locale` argument and
+//  never threaded it into the format style would produce every string below
+//  unchanged. *The seam itself* is the section that closes that. It runs
+//  values through `en_US` and `de_DE`, which are each other's opposite in both
+//  the decimal separator and the grouping separator, so whichever region the
+//  host is set to, at least one side of every pair disagrees with it.
 //
 
 import Foundation
@@ -35,6 +43,10 @@ import Testing
 @Suite("Field metrics format")
 nonisolated struct FieldMetricsFormatTests {
     private static let locale = Locale(identifier: "en_US")
+    /// The other half of every regional pair below. German writes a comma
+    /// where American English writes a point, and a point where it writes a
+    /// comma, so no host region can satisfy both sides of a pair at once.
+    private static let german = Locale(identifier: "de_DE")
 
     private static func duration(_ seconds: Double?) -> String {
         FieldMetricsFormat.duration(seconds, locale: locale)
@@ -271,6 +283,97 @@ nonisolated struct FieldMetricsFormatTests {
     func diagnosticWithoutDetail() {
         let bare = FieldDiagnosticDigest(kind: .crash)
         #expect(FieldMetricsFormat.diagnosticValue(bare, locale: Self.locale) == "No detail")
+    }
+
+    // MARK: - The seam itself
+
+    /// German and American English are each other's opposite in both
+    /// separators — a comma for the decimal point and a point for the
+    /// grouping — so a value carrying each in turn cannot agree with the same
+    /// ambient region twice. Every other case in this file is `en_US`, and on
+    /// an `en_US` runner every one of them would still pass if the formatter
+    /// took the `locale` argument and never threaded it into the format
+    /// style. These pairs are what makes that fail: whichever region the host
+    /// is set to, at least one side of every pair disagrees with it.
+    @Test("a number follows the region it was handed, not the machine's")
+    func numbersFollowTheHandedRegion() {
+        #expect(FieldMetricsFormat.ratio(0.0012, locale: Self.locale) == "0.0012")
+        #expect(FieldMetricsFormat.ratio(0.0012, locale: Self.german) == "0,0012")
+
+        #expect(FieldMetricsFormat.duration(0.0005, locale: Self.locale) == "0.5 ms")
+        #expect(FieldMetricsFormat.duration(0.0005, locale: Self.german) == "0,5 ms")
+
+        #expect(FieldMetricsFormat.duration(90, locale: Self.locale) == "1.5 min")
+        #expect(FieldMetricsFormat.duration(90, locale: Self.german) == "1,5 min")
+
+        #expect(FieldMetricsFormat.duration(5400, locale: Self.locale) == "1.5 h")
+        #expect(FieldMetricsFormat.duration(5400, locale: Self.german) == "1,5 h")
+
+        #expect(FieldMetricsFormat.milliseconds(1234.6, locale: Self.locale) == "1,235 ms")
+        #expect(FieldMetricsFormat.milliseconds(1234.6, locale: Self.german) == "1.235 ms")
+
+        #expect(FieldMetricsFormat.bytes(1_572_864, locale: Self.locale) == "1.5 MB")
+        #expect(FieldMetricsFormat.bytes(1_572_864, locale: Self.german) == "1,5 MB")
+    }
+
+    /// A percentage is asserted by prefix rather than whole, because the space
+    /// German puts before the sign is a non-breaking one and would sit in this
+    /// file as an invisible character. The separator is the part under test.
+    @Test("a percentage takes its separator from the handed region too")
+    func percentageFollowsTheHandedRegion() {
+        let american = FieldMetricsFormat.percentage(0.1234, locale: Self.locale)
+        let germanShare = FieldMetricsFormat.percentage(0.1234, locale: Self.german)
+        #expect(american == "12.3%")
+        #expect(germanShare.hasPrefix("12,3"))
+        #expect(american != germanShare)
+    }
+
+    /// The seam has to survive the two entry points that format nothing
+    /// themselves and delegate every column — a row built from a region it was
+    /// not handed is the same bug one level further along.
+    @Test("a composed row carries the region into every column it delegates")
+    func composedRowsFollowTheHandedRegion() {
+        let summary = HistogramSummary(buckets: [.init(start: 0, end: 1500, count: 2)])
+        let signpost = SignpostDigest(
+            name: FieldSignpost.Span.offlineDownload.rawValue,
+            category: FieldSignpost.category,
+            count: 2,
+            duration: summary,
+            cpuSeconds: 0.001,
+            logicalWriteBytes: 1_572_864
+        )
+        let write = FieldDiagnosticDigest(kind: .diskWriteException, bytes: 1_572_864)
+
+        #expect(
+            FieldMetricsFormat.histogram(summary, unit: "ms", locale: Self.german)
+                == "≤ 1.500 ms median · ≤ 1.500 ms p90 · 2 samples"
+        )
+        #expect(
+            FieldMetricsFormat.signpostValue(signpost, locale: Self.german)
+                == "2× · ≤ 1.500 ms median · 0,5 ms CPU each · 1,5 MB written"
+        )
+        #expect(FieldMetricsFormat.diagnosticValue(write, locale: Self.german) == "1,5 MB")
+    }
+
+    /// A date is regional in more than its separators, so the period is
+    /// checked against the same style rather than against a spelling of the
+    /// German calendar this file would have to keep up to date — and against
+    /// the American rendering, which it must not be.
+    @Test("a period is written in the region it was handed")
+    func periodFollowsTheHandedRegion() {
+        let start = Date(timeIntervalSince1970: 1_700_000_000)
+        let end = start.addingTimeInterval(86_400)
+        let report = Self.report(from: start, to: end)
+        let style = Date.FormatStyle(date: .abbreviated, time: .shortened).locale(Self.german)
+
+        #expect(
+            FieldMetricsFormat.period(report, locale: Self.german)
+                == "\(start.formatted(style)) – \(end.formatted(style))"
+        )
+        #expect(
+            FieldMetricsFormat.period(report, locale: Self.german)
+                != FieldMetricsFormat.period(report, locale: Self.locale)
+        )
     }
 
     // MARK: - The report's own header
