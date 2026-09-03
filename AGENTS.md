@@ -16,8 +16,8 @@ code is written here, and this file deliberately does not restate it.
 Supporting documents, each owning its own facts:
 
 - [`README.md`](README.md) — what the app is, what it needs, how to build it, and how it is laid out.
-- [`docs/CONTRIBUTING.md`](docs/CONTRIBUTING.md) — the short version for a first change.
-- [`docs/PERFORMANCE.md`](docs/PERFORMANCE.md) — what the app costs and how that was measured.
+- [`CONTRIBUTING.md`](CONTRIBUTING.md) — the short version for a first change.
+- [`PERFORMANCE.md`](PERFORMANCE.md) — what the app costs and how that was measured.
 - [Issues](https://github.com/ZsomborRajki/OpenHikes/issues) — the open work. Missing features and undecided product questions are tracked there, not in a checked-in list.
 
 ## Commands

@@ -42,7 +42,7 @@ extension OpenHikesModel {
     /// and — the part that matters — the app-switcher snapshots UIKit takes
     /// after the handler returns.
     ///
-    /// That last stretch is why this exists. `docs/PERFORMANCE.md` carried a
+    /// That last stretch is why this exists. `PERFORMANCE.md` carried a
     /// ~300 ms window "with no mark in it at all" for as long as the harness
     /// has been measuring, because nothing running in it was the app's to mark
     /// at all: `-[UIApplication _performSnapshotsWithAction:forScene:]` lays

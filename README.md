@@ -88,8 +88,8 @@ CI runs strict SwiftLint, the shared package suite in both debug and release, th
 ## Documentation
 
 - [`AGENTS.md`](AGENTS.md) and [`.github/copilot-instructions.md`](.github/copilot-instructions.md) — the architecture, the conventions, the energy policies, and the decisions already settled.
-- [`CONTRIBUTING.md`](docs/CONTRIBUTING.md) — the short version for a first change.
-- [`PERFORMANCE.md`](docs/PERFORMANCE.md) — what the app costs in frames and in battery, and how that was measured.
+- [`CONTRIBUTING.md`](CONTRIBUTING.md) — the short version for a first change.
+- [`PERFORMANCE.md`](PERFORMANCE.md) — what the app costs in frames and in battery, and how that was measured.
 - [`SECURITY.md`](SECURITY.md) — how to report a vulnerability privately.
 - [Issues](https://github.com/ZsomborRajki/OpenHikes/issues) — the open work: bugs, missing features, and product decisions that are still open.
 

@@ -160,7 +160,7 @@ struct ElevationChartView: View, Equatable {
     /// That cost is paid on every pass of this body, and the app does not
     /// control how often that is: going to the background, UIKit lays the
     /// hosting view out twice for the app-switcher snapshot, and both passes
-    /// go through here. See P4 in `docs/PERFORMANCE.md`.
+    /// go through here. See P4 in `PERFORMANCE.md`.
     ///
     /// Drawing order is unchanged. Swift Charts groups marks into series
     /// before it draws, so "every area, then every line" and "each sample's
