@@ -18,6 +18,7 @@
 //
 
 import Foundation
+import os
 import SwiftData
 
 @MainActor
@@ -26,6 +27,11 @@ final class HikeIntentCoordinator {
     private let container: ModelContainer
     private let calendar: Calendar
     private let clock: @Sendable () -> Date
+
+    /// Where a store failure's own words go. They are logged rather than
+    /// spoken: the underlying text is a SwiftData message written for a
+    /// developer, and ``HikeIntentFailure/storage`` is read aloud by Siri.
+    private static let logger = Logger(subsystem: "OpenHikes", category: "Intents")
 
     init(
         recorder: HikeRecorder,
@@ -43,15 +49,25 @@ final class HikeIntentCoordinator {
 // MARK: - Controlling a recording
 
 extension HikeIntentCoordinator {
-    /// Whether Core Location has been asked yet.
+    /// What Core Location will do to a recording started right now.
     ///
     /// Read by the intents *before* starting rather than inferred from a
     /// failure afterwards: `HikeRecorder.start()` answers `.notDetermined` by
-    /// putting up the system prompt and waiting, which from a background intent
-    /// is a recording that silently never begins.
+    /// putting up the system prompt and returning, which from a background
+    /// intent is a recording that silently never begins.
+    ///
+    /// Reduced accuracy is reported separately from `.granted` because it is
+    /// the *second* prompt location can put up and the recorder walks into it
+    /// on both paths that matter: `activateSessionIfPossible()` and `resume()`
+    /// each call `requestTemporaryFullAccuracy()` and then fail with
+    /// `.preciseLocationRequired` when it did not land. That request cannot
+    /// show its alert from the background either, so treating a
+    /// reduced-accuracy walker as authorized turns "start a hike" into "turn
+    /// on Precise Location in Settings" for somebody whose phone is in their
+    /// pocket.
     var authorization: HikeIntentAuthorization {
         switch recorder.source.authorization {
-        case .authorized: .granted
+        case .authorized: recorder.source.hasFullAccuracy ? .granted : .reducedAccuracy
         case .denied: .denied
         case .notDetermined: .undecided
         }
@@ -65,6 +81,7 @@ extension HikeIntentCoordinator {
     /// added later fails to compile here rather than falling into a default
     /// that quietly reports success.
     func startRecording() async throws(HikeIntentFailure) -> LiveRecordingReport {
+        await settleRecorder()
         switch recorder.phase {
         // `start()` resets a failed session and tries again, so a refusal the
         // walker has since fixed — permission granted in Settings — starts
@@ -83,7 +100,8 @@ extension HikeIntentCoordinator {
         return liveReport()
     }
 
-    func pauseRecording() throws(HikeIntentFailure) -> LiveRecordingReport {
+    func pauseRecording() async throws(HikeIntentFailure) -> LiveRecordingReport {
+        await settleRecorder()
         guard recorder.phase == .waitingForFix || recorder.phase == .recording else {
             throw .noActiveRecording
         }
@@ -93,6 +111,7 @@ extension HikeIntentCoordinator {
     }
 
     func resumeRecording() async throws(HikeIntentFailure) -> LiveRecordingReport {
+        await settleRecorder()
         guard recorder.phase == .paused else { throw .notPaused }
         await recorder.resume()
         try throwIfRecorderFailed()
@@ -107,6 +126,7 @@ extension HikeIntentCoordinator {
     /// the choice is a map with two lines on it, and there is no voice answer
     /// to that question.
     func stopRecording() async throws(HikeIntentFailure) -> FinishedHikeReport {
+        await settleRecorder()
         switch recorder.phase {
         case .waitingForFix, .recording, .paused: break
         case .idle: throw .noActiveRecording
@@ -120,7 +140,13 @@ extension HikeIntentCoordinator {
         } catch let failure as RecordingFailure {
             throw .recording(failure)
         } catch {
-            throw .storage(error.localizedDescription)
+            // Logged rather than spoken, as in `fetch(_:)` below, and its own
+            // case rather than `.storage`: nothing was read here, a hike was
+            // written, and the two failures have nothing to say to each other.
+            Self.logger.error(
+                "Stopping a recording for an intent failed: \(error.localizedDescription, privacy: .public)"
+            )
+            throw .couldNotSave
         }
         switch outcome {
         case .needsReview: throw .awaitingRouteReview
@@ -136,7 +162,8 @@ extension HikeIntentCoordinator {
     /// is reported as the failure — its distance is real but it is no longer
     /// being added to, and reading it back as progress is how somebody walks
     /// another hour on a recording that stopped.
-    func currentRecording() throws(HikeIntentFailure) -> LiveRecordingReport {
+    func currentRecording() async throws(HikeIntentFailure) -> LiveRecordingReport {
+        await settleRecorder()
         switch recorder.phase {
         case .waitingForFix, .recording, .paused: return liveReport()
         case .failed(let failure): throw .recording(failure)
@@ -152,8 +179,27 @@ extension HikeIntentCoordinator {
             ),
             elapsed: recorder.elapsedSeconds(),
             isPaused: recorder.phase == .paused,
-            trailName: recorder.stats.currentTrail?.name
+            trailName: recorder.stats.currentTrail?.name,
+            // Carried rather than dropped: the recording screen dims this same
+            // card when newer fixes have overtaken the match, and on a densely
+            // sampled walk that is routinely true. This surface is the one
+            // used when the walker *cannot* look at the screen, so it is the
+            // last place to state a stale match flatly.
+            isTrailNameStale: recorder.stats.isCurrentTrailStale
         )
+    }
+
+    /// Waits out a recovery pass before reading ``HikeRecorder/phase``.
+    ///
+    /// A launch that recovers automatically is in `.recovering` from the
+    /// instant the recorder is constructed, whether or not there is anything
+    /// to recover — and the launch this whole design exists for is the one the
+    /// system makes *in order to* perform an intent. Without this, every
+    /// intent on a cold start answers about the launch: "still finishing your
+    /// last recording" to somebody who has none, "not recording" to somebody
+    /// who is.
+    private func settleRecorder() async {
+        await recorder.settleAutomaticRecovery()
     }
 
     /// Turns the recorder's own `.failed` phase into a thrown error.
@@ -190,8 +236,10 @@ extension HikeIntentCoordinator {
         let day = calendar.startOfDay(for: date)
         guard let next = calendar.date(byAdding: .day, value: 1, to: day) else {
             // Only reachable for a date the calendar cannot step from, which
-            // is not a state the walker can be told anything useful about.
-            throw .storage("That day couldn't be worked out.")
+            // is not a state the walker can be told anything useful about —
+            // and not a store failure, so not `.storage`, whose own sentence
+            // would claim their hikes could not be read.
+            throw .unknownDay
         }
         return try totals(from: day, to: next)
     }
@@ -227,17 +275,42 @@ extension HikeIntentCoordinator {
         do {
             return try ModelContext(container).fetch(descriptor)
         } catch {
-            throw .storage(error.localizedDescription)
+            // Logged rather than carried into the failure: SwiftData's message
+            // is written for a developer, and everything a `HikeIntentFailure`
+            // holds is read out loud.
+            Self.logger.error("Reading hikes for an intent failed: \(error.localizedDescription, privacy: .public)")
+            throw .storage
         }
     }
 
+    /// Reads the elapsed clock off the route's own end stamps rather than
+    /// through ``Hike/routeStatistics``.
+    ///
+    /// That property is documented at its declaration as deriving every
+    /// statistic "from scratch, on the calling thread, on every read", and
+    /// this coordinator is `@MainActor` — so a saved multi-hour hike, which is
+    /// thousands of points, would run a full accumulator pass on the main
+    /// actor inside an intent that has a system execution budget. Both report
+    /// paths reach here, and one of them lands immediately after a save.
+    ///
+    /// The answer is the same one: `HikeRouteStatistics` takes its duration
+    /// between the first and last *stamped* points, which is what these two
+    /// searches find, and calls it `nil` unless the clock actually ran.
     private static func report(for hike: Hike) -> FinishedHikeReport {
-        FinishedHikeReport(
+        let route = hike.route
+        let first = route.first { $0.timestamp != nil }?.timestamp
+        let last = route.last { $0.timestamp != nil }?.timestamp
+        let duration: TimeInterval? = if let first, let last, last > first {
+            last.timeIntervalSince(first)
+        } else {
+            nil
+        }
+        return FinishedHikeReport(
             id: hike.id,
             title: hike.displayTitle,
             date: hike.date,
             distance: hike.distance,
-            duration: hike.routeStatistics.duration
+            duration: duration
         )
     }
 }

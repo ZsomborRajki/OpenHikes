@@ -25,11 +25,16 @@ struct HikeIntentPhrasingTests {
             distance: Measurement(value: 5200, unit: .meters),
             elapsed: 4500,
             isPaused: false,
-            trailName: nil
+            trailName: nil,
+            isTrailNameStale: false
         ).spokenSummary
 
         #expect(summary.contains("You're"))
-        #expect(summary.contains(HikeFormat.duration(4500)))
+        // The *spoken* duration: `HikeFormat.duration` is narrow because a stat
+        // tile has room for "1h 25m" and a synthesiser handed it is guessing,
+        // which is the same reason the distance beside it is `.wide`.
+        #expect(summary.contains(HikeFormat.spokenDuration(4500)))
+        #expect(!summary.contains(HikeFormat.duration(4500)))
     }
 
     @Test("a paused recording says it is paused")
@@ -38,7 +43,8 @@ struct HikeIntentPhrasingTests {
             distance: Measurement(value: 1000, unit: .meters),
             elapsed: 600,
             isPaused: true,
-            trailName: nil
+            trailName: nil,
+            isTrailNameStale: false
         ).spokenSummary
 
         #expect(summary.contains("paused"))
@@ -50,10 +56,30 @@ struct HikeIntentPhrasingTests {
             distance: Measurement(value: 2400, unit: .meters),
             elapsed: 1800,
             isPaused: false,
-            trailName: "Kalvarienberg"
+            trailName: "Kalvarienberg",
+            isTrailNameStale: false
         ).spokenSummary
 
         #expect(summary.contains("on Kalvarienberg"))
+        #expect(!summary.contains("last on"))
+    }
+
+    /// The recording screen dims this same card when newer fixes have
+    /// overtaken the match. This surface is the one used when the walker
+    /// cannot look at that screen, so it is the last place to drop the hedge:
+    /// somebody who stepped off the path a minute ago must not hear that they
+    /// are still on it.
+    @Test("a match newer fixes have overtaken is hedged rather than stated")
+    func aStaleTrailIsHedged() {
+        let summary = LiveRecordingReport(
+            distance: Measurement(value: 2400, unit: .meters),
+            elapsed: 1800,
+            isPaused: false,
+            trailName: "Kalvarienberg",
+            isTrailNameStale: true
+        ).spokenSummary
+
+        #expect(summary.contains("last on Kalvarienberg"))
     }
 
     @Test("a trail matched to an unnamed way is left out rather than read as blank")
@@ -62,7 +88,8 @@ struct HikeIntentPhrasingTests {
             distance: Measurement(value: 2400, unit: .meters),
             elapsed: 1800,
             isPaused: false,
-            trailName: ""
+            trailName: "",
+            isTrailNameStale: false
         ).spokenSummary
 
         #expect(!summary.contains(" on "))
@@ -79,7 +106,7 @@ struct HikeIntentPhrasingTests {
         ).spokenSummary
 
         #expect(summary.hasPrefix("Ridge Loop:"))
-        #expect(summary.contains(HikeFormat.duration(7200)))
+        #expect(summary.contains(HikeFormat.spokenDuration(7200)))
     }
 
     @Test("an imported route with no clock reports distance without a duration")
@@ -127,6 +154,22 @@ struct HikeIntentPhrasingTests {
 
         #expect(failure.errorDescription?.contains("pick which trail") == true)
         #expect(failure.recoverySuggestion?.contains("Open OpenHikes") == true)
+    }
+
+    /// `.storage` is read aloud as its description *and* its recovery
+    /// suggestion in one breath, so a suggestion carrying SwiftData's own
+    /// words would have Siri say "Your hikes couldn't be read." followed by a
+    /// developer's error string. And the calendar failure is not a store
+    /// failure at all — reusing `.storage` for it claimed something false
+    /// before saying something unrelated.
+    @Test("a store failure is spoken in the app's words rather than the store's")
+    func aStoreFailureDoesNotReadOutItsOwnDiagnostics() {
+        let storage = HikeIntentFailure.storage
+        let day = HikeIntentFailure.unknownDay
+
+        #expect(storage.recoverySuggestion == "Open OpenHikes to check on your hikes.")
+        #expect(day.errorDescription?.contains("couldn't be read") == false)
+        #expect(day.recoverySuggestion == nil)
     }
 
     @Test("a recorder failure is passed through in the recorder's own words")

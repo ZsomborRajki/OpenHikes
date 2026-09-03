@@ -25,6 +25,10 @@ nonisolated enum HikeIntentFailure: LocalizedError, Equatable, Sendable {
     /// still being recovered. Both are brief, and both are states in which
     /// starting a new hike would silently do nothing.
     case busyFinishing
+    /// Stopping ended in something the recorder does not have a word for. The
+    /// underlying text is logged where it is caught rather than carried here:
+    /// every string this enum holds is read out loud.
+    case couldNotSave
     /// Asked to stop, pause or report on a recording that is not running.
     case noActiveRecording
     /// Nothing has been recorded or imported yet.
@@ -33,12 +37,19 @@ nonisolated enum HikeIntentFailure: LocalizedError, Equatable, Sendable {
     case notPaused
     /// The recorder refused, in its own words.
     case recording(RecordingFailure)
-    /// The store could not be read.
-    case storage(String)
+    /// The store could not be read. Carries nothing for the same reason
+    /// ``couldNotSave`` does not.
+    case storage
+    /// The walker's calendar could not name the day being asked about. Not a
+    /// store failure — nothing was read — and so not ``storage``, whose
+    /// sentence would say otherwise.
+    case unknownDay
 
     var errorDescription: String? {
         switch self {
         case .busyFinishing: "OpenHikes is still finishing your last recording."
+        case .couldNotSave: "Your hike couldn't be saved."
+        case .unknownDay: "OpenHikes couldn't work out which day that is."
         case .noActiveRecording: "OpenHikes isn't recording a hike right now."
         case .alreadyRecording: "OpenHikes is already recording a hike."
         case .notPaused: "That hike isn't paused."
@@ -52,11 +63,15 @@ nonisolated enum HikeIntentFailure: LocalizedError, Equatable, Sendable {
 
     var recoverySuggestion: String? {
         switch self {
-        case .alreadyRecording, .noActiveRecording, .notPaused, .noHikesYet: nil
+        case .alreadyRecording, .noActiveRecording, .notPaused, .noHikesYet, .unknownDay:
+            nil
         case .busyFinishing: "Try again in a moment."
         case .recording(let failure): failure.recoverySuggestion
         case .awaitingRouteReview: "Open OpenHikes to finish reviewing it."
-        case .storage(let detail): detail
+        // Fixed rather than the store's own words: what SwiftData has to say
+        // about a failed fetch is a sentence for a developer, and this one is
+        // spoken. It is logged in `HikeIntentCoordinator.fetch(_:)` instead.
+        case .couldNotSave, .storage: "Open OpenHikes to check on your hikes."
         }
     }
 }

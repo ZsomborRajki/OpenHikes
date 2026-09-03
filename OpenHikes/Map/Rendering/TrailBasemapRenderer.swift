@@ -140,6 +140,7 @@ actor TrailBasemapRenderer {
            // manifest: without this check it would keep claiming the work is
            // done while the widget quietly fell back to the line glyph.
            SharedStore.hasAllBasemapImages(in: existing),
+           Self.holdsEveryCombination(existing),
            Self.isAtIntendedScale(existing) { return }
 
         inFlight = request
@@ -190,8 +191,11 @@ actor TrailBasemapRenderer {
                 // and appearance, and a set holding the one it is being asked
                 // for draws a map where an all-or-nothing set draws the line
                 // glyph. The combinations that failed fall back until the
-                // next selection change re-renders — which is what
-                // discarding the whole pass would have given all four.
+                // next pass — which is what discarding the whole pass would
+                // have given all four — and a short set is what
+                // ``holdsEveryCombination(_:)`` refuses to accept as done, so
+                // the next pass is the next refresh rather than the next
+                // change of coverage.
                 guard SharedStore.writeBasemapImage(rendered.data, named: fileName) else { continue }
                 written.insert(fileName)
                 images.append(
@@ -500,6 +504,29 @@ actor TrailBasemapRenderer {
     /// of a context it *constructed* at that scale rather than ones it
     /// measured, so a pass that publishes anything publishes something this
     /// accepts.
+    /// Whether every shape-and-appearance combination the widget can ask for
+    /// is in this manifest.
+    ///
+    /// Without it the early-out above accepts a short set forever: its other
+    /// two questions — the coverage, and whether the files are on disk — are
+    /// asked of the manifest's *own* images, so a manifest holding three of
+    /// four answers yes to both. Re-selecting the same trail would return
+    /// before rendering anything, and the combination that failed would draw
+    /// the line glyph until the trail's geometry changed or ``invalidate()``
+    /// ran. Refusing a short set makes the fallback last until the next
+    /// refresh instead, which is the whole reason a partial pass publishes.
+    static func holdsEveryCombination(_ set: TrailBasemapSet) -> Bool {
+        for variant in TrailBasemapVariant.allCases {
+            for appearance in TrailBasemapAppearance.allCases
+            where !set.images.contains(
+                where: { $0.variant == variant && $0.appearance == appearance }
+            ) {
+                return false
+            }
+        }
+        return true
+    }
+
     static func isAtIntendedScale(_ set: TrailBasemapSet) -> Bool {
         set.images.allSatisfy { image in
             let intended = intendedPixelSize(for: image.variant)
