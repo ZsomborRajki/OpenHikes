@@ -106,7 +106,7 @@ jobs:
           curl --fail --location --retry 3 \
             --output SwiftLint.pkg \
             "https://github.com/realm/SwiftLint/releases/download/${version}/SwiftLint.pkg"
-          echo "825e687d618e17d24bd5fad6d2cf98d4c32a157940ad5b7ce8ae4d722d6afb3a  SwiftLint.pkg" \
+          echo "3fb0202842701762880cc2cf04fc394398bab3f16a04dd76e000e02d07e32486  SwiftLint.pkg" \
             | shasum --algorithm 256 --check
           sudo installer -pkg SwiftLint.pkg -target /
           rm SwiftLint.pkg
