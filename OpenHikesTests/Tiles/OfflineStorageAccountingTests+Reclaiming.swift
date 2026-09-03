@@ -155,7 +155,14 @@ extension StorageAccountingTests {
 
     // MARK: - Expiration
 
-    @Test("launch cleanup removes tiles after seven days from both disk tiers")
+    /// The sweep clears the browsing tier and leaves saved coverage alone.
+    ///
+    /// It used to take both, which is what deleted a walker's downloaded map on
+    /// the launch after its seventh day — the hike went on claiming tiles whose
+    /// bytes were gone, and the claim was only discovered to be empty out of
+    /// signal. Age now sends a durable tile to be refreshed on its next load;
+    /// what bounds that tier is what hikes claim, not how old it is.
+    @Test("launch cleanup expires the browsing tier and keeps saved coverage")
     func launchCleanupRemovesExpiredTiles() async throws {
         let staleBrowsed = key(16, 24, 0)
         let staleSaved = key(16, 24, 1)
@@ -169,13 +176,15 @@ extension StorageAccountingTests {
 
         let removed = await removeExpiredTiles()
 
-        #expect(removed >= 2)
+        #expect(removed >= 1)
         #expect(!sandbox.isBrowsed(staleBrowsed))
-        #expect(!sandbox.isSaved(staleSaved))
+        #expect(sandbox.isSaved(staleSaved), "a saved map is not deleted for being a week old")
         #expect(sandbox.isBrowsed(freshBrowsed), "tiles inside the seven-day TTL remain cached")
     }
 
-    @Test("an expired tile is deleted instead of being displayed")
+    /// Cache, unlike coverage, really is deleted where it lies: nobody asked
+    /// for it, and the only cost of losing it is fetching it again.
+    @Test("an expired browsing tile is deleted instead of being displayed")
     func displayLookupRejectsExpiredTile() async throws {
         let stale = key(16, 25, 0)
         try sandbox.browse(key: stale)

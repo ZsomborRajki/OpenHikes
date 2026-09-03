@@ -112,14 +112,22 @@ struct TileStoreTests {
         #expect(store.drainPendingKeys(for: hikeID).isEmpty)
     }
 
-    @Test("an expired known tile is saved again when viewed")
+    /// A tile the manifest already names, whose durable copy has since been
+    /// deleted — by Settings' cache clear, or by a reclaim at a provider's
+    /// ceiling — is saved again the next time it is viewed. The stale manifest
+    /// entry must not be read as "already on disk".
+    ///
+    /// Deleted outright rather than aged past the TTL, which no longer removes
+    /// anything: saved coverage a week old is still saved, and the promote path
+    /// is required to say so. That case is
+    /// `TileDurableAccountingTests.promoteTreatsStaleCoverageAsSaved`.
+    @Test("a known tile whose durable copy is gone is saved again when viewed")
     func refreshesExpiredKnownTile() async throws {
         let key = key(16, 3, 4)
         try sandbox.browse(key: key)
         #expect(await offMain { sandbox.cache.promoteCachedTile(forKey: key) })
-        try sandbox.age(key: key, byDays: 8)
-        _ = await offMain { sandbox.cache.removeExpiredTiles() }
-        #expect(!sandbox.isSaved(key), "precondition: launch cleanup removed the expired copy")
+        try FileManager.default.removeItem(at: sandbox.savedFile(for: key))
+        #expect(!sandbox.isSaved(key), "precondition: the durable copy is gone")
 
         activate(knownKeys: [key])
         try await persist(key: key, tile: tile())

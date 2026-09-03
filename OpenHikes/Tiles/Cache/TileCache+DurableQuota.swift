@@ -114,19 +114,21 @@ nonisolated extension TileCache {
     /// Forgets every measured total, so the next reservation re-measures.
     ///
     /// Invalidation rather than per-file decrements: durable tiles are deleted
-    /// by five different paths (the TTL sweep, the unclaimed sweep, the cache
-    /// trim, a keyed removal, a full clear), and a decrement missed by any one
-    /// of them would leave the total drifting permanently upward until it
-    /// refused every write. Re-measuring costs one directory walk on the next
-    /// durable write, and deletions are rare next to writes.
+    /// by four different paths (the unclaimed sweep, the cache trim, a keyed
+    /// removal, a full clear), and a decrement missed by any one of them would
+    /// leave the total drifting permanently upward until it refused every
+    /// write. Re-measuring costs one directory walk on the next durable write,
+    /// and deletions are rare next to writes.
     ///
-    /// The exception is a path that mutates exactly one durable file whose
-    /// size it already knows, on the browse path — the lazy TTL deletion in
-    /// ``freshModificationDate(for:in:referenceDate:)`` and the durable
-    /// re-fetch write. Those use ``adjustDurableBytes(forProviderID:by:)``
-    /// below, because invalidating per tile would turn the next reservation
-    /// into a directory walk and, during a bulk download over expired
-    /// coverage, one walk per tile saved.
+    /// Age is not one of those paths. A durable tile past its TTL is refreshed
+    /// in place rather than deleted — see
+    /// ``TileCache/storedModificationDate(for:in:referenceDate:)`` — so the
+    /// browse path moves this total only by *writing*, through the durable
+    /// re-fetch in ``TileCache/storeFetchedTile(_:forKey:in:token:)``. That one
+    /// uses ``adjustDurableBytes(forProviderID:by:)`` below, because
+    /// invalidating per tile would turn the next reservation into a directory
+    /// walk and, during a bulk download over stale coverage, one walk per tile
+    /// saved.
     func invalidateDurableMeasurements() {
         durableProviderBytes.withLock { $0.removeAll() }
     }

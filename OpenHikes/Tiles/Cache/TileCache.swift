@@ -85,13 +85,27 @@ nonisolated final class TileCache: @unchecked Sendable {
     final class MemoryTile: @unchecked Sendable {
         let image: TileImage
         let storedAt: Date
+        /// When this entry was admitted as *stale durable coverage* rather than
+        /// as a current tile, if it was.
+        ///
+        /// A tile is only ever admitted this way once the load path has run out
+        /// of ways to refresh it, and it then answers reads for
+        /// ``TileCache/staleCoverageRecheckInterval`` rather than being turned
+        /// away by the TTL like everything else here. Both halves are load
+        /// bearing: `draw` paints only what this tier holds, so coverage kept
+        /// out of it cannot appear on screen at all — and a miss on a tile the
+        /// load path reports as loaded is a draw/load loop, one pass per tile
+        /// per pass, forever. The interval is what stops that becoming a
+        /// permanent answer instead.
+        let servedStaleAt: Date?
         /// What this entry costs the memory tier — see
         /// ``TileCache/decodedByteCost(of:)``. Computed once, at insertion.
         let byteCost: Int
 
-        init(image: TileImage, storedAt: Date) {
+        init(image: TileImage, storedAt: Date, servedStaleAt: Date? = nil) {
             self.image = image
             self.storedAt = storedAt
+            self.servedStaleAt = servedStaleAt
             byteCost = TileCache.decodedByteCost(of: image)
         }
     }
@@ -134,6 +148,17 @@ nonisolated final class TileCache: @unchecked Sendable {
 
     /// OSM requires cached tiles to honor response caching headers, or to use
     /// at least a seven-day TTL when the client does not persist those headers.
+    ///
+    /// **A refresh deadline, not a deletion deadline.** The policy asks that a
+    /// tile this old not be *reused as current* without asking the server
+    /// again; it does not ask that the bytes be unlinked at seven days, and the
+    /// two are only the same thing for cache. For durable coverage they are
+    /// opposites: a walker who saved a map the week before a trip has no
+    /// signal to re-ask with, and deleting on their behalf leaves them with a
+    /// blank map instead of an old one. So this expires the browsing tier
+    /// outright, and for the durable tier it decides only *when to try* — see
+    /// ``storedModificationDate(for:in:referenceDate:)`` and
+    /// ``loadTileResult(forKey:url:purpose:)``.
     static let tileExpirationInterval: TimeInterval = 7 * 24 * 60 * 60
 
     /// Ceiling on the decoded bytes held in the memory tier.
@@ -190,7 +215,9 @@ nonisolated final class TileCache: @unchecked Sendable {
     /// agree identifies a tile, and it's what the tiers file it under.
     private let inFlightFetches = Mutex([String: Task<FetchedTile?, Never>]())
 
-    private struct MutationToken: Equatable {
+    /// Internal rather than private: ``TileCache+DiskReads`` publishes through
+    /// the same ordering, and `private` in an extension is file-scoped.
+    struct MutationToken: Equatable {
         let global: UInt64
         let name: UInt64
     }
@@ -313,34 +340,6 @@ nonisolated extension TileCache {
     /// cost enters as free, and one call site that forgot would quietly exempt
     /// its tiles from ``memoryByteLimit`` — with no symptom until the app is
     /// killed for memory somewhere else entirely.
-    private func cacheInMemory(_ image: TileImage, storedAt: Date, forKey key: String) {
-        let tile = MemoryTile(image: image, storedAt: storedAt)
-        // swiftlint:disable:next legacy_objc_type
-        memory.setObject(tile, forKey: key as NSString, cost: tile.byteCost)
-    }
-
-    /// Fast, synchronous memory-only lookup — safe to call from the render loop.
-    ///
-    /// Applies the TTL lazily, evicting as it finds one expired. This is the
-    /// *only* thing keeping a stale tile off the screen — the disk sweeps
-    /// deliberately don't touch this tier — so an expired entry must never be
-    /// returned from here, however it got in.
-    ///
-    /// `referenceDate` is defaulted for the same reason it is on
-    /// ``removeExpiredTiles(referenceDate:)``: a test can't wait out a
-    /// seven-day TTL, and a memory entry's age comes from when it was cached
-    /// rather than from a file it could backdate.
-    func memoryImage(forKey key: String, referenceDate: Date = Date()) -> TileImage? {
-        // swiftlint:disable:next legacy_objc_type
-        let cacheKey = key as NSString
-        guard let tile = memory.object(forKey: cacheKey) else { return nil }
-        guard !isExpired(tile.storedAt, referenceDate: referenceDate) else {
-            memory.removeObject(forKey: cacheKey)
-            return nil
-        }
-        return tile.image
-    }
-
     /// Loads a tile for display — memory, then disk (ephemeral, then durable),
     /// then the network — populating the faster tiers as it goes, and reports
     /// which of those answered.
@@ -354,6 +353,16 @@ nonisolated extension TileCache {
     /// may reclaim it, which is the right trade for something nobody asked to
     /// keep. Tiles that *are* meant to survive go through
     /// ``saveTileDurably(forKey:url:)`` or ``promoteCachedTile(forKey:)``.
+    ///
+    /// **Saved coverage is served stale rather than not at all.** A durable
+    /// tile past ``tileExpirationInterval`` is refreshed if a request is
+    /// allowed and lands, and drawn as it is if either of those fails. Nothing
+    /// on this path unlinks the saved bytes to make room for a replacement
+    /// that may never arrive: the old copy is overwritten by
+    /// ``storeFetchedTile(_:forKey:in:token:)``'s atomic write or not at all.
+    /// This is what stops a map downloaded a week before a trip from being
+    /// blank on the trail, and it keeps the hike's `offlineDownloads` claim
+    /// true rather than describing bytes that were deleted at launch.
     ///
     /// `@concurrent` rather than plain `nonisolated`: everything below the
     /// first memory hit is synchronous disk work, and an `async` function that
@@ -377,13 +386,17 @@ nonisolated extension TileCache {
         let mutationToken = mutationToken(forKey: key)
         if let cached = memoryImage(forKey: key) { return .loaded(cached) }
 
-        // Which tier holds this key, read *before* `diskImage` — it deletes an
-        // expired file as it finds it, and the answer decides where a refetched
-        // tile is written back below.
+        // Which tier holds this key, and whether the durable copy is coverage
+        // that has gone stale. Read *before* the disk lookup, which deletes an
+        // expired browsing file as it finds it: the answer decides where a
+        // refetched tile is written back below, and whether there is anything
+        // to fall back on if it cannot be fetched at all.
         let paths = filePaths(forKey: key)
-        let wasDurable = FileManager.default.fileExists(atPath: paths.durable.path)
+        let durableStoredAt = storedModificationDate(for: paths.durable, in: .durable)
+        let wasDurable = durableStoredAt != nil
+        let hasStaleCoverage = durableStoredAt.map { isExpired($0) } ?? false
 
-        if let tile = diskImage(forKey: key) {
+        if let tile = freshDiskImage(forKey: key) {
             guard publishDiskTile(
                 tile,
                 forKey: key,
@@ -399,6 +412,18 @@ nonisolated extension TileCache {
         // than only in a debug log nobody is reading on a mountain.
         let decision = networkDecision(for: purpose)
         guard decision.isAllowed else {
+            // Unless the walker saved this ground for exactly this moment. A
+            // week-old tile of a valley is the same valley; a blank square is
+            // not, and the phone that can't refresh it is the phone least able
+            // to do without it.
+            if hasStaleCoverage,
+               let stale = staleCoverage(
+                   forKey: key,
+                   reason: decision.reason ?? "suppressed",
+                   token: mutationToken
+               ) {
+                return .loaded(stale)
+            }
             RenderSignpost.mark(
                 "TileFetchSuppressed",
                 "purpose=\(purpose.rawValue) reason=\(decision.reason ?? "unknown")"
@@ -411,7 +436,16 @@ nonisolated extension TileCache {
             return .suppressed
         }
 
-        guard let fetched = await fetchTileOnce(forKey: key, url: url) else { return .failed }
+        guard let fetched = await fetchTileOnce(forKey: key, url: url) else {
+            // The refresh was allowed and still didn't land — a timeout, a 500,
+            // a captive portal. The saved bytes were never unlinked to make
+            // room for it, so they are still here to draw.
+            if hasStaleCoverage,
+               let stale = staleCoverage(forKey: key, reason: "refresh-failed", token: mutationToken) {
+                return .loaded(stale)
+            }
+            return .failed
+        }
         // Back into the tier it came from. A tile that was durable is offline
         // coverage some hike is counting on; writing its replacement to the
         // browsing tier instead would leave the manifest still claiming it while
@@ -476,33 +510,6 @@ nonisolated extension TileCache {
         )
     }
 
-    /// The tile as it sits on disk, ephemeral tier first — it's the one a
-    /// browsing fetch refreshes, and the two hold the same image.
-    private func diskImage(forKey key: String) -> (image: TileImage, storedAt: Date)? {
-        let name = diskName(for: key)
-        for tier in [StorageTier.browsing, .durable] {
-            let file = directory(for: tier).appendingPathComponent(name)
-            guard let storedAt = freshModificationDate(for: file, in: tier) else { continue }
-            do {
-                let data = try Data(contentsOf: file)
-                guard let image = TileImage(data: data) else {
-                    Self.logger.error(
-                        "Cached tile could not be decoded at \(file.path, privacy: .public)"
-                    )
-                    continue
-                }
-                return (image, storedAt)
-            } catch {
-                logFileError(
-                    error,
-                    operation: "read cached tile",
-                    url: file
-                )
-            }
-        }
-        return nil
-    }
-
     /// One tile off the network per key, however many callers ask at once.
     ///
     /// The first caller starts the fetch and the rest await its result, so the
@@ -547,7 +554,11 @@ nonisolated extension TileCache {
     /// them there — see ``MutationVersions/names``.
     ///
     /// Call with ``mutationVersions`` held.
-    private static func mutationToken(
+    ///
+    /// Internal for the same reason ``MutationToken`` is: the memory tier
+    /// publishes under this ordering from its own file, and `private` in an
+    /// extension is file-scoped.
+    static func mutationToken(
         forName name: String,
         in versions: MutationVersions
     ) -> MutationToken {
@@ -573,9 +584,12 @@ nonisolated extension TileCache {
     /// ``enforceDurableByteLimits()`` corrects a store that is over it.
     ///
     /// The delta, rather than the tile's whole size, because the destination
-    /// may still hold a counted file: a durable tile that is present but
-    /// undecodable is not deleted by the TTL check, and this write replaces
-    /// it. Adding the full size there would count one tile twice.
+    /// usually still holds a counted file: this is the refresh path, and stale
+    /// durable coverage is deliberately left on disk until the bytes replacing
+    /// it have actually arrived. Adding the full size there would count one
+    /// tile twice. The `.atomic` write below is what makes the replacement a
+    /// single step, so a walker who backgrounds the app mid-refresh still has
+    /// a whole tile afterwards rather than half of one.
     private func storeFetchedTile(
         _ fetched: FetchedTile,
         forKey key: String,
@@ -604,23 +618,6 @@ nonisolated extension TileCache {
             // the memory entry under the same mutation lock.
             discardRedundantCachedCopy(forKey: key)
             cacheInMemory(fetched.image, storedAt: Date(), forKey: key)
-            return true
-        }
-    }
-
-    private func publishDiskTile(
-        _ tile: (image: TileImage, storedAt: Date),
-        forKey key: String,
-        token: MutationToken
-    ) -> Bool {
-        let name = diskName(for: key)
-        return mutationVersions.withLock { versions in
-            guard token == Self.mutationToken(forName: name, in: versions) else { return false }
-            cacheInMemory(
-                tile.image,
-                storedAt: tile.storedAt,
-                forKey: key
-            )
             return true
         }
     }
@@ -741,14 +738,14 @@ nonisolated extension TileCache {
         // this case must not reserve any. Checked before the lock so the
         // reservation below — which may walk the durable directory to take its
         // first measurement — is never taken with `mutationVersions` held.
-        if freshModificationDate(for: paths.durable, in: .durable) != nil {
+        if storedModificationDate(for: paths.durable, in: .durable) != nil {
             return mutationVersions.withLock { _ in
                 discardRedundantCachedCopy(forKey: key)
                 return true
             }
         }
         racingWriter()
-        guard freshModificationDate(for: paths.cached, in: .browsing) != nil else {
+        guard storedModificationDate(for: paths.cached, in: .browsing) != nil else {
             // No cached copy is not the same answer as "not saved". A racer
             // promoting the same key moves that copy away, and between the
             // durable check above and this one it can complete the move —
@@ -759,7 +756,7 @@ nonisolated extension TileCache {
             // reconsiders it because the browsing copy it would be re-saved
             // from is gone. The move is a rename, so a missing cached copy
             // means it has already landed.
-            return freshModificationDate(for: paths.durable, in: .durable) != nil
+            return storedModificationDate(for: paths.durable, in: .durable) != nil
         }
 
         let byteCount = fileSize(paths.cached)
@@ -776,7 +773,7 @@ nonisolated extension TileCache {
             // and two writers racing one key can both pass it. Without this,
             // the destination clear below would delete the durable tile the
             // other writer just wrote, and then report that nothing was saved.
-            if freshModificationDate(for: paths.durable, in: .durable) != nil {
+            if storedModificationDate(for: paths.durable, in: .durable) != nil {
                 discardRedundantCachedCopy(forKey: key)
                 return .alreadyDurable
             }
@@ -792,7 +789,7 @@ nonisolated extension TileCache {
             } catch {
                 // Another writer may have produced the durable copy after the
                 // checks above. That is still a successful save.
-                if freshModificationDate(for: paths.durable, in: .durable) != nil {
+                if storedModificationDate(for: paths.durable, in: .durable) != nil {
                     discardRedundantCachedCopy(forKey: key)
                     return .alreadyDurable
                 }
@@ -818,9 +815,18 @@ nonisolated extension TileCache {
         }
     }
 
-    /// Removes expired tiles from both disk tiers, and any browsing-tier copy of
-    /// a tile that is also stored durably. Runs at launch so stale offline
-    /// coverage is not retained indefinitely.
+    /// Removes expired tiles from the browsing tier, and any browsing-tier copy
+    /// of a tile that is also stored durably. Runs at launch.
+    ///
+    /// **Durable tiles are not swept by age.** They used to be, and that is
+    /// what deleted a walker's saved map on the launch after its seventh day —
+    /// before the app had any idea whether the phone could replace it, and
+    /// while the hike went on claiming coverage whose bytes were gone. Age
+    /// sends a durable tile to be *refreshed* on the next load instead; what
+    /// bounds the durable tier is the per-provider ceiling in
+    /// ``TileCache+DurableQuota``, ``trimCache(claimedBy:limit:)``, and
+    /// ``removeTiles(unclaimedBy:)`` — all of which go by what a hike claims
+    /// rather than by how old it is.
     ///
     /// The duplicate sweep is what heals an install that already has some: the
     /// write paths no longer produce them, but tiles saved before that stay on
@@ -874,40 +880,30 @@ nonisolated extension TileCache {
 
         var removed = 0
 
-        // Durable first, so what survives here is known while walking the
-        // browsing tier — where a copy of a surviving durable tile is a
-        // duplicate rather than a tile in its own right.
+        // Durable first, so what is stored there is known while walking the
+        // browsing tier — where a copy of a durable tile is a duplicate rather
+        // than a tile in its own right.
         //
-        // Each stat-and-unlink pair is taken under `mutationVersions`, and
-        // deliberately not the enumeration, which would hold the lock for a
-        // full directory walk. ``promoteCachedTile(forKey:)`` moves a
-        // browsing-tier file into durable storage while holding the same lock,
-        // so unlocked these were two syscalls a promote could land between:
-        // the sweep stats a seven-day-stale tile, the user re-views it, the
-        // promote writes fresh bytes, and the sweep then unlinks them while
-        // the key stays in the hike's manifest — a silent hole in a claimed
-        // hike's offline coverage. It self-heals on the next draw, which is
-        // why this is low rather than high, but nothing else here is holding
-        // that lock for show.
-        var keptDurableNames = Set<String>()
-        for file in allTileFiles(in: durableDirectory) {
-            let isKept = mutationVersions.withLock { _ -> Bool in
-                guard isStale(file) else { return true }
-                if remove(file) { removed += 1 }
-                return false
-            }
-            if isKept { keptDurableNames.insert(file.lastPathComponent) }
-        }
+        // No unlinking here, and so no lock: this walk only reads names now.
+        // It used to stat and delete under `mutationVersions`, because
+        // ``promoteCachedTile(forKey:)`` moves a browsing-tier file into
+        // durable storage while holding that lock and could land between the
+        // stat and the unlink — the sweep finds a seven-day-stale tile, the
+        // walker re-views it, the promote writes fresh bytes, and the sweep
+        // unlinks those. Nothing deletes durable bytes for age any more, so
+        // that interleaving no longer has a deletion to race.
+        let durableNames = Set(allTileFiles(in: durableDirectory).map(\.lastPathComponent))
 
         for file in allTileFiles(in: directory) {
             mutationVersions.withLock { _ in
-                guard isStale(file) || keptDurableNames.contains(file.lastPathComponent)
+                guard isStale(file) || durableNames.contains(file.lastPathComponent)
                 else { return }
                 if remove(file) { removed += 1 }
             }
         }
 
-        if removed > 0 { invalidateDurableMeasurements() }
+        // No durable measurement to invalidate: everything removed above came
+        // out of the browsing tier, which no provider ceiling counts.
         return removed
     }
 

@@ -11,13 +11,18 @@
 //  directory walks, so a mutation that forgets to move it makes every later
 //  decision wrong without anything failing at the time.
 //
-//  Both defects it covers were on the *browse* path, where a durable tile can
+//  Both defects it covers were on the *browse* path, where a durable tile could
 //  be deleted (its TTL elapsed while the map was drawing it) and rewritten (a
 //  fetch puts the refreshed bytes back in the tier they came from) without any
 //  reservation being involved. Neither moved the total, and the two errors
 //  cancelled each other exactly often enough to look like nothing was wrong —
 //  which is why every assertion here compares the maintained total against a
 //  fresh walk of the directory rather than against the other half of the pair.
+//
+//  Only the write half is still a mutation. Age no longer deletes durable
+//  coverage — it is refreshed in place instead — so the tests below pin the
+//  other thing that can go wrong once a stale tile survives: its bytes staying
+//  counted for as long as they are on disk.
 //
 //  `.serialized` for the same reason `TileTransportTests` is: `StubTileProtocol`
 //  scripts responses through process-wide state, so two tests scripting it at
@@ -93,50 +98,60 @@ struct TileDurableAccountingTests {
         try Data(repeating: 0x7A, count: Int(byteCount)).write(to: file, options: .atomic)
     }
 
-    // MARK: The lazy TTL deletion
+    // MARK: Stale durable coverage
 
     /// The headline for the read side. A durable tile whose seven days ran out
-    /// is deleted by the first browse that goes looking for it, and the
-    /// provider gets those bytes back there and then — not at the next launch,
-    /// which is when `removeExpiredTiles` would otherwise have noticed.
-    @Test("an expired durable tile gives its bytes back as it is deleted")
-    func expiredDurableTileIsCredited() async throws {
+    /// is still on disk and still spending the provider's ceiling, so the total
+    /// must not move — the browse that finds it draws it and leaves it there.
+    ///
+    /// This used to be the opposite assertion: the browse deleted the tile and
+    /// credited the bytes back. Crediting was right *given* the deletion; the
+    /// deletion was the bug, because it threw away a walker's saved map at the
+    /// moment they had no signal to replace it.
+    @Test("a stale durable tile is drawn, kept, and still counted")
+    func staleDurableTileIsKeptAndCounted() async throws {
         let sandbox = TileSandbox(reachable: false)
-        let expired = Self.key(0)
-        try sandbox.place(in: sandbox.savedFile(for: expired), agedByDays: 8)
+        let stale = Self.key(0)
+        try sandbox.place(in: sandbox.savedFile(for: stale), agedByDays: 8)
         try sandbox.save(key: Self.key(1))
 
         let before = await offMain { sandbox.cache.durableSpace(forProviderID: Self.stadia) }
         #expect(try #require(before).used == TileStore.tileByteCount * 2, "precondition: both tiles counted")
 
-        // Offline, so the browse gets as far as the disk tiers and no
-        // further: what the total does here is the deletion's doing alone.
-        #expect(await sandbox.cache.loadTile(forKey: expired, url: Self.url(0)) == nil)
-        #expect(!sandbox.isSaved(expired), "precondition: the TTL took it")
+        // Offline, so the browse gets as far as the disk tiers and no further:
+        // there is no refresh, and the saved copy is the whole answer.
+        #expect(await sandbox.cache.loadTile(forKey: stale, url: Self.url(0)) != nil)
+        #expect(sandbox.isSaved(stale), "the bytes the hike claims are still on disk")
 
-        #expect(Self.maintainedBytes(sandbox.cache) == TileStore.tileByteCount)
-        #expect(await Self.measuredBytes(sandbox.cache) == TileStore.tileByteCount)
+        #expect(Self.maintainedBytes(sandbox.cache) == TileStore.tileByteCount * 2)
+        #expect(await Self.measuredBytes(sandbox.cache) == TileStore.tileByteCount * 2)
     }
 
-    /// The same deletion reached through the promote path, which stats the
-    /// durable tier before it decides whether a browsed tile needs saving.
-    @Test("a promote that finds an expired durable tile credits it too")
-    func promoteCreditsAnExpiredDurableTile() async throws {
+    /// The same tile reached through the promote path, which stats the durable
+    /// tier before it decides whether a browsed tile needs saving.
+    ///
+    /// Stale coverage is still coverage, so the honest answer is "already
+    /// saved" — and it has to be, or ``AutoSaveTileStore`` gives back a claim
+    /// on bytes that are sitting right there. Nothing is deleted, so nothing is
+    /// credited.
+    @Test("a promote that finds stale durable coverage reports it as saved")
+    func promoteTreatsStaleCoverageAsSaved() async throws {
         let sandbox = TileSandbox()
-        let expired = Self.key(0)
-        try sandbox.place(in: sandbox.savedFile(for: expired), agedByDays: 8)
+        let stale = Self.key(0)
+        try sandbox.place(in: sandbox.savedFile(for: stale), agedByDays: 8)
         try sandbox.save(key: Self.key(1))
         _ = await offMain { sandbox.cache.durableSpace(forProviderID: Self.stadia) }
 
-        // Nothing in the browsing tier, so this only deletes: there is no
-        // cached copy to promote in its place.
-        #expect(await offMain { !sandbox.cache.promoteCachedTile(forKey: expired) })
+        // Nothing in the browsing tier, so there is no cached copy to promote:
+        // the answer comes entirely from what the durable tier already holds.
+        #expect(await offMain { sandbox.cache.promoteCachedTile(forKey: stale) })
 
-        #expect(Self.maintainedBytes(sandbox.cache) == TileStore.tileByteCount)
-        #expect(await Self.measuredBytes(sandbox.cache) == TileStore.tileByteCount)
+        #expect(sandbox.isSaved(stale))
+        #expect(Self.maintainedBytes(sandbox.cache) == TileStore.tileByteCount * 2)
+        #expect(await Self.measuredBytes(sandbox.cache) == TileStore.tileByteCount * 2)
     }
 
-    /// The other half of the deletion rule, and the reason the tier is a
+    /// The tier the TTL does still delete, and the reason the tier is a
     /// parameter rather than something the helper works out for itself: an
     /// expiring *browsing* tile spends none of a provider's ceiling, so it
     /// must not move the total — and must not drop the measurement either,
@@ -158,16 +173,21 @@ struct TileDurableAccountingTests {
         )
     }
 
-    /// An uncapped provider has no total at all, and a deletion on its tiles
-    /// must not conjure one.
-    @Test("an uncapped provider is not given a total by a deletion")
+    /// An uncapped provider has no total at all, and a mutation on its tiles
+    /// must not conjure one — a partial figure installed here would be treated
+    /// as the whole store by the next provider that *is* capped.
+    ///
+    /// Driven through the durable re-fetch, which is now the only thing on the
+    /// browse path that moves a total at all.
+    @Test("an uncapped provider is not given a total by a durable re-fetch")
     func uncappedProviderStaysUnmeasured() async throws {
-        let sandbox = TileSandbox(reachable: false)
-        let expired = Self.key(0, provider: Self.osm)
-        try sandbox.place(in: sandbox.savedFile(for: expired), agedByDays: 8)
+        let sandbox = Self.stubbedSandbox()
+        defer { StubTileProtocol.reset() }
+        let stale = Self.key(0, provider: Self.osm)
+        try sandbox.place(in: sandbox.savedFile(for: stale), agedByDays: 8)
 
-        #expect(await sandbox.cache.loadTile(forKey: expired, url: Self.url(0)) == nil)
-        #expect(!sandbox.isSaved(expired))
+        #expect(await sandbox.cache.loadTile(forKey: stale, url: Self.url(0)) != nil)
+        #expect(sandbox.isSaved(stale), "precondition: the refresh went back into the durable tier")
         #expect(Self.maintainedBytes(sandbox.cache, Self.osm) == nil)
     }
 
