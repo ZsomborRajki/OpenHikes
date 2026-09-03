@@ -6,7 +6,7 @@
 //
 //  ``TileCache/filePaths(forKey:)`` states the invariant: a tile lives in the
 //  browsing tier or the durable one, never both. The write paths keep it, and
-//  these two are what they keep it with — plus what heals an install that
+//  what is here is what they keep it with — plus what heals an install that
 //  already has duplicates, from a build whose write paths did not.
 //
 //  Durable normally wins, because the only question a duplicate of identical
@@ -21,6 +21,7 @@
 
 import Foundation
 import os
+import Synchronization
 
 nonisolated extension TileCache {
 
@@ -80,6 +81,36 @@ nonisolated extension TileCache {
         return true
     }
 
+    /// Resolves a duplicate for `key` whose durable side has gone stale,
+    /// keeping whichever of the two copies holds the newer bytes.
+    ///
+    /// The load path's own reconciliation, and it exists because that path
+    /// cannot reach ``adoptNewerCachedCopy(cached:durable:diskName:)`` on its
+    /// own: ``TileCache/freshDiskImage(forKey:)`` reads the browsing tier
+    /// first, and reading it is what unlinks a browsing file past the TTL.
+    /// Where both copies are stale — an install carrying a duplicate from a
+    /// build whose write paths made them, opened before the launch sweep has
+    /// run — that deletes the newer of the two and leaves the older to be
+    /// drawn as the walker's coverage. A stale durable tile is the only case
+    /// where that can happen, which is why the caller asks only then; a fresh
+    /// durable copy is the one that answers the lookup anyway.
+    ///
+    /// Nothing here decides *which* tier holds the key: the browsing copy is
+    /// either adopted into durable storage or dropped, exactly as
+    /// ``promoteCachedTile(forKey:racingWriter:)`` resolves the same duplicate.
+    /// The key is already durable, so no claim and no reservation changes hands.
+    func reconcileStaleDuplicate(forKey key: String) {
+        let paths = filePaths(forKey: key)
+        guard FileManager.default.fileExists(atPath: paths.cached.path) else { return }
+        let name = diskName(for: key)
+        mutationVersions.withLock { _ in
+            guard !adoptNewerCachedCopy(cached: paths.cached, durable: paths.durable, diskName: name) else {
+                return
+            }
+            discardRedundantCachedCopy(forKey: key)
+        }
+    }
+
     /// Enforces the one-file-per-key rule in the one direction it can go wrong:
     /// a browsing-tier copy of a tile that is also stored durably.
     ///
@@ -91,9 +122,10 @@ nonisolated extension TileCache {
     ///
     /// "Identical" is what makes that safe, and it is what the write paths
     /// guarantee. Callers reconciling a duplicate they did not write —
-    /// ``promoteCachedTile(forKey:racingWriter:)`` and the launch sweep — go
-    /// through ``adoptNewerCachedCopy(cached:durable:diskName:)`` first, which
-    /// is where a browsing copy that is genuinely newer is kept instead.
+    /// ``promoteCachedTile(forKey:racingWriter:)``, the launch sweep, and
+    /// ``reconcileStaleDuplicate(forKey:)`` on the load path — go through
+    /// ``adoptNewerCachedCopy(cached:durable:diskName:)`` first, which is where
+    /// a browsing copy that is genuinely newer is kept instead.
     func discardRedundantCachedCopy(forKey key: String) {
         let (cached, durable) = filePaths(forKey: key)
         guard FileManager.default.fileExists(atPath: durable.path) else { return }

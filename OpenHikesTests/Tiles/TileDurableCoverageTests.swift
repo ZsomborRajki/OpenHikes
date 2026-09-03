@@ -343,6 +343,33 @@ struct TileDurableCoverageTests {
         #expect(try Self.modificationDate(of: stub.savedFile(for: key)) == savedAt, "nothing rewrote the saved copy")
     }
 
+    /// The third path that meets a duplicate, and the one that gets there
+    /// first: a load, on the launch that beats the sweep. ``freshDiskImage``
+    /// asks the browsing tier before the durable one, and *asking* is what
+    /// unlinks an expired browsing file — so where an older build left two
+    /// copies that are both past the TTL, the newer of them was deleted before
+    /// anything reconciled the tiers, and the walker was drawn the older one.
+    @Test("a load past the TTL keeps the newer of two stale duplicates")
+    func loadKeepsTheNewerStaleDuplicate() async throws {
+        let stub = StubbedTileCache(reachable: false)
+        defer { stub.tearDown() }
+        let key = Self.key(0)
+        try stub.place(in: stub.savedFile(for: key), agedByDays: Self.staleByDays * 4)
+        let browsed = stub.browsedFile(for: key)
+        try stub.place(in: browsed, agedByDays: Self.staleByDays)
+        let browsedAt = try Self.modificationDate(of: browsed)
+        let cache = stub.cache
+
+        #expect(await cache.loadTile(forKey: key, url: Self.url(0)) != nil, "offline, saved coverage is still drawn")
+
+        #expect(!stub.isBrowsed(key), "one file per key either way")
+        #expect(stub.isSaved(key), "and it is the durable one")
+        #expect(
+            try Self.isDated(stub.savedFile(for: key), like: browsedAt),
+            "the month-old bytes are not what a device holding week-old ones should be drawn"
+        )
+    }
+
     // MARK: - What the hike's manifest is allowed to promise
 
     /// The accounting half of the same promise. A hike sheet's `Offline tiles`

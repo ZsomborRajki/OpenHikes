@@ -410,6 +410,15 @@ nonisolated extension TileCache {
         let wasDurable = durableStoredAt != nil
         let hasStaleCoverage = durableStoredAt.map { isExpired($0) } ?? false
 
+        // Stale coverage with a browsing-tier duplicate beside it: reconciled
+        // here, because the lookup below cannot be trusted to meet it. It asks
+        // the browsing tier first, and asking unlinks an expired browsing file
+        // — so two copies left by an older build that are both past the TTL
+        // would lose the newer one before either the launch sweep or a promote
+        // reached them, and the older would be the copy drawn. Same rule as
+        // those two paths apply; see ``adoptNewerCachedCopy(cached:durable:diskName:)``.
+        if hasStaleCoverage { reconcileStaleDuplicate(forKey: key) }
+
         if let tile = freshDiskImage(forKey: key) {
             guard publishDiskTile(
                 tile,
