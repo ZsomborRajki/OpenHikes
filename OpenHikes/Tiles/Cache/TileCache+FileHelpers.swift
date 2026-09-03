@@ -11,12 +11,12 @@ nonisolated extension TileCache {
     /// Which of the two disk tiers a file belongs to.
     ///
     /// Carried explicitly rather than inferred from the file's parent
-    /// directory, because ``freshModificationDate(for:in:referenceDate:)``
-    /// deletes what it finds expired and the two tiers are accounted for
-    /// differently — a durable byte is spent against a provider's licensed
-    /// ceiling and a browsing byte is not. Comparing URLs would make that
-    /// distinction depend on path normalisation; a parameter makes the
-    /// compiler check it at every call site.
+    /// directory, because ``storedModificationDate(for:in:referenceDate:)``
+    /// deletes an expired *browsing* file and never an expired durable one —
+    /// the tier is what decides whether age is allowed to unlink anything at
+    /// all. Comparing URLs would make that distinction depend on path
+    /// normalisation; a parameter makes the compiler check it at every call
+    /// site.
     enum StorageTier: Sendable {
         /// `Caches` — a tile fetched to draw the map, which the OS may reclaim.
         case browsing
@@ -67,18 +67,30 @@ nonisolated extension TileCache {
         }
     }
 
-    /// Returns a usable fetch date, deleting the file when its fixed TTL has
-    /// elapsed. Modification time is the fetch time because tile files are
-    /// written atomically and never rewritten except by a fresh response.
+    /// Returns the file's fetch date, or `nil` when there is no usable file.
+    /// Modification time is the fetch time because tile files are written
+    /// atomically and never rewritten except by a fresh response.
     ///
-    /// `tier` is what the deletion is accounted for against. A durable tile
-    /// removed here is bytes a capped provider gets back — without that, the
-    /// total kept counting a file that no longer exists, and since the only
-    /// thing that reset it was a launch-time sweep, a browsing session over
-    /// week-old Stadia coverage could refuse legitimate saves for the rest of
-    /// the session. A browsing-tier deletion is accounted for by nobody,
-    /// which is why the tier has to be known rather than assumed.
-    func freshModificationDate(
+    /// **The tier decides what age is allowed to do.** A browsing tile past
+    /// ``TileCache/tileExpirationInterval`` is deleted here and reported
+    /// absent: it is cache, nobody asked for it, and the only cost of losing
+    /// it is refetching it. A **durable** tile is offline coverage a walker
+    /// explicitly saved, so age never unlinks it — the date comes back as it
+    /// stands and the caller decides whether to refresh. Deleting it here is
+    /// what made a map saved a week before a trip blank on the trail: the
+    /// bytes went before anything had asked whether the phone had signal to
+    /// replace them. See ``TileCache/loadTileResult(forKey:url:purpose:)``.
+    ///
+    /// Callers that need *freshness* rather than presence pass the returned
+    /// date through ``isExpired(_:referenceDate:)``; callers asking whether a
+    /// key is stored at all — ``TileCache/promoteCachedTile(forKey:racingWriter:)``
+    /// — want exactly this answer, because stale coverage is still coverage
+    /// and a hike's claim on it is still true.
+    ///
+    /// A durable file whose date cannot be read is reported as `.distantPast`:
+    /// it is present, so its bytes stay, but nothing can vouch for its age and
+    /// treating it as maximally stale is what sends it to be refreshed.
+    func storedModificationDate(
         for file: URL,
         in tier: StorageTier,
         referenceDate: Date = Date()
@@ -97,32 +109,12 @@ nonisolated extension TileCache {
             )
             modified = nil
         }
+        guard tier == .browsing else { return modified ?? .distantPast }
         guard let modified, !isExpired(modified, referenceDate: referenceDate) else {
-            // Sized before the unlink, and given back only if the unlink was
-            // this caller's: `removeItemIgnoringNotFound` reports `false` for a
-            // file another thread already took, so two threads finding the
-            // same tile expired cannot subtract it twice.
-            let byteCount = tier == .durable ? fileSize(file) : 0
-            let removed = removeItemIgnoringNotFound(
+            _ = removeItemIgnoringNotFound(
                 at: file,
                 operation: "remove unusable tile"
             )
-            if removed, tier == .durable {
-                // A decrement rather than ``invalidateDurableMeasurements()``,
-                // which is what the batch deletion paths use. Those delete
-                // many files and invalidate once; this deletes exactly one
-                // file whose size it just read, and runs per tile on the
-                // browse path. Invalidating here would make the next capped
-                // provider reservation re-walk the durable directory — and
-                // interleaved with a bulk download over expired coverage,
-                // that is one full directory walk per tile saved.
-                // ``reclaimDurableBytes(forProviderID:protecting:byteCount:)``
-                // already subtracts what it deletes for the same reason.
-                adjustDurableBytes(
-                    forProviderID: Self.providerID(forDiskName: file.lastPathComponent),
-                    by: -byteCount
-                )
-            }
             return nil
         }
         return modified
