@@ -49,6 +49,12 @@ nonisolated extension TileCache {
             previous = next
             return old
         }
+        // Asked of the policy rather than compared field by field, so this
+        // cannot drift from what `loadTile` will actually do. Power is passed
+        // for the same reason and weighs nothing today: `.interactive` is
+        // decided by `isOnline` and `isConstrained` alone. If that ever
+        // changes, this edge will need a power observer too — a path update is
+        // the only thing that reaches here, and Low Power Mode is not one.
         let power = readPower()
         let wasAllowed = TileNetworkPolicy.decide(.interactive, conditions: old, power: power).isAllowed
         let isAllowed = TileNetworkPolicy.decide(.interactive, conditions: next, power: power).isAllowed
@@ -67,8 +73,8 @@ nonisolated extension TileCache {
 
     #if DEBUG
     /// Test hook: drives the reachability transitions a cache built with
-    /// `monitorsNetwork: false` never receives — including the reconnect
-    /// notification renderers listen for to retry failed tiles.
+    /// `monitorsNetwork: false` never receives — including the notification
+    /// renderers listen for to retry tiles once fetching is allowed again.
     func setReachable(_ reachable: Bool) {
         applyPath(TileNetworkConditions(isOnline: reachable))
     }
