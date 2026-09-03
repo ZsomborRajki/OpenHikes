@@ -21,15 +21,13 @@ import Testing
 @Suite("Offline tile enumeration")
 struct OfflineTileEnumerationTests {
     private let route = Fixture.coordinates(Fixture.ridgeRoute)
-    private let scale: CGFloat = 2
 
     private func keys(maxZoom: Int = 14, providerMaxZoom: Int = 19) -> [String] {
         OfflineTileDownloader.tileKeys(
             for: route,
             providerID: TileProvider.openStreetMap.id,
             providerMaxZoom: providerMaxZoom,
-            maxZoom: maxZoom,
-            scale: scale
+            maxZoom: maxZoom
         )
     }
 
@@ -54,7 +52,6 @@ struct OfflineTileEnumerationTests {
         let exact = ["test/10/1/1@2.0", "test/10/1/2@2.0"]
         let record = OfflineDownloadRecord(
             providerID: "test",
-            scale: 2,
             maxZoom: 19,
             savedTileKeys: exact
         )
@@ -64,51 +61,57 @@ struct OfflineTileEnumerationTests {
         #expect(Set(stored) == Set(exact))
     }
 
-    /// The renderer looks tiles up as `providerID/z/x/y@scale`. The
+    /// The renderer looks tiles up as `providerID/z/x/y`. The
     /// downloader builds the same string from a different code path; if the
     /// two ever drift, every pre-downloaded tile becomes invisible to the map
     /// and gets fetched again.
     @Test("download keys are exactly the keys the renderer asks for")
     func keyFormatMatchesRenderer() {
-        let path = MKTileOverlayPath(x: 8723, y: 5685, z: 14, contentScaleFactor: scale)
+        let path = MKTileOverlayPath(x: 8723, y: 5685, z: 14, contentScaleFactor: 2)
         let rendererKey = "\(TileProvider.openStreetMap.id)/\(path.cacheKey)"
         let downloaderKey = OfflineTileDownloader.Tile(z: path.z, x: path.x, y: path.y)
-            .cacheKey(providerID: TileProvider.openStreetMap.id, scale: path.contentScaleFactor)
+            .cacheKey(providerID: TileProvider.openStreetMap.id)
         #expect(rendererKey == downloaderKey)
         #expect(
             downloaderKey == TileCacheKey.namespaced(
                 providerID: TileProvider.openStreetMap.id,
                 z: path.z,
                 x: path.x,
-                y: path.y,
-                scale: path.contentScaleFactor
+                y: path.y
             )
         )
-        #expect(downloaderKey == "osm/14/8723/5685@2.0")
+        #expect(downloaderKey == "osm/14/8723/5685")
     }
 
-    /// A different display scale is a different tile image, so the keys must
-    /// not collide — a hike downloaded on a 2× device shouldn't report its
-    /// tiles as present on a 3× one.
-    @Test("scale is part of the identity of a tile")
-    func scaleNamespacesKeys() {
-        let at2x = OfflineTileDownloader.tileKeys(
-            for: route, providerID: "osm", providerMaxZoom: 19, maxZoom: 12, scale: 2
+    /// Display scale is *not* part of a tile's identity, and this is the
+    /// regression guard for the bug that proved it had to stop being one.
+    ///
+    /// MapKit documents `contentScaleFactor` as "typically either 1.0 or 2.0"
+    /// and never hands the renderer a 3, while SwiftUI's `displayScale` — what
+    /// the download path used to read — is 3.0 on every Plus/Pro/Pro Max. A
+    /// key carrying either value therefore made a downloaded tile invisible to
+    /// the map on those devices. A renderer path is the only thing in the app
+    /// that has ever carried a scale, so a path at 3× and a path at 2× naming
+    /// the same tile must produce one key, and the downloader must produce it
+    /// too.
+    @Test("display scale is not part of the identity of a tile")
+    func scaleDoesNotNamespaceKeys() {
+        let at2x = MKTileOverlayPath(x: 8723, y: 5685, z: 14, contentScaleFactor: 2)
+        let at3x = MKTileOverlayPath(x: 8723, y: 5685, z: 14, contentScaleFactor: 3)
+        #expect(at2x.cacheKey == at3x.cacheKey)
+        #expect(
+            OfflineTileDownloader.Tile(z: 14, x: 8723, y: 5685).cacheKey(providerID: "osm")
+                == "osm/\(at3x.cacheKey)"
         )
-        let at3x = OfflineTileDownloader.tileKeys(
-            for: route, providerID: "osm", providerMaxZoom: 19, maxZoom: 12, scale: 3
-        )
-        #expect(at2x.count == at3x.count)
-        #expect(Set(at2x).isDisjoint(with: Set(at3x)))
     }
 
     @Test("provider is part of the identity of a tile")
     func providerNamespacesKeys() {
         let osm = OfflineTileDownloader.tileKeys(
-            for: route, providerID: "osm", providerMaxZoom: 19, maxZoom: 12, scale: 2
+            for: route, providerID: "osm", providerMaxZoom: 19, maxZoom: 12
         )
         let other = OfflineTileDownloader.tileKeys(
-            for: route, providerID: "stadia_outdoors", providerMaxZoom: 20, maxZoom: 12, scale: 2
+            for: route, providerID: "stadia_outdoors", providerMaxZoom: 20, maxZoom: 12
         )
         #expect(Set(osm).isDisjoint(with: Set(other)))
     }
@@ -124,7 +127,7 @@ struct OfflineTileEnumerationTests {
             for coordinate in route {
                 let x = SlippyTileMath.tileX(coordinate.longitude, z: z)
                 let y = SlippyTileMath.tileY(coordinate.latitude, z: z)
-                #expect(keys.contains("osm/\(z)/\(x)/\(y)@2.0"), "no tile covers the route at zoom \(z)")
+                #expect(keys.contains("osm/\(z)/\(x)/\(y)"), "no tile covers the route at zoom \(z)")
             }
         }
     }
@@ -174,8 +177,7 @@ struct OfflineTileEnumerationTests {
             for: sprawling,
             providerID: "osm",
             providerMaxZoom: 19,
-            maxZoom: 19,
-            scale: 2
+            maxZoom: 19
         )
         #expect(keys.count <= OfflineTileDownloader.tileBudget)
     }
@@ -193,8 +195,7 @@ struct OfflineTileEnumerationTests {
             for: acrossTheLine,
             providerID: "osm",
             providerMaxZoom: 19,
-            maxZoom: 16,
-            scale: 2
+            maxZoom: 16
         )
         let levels = zoomLevels(in: keys)
         #expect(keys.count < 500, "a ~10 km trail shouldn't enumerate a world-wide strip")
@@ -208,13 +209,13 @@ struct OfflineTileEnumerationTests {
     func antimeridianCoversBothSides() {
         let acrossTheLine = Fixture.antimeridianRoute
         let keys = Set(OfflineTileDownloader.tileKeys(
-            for: acrossTheLine, providerID: "osm", providerMaxZoom: 19, maxZoom: 16, scale: 2
+            for: acrossTheLine, providerID: "osm", providerMaxZoom: 19, maxZoom: 16
         ))
         for z in zoomLevels(in: Array(keys)) {
             for coordinate in acrossTheLine {
                 let x = SlippyTileMath.tileX(coordinate.longitude, z: z)
                 let y = SlippyTileMath.tileY(coordinate.latitude, z: z)
-                #expect(keys.contains("osm/\(z)/\(x)/\(y)@2.0"), "zoom \(z) misses \(coordinate.longitude)")
+                #expect(keys.contains("osm/\(z)/\(x)/\(y)"), "zoom \(z) misses \(coordinate.longitude)")
             }
         }
     }
@@ -230,7 +231,7 @@ struct OfflineTileEnumerationTests {
             CLLocationCoordinate2D(latitude: 55.0, longitude: 40.0),
         ]
         let keys = OfflineTileDownloader.tileKeys(
-            for: sprawling, providerID: "osm", providerMaxZoom: 19, maxZoom: 19, scale: 2
+            for: sprawling, providerID: "osm", providerMaxZoom: 19, maxZoom: 19
         )
         #expect(!keys.isEmpty, "a route this size still has an overview worth saving")
 
@@ -283,7 +284,6 @@ struct OfflineDownloadStateTests {
         downloader.start(
             route: Fixture.ridgeRoute,
             source: ActiveTileSource(.openStreetMap),
-            scale: 2
         )
 
         #expect(downloader.isFailed)
@@ -308,7 +308,6 @@ struct OfflineDownloadStateTests {
                 urlTemplate: "https://example.invalid/{z}/{x}/{y}.png",
                 maximumZ: 12
             ),
-            scale: 2
         )
 
         #expect(downloader.isFailed)
@@ -318,14 +317,13 @@ struct OfflineDownloadStateTests {
     @Test("a route with nothing to draw is refused with a reason")
     func refusesEmptyRoute() {
         let downloader = OfflineTileDownloader()
-        downloader.start(route: [], source: unreachable, scale: 2)
+        downloader.start(route: [], source: unreachable)
         #expect(downloader.isFailed)
         #expect(downloader.phase == .failed("No route to save."))
 
         downloader.start(
             route: [RouteCoordinate(latitude: 47.63, longitude: 12.86)],
             source: unreachable,
-            scale: 2
         )
         #expect(downloader.isFailed)
     }
@@ -342,7 +340,7 @@ struct OfflineDownloadStateTests {
     @Test("a failed download can be reset back to idle")
     func resetAfterFailure() {
         let downloader = OfflineTileDownloader()
-        downloader.start(route: [], source: unreachable, scale: 2)
+        downloader.start(route: [], source: unreachable)
         #expect(downloader.isFailed)
         downloader.reset()
         #expect(downloader.phase == .idle)
@@ -358,7 +356,7 @@ struct OfflineDownloadStateTests {
     @Test("starting a download counts the tiles it's going to fetch")
     func startCountsTiles() async {
         let downloader = OfflineTileDownloader(isOnline: { true }, saveTile: { _, _ in false })
-        downloader.start(route: Fixture.ridgeRoute, source: unreachable, scale: 2)
+        downloader.start(route: Fixture.ridgeRoute, source: unreachable)
         #expect(downloader.phase == .downloading)
         await downloader.waitForPlanning()
         #expect(downloader.total > 0)
@@ -383,7 +381,7 @@ struct OfflineDownloadStateTests {
             saveTile: { _, _ in true }
         )
 
-        downloader.start(route: route, source: controlled, scale: 2)
+        downloader.start(route: route, source: controlled)
         let waiter = Task { await downloader.waitForPlanning() }
         downloader.cancel()
 
@@ -414,7 +412,7 @@ struct OfflineDownloadStateTests {
             saveTile: { _, _ in true }
         )
 
-        downloader.start(route: route, source: controlled, scale: 2)
+        downloader.start(route: route, source: controlled)
         downloader.cancel()
         await downloader.waitForCurrentRun()
 
@@ -438,7 +436,7 @@ struct OfflineDownloadStateTests {
             isOnline: { true },
             saveTile: { _, _ in await held.save() }
         )
-        downloader.start(route: Fixture.ridgeRoute, source: unreachable, scale: 2)
+        downloader.start(route: Fixture.ridgeRoute, source: unreachable)
         #expect(downloader.phase == .downloading)
 
         downloader.cancel()
@@ -462,9 +460,9 @@ struct OfflineDownloadStateTests {
             saveTile: { _, _ in await held.save() }
         )
         let route = Fixture.ridgeRoute
-        downloader.start(route: route, source: unreachable, scale: 2)
+        downloader.start(route: route, source: unreachable)
         downloader.cancel()
-        downloader.start(route: route, source: unreachable, scale: 2)
+        downloader.start(route: route, source: unreachable)
         #expect(downloader.phase == .downloading)
 
         // Both runs' saves complete now, so the abandoned one's tail unwinds
@@ -486,7 +484,7 @@ struct OfflineDownloadStateTests {
             saveTile: { _, _ in await attempts.succeedAlternating() }
         )
 
-        downloader.start(route: Fixture.ridgeRoute, source: controlled, scale: 2)
+        downloader.start(route: Fixture.ridgeRoute, source: controlled)
         await downloader.waitForCurrentRun()
 
         #expect(downloader.isFailed)
@@ -508,7 +506,7 @@ struct OfflineDownloadStateTests {
             saveTile: { _, _ in false }
         )
 
-        downloader.start(route: Fixture.ridgeRoute, source: controlled, scale: 2)
+        downloader.start(route: Fixture.ridgeRoute, source: controlled)
         await downloader.waitForCurrentRun()
 
         #expect(downloader.isFailed)
@@ -527,7 +525,7 @@ struct OfflineDownloadStateTests {
             saveTile: { _, _ in true }
         )
 
-        downloader.start(route: Fixture.ridgeRoute, source: controlled, scale: 2)
+        downloader.start(route: Fixture.ridgeRoute, source: controlled)
         await downloader.waitForCurrentRun()
 
         #expect(downloader.completed == downloader.total)
@@ -541,7 +539,7 @@ struct OfflineDownloadStateTests {
             saveTile: { _, _ in true }
         )
 
-        downloader.start(route: Fixture.ridgeRoute, source: controlled, scale: 2)
+        downloader.start(route: Fixture.ridgeRoute, source: controlled)
         await downloader.waitForCurrentRun()
 
         #expect(downloader.phase == .finished)
@@ -597,7 +595,6 @@ struct OfflineDownloadManifestTests {
         hike.mergeOfflineDownload(
             OfflineDownloadRecord(
                 providerID: "test",
-                scale: 2,
                 maxZoom: 12,
                 savedTileKeys: ["test/12/1/1@2.0"]
             )
@@ -605,7 +602,6 @@ struct OfflineDownloadManifestTests {
         hike.mergeOfflineDownload(
             OfflineDownloadRecord(
                 providerID: "test",
-                scale: 2,
                 maxZoom: 12,
                 savedTileKeys: ["test/12/1/2@2.0"]
             )
@@ -618,19 +614,36 @@ struct OfflineDownloadManifestTests {
         )
     }
 
+    /// Records written before display scale left the cache key carry a `2.0`
+    /// or `3.0` here and re-derive keys for tiles that are no longer on disk.
+    /// Matching on provider and depth alone is what lets a re-download absorb
+    /// one instead of accumulating a second record beside it.
+    @Test("a record from before the key change is absorbed rather than kept")
+    func mergeIgnoresLegacyScale() {
+        let hike = Fixture.hike(in: context)
+        hike.mergeOfflineDownload(
+            OfflineDownloadRecord(providerID: "test", maxZoom: 12, scale: 3)
+        )
+        hike.mergeOfflineDownload(
+            OfflineDownloadRecord(providerID: "test", maxZoom: 12)
+        )
+
+        #expect(hike.offlineDownloads.count == 1)
+        #expect(hike.offlineDownloads[0].scale == 0)
+    }
+
     @Test("a complete retry replaces partial coverage")
     func completeRetryReplacesPartial() {
         let hike = Fixture.hike(in: context)
         hike.mergeOfflineDownload(
             OfflineDownloadRecord(
                 providerID: "test",
-                scale: 2,
                 maxZoom: 12,
                 savedTileKeys: ["test/12/1/1@2.0"]
             )
         )
         hike.mergeOfflineDownload(
-            OfflineDownloadRecord(providerID: "test", scale: 2, maxZoom: 12)
+            OfflineDownloadRecord(providerID: "test", maxZoom: 12)
         )
 
         #expect(hike.offlineDownloads.count == 1)

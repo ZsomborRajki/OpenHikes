@@ -17,19 +17,28 @@ import Foundation
 nonisolated struct OfflineDownloadRecord: Codable, Hashable, Sendable {
     /// Tile provider the download used (namespaces the cache keys).
     var providerID: String
-    /// Display scale the tiles were saved at (part of the cache key).
-    var scale: Double
     /// Deepest zoom level saved.
     var maxZoom: Int
     /// Exact durable keys for a partial download. An empty array indicates
     /// that every tile in the deterministic grid was saved (complete download).
     var savedTileKeys: [String]
+    /// **Vestigial, and kept only because it is part of the persisted shape.**
+    ///
+    /// Display scale stopped being part of a tile's identity — see
+    /// ``TileCacheKey`` for why it never described one — so nothing reads this
+    /// any more and new records leave it at zero. It stays declared because
+    /// `OpenHikesSchemaV2` is the live version: dropping a column from an
+    /// inline `Codable` value type is a change to a persisted shape, which
+    /// means freezing V2 and adding a V3 stage for a field no code consults.
+    /// Records written before the change still carry their `2.0` or `3.0`
+    /// here, and decode unchanged.
+    var scale: Double
 
-    init(providerID: String, scale: Double, maxZoom: Int, savedTileKeys: [String] = []) {
+    init(providerID: String, maxZoom: Int, savedTileKeys: [String] = [], scale: Double = 0) {
         self.providerID = providerID
-        self.scale = scale
         self.maxZoom = maxZoom
         self.savedTileKeys = savedTileKeys
+        self.scale = scale
     }
 }
 

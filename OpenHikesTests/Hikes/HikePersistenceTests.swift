@@ -86,7 +86,7 @@ struct HikePersistenceTests {
             // to reach it. A value that was never inserted has nowhere to put
             // them, which is why they are no longer initialiser arguments.
             hike.offlineDownloads = [
-                OfflineDownloadRecord(providerID: "osm", scale: 2, maxZoom: 14, savedTileKeys: ["osm/14/1/1@2.0"])
+                OfflineDownloadRecord(providerID: "osm", maxZoom: 14, savedTileKeys: ["osm/14/1/1@2.0"])
             ]
             hike.autoSavedTileKeys = ["osm/16/9/9@2.0"]
             hike.autoSaveTilesEnabled = false

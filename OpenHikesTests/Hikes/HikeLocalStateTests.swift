@@ -33,7 +33,7 @@ struct HikeLocalStateTests {
 
         hike.autoSavedTileKeys = ["osm/16/9/9@2.0"]
         hike.offlineDownloads = [
-            OfflineDownloadRecord(providerID: "osm", scale: 2, maxZoom: 14, savedTileKeys: ["osm/14/1/1@2.0"])
+            OfflineDownloadRecord(providerID: "osm", maxZoom: 14, savedTileKeys: ["osm/14/1/1@2.0"])
         ]
         hike.autoSaveTilesEnabled = false
         try context.save()
@@ -69,7 +69,7 @@ struct HikeLocalStateTests {
 
         hike.autoSavedTileKeys = ["a"]
         hike.autoSaveTilesEnabled = false
-        hike.offlineDownloads = [OfflineDownloadRecord(providerID: "osm", scale: 2, maxZoom: 12)]
+        hike.offlineDownloads = [OfflineDownloadRecord(providerID: "osm", maxZoom: 12)]
         try context.save()
 
         let rows = try context.fetch(FetchDescriptor<HikeLocalState>())
@@ -158,10 +158,10 @@ struct HikeLocalStateTests {
         let hike = Fixture.hike(in: context)
 
         hike.mergeOfflineDownload(
-            OfflineDownloadRecord(providerID: "osm", scale: 2, maxZoom: 14, savedTileKeys: ["a"])
+            OfflineDownloadRecord(providerID: "osm", maxZoom: 14, savedTileKeys: ["a"])
         )
         hike.mergeOfflineDownload(
-            OfflineDownloadRecord(providerID: "osm", scale: 2, maxZoom: 14, savedTileKeys: ["b"])
+            OfflineDownloadRecord(providerID: "osm", maxZoom: 14, savedTileKeys: ["b"])
         )
 
         #expect(hike.offlineDownloads.count == 1)

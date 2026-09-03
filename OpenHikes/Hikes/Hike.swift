@@ -298,11 +298,16 @@ extension Hike {
 
 extension Hike {
     /// Adds complete or partial bulk coverage without accumulating redundant
-    /// records for repeated attempts at the same provider/scale/depth.
+    /// records for repeated attempts at the same provider/depth.
+    ///
+    /// Deliberately does not compare ``OfflineDownloadRecord/scale``, which no
+    /// longer describes anything — see ``TileCacheKey``. Ignoring it is also
+    /// what retires records written before that change: a re-download at the
+    /// same provider and depth absorbs the old `2.0`/`3.0` record instead of
+    /// sitting beside it re-deriving keys for tiles that are no longer there.
     func mergeOfflineDownload(_ record: OfflineDownloadRecord) {
         let matches: (OfflineDownloadRecord) -> Bool = { existing in
             existing.providerID == record.providerID
-                && existing.scale == record.scale
                 && existing.maxZoom == record.maxZoom
         }
 
@@ -324,7 +329,6 @@ extension Hike {
         offlineDownloads.append(
             OfflineDownloadRecord(
                 providerID: record.providerID,
-                scale: record.scale,
                 maxZoom: record.maxZoom,
                 savedTileKeys: mergedKeys.sorted()
             )

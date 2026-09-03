@@ -74,12 +74,14 @@ struct TileOverzoomTests {
     }
 
     /// The path portion of a cache key. `TileCacheKey.namespaced` prefixes the
-    /// provider id before a tile is stored under it.
-    @Test("the cache key identifies zoom, position and scale")
+    /// provider id before a tile is stored under it. Scale is not in there —
+    /// see ``TileCacheKey`` — so the only thing that can separate two keys is
+    /// the tile they name.
+    @Test("the cache key identifies zoom and position, and nothing else")
     func cacheKey() {
-        #expect(MKTileOverlayPath(x: 3, y: 4, z: 5, contentScaleFactor: 2).cacheKey == "5/3/4@2.0")
-        #expect(MKTileOverlayPath(x: 3, y: 4, z: 5, contentScaleFactor: 3).cacheKey == "5/3/4@3.0")
-        #expect(MKTileOverlayPath(x: 4, y: 3, z: 5, contentScaleFactor: 2).cacheKey != "5/3/4@2.0")
+        #expect(MKTileOverlayPath(x: 3, y: 4, z: 5, contentScaleFactor: 2).cacheKey == "5/3/4")
+        #expect(MKTileOverlayPath(x: 3, y: 4, z: 5, contentScaleFactor: 3).cacheKey == "5/3/4")
+        #expect(MKTileOverlayPath(x: 4, y: 3, z: 5, contentScaleFactor: 2).cacheKey != "5/3/4")
     }
 
     @Test("fallback source region maps to the whole destination tile")

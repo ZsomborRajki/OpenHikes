@@ -121,7 +121,6 @@ struct StorageAccountingTests {
         let provider = TileProvider.default
         let fullRecord = OfflineDownloadRecord(
             providerID: provider.id,
-            scale: 2,
             maxZoom: 12
         )
         let fullKeys = Set(
@@ -129,15 +128,13 @@ struct StorageAccountingTests {
                 for: route,
                 providerID: provider.id,
                 providerMaxZoom: provider.maximumZ,
-                maxZoom: 12,
-                scale: 2
+                maxZoom: 12
             )
         )
         let overlap = try #require(fullKeys.first)
         let extra = "\(provider.id)/13/999/999@2.0"
         let partialRecord = OfflineDownloadRecord(
             providerID: provider.id,
-            scale: 2,
             maxZoom: 12,
             savedTileKeys: [overlap, extra]
         )
@@ -245,7 +242,7 @@ struct StorageAccountingTests {
     func claimedCacheTierTilesAreCoverage() async throws {
         let hike = Fixture.hike(in: context) { hike in
             hike.offlineDownloads = [
-                OfflineDownloadRecord(providerID: TileProvider.default.id, scale: 2, maxZoom: 12)
+                OfflineDownloadRecord(providerID: TileProvider.default.id, maxZoom: 12)
             ]
         }
 

@@ -160,8 +160,6 @@ struct HikeDetailView: View {
     /// same provider (and API key) the map is currently drawing.
     @AppStorage(SettingsKey.tileProviderID)
     private var tileProviderID = TileProvider.default.id
-    @Environment(\.displayScale)
-    private var displayScale
     // Shared with offline-storage helpers in the companion extension file.
     // swiftlint:disable private_swiftui_state
     @Environment(\.modelContext)
@@ -366,11 +364,7 @@ private extension HikeDetailView {
                         downloader: downloader,
                         canDownload: canDownload
                     ) {
-                        downloader.start(
-                            route: hike.route,
-                            source: source,
-                            scale: displayScale
-                        )
+                        downloader.start(route: hike.route, source: source)
                     }
                 }
             } middleControls: {

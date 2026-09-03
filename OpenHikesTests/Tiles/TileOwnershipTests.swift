@@ -34,7 +34,7 @@ struct TileOwnershipTests {
 
     private func download(_ hike: Hike, maxZoom: Int = 14) {
         hike.offlineDownloads.append(
-            OfflineDownloadRecord(providerID: TileProvider.openStreetMap.id, scale: 2, maxZoom: maxZoom)
+            OfflineDownloadRecord(providerID: TileProvider.openStreetMap.id, maxZoom: maxZoom)
         )
     }
 
@@ -62,8 +62,7 @@ struct TileOwnershipTests {
             for: Fixture.coordinates(Fixture.ridgeRoute),
             providerID: TileProvider.openStreetMap.id,
             providerMaxZoom: TileProvider.openStreetMap.maximumZ,
-            maxZoom: 14,
-            scale: 2
+            maxZoom: 14
         ))
         #expect(claimed == expected)
     }
