@@ -224,12 +224,16 @@ final class HikeIntentCoordinatorTests {
     func controlTogglesTheRecording() async throws {
         let coordinator = makeCoordinator()
 
-        let startOutcome = try await coordinator.toggleHikeRecording()
+        let startOutcome = try await coordinator.toggleHikeRecording(
+            canPromptForLocation: false
+        )
         #expect(startOutcome == .completed)
         #expect(source.startCount == 1)
         walk()
 
-        let stopOutcome = try await coordinator.toggleHikeRecording()
+        let stopOutcome = try await coordinator.toggleHikeRecording(
+            canPromptForLocation: false
+        )
         #expect(stopOutcome == .completed)
         await #expect(throws: HikeIntentFailure.noActiveRecording) {
             try await coordinator.currentRecording()
@@ -242,10 +246,64 @@ final class HikeIntentCoordinatorTests {
         source.authorization = .notDetermined
         let coordinator = makeCoordinator()
 
-        let outcome = try await coordinator.toggleHikeRecording()
+        let outcome = try await coordinator.toggleHikeRecording(
+            canPromptForLocation: false
+        )
 
         #expect(outcome == .requiresForegroundAuthorization)
         #expect(source.startCount == 0)
+    }
+
+    /// The same hand-off the recording intents make, for the same reason: the
+    /// accuracy prompt the recorder walks into is as foreground-only as the
+    /// first one, and a control has no dialog of its own to fall back on.
+    @Test("the control opens the app for a reduced-accuracy grant too")
+    func controlDefersReducedAccuracy() async throws {
+        source.hasFullAccuracy = false
+        let coordinator = makeCoordinator()
+
+        let outcome = try await coordinator.toggleHikeRecording(
+            canPromptForLocation: false
+        )
+
+        #expect(outcome == .requiresForegroundAuthorization)
+        #expect(source.startCount == 0)
+    }
+
+    /// Once the intent has brought the app forward there is nothing left to
+    /// defer to: `recorder.start()` is the call that asks Core Location, and
+    /// refusing a second time would be a control that can never start a hike.
+    ///
+    /// The prompt itself is what is asserted rather than a started session:
+    /// the stub answers `.notDetermined` and never changes its mind, which is
+    /// the same shape a real walker who has not tapped Allow yet presents.
+    @Test("a foregrounded control action asks rather than deferring again")
+    func controlStartsOnceForegrounded() async throws {
+        source.authorization = .notDetermined
+        let coordinator = makeCoordinator()
+
+        let outcome = try await coordinator.toggleHikeRecording(
+            canPromptForLocation: true
+        )
+
+        #expect(outcome == .completed)
+        #expect(source.authorizationRequests == 1)
+    }
+
+    /// A Control Center tap is the likeliest of all to launch this process
+    /// purely to perform an intent, and the toggle reads the phase itself
+    /// before delegating. Unsettled, it finds `.recovering` and refuses with
+    /// `busyFinishing` on a device with no interrupted hike at all.
+    @Test("a recovering launch is waited out by the control too")
+    func controlWaitsOutARecoveringLaunch() async throws {
+        let coordinator = makeCoordinator(automaticallyRecovers: true)
+
+        let outcome = try await coordinator.toggleHikeRecording(
+            canPromptForLocation: false
+        )
+
+        #expect(outcome == .completed)
+        #expect(source.startCount == 1)
     }
 
     // MARK: - Reporting on a live recording
