@@ -115,8 +115,7 @@ extension OfflineTileDownloader {
     /// more than was needed rather than overrunning the limit.
     func spaceShortfall(
         tiles: [Tile],
-        source: ActiveTileSource,
-        scale: CGFloat
+        source: ActiveTileSource
     ) async -> SpaceShortfall? {
         guard let space = await quota.space(source.providerID) else { return nil }
         let required = Int64(tiles.count) * TileCache.estimatedTileBytes
@@ -125,7 +124,7 @@ extension OfflineTileDownloader {
 
         // This download's own tiles are never candidates: re-saving a hike
         // must not evict the copy of it already on disk.
-        let plannedKeys = Set(tiles.map { $0.cacheKey(providerID: source.providerID, scale: scale) })
+        let plannedKeys = Set(tiles.map { $0.cacheKey(providerID: source.providerID) })
         let reclaimable = await quota.reclaimable(source.providerID, plannedKeys)
         let shortfall = min(required - available, reclaimable)
         guard shortfall > 0 else { return nil }

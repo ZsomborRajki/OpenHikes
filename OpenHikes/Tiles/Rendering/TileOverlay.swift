@@ -85,25 +85,30 @@ nonisolated final class TileOverlay: MKTileOverlay, @unchecked Sendable {
     }
 
     /// Provider-namespaced cache key, so switching providers doesn't reuse tiles.
+    ///
+    /// Reads no `contentScaleFactor`: see ``TileCacheKey`` for why a tile's
+    /// identity stops at provider and z/x/y.
     private func cacheKey(for path: MKTileOverlayPath) -> String {
         TileCacheKey.namespaced(
             providerID: providerID,
             z: path.z,
             x: path.x,
-            y: path.y,
-            scale: path.contentScaleFactor
+            y: path.y
         )
     }
 }
 
 nonisolated extension MKTileOverlayPath {
     /// Stable string key (MKTileOverlayPath isn't Hashable).
+    ///
+    /// Two paths differing only in `contentScaleFactor` share a key, which is
+    /// the point — they name the same tile at the same URL. See
+    /// ``TileCacheKey``.
     var cacheKey: String {
         TileCacheKey.path(
             z: z,
             x: x,
-            y: y,
-            scale: contentScaleFactor
+            y: y
         )
     }
 

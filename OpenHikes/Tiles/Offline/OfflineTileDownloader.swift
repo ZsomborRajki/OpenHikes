@@ -5,7 +5,7 @@
 //  Pre-fetches the map tiles covering a route's bounding box across a range of
 //  zoom levels and primes `TileCache` with them, so the route can be viewed
 //  offline later. Tiles are stored under the exact keys the map renderer looks
-//  up (`providerID/z/x/y@scale`), so a warmed cache is served transparently.
+//  up (`providerID/z/x/y`), so a warmed cache is served transparently.
 //
 
 import CoreLocation
@@ -34,7 +34,6 @@ final class OfflineTileDownloader {
     struct PendingRun {
         let tiles: [Tile]
         let source: ActiveTileSource
-        let scale: CGFloat
         let shortfall: SpaceShortfall
         let generation: Int
     }
@@ -129,7 +128,7 @@ final class OfflineTileDownloader {
     /// only where the button is drawn: ``TileProvider/supportsBulkDownload``
     /// is a promise to the tile host rather than a UI affordance, so the code
     /// that would do the fetching has to be the thing that keeps it.
-    func start(route: [RouteCoordinate], source: ActiveTileSource, scale: CGFloat) {
+    func start(route: [RouteCoordinate], source: ActiveTileSource) {
         guard phase != .downloading else { return }
         guard source.permitsBulkDownload else {
             phase = .failed("This map source doesn't allow offline downloads.")
@@ -164,7 +163,6 @@ final class OfflineTileDownloader {
                 route: route,
                 source: source,
                 maxZoom: maxZoom,
-                scale: scale,
                 generation: currentGeneration
             )
         }
@@ -197,7 +195,6 @@ final class OfflineTileDownloader {
         route: [RouteCoordinate],
         source: ActiveTileSource,
         maxZoom: Int,
-        scale: CGFloat,
         generation: Int
     ) async {
         let tiles: [Tile]
@@ -231,12 +228,11 @@ final class OfflineTileDownloader {
         // A provider whose terms cap durable storage may not have room for
         // this. Asked before a single tile is fetched, so a user who declines
         // has cost nothing and lost nothing.
-        if let shortfall = await spaceShortfall(tiles: tiles, source: source, scale: scale) {
+        if let shortfall = await spaceShortfall(tiles: tiles, source: source) {
             guard generation == self.generation, !Task.isCancelled else { return }
             pendingRun = PendingRun(
                 tiles: tiles,
                 source: source,
-                scale: scale,
                 shortfall: shortfall,
                 generation: generation
             )
@@ -247,7 +243,6 @@ final class OfflineTileDownloader {
         await run(
             tiles: tiles,
             source: source,
-            scale: scale,
             generation: generation
         )
     }
@@ -265,7 +260,7 @@ final class OfflineTileDownloader {
             guard let self else { return }
             let plannedKeys = Set(
                 pending.tiles.map { tile in
-                    tile.cacheKey(providerID: pending.source.providerID, scale: pending.scale)
+                    tile.cacheKey(providerID: pending.source.providerID)
                 }
             )
             _ = await quota.reclaim(
@@ -277,7 +272,6 @@ final class OfflineTileDownloader {
             await run(
                 tiles: pending.tiles,
                 source: pending.source,
-                scale: pending.scale,
                 generation: pending.generation
             )
         }
@@ -291,7 +285,7 @@ final class OfflineTileDownloader {
         phase = .idle
     }
 
-    private func run(tiles: [Tile], source: ActiveTileSource, scale: CGFloat, generation: Int) async {
+    private func run(tiles: [Tile], source: ActiveTileSource, generation: Int) async {
         let saveTileCallback = saveTile
         let loadGate = gate
         var savedKeys = Set<String>()
@@ -310,7 +304,6 @@ final class OfflineTileDownloader {
                     await Self.save(
                         tile,
                         from: source,
-                        scale: scale,
                         through: loadGate,
                         using: saveTileCallback
                     )
@@ -339,7 +332,7 @@ final class OfflineTileDownloader {
             }
         }
 
-        await finalize(savedKeys: savedKeys, tiles: tiles, source: source, scale: scale, generation: generation)
+        await finalize(savedKeys: savedKeys, tiles: tiles, source: source, generation: generation)
     }
 
     /// One tile, fetched straight into durable storage. `nonisolated static`
@@ -349,11 +342,10 @@ final class OfflineTileDownloader {
     nonisolated private static func save(
         _ tile: Tile,
         from source: ActiveTileSource,
-        scale: CGFloat,
         through gate: TileLoadGate,
         using saveTile: @Sendable (String, URL) async -> Bool
     ) async -> SaveResult {
-        let key = tile.cacheKey(providerID: source.providerID, scale: scale)
+        let key = tile.cacheKey(providerID: source.providerID)
         guard let url = tile.url(from: source.urlTemplate) else { return SaveResult(key: key, saved: false) }
         // Shared with the map's own tile loads, at `.background`: nobody minds
         // a download taking a minute longer, and everybody minds the map
@@ -382,7 +374,6 @@ final class OfflineTileDownloader {
         savedKeys: Set<String>,
         tiles: [Tile],
         source: ActiveTileSource,
-        scale: CGFloat,
         generation: Int
     ) async {
         guard generation == self.generation else { return }
@@ -395,7 +386,6 @@ final class OfflineTileDownloader {
         if savedKeys.count == tiles.count {
             completedRecord = OfflineDownloadRecord(
                 providerID: source.providerID,
-                scale: Double(scale),
                 maxZoom: source.maximumZ
             )
             phase = .finished
@@ -403,7 +393,6 @@ final class OfflineTileDownloader {
             if !sortedKeys.isEmpty {
                 completedRecord = OfflineDownloadRecord(
                     providerID: source.providerID,
-                    scale: Double(scale),
                     maxZoom: source.maximumZ,
                     savedTileKeys: sortedKeys
                 )

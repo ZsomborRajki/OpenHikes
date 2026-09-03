@@ -20,13 +20,12 @@ nonisolated extension OfflineTileDownloader {
             return URL(string: filled)
         }
 
-        func cacheKey(providerID: String, scale: CGFloat) -> String {
+        func cacheKey(providerID: String) -> String {
             TileCacheKey.namespaced(
                 providerID: providerID,
                 z: z,
                 x: x,
-                y: y,
-                scale: scale
+                y: y
             )
         }
     }
@@ -69,15 +68,13 @@ nonisolated extension OfflineTileDownloader {
     }
 
     /// The cache keys every tile a download of `route` would produce for the
-    /// given provider, scale, and depth — so stored tiles can be measured and
-    /// removed after the fact. Deterministic: recomputing yields exactly the
-    /// saved set.
+    /// given provider and depth — so stored tiles can be measured and removed
+    /// after the fact. Deterministic: recomputing yields exactly the saved set.
     static func tileKeys(
         for route: [CLLocationCoordinate2D],
         providerID: String,
         providerMaxZoom: Int,
-        maxZoom: Int,
-        scale: CGFloat
+        maxZoom: Int
     ) -> [String] {
         let clamped = min(max(maxZoom, minZoom), providerMaxZoom)
         return tiles(
@@ -86,7 +83,7 @@ nonisolated extension OfflineTileDownloader {
             maxZoom: clamped,
             budget: tileBudget(forProviderID: providerID)
         ).map { tile in
-            tile.cacheKey(providerID: providerID, scale: scale)
+            tile.cacheKey(providerID: providerID)
         }
     }
 
@@ -127,8 +124,7 @@ nonisolated extension OfflineTileDownloader {
                     for: route,
                     providerID: record.providerID,
                     providerMaxZoom: provider.maximumZ,
-                    maxZoom: record.maxZoom,
-                    scale: CGFloat(record.scale)
+                    maxZoom: record.maxZoom
                 )
             )
         }

@@ -70,6 +70,9 @@ struct SchemaMigrationTests {
         )
         hike.tintHex = "#34C759FF"
         hike.offlineDownloads = [
+            // The frozen V1 shape, written exactly as a store of that era
+            // held it: `scale` was still a column and the saved key still
+            // carried an `@2.0` suffix.
             OpenHikesSchemaV1.OfflineDownloadRecord(
                 providerID: "osm",
                 scale: 2,
