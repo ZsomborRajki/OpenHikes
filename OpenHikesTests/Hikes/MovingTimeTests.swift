@@ -169,6 +169,42 @@ struct MovingTimeTests {
         #expect(flattenedMoving > moving + 3000)
     }
 
+    /// The resume is where walking starts again, so the point that carries the
+    /// boundary has to become the reference the next interval is measured
+    /// from. Dropping it instead loses the whole first leg after every pause —
+    /// a second on a 1 Hz recording, and minutes on a sparse imported GPX.
+    ///
+    /// Exactly one leg either side of the pause, and an exact expectation:
+    /// a tolerance wide enough for the window's own lag would hide the
+    /// missing leg entirely.
+    @Test("the leg walked straight after a resume is counted")
+    func theFirstLegAfterAResumeIsCounted() throws {
+        let metersWalked = Self.walkingSpeed * 600
+        let route = [
+            RouteCoordinate(latitude: 47.63, longitude: 12.86, timestamp: Self.start),
+            RouteCoordinate(
+                latitude: 47.63 + metersWalked / Self.metersPerDegreeLatitude,
+                longitude: 12.86,
+                timestamp: Self.start.addingTimeInterval(600)
+            ),
+            RouteCoordinate(
+                latitude: 47.70,
+                longitude: 12.86,
+                timestamp: Self.start.addingTimeInterval(4200),
+                boundary: .paused
+            ),
+            RouteCoordinate(
+                latitude: 47.70 + metersWalked / Self.metersPerDegreeLatitude,
+                longitude: 12.86,
+                timestamp: Self.start.addingTimeInterval(4800)
+            ),
+        ]
+
+        let moving = try #require(Self.statistics(for: route).movingDuration)
+
+        #expect(moving == 1200)
+    }
+
     /// A walk with nothing to subtract has to report the same number twice.
     /// The presumption is what buys this: an unjudgeable window counts as
     /// movement, so the head of a route is not quietly deducted.

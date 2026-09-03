@@ -199,14 +199,20 @@ nonisolated struct MovingTimeAccumulator: Sendable {
     mutating func record(_ point: RouteCoordinate) {
         // A pause is not a stop this rule has to judge — the walker declared
         // it. Neither the span it opened nor the displacement across it says
-        // anything about walking, so the leg is dropped whole and the window
-        // starts again at the resume. Without this a walker who paused at the
-        // trailhead, drove to the next one and resumed is credited with the
-        // whole drive as moving time, because the rule sees only a long span
-        // and a large displacement and calls that walking.
+        // anything about walking, so the leg arriving here is dropped whole.
+        // Without this a walker who paused at the trailhead, drove to the next
+        // one and resumed is credited with the whole drive as moving time,
+        // because the rule sees only a long span and a large displacement and
+        // calls that walking.
+        //
+        // Dropping the reference is the whole of it, and the point then falls
+        // through to be recorded like any other. It is where the walking
+        // starts again, so it has to become the baseline the next interval is
+        // measured from — returning here instead would drop that interval too,
+        // which is a second on a 1 Hz recording and minutes on a sparse
+        // imported GPX.
         if point.isPauseBoundary {
             resetSegment()
-            return
         }
         guard let timestamp = point.timestamp else { return }
         let elapsed = previous.map { timestamp.timeIntervalSince($0.timestamp) }
@@ -225,6 +231,9 @@ nonisolated struct MovingTimeAccumulator: Sendable {
     /// clock must not cross is expressed by dropping the reference and the
     /// window rather than by starting a new accumulator: the seconds already
     /// booked belong to the same walk and are still owed to the walker.
+    ///
+    /// It drops the past and nothing else. The point that crosses the boundary
+    /// is still recorded, and becomes the reference on the far side of it.
     mutating func resetSegment() {
         window.removeAll(keepingCapacity: true)
         previous = nil
