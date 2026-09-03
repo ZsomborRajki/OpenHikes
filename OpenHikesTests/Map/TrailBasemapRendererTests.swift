@@ -9,19 +9,30 @@
 //  contract worth pinning here is not "the picture is pretty", it is that the
 //  *store* is never left in a shape the widget cannot survive.
 //
-//  Two limits shape what is asserted below, and they are worth stating rather
-//  than discovering.
+//  Three things shape what is asserted below, and they are worth stating
+//  rather than discovering.
 //
-//  `MKMapSnapshotter` remains the production boundary. Tests inject its result
-//  at that boundary, so no assertion or completion time depends on a network
-//  service. The separate encoding tests still exercise the real JPEG path.
+//  `MKMapSnapshotter` remains the production boundary, and no test crosses it.
+//  Tests inject the render's *result* at that boundary, so neither an
+//  assertion nor a completion time depends on a network service. Two things
+//  keep that true rather than merely intended: the suite's `.timeLimit`, which
+//  is the real assertion for it — a reintroduced live snapshot does not fail a
+//  `#expect`, it costs four framework timeouts per pass and stays green — and
+//  ``unusedRenderer(sourceLocation:)``, which is what the tests that must not
+//  render at all are handed. A `nil`-returning stub would not do for those:
+//  refusing to render leaves the store untouched, which is exactly what they
+//  assert, so they would pass while the guard they exist for was broken.
+//  `TrailBasemapRendererTests+RenderScale.swift` still goes through the real
+//  JPEG path, which is local work and needs no network.
 //
 //  Ordering is not a promise an actor makes. `TrailBasemapRenderer`
 //  serializes, it does not queue: a pass suspends at every snapshot, and
 //  another call can enter in that gap. So a burst is asserted through the
 //  invariant its bookkeeping exists to preserve — a manifest always has its
 //  images, and no image outlives the manifest naming it — never through which
-//  caller won.
+//  caller won. See `overlappingRefreshesLeaveAConsistentStore`; the
+//  superseding tests beside it pin what a *single*, scripted interleaving is
+//  allowed to do, which is only assertable because the boundary is injected.
 //
 //  Isolation is asserted at the executor, not at the type. See
 //  `rendererDoesNotRunOnTheMainThread`.
@@ -42,13 +53,51 @@ private func runsOnMainThread(on renderer: isolated TrailBasemapRenderer) -> Boo
     pthread_main_np() != 0
 }
 
-@Suite("Trail basemap rendering", .serialized, .enabled(if: SharedStoreProbe.isAvailable))
+/// The `.timeLimit` is not decoration, and it is not about a slow machine.
+/// It is the regression test for the defect this suite was rewritten to fix:
+/// a live `MKMapSnapshotter` call makes no assertion here fail, it just waits
+/// out four framework timeouts per pass — 570 seconds for a green run, against
+/// a 30-minute CI job budget. A minute is several orders of magnitude above
+/// what the whole suite costs with the boundary injected, and far below what
+/// one reintroduced round-trip costs.
+@Suite(
+    "Trail basemap rendering",
+    .serialized,
+    .timeLimit(.minutes(1)),
+    .enabled(if: SharedStoreProbe.isAvailable)
+)
 final class TrailBasemapRendererTests {
     /// The pixel dimensions `renderScale` promises, written out rather than
     /// derived from `pointSize × renderScale` — a derived expectation would
     /// restate the implementation and pass whatever it did.
     nonisolated static let expectedSquarePixels = (width: 640, height: 640)
     nonisolated static let expectedWidePixels = (width: 760, height: 360)
+
+    /// One image the widget can ask for, as the pair that identifies it. A
+    /// named type rather than a tuple so a published set can be compared as a
+    /// `Set` — which is what makes "every combination, once" assertable
+    /// without depending on the order the render loop happens to walk in.
+    struct Image: Hashable {
+        let variant: TrailBasemapVariant
+        let appearance: TrailBasemapAppearance
+
+        /// `nonisolated` because the target defaults to `MainActor` isolation
+        /// and ``everyImage`` is built outside it, like every other fixture
+        /// here.
+        nonisolated init(_ variant: TrailBasemapVariant, _ appearance: TrailBasemapAppearance) {
+            self.variant = variant
+            self.appearance = appearance
+        }
+    }
+
+    /// Every combination a manifest has to carry. Derived from the two
+    /// enumerations on purpose, unlike the pixel constants above: this one is
+    /// a statement about the widget's needs — it picks by shape and by
+    /// appearance — and adding a case to either enumeration is meant to widen
+    /// what is asserted rather than leave a combination silently unchecked.
+    nonisolated static let everyImage: [Image] = TrailBasemapVariant.allCases.flatMap { variant in
+        TrailBasemapAppearance.allCases.map { Image(variant, $0) }
+    }
 
     /// A ~1 km trail with bends in both axes, in the Chiemgau Alps.
     nonisolated static let trail: [SharedTrailSnapshot.CodableCoordinate] = [
@@ -63,20 +112,73 @@ final class TrailBasemapRendererTests {
     /// disappearing.
     nonisolated static let imageBytes = Data("not-a-jpeg".utf8)
 
+    /// What a snapshot would have produced, had one been taken. The bytes name
+    /// the image they stand for so a manifest entry can be traced back to the
+    /// call that produced it — see ``renderedBytes(for:)``, which is how the
+    /// assertions spell the same thing.
+    ///
+    /// The pixel dimensions come from the renderer's own
+    /// `intendedPixelSize(for:)` for one reason only: the short-circuit in
+    /// `refreshIfNeeded` consults `isAtIntendedScale`, so a stub returning
+    /// anything else would publish a manifest the renderer immediately treats
+    /// as stale. What is *asserted* about those dimensions is written out at
+    /// ``expectedSquarePixels`` instead, so nothing here decides its own
+    /// expectation.
     nonisolated static func rendered(
         for input: TrailBasemapRenderer.RenderInput
     ) -> TrailBasemapRenderer.Rendered {
         let pixels = TrailBasemapRenderer.intendedPixelSize(for: input.variant)
         return TrailBasemapRenderer.Rendered(
-            data: Data("\(input.variant.rawValue)-\(input.appearance.rawValue)".utf8),
+            data: renderedBytes(for: input.variant, input.appearance),
             pixelWidth: pixels.width,
             pixelHeight: pixels.height,
             visibleRect: input.unitRect
         )
     }
 
+    /// The bytes ``rendered(for:)`` writes for one image, named rather than
+    /// spelled twice — an assertion that built the string itself would agree
+    /// with a renderer that had put the wrong file's bytes on disk.
+    nonisolated static func renderedBytes(
+        for variant: TrailBasemapVariant,
+        _ appearance: TrailBasemapAppearance
+    ) -> Data {
+        Data("\(variant.rawValue)-\(appearance.rawValue)".utf8)
+    }
+
+    /// A renderer whose snapshots always fail, for the tests whose subject is
+    /// what the *store* looks like afterwards rather than whether a render was
+    /// attempted. Offline is a real state, so this is production behaviour and
+    /// not only a convenience.
     nonisolated static func failingRenderer() -> TrailBasemapRenderer {
         TrailBasemapRenderer { _ in nil }
+    }
+
+    /// A renderer that must never be asked for anything, for the tests that
+    /// exist to prove a guard runs *before* the render loop.
+    ///
+    /// ``failingRenderer()`` cannot serve that purpose. Refusing to render
+    /// also leaves the store untouched, which is precisely what those tests
+    /// assert, so they would stay green while the guard was gone. This fails
+    /// on the attempt, so the assertion is "nothing was rendered" rather than
+    /// "nothing survived being rendered".
+    ///
+    /// It also closes the last routes to a live snapshot. With these two call
+    /// sites converted, no test reaches `refreshIfNeeded(hikeID:polyline:)`
+    /// through the default initialiser: the remaining `TrailBasemapRenderer()`
+    /// calls are `invalidate()` and the executor probe, and neither enters the
+    /// render loop. The production initialiser stays exercised, which is the
+    /// point of leaving them alone.
+    nonisolated static func unusedRenderer(
+        sourceLocation: SourceLocation = #_sourceLocation
+    ) -> TrailBasemapRenderer {
+        TrailBasemapRenderer { input in
+            Issue.record(
+                "a render reached the snapshot boundary: \(input.variant.rawValue)/\(input.appearance.rawValue)",
+                sourceLocation: sourceLocation
+            )
+            return nil
+        }
     }
 
     /// One name per shape rather than coordinates written inline in
@@ -135,7 +237,11 @@ final class TrailBasemapRendererTests {
     /// names it a second time here. `seededImagesLandWhereTheSuiteLooks` is
     /// what keeps that copy honest — without it, a renamed directory would
     /// turn every orphan check below silently vacuous rather than red.
-    private enum Container {
+    ///
+    /// Internal rather than private only because the overlap tests live in
+    /// `TrailBasemapRendererTests+Overlap.swift`; nothing outside this suite
+    /// should reach for it.
+    enum Container {
         static let directoryName = "basemaps"
 
         static var url: URL? {
@@ -196,7 +302,7 @@ final class TrailBasemapRendererTests {
     /// advertises. Both are silent in production — the first makes the widget
     /// fall back to the line glyph forever, the second leaks bytes into a
     /// container nothing else sweeps.
-    private static func expectConsistentStore(
+    static func expectConsistentStore(
         for hikeIDs: [UUID],
         _ comment: Comment,
         sourceLocation: SourceLocation = #_sourceLocation
@@ -312,13 +418,17 @@ extension TrailBasemapRendererTests {
     /// and the guard runs before the store is consulted — so an existing
     /// manifest for the same hike survives untouched rather than being
     /// replaced by a render of a single point's neighbourhood.
+    ///
+    /// Through ``unusedRenderer(sourceLocation:)`` so that "renders nothing"
+    /// is what is asserted. The store assertions below hold whether the guard
+    /// ran or a render simply failed, and only one of those is the contract.
     @Test("a polyline of fewer than two points renders nothing", arguments: [0, 1])
     func tooFewPointsRenderNothing(pointCount: Int) async throws {
         let hikeID = UUID()
         let coverage = try #require(UnitMercatorRect(bounding: Self.trail))
         let seeded = Self.seedPublishedSet(hikeID: hikeID, coverage: coverage)
 
-        await TrailBasemapRenderer().refreshIfNeeded(
+        await Self.unusedRenderer().refreshIfNeeded(
             hikeID: hikeID,
             polyline: Array(Self.trail.prefix(pointCount))
         )
@@ -333,13 +443,22 @@ extension TrailBasemapRendererTests {
     /// come back untouched — `generatedAt` included, since a re-render that
     /// produced identical pixels would still cost four network round-trips and
     /// a widget reload.
+    ///
+    /// ``unusedRenderer(sourceLocation:)`` rather than a default renderer, for
+    /// two reasons that point the same way. The store assertions below cannot
+    /// tell a short-circuit from a render that was taken and then found to
+    /// change nothing, so without it this test passes on a broken
+    /// short-circuit. And a default renderer would *take* those four
+    /// snapshots the moment the short-circuit regressed, which is this suite's
+    /// old failure mode: the one test whose subject is the cost of a redundant
+    /// render, paying it.
     @Test("a trail the stored manifest already frames is left exactly as it is")
     func coveredTrailIsLeftExactlyAsItIs() async throws {
         let hikeID = UUID()
         let coverage = try #require(UnitMercatorRect(bounding: Self.trail))
         let seeded = Self.seedPublishedSet(hikeID: hikeID, coverage: coverage)
 
-        await TrailBasemapRenderer().refreshIfNeeded(hikeID: hikeID, polyline: Self.trail)
+        await Self.unusedRenderer().refreshIfNeeded(hikeID: hikeID, polyline: Self.trail)
 
         #expect(SharedStore.loadBasemapSet(for: hikeID) == seeded)
         #expect(Self.Container.fileNames == Set(seeded.images.map(\.fileName)))
@@ -365,6 +484,16 @@ extension TrailBasemapRendererTests {
 // MARK: - Deterministic render outcomes
 
 extension TrailBasemapRendererTests {
+    /// The interior of a successful pass, which nothing asserted for as long
+    /// as a render meant a live snapshot: that every image the widget can ask
+    /// for is written, that each one's bytes reach the file its manifest entry
+    /// names, and that the region and pixel dimensions recorded are the ones
+    /// the render reported rather than the ones the renderer assumed.
+    ///
+    /// The pixel expectations are ``expectedSquarePixels`` and
+    /// ``expectedWidePixels`` rather than `intendedPixelSize(for:)`, which is
+    /// what the stub was built from: comparing the two would restate the
+    /// implementation on both sides and agree with whatever it did.
     @Test("a successful render publishes every variant with controlled metadata")
     func successfulRenderPublishesControlledMetadata() async throws {
         let hikeID = UUID()
@@ -375,21 +504,38 @@ extension TrailBasemapRendererTests {
 
         let published = try #require(SharedStore.loadBasemapSet(for: hikeID))
         #expect(published.coverage == coverage)
-        #expect(published.images.count == 4)
+        // Every shape the widget can be laid out at, in both appearances: the
+        // set the widget picks from, so a missing combination is a fallback to
+        // the line glyph on some device.
+        #expect(published.images.count == Self.everyImage.count)
+        #expect(Set(published.images.map { Self.Image($0.variant, $0.appearance) }) == Set(Self.everyImage))
         for image in published.images {
-            let expectedRect = coverage.framed(toAspectRatio: image.variant.aspectRatio)
-            let expectedPixels = TrailBasemapRenderer.intendedPixelSize(for: image.variant)
-            #expect(image.visibleRect == expectedRect)
-            #expect(image.pixelWidth == expectedPixels.width)
-            #expect(image.pixelHeight == expectedPixels.height)
+            let expectedPixels = image.variant == .square ? Self.expectedSquarePixels : Self.expectedWidePixels
+            let label = "\(image.variant.rawValue)/\(image.appearance.rawValue)"
+            #expect(
+                image.visibleRect == coverage.framed(toAspectRatio: image.variant.aspectRatio),
+                "\(label) recorded a region the render did not report"
+            )
+            #expect(image.pixelWidth == expectedPixels.width, "\(label) recorded the wrong width")
+            #expect(image.pixelHeight == expectedPixels.height, "\(label) recorded the wrong height")
             #expect(
                 SharedStore.basemapImageData(named: image.fileName)
-                    == Data("\(image.variant.rawValue)-\(image.appearance.rawValue)".utf8)
+                    == Self.renderedBytes(for: image.variant, image.appearance),
+                "\(label) points at another image's bytes"
             )
         }
         Self.expectConsistentStore(for: [hikeID], "after a successful render")
     }
 
+    /// Offline, or a background launch with no network — the state the whole
+    /// suite used to run in by accident, and the one the renderer's own
+    /// comment says must leave the previous trail's pictures alone. A widget
+    /// only ever pairs a set with the hike it was rendered for, so a stale set
+    /// is harmless where a cleared one is a blank map.
+    ///
+    /// This is also the timing regression from the issue, and the assertion
+    /// for that half is the suite's `.timeLimit` rather than anything here: a
+    /// forced failure has to *return*, not wait out `MKMapSnapshotter`.
     @Test("forced snapshot failures return without replacing the previous set")
     func failedRenderLeavesThePreviousSetIntact() async throws {
         let previousHike = UUID()
@@ -406,8 +552,24 @@ extension TrailBasemapRendererTests {
         #expect(Self.Container.fileNames == Set(seeded.images.map(\.fileName)))
     }
 
-    @Test("partial success publishes only complete render results")
-    func partialSuccessPublishesOnlySuccessfulImages() async throws {
+    /// A pass where some snapshots land and others don't — one appearance
+    /// failing while the other succeeds is the shape a flaky connection
+    /// actually takes, since the four renders are four separate requests.
+    ///
+    /// The policy is publish-what-landed, and it is a real decision rather
+    /// than an oversight in the loop: the alternative is to discard four
+    /// snapshots because one of them failed, and a widget that has the light
+    /// image it is currently being asked for draws a map, while one holding
+    /// nothing draws the line glyph. The cost is that the *other* appearance
+    /// falls back until the next selection change re-renders — which is the
+    /// same fallback an all-or-nothing policy would have given both.
+    ///
+    /// So an incomplete set reaching disk is correct here. What must still
+    /// hold is that it is an *honest* incomplete set: every entry it
+    /// advertises has its bytes, and the trail it superseded took its own
+    /// images with it.
+    @Test("a partly failed render publishes the images that did land")
+    func partialSuccessPublishesTheImagesThatLanded() async throws {
         let previousHike = UUID()
         Self.seedPublishedSet(
             hikeID: previousHike,
@@ -421,8 +583,10 @@ extension TrailBasemapRendererTests {
         await renderer.refreshIfNeeded(hikeID: subject, polyline: Self.trail)
 
         let published = try #require(SharedStore.loadBasemapSet(for: subject))
-        #expect(published.images.count == TrailBasemapVariant.allCases.count)
-        #expect(published.images.allSatisfy { $0.appearance == .light })
+        #expect(
+            Set(published.images.map { Self.Image($0.variant, $0.appearance) })
+                == Set(Self.everyImage.filter { $0.appearance == .light })
+        )
         #expect(SharedStore.loadBasemapSet(for: previousHike) == nil)
         Self.expectConsistentStore(for: [previousHike, subject], "after partial success")
     }
@@ -522,58 +686,6 @@ extension TrailBasemapRendererTests {
     }
 }
 
-// MARK: - Overlap
-
-extension TrailBasemapRendererTests {
-    @Test("a superseded render cannot publish after the newer render")
-    func supersededRenderCannotPublish() async throws {
-        let olderHike = UUID()
-        let newerHike = UUID()
-        let newerTrail = Self.trail.map { point in
-            SharedTrailSnapshot.CodableCoordinate(
-                latitude: point.latitude + 0.01,
-                longitude: point.longitude
-            )
-        }
-        let rendererSlot = Mutex<TrailBasemapRenderer?>(nil)
-        let isFirstRender = Mutex(true)
-        let renderer = TrailBasemapRenderer { input in
-            let shouldSupersede = isFirstRender.withLock { isFirst in
-                defer { isFirst = false }
-                return isFirst
-            }
-            if shouldSupersede, let renderer = rendererSlot.withLock({ $0 }) {
-                await renderer.refreshIfNeeded(hikeID: newerHike, polyline: newerTrail)
-            }
-            return Self.rendered(for: input)
-        }
-        rendererSlot.withLock { $0 = renderer }
-
-        await renderer.refreshIfNeeded(hikeID: olderHike, polyline: Self.trail)
-
-        let published = try #require(SharedStore.loadBasemapSet(for: newerHike))
-        #expect(published.coverage == UnitMercatorRect(bounding: newerTrail))
-        #expect(SharedStore.loadBasemapSet(for: olderHike) == nil)
-        Self.expectConsistentStore(for: [olderHike, newerHike], "after overlapping renders")
-    }
-
-    @Test("invalidation discards a render suspended at the snapshot boundary")
-    func invalidationDiscardsSuspendedRender() async {
-        let hikeID = UUID()
-        let rendererSlot = Mutex<TrailBasemapRenderer?>(nil)
-        let renderer = TrailBasemapRenderer { input in
-            await rendererSlot.withLock({ $0 })?.invalidate()
-            return Self.rendered(for: input)
-        }
-        rendererSlot.withLock { $0 = renderer }
-
-        await renderer.refreshIfNeeded(hikeID: hikeID, polyline: Self.trail)
-
-        #expect(SharedStore.loadBasemapSet(for: hikeID) == nil)
-        #expect(Self.Container.fileNames.isEmpty)
-    }
-}
-
 // MARK: - Isolation
 
 extension TrailBasemapRendererTests {
@@ -595,165 +707,5 @@ extension TrailBasemapRendererTests {
         let onMain = await runsOnMainThread(on: TrailBasemapRenderer())
 
         #expect(!onMain)
-    }
-}
-
-// MARK: - Render scale
-
-/// `renderScale` was a claim rather than a behaviour for as long as it
-/// existed: `MKMapSnapshotter` ignores every scale knob it offers and returns
-/// the device's own, so the images that reached the App Group were 960×960 and
-/// 1140×540 on a 3× phone while the constant asked for 640×640 and 760×360 —
-/// 2.25× the bytes to decode, inside the one process the renderer's header
-/// says cannot recover from running out.
-///
-/// `encode` resamples now, and these are what stop the next OS release quietly
-/// undoing it. They avoid the network entirely by going at `encode` directly
-/// with an image built at a chosen scale, which is also the only way anything
-/// asserts the pixel dimensions a manifest records.
-extension TrailBasemapRendererTests {
-    /// An opaque image of `size` points at `scale`, standing in for what the
-    /// snapshotter returns. Two tones rather than one so the JPEG encoder has
-    /// something to do.
-    @MainActor
-    static func deviceScaleImage(size: CGSize, scale: CGFloat) -> UIImage {
-        let format = UIGraphicsImageRendererFormat()
-        format.scale = scale
-        format.opaque = true
-        return UIGraphicsImageRenderer(size: size, format: format).image { context in
-            UIColor.systemGreen.setFill()
-            context.fill(CGRect(origin: .zero, size: size))
-            UIColor.systemBlue.setFill()
-            context.fill(CGRect(x: 0, y: 0, width: size.width / 2, height: size.height))
-        }
-    }
-
-    /// Pixel dimensions read out of encoded bytes, so what is asserted is what
-    /// a decoder will find in the file rather than what the struct claims.
-    static func pixelSize(ofJPEG data: Data) -> (width: Int, height: Int)? {
-        guard let source = CGImageSourceCreateWithData(data as CFData, nil),
-              let properties = CGImageSourceCopyPropertiesAtIndex(source, 0, nil) as? [CFString: Any],
-              let width = properties[kCGImagePropertyPixelWidth] as? Int,
-              let height = properties[kCGImagePropertyPixelHeight] as? Int
-        else { return nil }
-        return (width: width, height: height)
-    }
-
-    nonisolated static let deviceScales: [CGFloat] = [2, 3]
-
-    @Test("the intended pixel size is the point size at the renderer's scale")
-    func intendedPixelSizeMatchesTheVariant() {
-        #expect(TrailBasemapRenderer.intendedPixelSize(for: .square) == Self.expectedSquarePixels)
-        #expect(TrailBasemapRenderer.intendedPixelSize(for: .wide) == Self.expectedWidePixels)
-    }
-
-    /// The fix itself, at both the scale that needed it and the scale that
-    /// didn't. A 2× device already produced the intended size and must come
-    /// through untouched; a 3× device is the case that was silently oversized.
-    @Test(
-        "an image at the device's own scale is written at the renderer's scale",
-        arguments: TrailBasemapVariant.allCases, deviceScales
-    )
-    @MainActor
-    func encodeResamplesToTheIntendedScale(variant: TrailBasemapVariant, deviceScale: CGFloat) throws {
-        let source = Self.deviceScaleImage(size: variant.pointSize, scale: deviceScale)
-        let intended = TrailBasemapRenderer.intendedPixelSize(for: variant)
-        let label = "\(variant.rawValue) at \(deviceScale)×"
-
-        let encoded = try #require(TrailBasemapRenderer.encode(source), Comment(rawValue: label))
-
-        #expect(encoded.pixelWidth == intended.width, "\(label) recorded the wrong width")
-        #expect(encoded.pixelHeight == intended.height, "\(label) recorded the wrong height")
-
-        let onDisk = try #require(Self.pixelSize(ofJPEG: encoded.data), Comment(rawValue: label))
-        #expect(onDisk.width == intended.width, "\(label) encoded the wrong width")
-        #expect(onDisk.height == intended.height, "\(label) encoded the wrong height")
-    }
-
-    /// The saving is the point, so it is measured rather than inferred from
-    /// the dimensions. Bounded loosely on purpose: what a JPEG encoder does
-    /// with a given picture is not this suite's business, and a tight bound
-    /// here would fail on a future encoder without anything being wrong.
-    @Test("resampling actually shrinks what reaches the App Group")
-    @MainActor
-    func resamplingShrinksTheEncodedImage() throws {
-        let variant = TrailBasemapVariant.square
-        let native = try #require(
-            Self.deviceScaleImage(size: variant.pointSize, scale: 3).jpegData(compressionQuality: 0.9)
-        )
-        let resampled = try #require(
-            TrailBasemapRenderer.encode(Self.deviceScaleImage(size: variant.pointSize, scale: 3))
-        )
-
-        #expect(resampled.data.count < native.count)
-    }
-
-    /// The resample is UIKit drawing on a pipeline that must not touch the
-    /// main thread — `encode` is reached from inside
-    /// `withTaskExecutorPreference`, so this is where it really runs. A UIKit
-    /// call that needed the main thread would fail here rather than in the
-    /// field.
-    @Test("encoding, and so the resample, works off the main thread")
-    func encodeWorksOffTheMainThread() async throws {
-        let variant = TrailBasemapVariant.square
-        let source = Self.deviceScaleImage(size: variant.pointSize, scale: 3)
-
-        let outcome = await Task.detached {
-            (wasMain: pthread_main_np() != 0, encoded: TrailBasemapRenderer.encode(source))
-        }.value
-
-        #expect(!outcome.wasMain, "the probe itself ran on the main thread and proves nothing")
-        let encoded = try #require(outcome.encoded)
-        let intended = TrailBasemapRenderer.intendedPixelSize(for: variant)
-        #expect(encoded.pixelWidth == intended.width)
-        #expect(encoded.pixelHeight == intended.height)
-    }
-
-    /// A manifest written before the resample existed records the device's own
-    /// scale. The short-circuit has to treat that as work still to do, or a
-    /// walker who keeps one trail selected keeps the oversized images for as
-    /// long as they keep it selected.
-    @Test("a manifest recorded at the device's scale is not accepted as done")
-    func anOversizedManifestIsNotAtIntendedScale() throws {
-        let atIntended = try Self.basemapSet(scale: 2)
-        let oversized = try Self.basemapSet(scale: 3)
-
-        #expect(TrailBasemapRenderer.isAtIntendedScale(atIntended))
-        #expect(!TrailBasemapRenderer.isAtIntendedScale(oversized))
-    }
-
-    /// One oversized image among correct ones still has to re-render: the
-    /// widget picks per appearance and shape, so the one it lands on is not
-    /// this renderer's to predict.
-    @Test("one oversized image is enough to make the whole manifest stale")
-    func oneOversizedImageMakesTheSetStale() throws {
-        var mixed = try Self.basemapSet(scale: 2)
-        mixed.images[0].pixelWidth *= 2
-        mixed.images[0].pixelHeight *= 2
-
-        #expect(!TrailBasemapRenderer.isAtIntendedScale(mixed))
-    }
-
-    /// A manifest as the renderer would have written it on a device of the
-    /// given scale — every variant and appearance, since the widget picks
-    /// among them and one wrong entry is one wrong widget.
-    static func basemapSet(scale: CGFloat) throws -> TrailBasemapSet {
-        let coverage = try #require(UnitMercatorRect(bounding: Self.trail))
-        return TrailBasemapSet(
-            hikeID: UUID(),
-            coverage: coverage,
-            images: TrailBasemapVariant.allCases.flatMap { variant in
-                TrailBasemapAppearance.allCases.map { appearance in
-                    TrailBasemap(
-                        fileName: "\(variant.rawValue)-\(appearance.rawValue).jpg",
-                        variant: variant,
-                        appearance: appearance,
-                        pixelWidth: Int(variant.pointSize.width * scale),
-                        pixelHeight: Int(variant.pointSize.height * scale),
-                        visibleRect: coverage
-                    )
-                }
-            }
-        )
     }
 }
