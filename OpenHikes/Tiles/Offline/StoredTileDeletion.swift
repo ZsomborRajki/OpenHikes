@@ -88,13 +88,25 @@ nonisolated enum StoredTileDeletion {
     /// - The manifests are emptied, and the commit is the point of no return.
     ///   A refusal puts the whole thing back — manifests, the fold, the
     ///   preference and the arming — and deletes nothing.
-    /// - A download in flight is stood down once the commit lands, before the
-    ///   plan is spent: its tiles are precisely the ones no hike claims yet,
-    ///   so left running it would have them deleted and then claim them back,
-    ///   putting the hike's coverage back moments after the walker deleted
-    ///   it. Nothing can slip between the two — this holds the main actor
-    ///   from the snapshot to here, and a claim is main-actor work.
+    /// - Every download in flight is stood down once the commit lands, before
+    ///   the plan is spent: their tiles are precisely the ones no hike claims
+    ///   yet, so left running they would have them deleted and then claim
+    ///   them back, putting the hike's coverage back moments after the walker
+    ///   deleted it. Nothing can slip between the two — this holds the main
+    ///   actor from the snapshot to here, and a claim is main-actor work.
+    ///   Through ``OfflineDownloadRegistry`` rather than one screen's
+    ///   downloader, because a run outlives the screen that started it: walk
+    ///   back to the list and into the hike again and the view holds a fresh,
+    ///   idle downloader while the real run is still writing tiles, invisible
+    ///   to a stand-down aimed at the screen. A run for *another* hike
+    ///   matters for the same reason from the other side — its tiles are
+    ///   absent from the survivor snapshot, so this plan may free them, and
+    ///   it would then claim files that are gone.
     ///
+    /// - Parameter downloads: Where the runs still in flight are, so they can
+    ///   be stood down — and only once the deletion is on disk. A refusal
+    ///   leaves them alone: nothing was deleted, so there is nothing for them
+    ///   to resurrect, and the walker never cancelled them.
     /// - Parameter fetch: The library, hikes and all, so the survivors' claims
     ///   can be read. A fetch that failed refuses the deletion rather than
     ///   shortening the set.
@@ -106,7 +118,7 @@ nonisolated enum StoredTileDeletion {
     static func delete(
         storedTilesOf hike: Hike,
         autoSave: AutoSaveController,
-        downloader: OfflineTileDownloader,
+        downloads: OfflineDownloadRegistry = .shared,
         fetchingHikes fetch: () throws -> [Hike],
         save: (ModelContext) throws -> Void = { try $0.save() }
     ) -> Outcome {
@@ -174,7 +186,7 @@ nonisolated enum StoredTileDeletion {
             return .refused(.notSaved)
         }
 
-        downloader.cancel()
+        downloads.standDown()
         return .committed(freeing: plan)
     }
 }

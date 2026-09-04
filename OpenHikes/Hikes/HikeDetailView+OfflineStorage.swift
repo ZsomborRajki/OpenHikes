@@ -120,12 +120,18 @@ extension HikeDetailView {
         switch StoredTileDeletion.delete(
             storedTilesOf: hike,
             autoSave: autoSave,
-            downloader: downloader,
             fetchingHikes: { try modelContext.fetch(FetchDescriptor<Hike>()) }
         ) {
         case let .committed(deletionPlan):
             // Only now the coverage is really gone: a refusal has to leave the
             // row describing the map the hike still has.
+            //
+            // The runs still in flight were stood down by the deletion, which
+            // reaches all of them; this is the button on *this* screen, whose
+            // last run may have finished long ago and still be saying so. A
+            // download's result is not a result any more once the map it
+            // produced has been deleted.
+            downloader.cancel()
             invalidateStoredBytesMeasurement()
             storedBytes = 0
             // The key computation (tile-grid enumeration per download record)
