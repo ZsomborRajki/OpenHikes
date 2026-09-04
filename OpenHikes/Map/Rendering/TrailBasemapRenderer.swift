@@ -23,7 +23,6 @@
 import Foundation
 import MapKit
 import OpenHikesShared
-import WidgetKit
 
 #if canImport(UIKit)
 import UIKit
@@ -224,7 +223,12 @@ actor TrailBasemapRenderer {
         SharedStore.saveBasemapSet(TrailBasemapSet(hikeID: hikeID, coverage: coverage, images: images))
         published = true
         SharedStore.pruneBasemapImages(keeping: Set(images.map(\.fileName)))
-        WidgetCenter.shared.reloadTimelines(ofKind: TrailWidgetKind.id)
+        // Unless a live recording owns the widget, in which case these images
+        // are not what it is drawing and the redraw waits for the recording to
+        // release it — see ``TrailWidgetReload``. An actor rather than the
+        // main actor, so the App Group read that decision costs is already off
+        // the main thread.
+        TrailWidgetReload.requestUnlessRecording()
     }
 
     /// Drops the rendered basemaps, and makes any render currently in flight

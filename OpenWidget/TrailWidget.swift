@@ -26,7 +26,42 @@ struct TrailWidgetEntry: TimelineEntry {
     var basemaps: TrailBasemapSet?
 
     /// Pairs a stored snapshot with its basemaps, which are only ever valid
-    /// for the hike they were rendered for.
+    /// for the hike they were rendered for — and settles the one contention
+    /// this widget has.
+    ///
+    /// **A live recording always outranks the selected trail, and takes the
+    /// whole widget rather than a badge or a second line.** They genuinely
+    /// overlap: a walker records their own track along an imported route. The
+    /// recording wins because it is the thing that would be *lost* — a follow
+    /// is re-derived from the trail and the next fix, a recording is not —
+    /// and it is the only one of the two that is happening *now*. It is the
+    /// same rule `HikeLiveActivityController.accepts(_:)` applies to the Lock
+    /// Screen, applied here so the two surfaces cannot disagree about which
+    /// walk is under way. A badge was the alternative and it loses twice
+    /// over: the small family has room for the trace or for a trail, not
+    /// both, and a secondary state is a second thing to keep fresh on a
+    /// budget the recording feed is already spending.
+    ///
+    /// Total, not conditional. A *paused* recording takes the widget too — it
+    /// is a walk the walker will come back to, and handing the screen back to
+    /// a trail mid-hike would be the takeover flickering. The three questions
+    /// this payload is asked are therefore deliberately different, and the
+    /// difference is the policy rather than an oversight:
+    ///
+    /// - *Who owns the widget* — a recording exists. Here.
+    /// - *Whether it is worth spending on* — the recording is capturing
+    ///   fixes. `TrailWidgetProvider.nextReload(after:recording:)` and
+    ///   `relevance()`: a paused walk holds the screen but is not worth a
+    ///   location sample, a Smart Stack promotion, or a twenty-minute
+    ///   timeline.
+    /// - *What the Control Center button does* — a recording exists.
+    ///   `HikeRecordingControlState`, which is this same question and gives
+    ///   this same answer.
+    ///
+    /// The stored trail is *kept*, not cleared, throughout — nothing here
+    /// writes — so the moment the recorder clears its payload the widget's
+    /// next timeline has the walker's selection back untouched, basemaps
+    /// included. The takeover is a projection, and only a projection.
     init(
         date: Date,
         snapshot: SharedTrailSnapshot?,

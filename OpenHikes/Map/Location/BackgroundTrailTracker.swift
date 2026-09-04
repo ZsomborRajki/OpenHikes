@@ -33,7 +33,6 @@ import Observation
 import OpenHikesShared
 import SwiftData
 import Synchronization
-import WidgetKit
 
 /// The slice of `CLLocationManager` this tracker uses: authorization, and
 /// significant-location-change delivery.
@@ -327,7 +326,7 @@ final class BackgroundTrailTracker: NSObject {
                 else { return }
                 await TrailBasemapRenderer.shared.invalidate()
                 guard selectionRevision == revision else { return }
-                WidgetCenter.shared.reloadTimelines(ofKind: TrailWidgetKind.id)
+                await snapshotWriter.reloadWidget()
             }
             return
         }
@@ -345,7 +344,7 @@ final class BackgroundTrailTracker: NSObject {
                   selectionRevision == revision,
                   trackedHikeID == input.hikeID
             else { return }
-            WidgetCenter.shared.reloadTimelines(ofKind: TrailWidgetKind.id)
+            await snapshotWriter.reloadWidget()
             refreshBasemaps(for: snapshot)
         }
     }
@@ -614,6 +613,18 @@ final class BackgroundTrailTracker: NSObject {
             return SharedStore.load()
         }
 
+        /// Redraws the widget unless a live recording owns it — the
+        /// precedence rule, and the argument for gating it here, are in
+        /// ``TrailWidgetReload``.
+        ///
+        /// On the writer rather than at the three call sites because the
+        /// decision costs an App Group read, and every other read this feed
+        /// makes is already behind this actor for exactly that reason. It
+        /// deliberately takes no revision: a redraw asked for by a superseded
+        /// selection is at worst a redraw of what is already on screen, and
+        /// every caller has re-checked its own revision on the line above.
+        func reloadWidget() { TrailWidgetReload.requestUnlessRecording() }
+
         /// Replaces just the live-fix portion of the stored snapshot,
         /// rebuilding the trail from `input` first when the store holds a
         /// different one — which is what a background relaunch finds, and
@@ -700,7 +711,7 @@ extension BackgroundTrailTracker {
                   ),
                   selectionRevision == revision
             else { return }
-            WidgetCenter.shared.reloadTimelines(ofKind: TrailWidgetKind.id)
+            await snapshotWriter.reloadWidget()
             publishFollowActivity(write.snapshot)
             // Only when the trail itself changed. A moving position needs no
             // new basemap — that's the whole reason images are affordable here.
