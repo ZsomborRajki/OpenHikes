@@ -57,8 +57,8 @@ nonisolated enum CloudSyncActivity: Equatable, Sendable {
     case idle
     /// There is no Apple Account this device can sync with.
     case paused
-    /// A pass ended on a transient failure — no signal, rate limiting, a busy
-    /// zone — that mirroring will retry on its own.
+    /// A pass ended on a failure mirroring clears itself — no signal, rate
+    /// limiting, or a record zone it is rebuilding from scratch.
     ///
     /// Its own case rather than ``idle`` because the two differ in the only
     /// way that matters here: nothing was transferred. Folding it into
@@ -172,9 +172,9 @@ final class CloudSyncStatus {
             "Your hikes stay on this device only."
         case .retrying:
             lastSyncedAt.map { date in
-                "iCloud can't be reached right now. This will finish on its own. "
+                "iCloud hasn't finished this yet. It will catch up on its own. "
                     + "Last synced \(HikeFormat.timestamp(date))."
-            } ?? "iCloud can't be reached right now. This will finish on its own."
+            } ?? "iCloud hasn't finished this yet. It will catch up on its own."
         case .working:
             "Sending and receiving your hikes and photos."
         }

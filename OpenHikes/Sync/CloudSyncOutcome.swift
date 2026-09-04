@@ -57,31 +57,64 @@ nonisolated enum CloudSyncOutcome: Equatable, Sendable {
             : .failed(error.localizedDescription)
     }
 
-    /// Whether an error is the network's problem rather than the user's.
+    /// Whether an error is mirroring's own to clear rather than the user's.
     ///
-    /// The transient set is CloudKit's own retry vocabulary: no connection, a
-    /// busy or rate-limited service, a request that was simply cancelled.
-    /// Mirroring retries all of those without being asked, so surfacing them
-    /// would put "Sync Problem" on the screen for a condition that fixes
-    /// itself the moment a signal comes back — and would leave it there,
-    /// because the retry that succeeds is silent.
+    /// Two kinds qualify, and neither leaves the person anything to do.
+    ///
+    /// The first is CloudKit's own retry vocabulary: no connection, a busy or
+    /// rate-limited service, a request that was simply cancelled. Mirroring
+    /// retries all of those without being asked, so surfacing them would put
+    /// "Sync Problem" on the screen for a condition that fixes itself the
+    /// moment a signal comes back — and would leave it there, because the
+    /// retry that succeeds is silent.
+    ///
+    /// The second is the record zone going out from under the store:
+    /// ``CKError/Code/zoneNotFound``, ``CKError/Code/userDeletedZone`` and a
+    /// ``CKError/Code/changeTokenExpired`` token that no longer names
+    /// anything. These read alarming and are not: Core Data answers them by
+    /// posting `NSCloudKitMirroringDelegateWillResetSyncNotificationName`,
+    /// dropping its mirroring metadata and re-uploading the store from
+    /// scratch, which is the recovery and not a symptom of one failing. A
+    /// person reaches this by deleting the app's data from iCloud storage, by
+    /// having another device delete it, or — the way this was found — by
+    /// installing a debug build over one from TestFlight, since Xcode talks to
+    /// the *development* CloudKit environment and TestFlight to *production*,
+    /// and the zone the local store remembers exists in only one of them.
     ///
     /// Anything else is reported. An unknown error is far more likely to be a
     /// full iCloud account or a schema the container will not accept — both of
     /// which the user can act on and neither of which improves by waiting —
-    /// than a transient case Apple forgot to document.
+    /// than a self-healing case Apple forgot to document.
     static func isTransient(_ error: any Error) -> Bool {
         guard let ckError = error as? CKError else { return false }
-        switch ckError.code {
-        case .networkUnavailable,
-            .networkFailure,
-            .serviceUnavailable,
-            .requestRateLimited,
-            .zoneBusy,
-            .operationCancelled:
-            return true
-        default:
-            return false
+        // A partial failure carries no verdict of its own. It is the wrapper a
+        // batch operation returns, and what actually went wrong is one error
+        // per item inside it — so reading the wrapper's own code called every
+        // one of these permanent, including a single busy zone inside an
+        // otherwise clean fetch. This is the shape the zone errors above
+        // arrive in: mirroring fetches every zone in one operation, and a
+        // missing one comes back as `Partial Failure (2/1011)` with the real
+        // `Zone Not Found` underneath it.
+        if ckError.code == .partialFailure {
+            guard let partial = ckError.partialErrorsByItemID, !partial.isEmpty else {
+                return false
+            }
+            return partial.values.allSatisfy { isTransient($0) }
         }
+        return selfHealingCodes.contains(ckError.code)
     }
+
+    /// The codes ``isTransient(_:)`` answers `true` for, as a set so that the
+    /// two lists it documents stay one list to edit.
+    private static let selfHealingCodes: Set<CKError.Code> = [
+        .networkUnavailable,
+        .networkFailure,
+        .serviceUnavailable,
+        .requestRateLimited,
+        .zoneBusy,
+        .operationCancelled,
+        .zoneNotFound,
+        .userDeletedZone,
+        .changeTokenExpired,
+    ]
 }
