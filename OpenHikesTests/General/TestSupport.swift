@@ -406,6 +406,28 @@ nonisolated final class TileSandbox: Sendable {
 ///
 /// Whether a skip is acceptable is `SuitePrecondition`'s question, not this
 /// one's.
+/// Counts the redraws a production call site actually asked the widget-reload
+/// seam for.
+///
+/// `WidgetCenter` neither reports a reload nor replays one, so without a sink
+/// to hand out, the only assertable thing is `TrailWidgetReload` in isolation —
+/// and a call site that went back to calling `WidgetCenter` directly, bypassing
+/// the recording gate, would pass such a test while spending the reload budget
+/// the gate exists to protect. Handing the real `BackgroundTrailTracker` and
+/// `TrailBasemapRenderer` one of these is what makes that failure visible.
+nonisolated final class WidgetReloadSpy: Sendable {
+    private let granted = Mutex(0)
+
+    /// The seam to hand to a tracker or a renderer.
+    var reload: TrailWidgetReload {
+        TrailWidgetReload { self.granted.withLock { $0 += 1 } }
+    }
+
+    /// How many redraws the gate has granted — refusals are not counted,
+    /// because a refusal is precisely the absence of this call.
+    var count: Int { granted.withLock { $0 } }
+}
+
 nonisolated enum SharedStoreProbe {
     static var isAvailable: Bool {
         FileManager.default.containerURL(forSecurityApplicationGroupIdentifier: SharedStore.appGroupID) != nil

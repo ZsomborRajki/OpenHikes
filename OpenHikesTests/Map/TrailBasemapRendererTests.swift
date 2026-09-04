@@ -566,6 +566,33 @@ extension TrailBasemapRendererTests {
         Self.expectConsistentStore(for: [hikeID], "after a successful render")
     }
 
+    /// The widget is told to redraw *through the recording gate*, not by
+    /// reaching for `WidgetCenter` directly.
+    ///
+    /// That distinction is the whole of `TrailWidgetReload`: a live recording
+    /// owns the widget, so the images this pass just published are not what it
+    /// is drawing, and the redraw waits for the walk to end. `WidgetCenter`
+    /// neither reports a reload nor replays one, so the injected sink is the
+    /// only way to tell the two apart — a pass that went back to calling
+    /// `WidgetCenter` itself would publish exactly the same manifest and leave
+    /// every other test here green.
+    ///
+    /// The refusal half is asserted where the recording payload can be written
+    /// without racing this suite's own App Group files — see
+    /// `WidgetFeedBudgetTests`, which drives the tracker's two call sites.
+    @Test("a published render asks for the redraw through the recording gate")
+    func publishedRenderAsksThroughTheGate() async {
+        let reloads = WidgetReloadSpy()
+        let renderer = TrailBasemapRenderer(
+            render: { input in Self.rendered(for: input) },
+            widgetReload: reloads.reload
+        )
+
+        await renderer.refreshIfNeeded(hikeID: UUID(), polyline: Self.trail)
+
+        #expect(reloads.count == 1, "a pass that published has to ask for the widget to be redrawn")
+    }
+
     /// Offline, or a background launch with no network — the state the whole
     /// suite used to run in by accident, and the one the renderer's own
     /// comment says must leave the previous trail's pictures alone. A widget

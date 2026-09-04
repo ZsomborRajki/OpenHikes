@@ -157,35 +157,61 @@ final class WidgetFeedBudgetTests {
     /// the recording every fifteen minutes, so ungated the losing feed spends
     /// the budget roughly twenty times as fast as the winning one.
     ///
-    /// The store keeps being *written* throughout, which is the half that must
-    /// not be gated: the unconditional reload the recorder issues when the
-    /// walk ends has to find the walker's selection already current.
+    /// Driven through the real tracker rather than through `TrailWidgetReload`
+    /// alone, and that is the point of the spy: both of this feed's redraw call
+    /// sites — the selection publication and the live-fix write — are exercised
+    /// here, so a call site that went back to `WidgetCenter.reloadTimelines`
+    /// and bypassed the gate fails this test instead of quietly passing it.
     @Test("the trail feed spends no reload while a recording owns the widget")
     func recordingOwnershipSuppressesTrailReloads() async throws {
-        #expect(await requestedAReload(), "precondition: with nothing recording, a redraw is worth asking for")
+        let reloads = WidgetReloadSpy()
+        let gatedTracker = BackgroundTrailTracker(
+            container: container,
+            defaults: defaults,
+            widgetReload: reloads.reload
+        )
+        let hike = Fixture.hike(in: context)
+        let profile = RouteProfile(route: hike.route)
+        let onRoute = try #require(profile.nearestPoint(to: profile.coordinates[2]))
+        let offRoute = try #require(
+            profile.nearestPoint(to: CLLocationCoordinate2D(latitude: 37.3350, longitude: -122.0200))
+        )
 
+        gatedTracker.hikeSelectionChanged(to: hike)
+        await gatedTracker.waitForSelectionPublish()
+        #expect(reloads.count == 1, "precondition: publishing a selection redraws the widget")
+
+        // The walk starts. From here the widget draws the recording, so a
+        // trail redraw could only draw the same thing again.
         try SharedStore.saveRecording(Self.recording())
         defer { try? SharedStore.clearRecording() }
-        #expect(await requestedAReload() == false)
+        gatedTracker.publishLiveFix(hike: hike, profile: profile, match: onRoute)
+        await gatedTracker.waitForLiveFixPublish()
 
-        // A paused recording owns the widget just as a running one does — the
-        // takeover is total, so the suppression has to be too. This is the
-        // line that fails if the rule is ever narrowed to "capturing fixes",
-        // which is a different question the widget asks elsewhere.
+        // Not decoration: the write landing is what makes the assertion below
+        // a statement about the gate rather than about a publication that was
+        // throttled away before it reached one.
+        #expect(
+            SharedStore.load()?.liveFix != nil,
+            "the write still lands — it is only the redraw that waits"
+        )
+        #expect(reloads.count == 1, "the recording owns the widget")
+
+        // A pause does not hand it back, so the suppression does not lift
+        // either. Off-route, which is a status flip, so this publication takes
+        // the throttle bypass rather than being dropped for the interval.
         try SharedStore.saveRecording(Self.recording(isCapturingFixes: false))
-        #expect(await requestedAReload() == false)
+        gatedTracker.publishLiveFix(hike: hike, profile: profile, match: offRoute)
+        await gatedTracker.waitForLiveFixPublish()
+        #expect(reloads.count == 1, "a paused recording owns the widget too")
 
+        // The walk ends. A selection publication rather than another fix,
+        // because selections are not throttled — and it is the second of the
+        // two call sites.
         try SharedStore.clearRecording()
-        #expect(await requestedAReload(), "the walk is over — the selection is the widget's again")
-    }
-
-    /// Off the main thread, which is both where the gate reads the App Group
-    /// and where it asserts it is being called from. `Task.detached` rather
-    /// than a bare `Task`, for the reason ``offMainSeamLeavesTheMainThread``
-    /// spells out: on a `@MainActor` suite the two look identical and only one
-    /// of them leaves.
-    private func requestedAReload() async -> Bool {
-        await Task.detached { TrailWidgetReload.requestUnlessRecording() }.value
+        gatedTracker.hikeSelectionChanged(to: Fixture.hike(in: context, title: "Next"))
+        await gatedTracker.waitForSelectionPublish()
+        #expect(reloads.count == 2, "the selection is the widget's again")
     }
 
     private static func recording(
