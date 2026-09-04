@@ -10,6 +10,15 @@
 //  pin to — neither is allowed to be the difference between having the picture
 //  and not having it.
 //
+//  Adding is a file and a row, and the row is what makes the file a photo. So
+//  the attach is *saved* before the add reports success, and a save the store
+//  refuses takes the whole attempt back — the row out of the hike, the bytes
+//  off disk — rather than leaving a picture that the gallery shows now and
+//  will have forgotten by the next launch. The optional photo-library mirror
+//  waits for that commit too: the copy in the user's library is the one thing
+//  here nothing can take back, and it must never be all that survives an
+//  import OpenHikes itself failed to keep.
+//
 //  Deleting is the mirror image: the metadata goes on the main actor, where
 //  the `@Model` lives, and the files go afterwards on the concurrent executor.
 //  A file left behind by a failed delete is wasted space; a `Hike` still
@@ -45,11 +54,19 @@ nonisolated enum HikePhotoImport {
     /// - Parameter libraryWriter: The seam the mirrored copy goes through, so
     ///   a test can watch what it was handed without a photo library to write
     ///   into.
+    /// - Parameter save: The seam the commit goes through, the same one
+    ///   ``remove(_:from:store:save:)`` takes, so a test can watch what is on
+    ///   disk at the moment the attach lands, or refuse it.
     /// - Returns: The stored photo, or `nil` when the bytes were not an image,
-    ///   could not be written, or the hike went away while they were being
-    ///   written. A photo this hike already holds for `assetLocalIdentifier`
-    ///   comes back as-is: the asset is in the walk, which is what the caller
-    ///   asked for, so this is a success and not a failure to report.
+    ///   could not be written, the hike went away while they were being
+    ///   written, or the attach could not be committed. A photo this hike
+    ///   already holds for `assetLocalIdentifier` comes back as-is: the asset
+    ///   is in the walk, which is what the caller asked for, so this is a
+    ///   success and not a failure to report.
+    ///
+    /// A returned photo is on disk in both halves — file and row — rather than
+    /// merely started. See this file's header for why the commit is here and
+    /// not left to the next autosave.
     @MainActor
     @discardableResult static func add(
         _ data: Data,
@@ -60,7 +77,8 @@ nonisolated enum HikePhotoImport {
         assetLocalIdentifier: String? = nil,
         matchEvidence: PhotoMatchEvidence? = nil,
         store: HikePhotoStore = .shared,
-        libraryWriter: any PhotoLibraryWriting = PhotoLibraryWriter()
+        libraryWriter: any PhotoLibraryWriting = PhotoLibraryWriter(),
+        save: (ModelContext) throws -> Void = { try $0.save() }
     ) async -> HikePhoto? {
         // Asked before the bytes are written rather than after, so a repeat
         // costs no file and no decode. The scan filters its own offers by the
@@ -99,6 +117,21 @@ nonisolated enum HikePhotoImport {
             return existing
         }
         hike.addPhoto(photo)
+        // The attach is committed here rather than left to the next autosave,
+        // and everything after this line depends on it having landed. A save
+        // the store refuses would otherwise leave the picture on screen until
+        // the app is next launched, with its file swept as an orphan in the
+        // meantime — a photo the user was told they had, taken back without a
+        // word. Both halves go instead, and the caller is told at once.
+        guard persisted(
+            hike,
+            save,
+            refusal: "Dropped a photo whose attach could not be saved"
+        ) else {
+            hike.removePhoto(id: photo.id)
+            discardFiles([photo], from: store)
+            return nil
+        }
         if savesToPhotoLibrary {
             // Read back off the stored photo rather than from the arguments,
             // so the copy in the user's library and the copy in the app carry
@@ -132,7 +165,8 @@ nonisolated enum HikePhotoImport {
         savesToPhotoLibrary: Bool,
         capturedAt: Date = .now,
         store: HikePhotoStore = .shared,
-        libraryWriter: any PhotoLibraryWriting = PhotoLibraryWriter()
+        libraryWriter: any PhotoLibraryWriting = PhotoLibraryWriter(),
+        save: (ModelContext) throws -> Void = { try $0.save() }
     ) async -> HikePhoto? {
         guard let data = await encoded(frame, in: store) else { return nil }
         return await add(
@@ -142,7 +176,8 @@ nonisolated enum HikePhotoImport {
             savesToPhotoLibrary: savesToPhotoLibrary,
             capturedAt: frame.capturedAt ?? capturedAt,
             store: store,
-            libraryWriter: libraryWriter
+            libraryWriter: libraryWriter,
+            save: save
         )
     }
 
@@ -169,7 +204,11 @@ nonisolated enum HikePhotoImport {
         save: (ModelContext) throws -> Void = { try $0.save() }
     ) {
         guard let removed = hike.removePhoto(id: photo.id) else { return }
-        guard persisted(hike, save) else {
+        guard persisted(
+            hike,
+            save,
+            refusal: "Kept a photo whose removal could not be saved"
+        ) else {
             hike.addPhoto(removed)
             return
         }
@@ -181,11 +220,16 @@ nonisolated enum HikePhotoImport {
     ///
     /// `true` for a hike with no context at all: nothing persisted the row in
     /// the first place, so nothing can bring it back and the files are free to
-    /// go.
+    /// go. A hike being added to has already been checked for attachment, so
+    /// this case is the removal path's alone.
+    ///
+    /// - Parameter refusal: What was done about a save that failed, for the
+    ///   log — the two callers undo opposite things.
     @MainActor
     private static func persisted(
         _ hike: Hike,
-        _ save: (ModelContext) throws -> Void
+        _ save: (ModelContext) throws -> Void,
+        refusal: String
     ) -> Bool {
         guard let context = hike.modelContext else { return true }
         do {
@@ -194,7 +238,7 @@ nonisolated enum HikePhotoImport {
         } catch {
             HikePhotoStore.logger.error(
                 """
-                Kept a photo whose removal could not be saved: \
+                \(refusal, privacy: .public): \
                 \(error.localizedDescription, privacy: .public)
                 """
             )
