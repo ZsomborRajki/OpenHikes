@@ -185,41 +185,4 @@ final class OpenHikesModel {
         )
         return try? modelContext.fetch(descriptor).first
     }
-
-    func importHike(
-        from url: URL,
-        into modelContext: ModelContext
-    ) async throws(GPXImport.ImportFailure) -> Hike {
-        let scoped = url.startAccessingSecurityScopedResource()
-        // The MetricKit span covers the whole import rather than only the
-        // parse `GPXParsed` already times: what is worth knowing in the field
-        // is what opening somebody's 20,000-point GPX costs end to end,
-        // including the SwiftData insert, and that is not a number a
-        // three-point fixture can produce.
-        let span = FieldSignpost.begin(.hikeImport)
-        defer {
-            FieldSignpost.end(span)
-            if scoped {
-                url.stopAccessingSecurityScopedResource()
-            }
-        }
-
-        let track = try await GPXImport.loadOffMain(from: url)
-        guard track.points.count > 1 else { throw .tooShort }
-
-        let hike = Hike(
-            // Bounded here rather than absorbed downstream: this name came out
-            // of a file the walker may never have opened. See ``HikeTitle``.
-            title: HikeTitle.imported(trackName: track.name, fileURL: url),
-            distanceMeters: track.distanceMeters,
-            date: track.startTime ?? .now,
-            tintHex: Hike.randomTintHex(),
-            route: track.route,
-            trackDescription: track.trackDescription,
-            author: track.author,
-            keywords: track.keywords
-        )
-        modelContext.insert(hike)
-        return hike
-    }
 }

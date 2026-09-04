@@ -34,7 +34,11 @@ struct OpenHikesView: View {
     @State private var highlight = RouteHighlight()
     /// Set when a picked file couldn't become a hike; drives the alert that
     /// says so. `nil` the rest of the time.
-    @State private var importFailure: GPXImport.ImportFailure?
+    ///
+    /// Wider than the parser's own failure, because a file that read perfectly
+    /// and a store that refused to keep it are different sentences and only
+    /// one of them is about the walker's file. See ``HikeImportFailure``.
+    @State private var importFailure: HikeImportFailure?
     @State private var searchFailure: SearchFailure?
     /// Invalidates an import's permission to replace the current selection
     /// when recording or navigation moves on while GPX parsing is off-main.
@@ -239,7 +243,7 @@ struct OpenHikesView: View {
                     photoCapture: photoCapture,
                     photoPins: photoPins,
                     onImportGPX: importGPX,
-                    onImportFailed: { importFailure = .unreadable },
+                    onImportFailed: { importFailure = .file(.unreadable) },
                     onSearchFailed: { failure in searchFailure = failure },
                     onSheetTopChange: { topY in
                         // Read when the sheet reports, not when this body runs:
@@ -384,13 +388,18 @@ struct OpenHikesView: View {
     /// arrived as a copy. Unlike the document picker's file, this one may be
     /// the app's to clean up — see ``GPXInbox``.
     ///
-    /// The copy goes whether the import succeeded or not: a file that couldn't
-    /// become a hike still won't on the next launch, and leaving it behind
-    /// only hides it in a directory nothing else reads.
+    /// The copy goes when the file became a hike *and* when it never could:
+    /// one that couldn't parse still won't on the next launch, and leaving it
+    /// behind only hides it in a directory nothing else reads. The exception
+    /// is a save the store refused, where this copy is the only source the app
+    /// controls and the file itself was never the problem — see
+    /// ``HikeImportOutcome/discardsSourceCopy``.
     private func openImportedFile(_ url: URL) {
         Task {
-            await performImport(from: url)
-            await GPXInbox.discardCopy(at: url)
+            let outcome = await performImport(from: url)
+            if outcome.discardsSourceCopy {
+                await GPXInbox.discardCopy(at: url)
+            }
         }
     }
 
@@ -475,8 +484,8 @@ struct OpenHikesView: View {
     private func importGPX(from url: URL) {
         // Discarded explicitly rather than by `@discardableResult`: a
         // single-expression closure returns its value, and a `Task` carrying
-        // a `Hike` is a task carrying something SwiftData does not let cross
-        // an isolation boundary.
+        // an outcome that holds a `Hike` is a task carrying something
+        // SwiftData does not let cross an isolation boundary.
         Task { _ = await performImport(from: url) }
     }
 
@@ -488,11 +497,11 @@ struct OpenHikesView: View {
             forResource: name,
             withExtension: "gpx"
         ) else {
-            importFailure = .unreadable
+            importFailure = .file(.unreadable)
             return
         }
-        let importedHike = await performImport(from: url)
-        await seedRequestedPhotos(for: importedHike)
+        let outcome = await performImport(from: url)
+        await seedRequestedPhotos(for: outcome.hike)
     }
 
     /// Imports `url`, and hands back the hike it persisted — whether or not
@@ -500,9 +509,12 @@ struct OpenHikesView: View {
     /// left to do to the new hike needs the hike itself; reading the selection
     /// afterwards would hand it whatever won the race instead.
     ///
-    /// `nil` only when the file could not become a hike, which the alert this
-    /// raises is already the report of.
-    @discardableResult private func performImport(from url: URL) async -> Hike? {
+    /// Refused only when the file could not become a *kept* hike, which the
+    /// alert this raises is already the report of. The failure is carried out
+    /// as well as shown, because what a caller may do with the file next
+    /// depends on which of the two failures it was — see
+    /// ``HikeImportOutcome``.
+    private func performImport(from url: URL) async -> HikeImportOutcome {
         let selectionToken = importSelectionGate.token(
             selectedHikeID: selectedHike?.id,
             path: sheet.path
@@ -519,14 +531,14 @@ struct OpenHikesView: View {
         let importedHike: Hike
         // Typed, so the catch below can't quietly widen to `any Error` and
         // start swallowing something this screen has no message for.
-        do throws(GPXImport.ImportFailure) {
-            importedHike = try await appModel.importHike(
+        do throws(HikeImportFailure) {
+            importedHike = try await HikeImport.hike(
                 from: url,
                 into: modelContext
             )
         } catch {
             importFailure = error
-            return nil
+            return .refused(error)
         }
 
         // The imported row remains persisted when another action won the
@@ -538,11 +550,11 @@ struct OpenHikesView: View {
             path: sheet.path,
             currentRecordingHikeID: currentRecordingHikeID,
             recordingPresented: sheet.isRecordingPresented
-        ) else { return importedHike }
+        ) else { return .imported(importedHike) }
         selectedHike = importedHike
         // The selection draws the imported route; expanding reveals it.
         withAnimation { sheet.detent = .medium }
-        return importedHike
+        return .imported(importedHike)
     }
 }
 
