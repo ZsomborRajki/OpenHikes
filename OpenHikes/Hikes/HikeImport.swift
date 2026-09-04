@@ -19,6 +19,12 @@
 //  imported again, and the copy in the inbox is the only source the app has
 //  left to try it from.
 //
+//  Waiting for the commit is not the same as blocking on it. The write goes
+//  through a background context and only the hike's id comes back, because
+//  serializing an externally stored route is the longest thing an import does
+//  and every millisecond of it would otherwise be spent on the main actor,
+//  under a document picker that is still dismissing.
+//
 
 import Foundation
 import os
@@ -94,7 +100,7 @@ enum HikeImportOutcome {
 }
 
 enum HikeImport {
-    private static let logger = Logger(
+    nonisolated private static let logger = Logger(
         subsystem: "OpenHikes",
         category: "HikeImport"
     )
@@ -111,11 +117,13 @@ enum HikeImport {
     ///   refuse it — the same shape ``HikeRecorder`` and
     ///   ``HikePhotoImport/remove(_:from:store:save:)`` take theirs in. There
     ///   is no sequence of taps that makes a store say no, and this is the one
-    ///   failure whose whole point is what it does *not* leave behind.
+    ///   failure whose whole point is what it does *not* leave behind. It is
+    ///   handed the background context the write goes through, not the
+    ///   screen's.
     static func hike(
         from url: URL,
         into modelContext: ModelContext,
-        save: (ModelContext) throws -> Void = { try $0.save() }
+        save: @Sendable (ModelContext) throws -> Void = { try $0.save() }
     ) async throws(HikeImportFailure) -> Hike {
         let scoped = url.startAccessingSecurityScopedResource()
         let span = FieldSignpost.begin(.hikeImport)
@@ -127,35 +135,93 @@ enum HikeImport {
         }
 
         let track = try await parsed(url)
+        let id = try await stored(
+            track,
+            // Both settled here, on the actor that owns the UI types they
+            // reach: the title is bounded rather than absorbed downstream,
+            // because this name came out of a file the walker may never have
+            // opened (see ``HikeTitle``), and the tint is mixed through
+            // SwiftUI's `Color`.
+            titled: HikeTitle.imported(trackName: track.name, fileURL: url),
+            tintedWith: Hike.randomTintHex(),
+            in: modelContext.container,
+            save: save
+        )
+        return try imported(id, into: modelContext)
+    }
+
+    /// Builds the row and commits it, off the main actor.
+    ///
+    /// Serializing a route is the expensive half of an import and it grows
+    /// with the walk — an externally stored route of a few hundred thousand
+    /// points measured in the hundreds of milliseconds inside `save()`, all of
+    /// it while the document picker is dismissing. The parse is already
+    /// off-main for the same reason and is the *shorter* half, so this goes
+    /// the same way.
+    ///
+    /// Safe rather than clever, and the same shape as
+    /// ``BackgroundTrailTracker``'s off-main read: `ModelContainer` is
+    /// `Sendable`, the `ModelContext` built from it is created, used and
+    /// discarded inside this one call, and the only thing that leaves is the
+    /// hike's id — never the non-`Sendable` `Hike` itself.
+    @concurrent
+    nonisolated private static func stored(
+        _ track: GPXImport.Track,
+        titled title: String,
+        tintedWith tintHex: String,
+        in container: ModelContainer,
+        save: @Sendable (ModelContext) throws -> Void
+    ) async throws(HikeImportFailure) -> UUID {
+        assertOffMainThread(
+            "Serializing an imported route must stay off the main thread"
+        )
+        let context = ModelContext(container)
         let hike = Hike(
-            // Bounded here rather than absorbed downstream: this name came out
-            // of a file the walker may never have opened. See ``HikeTitle``.
-            title: HikeTitle.imported(trackName: track.name, fileURL: url),
+            title: title,
             distanceMeters: track.distanceMeters,
             date: track.startTime ?? .now,
-            tintHex: Hike.randomTintHex(),
+            tintHex: tintHex,
             route: track.route,
             trackDescription: track.trackDescription,
             author: track.author,
             keywords: track.keywords
         )
-        modelContext.insert(hike)
+        context.insert(hike)
         do {
-            try save(modelContext)
+            try save(context)
         } catch {
-            // Out of the context with it, the same answer ``HikeRecorder``
-            // gives a draft it could not create. A row left pending in a
-            // context the *next* save might accept would put the hike back on
-            // the list a moment after the walker was told it wasn't there —
-            // the same disagreement between screen and disk, only later and
-            // with no alert beside it.
-            modelContext.delete(hike)
+            // The row goes with the context, which is this call's and nothing
+            // else's. A pending insert left somewhere the *next* save might
+            // accept would put the hike back on the list a moment after the
+            // walker was told it wasn't there — the same disagreement between
+            // screen and disk, only later and with no alert beside it.
             logger.error(
                 """
                 An imported hike could not be saved: \
                 \(error.localizedDescription, privacy: .public)
                 """
             )
+            throw .notSaved
+        }
+        return hike.id
+    }
+
+    /// The committed row, in the context the screen draws from.
+    ///
+    /// A fetch rather than a handover: the `Hike` the write above built
+    /// belongs to a context that no longer exists, and a `@Model` is not
+    /// something SwiftData lets cross an isolation boundary in any case.
+    private static func imported(
+        _ id: UUID,
+        into modelContext: ModelContext
+    ) throws(HikeImportFailure) -> Hike {
+        let descriptor = FetchDescriptor<Hike>(predicate: #Predicate { $0.id == id })
+        guard let hike = try? modelContext.fetch(descriptor).first else {
+            // On disk, and unreadable from here — nothing this call can put
+            // right. Reported as the storage failure it is nearest to, which
+            // also keeps the copy the file arrived as: a duplicate on the next
+            // attempt is recoverable and a deleted copy is not.
+            logger.error("An imported hike was saved but could not be read back")
             throw .notSaved
         }
         return hike
