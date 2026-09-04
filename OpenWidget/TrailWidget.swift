@@ -576,7 +576,9 @@ private struct TrailWidgetContent: View {
                 Text(snapshot.statusText)
                     .font(family == .systemSmall ? .caption.weight(.semibold) : .caption)
                     .foregroundStyle(hasMap ? Color.white : .secondary)
-                if let fraction = snapshot.fractionComplete {
+                // Coverage while a walk is under way, position otherwise —
+                // the same number the status line above it just gave.
+                if let fraction = snapshot.progressFraction {
                     TrailWidgetProgressBar(fraction: fraction, tint: tint, onMap: hasMap)
                         .padding(.top, Stack.progressTopPadding)
                 }

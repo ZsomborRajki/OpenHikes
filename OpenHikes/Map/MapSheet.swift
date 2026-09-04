@@ -31,6 +31,9 @@ struct MapSheet: View {
     /// `NavigationPath` can be appended to but never read back.
     var presentation: SheetPresentation
     var highlight: RouteHighlight
+    /// Handed down so a walk's summary can draw what it covered on the map.
+    /// See ``WalkHighlight``.
+    var walkHighlight: WalkHighlight
     var mapController: MapController
     /// Handed down so a pushed screen can offer the map's camera pill, and
     /// taken away again when it goes. See ``PhotoCaptureController``.
@@ -99,6 +102,7 @@ struct MapSheet: View {
                     isCompact: presentation.isCompact,
                     completer: completer,
                     recorder: hikeRecorder,
+                    walkSession: appModel.walkSession,
                     selectedHikeID: selectedHike?.id,
                     onOpen: open,
                     onSelectResult: select,
@@ -262,9 +266,11 @@ struct MapSheet: View {
                 locationManager: appModel.locationManager,
                 backgroundTracker: appModel.backgroundTracker,
                 trailGraphProvider: appModel.trailGraphProvider,
+                walkSession: appModel.walkSession,
                 photoCapture: photoCapture,
                 photoPins: photoPins,
                 onOpenPhoto: { photo in presentation.path.append(.photo(hike, photo.id)) },
+                onOpenWalk: { walk in presentation.path.append(.walk(walk)) },
                 onZoomToRoute: { withAnimation { presentation.detent = .medium } }
             )
         case .recording:
@@ -286,6 +292,13 @@ struct MapSheet: View {
                 highlight: highlight,
                 mapController: mapController,
                 onShowOnMap: presentation.collapseWhenFullHeightScreenPops
+            )
+        case let .walk(walk):
+            WalkSummaryView(
+                walk: walk,
+                walkHighlight: walkHighlight,
+                mapController: mapController,
+                onShowOnMap: { withAnimation { presentation.detent = .medium } }
             )
         }
     }
@@ -327,6 +340,9 @@ private func delete(_ hike: Hike, among hikes: [Hike]) {
     if SheetRoute.removeHike(hike.id, selectedHike: &selectedHike, from: &presentation.path) {
         highlight.move(to: nil)
     }
+    // After the commit: the sidecar column went with the hike, and what is
+    // left is the session's memory of it and the pin on the tracker.
+    appModel.walkSession.discardWalk(forDeletedHike: hike.id)
 
     if let deletionPlan {
         // Enumerating a route's tile grid is real CPU work, per download

@@ -35,6 +35,11 @@ extension MapView {
         /// styled differently from them because they say a different thing —
         /// see ``RouteBoundary``.
         var pausedRouteOverlays: [MKPolyline] = []
+        /// The stretches of the drawn route a finished walk covered, drawn
+        /// twice — a casing and a line — so they stand out from the route
+        /// they sit on. See `MapCoordinator+WalkHighlight.swift`.
+        var walkHighlightCasingOverlays: [MKPolyline] = []
+        var walkHighlightOverlays: [MKPolyline] = []
         var recordingChunkOverlays: [MKPolyline] = []
         var recordingTailOverlay: MKPolyline?
         var recordingReviewOverlay: MKPolyline?
@@ -174,19 +179,6 @@ extension MapView {
         /// Internal alongside the threshold above, so the dot's own file can
         /// read them — see `MapCoordinator+Highlight.swift`.
         static let overlapFadedAlpha: CGFloat = 0.25
-        /// Faded, but well clear of the basemap: a stretch the app is less
-        /// sure about still has to be followable on a printed-looking map.
-        private static let inferredRouteAlpha: CGFloat = 0.55
-        /// The dashed line is drawn a little wider than the solid one so that
-        /// fading it doesn't also make it thinner to the eye.
-        private static let inferredRouteWidthFactor: CGFloat = 1.35
-        private static let inferredRouteDashPattern: [Int] = [2, 7]
-        /// A pause is drawn fainter still than an inferred stretch: the app
-        /// has no claim at all about this ground, not merely a weak one.
-        private static let pausedRouteAlpha: CGFloat = 0.4
-        /// Dotted where the inferred line is dashed, which is what separates
-        /// the two at a glance on a route that carries both.
-        private static let pausedRouteDashPattern: [Int] = [1, 6]
 
         /// Edge padding used whenever the map is fitted to the route.
         #if os(macOS)
@@ -659,6 +651,9 @@ extension MapView.Coordinator {
             return CachingTileOverlayRenderer(overlay: matchedTileOverlay)
         }
         if let polyline = overlay as? MKPolyline {
+            if let renderer = walkHighlightRenderer(for: polyline) {
+                return renderer
+            }
             if recordingReviewOverlay === polyline {
                 let renderer = MKPolylineRenderer(polyline: polyline)
                 #if os(macOS)
@@ -700,64 +695,5 @@ extension MapView.Coordinator {
             return renderer
         }
         return MKOverlayRenderer(overlay: overlay)
-    }
-
-    /// The route's own tint, drawn dashed and faded.
-    ///
-    /// Deliberately the same colour rather than a warning one: this stretch is
-    /// still the hiker's route, and the app's claim about it is weaker, not
-    /// alarming. The dash is what carries the meaning — a broken line for the
-    /// part of the walk the recording didn't see — and keeping the tint means
-    /// a hike recoloured by its owner stays recoloured throughout.
-    ///
-    /// Left as a plain `MKPolylineRenderer`: the directional chevrons state a
-    /// travel direction along the line, which is exactly what isn't known here.
-    private func inferredRouteRenderer(
-        for polyline: MKPolyline
-    ) -> MKPolylineRenderer {
-        let renderer = MKPolylineRenderer(polyline: polyline)
-        applyInferredStyle(to: renderer)
-        return renderer
-    }
-
-    /// Applies the paused-stretch appearance.
-    ///
-    /// Built on the inferred one rather than beside it: both are the route's
-    /// own tint drawn weakly over ground the line crosses without evidence,
-    /// and the walker should not have to learn two visual languages for that.
-    /// The dots and the extra fade are what say which of the two this is —
-    /// nobody was watching, versus nobody was asked to.
-    ///
-    /// Left a plain `MKPolylineRenderer` for the reason the inferred one is:
-    /// a direction along this stretch is precisely what isn't known.
-    func applyPausedStyle(to renderer: MKPolylineRenderer) {
-        applyInferredStyle(to: renderer)
-        #if os(macOS)
-        renderer.strokeColor = NSColor(routeTint)
-            .withAlphaComponent(Self.pausedRouteAlpha)
-        #else
-        renderer.strokeColor = UIColor(routeTint)
-            .withAlphaComponent(Self.pausedRouteAlpha)
-        #endif
-        // swiftlint:disable:next legacy_objc_type
-        renderer.lineDashPattern = Self.pausedRouteDashPattern.map { NSNumber(value: $0) }
-        renderer.lineCap = .round
-    }
-
-    /// Applies the inferred-stretch appearance, derived from the route's
-    /// current tint and width so the two never drift apart.
-    func applyInferredStyle(to renderer: MKPolylineRenderer) {
-        #if os(macOS)
-        renderer.strokeColor = NSColor(routeTint)
-            .withAlphaComponent(Self.inferredRouteAlpha)
-        #else
-        renderer.strokeColor = UIColor(routeTint)
-            .withAlphaComponent(Self.inferredRouteAlpha)
-        #endif
-        renderer.lineWidth = CGFloat(routeWidth) * Self.inferredRouteWidthFactor
-        // swiftlint:disable:next legacy_objc_type
-        renderer.lineDashPattern = Self.inferredRouteDashPattern.map { NSNumber(value: $0) }
-        renderer.lineJoin = .round
-        renderer.lineCap = .butt
     }
 }

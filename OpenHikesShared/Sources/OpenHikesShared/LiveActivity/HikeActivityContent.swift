@@ -51,6 +51,10 @@ public extension HikeActivityAttributes {
     }
 
     /// The fixed half of a followed trail's activity.
+    ///
+    /// - Parameter startedAt: what to order the activity by when the trail
+    ///   is merely being followed. A walk under way carries its own start,
+    ///   and that one wins: it is the instant the walk's clock counts from.
     static func following(
         from snapshot: SharedTrailSnapshot,
         startedAt: Date = .now
@@ -59,7 +63,7 @@ public extension HikeActivityAttributes {
             subject: .following(hikeID: snapshot.hikeID),
             title: snapshot.title,
             tintHex: snapshot.tintHex,
-            startedAt: startedAt,
+            startedAt: snapshot.walk?.startedAt ?? startedAt,
             routeDistanceMeters: snapshot.totalDistanceMeters
         )
     }
@@ -111,12 +115,19 @@ public extension HikeActivityAttributes.ContentState {
     /// the trail or lost signal, and the right thing to show is the trail's
     /// own numbers with the position withheld. That is exactly what leaving
     /// `offRouteMeters` and `currentElevationMeters` `nil` says.
+    ///
+    /// A walk under way brings three more: its coverage, its run state and
+    /// its clock. Without one the state reads as it always did — running,
+    /// with a clock at zero that the presentation never draws.
     init(following snapshot: SharedTrailSnapshot) {
         self.init(
             distanceMeters: snapshot.liveFix?.distanceAlongRouteMeters ?? 0,
             elevationGainMeters: snapshot.elevationGainMeters,
             currentElevationMeters: snapshot.liveFix?.elevationMeters,
             offRouteMeters: snapshot.liveFix?.offRouteMeters,
+            coveredFractionComplete: snapshot.walk?.coveredFraction,
+            runState: snapshot.walk.map { walk in RunState(walkState: walk.state) } ?? .running,
+            elapsedSeconds: snapshot.walk?.activeSeconds ?? 0,
             updatedAt: snapshot.updatedAt
         )
     }
@@ -152,5 +163,16 @@ public extension HikeActivityAttributes.ContentState {
         var copy = self
         copy.runState = .finished
         return copy
+    }
+}
+
+public extension HikeActivityAttributes.ContentState.RunState {
+    /// The walk's own three words, as the activity says them.
+    init(walkState: SharedTrailSnapshot.Walk.State) {
+        switch walkState {
+        case .active: self = .running
+        case .paused: self = .paused
+        case .finished: self = .finished
+        }
     }
 }

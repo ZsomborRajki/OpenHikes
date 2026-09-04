@@ -6,6 +6,7 @@
 //  drag/scrub-frequency updates never re-render a SwiftUI view.
 //
 
+import Algorithms
 import Foundation
 import MapKit
 
@@ -43,6 +44,69 @@ final class RouteHighlight {
         case let (current?, next?)
             where current.latitude == next.latitude && current.longitude == next.longitude: return
         default: self.coordinate = coordinate
+        }
+    }
+}
+
+/// The stretches of the drawn route a finished walk covered, held in a
+/// reference type for the reason ``RouteHighlight`` is: the map observes it
+/// directly and adds or removes a handful of polylines, and no SwiftUI view
+/// re-renders for it.
+///
+/// Set by the Walk Summary's *Show on Map*, cleared when the selection
+/// changes — a covered stretch belongs to the route it was drawn over.
+@Observable
+final class WalkHighlight {
+    /// Non-isolated so releasing the last reference never requires proving
+    /// we're on the main actor — see ``LocationManager``'s deinit for why.
+    nonisolated deinit { /* intentionally empty */ }
+
+    /// Bumped on every change. The coordinator observes this one `Int` and
+    /// reads ``segments`` inside the same pass, so a `[[CLLocationCoordinate2D]]`
+    /// — not `Equatable`, and so not filtered by Observation — is never the
+    /// thing being tracked.
+    private(set) var revision = 0
+    @ObservationIgnored private(set) var segments: [[CLLocationCoordinate2D]] = []
+
+    func show(_ segments: [[CLLocationCoordinate2D]]) {
+        self.segments = segments
+        revision += 1
+    }
+
+    func clear() {
+        guard !segments.isEmpty else { return }
+        segments = []
+        revision += 1
+    }
+}
+
+nonisolated extension WalkHighlight {
+    /// The covered `ranges` of a route as drawable stretches: every route
+    /// point inside each range, with the range's own ends interpolated onto
+    /// the route so a stretch starts and stops where the coverage did rather
+    /// than at the nearest track point.
+    ///
+    /// `@concurrent` because a route is twenty thousand points on a long
+    /// hike and this walks the part of it that was covered; the button that
+    /// asks for it awaits the answer.
+    @concurrent
+    static func segments(
+        covering ranges: [ClosedRange<Double>],
+        along profile: RouteProfile
+    ) async -> [[CLLocationCoordinate2D]] {
+        ranges.compactMap { range in
+            guard range.upperBound > range.lowerBound,
+                  let start = profile.coordinate(atDistance: range.lowerBound),
+                  let end = profile.coordinate(atDistance: range.upperBound)
+            else { return nil }
+            let first = profile.distances.partitioningIndex { $0 > range.lowerBound }
+            let last = profile.distances.partitioningIndex { $0 >= range.upperBound }
+            var stretch: [CLLocationCoordinate2D] = [start]
+            if first < last {
+                stretch.append(contentsOf: profile.coordinates[first..<last])
+            }
+            stretch.append(end)
+            return stretch
         }
     }
 }

@@ -149,6 +149,59 @@ struct HikeLocalStateTests {
         #expect(refetched.autoSavedTileKeys == ["osm/16/9/9@2.0"])
     }
 
+    /// The walk in progress lives beside the tile claims: device-local, so a
+    /// second device never shows it half-drawn.
+    @Test("the walk in progress round-trips through the sidecar")
+    func walkInProgressRoundTrips() throws {
+        let container = try Fixture.modelContainer()
+        let id: UUID
+        var record: TrailWalkRecord
+        do {
+            let context = ModelContext(container)
+            let hike = Fixture.hike(in: context)
+            id = hike.id
+            record = TrailWalkRecord(hikeID: hike.id, routeDistanceMeters: 1000, startedAt: .now)
+            record.coverage.record(distance: 10)
+            record.coverage.record(distance: 250)
+            record.pause(at: .now.addingTimeInterval(60))
+            hike.walkInProgress = record
+            try context.save()
+        }
+
+        let context = ModelContext(container)
+        let refetched = try #require(
+            try context.fetch(FetchDescriptor<Hike>(predicate: #Predicate { $0.id == id })).first
+        )
+        let stored = try #require(refetched.walkInProgress)
+        #expect(stored.coverage.intervals == [10, 250])
+        #expect(stored.phase == .paused)
+        #expect(stored.hikeID == id)
+        #expect(stored.routeDistanceMeters == 1000)
+    }
+
+    @Test("a hike with nothing walked reports no walk without creating a row")
+    func noWalkCreatesNoRow() throws {
+        let context = try context()
+        let hike = Fixture.hike(in: context)
+        #expect(hike.walkInProgress == nil)
+        #expect(try context.fetch(FetchDescriptor<HikeLocalState>()).isEmpty)
+    }
+
+    @Test("deleting a hike's local state drops its walk in progress")
+    func deletingLocalStateDropsTheWalk() throws {
+        let context = try context()
+        let hike = Fixture.hike(in: context)
+        hike.walkInProgress = TrailWalkRecord(hikeID: hike.id, routeDistanceMeters: 1000, startedAt: .now)
+        try context.save()
+        #expect(try context.fetch(FetchDescriptor<HikeLocalState>()).count == 1)
+
+        hike.deleteLocalState()
+        context.delete(hike)
+        try context.save()
+
+        #expect(try context.fetch(FetchDescriptor<HikeLocalState>()).isEmpty)
+    }
+
     /// ``Hike/mergeOfflineDownload(_:)`` reads and writes the array through
     /// the passthrough, so it is worth checking it still collapses records
     /// rather than accumulating them now that the array lives elsewhere.

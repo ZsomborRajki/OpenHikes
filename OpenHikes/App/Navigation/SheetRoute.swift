@@ -4,6 +4,7 @@
 //
 
 import Foundation
+import SwiftData
 
 enum SheetRoute: Hashable {
     case hike(Hike)
@@ -12,6 +13,10 @@ enum SheetRoute: Hashable {
     /// deleted from inside the viewer doesn't invalidate the route showing it.
     case photo(Hike, UUID)
     case recording
+    /// A finished walk's summary. Carries the walk, whose `hikeID` says which
+    /// hike's screens it belongs under — so deleting the hike pops its
+    /// summaries with it.
+    case walk(HikeWalk)
 
     static func reopenRecording(in path: inout [Self]) {
         path = [.recording]
@@ -34,6 +39,7 @@ enum SheetRoute: Hashable {
         switch self {
         case let .hike(hike): hike.id == hikeID
         case let .photo(hike, _): hike.id == hikeID
+        case let .walk(walk): walk.hikeID == hikeID
         case .recording: false
         }
     }
@@ -69,5 +75,37 @@ enum SheetRoute: Hashable {
     /// is a stamp.
     var prefersFullHeight: Bool {
         if case .photo = self { true } else { false }
+    }
+
+    // Spelled out rather than synthesized, because the compiler cannot see
+    // `HikeWalk`'s `PersistentModel` conformance from here: `Hike` names
+    // `\HikeWalk.hike` in its relationship and `HikeWalk` names `Hike`, and
+    // the two macro expansions refer to each other. The identities compared
+    // are the ones the synthesis would have used.
+    static func == (lhs: Self, rhs: Self) -> Bool {
+        switch (lhs, rhs) {
+        case let (.hike(left), .hike(right)): left == right
+        case let (.photo(left, leftPhoto), .photo(right, rightPhoto)): left == right && leftPhoto == rightPhoto
+        case (.recording, .recording): true
+        case let (.walk(left), .walk(right)): left.persistentModelID == right.persistentModelID
+        default: false
+        }
+    }
+
+    func hash(into hasher: inout Hasher) {
+        switch self {
+        case let .hike(hike):
+            hasher.combine(0)
+            hasher.combine(hike)
+        case let .photo(hike, photoID):
+            hasher.combine(1)
+            hasher.combine(hike)
+            hasher.combine(photoID)
+        case .recording:
+            hasher.combine(2)
+        case let .walk(walk):
+            hasher.combine(3)
+            hasher.combine(walk.persistentModelID)
+        }
     }
 }

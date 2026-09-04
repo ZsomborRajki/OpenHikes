@@ -706,7 +706,9 @@ extension PerformanceUITests {
 
 // MARK: - Assertions and reporting
 
-private extension PerformanceUITests {
+/// Internal rather than private so the scenarios in the `+` files — which
+/// report per-event ratios `measurePhase` has no slot for — can reach them.
+extension PerformanceUITests {
     /// Everything the phase saw, printed for the generated report — including
     /// the counters no assertion covers, since an unexplained new name in this
     /// list is itself a finding.

@@ -61,6 +61,13 @@ enum PayloadShapeFixture {
             timestamp: Date(timeIntervalSince1970: 1_700_000_500),
             elevationMeters: 812.5
         ),
+        walk: SharedTrailSnapshot.Walk(
+            state: .paused,
+            coveredFraction: 0.25,
+            furthestDistanceMeters: 2140.5,
+            activeSeconds: 1830.5,
+            startedAt: Date(timeIntervalSince1970: 1_699_998_000)
+        ),
         updatedAt: Date(timeIntervalSince1970: 1_700_000_000)
     )
 

@@ -76,6 +76,9 @@ extension OpenHikesModel {
             backgroundTracker.refreshBasemaps()
         }
         hikeRecorder.sceneDidBecomeActive()
+        // A walk left in a pocket through the night has no fix to notice it
+        // by; coming back is the other moment it can.
+        walkSession.endIfAbandoned()
         cloudSync.sceneDidBecomeActive()
         entitlement.sceneDidBecomeActive()
     }

@@ -233,6 +233,32 @@ final class WidgetFeedTests {
 
     /// A fix too far from the trail isn't progress — the widget shows the
     /// trail's length instead of a made-up position.
+    /// The walk's figures ride beside the fix, and the status line reads
+    /// coverage — the widget never computes it.
+    @Test("a live fix during a walk publishes its coverage")
+    func liveFixDuringAWalkPublishesCoverage() async throws {
+        let hike = hike()
+        let profile = RouteProfile(route: hike.route)
+        let session = TrailWalkSession(context: context, tracker: tracker)
+        tracker.hikeSelectionChanged(to: hike)
+        await tracker.waitForSelectionPublish()
+        for index in 0...2 {
+            session.recordForegroundMatch(hike: hike, profile: profile, distance: profile.distances[index])
+        }
+
+        let match = try #require(profile.nearestPoint(to: profile.coordinates[2]))
+        tracker.publishLiveFix(hike: hike, profile: profile, match: match, walk: session.payload(for: hike.id))
+        await tracker.waitForLiveFixPublish()
+
+        let snapshot = try #require(SharedStore.load())
+        let walk = try #require(snapshot.walk)
+        #expect(walk.state == .active)
+        #expect(walk.coveredFraction == session.coveredFraction)
+        #expect(abs(walk.furthestDistanceMeters - profile.distances[2]) < 1)
+        #expect(snapshot.progressFraction == walk.coveredFraction)
+        #expect(snapshot.statusText.contains("% walked"))
+    }
+
     @Test("a fix off the trail publishes no position")
     func offRouteFixPublishesNothing() async throws {
         let hike = hike()

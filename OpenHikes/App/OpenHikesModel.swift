@@ -31,6 +31,10 @@ final class OpenHikesModel {
     let backgroundTracker: BackgroundTrailTracker
     let autoSaveController: AutoSaveController
     let hikeRecorder: HikeRecorder
+    /// The walk under way along a followed trail, if any. Owned here rather
+    /// than by the detail view because it outlives the screen that starts it
+    /// — see ``TrailWalkSession``.
+    let walkSession: TrailWalkSession
     let locationManager: LocationManager
     let weatherManager: WeatherManager
     /// The OSM walking graph, shared with ``hikeRecorder`` rather than built
@@ -73,6 +77,7 @@ final class OpenHikesModel {
         locationManager: LocationManager,
         weatherManager: WeatherManager,
         trailGraphProvider: (any TrailGraphProviding)? = nil,
+        walkSession: TrailWalkSession? = nil,
         defaults: UserDefaults = .standard,
         startupIssue: StorageStartupIssue? = nil,
         isSyncingThisLaunch: Bool = false
@@ -81,6 +86,13 @@ final class OpenHikesModel {
         self.backgroundTracker = backgroundTracker
         self.autoSaveController = autoSaveController
         self.hikeRecorder = hikeRecorder
+        // The recorder stays the single authority on which hike is a draft;
+        // the session only asks.
+        self.walkSession = walkSession ?? TrailWalkSession(
+            context: container.mainContext,
+            tracker: backgroundTracker,
+            activeRecordingHikeID: { [weak hikeRecorder] in hikeRecorder?.currentHike?.id }
+        )
         self.locationManager = locationManager
         self.weatherManager = weatherManager
         self.trailGraphProvider = trailGraphProvider
@@ -118,6 +130,14 @@ final class OpenHikesModel {
         // not a guarantee, and this costs one branch.
         if !AppLaunchEnvironment.isRunningTests {
             FieldMetrics.shared.register()
+        }
+        // Behind the same guard, and for the same reason: adopting a walk
+        // writes the sidecar and pins the tracker, underneath suites that own
+        // their own. Here rather than in the root view's launch task because
+        // a background relaunch never shows a view — see
+        // ``TrailWalkSession/restoreAtLaunch(now:)``.
+        if !AppLaunchEnvironment.isRunningTests, startupIssue == nil {
+            self.walkSession.restoreAtLaunch()
         }
     }
 

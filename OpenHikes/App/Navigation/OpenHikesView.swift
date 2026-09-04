@@ -32,6 +32,9 @@ struct OpenHikesView: View {
     /// below; see ``SheetPresentation``.
     @State private var sheet = SheetPresentation()
     @State private var highlight = RouteHighlight()
+    /// The stretches of the drawn route a finished walk covered, observed
+    /// directly by the map — see ``WalkHighlight``.
+    @State private var walkHighlight = WalkHighlight()
     /// Set when a picked file couldn't become a hike; drives the alert that
     /// says so. `nil` the rest of the time.
     ///
@@ -165,6 +168,7 @@ struct OpenHikesView: View {
             route: displayedRoute,
             routeStyle: routeStyle,
             highlight: highlight,
+            walkHighlight: walkHighlight,
             recordingTrace: appModel.hikeRecorder.trace,
             sheetMetrics: sheetMetrics,
             tileSource: activeTileSource,
@@ -239,6 +243,7 @@ struct OpenHikesView: View {
                     selectedHike: $selectedHike,
                     presentation: sheet,
                     highlight: highlight,
+                    walkHighlight: walkHighlight,
                     mapController: mapController,
                     photoCapture: photoCapture,
                     photoPins: photoPins,
@@ -345,6 +350,8 @@ struct OpenHikesView: View {
                 if selectedHike == nil {
                     displayedRouteCoordinateCache.clear()
                 }
+                // A covered stretch belongs to the route it was drawn over.
+                walkHighlight.clear()
                 // Hands the map the new route's appearance, and re-points the
                 // tracking that keeps it current, without this body ever
                 // reading either value — a change handler is not a body pass,
@@ -370,6 +377,111 @@ struct OpenHikesView: View {
             }
     }
 
+    /// Restores an active recording draft when recovery has already found it;
+    /// otherwise restores the last selected finished hike across launches.
+    ///
+    /// The stored-selection half is skipped while any test bundle is running:
+    /// restoring a selection publishes a widget payload into the App Group and
+    /// reloads the widget's timelines, underneath suites whose whole subject is
+    /// that one file. The guard itself is in
+    /// ``OpenHikesModel/restoreLastSelectedHike(in:)``; see
+    /// ``AppLaunchEnvironment``.
+    private func restoreLastSelectedHike() {
+        if let recordingHike = appModel.hikeRecorder.currentHike {
+            selectedHike = recordingHike
+            highlight.move(to: nil)
+            return
+        }
+        guard selectedHike == nil else { return }
+        selectedHike = appModel.restoreLastSelectedHike(in: modelContext)
+    }
+
+    /// Parses a picked .gpx file, persists it as a `Hike`, and shows it on the map.
+    /// A file that can't become a hike raises ``importFailure`` rather than
+    /// leaving the user looking at an unchanged screen.
+    private func importGPX(from url: URL) {
+        // Discarded explicitly rather than by `@discardableResult`: a
+        // single-expression closure returns its value, and a `Task` carrying
+        // an outcome that holds a `Hike` is a task carrying something
+        // SwiftData does not let cross an isolation boundary.
+        Task { _ = await performImport(from: url) }
+    }
+
+    private func importRequestedGPXFixture() async {
+        guard !didProcessLaunchFixture,
+              let name = AppLaunchEnvironment.importedGPXFixtureName else { return }
+        didProcessLaunchFixture = true
+        guard let url = Bundle.main.url(
+            forResource: name,
+            withExtension: "gpx"
+        ) else {
+            importFailure = .file(.unreadable)
+            return
+        }
+        let outcome = await performImport(from: url)
+        await seedRequestedPhotos(for: outcome.hike)
+        seedRequestedWalks(for: outcome.hike)
+    }
+
+    /// Imports `url`, and hands back the hike it persisted — whether or not
+    /// that hike went on to win the selection below. A caller with something
+    /// left to do to the new hike needs the hike itself; reading the selection
+    /// afterwards would hand it whatever won the race instead.
+    ///
+    /// Refused only when the file could not become a *kept* hike, which the
+    /// alert this raises is already the report of. The failure is carried out
+    /// as well as shown, because what a caller may do with the file next
+    /// depends on which of the two failures it was — see
+    /// ``HikeImportOutcome``.
+    private func performImport(from url: URL) async -> HikeImportOutcome {
+        let selectionToken = importSelectionGate.token(
+            selectedHikeID: selectedHike?.id,
+            path: sheet.path
+        )
+        #if DEBUG
+        // Losing this race needs a navigation or selection change to land in
+        // the moment a GPX parse takes, which is not something automation can
+        // aim at. A scenario that is about the losing side asks for it here
+        // instead; see ``AppLaunchEnvironment/losesImportSelection``.
+        if AppLaunchEnvironment.losesImportSelection {
+            importSelectionGate.invalidate()
+        }
+        #endif
+        let importedHike: Hike
+        // Typed, so the catch below can't quietly widen to `any Error` and
+        // start swallowing something this screen has no message for.
+        do throws(HikeImportFailure) {
+            importedHike = try await HikeImport.hike(
+                from: url,
+                into: modelContext
+            )
+        } catch {
+            importFailure = error
+            return .refused(error)
+        }
+
+        // The imported row remains persisted when another action won the
+        // selection race; only its stale attempt to take over the map and
+        // sheet is dropped.
+        guard importSelectionGate.permits(
+            token: selectionToken,
+            selectedHikeID: selectedHike?.id,
+            path: sheet.path,
+            currentRecordingHikeID: currentRecordingHikeID,
+            recordingPresented: sheet.isRecordingPresented
+        ) else { return .imported(importedHike) }
+        selectedHike = importedHike
+        // The selection draws the imported route; expanding reveals it.
+        withAnimation { sheet.detent = .medium }
+        return .imported(importedHike)
+    }
+}
+
+// MARK: - Inbound URLs
+
+/// What the system hands the app: a file to import, or a widget tap. Held
+/// apart from the view's body for length, and because none of it draws.
+private extension OpenHikesView {
     /// Routes a URL the system hands the app.
     ///
     /// Two unrelated things arrive here now that OpenHikes declares the GPX
@@ -458,104 +570,6 @@ struct OpenHikesView: View {
         // push there would arrive off-screen.
         withAnimation { sheet.detent = .medium }
     }
-
-    /// Restores an active recording draft when recovery has already found it;
-    /// otherwise restores the last selected finished hike across launches.
-    ///
-    /// The stored-selection half is skipped while any test bundle is running:
-    /// restoring a selection publishes a widget payload into the App Group and
-    /// reloads the widget's timelines, underneath suites whose whole subject is
-    /// that one file. The guard itself is in
-    /// ``OpenHikesModel/restoreLastSelectedHike(in:)``; see
-    /// ``AppLaunchEnvironment``.
-    private func restoreLastSelectedHike() {
-        if let recordingHike = appModel.hikeRecorder.currentHike {
-            selectedHike = recordingHike
-            highlight.move(to: nil)
-            return
-        }
-        guard selectedHike == nil else { return }
-        selectedHike = appModel.restoreLastSelectedHike(in: modelContext)
-    }
-
-    /// Parses a picked .gpx file, persists it as a `Hike`, and shows it on the map.
-    /// A file that can't become a hike raises ``importFailure`` rather than
-    /// leaving the user looking at an unchanged screen.
-    private func importGPX(from url: URL) {
-        // Discarded explicitly rather than by `@discardableResult`: a
-        // single-expression closure returns its value, and a `Task` carrying
-        // an outcome that holds a `Hike` is a task carrying something
-        // SwiftData does not let cross an isolation boundary.
-        Task { _ = await performImport(from: url) }
-    }
-
-    private func importRequestedGPXFixture() async {
-        guard !didProcessLaunchFixture,
-              let name = AppLaunchEnvironment.importedGPXFixtureName else { return }
-        didProcessLaunchFixture = true
-        guard let url = Bundle.main.url(
-            forResource: name,
-            withExtension: "gpx"
-        ) else {
-            importFailure = .file(.unreadable)
-            return
-        }
-        let outcome = await performImport(from: url)
-        await seedRequestedPhotos(for: outcome.hike)
-    }
-
-    /// Imports `url`, and hands back the hike it persisted — whether or not
-    /// that hike went on to win the selection below. A caller with something
-    /// left to do to the new hike needs the hike itself; reading the selection
-    /// afterwards would hand it whatever won the race instead.
-    ///
-    /// Refused only when the file could not become a *kept* hike, which the
-    /// alert this raises is already the report of. The failure is carried out
-    /// as well as shown, because what a caller may do with the file next
-    /// depends on which of the two failures it was — see
-    /// ``HikeImportOutcome``.
-    private func performImport(from url: URL) async -> HikeImportOutcome {
-        let selectionToken = importSelectionGate.token(
-            selectedHikeID: selectedHike?.id,
-            path: sheet.path
-        )
-        #if DEBUG
-        // Losing this race needs a navigation or selection change to land in
-        // the moment a GPX parse takes, which is not something automation can
-        // aim at. A scenario that is about the losing side asks for it here
-        // instead; see ``AppLaunchEnvironment/losesImportSelection``.
-        if AppLaunchEnvironment.losesImportSelection {
-            importSelectionGate.invalidate()
-        }
-        #endif
-        let importedHike: Hike
-        // Typed, so the catch below can't quietly widen to `any Error` and
-        // start swallowing something this screen has no message for.
-        do throws(HikeImportFailure) {
-            importedHike = try await HikeImport.hike(
-                from: url,
-                into: modelContext
-            )
-        } catch {
-            importFailure = error
-            return .refused(error)
-        }
-
-        // The imported row remains persisted when another action won the
-        // selection race; only its stale attempt to take over the map and
-        // sheet is dropped.
-        guard importSelectionGate.permits(
-            token: selectionToken,
-            selectedHikeID: selectedHike?.id,
-            path: sheet.path,
-            currentRecordingHikeID: currentRecordingHikeID,
-            recordingPresented: sheet.isRecordingPresented
-        ) else { return .imported(importedHike) }
-        selectedHike = importedHike
-        // The selection draws the imported route; expanding reveals it.
-        withAnimation { sheet.detent = .medium }
-        return .imported(importedHike)
-    }
 }
 
 // MARK: - Launch fixtures
@@ -577,6 +591,16 @@ private extension OpenHikesView {
         let count = AppLaunchEnvironment.seededPhotoCount
         guard count > 0, let hike else { return }
         await SeededPhotoFixture.attach(count: count, to: hike)
+        #endif
+    }
+
+    /// Gives the imported hike the walks a walker would have come home with,
+    /// so the History segment and the summary can be checked in seconds
+    /// rather than after a simulated stroll. Mirrors ``seedRequestedPhotos``.
+    func seedRequestedWalks(for hike: Hike?) {
+        #if DEBUG
+        guard let name = AppLaunchEnvironment.seededWalkFixtureName, let hike else { return }
+        SeededWalkFixture.attach(named: name, to: hike, in: modelContext)
         #endif
     }
 
@@ -697,6 +721,9 @@ struct ImportSelectionGate {
         // import that arrives while it is open is still landing on the hike
         // the user is looking at.
         case .some(.photo(let hike, _)): .hike(hike.id)
+        // A walk's summary is its hike's screen two pushes in, on the same
+        // terms as the photo viewer.
+        case .some(.walk(let walk)): .hike(walk.hikeID)
         }
     }
 }

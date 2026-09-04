@@ -154,13 +154,23 @@ public extension HikeActivityAttributes {
     /// both of those are only answerable when there *is* an end — and drops
     /// straight back to the trail's own length when the walker has no usable
     /// fix, rather than claiming 0%.
+    ///
+    /// A walk under way changes what the percentage *means*, and says so:
+    /// it is coverage rather than position, captioned *Walked*, with the
+    /// walk's own clock in the second slot — ticking while it runs, frozen
+    /// while it is paused or finished — and the distance left moved into the
+    /// chips so it is not lost to the clock. Paused and Finished outrank
+    /// *Off trail* for the status word: a paused walker is standing still
+    /// wherever they are, and a finished one is done.
     private func followingPresentation(
         for state: ContentState,
         metricLimit: Int,
         locale: Locale
     ) -> HikeActivityPresentation {
+        let walk = WalkFigures(attributes: self, state: state, locale: locale)
         let metrics = Array(
             [
+                walk.remainingMetric,
                 TrailWidgetMetric.currentElevation(
                     meters: state.currentElevationMeters,
                     locale: locale
@@ -173,47 +183,95 @@ public extension HikeActivityAttributes {
             .compactMap(\.self)
             .prefix(metricLimit)
         )
-        let progress = fractionComplete(for: state)
+        let progress = walk.coveredFraction ?? fractionComplete(for: state)
         let elapsed = WidgetFormat.duration(seconds: state.elapsedSeconds)
         let isOnRoute = state.offRouteMeters != nil
-        let remaining = remainingDistanceMeters(for: state).map { meters in
-            WidgetFormat.length(meters: meters, locale: locale)
-        }
+        let status = Self.followingStatus(
+            runState: walk.isWalking ? state.runState : nil,
+            isOnRoute: isOnRoute
+        )
         let total = WidgetFormat.length(
             meters: routeDistanceMeters ?? 0,
             locale: locale
         )
+        let percentage = progress.map { fraction in
+            "\(Int((fraction * 100).rounded()))%"
+        }
+        let showsTimer = walk.isWalking && state.isTicking
         return HikeActivityPresentation(
             title: title,
-            symbolName: isOnRoute ? "figure.hiking" : "exclamationmark.triangle.fill",
-            statusLabel: isOnRoute ? nil : "Off trail",
-            primaryValue: progress.map { fraction in
-                "\(Int((fraction * 100).rounded()))%"
-            } ?? total,
-            primaryCaption: progress == nil ? "Trail length" : "Complete",
-            secondaryValue: remaining,
-            secondaryCaption: "Remaining",
+            symbolName: status.symbolName,
+            statusLabel: status.label,
+            primaryValue: percentage ?? total,
+            primaryCaption: walk.isWalking
+                ? "Walked"
+                : (progress == nil ? "Trail length" : "Complete"),
+            // A running walk puts its live timer here instead, exactly as a
+            // running recording does; a paused or finished one shows the
+            // frozen clock, and a plain follow keeps the distance left.
+            secondaryValue: walk.isWalking
+                ? (showsTimer ? nil : elapsed)
+                : walk.remaining,
+            secondaryCaption: walk.isWalking ? "Elapsed" : "Remaining",
             metrics: metrics,
             progress: progress,
-            // A follow has no clock of its own: the walker may have opened the
-            // trail hours before setting off, so counting from `startedAt`
-            // would report the wrong thing with great confidence.
-            showsElapsedTimer: false,
+            showsElapsedTimer: showsTimer,
             timerStart: state.timerStart,
             elapsedText: elapsed,
-            accessibilityLabel: isOnRoute
-                ? title
-                : "\(title), off trail",
+            accessibilityLabel: status.label.map { "\(title), \($0.lowercased())" }
+                ?? title,
             accessibilityValue: Self.spoken(
                 [
-                    progress.map { fraction in
-                        "\(Int((fraction * 100).rounded())) percent complete"
-                    } ?? "\(total) long",
-                    remaining.map { "\($0) remaining" },
+                    percentage.map { "\($0.dropLast()) percent \(walk.isWalking ? "walked" : "complete")" }
+                        ?? "\(total) long",
+                    walk.isWalking ? elapsed : walk.remaining.map { "\($0) remaining" },
                 ],
                 metrics: metrics
             )
         )
+    }
+
+    /// The figures a walk contributes, or their absence for a plain follow.
+    ///
+    /// The distance left is computed once and spent twice — as the chip a
+    /// walk shows it in, and as the second slot a plain follow keeps it in —
+    /// so the two surfaces cannot round it differently.
+    private struct WalkFigures {
+        let coveredFraction: Double?
+        let remaining: String?
+
+        var isWalking: Bool { coveredFraction != nil }
+
+        var remainingMetric: TrailWidgetMetric? {
+            guard isWalking, let remaining else { return nil }
+            return TrailWidgetMetric(kind: .remaining, value: remaining)
+        }
+
+        init(attributes: HikeActivityAttributes, state: ContentState, locale: Locale) {
+            coveredFraction = state.coveredFractionComplete
+            remaining = attributes.remainingDistanceMeters(for: state).map { meters in
+                WidgetFormat.length(meters: meters, locale: locale)
+            }
+        }
+    }
+
+    /// The glyph and the word for a followed trail: what the walk is doing
+    /// when there is one, otherwise only whether the walker is on the trail.
+    ///
+    /// `nil` for the ordinary case for the reason ``recordingStatus(for:)``
+    /// gives: a status line that is always populated is one nobody reads.
+    private static func followingStatus(
+        runState: ContentState.RunState?,
+        isOnRoute: Bool
+    ) -> (symbolName: String, label: String?) {
+        switch runState {
+        case .paused: return ("pause.circle.fill", "Paused")
+        case .finished: return ("checkmark.circle.fill", "Finished")
+        case .running, nil:
+            return isOnRoute
+                ? ("figure.hiking", nil)
+                : ("exclamationmark.triangle.fill", "Off trail")
+        }
     }
 
     /// Fraction of the followed trail walked, or `nil` when there is no live

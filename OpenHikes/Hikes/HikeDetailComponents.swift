@@ -63,29 +63,41 @@ struct TrailProgressView: View {
     let tint: Color
     /// Tracker/live-follow positions — see ``TrackerState``.
     let tracker: TrackerState
+    /// The hike this row is drawn for, so it knows whether the walk under
+    /// way is its own.
+    var hikeID: UUID?
+    /// The walk under way, if any — see ``TrailWalkSession``. Read here for
+    /// the same reason `tracker` is: a matched fix that extends the walk
+    /// redraws this row and nothing above it.
+    var walk: TrailWalkSession?
 
     var body: some View {
         // The live match when auto-follow has one, otherwise wherever the
         // tracker was last left: a scrub, or the start of the trail.
         let live = tracker.liveTrackerDistance
         let distance = live ?? tracker.trackerDistance
-        let fraction = profile.fractionComplete(atDistance: distance) ?? 0
         let remaining = profile.remainingDistanceMeters(atDistance: distance)
+        // While this hike is being walked, the figure is coverage: what the
+        // walk has actually spanned rather than where the walker stands.
+        let walked = walk.flatMap { session in
+            session.walkedHikeID == hikeID ? session.coveredFraction : nil
+        }
+        let fraction = walked ?? profile.fractionComplete(atDistance: distance) ?? 0
+        let percent = Int((fraction * 100).rounded())
+        let caption = walked == nil ? "\(percent)%" : "\(percent)% walked"
 
         VStack(alignment: .leading, spacing: 6) {
             HStack(spacing: 6) {
                 Label(
-                    live == nil ? "Trail Progress" : "Live Progress",
-                    systemImage: live == nil
-                        ? "point.topleft.down.to.point.bottomright.curvepath"
-                        : "location.fill"
+                    title(walking: walked != nil, live: live != nil),
+                    systemImage: symbol(walking: walked != nil, live: live != nil)
                 )
-                .font(.caption.weight(.medium))
-                .foregroundStyle(live == nil ? .secondary : Color.blue)
+                    .font(.caption.weight(.medium))
+                    .foregroundStyle(live == nil && walked == nil ? .secondary : Color.blue)
 
                 Spacer()
 
-                Text("\(Int((fraction * 100).rounded()))% · \(Self.length(remaining)) left")
+                Text("\(caption) · \(Self.length(remaining)) left")
                     .font(.caption)
                     .foregroundStyle(.secondary)
                     .monospacedDigit()
@@ -96,8 +108,27 @@ struct TrailProgressView: View {
                 .tint(tint)
         }
         .accessibilityElement(children: .ignore)
-        .accessibilityLabel(live == nil ? "Trail progress" : "Live trail progress")
-        .accessibilityValue("\(Int((fraction * 100).rounded())) percent, \(Self.length(remaining)) remaining")
+        .accessibilityLabel(title(walking: walked != nil, live: live != nil))
+        // The covered length in whole metres as well as the percentage: a
+        // percentage of a long trail hides a walker's first few hundred
+        // metres, and this is the value a test waits on to know a fix landed.
+        .accessibilityValue(
+            walked.map { fraction in
+                "\(percent) percent walked, \(Int(fraction * profile.totalDistanceMeters)) metres covered, "
+                    + "\(Self.length(remaining)) remaining"
+            } ?? "\(percent) percent, \(Self.length(remaining)) remaining"
+        )
+        .accessibilityIdentifier("trail-progress")
+    }
+
+    private func title(walking: Bool, live: Bool) -> String {
+        if walking { return "Walk Progress" }
+        return live ? "Live Progress" : "Trail Progress"
+    }
+
+    private func symbol(walking: Bool, live: Bool) -> String {
+        if walking { return "figure.walk" }
+        return live ? "location.fill" : "point.topleft.down.to.point.bottomright.curvepath"
     }
 
     private static func length(_ meters: Double) -> String {
@@ -152,12 +183,15 @@ struct HikeTrailProgress: View {
     let hike: Hike
     let profile: RouteProfile
     let tracker: TrackerState
+    var walk: TrailWalkSession?
 
     var body: some View {
         TrailProgressView(
             profile: profile,
             tint: hike.tintOpaque,
-            tracker: tracker
+            tracker: tracker,
+            hikeID: hike.id,
+            walk: walk
         )
     }
 }

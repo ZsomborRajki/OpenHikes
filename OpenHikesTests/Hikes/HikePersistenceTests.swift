@@ -150,6 +150,86 @@ struct HikePersistenceTests {
         #expect(reopened.route == route, "including the elevations, the timestamps, and their absence")
     }
 
+    /// A finished walk is a row of its own in the mirrored store, hung off
+    /// its hike: every column survives a reopen, and the hike's cascade takes
+    /// it when the hike goes.
+    @Test("a walk written to disk comes back whole and cascades with its hike")
+    func walkSurvivesAReopenAndCascades() throws {
+        try makeDirectory()
+        defer { removeDirectory() }
+
+        let hikeID = UUID()
+        let walkID = UUID()
+        let startedAt = Date(timeIntervalSince1970: 1_750_000_000)
+        do {
+            let container = try openContainer()
+            let context = ModelContext(container)
+            let hike = Hike(title: "Ridge Loop", distanceMeters: 2000, id: hikeID, route: Fixture.ridgeRoute)
+            context.insert(hike)
+            let walk = HikeWalk(
+                hikeID: hikeID,
+                startedAt: startedAt,
+                endedAt: startedAt.addingTimeInterval(3600),
+                activeSeconds: 3000,
+                coveredIntervals: [0, 800, 1200, 1500],
+                furthestDistanceMeters: 1500,
+                routeDistanceMeters: 2000,
+                endReason: .reachedEnd,
+                id: walkID
+            )
+            context.insert(walk)
+            walk.hike = hike
+            try context.save()
+        }
+
+        do {
+            let container = try openContainer()
+            let context = ModelContext(container)
+            let reopened = try #require(
+                try context.fetch(FetchDescriptor<HikeWalk>(predicate: #Predicate { $0.id == walkID })).first
+            )
+            #expect(reopened.hikeID == hikeID)
+            #expect(reopened.hike?.id == hikeID)
+            #expect(reopened.startedAt == startedAt)
+            #expect(reopened.endedAt == startedAt.addingTimeInterval(3600))
+            #expect(reopened.activeSeconds == 3000)
+            #expect(reopened.coveredIntervals == [0, 800, 1200, 1500])
+            #expect(reopened.furthestDistanceMeters == 1500)
+            #expect(reopened.routeDistanceMeters == 2000)
+            #expect(reopened.endReason == .reachedEnd)
+            #expect(abs(reopened.coveredFraction - 0.55) < 0.0001)
+
+            let hike = try #require(
+                try context.fetch(FetchDescriptor<Hike>(predicate: #Predicate { $0.id == hikeID })).first
+            )
+            #expect(hike.walks?.map(\.id) == [walkID])
+            context.delete(hike)
+            try context.save()
+        }
+
+        let container = try openContainer()
+        let context = ModelContext(container)
+        #expect(try context.fetch(FetchDescriptor<HikeWalk>()).isEmpty, "the cascade took the walk with the hike")
+    }
+
+    /// An end reason this build does not know decodes as no reason rather
+    /// than failing the row — the same degradation `routeLinePatternID` has.
+    @Test("an unknown end reason degrades rather than failing to decode")
+    func unknownEndReasonDegrades() {
+        let walk = HikeWalk(
+            hikeID: UUID(),
+            startedAt: .now,
+            endedAt: .now,
+            activeSeconds: 0,
+            coveredIntervals: [],
+            furthestDistanceMeters: 0,
+            routeDistanceMeters: 100,
+            endReason: .ended
+        )
+        walk.endReasonID = "teleported"
+        #expect(walk.endReason == nil)
+    }
+
     @Test("route points written before motion metadata still decode")
     func legacyRouteCoordinateDecodesWithoutMotion() throws {
         let data = Data(

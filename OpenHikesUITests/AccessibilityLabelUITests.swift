@@ -72,6 +72,58 @@ nonisolated final class AccessibilityLabelUITests: XCTestCase {
         )
     }
 
+    /// A walk's row is one element whose label leads with the date and whose
+    /// value carries the percentage; the `Details | History` segment is
+    /// reachable and reports its selection; and the summary's completion
+    /// figure is spoken as a value ("50 percent complete, 4.7 km remaining")
+    /// rather than drawn as a bar with nothing to say.
+    @MainActor
+    func testWalkHistoryAndSummaryReadAsElements() {
+        let app = launchApp(
+            arguments: [
+                "--ui-test-expanded-sheet",
+                "--ui-test-import-gpx=\(UITestFixture.gpxName)",
+                "--ui-test-seed-walks=HalfLoop",
+            ]
+        )
+        openHikeDetail(in: app)
+
+        let segment = app.segmentedControls["walk-segment"]
+        XCTAssertTrue(
+            segment.waitForExistence(timeout: UITestTimeout.existence),
+            "the two faces of the detail should be a reachable segmented control"
+        )
+        XCTAssertTrue(segment.buttons["Details"].isSelected, "Details is the face a trail opens on")
+        segment.buttons["History"].tap()
+        XCTAssertTrue(
+            waitUntilSelected(segment.buttons["History"]),
+            "the segment should report which face is up"
+        )
+
+        let row = app.descendants(matching: .any)
+            .matching(identifier: "walk-row")
+            .firstMatch
+        XCTAssertTrue(row.waitForExistence(timeout: UITestTimeout.existence))
+        let year = Calendar.current.component(.year, from: .now)
+        XCTAssertTrue(
+            row.label.contains("\(year)") || row.label.contains("\(year - 1)"),
+            "a walk row should lead with its date, got \"\(row.label)\""
+        )
+        let value = row.value as? String ?? ""
+        XCTAssertTrue(value.contains("50 percent"), "the value carries the percentage, got \"\(value)\"")
+        XCTAssertTrue(value.contains("ended"), "and how the walk ended, got \"\(value)\"")
+
+        row.tap()
+        XCTAssertTrue(
+            app.navigationBars["Walk Summary"].waitForExistence(timeout: UITestTimeout.navigation)
+        )
+        let completion = element("walk-completion", in: app)
+        XCTAssertTrue(completion.waitForExistence(timeout: UITestTimeout.existence))
+        let spoken = completion.value as? String ?? ""
+        XCTAssertTrue(spoken.contains("50 percent complete"), "got \"\(spoken)\"")
+        XCTAssertTrue(spoken.contains("remaining"), "got \"\(spoken)\"")
+    }
+
     /// Two texts in a rounded rectangle are one fact, and the caption is drawn
     /// uppercased — which VoiceOver spells out ("A V G Speed") unless the
     /// label is spoken from the original.

@@ -49,10 +49,17 @@ extension BackgroundTrailTracker {
 
     /// Takes a followed trail off the Lock Screen.
     ///
-    /// No final panel and no lingering: unlike a finished recording there is
-    /// no result to leave behind, and a walker who has switched trails or
-    /// turned following off has already said what they want to see.
-    func endFollowActivity(hikeID: UUID?) {
+    /// No final panel and no lingering by default: a follow that merely
+    /// stopped has no result to leave behind, and a walker who has switched
+    /// trails or turned following off has already said what they want to
+    /// see. A walk that *ended* is the exception, and passes its closing
+    /// figures with a dismiss delay, the way a finished recording does; an
+    /// abandoned one still passes `nil`.
+    func endFollowActivity(
+        hikeID: UUID?,
+        finalState: HikeActivityAttributes.ContentState? = nil,
+        dismissAfter: TimeInterval? = nil
+    ) {
         guard let liveActivityController,
               let active = liveActivityController.activeSubject,
               !active.isRecording,
@@ -60,8 +67,8 @@ extension BackgroundTrailTracker {
         else { return }
         liveActivityController.end(
             subject: active,
-            finalState: nil,
-            dismissAfter: nil
+            finalState: finalState,
+            dismissAfter: dismissAfter
         )
     }
 }
