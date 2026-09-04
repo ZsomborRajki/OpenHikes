@@ -80,6 +80,21 @@ extension HikeDetailView {
         }
     }
 
+    /// Where a download's verified coverage is recorded, bound to *this* hike
+    /// at the moment the download starts.
+    ///
+    /// The hike is captured rather than read back off the screen when the run
+    /// ends, because by then there may be no screen: dismissing this view
+    /// cancels nothing, so the run goes on writing durable tiles with its
+    /// `onChange` observer gone. One `HikeDetailView` can also outlive the
+    /// hike it was first drawn for, and coverage merged into whichever hike
+    /// the view is showing when the last tile lands is coverage claimed by
+    /// the wrong trail.
+    var offlineDownloadClaim: OfflineTileDownloader.Claim {
+        let target = hike
+        return { record in try OfflineDownloadClaim.commit(record, for: target) }
+    }
+
     func scheduleStoredBytesRefresh() {
         guard !hike.offlineDownloads.isEmpty || !hike.autoSavedTileKeys.isEmpty else {
             invalidateStoredBytesMeasurement()

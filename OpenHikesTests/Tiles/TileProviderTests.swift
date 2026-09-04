@@ -328,7 +328,7 @@ struct TileProviderTests {
 
     /// `ActiveTileSource` carries `providerID` but not `supportsBulkDownload`,
     /// so the licensing promise above has to be *recovered* at the boundary
-    /// into `OfflineTileDownloader.start(route:source:)` rather than
+    /// into `OfflineTileDownloader.start(route:source:claim:)` rather than
     /// travelling with the value. ``ActiveTileSource/permitsBulkDownload`` is
     /// that lookup, and the downloader's refusal is pinned in
     /// `OfflineTileDownloaderTests`.

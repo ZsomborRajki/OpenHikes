@@ -182,6 +182,13 @@ enum Fixture {
         return hike
     }
 
+    /// A download whose coverage is recorded nowhere, for the suites that
+    /// drive the downloader's state machine rather than its ownership record.
+    /// What a real claim has to do — merge the verified record and commit it
+    /// before anything reports a map as saved — belongs to
+    /// ``OfflineDownloadClaim`` and is pinned by `OfflineDownloadClaimTests`.
+    static let unrecordedClaim: OfflineTileDownloader.Claim = { _ in /* no-op */ }
+
     static func modelContainer() throws -> ModelContainer {
         try ModelContainer.openHikes(isStoredInMemoryOnly: true)
     }

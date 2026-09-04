@@ -309,11 +309,13 @@ struct HikeDetailView: View {
             guard !scrubbing, let profile else { return }
             updateLiveFollow(profile: profile)
         }
-        // Record verified coverage from complete and partial downloads so
-        // storage accounting never claims tiles that failed to reach disk.
+        // A download records and commits its own coverage now — see
+        // ``OfflineDownloadClaim`` — because this screen is gone the moment
+        // the walker taps back and the run carries on writing tiles either
+        // way. What is left here is redrawing the storage row for a screen
+        // that is still up, against a manifest already on disk.
         .onChange(of: downloader.phase) { _, phase in
-            guard phase != .downloading, let record = downloader.completedRecord else { return }
-            hike.mergeOfflineDownload(record)
+            guard phase != .downloading, downloader.completedRecord != nil else { return }
             refreshStoredBytes()
         }
         .task {
@@ -364,7 +366,11 @@ private extension HikeDetailView {
                         downloader: downloader,
                         canDownload: canDownload
                     ) {
-                        downloader.start(route: hike.route, source: source)
+                        downloader.start(
+                            route: hike.route,
+                            source: source,
+                            claim: offlineDownloadClaim
+                        )
                     }
                 }
             } middleControls: {

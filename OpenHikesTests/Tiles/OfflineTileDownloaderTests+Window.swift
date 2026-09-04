@@ -84,7 +84,7 @@ extension OfflineDownloadStateTests {
             saveTile: { key, _ in await probe.save(key) }
         )
 
-        downloader.start(route: Fixture.ridgeRoute, source: Self.deepSource)
+        downloader.start(route: Fixture.ridgeRoute, source: Self.deepSource, claim: Fixture.unrecordedClaim)
         await downloader.waitForCurrentRun()
 
         let planned = Self.plannedKeys()
@@ -110,7 +110,7 @@ extension OfflineDownloadStateTests {
         )
         let window = OfflineTileDownloader.inFlightWindow
 
-        downloader.start(route: Fixture.ridgeRoute, source: Self.deepSource)
+        downloader.start(route: Fixture.ridgeRoute, source: Self.deepSource, claim: Fixture.unrecordedClaim)
         await downloader.waitForPlanning()
         await probe.waitForFirstSave()
 
@@ -143,7 +143,7 @@ extension OfflineDownloadStateTests {
             saveTile: { key, _ in await probe.save(key) }
         )
 
-        downloader.start(route: Fixture.ridgeRoute, source: Self.deepSource)
+        downloader.start(route: Fixture.ridgeRoute, source: Self.deepSource, claim: Fixture.unrecordedClaim)
         await downloader.waitForPlanning()
         // Waited for rather than slept past: the window is only genuinely
         // pumping once a tile has reached the transport.

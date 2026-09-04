@@ -38,6 +38,18 @@ final class OfflineTileDownloader {
         let generation: Int
     }
 
+    /// How a run records the coverage it verified, against the hike that
+    /// asked for it — see ``OfflineDownloadClaim``.
+    ///
+    /// Bound at ``start(route:source:claim:)`` rather than read back when the
+    /// run ends, which is what gives ownership a lifetime of its own: the
+    /// hike is decided by the tap, and the download keeps writing durable
+    /// tiles long after the screen that started it has been dismissed. A
+    /// closure rather than the ``Hike`` itself so this stays a tile
+    /// subsystem — the store, its sidecar and the merge rule live on the
+    /// other side of the seam, the same way the transport and the save do.
+    typealias Claim = @MainActor (OfflineDownloadRecord) throws(OfflineDownloadClaim.Failure) -> Void
+
     /// What one tile's task carries back out of the group. `nonisolated`, like
     /// ``Tile``, because it crosses out of a child task.
     nonisolated private struct SaveResult: Sendable {
@@ -86,6 +98,11 @@ final class OfflineTileDownloader {
     /// whatever else happened to be loading tiles at the time.
     private let gate: TileLoadGate
     private let saveTile: @Sendable (String, URL) async -> Bool
+    /// Where the current run's coverage is recorded, handed over by the
+    /// `start` that began it and outliving whatever screen that was. `nil`
+    /// until the first download, which is the only state in which a finished
+    /// run has nothing to claim to.
+    private var claim: Claim?
     let quota: QuotaBroker
     /// A plan waiting on the space confirmation. Cleared by every path that
     /// leaves ``Phase/needsSpace(_:)``.
@@ -128,7 +145,16 @@ final class OfflineTileDownloader {
     /// only where the button is drawn: ``TileProvider/supportsBulkDownload``
     /// is a promise to the tile host rather than a UI affordance, so the code
     /// that would do the fetching has to be the thing that keeps it.
-    func start(route: [RouteCoordinate], source: ActiveTileSource) {
+    /// - Parameter claim: Where this run's verified coverage is recorded and
+    ///   committed when it ends — see ``Claim``. Required rather than
+    ///   defaulted: a download whose tiles nothing claims is one the next
+    ///   launch trim deletes, so every caller has to say where the map it is
+    ///   about to spend a connection on belongs.
+    func start(
+        route: [RouteCoordinate],
+        source: ActiveTileSource,
+        claim: @escaping Claim
+    ) {
         guard phase != .downloading else { return }
         guard source.permitsBulkDownload else {
             phase = .failed("This map source doesn't allow offline downloads.")
@@ -149,6 +175,7 @@ final class OfflineTileDownloader {
         total = 0
         completedRecord = nil
         pendingRun = nil
+        self.claim = claim
         phase = .downloading
         let maxZoom = max(source.maximumZ, Self.minZoom)
         // Bracketed for MetricKit rather than for `RenderSignpost`: what a
@@ -370,6 +397,13 @@ final class OfflineTileDownloader {
         return SaveResult(key: key, saved: saved)
     }
 
+    /// Publishes what the run produced, and commits who it belongs to first.
+    ///
+    /// The order is the point: every tile counted here is already on durable
+    /// storage, where the next launch trim deletes whatever no hike claims. A
+    /// phase saying the map was saved, published ahead of the claim, is a
+    /// promise a refused commit — or a hike deleted while this ran — has
+    /// already broken. See ``OfflineDownloadClaim``.
     private func finalize(
         savedKeys: Set<String>,
         tiles: [Tile],
@@ -383,28 +417,34 @@ final class OfflineTileDownloader {
         }
 
         let sortedKeys = savedKeys.sorted()
-        if savedKeys.count == tiles.count {
-            completedRecord = OfflineDownloadRecord(
-                providerID: source.providerID,
-                maxZoom: source.maximumZ
-            )
-            phase = .finished
-        } else {
-            if !sortedKeys.isEmpty {
-                completedRecord = OfflineDownloadRecord(
-                    providerID: source.providerID,
-                    maxZoom: source.maximumZ,
-                    savedTileKeys: sortedKeys
-                )
+        let isComplete = savedKeys.count == tiles.count
+        let record = Self.coverage(
+            savedKeys: sortedKeys,
+            plannedCount: tiles.count,
+            source: source
+        )
+        completedRecord = record
+
+        if let record {
+            do {
+                try claim?(record)
+            } catch {
+                phase = .failed(Self.unclaimedMessage)
+                return
             }
-            phase = .failed(
-                await failureMessage(
-                    savedCount: sortedKeys.count,
-                    plannedCount: tiles.count,
-                    source: source
-                )
-            )
         }
+
+        guard !isComplete else {
+            phase = .finished
+            return
+        }
+        phase = .failed(
+            await failureMessage(
+                savedCount: sortedKeys.count,
+                plannedCount: tiles.count,
+                source: source
+            )
+        )
     }
 
     /// Test/support hook that waits for the latest run without polling time —

@@ -621,7 +621,8 @@ struct DownloadProgressTests {
 
         downloader.start(
             route: Fixture.ridgeRoute,
-            source: ActiveTileSource(providerID: TileProvider.stadiaOutdoors.id, urlTemplate: "https://tiles.invalid/{z}/{x}/{y}.png", maximumZ: 14)
+            source: ActiveTileSource(providerID: TileProvider.stadiaOutdoors.id, urlTemplate: "https://tiles.invalid/{z}/{x}/{y}.png", maximumZ: 14),
+            claim: Fixture.unrecordedClaim
         )
         await downloader.waitForPlanning()
         let total = downloader.total
