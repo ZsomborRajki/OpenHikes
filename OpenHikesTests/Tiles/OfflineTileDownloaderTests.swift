@@ -340,12 +340,18 @@ struct OfflineDownloadStateTests {
         #expect(!downloader.isFailed)
     }
 
-    @Test("a failed download can be reset back to idle")
-    func resetAfterFailure() {
+    /// The button goes back to "Offline" once the walker has dealt with a
+    /// failure — by deleting the hike's tiles, which is the one path that
+    /// clears a finished or failed run. It used to have a `reset()` of its
+    /// own, which declined while a download was running and so could not be
+    /// used by the deletion that needed it; `cancel()` is the one spelling
+    /// now, and it works from every phase.
+    @Test("a failed download can be cleared back to idle")
+    func cancelAfterFailure() {
         let downloader = OfflineTileDownloader()
         downloader.start(route: [], source: unreachable, claim: Fixture.unrecordedClaim)
         #expect(downloader.isFailed)
-        downloader.reset()
+        downloader.cancel()
         #expect(downloader.phase == .idle)
         #expect(downloader.total == 0)
     }

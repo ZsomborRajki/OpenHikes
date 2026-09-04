@@ -98,6 +98,10 @@ final class OfflineTileDownloader {
     /// whatever else happened to be loading tiles at the time.
     private let gate: TileLoadGate
     private let saveTile: @Sendable (String, URL) async -> Bool
+    /// Where this downloader announces a run, so the storage actions that
+    /// delete durable tiles can stand it down first — see
+    /// ``OfflineDownloadRegistry``.
+    private let registry: OfflineDownloadRegistry
     /// Where the current run's coverage is recorded, handed over by the
     /// `start` that began it and outliving whatever screen that was. `nil`
     /// until the first download, which is the only state in which a finished
@@ -127,6 +131,7 @@ final class OfflineTileDownloader {
         gate: TileLoadGate = .shared,
         isOnline: @escaping @Sendable () -> Bool = { TileCache.shared.isOnline },
         quota: QuotaBroker = .standard,
+        registry: OfflineDownloadRegistry = .shared,
         saveTile: @escaping @Sendable (String, URL) async -> Bool = { key, url in
             await TileCache.shared.saveTileDurably(forKey: key, url: url)
         }
@@ -134,6 +139,7 @@ final class OfflineTileDownloader {
         self.gate = gate
         self.isOnline = isOnline
         self.quota = quota
+        self.registry = registry
         self.saveTile = saveTile
     }
 
@@ -177,6 +183,10 @@ final class OfflineTileDownloader {
         pendingRun = nil
         self.claim = claim
         phase = .downloading
+        // Announced before the first tile is planned, so a deletion that
+        // starts while this run is in flight stands it down rather than
+        // racing its completion for the manifest.
+        registry.track(self)
         let maxZoom = max(source.maximumZ, Self.minZoom)
         // Bracketed for MetricKit rather than for `RenderSignpost`: what a
         // maximum-budget download costs in CPU, footprint and *logical writes*
@@ -206,16 +216,6 @@ final class OfflineTileDownloader {
         completedRecord = nil
         pendingRun = nil
         finishPlanning()
-    }
-
-    /// Returns to idle after a finished/failed download (e.g. its tiles were deleted).
-    func reset() {
-        guard phase != .downloading else { return }
-        phase = .idle
-        completed = 0
-        total = 0
-        completedRecord = nil
-        pendingRun = nil
     }
 
     private func prepareAndRun(

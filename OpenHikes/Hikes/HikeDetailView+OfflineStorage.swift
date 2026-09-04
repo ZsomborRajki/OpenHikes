@@ -137,11 +137,18 @@ extension HikeDetailView {
             storageDeletionFailed = true
             return
         }
+        // The point of no return, and so where the other writer stands down: a
+        // bulk download in flight would go on writing tiles this plan cannot
+        // see and then claim them, putting the hike's coverage back moments
+        // after the walker deleted it. `reset()` used to stand here and could
+        // not do it — it declines while a download is running, which is
+        // exactly when it matters — while `cancel()` also leaves the button
+        // idle, which is what `reset()` was here for.
+        downloader.cancel()
         hike.offlineDownloads.removeAll()
         hike.autoSavedTileKeys.removeAll()
         invalidateStoredBytesMeasurement()
         storedBytes = 0
-        downloader.reset()
         Task(priority: .utility) {
             await deletionPlan.removeExclusiveTiles(from: .shared)
         }

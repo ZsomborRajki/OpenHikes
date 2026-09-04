@@ -63,11 +63,18 @@ enum OfflineStorageActions {
 
     /// "Clear Map Cache": frees every tile no hike claims, and nothing at all
     /// when the claims could not be established.
+    ///
+    /// A bulk download in flight is stood down first, because its tiles are
+    /// exactly the ones no hike claims *yet* — see ``OfflineDownloadRegistry``.
+    /// Left running, they would be freed here and its completion would claim
+    /// them back a moment later.
     static func clearMapCache(
         in cache: TileCache,
+        downloads: OfflineDownloadRegistry = .shared,
         fetchingHikes fetch: () throws -> [Hike]
     ) -> Task<Void, Never>? {
         guard let claims = try? TileOwnership.claims(of: fetch()) else { return nil }
+        downloads.standDown()
         return Task(priority: .utility) { await removeTiles(unclaimedBy: claims, from: cache) }
     }
 
@@ -79,11 +86,18 @@ enum OfflineStorageActions {
     /// is that no hike is left listing tiles that are gone. A fetch that
     /// failed would delete the tiles and clear no manifest, so the hike sheets
     /// would go on reporting offline coverage that no longer exists.
+    ///
+    /// Which is the promise a download still running breaks from the other
+    /// end, so one is stood down once the manifests are clear and before the
+    /// deletion runs: its completion cannot then write a record into a
+    /// manifest this just emptied. See ``OfflineDownloadRegistry``.
     static func deleteAllTiles(
         in cache: TileCache,
+        downloads: OfflineDownloadRegistry = .shared,
         fetchingHikes fetch: () throws -> [Hike]
     ) -> Task<Void, Never>? {
         guard (try? clearManifests(fetchingHikes: fetch)) != nil else { return nil }
+        downloads.standDown()
         return Task(priority: .utility) { await removeAllTiles(from: cache) }
     }
 
