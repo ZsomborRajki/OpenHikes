@@ -151,9 +151,13 @@ struct StorageAccountingTests {
         #expect(stored == fullKeys.union([extra]))
     }
 
-    /// The delete-a-hike path from `MapSheet.delete(_:among:)`, minus the SwiftUI.
+    /// The tile half of the delete-a-hike path, minus the SwiftUI and minus
+    /// the commit: what this suite measures is which tiles a plan frees, so it
+    /// stands auto-save down and spends the plan by hand. The ordering around
+    /// the save — and putting the stand-down back when the save is refused —
+    /// belongs to ``HikeDeletion`` and is checked in `HikeDeletionTests`.
     func deleteHike(_ hike: Hike, using controller: AutoSaveController, survivors: [Hike] = []) async throws {
-        controller.hikeWillBeDeleted(hike)
+        _ = controller.hikeWillBeDeleted(hike)
         let deletionPlan = try #require(StoredTileDeletionPlan(removing: hike, among: [hike] + survivors))
         await deletionPlan.removeExclusiveTiles(from: sandbox.cache)
         context.delete(hike)

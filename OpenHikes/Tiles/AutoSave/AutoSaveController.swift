@@ -180,14 +180,49 @@ final class AutoSaveController {
         flushPendingKeys()
     }
 
+    /// What it takes to put auto-save back after a deletion the store refused.
+    ///
+    /// The keys are the payload: they were moved out of
+    /// ``AutoSaveTileStore``'s pending set into the hike's manifest as an
+    /// *unsaved* write, so the rollback that returns the hike takes them back
+    /// out again, and the store no longer has them either.
+    struct StandDown {
+        let hikeID: UUID
+        let foldedKeys: [String]
+    }
+
     /// Called just before `hike` is deleted, so the delete that follows sees a
     /// complete manifest. Waiting for the selection change to propagate back
     /// through SwiftUI would leave the tiles saved in the last drain window on
     /// disk with nothing claiming them — and they're durable, so nothing would
     /// ever reclaim them.
-    func hikeWillBeDeleted(_ hike: Hike) {
-        guard activeHike?.id == hike.id else { return }
-        deactivate(flushWhileSuspended: true)
+    ///
+    /// - Returns: what ``hikeDeletionWasRefused(_:for:)`` needs to undo this,
+    ///   or `nil` when this hike wasn't the one auto-saving and nothing stood
+    ///   down. A deletion that can be refused has to hold on to it.
+    func hikeWillBeDeleted(_ hike: Hike) -> StandDown? {
+        guard activeHike?.id == hike.id else { return nil }
+        return StandDown(
+            hikeID: hike.id,
+            foldedKeys: deactivate(flushWhileSuspended: true)
+        )
+    }
+
+    /// Puts auto-save back on a hike whose deletion the store would not accept.
+    ///
+    /// Both halves have to be undone. The rollback returned the hike, but it
+    /// returned its manifest to the last committed state with it, so the keys
+    /// folded in on the way out claim nothing — and their tiles are durable,
+    /// so the next launch trim would delete a walk's worth of map the user
+    /// still has the hike for. And the selection never changed, so nothing
+    /// else is going to re-arm the controller: without this the still-selected
+    /// hike would quietly stop auto-saving until it was selected again.
+    func hikeDeletionWasRefused(_ standDown: StandDown, for hike: Hike) {
+        guard standDown.hikeID == hike.id else { return }
+        hike.autoSavedTileKeys.append(contentsOf: standDown.foldedKeys)
+        // The path a re-selection takes, so eligibility and a suspended scene
+        // are answered here the way they are answered there.
+        hikeSelectionChanged(to: hike)
     }
 
     private func applySelection(_ hike: Hike?) {
@@ -260,17 +295,18 @@ final class AutoSaveController {
         )
     }
 
-    private func deactivate(flushWhileSuspended: Bool = false) {
+    /// - Returns: the keys folded into the outgoing hike's manifest on the way
+    ///   out, for the one caller that may have to hand them back.
+    @discardableResult private func deactivate(flushWhileSuspended: Bool = false) -> [String] {
         // Same reason as in `activate`: `clearActiveHike` drops the pending set,
         // which is the only record of the last couple of seconds' worth of saves.
-        if flushWhileSuspended {
-            flushPendingKeysIgnoringSuspension()
-        } else {
-            flushPendingKeys()
-        }
+        let folded = flushWhileSuspended
+            ? flushPendingKeysIgnoringSuspension()
+            : flushPendingKeys()
         cancelPendingActivation()
         activeHike = nil
         store.clearActiveHike()
+        return folded
     }
 
     private func cancelPendingActivation() {
@@ -291,15 +327,19 @@ final class AutoSaveController {
     /// tiles are still spoken for: until this runs, the newest tiles exist on
     /// disk with nothing in SwiftData pointing at them, and `deactivate()`
     /// discards the in-memory record that would have found them.
-    func flushPendingKeys() {
-        guard !isSuspended else { return }
-        flushPendingKeysIgnoringSuspension()
+    ///
+    /// - Returns: what it folded, so a fold that has to be taken back — a
+    ///   deletion the store then refused — can be.
+    @discardableResult func flushPendingKeys() -> [String] {
+        guard !isSuspended else { return [] }
+        return flushPendingKeysIgnoringSuspension()
     }
 
-    private func flushPendingKeysIgnoringSuspension() {
-        guard let hike = activeHike else { return }
-        let newKeys = store.drainPendingKeys(for: hike.id)
-        guard !newKeys.isEmpty else { return }
+    @discardableResult private func flushPendingKeysIgnoringSuspension() -> [String] {
+        guard let hike = activeHike else { return [] }
+        let newKeys = Array(store.drainPendingKeys(for: hike.id))
+        guard !newKeys.isEmpty else { return [] }
         hike.autoSavedTileKeys.append(contentsOf: newKeys)
+        return newKeys
     }
 }

@@ -602,12 +602,20 @@ struct AutoSaveLifecycleTests {
         try await persistOneTile(key: key)
 
         controller.sceneWillResignActive { /* scene resigned active */ }
-        controller.hikeWillBeDeleted(hike)
+        let standDown = try #require(
+            controller.hikeWillBeDeleted(hike),
+            "the active hike's stand-down is what a refused deletion would put back"
+        )
 
         #expect(
             hike.autoSavedTileKeys.contains(key),
             "the delete path flushes past suspension so the tiles it frees are all of them"
         )
+        // Nothing for a refused deletion to hand back, and that is right:
+        // `sceneWillResignActive` folded this key under a save of its own, so
+        // it is committed and a rollback cannot take it away. The stand-down
+        // carries only the fold that is still unsaved.
+        #expect(standDown.foldedKeys.isEmpty)
     }
 
     /// `sceneWillResignActive` appends the pending snapshot to the manifest

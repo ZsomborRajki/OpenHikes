@@ -300,50 +300,18 @@ private func delete(_ hike: Hike, among hikes: [Hike]) {
         return
     }
 
-    // Before anything else: tiles auto-saved in the last couple of seconds
-    // live only in AutoSaveTileStore's pending set. Folding them into the
-    // manifest first is what stops them outliving the hike with nothing
-    // pointing at them — and stopping auto-save here, rather than waiting
-    // for the selection change below to make its way back through SwiftUI,
-    // closes the window where a tile still in flight lands on disk claimed
-    // by a hike that no longer exists. It has to happen while the hike is
-    // still attached, which is before the store has been asked to accept the
-    // deletion — so a refused deletion leaves auto-save off for a hike that
-    // survives, until it is selected again. That is the recoverable half of
-    // the choice; a tile written for a hike that has gone is not.
-    autoSave.hikeWillBeDeleted(hike)
-
-    // Planned here, while the hike is still in the store to be asked: both
-    // `hasStoredTiles` and the plan take their claims from the sidecar row,
-    // which `HikeDeletion` drops with the hike below. Built now, spent after
-    // the deletion is on disk.
-    //
-    // It frees the tiles this hike had saved offline — but only the ones no
-    // surviving hike still claims. Cache keys carry no hike identity, so
-    // deleting this hike's keys outright would strip coverage from any
-    // trail sharing the area (and at low zoom, that's most of them) while
-    // leaving their manifests claiming tiles that are gone.
-    //
-    // A plan that cannot be built frees nothing, the way the launch trim and
-    // Settings refuse theirs: a survivor whose sidecar read failed is missing
-    // from the claim set, and spending a set that is short by one hike is how
-    // a neighbour loses the map it downloaded for a valley with no signal.
-    // The hike is still deleted either way; its own tiles are then unclaimed,
-    // and the next launch trim reclaims them.
-    let deletionPlan = hike.hasStoredTiles
-        ? StoredTileDeletionPlan(removing: hike, among: hikes)
-        : nil
-
-    // The row, its sidecar, and — once the store has accepted both — the
-    // photo files. `HikeDeletion` owns that order and takes the whole
-    // deletion back if the save is refused, which is why nothing on screen is
-    // touched until it returns: a failure leaves the sheet exactly as the user
-    // left it, showing a hike that is still there.
-    do {
-        try HikeDeletion.delete([hike])
-    } catch {
-        return
-    }
+    // Everything that has to happen while the hike is still in the store, in
+    // the order it has to happen in: auto-save stood down, its offline tiles
+    // planned, then the sidecar, the row and the photo files. `HikeDeletion`
+    // owns that order and puts all of it back — auto-save included — if the
+    // store refuses the save, which is why nothing on screen is touched until
+    // it answers: a refusal leaves the sheet exactly as the user left it,
+    // showing a hike that is still there.
+    guard case let .committed(deletionPlan) = HikeDeletion.delete(
+        hike,
+        among: hikes,
+        autoSave: autoSave
+    ) else { return }
 
     // Clearing the selection stops the *map* drawing a deleted trail; clearing
     // the path stops its detail view staying pushed, showing a hike that no

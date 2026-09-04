@@ -35,6 +35,65 @@ nonisolated enum HikeDeletion {
         category: "HikeDeletion"
     )
 
+    /// What the store did with a deletion, for the screen that asked for it.
+    enum Outcome {
+        /// On disk. The plan, when there is one, frees the tiles this hike had
+        /// saved offline and no surviving hike still claims — the caller
+        /// spends it off the main thread.
+        case committed(freeing: StoredTileDeletionPlan?)
+        /// Refused, and everything put back: the hike, its sidecar, its files,
+        /// and auto-save. There is nothing for the caller to take off screen.
+        case refused
+    }
+
+    /// Deletes one hike out of the list, with everything that has to happen
+    /// around it in the order it has to happen in.
+    ///
+    /// Extracted from `MapSheet.delete(_:among:)`, the way
+    /// ``SheetRoute/removeHike(_:selectedHike:from:)`` was, so a test can call
+    /// the sequence rather than restate it — and this is a sequence where
+    /// every step is ordered against the commit:
+    ///
+    /// - Auto-save stands down *first*. Tiles saved in the last drain window
+    ///   live only in ``AutoSaveTileStore``'s pending set; folding them into
+    ///   the manifest now is what stops them outliving the hike with nothing
+    ///   pointing at them, and it closes the window where a tile still in
+    ///   flight lands on disk claimed by a hike that no longer exists.
+    /// - The tile plan is built *second*, because it reads the manifest that
+    ///   fold just completed, and because the sidecar it reads goes with the
+    ///   hike. It is spent last, by the caller, once the deletion is on disk.
+    /// - A plan that cannot be built frees nothing, the way the launch trim
+    ///   and Settings refuse theirs: a survivor whose sidecar read failed is
+    ///   missing from the claim set, and spending a set that is short by one
+    ///   hike is how a neighbour loses the map it downloaded for a valley with
+    ///   no signal. The hike is still deleted either way; its own tiles are
+    ///   then unclaimed, and the next launch trim reclaims them.
+    ///
+    /// A refused save puts all of it back, auto-save included, and says so —
+    /// so the caller can leave the screen exactly as the user left it.
+    @MainActor
+    static func delete(
+        _ hike: Hike,
+        among hikes: [Hike],
+        autoSave: AutoSaveController,
+        store: HikePhotoStore = .shared,
+        save: (ModelContext) throws -> Void = { try $0.save() }
+    ) -> Outcome {
+        let standDown = autoSave.hikeWillBeDeleted(hike)
+        let plan = hike.hasStoredTiles
+            ? StoredTileDeletionPlan(removing: hike, among: hikes)
+            : nil
+        do {
+            try delete([hike], store: store, save: save)
+        } catch {
+            if let standDown {
+                autoSave.hikeDeletionWasRefused(standDown, for: hike)
+            }
+            return .refused
+        }
+        return .committed(freeing: plan)
+    }
+
     /// Deletes these hikes, their sidecars and their photo files, in that
     /// order, and reports a commit that was refused.
     ///
