@@ -66,12 +66,10 @@ struct StoredTileDeletionTests {
         context = try Fixture.modelContext()
     }
 
-    /// An idle downloader of this suite's own: the deletion stands one down,
-    /// and reaching for the app's registry would stand down whatever another
-    /// suite happened to be running.
-    private func idleDownloader() -> OfflineTileDownloader {
-        OfflineTileDownloader(isOnline: { false }, registry: OfflineDownloadRegistry())
-    }
+    /// A registry of this suite's own. The deletion stands down every run in
+    /// the one it is handed, and the app's is shared with whatever another
+    /// suite happens to be downloading.
+    private let downloads = OfflineDownloadRegistry()
 
     /// Two hikes over the same ground, both saved, claiming by auto-saved key
     /// so the claim is exactly the two tiles on disk rather than a recomputed
@@ -107,7 +105,7 @@ struct StoredTileDeletionTests {
         let outcome = StoredTileDeletion.delete(
             storedTilesOf: deleting,
             autoSave: AutoSaveController(store: sandbox.store, drainInterval: nil),
-            downloader: idleDownloader(),
+            downloads: downloads,
             fetchingHikes: { [deleting, survivor] },
             save: { modelContext in
                 manifestAtCommit = (deleting.offlineDownloads.count, deleting.autoSavedTileKeys.count)
@@ -148,7 +146,7 @@ struct StoredTileDeletionTests {
         let outcome = StoredTileDeletion.delete(
             storedTilesOf: deleting,
             autoSave: AutoSaveController(store: sandbox.store, drainInterval: nil),
-            downloader: idleDownloader(),
+            downloads: downloads,
             fetchingHikes: { [deleting, survivor] },
             save: { _ in throw CocoaError(.fileWriteUnknown) }
         )
@@ -200,7 +198,7 @@ struct StoredTileDeletionTests {
         let outcome = StoredTileDeletion.delete(
             storedTilesOf: hike,
             autoSave: controller,
-            downloader: idleDownloader(),
+            downloads: downloads,
             fetchingHikes: { [hike] },
             save: { _ in throw CocoaError(.fileWriteUnknown) }
         )
@@ -221,20 +219,82 @@ struct StoredTileDeletionTests {
         #expect(sandbox.isSaved(Self.corridorKey))
     }
 
-    /// A download outlives the screen that started it, so the walker can reach
-    /// this button while tiles are still landing. A committed deletion stands
-    /// that run down — its tiles are precisely the ones no hike claims yet, so
-    /// left running it would claim back coverage that was just deleted — but a
-    /// *refused* one must not: nothing was deleted, so there is nothing for
-    /// the run to resurrect, and cancelling it would cost the walker a
-    /// download they never cancelled.
+    // MARK: A download the walker overtook
+
+    /// The run this button has to stand down is not the one on screen.
+    ///
+    /// A download outlives the screen that started it — that is what
+    /// ``OfflineDownloadClaim`` is for — so walking back to the list and into
+    /// the hike again leaves `HikeDetailView` holding a *fresh, idle*
+    /// downloader while the real run is still writing tiles. A stand-down
+    /// aimed at the screen's own downloader would cancel nothing, the run
+    /// would finish, and its claim would put back the coverage the walker
+    /// just deleted — pointing, in part, at files this plan had already
+    /// freed. So the deletion stands down the registry, which is where a run
+    /// says it is in flight regardless of what is on screen.
+    @Test("a committed deletion stands down a run started from a screen that has since gone")
+    func committedDeletionStandsDownTheRunItCannotSee() async throws {
+        let (deleting, survivor) = try sandboxWithSharedTile()
+        let held = HeldSaves()
+        // Started from the screen the walker has since left; the deletion is
+        // handed no reference to it, which is the whole point.
+        let abandonedRun = OfflineTileDownloader(
+            isOnline: { true },
+            registry: downloads,
+            saveTile: { _, _ in await held.save() }
+        )
+        // Spelled out rather than written inline, the way `HikeDetailView`
+        // builds it: the claim is a typed-throwing closure, and a literal at
+        // the call site infers an untyped one.
+        let claim: OfflineTileDownloader.Claim = { record in
+            try OfflineDownloadClaim.commit(record, for: deleting)
+        }
+        abandonedRun.start(
+            route: deleting.route,
+            source: Self.source,
+            claim: claim,
+        )
+        await abandonedRun.waitForPlanning()
+        try #require(abandonedRun.isRunning, "precondition: the run is in flight")
+        // What the screen asking for the deletion now holds: a downloader that
+        // has never run, and cancelling which would achieve nothing.
+        let onScreen = OfflineTileDownloader(isOnline: { false }, registry: downloads)
+        try #require(!onScreen.isRunning)
+
+        let outcome = StoredTileDeletion.delete(
+            storedTilesOf: deleting,
+            autoSave: AutoSaveController(store: sandbox.store, drainInterval: nil),
+            downloads: downloads,
+            fetchingHikes: { [deleting, survivor] }
+        )
+
+        guard case .committed = outcome else {
+            Issue.record("the deletion was refused")
+            return
+        }
+        #expect(abandonedRun.phase == .idle, "the deletion stands the run down before it can claim")
+
+        // Only now do the tiles the run had in flight come back — the window
+        // its claim would have landed in.
+        await held.release()
+        await abandonedRun.waitForCurrentRun()
+        #expect(
+            deleting.offlineDownloads.isEmpty,
+            "a deletion the walker asked for must not be undone by the run it interrupted"
+        )
+        #expect(deleting.autoSavedTileKeys.isEmpty)
+    }
+
+    /// The other side of it: a *refused* deletion must leave those runs alone.
+    /// Nothing was deleted, so there is nothing for them to resurrect, and
+    /// cancelling one would cost the walker a download they never cancelled.
     @Test("a refused deletion leaves a download in flight alone")
     func refusedSaveLeavesTheDownloadRunning() async throws {
         let (deleting, survivor) = try sandboxWithSharedTile()
         let held = HeldSaves()
         let downloader = OfflineTileDownloader(
             isOnline: { true },
-            registry: OfflineDownloadRegistry(),
+            registry: downloads,
             saveTile: { _, _ in await held.save() }
         )
         downloader.start(
@@ -248,7 +308,7 @@ struct StoredTileDeletionTests {
         let outcome = StoredTileDeletion.delete(
             storedTilesOf: deleting,
             autoSave: AutoSaveController(store: sandbox.store, drainInterval: nil),
-            downloader: downloader,
+            downloads: downloads,
             fetchingHikes: { [deleting, survivor] },
             save: { _ in throw CocoaError(.fileWriteUnknown) }
         )
@@ -283,7 +343,7 @@ struct StoredTileDeletionTests {
         let outcome = StoredTileDeletion.delete(
             storedTilesOf: deleting,
             autoSave: controller,
-            downloader: idleDownloader(),
+            downloads: downloads,
             fetchingHikes: { throw LibraryReadFailure() }
         )
 

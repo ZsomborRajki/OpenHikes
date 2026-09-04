@@ -177,7 +177,7 @@ struct StorageAccountingTests {
         let outcome = StoredTileDeletion.delete(
             storedTilesOf: hike,
             autoSave: controller,
-            downloader: OfflineTileDownloader(isOnline: { false }, registry: OfflineDownloadRegistry()),
+            downloads: OfflineDownloadRegistry(),
             fetchingHikes: { hikes }
         )
         guard case let .committed(deletionPlan) = outcome else {
