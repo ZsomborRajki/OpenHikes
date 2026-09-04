@@ -1,7 +1,7 @@
 // swift-tools-version: 6.2
 import PackageDescription
 
-/// Platforms track the app rather than trailing it. The app ships iOS 26.5
+/// Platforms track the app rather than trailing it. The app ships iOS 26.0
 /// only, so a shared target that still claimed iOS 18 would be refusing every
 /// API added since — silently, as an unavailability error at the one call site
 /// that reached for one. macOS and visionOS are named at the same level for

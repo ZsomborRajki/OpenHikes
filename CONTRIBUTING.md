@@ -24,7 +24,7 @@ does not fit it is better discussed before it is written.
 ## Setting up
 
 See [Requirements](README.md#requirements) and [Setup](README.md#setup). In
-short: Xcode 26.5 or later, iOS 26.5, and an Apple development team that can
+short: Xcode 26.5 or later, iOS 26.0, and an Apple development team that can
 sign the WeatherKit entitlement, the App Group, the iCloud container and push.
 
 `OpenHikes/Secrets.plist` holds the optional Stadia and Thunderforest keys. It

@@ -19,7 +19,7 @@ There is no backend and no OpenHikes account. Everything lives on the device, an
 
 ## Requirements
 
-- Xcode 26.5 or later, and iOS 26.5.
+- Xcode 26.5 or later, and iOS 26.0.
 - An Apple development team that can sign the WeatherKit entitlement, the shared App Group, the iCloud container and the push entitlement.
 - iPhone only. Every target sets `TARGETED_DEVICE_FAMILY = 1`.
 
