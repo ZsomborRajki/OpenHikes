@@ -23,6 +23,7 @@
 import Foundation
 @testable import OpenHikes
 import SwiftData
+import Synchronization
 import Testing
 
 @Suite("Hike import")
@@ -74,7 +75,7 @@ struct HikeImportTests {
     private func outcome(
         importing url: URL,
         into context: ModelContext,
-        save: (ModelContext) throws -> Void = { try $0.save() }
+        save: @Sendable (ModelContext) throws -> Void = { try $0.save() }
     ) async -> HikeImportOutcome {
         do throws(HikeImportFailure) {
             return .imported(
@@ -147,10 +148,10 @@ struct HikeImportTests {
         }
     }
 
-    /// The row goes back out with the failure. Left pending, it is a hike the
-    /// walker was told they don't have, waiting for whichever later save does
-    /// succeed to put it on the list without a word.
-    @Test("a refused save leaves no hike behind in the context")
+    /// The row goes with the failure. Left anywhere a later commit could pick
+    /// it up, it is a hike the walker was told they don't have, waiting for
+    /// whichever save does succeed to put it on the list without a word.
+    @Test("a refused save leaves no hike behind to land later")
     func refusedSaveLeavesNothingInserted() async throws {
         let sandbox = try makeSandbox()
         defer { try? FileManager.default.removeItem(at: sandbox) }
@@ -162,7 +163,8 @@ struct HikeImportTests {
                 throw CocoaError(.fileWriteUnknown)
             }
 
-            // The fetch the hikes list runs …
+            // The fetch the hikes list runs — the screen's own context,
+            // which is the one a `@Query` draws from …
             let remaining = try context.fetch(FetchDescriptor<Hike>())
             #expect(remaining.isEmpty)
             // … and then the commit that would have been the quiet second
@@ -176,6 +178,29 @@ struct HikeImportTests {
             afterALaterSave.isEmpty,
             "a save the walker was told failed must not land at the next one"
         )
+    }
+
+    /// Serializing an externally stored route is the longest thing an import
+    /// does — hundreds of milliseconds for a walk of a few hundred thousand
+    /// points — and it lands while the document picker is still dismissing.
+    /// The parse has always been off-main; the commit is the larger half and
+    /// has to be as well, which is a property of the seam rather than of any
+    /// one file size.
+    @Test("the commit does not run on the main thread")
+    func commitStaysOffTheMainThread() async throws {
+        let sandbox = try makeSandbox()
+        defer { try? FileManager.default.removeItem(at: sandbox) }
+        let file = try writeGPX(Self.ridgeGPX, in: sandbox)
+        let context = try openStore(in: sandbox)
+
+        let sawMainThread = Mutex(true)
+        let result = await outcome(importing: file, into: context) { writing in
+            sawMainThread.withLock { $0 = Thread.isMainThread }
+            try writing.save()
+        }
+
+        #expect(result.hike != nil)
+        #expect(!sawMainThread.withLock { $0 })
     }
 
     /// The alert has to name the half that actually failed: a GPX message
