@@ -24,8 +24,9 @@
 //  The two failures are not the same news either. A file that is here and
 //  unreadable may be readable in a moment, so that page offers to ask again or
 //  to take the row that claims the file out of the hike. A file that is not
-//  here has nothing to wait for: photo pixels stay on the device that took
-//  them — see *Settled decisions* in the repository instructions — so that
+//  here has nothing to wait for: photo pixels stay on the device the photo
+//  was added on — see *Settled decisions* in the repository instructions — so
+//  that
 //  page explains itself and offers nothing, because both of the other page's
 //  buttons would be lies about what pressing them does.
 //
@@ -393,8 +394,9 @@ private struct HikePhotoPage: View {
         } description: {
             Text(
                 """
-                OpenHikes keeps photo files on the device that took them \u{2014} \
-                only where and when the photo was taken travels with the hike.
+                OpenHikes keeps photo files on the device they were added \
+                on \u{2014} only where and when the photo was taken travels \
+                with the hike.
                 """
             )
         }

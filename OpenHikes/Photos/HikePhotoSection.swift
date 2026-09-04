@@ -26,10 +26,10 @@
 //  and vanishes reads as a glitch.
 //
 //  A tile that never will finish is a different placeholder. Photo files stay
-//  on the device that took them — see *Settled decisions* in the repository
-//  instructions — so on a second device the whole strip is photos whose pixels
-//  are elsewhere, and a tile that says so is the difference between an
-//  explanation and a row of broken pictures.
+//  on the device the photo was added on — see *Settled decisions* in the
+//  repository instructions — so on a second device the whole strip is photos
+//  whose pixels are elsewhere, and a tile that says so is the difference
+//  between an explanation and a row of broken pictures.
 //
 
 import SwiftUI

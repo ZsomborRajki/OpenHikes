@@ -73,6 +73,13 @@ final class PhotoCalloutPreview: UIControl {
     /// What the view is currently showing, so a decode that lands after the
     /// view has been recycled onto another pin is dropped rather than drawn.
     private var photoID: UUID?
+    /// What the last finished load found, or `nil` while one is in flight and
+    /// for a photo that drew.
+    ///
+    /// Kept because a reselect re-enters ``show(_:store:onTap:)`` for the same
+    /// pin and returns without loading again: the glyph on screen survives
+    /// that, and without this the sentence describing it would not.
+    private var unavailability: PhotoUnavailability?
     private var loadTask: Task<Void, Never>?
     private var onTap: ((UUID) -> Void)?
 
@@ -95,9 +102,15 @@ final class PhotoCalloutPreview: UIControl {
         onTap: @escaping (UUID) -> Void
     ) {
         self.onTap = onTap
-        accessibilityLabel = Self.label(for: pin)
+        // Recomputed on every call rather than only for a new photo: a pin's
+        // count changes under a preview that is still showing the same leading
+        // photo. What must *not* be lost with it is what the load found, which
+        // is why that is remembered rather than re-derived — the reselect
+        // below returns without asking the store again.
+        accessibilityLabel = Self.label(for: pin, unavailable: unavailability)
         guard photoID != pin.photo.id else { return }
         photoID = pin.photo.id
+        unavailability = nil
         showPlaceholder("photo")
         loadTask?.cancel()
         loadTask = Task { [weak self] in
@@ -111,6 +124,7 @@ final class PhotoCalloutPreview: UIControl {
                 // The callout is the one place a photo is shown without the
                 // user having asked for it, so it says the least it can and
                 // leaves the explanation to the page a tap opens.
+                unavailability = reason
                 showPlaceholder(Self.symbol(for: reason))
                 accessibilityLabel = Self.label(for: pin, unavailable: reason)
             case .loading:
@@ -192,12 +206,17 @@ final class PhotoCalloutPreview: UIControl {
     /// much to a sighted user, and this is the sentence that says it to
     /// everyone else. Still "open", because the page a tap opens is where the
     /// state is explained.
+    ///
+    /// `nil` is a picture that drew, or one still being decoded — both of
+    /// which the name alone describes.
     private static func label(
         for pin: PhotoMapPin,
-        unavailable reason: PhotoUnavailability
+        unavailable reason: PhotoUnavailability?
     ) -> String {
         let base = label(for: pin)
         switch reason {
+        case .none:
+            return base
         case .notOnThisDevice:
             return String(localized: "\(base), not on this device")
         case .unreadable:
