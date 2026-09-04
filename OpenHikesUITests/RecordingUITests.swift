@@ -214,11 +214,7 @@ nonisolated final class RecordingUITests: XCTestCase {
         XCTAssertTrue(
             points.waitForExistence(timeout: UITestTimeout.existence)
         )
-        walkRecordedTrace(
-            UITestMultiSectionFixture.trace,
-            countedBy: points,
-            timeout: Self.longTraceTimeout
-        )
+        walkRecordedTrace(UITestMultiSectionFixture.trace, countedBy: points)
         stopRecording(named: Self.reviewedHikeName, in: app)
 
         let title = element("review-section-title", in: app)
@@ -298,9 +294,6 @@ nonisolated final class RecordingUITests: XCTestCase {
     /// simulator, and saving writes the route plus its widget payload.
     private static let reviewTimeout: TimeInterval = 30
     private static let saveTimeout: TimeInterval = 20
-    /// Seventeen fixes at the walking pace, plus the redeliveries a rejected
-    /// fix costs.
-    private static let longTraceTimeout: TimeInterval = 150
     private static let reviewedHikeName = "Reviewed Route"
 
     @MainActor

@@ -444,13 +444,22 @@ extension XCTestCase {
         redeliver: () -> Void
     ) -> Bool {
         let deadline = Date().addingTimeInterval(timeout)
+        var nextDelivery = Date().addingTimeInterval(pace)
         while Date() < deadline {
             if let value = element.value as? String,
                let recorded = Int(value), recorded >= count {
                 return true
             }
-            Thread.sleep(forTimeInterval: pace)
-            redeliver()
+            // How often the count is re-read is not how often a fix is
+            // re-delivered. Reading at the pace meant a fix accepted a
+            // fraction of a second after it was handed over went unnoticed
+            // for a whole pace, and a seventeen-fix walk paid that on every
+            // one of them — sixty seconds of a hundred-and-fifty-second test.
+            if Date() >= nextDelivery {
+                redeliver()
+                nextDelivery = Date().addingTimeInterval(pace)
+            }
+            Thread.sleep(forTimeInterval: 0.25)
         }
         return false
     }
