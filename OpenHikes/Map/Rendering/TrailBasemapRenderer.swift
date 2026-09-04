@@ -113,10 +113,19 @@ actor TrailBasemapRenderer {
     /// cleared.
     private var generation = 0
 
-    /// - Parameter render: the snapshot boundary, defaulting to the real
-    ///   `MKMapSnapshotter` pass. Supplied only by tests; see ``Render``.
-    init(render: Render? = nil) {
+    /// The redraw seam, for the same reason ``Render`` is one: `WidgetCenter`
+    /// neither reports a reload nor replays it, so a suite can only tell that
+    /// this pass went through the recording gate if it is handed the sink.
+    private let widgetReload: TrailWidgetReload
+
+    /// - Parameters:
+    ///   - render: the snapshot boundary, defaulting to the real
+    ///     `MKMapSnapshotter` pass. Supplied only by tests; see ``Render``.
+    ///   - widgetReload: where a finished pass asks for the widget to be
+    ///     redrawn. Supplied only by tests; see ``TrailWidgetReload``.
+    init(render: Render? = nil, widgetReload: TrailWidgetReload = .system) {
         self.render = render ?? TrailBasemapRenderer.renderWithMapKit
+        self.widgetReload = widgetReload
     }
 
     /// Whether this pass is still the one whose results are wanted.
@@ -228,7 +237,7 @@ actor TrailBasemapRenderer {
         // release it — see ``TrailWidgetReload``. An actor rather than the
         // main actor, so the App Group read that decision costs is already off
         // the main thread.
-        TrailWidgetReload.requestUnlessRecording()
+        widgetReload.requestUnlessRecording()
     }
 
     /// Drops the rendered basemaps, and makes any render currently in flight

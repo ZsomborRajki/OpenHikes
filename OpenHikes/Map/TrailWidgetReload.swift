@@ -40,16 +40,38 @@ import WidgetKit
 /// what the widget draws, and they stay unconditional in
 /// `AppGroupRecordingSharedStateStore` — this is only about the feed that has
 /// lost the screen.
-nonisolated enum TrailWidgetReload {
-    /// - Returns: whether WidgetKit was actually asked, which is the only
-    ///   observable half. `WidgetCenter` neither reports a reload nor replays
-    ///   one, so a suite can assert on the decision or on nothing at all.
-    @discardableResult static func requestUnlessRecording() -> Bool {
+///
+/// A value with an injected sink rather than a free function, for the reason
+/// `TrailBasemapRenderer.Render` is one: `WidgetCenter` neither reports a
+/// reload nor replays it, so without a seam here the only assertable thing is
+/// this type in isolation — and a call site that went back to calling
+/// `WidgetCenter` directly would pass that test while spending the budget this
+/// exists to protect. ``system`` is what the app builds; a suite hands the
+/// tracker and the renderer a counter instead and drives the real paths.
+nonisolated struct TrailWidgetReload: Sendable {
+    /// What a *granted* request does. Only tests supply one.
+    typealias Reload = @Sendable () -> Void
+
+    /// The one the app uses, and the default every production call site takes.
+    static let system = Self()
+
+    private let reload: Reload
+
+    init(reload: @escaping Reload = {
+        WidgetCenter.shared.reloadTimelines(ofKind: TrailWidgetKind.id)
+    }) {
+        self.reload = reload
+    }
+
+    /// - Returns: whether the redraw was asked for, which is what the refusal
+    ///   is asserted through where a sink would be indistinguishable from
+    ///   silence.
+    @discardableResult func requestUnlessRecording() -> Bool {
         assertOffMainThread(
             "Reading the recording snapshot must stay off the main thread"
         )
         guard SharedStore.loadRecording() == nil else { return false }
-        WidgetCenter.shared.reloadTimelines(ofKind: TrailWidgetKind.id)
+        reload()
         return true
     }
 }
