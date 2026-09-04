@@ -98,6 +98,79 @@ struct SharedTrailSnapshotTests {
         #expect(!status.isEmpty)
     }
 
+    // MARK: Walks
+
+    private static func walk(
+        state: SharedTrailSnapshot.Walk.State = .active,
+        covered: Double = 0.5
+    ) -> SharedTrailSnapshot.Walk {
+        SharedTrailSnapshot.Walk(
+            state: state,
+            coveredFraction: covered,
+            furthestDistanceMeters: 5000,
+            activeSeconds: 1800,
+            startedAt: Date(timeIntervalSince1970: 1_000_000)
+        )
+    }
+
+    /// The return-leg case: position reads 62%, coverage reads 50%, and the
+    /// status line has to show the coverage and say that it is coverage.
+    @Test("during a walk the status line is coverage, captioned walked")
+    func statusDuringAWalkIsCoverage() {
+        var snapshot = Self.snapshot(total: 10_000, along: 6200)
+        snapshot.walk = Self.walk()
+        let status = snapshot.statusText
+        #expect(status.hasPrefix("50% walked"))
+        #expect(status.contains("left"))
+        #expect(!status.contains("62%"))
+        #expect(snapshot.progressFraction == 0.5, "and the bar draws the same number")
+        #expect(snapshot.fractionComplete == 0.62, "position is still there for whoever asks for it")
+    }
+
+    @Test("a paused walk says so before its coverage")
+    func pausedWalkSaysPaused() {
+        var snapshot = Self.snapshot(total: 10_000, along: 6200)
+        snapshot.walk = Self.walk(state: .paused)
+        #expect(snapshot.statusText.hasPrefix("Paused · 50% walked"))
+    }
+
+    @Test("a walk with no fix reports coverage and nothing left")
+    func walkWithoutFixReportsCoverageOnly() {
+        var snapshot = Self.snapshot(total: 10_000)
+        snapshot.walk = Self.walk(covered: 0.25)
+        #expect(snapshot.statusText == "25% walked")
+        #expect(snapshot.progressFraction == 0.25)
+    }
+
+    /// The walk key is optional, so every payload already in a container —
+    /// and every one a plain follow still writes — decodes with no walk and
+    /// no version bump.
+    @Test("a payload written without a walk key decodes as no walk")
+    func payloadWithoutWalkDecodes() throws {
+        let snapshot = Self.snapshot(total: 8000, along: 1234)
+        var object = try #require(
+            JSONSerialization.jsonObject(with: JSONEncoder().encode(snapshot)) as? [String: Any]
+        )
+        object.removeValue(forKey: "walk")
+        let decoded = try JSONDecoder().decode(
+            SharedTrailSnapshot.self,
+            from: JSONSerialization.data(withJSONObject: object)
+        )
+        #expect(decoded.walk == nil)
+        #expect(decoded.statusText == snapshot.statusText)
+    }
+
+    @Test("a walk survives the round trip through the App Group")
+    func walkRoundTrips() throws {
+        var snapshot = Self.snapshot(total: 8000, along: 1234)
+        snapshot.walk = Self.walk(state: .paused, covered: 0.4)
+        let decoded = try JSONDecoder().decode(
+            SharedTrailSnapshot.self,
+            from: JSONEncoder().encode(snapshot)
+        )
+        #expect(decoded.walk == snapshot.walk)
+    }
+
     // MARK: Crossing process boundaries
 
     @Test("a snapshot survives the round trip through the App Group")

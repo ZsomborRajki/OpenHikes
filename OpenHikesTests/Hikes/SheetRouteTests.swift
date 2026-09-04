@@ -5,6 +5,7 @@
 
 import Foundation
 @testable import OpenHikes
+import SwiftData
 import Testing
 
 @Suite("Sheet route")
@@ -65,6 +66,49 @@ struct SheetRouteTests {
         let remaining = path.filter { !$0.shows(hikeID: deleted.id) }
 
         #expect(remaining == [.hike(survivor)])
+    }
+
+    /// A walk's summary is its hike's screen, so deleting the hike pops it —
+    /// through the rule `MapSheet.delete` itself calls.
+    @Test("deleting a hike pops its walk summaries with it")
+    func walkRouteBelongsToItsHike() throws {
+        let context = try Fixture.modelContext()
+        let deleted = Fixture.hike(in: context, title: "Ridge Loop")
+        let survivor = Fixture.hike(in: context, title: "Valley Walk")
+        let walk = HikeWalk(
+            hikeID: deleted.id,
+            startedAt: .now,
+            endedAt: .now,
+            activeSeconds: 600,
+            coveredIntervals: [0, 500],
+            furthestDistanceMeters: 500,
+            routeDistanceMeters: 1000,
+            endReason: .ended
+        )
+        context.insert(walk)
+        walk.hike = deleted
+        let survivorWalk = HikeWalk(
+            hikeID: survivor.id,
+            startedAt: .now,
+            endedAt: .now,
+            activeSeconds: 600,
+            coveredIntervals: [0, 500],
+            furthestDistanceMeters: 500,
+            routeDistanceMeters: 1000,
+            endReason: .ended
+        )
+        context.insert(survivorWalk)
+        survivorWalk.hike = survivor
+        var selectedHike: Hike? = deleted
+        var path: [SheetRoute] = [.hike(deleted), .walk(walk), .hike(survivor), .walk(survivorWalk)]
+
+        let wasSelected = SheetRoute.removeHike(deleted.id, selectedHike: &selectedHike, from: &path)
+
+        #expect(wasSelected)
+        #expect(path == [.hike(survivor), .walk(survivorWalk)])
+        #expect(SheetRoute.walk(walk).shows(hikeID: deleted.id))
+        #expect(!SheetRoute.walk(walk).shows(hikeID: survivor.id))
+        #expect(!SheetRoute.walk(walk).prefersFullHeight)
     }
 
     @Test("recording is nobody's hike screen")

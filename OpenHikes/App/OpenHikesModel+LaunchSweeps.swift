@@ -159,3 +159,43 @@ extension OpenHikesModel {
         store.reclaimOrphans(claimedBy: claimed)
     }
 }
+
+// MARK: - The walk left open
+
+extension OpenHikesModel {
+    /// What a launch found in the sidecar about a walk under way.
+    enum OpenWalkAtLaunch: Equatable {
+        /// Nothing was open.
+        case absent
+        /// The sidecar could not be read. Closes nothing, the way a failed
+        /// claim fetch trims no tile: a walk that cannot be seen is not a
+        /// walk that is over.
+        case unreadable
+        /// A walk recent enough to still be the walker's, to adopt.
+        case resume(HikeLocalState, TrailWalkRecord)
+        /// A walk older than ``TrailWalkPolicy/staleAtLaunchAfter``, to close
+        /// as abandoned — kept if it covered enough, with no lingering panel.
+        case abandon(HikeLocalState, TrailWalkRecord)
+    }
+
+    /// The rule itself, closure-driven and `static` for the reason the two
+    /// sweeps above are: the branch that matters is the failing one, and
+    /// nothing makes a `ModelContext` throw on demand.
+    ///
+    /// The whole sidecar is scanned rather than queried, because the column
+    /// is a `Codable` value and an in-memory filter over rows that number one
+    /// per hike with tiles is cheaper than a predicate SwiftData might not
+    /// honour. One open walk at a time is the rule; if two are ever found,
+    /// the newest is the one taken and the rest are left for the next sweep.
+    static func openWalkAtLaunch(
+        now: Date,
+        fetchingLocalStates fetch: () throws -> [HikeLocalState]
+    ) -> OpenWalkAtLaunch {
+        guard let states = try? fetch() else { return .unreadable }
+        let open = states
+            .compactMap { state in state.walkInProgress.map { (state, $0) } }
+            .max { $0.1.startedAt < $1.1.startedAt }
+        guard let (state, record) = open else { return .absent }
+        return record.isStale(at: now) ? .abandon(state, record) : .resume(state, record)
+    }
+}

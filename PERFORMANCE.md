@@ -132,7 +132,7 @@ two seconds whatever the app is doing; the other two are gauges whose "count" is
 a number of megabytes and a number of seconds.
 
 A finding the whole app shares is stated **once**, naming the scenarios that saw
-it and the worst number among them. Nine scenarios run against one app, so a
+it and the worst number among them. Ten scenarios run against one app, so a
 launch cost every one of them pays is one fact, not nine findings.
 
 ## What a hike costs a battery

@@ -110,6 +110,7 @@ extension BackgroundTrailTracker {
             _ fix: SharedTrailSnapshot.LiveFix?,
             input: SnapshotInput,
             elevation: RouteElevationSummary,
+            walk: SharedTrailSnapshot.Walk?,
             ifCurrent revision: UInt64
         ) -> LiveFixWrite? {
             assertOffMainThread("Widget live-fix writes must stay off the main thread")
@@ -125,8 +126,34 @@ extension BackgroundTrailTracker {
             }
             guard var snapshot = stored, generation.matches(revision) else { return nil }
             snapshot.liveFix = fix
+            snapshot.walk = walk
             snapshot.updatedAt = .now
             SharedStore.save(snapshot)
             return LiveFixWrite(snapshot: snapshot, isNewTrail: isNewTrail)
         }
-    }}
+
+        /// Replaces just the walk portion of the stored snapshot, leaving the
+        /// fix where it is — a pause does not move the walker.
+        ///
+        /// Returns what landed, or `nil` when the store holds a different
+        /// trail: a walk's state belongs beside its own trail and nowhere
+        /// else, and the selection publication that put the other trail
+        /// there has already been deferred by the tracker while the walk
+        /// lives, so this is a guard rather than a path.
+        func applyWalk(
+            _ walk: SharedTrailSnapshot.Walk?,
+            hikeID: UUID,
+            ifCurrent revision: UInt64
+        ) -> SharedTrailSnapshot? {
+            assertOffMainThread("Widget walk writes must stay off the main thread")
+            guard generation.matches(revision),
+                  var snapshot = SharedStore.load(),
+                  snapshot.hikeID == hikeID
+            else { return nil }
+            snapshot.walk = walk
+            snapshot.updatedAt = .now
+            SharedStore.save(snapshot)
+            return snapshot
+        }
+    }
+}

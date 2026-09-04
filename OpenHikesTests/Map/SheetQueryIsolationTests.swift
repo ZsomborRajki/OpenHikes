@@ -169,6 +169,7 @@ struct SheetQueryIsolationTests {
             selectedHike: .constant(nil),
             presentation: SheetPresentation(detent: .large),
             highlight: RouteHighlight(),
+            walkHighlight: WalkHighlight(),
             mapController: MapController(),
             photoCapture: PhotoCaptureController(),
             photoPins: PhotoMapPinController()
@@ -184,6 +185,7 @@ struct SheetQueryIsolationTests {
             isCompact: false,
             completer: SearchCompleter(),
             recorder: HikeRecorder(container: container, automaticallyRecovers: false),
+            walkSession: TrailWalkSession(context: ModelContext(container)),
             selectedHikeID: nil,
             onOpen: { _ in /* unused */ },
             onSelectResult: { _ in /* unused */ },

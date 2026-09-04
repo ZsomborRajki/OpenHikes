@@ -38,6 +38,11 @@ struct MapSheetHikes: View, Equatable {
     let isCompact: Bool
     var completer: SearchCompleter
     var recorder: HikeRecorder
+    /// Read for the one thing about a row a walk changes: its `Active` /
+    /// `Paused` badge, in the recording badge's shape. Only the coarse
+    /// properties are read — the ones that change on a tap — so a fix that
+    /// extends coverage never reaches this body.
+    var walkSession: TrailWalkSession
     let selectedHikeID: UUID?
     let onOpen: (Hike) -> Void
     /// A hike tapped in the search results: the caller clears the field and
@@ -74,6 +79,7 @@ struct MapSheetHikes: View, Equatable {
             && lhs.selectedHikeID == rhs.selectedHikeID
             && lhs.completer === rhs.completer
             && lhs.recorder === rhs.recorder
+            && lhs.walkSession === rhs.walkSession
     }
 
     var body: some View {
@@ -217,7 +223,7 @@ private extension MapSheetHikes {
                     HikeRow(
                         hike: hike,
                         isSelected: hike.id == selectedHikeID,
-                        status: recordingStatus(for: hike)
+                        status: status(for: hike)
                     )
                         .contentShape(.rect)
                 }
@@ -304,7 +310,7 @@ private extension MapSheetHikes {
                         HikeRow(
                             hike: hike,
                             isSelected: hike.id == selectedHikeID,
-                            status: recordingStatus(for: hike)
+                            status: status(for: hike)
                         )
                         .contentShape(.rect)
                     }
@@ -351,9 +357,28 @@ private extension MapSheetHikes {
     }
 }
 
-// MARK: - Recording state
+// MARK: - Recording and walk state
 
 private extension MapSheetHikes {
+    /// A recording's badge outranks a walk's, as it does on every surface —
+    /// though a hike can only carry one of the two, since a recording's own
+    /// draft never gets a walk.
+    func status(for hike: Hike) -> HikeRow.Status? {
+        recordingStatus(for: hike) ?? walkStatus(for: hike)
+    }
+
+    /// `Active` / `Paused`, exactly as a recording's row carries
+    /// `Recording` / `Paused`: the one thing about the row that changes, so a
+    /// walk left running by mistake is visible from the list and one tap from
+    /// the controls that end it.
+    func walkStatus(for hike: Hike) -> HikeRow.Status? {
+        guard walkSession.walkedHikeID == hike.id, let phase = walkSession.phase else { return nil }
+        return switch phase {
+        case .following: HikeRow.Status(title: "Active", tint: hike.tintOpaque)
+        case .paused: HikeRow.Status(title: "Paused", tint: .secondary)
+        }
+    }
+
     func recordingStatus(for hike: Hike) -> HikeRow.Status? {
         guard belongsToActiveRecording(hike) else { return nil }
         guard hike.id == recorder.currentHike?.id else { return HikeRow.Status(title: "Recording", tint: .red) }

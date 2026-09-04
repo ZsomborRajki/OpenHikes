@@ -114,9 +114,15 @@ nonisolated enum OpenHikesSchemaV1: OpenHikesVersionedSchema {
 /// diligence. Before changing the persisted shape again, freeze this version
 /// the way ``OpenHikesSchemaV1`` is frozen — nested model copies, nested
 /// copies of the value types they encode — then add V3 and its stage.
+///
+/// Walks were added to this version in place rather than as a V3: the
+/// `HikeWalk` entity and the sidecar's `walkInProgress` column are both
+/// additive, and at the time no install carried a V2 store worth migrating —
+/// the mirrored container was reset alongside. A store written before them
+/// still opens, through the lightweight migration SwiftData infers.
 nonisolated enum OpenHikesSchemaV2: OpenHikesVersionedSchema {
     static var versionIdentifier: Schema.Version { Schema.Version(2, 0, 0) }
-    static var hikeModels: [any PersistentModel.Type] { [Hike.self] }
+    static var hikeModels: [any PersistentModel.Type] { [Hike.self, HikeWalk.self] }
     static var localStateModels: [any PersistentModel.Type] { [HikeLocalState.self] }
 }
 

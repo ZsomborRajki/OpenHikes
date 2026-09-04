@@ -339,6 +339,39 @@ final class BackgroundDeliveryTests {
         await retainedTracker?.waitForLiveFixPublish()
     }
 
+    /// A walk left open by the last launch outranks the last selection: the
+    /// relaunched process restores the walk, pins the tracker to its hike,
+    /// and a significant-change fix extends its coverage — the feed that
+    /// keeps a walk honest with the phone in a pocket.
+    @Test("a fix delivered after a relaunch extends the walk left open, not the selection")
+    func backgroundFixExtendsTheOpenWalk() async throws {
+        let walked = Fixture.hike(in: context, title: "Walked", route: Fixture.ridgeRoute)
+        let profile = RouteProfile(route: walked.route)
+        var record = TrailWalkRecord(
+            hikeID: walked.id,
+            routeDistanceMeters: profile.totalDistanceMeters,
+            startedAt: .now
+        )
+        record.coverage.record(distance: profile.distances[0])
+        record.coverage.record(distance: profile.distances[1])
+        walked.walkInProgress = record
+        try context.save()
+        // The selection moved on to another trail before the kill.
+        let compared = selectedHike(route: Fixture.loopRoute)
+        let tracker = relaunchedTracker()
+        let session = TrailWalkSession(context: context, tracker: tracker)
+        session.restoreAtLaunch()
+        #expect(tracker.trackedHikeID == walked.id, "the walk's hike, not \(compared.title)")
+        let before = session.coveredFraction
+
+        await deliver(fix(at: profile.coordinates[2]))
+
+        #expect(session.coveredFraction > before)
+        let snapshot = try #require(SharedStore.load())
+        #expect(snapshot.hikeID == walked.id)
+        #expect(snapshot.walk?.coveredFraction == session.coveredFraction)
+    }
+
     /// The whole feature in one test: woken with no in-memory state, the app
     /// matches the fix against the hike `UserDefaults` says was selected and
     /// publishes progress along it.

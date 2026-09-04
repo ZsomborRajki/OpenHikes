@@ -65,50 +65,6 @@ protocol SignificantLocationMonitor: AnyObject {
     func stopSignificantLocationUpdates()
 }
 
-extension CLLocationManager: SignificantLocationMonitor {
-    var isAlwaysAuthorized: Bool {
-        #if os(iOS)
-        authorizationStatus == .authorizedAlways
-        #else
-        false
-        #endif
-    }
-
-    var canRequestAlwaysAccess: Bool {
-        #if os(iOS)
-        switch authorizationStatus {
-        case .notDetermined, .authorizedWhenInUse: true
-        default: false
-        }
-        #else
-        false
-        #endif
-    }
-
-    var monitorDelegate: CLLocationManagerDelegate? {
-        get { delegate }
-        set { delegate = newValue }
-    }
-
-    func requestAlwaysAccess() {
-        #if os(iOS)
-        requestAlwaysAuthorization()
-        #endif
-    }
-
-    func startSignificantLocationUpdates() {
-        #if os(iOS)
-        startMonitoringSignificantLocationChanges()
-        #endif
-    }
-
-    func stopSignificantLocationUpdates() {
-        #if os(iOS)
-        stopMonitoringSignificantLocationChanges()
-        #endif
-    }
-}
-
 @Observable
 final class BackgroundTrailTracker: NSObject {
     private let monitor: any SignificantLocationMonitor
@@ -125,7 +81,22 @@ final class BackgroundTrailTracker: NSObject {
     /// The hike background delivery should match fixes against. Seeded at
     /// launch from `SettingsKey.lastSelectedHikeID` (written by `OpenHikesModel`)
     /// since a background relaunch has no in-memory selection to read.
-    private var trackedHikeID: UUID?
+    ///
+    /// Pinned to the walked hike while a walk is under way — see
+    /// ``walkDidStart(hikeID:)``.
+    private(set) var trackedHikeID: UUID?
+    /// The hike being walked, which outranks the selection for as long as
+    /// the walk lives: a walker who locks the phone, or who opens another
+    /// trail to compare it, keeps accruing coverage on significant-change
+    /// updates against the trail they are actually on.
+    private(set) var walkedHikeID: UUID?
+    /// A selection change that arrived while a walk held the tracked hike,
+    /// applied when the walk ends. A box rather than a bare optional because
+    /// "deselected" and "never changed" are different answers.
+    private var deferredSelection: DeferredSelection?
+    /// Where a background match's coverage goes. Weak because the session
+    /// holds this tracker, and both live for the app's life either way.
+    weak var walkSession: TrailWalkSession?
     /// Invalidates detached selection work when a newer selection arrives.
     private var selectionRevision: UInt64 = 0
     private var selectionPublishTask: Task<Void, Never>?
@@ -296,6 +267,13 @@ final class BackgroundTrailTracker: NSObject {
     /// values on-main, then prepares and writes the widget payload off-main so
     /// a long GPX cannot consume most of the tap's frame.
     func hikeSelectionChanged(to hike: Hike?) {
+        // A walk holds the tracked hike, the widget and the Lock Screen until
+        // it ends — opening another trail to compare it is not leaving the
+        // walk. The selection is remembered and applied at the end.
+        if walkedHikeID != nil {
+            deferredSelection = DeferredSelection(hike: hike)
+            return
+        }
         // Before the id changes, so the activity that comes down is the one
         // for the trail being left rather than a lookup against the new one.
         if hike?.id != trackedHikeID { endFollowActivity(hikeID: nil) }
@@ -432,10 +410,16 @@ final class BackgroundTrailTracker: NSObject {
 
     /// Called from `HikeDetailView`'s auto-follow loop, which advances once per
     /// published fix. Throttled internally — does not write on every call.
+    ///
+    /// - Parameter walk: what the walk along this hike has recorded so far,
+    ///   or `nil` when nothing is being walked. Written into the snapshot
+    ///   beside the fix, so the widget and the Lock Screen read coverage and
+    ///   position from the same bytes.
     func publishLiveFix(
         hike: Hike,
         profile: RouteProfile,
-        match: (distanceAlongRoute: Double, offRouteMeters: Double)?
+        match: (distanceAlongRoute: Double, offRouteMeters: Double)?,
+        walk: SharedTrailSnapshot.Walk? = nil
     ) {
         // The first poll waits for selection publication in HikeDetailView.
         // Keep this guard as a backstop for any other caller; the next poll
@@ -467,7 +451,7 @@ final class BackgroundTrailTracker: NSObject {
         // them happens off it.
         let input = SnapshotInput(hike: hike)
         guard isOnRoute, let match, let coordinate = profile.coordinate(atDistance: match.distanceAlongRoute) else {
-            updateStoredLiveFix(nil, input: input, elevation: profile.elevation)
+            updateStoredLiveFix(nil, input: input, elevation: profile.elevation, walk: walk)
             return
         }
         lastMatchedDistance = match.distanceAlongRoute
@@ -480,7 +464,8 @@ final class BackgroundTrailTracker: NSObject {
                 elevationMeters: profile.sample(atDistance: match.distanceAlongRoute)?.elevation
             ),
             input: input,
-            elevation: profile.elevation
+            elevation: profile.elevation,
+            walk: walk
         )
     }
 
@@ -548,8 +533,21 @@ final class BackgroundTrailTracker: NSObject {
             guard let matched, selectionRevision == revision, trackedHikeID == hikeID else { return }
             // An unmatched fix leaves the reference alone: it says nothing
             // about where along the route the walker is.
-            if let distance = matched.matchedDistance { lastMatchedDistance = distance }
-            updateStoredLiveFix(matched.fix, input: matched.input, elevation: matched.elevation)
+            if let distance = matched.matchedDistance {
+                lastMatchedDistance = distance
+                // Coverage accrues from here too — this is the feed that
+                // keeps a walk honest while the phone is in a pocket.
+                walkSession?.recordBackgroundMatch(hikeID: hikeID, distance: distance, at: timestamp)
+            }
+            // A paused walk neither extends the union nor publishes: the
+            // widget already says Paused, and a moving dot would contradict it.
+            guard walkSession?.publishes(hikeID: hikeID) ?? true else { return }
+            updateStoredLiveFix(
+                matched.fix,
+                input: matched.input,
+                elevation: matched.elevation,
+                walk: walkSession?.payload(for: hikeID)
+            )
         }
     }
 
@@ -559,6 +557,64 @@ final class BackgroundTrailTracker: NSObject {
     private func finishBackgroundMatch(sequence: UInt64) {
         guard backgroundMatchSequence == sequence else { return }
         backgroundMatchTask = nil
+    }
+
+    // MARK: Walks
+
+    /// A selection remembered while a walk held the tracked hike.
+    struct DeferredSelection {
+        let hike: Hike?
+    }
+
+    /// Pins the tracked hike to the one being walked.
+    ///
+    /// A walk starts on a matched fix in the walked hike's own detail view,
+    /// so the two already agree — except after a relaunch, where the tracked
+    /// hike was seeded from the *last selection* and the walk restored from
+    /// disk is the one a background fix has to be matched against. That is
+    /// the relaunch this pin exists for.
+    func walkDidStart(hikeID: UUID) {
+        walkedHikeID = hikeID
+        guard trackedHikeID != hikeID else { return }
+        trackedHikeID = hikeID
+        lastMatchedDistance = nil
+        lastForegroundPublish = nil
+        lastStatusFlipPublish = nil
+        syncMonitoring()
+    }
+
+    /// Releases the pin, clears the walk from the widget, ends the Lock
+    /// Screen panel — lingering with `final`, or at once with `nil` — and
+    /// applies whatever selection arrived meanwhile.
+    ///
+    /// - Parameter final: the walk's closing figures, for the panel to show
+    ///   for `HikeLiveActivityController.finishedDismissAfter`. `nil` for a
+    ///   walk that was abandoned or not kept, which leaves nothing behind
+    ///   — the same rule a discarded recording follows.
+    func walkDidEnd(final: SharedTrailSnapshot.Walk?) {
+        guard let hikeID = walkedHikeID else { return }
+        walkedHikeID = nil
+        updateStoredWalk(nil, hikeID: hikeID) { [weak self] snapshot in
+            guard let self else { return }
+            var closing = snapshot
+            closing.walk = final
+            endFollowActivity(
+                hikeID: hikeID,
+                finalState: final.map { _ in .init(following: closing) },
+                dismissAfter: final == nil ? nil : HikeLiveActivityController.finishedDismissAfter
+            )
+        }
+        if let deferred = deferredSelection {
+            deferredSelection = nil
+            hikeSelectionChanged(to: deferred.hike)
+        }
+    }
+
+    /// Puts a pause or a resume in front of the walker at once.
+    func walkStateDidChange(_ walk: SharedTrailSnapshot.Walk, hikeID: UUID) {
+        updateStoredWalk(walk, hikeID: hikeID) { [weak self] snapshot in
+            self?.publishFollowActivity(snapshot)
+        }
     }
 }
 
@@ -589,7 +645,8 @@ extension BackgroundTrailTracker {
     private func updateStoredLiveFix(
         _ fix: SharedTrailSnapshot.LiveFix?,
         input: SnapshotInput,
-        elevation: RouteElevationSummary
+        elevation: RouteElevationSummary,
+        walk: SharedTrailSnapshot.Walk?
     ) {
         let revision = selectionRevision
         let previous = fixPublishTask
@@ -609,6 +666,7 @@ extension BackgroundTrailTracker {
                       fix,
                       input: input,
                       elevation: elevation,
+                      walk: walk,
                       ifCurrent: revision
                   ),
                   selectionRevision == revision
@@ -618,6 +676,37 @@ extension BackgroundTrailTracker {
             // Only when the trail itself changed. A moving position needs no
             // new basemap — that's the whole reason images are affordable here.
             if write.isNewTrail { refreshBasemaps(for: write.snapshot) }
+        }
+    }
+
+    /// Replaces just the walk portion of the stored snapshot — a pause, a
+    /// resume, an end — leaving the fix and the trail as they are, and hands
+    /// what landed to `then` on the same chain the fixes ride.
+    ///
+    /// The status-change bypass for a walk, in effect: the widget is redrawn
+    /// and the Lock Screen offered the new run state at once, through the
+    /// same funnel a fix goes through, so a Paused that arrives between two
+    /// fixes cannot be overwritten by the earlier of them landing late.
+    func updateStoredWalk(
+        _ walk: SharedTrailSnapshot.Walk?,
+        hikeID: UUID,
+        then completion: @escaping @MainActor (SharedTrailSnapshot) -> Void = { _ in /* no-op default */ }
+    ) {
+        let revision = selectionRevision
+        let previous = fixPublishTask
+        let pendingSelection = selectionPublishTask
+        fixPublishSequence &+= 1
+        let sequence = fixPublishSequence
+        fixPublishTask = Task { [weak self] in
+            defer { self?.finishFixPublish(sequence: sequence) }
+            await previous?.value
+            await pendingSelection?.value
+            guard let self,
+                  let snapshot = await snapshotWriter.applyWalk(walk, hikeID: hikeID, ifCurrent: revision),
+                  selectionRevision == revision
+            else { return }
+            await snapshotWriter.reloadWidget()
+            completion(snapshot)
         }
     }
 
@@ -652,174 +741,6 @@ extension BackgroundTrailTracker {
             awaitedWrite = fixPublishSequence
             await task.value
         }
-    }
-}
-
-/// Preparing what the widget stores, kept out of the tracker's own body:
-/// none of it touches the tracker's state, and all of it runs off the main
-/// thread.
-extension BackgroundTrailTracker {
-    // Internal rather than private because `SnapshotWriter` names it, and
-    // that actor now lives in its own file — the same trade
-    // `TrailBasemapRenderer.RenderInput` makes for `Render`.
-    nonisolated struct SnapshotInput: Sendable {
-        let hikeID: UUID
-        let title: String
-        let tintHex: String
-        let totalDistanceMeters: Double
-        let route: [RouteCoordinate]
-
-        init(hike: Hike) {
-            hikeID = hike.id
-            title = hike.title
-            tintHex = hike.tintHex
-            totalDistanceMeters = hike.distanceMeters
-            route = hike.route
-        }
-    }
-
-    /// What a live-fix write actually put in the store, so the caller can
-    /// decide whether the widget's basemaps need re-rendering without reading
-    /// the file back to find out.
-    nonisolated struct LiveFixWrite: Sendable {
-        let snapshot: SharedTrailSnapshot
-        let isNewTrail: Bool
-    }
-
-    /// A background fix projected onto its route.
-    nonisolated private struct BackgroundMatch: Sendable {
-        /// The hike the fix was matched against, reduced to values off the
-        /// main actor so the write path never has to reach back for it.
-        let input: SnapshotInput
-        /// Carried so a rebuild of the stored trail doesn't walk the route a
-        /// second time to recompute what this pass already has.
-        let elevation: RouteElevationSummary
-        /// The published position, or `nil` when the fix did not land on the
-        /// trail.
-        let fix: SharedTrailSnapshot.LiveFix?
-        /// Where matching should continue from next time, or `nil` to keep the
-        /// existing reference.
-        let matchedDistance: Double?
-    }
-
-    /// The one hop this type makes off the main actor, and the only place its
-    /// off-main work is entered from.
-    ///
-    /// `@concurrent` rather than `Task.detached`: the work stays inside the
-    /// caller's task, so cancelling that task reaches the `Task.isCancelled`
-    /// guards in `buildSnapshot` directly. Detached, those guards would read
-    /// the *worker's* cancellation state and could never fire — the
-    /// cancellation had to be forwarded by hand through a
-    /// `withTaskCancellationHandler`, and even then only landed between the
-    /// stages rather than inside the route-sized work.
-    ///
-    /// Its own function so the guarantee has somewhere to be tested at all.
-    /// What it prevents is invisible at the call site and expensive in the
-    /// field: a `Task {}` started from a method on this `@MainActor` type
-    /// looks exactly like `Task.detached` and runs its body on the main
-    /// thread — see `CloudSyncCoordinator.offMainThread(_:)`, which exists for
-    /// the same reason after that mistake shipped once.
-    @concurrent
-    nonisolated static func offMainThread<T: Sendable>(
-        _ work: @Sendable () -> T
-    ) async -> T {
-        assertOffMainThread("The widget feed's route and App Group work must stay off the main thread")
-        return work()
-    }
-
-    /// Reads the tracked hike and projects a background fix onto its route.
-    ///
-    /// The read belongs here rather than at the call site because it is the
-    /// larger half: fetching a five-hour hike materialises its externally
-    /// stored route before any of the arithmetic below can start, and that
-    /// measured worse than the two O(route points) passes that follow it.
-    /// Doing it here is safe rather than clever — `ModelContainer` is
-    /// `Sendable`, and the `ModelContext` built from it is created, used and
-    /// discarded inside this one call, so neither it nor the non-`Sendable`
-    /// `Hike` it vends ever crosses an isolation boundary. Only the
-    /// ``SnapshotInput`` of values taken from that hike leaves.
-    ///
-    /// Returns `nil` when the hike is gone or too short to match against.
-    nonisolated private static func match(
-        hikeID: UUID,
-        in container: ModelContainer,
-        to coordinate: CLLocationCoordinate2D,
-        near referenceDistance: Double?,
-        heading: CLLocationDirection?,
-        timestamp: Date
-    ) -> BackgroundMatch? {
-        assertOffMainThread("Reading a hike for the widget feed must stay off the main thread")
-        let context = ModelContext(container)
-        let descriptor = FetchDescriptor<Hike>(predicate: #Predicate { $0.id == hikeID })
-        guard let hike = (try? context.fetch(descriptor))?.first, hike.pointCount > 1 else { return nil }
-        let input = SnapshotInput(hike: hike)
-        let profile = RouteProfile(route: input.route)
-        guard let match = profile.nearestPoint(
-                to: coordinate,
-                near: referenceDistance,
-                heading: heading
-              ),
-              match.offRouteMeters <= RouteProfile.followMatchThresholdMeters,
-              let matched = profile.coordinate(atDistance: match.distanceAlongRoute) else {
-            return BackgroundMatch(input: input, elevation: profile.elevation, fix: nil, matchedDistance: nil)
-        }
-        return BackgroundMatch(
-            input: input,
-            elevation: profile.elevation,
-            fix: SharedTrailSnapshot.LiveFix(
-                coordinate: .init(latitude: matched.latitude, longitude: matched.longitude),
-                distanceAlongRouteMeters: match.distanceAlongRoute,
-                offRouteMeters: match.offRouteMeters,
-                timestamp: timestamp,
-                elevationMeters: profile.sample(atDistance: match.distanceAlongRoute)?.elevation
-            ),
-            matchedDistance: match.distanceAlongRoute
-        )
-    }
-
-    nonisolated private static func buildSnapshotOffMain(
-        from input: SnapshotInput,
-        liveFix: SharedTrailSnapshot.LiveFix?
-    ) async -> SharedTrailSnapshot? {
-        await offMainThread { buildSnapshot(from: input, liveFix: liveFix) }
-    }
-
-    nonisolated private static func buildSnapshot(
-        from input: SnapshotInput,
-        liveFix: SharedTrailSnapshot.LiveFix?
-    ) -> SharedTrailSnapshot? {
-        guard !Task.isCancelled else { return nil }
-        let profile = RouteProfile(route: input.route)
-        guard !Task.isCancelled else { return nil }
-        return buildSnapshot(
-            from: input,
-            elevation: profile.elevation,
-            liveFix: liveFix
-        )
-    }
-
-    /// Internal for the reason ``SnapshotInput`` is: `SnapshotWriter` rebuilds
-    /// through it, from its own file.
-    nonisolated static func buildSnapshot(
-        from input: SnapshotInput,
-        elevation: RouteElevationSummary,
-        liveFix: SharedTrailSnapshot.LiveFix?
-    ) -> SharedTrailSnapshot? {
-        guard !Task.isCancelled else { return nil }
-        return SharedTrailSnapshot(
-            hikeID: input.hikeID,
-            title: input.title,
-            tintHex: input.tintHex,
-            totalDistanceMeters: input.totalDistanceMeters,
-            polyline: decimate(input.route) { coordinate in
-                SharedTrailSnapshot.CodableCoordinate(latitude: coordinate.latitude, longitude: coordinate.longitude)
-            },
-            elevationLowMeters: elevation.lowMeters,
-            elevationHighMeters: elevation.highMeters,
-            elevationGainMeters: elevation.gainMeters,
-            elevationLossMeters: elevation.lossMeters,
-            liveFix: liveFix
-        )
     }
 }
 

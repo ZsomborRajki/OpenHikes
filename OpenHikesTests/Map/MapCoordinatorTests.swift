@@ -25,6 +25,7 @@ import Testing
 @Suite("Map coordinator")
 struct MapCoordinatorTests {
     private let highlight = RouteHighlight()
+    private let walkHighlight = WalkHighlight()
     private let recordingTrace = RecordingTrace()
     /// Internal, like `mapController` below, so the tracking-button tests get
     /// their own file — see `MapCoordinatorTests+SheetInsets.swift`.
@@ -78,6 +79,7 @@ struct MapCoordinatorTests {
             route: route,
             routeStyle: routeStyle,
             highlight: highlight,
+            walkHighlight: walkHighlight,
             recordingTrace: recordingTrace,
             sheetMetrics: sheetMetrics,
             tileSource: tileSource,

@@ -49,6 +49,20 @@ struct HikeActivityPayloadTests {
         )
     }
 
+    private static func walk(
+        state: SharedTrailSnapshot.Walk.State = .active,
+        covered: Double = 0.5,
+        activeSeconds: TimeInterval = 2700
+    ) -> SharedTrailSnapshot.Walk {
+        SharedTrailSnapshot.Walk(
+            state: state,
+            coveredFraction: covered,
+            furthestDistanceMeters: 6200,
+            activeSeconds: activeSeconds,
+            startedAt: Date(timeIntervalSince1970: 1_000_000)
+        )
+    }
+
     private static func liveFix(
         distance: Double = 6200,
         offRoute: Double = 8,
@@ -157,6 +171,37 @@ struct HikeActivityPayloadTests {
         #expect(state.elevationGainMeters == 540)
     }
 
+    /// A walk brings its coverage, its run state and its clock across, and
+    /// the trail's own start date gives way to the walk's — that is the
+    /// instant the Lock Screen clock has to count from.
+    @Test("a walk under way is carried whole into the activity")
+    func walkIsCarriedIntoTheActivity() {
+        var snapshot = Self.trailSnapshot(liveFix: Self.liveFix())
+        snapshot.walk = Self.walk(state: .paused)
+        let attributes = HikeActivityAttributes.following(from: snapshot, startedAt: .now)
+        let state = HikeActivityAttributes.ContentState(following: snapshot)
+
+        #expect(attributes.startedAt == Date(timeIntervalSince1970: 1_000_000))
+        #expect(state.coveredFractionComplete == 0.5)
+        #expect(state.runState == .paused)
+        #expect(state.elapsedSeconds == 2700)
+        // Position is still the position: coverage does not replace it.
+        #expect(state.distanceMeters == 6200)
+    }
+
+    /// The keys a walk adds are optional, so the state a previous build wrote
+    /// — and the one a plain follow still writes — decodes to "no walk".
+    @Test("a state written without walk keys decodes as a plain follow")
+    func stateWithoutWalkKeysDecodes() throws {
+        let legacy = Data(
+            #"{"distanceMeters":6200,"runState":"running","elapsedSeconds":0,"updatedAt":0}"#.utf8
+        )
+        let decoded = try JSONDecoder().decode(HikeActivityAttributes.ContentState.self, from: legacy)
+        #expect(decoded.coveredFractionComplete == nil)
+        #expect(decoded.runState == .running)
+        #expect(decoded.distanceMeters == 6200)
+    }
+
     /// The progress arithmetic has to agree with the widget's, which is what
     /// this compares it against rather than against a hand-computed constant.
     @Test("progress agrees with the widget snapshot it was built from")
@@ -218,8 +263,9 @@ struct HikeActivityPayloadTests {
     /// content state.
     private static let activityBudgetBytes = 4096
 
-    /// What the worst case is allowed to spend of that budget: a quarter, so
-    /// three quarters of it stay unspent.
+    /// What the worst case is allowed to spend of that budget: nine
+    /// thirty-seconds — a quarter, plus the one field a walk added to the
+    /// content state — so well over two thirds of it stay unspent.
     ///
     /// The limit itself is the wrong threshold to test against. This payload's
     /// whole reason for existing is that the route polyline was left out of
@@ -240,7 +286,7 @@ struct HikeActivityPayloadTests {
     /// bound below: they absorb a name several times longer than the one this
     /// test defends, so a walker who types an unusually long one does not
     /// depend on anybody having re-run these numbers.
-    private static let worstCaseCeilingBytes = activityBudgetBytes / 4
+    private static let worstCaseCeilingBytes = activityBudgetBytes * 9 / 32
 
     /// What a single update may cost: an eighth of the budget.
     ///
@@ -291,6 +337,7 @@ struct HikeActivityPayloadTests {
         averageSpeedMetersPerSecond: 1.2345678901234567,
         pointCount: Int.max,
         offRouteMeters: 3456.789012345678,
+        coveredFractionComplete: 0.12345678901234567,
         runState: .finished,
         elapsedSeconds: 456_789.01234567891,
         updatedAt: Date(timeIntervalSinceReferenceDate: 781_234_567.8912345)
@@ -327,7 +374,7 @@ struct HikeActivityPayloadTests {
     /// character title tested against 4096 has thousands of bytes of headroom,
     /// which is another way of saying it would not notice the thing it exists
     /// to notice.
-    @Test("the worst-case payload spends a quarter of ActivityKit's 4 KB budget")
+    @Test("the worst-case payload spends under a third of ActivityKit's 4 KB budget")
     func payloadFitsTheActivityBudget() throws {
         // The worst case has to still be one. A source file that lost the
         // multi-byte characters would quietly shrink it to a quarter the size

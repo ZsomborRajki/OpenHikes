@@ -72,6 +72,36 @@ nonisolated enum UITestFixture {
         latitude: trailheadLatitude,
         longitude: trailheadLongitude
     )
+
+    // swiftlint:disable no_magic_numbers
+    /// Points from the fixture GPX itself — its first, sixth, seventh, eighth,
+    /// ninth and tenth `<trkpt>`s, 30 to 50 m apart along the trail — so
+    /// every fix here is *on* the trail the app is following rather than
+    /// near it, and each one extends a walk's coverage. The first four span
+    /// 116 m, which is past the 100 m a walk needs to be kept.
+    ///
+    /// A follow has no speed gate, unlike `RecordingFixPolicy`, so the pace
+    /// between them only has to outlast `LocationManager`'s one-publish-a-second
+    /// throttle.
+    static let trailPoints = [
+        trailheadCoordinate,
+        CLLocationCoordinate2D(latitude: 47.718598, longitude: 12.831420),
+        CLLocationCoordinate2D(latitude: 47.718823, longitude: 12.831149),
+        CLLocationCoordinate2D(latitude: 47.719219, longitude: 12.830877),
+        CLLocationCoordinate2D(latitude: 47.719317, longitude: 12.830874),
+        CLLocationCoordinate2D(latitude: 47.719474, longitude: 12.830948),
+    ]
+    // swiftlint:enable no_magic_numbers
+
+    /// A fix a kilometre north of the trailhead: far enough that no leg of
+    /// the fixture trail is within the follow threshold, so a launch that
+    /// starts here has a hike open and no walk started.
+    static let offTrailCoordinate = CLLocationCoordinate2D(
+        latitude: trailheadLatitude + offTrailOffsetDegrees,
+        longitude: trailheadLongitude
+    )
+    /// About 1.1 km of latitude.
+    private static let offTrailOffsetDegrees = 0.01
 }
 
 /// The two-trail walk behind the review screen's Previous and Next buttons.

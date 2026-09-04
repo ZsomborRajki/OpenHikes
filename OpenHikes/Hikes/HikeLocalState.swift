@@ -58,6 +58,16 @@ final class HikeLocalState {
     /// on.
     var autoSaveTilesEnabled: Bool = true
 
+    /// The walk under way along this hike, between the milestones that write
+    /// it — see ``TrailWalkRecord``.
+    ///
+    /// Device-local on purpose, and the reason it is a column here rather
+    /// than a row in the mirrored store: a walk in progress is this phone's
+    /// walk, and last-writer-wins between two devices would be exactly the
+    /// tile-inventory bug this store exists to prevent. `nil` is the ordinary
+    /// state, so the row costs nothing for a hike nobody is walking.
+    var walkInProgress: TrailWalkRecord?
+
     init(hikeID: UUID) {
         self.hikeID = hikeID
     }

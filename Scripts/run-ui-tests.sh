@@ -16,6 +16,7 @@ bundle="OpenHikesUITests"
 suites=(
   OpenHikesUITests
   RecordingUITests
+  WalkUITests
   PhotoUITests
   SettingsUITests
   AccessibilityUITests

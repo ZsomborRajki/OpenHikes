@@ -48,6 +48,11 @@ struct MapView: MapViewRepresentable, Equatable {
     /// chart moves the marker without re-rendering any view.
     var highlight: RouteHighlight
 
+    /// The stretches a finished walk covered. Observed directly by the map
+    /// (not via SwiftUI) so the Walk Summary's *Show on Map* adds a handful of
+    /// polylines without re-rendering any view — see ``WalkHighlight``.
+    var walkHighlight: WalkHighlight
+
     /// The growing recorded track. Its revision is observed directly by the
     /// coordinator so accepted fixes update only MapKit overlays.
     var recordingTrace: RecordingTrace
@@ -102,6 +107,7 @@ struct MapView: MapViewRepresentable, Equatable {
         lhs.route == rhs.route
             && lhs.routeStyle === rhs.routeStyle
             && lhs.highlight === rhs.highlight
+            && lhs.walkHighlight === rhs.walkHighlight
             && lhs.recordingTrace === rhs.recordingTrace
             && lhs.sheetMetrics === rhs.sheetMetrics
             && lhs.tileSource == rhs.tileSource
@@ -134,6 +140,7 @@ struct MapView: MapViewRepresentable, Equatable {
         mapView.showsUserLocation = true
         mapView.pointOfInterestFilter = .includingAll
         coordinator.observeHighlight(highlight, on: mapView)
+        coordinator.observeWalkHighlight(walkHighlight, on: mapView)
         coordinator.observeRecordingTrace(recordingTrace, on: mapView)
         coordinator.observeSheetMetrics(sheetMetrics, on: mapView)
         coordinator.observeMapController(mapController, on: mapView)

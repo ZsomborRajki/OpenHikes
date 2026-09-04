@@ -43,6 +43,13 @@ public struct SharedTrailSnapshot: SharedPayload, Equatable {
     /// not the full track. See ``decimate(_:maxPoints:)``.
     public var polyline: [CodableCoordinate]
     public var liveFix: LiveFix?
+    /// The walk under way along this trail, if there is one — see ``Walk``.
+    ///
+    /// Optional, and an optional *key*: a payload written before walks
+    /// existed decodes with `nil` here, so this needed no `schemaVersion`
+    /// bump. While it is present the percentage in ``statusText`` is
+    /// coverage rather than position, and its caption says so.
+    public var walk: Walk?
     public var updatedAt: Date
 
     public init(
@@ -56,6 +63,7 @@ public struct SharedTrailSnapshot: SharedPayload, Equatable {
         elevationGainMeters: Double? = nil,
         elevationLossMeters: Double? = nil,
         liveFix: LiveFix? = nil,
+        walk: Walk? = nil,
         updatedAt: Date = .now
     ) {
         self.hikeID = hikeID
@@ -68,8 +76,53 @@ public struct SharedTrailSnapshot: SharedPayload, Equatable {
         self.elevationLossMeters = elevationLossMeters
         self.polyline = polyline
         self.liveFix = liveFix
+        self.walk = walk
         self.updatedAt = updatedAt
         schemaVersion = Self.currentSchemaVersion
+    }
+
+    /// What the app has recorded about the walk in progress along the trail:
+    /// how much of it has been covered, whether the walker has paused, and
+    /// how long they have been moving.
+    ///
+    /// Coverage rather than position, deliberately. ``fractionComplete``
+    /// reads where the walker *is*; this reads how much of the route their
+    /// consecutive matches have actually spanned, so a walker who opened the
+    /// app on the return leg of an out-and-back reads 50% here where the
+    /// position would say 100%. The app computes it — the widget and the
+    /// Live Activity only ever draw it.
+    public struct Walk: Codable, Sendable, Equatable {
+        /// Whether coverage is still accruing. A `String` raw value for the
+        /// reason `HikeActivityAttributes.ContentState.RunState` has one:
+        /// legible on the wire, and stable if the cases are reordered.
+        public enum State: String, Codable, Sendable {
+            case active = "active"
+            case finished = "finished"
+            case paused = "paused"
+        }
+
+        public var state: State
+        /// Covered length over the route's length, 0...1.
+        public var coveredFraction: Double
+        /// The furthest point along the route any match reached, in metres.
+        public var furthestDistanceMeters: Double
+        /// The walk's clock with its pauses taken out.
+        public var activeSeconds: TimeInterval
+        public var startedAt: Date
+
+        public init(
+            state: State,
+            coveredFraction: Double,
+            furthestDistanceMeters: Double,
+            activeSeconds: TimeInterval,
+            startedAt: Date
+        ) {
+            self.state = state
+            self.coveredFraction = coveredFraction
+            self.furthestDistanceMeters = furthestDistanceMeters
+            self.activeSeconds = activeSeconds
+            self.startedAt = startedAt
+        }
     }
 
     public struct LiveFix: Codable, Sendable, Equatable {
@@ -122,14 +175,37 @@ public struct SharedTrailSnapshot: SharedPayload, Equatable {
         return min(1, max(0, liveFix.distanceAlongRouteMeters / totalDistanceMeters))
     }
 
+    /// The fraction the progress bar should draw: the walk's coverage while
+    /// one is under way, otherwise the live position. `nil` when there is
+    /// neither — nothing to draw a bar for.
+    public var progressFraction: Double? {
+        walk?.coveredFraction ?? fractionComplete
+    }
+
     /// "62% · 1.4 mi left" while a live fix is on the trail, otherwise just
     /// the trail's total length. Shared with the iOS widget so the app and
     /// extension cannot drift out of sync.
+    ///
+    /// During a walk the percentage is coverage and the caption says
+    /// *walked*, so the return-leg case reads "50% walked · 0.2 km left"
+    /// rather than a contradiction. A paused walk says so first, because on a
+    /// widget that is the one word that changes what the number means.
     public var statusText: String {
+        if let walk {
+            let covered = "\(Self.percent(walk.coveredFraction))% walked"
+            let prefix = walk.state == .paused ? "Paused · " : ""
+            guard let remainingDistanceMeters else { return prefix + covered }
+            let remaining = WidgetFormat.length(meters: remainingDistanceMeters)
+            return "\(prefix)\(covered) · \(remaining) left"
+        }
         guard let fractionComplete, let remainingDistanceMeters
         else { return WidgetFormat.length(meters: totalDistanceMeters) }
         let remaining = WidgetFormat.length(meters: remainingDistanceMeters)
-        return "\(Int((fractionComplete * 100).rounded()))% · \(remaining) left"
+        return "\(Self.percent(fractionComplete))% · \(remaining) left"
+    }
+
+    private static func percent(_ fraction: Double) -> Int {
+        Int((fraction * 100).rounded())
     }
 }
 

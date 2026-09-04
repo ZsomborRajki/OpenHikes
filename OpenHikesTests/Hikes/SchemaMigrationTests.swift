@@ -136,6 +136,9 @@ struct SchemaMigrationTests {
         )
         #expect(migrated.autoSavedTileKeys.isEmpty, "an old hike has auto-saved nothing yet")
         #expect(migrated.autoSaveTilesEnabled, "and gets the same default a new hike does")
+        #expect(migrated.walks?.isEmpty ?? true, "a version one hike has never been walked")
+        #expect(migrated.walkInProgress == nil, "and the sidecar's new column reads as no walk in progress")
+        #expect(try context.fetch(FetchDescriptor<HikeWalk>()).isEmpty)
 
         // What it had to keep.
         #expect(migrated.title == "Version one ridge")

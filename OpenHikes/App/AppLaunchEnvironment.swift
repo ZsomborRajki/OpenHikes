@@ -28,6 +28,9 @@ nonisolated enum AppLaunchEnvironment {
         let performanceLogScenario: String?
         let simulatesOffline: Bool
         let seededPhotoCount: Int
+        /// `nil` unless a launch asked for a walk fixture — see
+        /// ``AppLaunchEnvironment/seededWalkFixtureName``.
+        let seededWalkFixtureName: String?
         let seededMetricsReportCount: Int
         let failsFirstSave: Bool
         let losesImportSelection: Bool
@@ -58,6 +61,7 @@ nonisolated enum AppLaunchEnvironment {
             performanceLogScenario = nil
             simulatesOffline = false
             seededPhotoCount = 0
+            seededWalkFixtureName = nil
             seededMetricsReportCount = 0
             failsFirstSave = false
             losesImportSelection = false
@@ -75,6 +79,7 @@ nonisolated enum AppLaunchEnvironment {
         private static let performanceLogPrefix = "--ui-test-performance-log="
         private static let offlineArgument = "--ui-test-offline"
         private static let seedPhotosPrefix = "--ui-test-seed-photos="
+        private static let seedWalksPrefix = "--ui-test-seed-walks="
         private static let seedMetricsPrefix = "--ui-test-seed-metrics="
         private static let failFirstSaveArgument = "--ui-test-fail-first-save"
         private static let loseImportSelectionArgument =
@@ -133,6 +138,11 @@ nonisolated enum AppLaunchEnvironment {
                 prefix: Self.seedPhotosPrefix,
                 isUITesting: isUITesting,
                 limit: Self.maximumSeededPhotos
+            )
+            seededWalkFixtureName = Self.fixtureName(
+                in: arguments,
+                prefix: Self.seedWalksPrefix,
+                isUITesting: isUITesting
             )
             seededMetricsReportCount = Self.count(
                 in: arguments,
@@ -273,6 +283,17 @@ nonisolated enum AppLaunchEnvironment {
     /// the real store, the real files on disk and the real decode path; only
     /// the pixels are invented.
     static let seededPhotoCount = configuration.seededPhotoCount
+
+    /// The name of a walk fixture to attach to the hike a launch imports, or
+    /// `nil` for none — see `SeededWalkFixture` for the names.
+    ///
+    /// A walk is a record of a stroll, and a stroll in the Simulator is a
+    /// minute of simulated fixes per scenario. The history and the summary
+    /// are about what a *finished* walk looks like, and this puts one in
+    /// front of them in the time it takes to import a GPX. The row goes
+    /// through the real store, so what is read afterwards is the shipping
+    /// query and the shipping cascade; only the walk is invented.
+    static let seededWalkFixtureName = configuration.seededWalkFixtureName
 
     /// How many synthetic MetricKit reports to write before Settings is
     /// opened.

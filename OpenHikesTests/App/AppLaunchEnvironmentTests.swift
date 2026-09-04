@@ -118,10 +118,12 @@ struct AppLaunchEnvironmentTests {
                 "--ui-testing",
                 "--ui-test-seed-photos=8",
                 "--ui-test-seed-metrics=999",
+                "--ui-test-seed-walks=HalfLoop",
             ]
         )
 
         #expect(configuration.seededPhotoCount == 8)
+        #expect(configuration.seededWalkFixtureName == "HalfLoop")
         // Clamped rather than honoured: a scenario asking for a thousand
         // reports is a typo, and the store would evict all but sixteen anyway.
         #expect(configuration.seededMetricsReportCount == 8)

@@ -67,7 +67,8 @@ public struct HikeActivityAttributes: Codable, Hashable, Sendable {
     /// walker sees on the map and in the widget.
     public var tintHex: String
     /// When the walk started. Recordings show elapsed time from here; a follow
-    /// uses it only to order activities.
+    /// carries the walk's own start when there is a walk, and otherwise uses
+    /// it only to order activities.
     public var startedAt: Date
     /// The followed trail's total length. `nil` for a recording, which has no
     /// end to measure against — that asymmetry is the whole difference between
@@ -96,8 +97,7 @@ public struct HikeActivityAttributes: Codable, Hashable, Sendable {
     /// widget's "omit the chip" rule — a route imported without elevations
     /// shows fewer facts, not a row of dashes.
     public struct ContentState: Codable, Hashable, Sendable {
-        /// What a recording is doing. A follow is always ``running``: it has
-        /// no clock of its own to stop.
+        /// What a recording — or a walk along a followed trail — is doing.
         ///
         /// A `String` raw value rather than the synthesized case-name coding,
         /// so the wire form is legible in a log and stays put if the cases are
@@ -124,14 +124,23 @@ public struct HikeActivityAttributes: Codable, Hashable, Sendable {
         /// different statement from "on it, zero metres away", and the reason
         /// this is optional rather than a large number.
         public var offRouteMeters: Double?
-        /// Recording only: whether fixes are being taken, deliberately not,
-        /// or done with.
+        /// Following only: how much of the trail the walk has *covered*, as
+        /// opposed to ``distanceMeters``, which is where along it the walker
+        /// is. `nil` for a recording, and for a follow with no walk under way.
+        ///
+        /// A field of its own rather than a re-meaning of ``distanceMeters``:
+        /// the two really are different numbers on an out-and-back walked
+        /// from the turn, and a panel that could not tell them apart would
+        /// say 100% to a walker who had done half.
+        public var coveredFractionComplete: Double?
+        /// Whether fixes are being taken, deliberately not, or done with.
         ///
         /// Three cases rather than a paused flag because the third one is
         /// reachable and says something different. A recording that has been
         /// stopped and saved stays on the Lock Screen for a few minutes
         /// showing what the walk came to — and a final panel reading "Paused"
         /// would be telling the walker their hike is still waiting for them.
+        /// A walk along a followed trail uses the same three words.
         public var runState: RunState
 
         /// Whether the recording is deliberately stopped but not finished.
@@ -158,6 +167,7 @@ public struct HikeActivityAttributes: Codable, Hashable, Sendable {
             averageSpeedMetersPerSecond: Double? = nil,
             pointCount: Int? = nil,
             offRouteMeters: Double? = nil,
+            coveredFractionComplete: Double? = nil,
             runState: RunState = .running,
             elapsedSeconds: TimeInterval = 0,
             updatedAt: Date = .now
@@ -168,6 +178,7 @@ public struct HikeActivityAttributes: Codable, Hashable, Sendable {
             self.averageSpeedMetersPerSecond = averageSpeedMetersPerSecond
             self.pointCount = pointCount
             self.offRouteMeters = offRouteMeters
+            self.coveredFractionComplete = coveredFractionComplete
             self.runState = runState
             self.elapsedSeconds = elapsedSeconds
             self.updatedAt = updatedAt

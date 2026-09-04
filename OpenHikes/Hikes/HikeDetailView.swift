@@ -10,117 +10,6 @@ import AsyncAlgorithms
 import SwiftData
 import SwiftUI
 
-nonisolated struct HikeDetailPreparedContent: Sendable {
-    let profile: RouteProfile
-    let stats: [Stat]
-}
-
-nonisolated enum HikeDetailPreparation {
-    /// `@concurrent` rather than a detached task: this stays part of the
-    /// caller's task, so `.task(id:)` tearing down the view cancels the
-    /// profile build without a hand-written cancellation handler, and the
-    /// route-sized work still runs on the concurrent executor.
-    ///
-    /// One walk, not two. The profile's cumulative index and the statistics'
-    /// max speed both need the distance between consecutive points, and that
-    /// trigonometry is what a long route costs; the profile hands each segment
-    /// to the statistics builder as it computes it. Cancellation is the
-    /// profile's, so a torn-down view never builds statistics from a partial
-    /// route — the walk throws before ``HikeRouteStatistics/Builder/finish()``
-    /// is reached.
-    @concurrent
-    static func prepare(
-        route: [RouteCoordinate],
-        distanceMeters: Double
-    ) async throws(CancellationError) -> HikeDetailPreparedContent {
-        assertOffMainThread(
-            "Hike detail route preparation must stay off the main thread"
-        )
-        // The single route-sized walk behind every number and the elevation
-        // chart. Timed so opening a long hike can be told apart from drawing
-        // one that was already prepared.
-        let state = RenderSignpost.beginInterval("HikeDetailPrepared")
-        defer { RenderSignpost.endInterval("HikeDetailPrepared", state) }
-        var statistics = HikeRouteStatistics.Builder(distanceMeters: distanceMeters)
-        let profile = try RouteProfile.cancellable(route: route) { point, segmentMeters in
-            statistics.consume(point, segmentMeters: segmentMeters)
-        }
-        return HikeDetailPreparedContent(
-            profile: profile,
-            stats: makeStats(
-                distanceMeters: distanceMeters,
-                statistics: statistics.finish()
-            )
-        )
-    }
-
-    private static func makeStats(
-        distanceMeters: Double,
-        statistics: HikeRouteStatistics
-    ) -> [Stat] {
-        let items: [Stat?] = [
-            Stat(
-                "Distance",
-                Measurement(value: distanceMeters, unit: UnitLength.meters)
-                    .formatted(.measurement(width: .abbreviated, usage: .road))
-            ),
-            statistics.duration.map { duration in
-                Stat("Duration", HikeFormat.duration(duration))
-            },
-            statistics.elevationGain.map { gain in
-                Stat("Elevation Gain", HikeFormat.length(gain))
-            },
-            statistics.elevationLoss.map { loss in
-                Stat("Elevation Loss", HikeFormat.length(loss))
-            },
-            statistics.maxElevation.map { elevation in
-                Stat("Max Elevation", HikeFormat.length(elevation))
-            },
-            statistics.minElevation.map { elevation in
-                Stat("Min Elevation", HikeFormat.length(elevation))
-            },
-            // Two clocks over one distance, named for the clock rather than
-            // left as a bare "Avg Speed" that has always been the elapsed one
-            // without saying so. Spelled out on both rows: relabelling only
-            // the new one would leave the older row still answering a question
-            // it was never measuring.
-            statistics.averageSpeed.map { speed in
-                Stat("Overall Avg Speed", HikeFormat.speed(speed))
-            },
-            statistics.movingAverageSpeed.map { speed in
-                Stat("Moving Avg Speed", HikeFormat.speed(speed))
-            },
-            statistics.maxSpeed.map { speed in
-                Stat("Max Speed", HikeFormat.speed(speed))
-            },
-            Stat(
-                "Track Points",
-                statistics.pointCount.formatted()
-            ),
-            statistics.inferredDistance.map { inferred in
-                // Named for what it is rather than hidden in the distance:
-                // the total already includes it, so the honest thing is to say
-                // how much of that total the app worked out rather than saw.
-                Stat("Inferred Path", HikeFormat.length(inferred))
-            },
-            statistics.startDate.map { date in
-                Stat("Start", formatted(date))
-            },
-            statistics.endDate.map { date in
-                Stat("End", formatted(date))
-            },
-        ]
-        return items.compactMap(\.self)
-    }
-
-    private static func formatted(_ date: Date) -> String {
-        date.formatted(
-            date: .abbreviated,
-            time: .shortened
-        )
-    }
-}
-
 struct HikeDetailView: View {
     let hike: Hike
     /// Reference type the map observes directly — writing to it doesn't re-render this view.
@@ -144,6 +33,11 @@ struct HikeDetailView: View {
     /// OSM walking graph behind the surface and difficulty sections. `nil`
     /// disables both — see ``HikeTrailAnalysis``.
     var trailGraphProvider: (any TrailGraphProviding)?
+    /// The walk under way, fed each on-route match from the follow loop
+    /// below. Passed to the progress row and the controls as a reference the
+    /// way `tracker` is, and never read from this body — see
+    /// ``TrailWalkSession``.
+    let walkSession: TrailWalkSession
     /// Offers the map's camera pill while this screen is up, and tells it
     /// where on the trail a photo taken now belongs. See
     /// ``PhotoCaptureController``.
@@ -153,6 +47,9 @@ struct HikeDetailView: View {
     var photoPins: PhotoMapPinController?
     /// Pushes the full-space viewer for a tapped thumbnail.
     var onOpenPhoto: (HikePhoto) -> Void = { _ in /* no-op default */ }
+    /// Pushes a finished walk's summary — from the History segment's rows,
+    /// and from End.
+    var onOpenWalk: (HikeWalk) -> Void = { _ in /* no-op default */ }
     /// Collapses the sheet so the map is visible when zooming to the route.
     var onZoomToRoute: () -> Void = { /* no-op default */ }
 
@@ -183,6 +80,11 @@ struct HikeDetailView: View {
     @State private var isEditingTitle = false
     /// Draft text while the inline title field is open.
     @State private var titleDraft = ""
+    /// Which face of the screen is up. `@State` here rather than in a leaf,
+    /// deliberately: a flip is a tap, not a fix, and it has to replace the
+    /// whole scroll view. It invalidates this body — and only this body,
+    /// which `HikeDetailSegmentTests` pins from the sheet's side.
+    @State private var segment = HikeDetailSegment.details
     private static let storedBytesRefreshDebounce: Duration = .seconds(5)
 
     /// Built once per hike in `.task`, never in `init`. Scrubbing then resolves
@@ -220,30 +122,23 @@ struct HikeDetailView: View {
         // this mark starts firing at that cadence again, something
         // re-introduced a read of `tracker`'s properties into this body
         // (directly or via a computed var it calls, like `elevationSection`).
+        // The same goes for `walkSession`: a matched fix that extends a walk
+        // redraws the progress row and the controls, and nothing above them.
         RenderSignpost.mark("HikeDetailBody")
-        return ScrollView {
-            VStack(alignment: .leading, spacing: 24) {
-                elevationSection
-                progressSection
-                header
-                statsGrid
-                photoSection
-                surfaceSection
-                difficultySection
-                if hasMetadata { metadataSection }
-                actionBar
+        return VStack(spacing: 0) {
+            segmentPicker
+            switch segment {
+            case .details: details
+            case .history: HikeWalkHistory(hike: hike, onOpen: onOpenWalk)
             }
-            .padding()
         }
         .navigationTitle(hike.displayTitle)
         #if os(iOS)
         .navigationBarTitleDisplayMode(.inline)
         #endif
-        // The elevation chart and the tinted header run right up under the
-        // navigation bar. `.soft` is the progressive blur that lets them scroll
-        // away behind it instead of meeting a hard line, which is what the
-        // bar's own glass is drawn to sit on.
-        .softScrollEdgeEffect(for: .top)
+        // On the container rather than on the Details face, so flipping to
+        // History neither restarts the profile build nor stops the follow
+        // loop: a walk keeps accruing while its walker reads its history.
         .task(id: hike.id) {
             let route = hike.route
             let distanceMeters = hike.distanceMeters
@@ -281,12 +176,14 @@ struct HikeDetailView: View {
         .onChange(of: hike.autoFollowEnabled) { _, enabled in
             if !enabled {
                 tracker.liveTrackerDistance = nil
-                // The Lock Screen goes with it. Nothing else would take it
-                // down: the foreground feed stops publishing the moment
-                // auto-follow is off, so an activity left running would sit
-                // there reporting the walker's last known position for as
-                // long as the app lived.
-                backgroundTracker.endFollowActivity(hikeID: hike.id)
+                // Turning following off for the walked hike is the walker
+                // saying *stop following*: the walk pauses and the Lock
+                // Screen says so. With no walk the panel comes down instead —
+                // nothing else would take it down, since the foreground feed
+                // stops publishing the moment auto-follow is off.
+                if !walkSession.autoFollowDidChange(hikeID: hike.id, enabled: false) {
+                    backgroundTracker.endFollowActivity(hikeID: hike.id)
+                }
             }
             switch FollowInteractionPolicy.highlightUpdate(
                 autoFollowEnabled: enabled,
@@ -349,6 +246,61 @@ struct HikeDetailView: View {
             downloader: downloader,
             deletionFailure: $storageDeletionFailure
         )
+    }
+
+    /// The screen as it always was: everything derived from the file, with
+    /// the walk's controls and live coverage in its progress section while a
+    /// walk is under way.
+    private var details: some View {
+        ScrollView {
+            VStack(alignment: .leading, spacing: 24) {
+                elevationSection
+                progressSection
+                header
+                statsGrid
+                photoSection
+                surfaceSection
+                difficultySection
+                if hasMetadata { metadataSection }
+                actionBar
+            }
+            .padding()
+        }
+        // The elevation chart and the tinted header run right up under the
+        // navigation bar. `.soft` is the progressive blur that lets them scroll
+        // away behind it instead of meeting a hard line, which is what the
+        // bar's own glass is drawn to sit on.
+        .softScrollEdgeEffect(for: .top)
+    }
+
+    /// `Details | History`. *History* rather than *Walks* because it holds
+    /// partial completions as well as full ones. Above the scroll view rather
+    /// than inside it, so it stays put while either face scrolls.
+    private var segmentPicker: some View {
+        Picker("Section", selection: $segment) {
+            ForEach(HikeDetailSegment.allCases) { face in
+                Text(face.title).tag(face)
+            }
+        }
+        .pickerStyle(.segmented)
+        .accessibilityIdentifier("walk-segment")
+        .padding(.horizontal)
+        .padding(.vertical, 8)
+    }
+}
+
+/// The two faces of the hike detail screen.
+nonisolated enum HikeDetailSegment: String, CaseIterable, Identifiable, Sendable {
+    case details = "details"
+    case history = "history"
+
+    var id: String { rawValue }
+
+    var title: String {
+        switch self {
+        case .details: "Details"
+        case .history: "History"
+        }
     }
 }
 
@@ -667,8 +619,12 @@ private extension HikeDetailView {
             HikeTrailProgress(
                 hike: hike,
                 profile: profile,
-                tracker: tracker
+                tracker: tracker,
+                walk: walkSession
             )
+            // Reads the session the way the bar reads `tracker`: as a
+            // reference this body never dereferences.
+            WalkControls(hike: hike, session: walkSession, onOpenWalk: onOpenWalk)
         }
     }
 
@@ -704,9 +660,15 @@ private extension HikeDetailView {
         }
         // Only worth telling the widget "no fix" while auto-follow is
         // actually trying to track this hike — if the user turned
-        // auto-follow off, leave whatever it last showed alone.
-        if hike.autoFollowEnabled {
-            backgroundTracker.publishLiveFix(hike: hike, profile: profile, match: nil)
+        // auto-follow off, leave whatever it last showed alone. A paused
+        // walk is left alone too: the widget says Paused, and that stands.
+        if hike.autoFollowEnabled, walkSession.publishes(hikeID: hike.id) {
+            backgroundTracker.publishLiveFix(
+                hike: hike,
+                profile: profile,
+                match: nil,
+                walk: walkSession.payload(for: hike.id)
+            )
         }
     }
 
@@ -716,6 +678,9 @@ private extension HikeDetailView {
         // nothing about where the walker is relative to the route, and must
         // neither re-arm the whole-route search nor spend one of the fixes
         // that delays it.
+        // Before the match, so a walk left unmatched for six hours is closed
+        // on the fix that would otherwise have quietly extended it.
+        walkSession.endIfAbandoned()
         guard hike.autoFollowEnabled,
               let fix = locationManager.routeFix(
                 maximumHorizontalAccuracy: RouteProfile.followMatchThresholdMeters
@@ -738,6 +703,10 @@ private extension HikeDetailView {
             return
         }
         followAnchor = .matched(at: match.distanceAlongRoute, course: fix.course, from: followAnchor)
+        // The walk starts here, on the first matched fix with following on,
+        // and this is where every later match extends it. Selection alone
+        // starts nothing.
+        walkSession.recordForegroundMatch(hike: hike, profile: profile, distance: match.distanceAlongRoute)
         let moved = tracker.liveTrackerDistance != match.distanceAlongRoute
         // Guarded like `trackerDistance` below — reassigning `@Observable`
         // storage to an equal value still triggers dependent views, so an
@@ -768,7 +737,14 @@ private extension HikeDetailView {
         // `move(to:)` does the comparison this path used to do by hand.
         highlight.move(to: nil)
         RenderSignpost.mark("LiveFollowUpdate", moved ? "moved" : "unchanged")
-        backgroundTracker.publishLiveFix(hike: hike, profile: profile, match: match)
+        // A paused walk still moves the dot above, and publishes nothing.
+        guard walkSession.publishes(hikeID: hike.id) else { return }
+        backgroundTracker.publishLiveFix(
+            hike: hike,
+            profile: profile,
+            match: match,
+            walk: walkSession.payload(for: hike.id)
+        )
     }
 
 }

@@ -62,9 +62,10 @@ struct PerformanceCounters {
     /// can stop, so a recording screen would never look settled with it in the
     /// comparison. It is still counted and still asserted on; it just cannot
     /// be evidence about whether the *previous interaction* has finished.
+    /// `WalkClockTick` is the walk's clock, and the same sentence applies.
     func isEquivalent(to other: Self) -> Bool {
         let sampled: Set<String> = [
-            "Process", "CPU.s", "Footprint.MB", "RecordingClockTick",
+            "Process", "CPU.s", "Footprint.MB", "RecordingClockTick", "WalkClockTick",
         ]
         let compared = Set(values.keys).union(other.values.keys)
             .subtracting(sampled)

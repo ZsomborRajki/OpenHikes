@@ -107,6 +107,7 @@ public struct TrailWidgetMetric: Sendable, Equatable, Identifiable {
         case currentElevation = "currentElevation"
         case pace = "pace"
         case points = "points"
+        case remaining = "remaining"
     }
 
     public let kind: Kind
@@ -129,6 +130,7 @@ public struct TrailWidgetMetric: Sendable, Equatable, Identifiable {
         case .currentElevation: "figure.hiking"
         case .pace: "speedometer"
         case .points: "point.3.connected.trianglepath.dotted"
+        case .remaining: "flag.pattern.checkered"
         }
     }
 
@@ -139,6 +141,7 @@ public struct TrailWidgetMetric: Sendable, Equatable, Identifiable {
         case .currentElevation: "Elevation"
         case .pace: "Average speed"
         case .points: "Track points"
+        case .remaining: "Remaining"
         }
     }
 

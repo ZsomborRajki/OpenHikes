@@ -149,6 +149,19 @@ final class Hike {
     /// it.
     var photos: [HikePhoto] = []
 
+    // swiftlint:disable discouraged_optional_collection
+    /// Every finished walk along this trail — see ``HikeWalk`` for why a walk
+    /// is a row of its own rather than a value here like ``photos``.
+    ///
+    /// Optional because CloudKit mirroring requires every relationship to
+    /// be, and read through ``HikeWalk``'s own `hikeID` column rather than
+    /// through here: the History segment's query filters on that column so a
+    /// write to this row does not re-rank it. What this is for is the
+    /// cascade, which takes the walks with the hike.
+    @Relationship(deleteRule: .cascade, inverse: \HikeWalk.hike)
+    var walks: [HikeWalk]?
+    // swiftlint:enable discouraged_optional_collection
+
     /// The resolved ``HikeLocalState``, remembered so repeated tile-ownership
     /// questions cost one fetch per hike rather than one per question.
     ///
@@ -267,6 +280,14 @@ extension Hike {
     var autoSaveTilesEnabled: Bool {
         get { localState?.autoSaveTilesEnabled ?? true }
         set { mutableLocalState?.autoSaveTilesEnabled = newValue }
+    }
+
+    /// The walk under way along this trail on this device, if any — see
+    /// ``TrailWalkRecord`` for why it is device-local and lives here rather
+    /// than in a row that syncs.
+    var walkInProgress: TrailWalkRecord? {
+        get { localState?.walkInProgress }
+        set { mutableLocalState?.walkInProgress = newValue }
     }
 
     /// Removes the sidecar, for a hike on its way out of the store.
