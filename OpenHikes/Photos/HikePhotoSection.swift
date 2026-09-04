@@ -25,6 +25,12 @@
 //  is already on disk arrives within a frame or two and a spinner that appears
 //  and vanishes reads as a glitch.
 //
+//  A tile that never will finish is a different placeholder. Photo files stay
+//  on the device that took them — see *Settled decisions* in the repository
+//  instructions — so on a second device the whole strip is photos whose pixels
+//  are elsewhere, and a tile that says so is the difference between an
+//  explanation and a row of broken pictures.
+//
 
 import SwiftUI
 
@@ -131,11 +137,11 @@ struct HikePhotoSection: View {
                             photo: photo,
                             store: store,
                             size: Self.tileSize,
-                            cornerRadius: Self.cornerRadius
+                            cornerRadius: Self.cornerRadius,
+                            label: Self.label(for: photo, among: photos)
                         )
                     }
                     .buttonStyle(.plain)
-                    .accessibilityLabel(Self.label(for: photo, among: photos))
                     .accessibilityIdentifier("hike-photo-\(photo.id.uuidString)")
                 }
             }
@@ -192,7 +198,13 @@ struct HikePhotoSection: View {
     }
 
     /// A tile draws a picture and nothing else, so its position in the walk is
-    /// the only thing there is to say about it.
+    /// the only thing there is to say about it here.
+    ///
+    /// The *rest* of what there is to say — that this device has no file for
+    /// it — is added by the tile, which is the only thing that knows: the
+    /// answer costs a disk read and arrives after this body has run. Composed
+    /// there rather than reported back up, because a tile telling its parent
+    /// what it found would redraw the whole strip once per tile.
     private static func label(for photo: HikePhoto, among photos: [HikePhoto]) -> String {
         let index = (photos.firstIndex(of: photo) ?? 0) + 1
         let place = photo.isAnchored
@@ -226,35 +238,81 @@ struct HikePhotoSection: View {
 /// keying the load on the photo is what stops a recycled tile from showing the
 /// previous photo's image until its own decode lands. It is also what cancels
 /// a decode for a tile that scrolled away before it finished.
+///
+/// It draws three things rather than two, because there are three: the
+/// picture, a placeholder for a decode that hasn't landed, and a photo this
+/// device has no file for — the ordinary state of every photo on a hike that
+/// was walked with another phone. That last one used to be the placeholder,
+/// permanently, which is a broken tile rather than an answer.
 struct HikePhotoThumbnail: View {
     let photo: HikePhoto
     let store: HikePhotoStore
     let size: CGFloat
     let cornerRadius: CGFloat
+    /// What the button around this tile is called, before the tile has any
+    /// idea whether it can draw the photo. See
+    /// ``HikePhotoSection/label(for:among:)``.
+    let label: String
 
-    @State private var image: PhotoImage?
+    @State private var display = PhotoDisplay.loading
 
     var body: some View {
         ZStack {
-            if let image {
-                Image(photoImage: image)
+            if case .ready(let loaded) = display {
+                Image(photoImage: loaded.image)
                     .resizable()
                     .scaledToFill()
             } else {
-                Rectangle()
-                    .fill(.quaternary)
-                    .overlay {
-                        Image(systemName: "photo")
-                            .foregroundStyle(.tertiary)
-                    }
+                placeholder
             }
         }
         .frame(width: size, height: size)
         .clipShape(.rect(cornerRadius: cornerRadius))
-        // The picture is the content; the button above carries the name.
-        .accessibilityHidden(true)
+        // The picture is the content and the button around it has no label of
+        // its own, so this is where the whole name is spoken.
+        .accessibilityElement()
+        .accessibilityLabel(accessibilityLabel)
         .task(id: photo.id) {
-            image = await HikePhotoLoader.thumbnail(for: photo, in: store)?.image
+            display = await HikePhotoLoader.thumbnail(for: photo, in: store)
+        }
+    }
+
+    /// A glyph on a flat fill, never a spinner: a thumbnail that is already on
+    /// disk arrives within a frame or two, and a spinner that appears and
+    /// vanishes reads as a glitch. Which glyph is the whole message — the
+    /// generic one means "in a moment", and the other two mean this tile is
+    /// never going to become a picture.
+    private var placeholder: some View {
+        Rectangle()
+            .fill(.quaternary)
+            .overlay {
+                Image(systemName: Self.symbol(for: display))
+                    .foregroundStyle(.tertiary)
+                    // The glyph is the tile's whole content and the tile is
+                    // one element with one label, spoken below.
+                    .accessibilityHidden(true)
+            }
+    }
+
+    private static func symbol(for display: PhotoDisplay) -> String {
+        switch display {
+        case .loading, .ready:
+            return "photo"
+        case .unavailable(.notOnThisDevice):
+            return "icloud.slash"
+        case .unavailable(.unreadable):
+            return "exclamationmark.triangle"
+        }
+    }
+
+    private var accessibilityLabel: String {
+        switch display {
+        case .loading, .ready:
+            return label
+        case .unavailable(.notOnThisDevice):
+            return String(localized: "\(label), not on this device")
+        case .unavailable(.unreadable):
+            return String(localized: "\(label), unavailable")
         }
     }
 }

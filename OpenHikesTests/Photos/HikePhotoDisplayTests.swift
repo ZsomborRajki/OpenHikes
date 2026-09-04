@@ -2,14 +2,20 @@
 //  HikePhotoDisplayTests.swift
 //  OpenHikesTests
 //
-//  The distinction the viewer hangs on: a photo whose pixels have not been
-//  decoded *yet* and one whose pixels are not there at all.
+//  The distinctions the gallery hangs on: a photo whose pixels have not been
+//  decoded *yet*, one this device has no file for, and one whose file is here
+//  and will not decode.
 //
-//  ``HikePhotoStore/displayImage(for:)`` answers both with `nil`, and the page
-//  that reads it used to draw a spinner either way — so a hike listing a photo
-//  whose file had gone showed a viewer that never resolved, with no message
-//  and nothing to press. ``HikePhotoLoader/display(for:in:)`` is what turns
-//  those two into different values, and this suite is what holds them apart.
+//  ``HikePhotoStore/displayImage(for:)`` answers all three with `nil`, and the
+//  page that reads it used to draw a spinner for every one — so a hike listing
+//  a photo whose file had gone showed a viewer that never resolved, with no
+//  message and nothing to press. ``HikePhotoLoader`` is what turns them into
+//  different values, and this suite is what holds them apart.
+//
+//  The middle one is not an edge case: photo files stay on the device that
+//  took them, so every photo of a hike walked with another phone is in that
+//  state on this one, and it is the state the strip, the map callout and the
+//  viewer all have to be able to name.
 //
 //  Every store here is rooted in a temporary directory, never
 //  `HikePhotoStore.shared`: these suites run in parallel with the host app,
@@ -60,9 +66,11 @@ struct HikePhotoDisplayTests {
         #endif
     }
 
-    private static func isUnavailable(_ display: PhotoDisplay) -> Bool {
-        if case .unavailable = display { return true }
-        return false
+    /// `nil` for anything that is not a failure, so an assertion can name the
+    /// reason it expects rather than only that something went wrong.
+    private static func unavailability(_ display: PhotoDisplay) -> PhotoUnavailability? {
+        guard case .unavailable(let reason) = display else { return nil }
+        return reason
     }
 
     private static func isReady(_ display: PhotoDisplay) -> Bool {
@@ -70,11 +78,27 @@ struct HikePhotoDisplayTests {
         return false
     }
 
-    @Test("a photo whose file was never written is unavailable, not loading")
+    /// Bytes under the name a photo claims, without asking the store to write
+    /// them: the only way to put a file the decoder will refuse where a photo
+    /// says its picture is. ``HikePhotoStore/store(_:capturedAt:coordinate:)``
+    /// sniffs the format and would refuse these outright.
+    private static func writeUndecodableFile(
+        for photo: HikePhoto,
+        in store: HikePhotoStore
+    ) throws {
+        try FileManager.default.createDirectory(
+            at: store.directory,
+            withIntermediateDirectories: true
+        )
+        try Data("not a picture".utf8).write(to: store.url(for: photo), options: .atomic)
+    }
+
+    @Test("a photo whose file was never written is missing, not loading")
     func displayReportsMissingFile() async throws {
         let sandbox = Sandbox()
-        // The row a hike keeps after its pixels have gone: valid metadata,
-        // nothing on disk under the name it claims.
+        // What a mirrored row looks like on a second device, and what a hike
+        // keeps after its pixels have gone: valid metadata, nothing on disk
+        // under the name it claims.
         let photo = HikePhoto()
         try #require(
             !FileManager.default.fileExists(
@@ -84,25 +108,21 @@ struct HikePhotoDisplayTests {
 
         let display = await HikePhotoLoader.display(for: photo, in: sandbox.store)
 
-        #expect(Self.isUnavailable(display))
+        #expect(Self.unavailability(display) == .notOnThisDevice)
     }
 
-    @Test("a file that is there but cannot be decoded is unavailable too")
+    /// The two failures have to stay apart: only this one is worth a "Try
+    /// Again", and only the other one is worth explaining that photo files
+    /// don't travel.
+    @Test("a file that is there but cannot be decoded is unreadable, not missing")
     func displayReportsUnreadableFile() async throws {
         let sandbox = Sandbox()
         let photo = HikePhoto()
-        // `install` writes bytes under the name the record already carries and
-        // deliberately doesn't sniff them, which is the only way to put a file
-        // the decoder will refuse where a photo says its picture is.
-        try #require(
-            await offMain {
-                sandbox.store.install(Data("not a picture".utf8), as: photo)
-            }
-        )
+        try Self.writeUndecodableFile(for: photo, in: sandbox.store)
 
         let display = await HikePhotoLoader.display(for: photo, in: sandbox.store)
 
-        #expect(Self.isUnavailable(display))
+        #expect(Self.unavailability(display) == .unreadable)
     }
 
     @Test("a photo whose file is there decodes to an image")
@@ -139,6 +159,63 @@ struct HikePhotoDisplayTests {
 
         let display = await task.value
         if case .unavailable = display {
+            Issue.record("a cancelled load must not be reported as a missing file")
+        }
+    }
+
+    // MARK: - The strip's read
+
+    /// The tile answers the same three ways the page does, because it draws a
+    /// different placeholder for each: a photo whose file is on another device
+    /// used to be indistinguishable from one still decoding, which is a tile
+    /// that stays broken with nothing said about it.
+    @Test("a thumbnail with no file behind it reports the same missing state")
+    func thumbnailReportsMissingFile() async {
+        let sandbox = Sandbox()
+
+        let display = await HikePhotoLoader.thumbnail(for: HikePhoto(), in: sandbox.store)
+
+        #expect(Self.unavailability(display) == .notOnThisDevice)
+    }
+
+    @Test("a thumbnail whose file cannot be decoded is unreadable, not missing")
+    func thumbnailReportsUnreadableFile() async throws {
+        let sandbox = Sandbox()
+        let photo = HikePhoto()
+        try Self.writeUndecodableFile(for: photo, in: sandbox.store)
+
+        let display = await HikePhotoLoader.thumbnail(for: photo, in: sandbox.store)
+
+        #expect(Self.unavailability(display) == .unreadable)
+    }
+
+    @Test("a thumbnail is rendered from the stored photo")
+    func thumbnailReturnsTheImage() async throws {
+        let sandbox = Sandbox()
+        let photo = try #require(
+            await offMain {
+                sandbox.store.store(Self.sampleImageData(), capturedAt: .now, coordinate: nil)
+            }
+        )
+
+        let display = await HikePhotoLoader.thumbnail(for: photo, in: sandbox.store)
+
+        #expect(Self.isReady(display))
+    }
+
+    /// Same rule as the page's: a cancelled tile has observed nothing, and a
+    /// tile that drew the "not on this device" glyph because it was scrolled
+    /// past would be inventing news.
+    @Test("a cancelled thumbnail reports loading rather than failure")
+    func cancelledThumbnailReportsLoading() async {
+        let sandbox = Sandbox()
+
+        let task = Task {
+            await HikePhotoLoader.thumbnail(for: HikePhoto(), in: sandbox.store)
+        }
+        task.cancel()
+
+        if case .unavailable = await task.value {
             Issue.record("a cancelled load must not be reported as a missing file")
         }
     }
