@@ -12,10 +12,10 @@
 //  message and nothing to press. ``HikePhotoLoader`` is what turns them into
 //  different values, and this suite is what holds them apart.
 //
-//  The middle one is not an edge case: photo files stay on the device that
-//  took them, so every photo of a hike walked with another phone is in that
-//  state on this one, and it is the state the strip, the map callout and the
-//  viewer all have to be able to name.
+//  The middle one is not an edge case: photo files stay on the device the
+//  photo was added on, so every photo of a hike walked with another phone is
+//  in that state on this one, and it is the state the strip, the map callout
+//  and the viewer all have to be able to name.
 //
 //  Every store here is rooted in a temporary directory, never
 //  `HikePhotoStore.shared`: these suites run in parallel with the host app,

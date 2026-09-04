@@ -214,6 +214,39 @@ extension MapCoordinatorTests {
         #expect(coordinator.photoPinController !== second)
     }
 
+    /// The callout keeps what a decode found out about the photo, because
+    /// MapKit re-enters `show(_:store:onTap:)` for a pin that is reselected
+    /// and that path deliberately does not decode again. The glyph survives it
+    /// — the image view is untouched — so the sentence describing the glyph
+    /// has to survive it too, or VoiceOver is told a photo is there while
+    /// everyone else is being shown that it is not.
+    @Test("reselecting a pin keeps what the callout found out about the photo")
+    func aReselectedPinKeepsItsUnavailableLabel() async throws {
+        #if os(iOS)
+        // Its own directory, never `HikePhotoStore.shared`: the host app
+        // writes into that one while this suite runs.
+        let root = FileManager.default.temporaryDirectory
+            .appendingPathComponent("photo-callout-\(UUID().uuidString)", isDirectory: true)
+        defer { try? FileManager.default.removeItem(at: root) }
+        let store = HikePhotoStore(storageRoot: root)
+        // A row with nothing behind it: the ordinary state of a photo added on
+        // another device.
+        let pin = try #require(
+            PhotoMapPin.pins(for: [Self.photo(at: Self.bend, offset: 0)]).first
+        )
+        let preview = PhotoCalloutPreview(frame: .zero)
+        preview.show(pin, store: store) { _ in /* unused */ }
+        await settle(until: "the callout to find the photo is not on this device") {
+            preview.accessibilityLabel?.hasSuffix("not on this device") == true
+        }
+
+        // The reselect.
+        preview.show(pin, store: store) { _ in /* unused */ }
+
+        #expect(preview.accessibilityLabel?.hasSuffix("not on this device") == true)
+        #endif
+    }
+
     private static func photo(
         at coordinate: CLLocationCoordinate2D,
         offset: TimeInterval

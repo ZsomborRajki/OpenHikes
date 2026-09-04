@@ -119,7 +119,9 @@ nonisolated enum HikePhotoLoader {
 /// rather than a picture to fail at drawing.
 nonisolated enum PhotoUnavailability: Sendable {
     /// No file under the name the row claims. What a mirrored photo looks like
-    /// on every device but the one that took it, and what a file deleted
+    /// on every device but the one it was added on — the camera writes its
+    /// bytes here and so does an import, so that is the device holding the
+    /// only copy, whatever took the picture — and what a file deleted
     /// underneath the app looks like anywhere.
     case notOnThisDevice
     /// A file is there and could not be decoded — bytes still arriving from a
