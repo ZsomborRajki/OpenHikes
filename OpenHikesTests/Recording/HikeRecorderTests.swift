@@ -280,6 +280,7 @@ final class HikeRecorderTests {
         saveModelContext: @escaping (ModelContext) throws -> Void = { context in
             try context.save()
         },
+        photoStore: HikePhotoStore = .shared,
         configureDefaults: (UserDefaults) -> Void = { _ in /* no-op */ }
     ) -> HikeRecorder {
         let defaults = UserDefaults(
@@ -289,6 +290,7 @@ final class HikeRecorderTests {
         let instance = HikeRecorder(
             container: container,
             saveModelContext: saveModelContext,
+            photoStore: photoStore,
             source: source,
             elevationSource: elevationSource,
             motionSource: motionSource,

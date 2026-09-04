@@ -53,8 +53,6 @@ struct MapSheet: View {
 
     @Environment(OpenHikesModel.self)
     private var appModel
-    @Environment(\.modelContext)
-    private var modelContext
     @FocusState private var searchFocused: Bool
     @State private var showImporter = false
     @State private var showSettings = false
@@ -308,27 +306,19 @@ private func delete(_ hike: Hike, among hikes: [Hike]) {
     // pointing at them — and stopping auto-save here, rather than waiting
     // for the selection change below to make its way back through SwiftUI,
     // closes the window where a tile still in flight lands on disk claimed
-    // by a hike that no longer exists.
+    // by a hike that no longer exists. It has to happen while the hike is
+    // still attached, which is before the store has been asked to accept the
+    // deletion — so a refused deletion leaves auto-save off for a hike that
+    // survives, until it is selected again. That is the recoverable half of
+    // the choice; a tile written for a hike that has gone is not.
     autoSave.hikeWillBeDeleted(hike)
 
-    // Clearing the selection stops the *map* drawing a deleted trail; clearing
-    // the path stops its detail view staying pushed, showing a hike that no
-    // longer exists — stats, elevation chart, and live Offline/Auto-Save
-    // controls writing to a detached object nothing will persist. SwiftData
-    // detaches rather than invalidates, so it's a stale screen rather than a
-    // crash. `SheetRoute.removeHike` owns both, including why the path is
-    // cleared unconditionally where the selection is not.
-    if SheetRoute.removeHike(hike.id, selectedHike: &selectedHike, from: &presentation.path) {
-        highlight.move(to: nil)
-    }
-
-    // The photos' own files, while the hike can still be asked which ones
-    // they are — a deleted `@Model` has nothing left to enumerate. Unlike
-    // tiles, a photo belongs to exactly one hike, so there is nothing to
-    // check against the survivors.
-    HikePhotoImport.discardFiles(of: hike)
-
-    // Free the tiles this hike had saved offline — but only the ones no
+    // Planned here, while the hike is still in the store to be asked: both
+    // `hasStoredTiles` and the plan take their claims from the sidecar row,
+    // which `HikeDeletion` drops with the hike below. Built now, spent after
+    // the deletion is on disk.
+    //
+    // It frees the tiles this hike had saved offline — but only the ones no
     // surviving hike still claims. Cache keys carry no hike identity, so
     // deleting this hike's keys outright would strip coverage from any
     // trail sharing the area (and at low zoom, that's most of them) while
@@ -340,7 +330,37 @@ private func delete(_ hike: Hike, among hikes: [Hike]) {
     // a neighbour loses the map it downloaded for a valley with no signal.
     // The hike is still deleted either way; its own tiles are then unclaimed,
     // and the next launch trim reclaims them.
-    if hike.hasStoredTiles, let deletionPlan = StoredTileDeletionPlan(removing: hike, among: hikes) {
+    let deletionPlan = hike.hasStoredTiles
+        ? StoredTileDeletionPlan(removing: hike, among: hikes)
+        : nil
+
+    // The row, its sidecar, and — once the store has accepted both — the
+    // photo files. `HikeDeletion` owns that order and takes the whole
+    // deletion back if the save is refused, which is why nothing on screen is
+    // touched until it returns: a failure leaves the sheet exactly as the user
+    // left it, showing a hike that is still there.
+    do {
+        try HikeDeletion.delete([hike])
+    } catch {
+        return
+    }
+
+    // Clearing the selection stops the *map* drawing a deleted trail; clearing
+    // the path stops its detail view staying pushed, showing a hike that no
+    // longer exists — stats, elevation chart, and live Offline/Auto-Save
+    // controls writing to a detached object nothing will persist. SwiftData
+    // detaches rather than invalidates, so it's a stale screen rather than a
+    // crash. `SheetRoute.removeHike` owns both, including why the path is
+    // cleared unconditionally where the selection is not.
+    //
+    // Safe to leave until after the save because no body runs in between:
+    // this method holds the main actor from the delete to here, and SwiftUI
+    // cannot draw the intervening state.
+    if SheetRoute.removeHike(hike.id, selectedHike: &selectedHike, from: &presentation.path) {
+        highlight.move(to: nil)
+    }
+
+    if let deletionPlan {
         // Enumerating a route's tile grid is real CPU work, per download
         // record, for every hike involved — all of it belongs off the
         // main thread.
@@ -348,17 +368,6 @@ private func delete(_ hike: Hike, among hikes: [Hike]) {
             await deletionPlan.removeExclusiveTiles(from: .shared)
         }
     }
-
-    // Last, because everything above reads it: `hasStoredTiles` and the
-    // deletion plan both take their claims from the sidecar row, which lives
-    // in the *other* store and so has nothing cascading to it. Dropping it any
-    // earlier would leave the plan with an empty claim set and this hike's
-    // tiles on disk; leaving it behind entirely would have it go on claiming
-    // them forever, which is the one leak `TileCache.trimCache(claimedBy:)`
-    // cannot see — it frees what nothing claims, and an orphaned sidecar is
-    // still a claim.
-    hike.deleteLocalState()
-    modelContext.delete(hike)
 }
 
 /// Opens a tapped hike suggestion straight to its detail view.

@@ -59,6 +59,10 @@ final class HikeRecorder: NSObject {
 
     @ObservationIgnored let container: ModelContainer
     @ObservationIgnored let saveModelContext: (ModelContext) throws -> Void
+    /// Where a discarded draft's photo files are erased from. The one seam a
+    /// suite needs to watch that erase without writing into the host app's
+    /// real photo directory.
+    @ObservationIgnored let photoStore: HikePhotoStore
     @ObservationIgnored let source: any RecordingLocationSource
     @ObservationIgnored let elevationSource: (any RecordingElevationSource)?
     @ObservationIgnored let motionSource: (any RecordingMotionSource)?
@@ -231,6 +235,7 @@ final class HikeRecorder: NSObject {
         saveModelContext: @escaping (ModelContext) throws -> Void = { context in
             try context.save()
         },
+        photoStore: HikePhotoStore = .shared,
         source: (any RecordingLocationSource)? = nil,
         elevationSource: (any RecordingElevationSource)? = nil,
         motionSource: (any RecordingMotionSource)? = nil,
@@ -261,6 +266,7 @@ final class HikeRecorder: NSObject {
             )
         self.container = container
         self.saveModelContext = saveModelContext
+        self.photoStore = photoStore
         self.source = source ?? SystemRecordingLocationSource()
         self.elevationSource = elevationSource
         self.motionSource = motionSource

@@ -2,8 +2,9 @@
 //  HikePhotoImportTests+Removal.swift
 //  OpenHikesTests
 //
-//  The other direction: taking a photo back out, and taking a whole hike's
-//  worth out at once.
+//  The other direction: taking a photo back out. A whole hike's worth goes
+//  the same way, one commit further out, and is checked in
+//  `HikeDeletionTests+Photos`.
 //
 //  Removal is two writes that cannot be made one — the metadata detach, which
 //  SwiftData commits, and the file erase, which the store does off the main
@@ -137,43 +138,5 @@ extension HikePhotoImportTests {
                 atPath: sandbox.store.url(for: kept).path
             )
         )
-    }
-
-    /// Called before the hike leaves the store, while it can still be asked
-    /// which files are its own — the ordering the deletion path in `MapSheet`
-    /// and the recorder's orphan sweep both depend on.
-    @Test("discarding a hike's files takes all of them")
-    func discardFilesClearsEverything() async throws {
-        let sandbox = Sandbox()
-        let context = try Fixture.modelContext()
-        let hike = Fixture.hike(in: context)
-        for _ in 0 ..< 3 {
-            _ = await HikePhotoImport.add(
-                Self.sampleImageData(),
-                to: hike,
-                coordinate: nil,
-                savesToPhotoLibrary: false,
-                store: sandbox.store
-            )
-        }
-        #expect(Self.fileCount(in: sandbox.store.directory) == 3)
-
-        HikePhotoImport.discardFiles(of: hike, store: sandbox.store)
-
-        await settleDelegateHop(until: "every photo file to be erased") {
-            Self.fileCount(in: sandbox.store.directory) == 0
-        }
-        #expect(Self.fileCount(in: sandbox.store.directory) == 0)
-    }
-
-    @Test("a hike with no photos discards nothing and doesn't fail")
-    func discardFilesToleratesAnEmptyHike() throws {
-        let sandbox = Sandbox()
-        let context = try Fixture.modelContext()
-        let hike = Fixture.hike(in: context)
-
-        HikePhotoImport.discardFiles(of: hike, store: sandbox.store)
-
-        #expect(hike.photos.isEmpty)
     }
 }

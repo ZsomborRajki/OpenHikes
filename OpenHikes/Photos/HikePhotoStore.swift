@@ -76,14 +76,20 @@ nonisolated struct ImageDataFormat: Equatable, Sendable {
 /// thread-safe but not declared `Sendable` by the SDK. Every other stored
 /// property is immutable.
 nonisolated final class HikePhotoStore: @unchecked Sendable {
-    /// The two files one photo occupies, named rather than modelled, so a
-    /// measurement can be taken off the main actor. See
-    /// `byteCount(of: [PhotoFiles])`.
+    /// The two files one photo occupies, named rather than modelled, so the
+    /// work that spends them can outlive the model they were read from: a
+    /// measurement taken off the main actor, and an erase that runs only once
+    /// the row claiming them is gone from the store. See
+    /// `byteCount(of: [PhotoFiles])` and `remove(_:)`.
     struct PhotoFiles: Equatable, Sendable {
+        /// Carried because the thumbnail tier is keyed by photo rather than by
+        /// file name, and a deleted photo's entry has to go with its files.
+        let id: UUID
         let fileName: String
         let thumbnailFileName: String
 
         init(_ photo: HikePhoto) {
+            id = photo.id
             fileName = photo.fileName
             thumbnailFileName = photo.thumbnailFileName
         }
@@ -253,6 +259,19 @@ nonisolated final class HikePhotoStore: @unchecked Sendable {
         )
     }
 
+    /// The same two paths from a snapshot of the names — what the measurement
+    /// and the erase below are handed.
+    private func url(for file: PhotoFiles) -> URL {
+        directory.appendingPathComponent(file.fileName, isDirectory: false)
+    }
+
+    private func thumbnailURL(for file: PhotoFiles) -> URL {
+        thumbnailDirectory.appendingPathComponent(
+            file.thumbnailFileName,
+            isDirectory: false
+        )
+    }
+
     /// The gallery strip's image.
     ///
     /// Rendered once and kept: the strip is rebuilt every time the hike screen
@@ -326,15 +345,8 @@ nonisolated final class HikePhotoStore: @unchecked Sendable {
     func byteCount(of files: [PhotoFiles]) -> Int64 {
         assertOffMainThread("Photo measurement must stay off the main thread")
         return files.reduce(into: Int64(0)) { total, file in
-            total += Self.fileSize(
-                directory.appendingPathComponent(file.fileName, isDirectory: false)
-            )
-            total += Self.fileSize(
-                thumbnailDirectory.appendingPathComponent(
-                    file.thumbnailFileName,
-                    isDirectory: false
-                )
-            )
+            total += Self.fileSize(url(for: file))
+            total += Self.fileSize(thumbnailURL(for: file))
         }
     }
 
@@ -342,13 +354,19 @@ nonisolated final class HikePhotoStore: @unchecked Sendable {
 
     /// Removes these photos' files. Safe to call for a photo whose file is
     /// already gone, which is what a partly-failed import leaves behind.
-    func remove(_ photos: [HikePhoto]) {
+    ///
+    /// Named rather than modelled, because an erase is the *last* step of a
+    /// removal and by then the model it would have read is on its way out of
+    /// the store — deleted, and after the save that commits it, detached.
+    /// ``HikeDeletion/delete(_:store:save:)`` takes the snapshot on the way
+    /// past, while the photos are still attached and can still be enumerated.
+    func remove(_ files: [PhotoFiles]) {
         assertOffMainThread("Photo deletion must stay off the main thread")
-        for photo in photos {
-            try? FileManager.default.removeItem(at: url(for: photo))
-            try? FileManager.default.removeItem(at: thumbnailURL(for: photo))
+        for file in files {
+            try? FileManager.default.removeItem(at: url(for: file))
+            try? FileManager.default.removeItem(at: thumbnailURL(for: file))
             // swiftlint:disable:next legacy_objc_type
-            thumbnails.removeObject(forKey: photo.id.uuidString as NSString)
+            thumbnails.removeObject(forKey: file.id.uuidString as NSString)
         }
     }
 

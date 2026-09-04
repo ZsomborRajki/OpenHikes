@@ -254,19 +254,14 @@ extension HikeRecorder {
         guard let sessionID,
               let hike = try existingHike(sessionID: sessionID),
               hike.isRecording else { return }
-        HikePhotoImport.discardFiles(of: hike)
-        // Before the delete, because `Hike.deleteLocalState()` reaches the
-        // sidecar through the hike's own `modelContext` and a deleted row has
-        // none. A recording draft is not an empty one: `AutoSaveController`
-        // folds browsing tiles into whichever hike is active, which for the
-        // length of a walk is this draft. Nothing cascades between the two
-        // stores, and nothing ever fetches a `HikeLocalState` except by the
-        // `hikeID` of a hike that still exists — so a row left behind here is
-        // unreachable and unsweepable, one per discarded recording, forever.
-        hike.deleteLocalState()
-        container.mainContext.delete(hike)
+        // A discarded draft is deleted the same way a saved hike is, sidecar
+        // and photo files included — see `HikeDeletion`. A recording draft is
+        // not an empty one on either count: the camera attaches photos to it
+        // while the walk is on, and `AutoSaveController` folds browsing tiles
+        // into whichever hike is active, which for the length of a walk is
+        // this draft.
         do {
-            try saveModelContext(container.mainContext)
+            try HikeDeletion.delete([hike], store: photoStore, save: saveModelContext)
         } catch {
             throw .save(error.localizedDescription)
         }
@@ -291,16 +286,12 @@ extension HikeRecorder {
            orphans.contains(where: { $0.id == currentHike.id }) {
             self.currentHike = nil
         }
-        for hike in orphans {
-            HikePhotoImport.discardFiles(of: hike)
-            // As in `deleteRecordingHike(sessionID:)` and for the same
-            // reason — an orphan has had a whole walk to accumulate
-            // auto-saved tile keys before the launch that abandoned it.
-            hike.deleteLocalState()
-            container.mainContext.delete(hike)
-        }
+        // One commit for the whole sweep, and — as in
+        // `deleteRecordingHike(sessionID:)` — nothing erased until it lands.
+        // An orphan has had a whole walk to accumulate photos and auto-saved
+        // tile keys before the launch that abandoned it.
         do {
-            try saveModelContext(container.mainContext)
+            try HikeDeletion.delete(orphans, store: photoStore, save: saveModelContext)
         } catch {
             throw .save(error.localizedDescription)
         }
