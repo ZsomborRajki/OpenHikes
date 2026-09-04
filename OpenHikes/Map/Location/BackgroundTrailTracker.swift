@@ -490,6 +490,14 @@ final class BackgroundTrailTracker: NSObject {
             maximumAge: LocationFixPolicy.backgroundMaximumAge,
             maximumHorizontalAccuracy: RouteProfile.followMatchThresholdMeters
         ) else { return }
+        // Before the match rather than inside it, and before the tracked hike
+        // is even read. Matching is the only thing that used to reach the
+        // session here, so a walker who left the trail produced nothing but
+        // unmatched significant changes and the six-hour rule never fired
+        // while the app stayed backgrounded — the widget and the Lock Screen
+        // kept an off-trail walk indefinitely. The foreground path checks on
+        // every fix; this is the same check on every accepted one.
+        walkSession?.endIfAbandoned()
         // Kept even though monitoring is now disarmed on deselection: a fix
         // already in flight can still land in the window between the two.
         guard let hikeID = trackedHikeID else { return }
@@ -537,7 +545,15 @@ final class BackgroundTrailTracker: NSObject {
                 lastMatchedDistance = distance
                 // Coverage accrues from here too — this is the feed that
                 // keeps a walk honest while the phone is in a pocket.
-                walkSession?.recordBackgroundMatch(hikeID: hikeID, distance: distance, at: timestamp)
+                let completedWalk = walkSession?.recordBackgroundMatch(
+                    hikeID: hikeID,
+                    distance: distance,
+                    at: timestamp
+                ) ?? false
+                // A fix that completed the walk is not published: the write
+                // below would carry no walk and start a plain follow over the
+                // finished panel `walkDidEnd` has just queued.
+                if completedWalk { return }
             }
             // A paused walk neither extends the union nor publishes: the
             // widget already says Paused, and a moving dot would contradict it.
@@ -594,25 +610,49 @@ final class BackgroundTrailTracker: NSObject {
     func walkDidEnd(final: SharedTrailSnapshot.Walk?) {
         guard let hikeID = walkedHikeID else { return }
         walkedHikeID = nil
+        // The revision this walk's last write is gated on. Applying the
+        // deferred selection bumps it, which is why that now happens inside
+        // the completion below and not beside it: done first, it rejected the
+        // terminal write and the panel was left on screen with no result on
+        // it — or ended at once with nothing, which is what an abandoned walk
+        // gets and not what a finished one does.
+        let revision = selectionRevision
         updateStoredWalk(nil, hikeID: hikeID) { [weak self] snapshot in
             guard let self else { return }
-            var closing = snapshot
-            closing.walk = final
+            // The result is built from what actually landed; the panel comes
+            // down either way, since a skipped write is no reason to leave a
+            // finished walk on the Lock Screen.
+            let finalState = final.flatMap { walk -> HikeActivityAttributes.ContentState? in
+                guard var closing = snapshot else { return nil }
+                closing.walk = walk
+                return .init(following: closing)
+            }
             endFollowActivity(
                 hikeID: hikeID,
-                finalState: final.map { _ in .init(following: closing) },
-                dismissAfter: final == nil ? nil : HikeLiveActivityController.finishedDismissAfter
+                finalState: finalState,
+                dismissAfter: finalState == nil ? nil : HikeLiveActivityController.finishedDismissAfter
             )
+            applyDeferredSelection(ifRevisionIs: revision)
         }
-        if let deferred = deferredSelection {
-            deferredSelection = nil
-            hikeSelectionChanged(to: deferred.hike)
-        }
+    }
+
+    /// Applies a selection remembered while the walk held the tracked hike.
+    ///
+    /// Dropped rather than applied when the revision has moved on: a newer
+    /// selection arrived after the walk released the pin and has already been
+    /// applied, and re-applying the remembered one would take the walker back
+    /// to a trail they left.
+    private func applyDeferredSelection(ifRevisionIs revision: UInt64) {
+        guard let deferred = deferredSelection else { return }
+        deferredSelection = nil
+        guard selectionRevision == revision else { return }
+        hikeSelectionChanged(to: deferred.hike)
     }
 
     /// Puts a pause or a resume in front of the walker at once.
     func walkStateDidChange(_ walk: SharedTrailSnapshot.Walk, hikeID: UUID) {
         updateStoredWalk(walk, hikeID: hikeID) { [weak self] snapshot in
+            guard let snapshot else { return }
             self?.publishFollowActivity(snapshot)
         }
     }
@@ -687,10 +727,16 @@ extension BackgroundTrailTracker {
     /// and the Lock Screen offered the new run state at once, through the
     /// same funnel a fix goes through, so a Paused that arrives between two
     /// fixes cannot be overwritten by the earlier of them landing late.
+    ///
+    /// - Parameter completion: handed what landed, or `nil` for a write the
+    ///   store skipped — a snapshot for another trail, or a selection that
+    ///   arrived while this was in flight. Called either way, because the end
+    ///   of a walk has work that has to happen whether or not the widget took
+    ///   the write: see ``walkDidEnd(final:)``.
     func updateStoredWalk(
         _ walk: SharedTrailSnapshot.Walk?,
         hikeID: UUID,
-        then completion: @escaping @MainActor (SharedTrailSnapshot) -> Void = { _ in /* no-op default */ }
+        then completion: @escaping @MainActor (SharedTrailSnapshot?) -> Void = { _ in /* no-op default */ }
     ) {
         let revision = selectionRevision
         let previous = fixPublishTask
@@ -701,12 +747,14 @@ extension BackgroundTrailTracker {
             defer { self?.finishFixPublish(sequence: sequence) }
             await previous?.value
             await pendingSelection?.value
-            guard let self,
-                  let snapshot = await snapshotWriter.applyWalk(walk, hikeID: hikeID, ifCurrent: revision),
-                  selectionRevision == revision
-            else { return }
-            await snapshotWriter.reloadWidget()
-            completion(snapshot)
+            guard let self else { return }
+            var written: SharedTrailSnapshot?
+            if let snapshot = await snapshotWriter.applyWalk(walk, hikeID: hikeID, ifCurrent: revision),
+               selectionRevision == revision {
+                await snapshotWriter.reloadWidget()
+                written = snapshot
+            }
+            completion(written)
         }
     }
 

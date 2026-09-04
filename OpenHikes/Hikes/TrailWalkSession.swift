@@ -32,6 +32,33 @@ import OpenHikesShared
 import os
 import SwiftData
 
+/// What ending a walk came to.
+///
+/// Three answers rather than an optional row, because the third one is not a
+/// missing row: a store that refuses the commit leaves the walk *under way*,
+/// and a caller that could not tell it from a walk too short to keep would
+/// take the controls off screen for a walk that is still running.
+enum TrailWalkEnd {
+    /// The walk ended with nothing to keep — under
+    /// ``TrailWalkPolicy/minimumCoverageMeters``, or along a hike that has
+    /// gone away — or there was no walk to end.
+    case discarded
+    /// The walk ended and became this row.
+    case kept(HikeWalk)
+    /// The store refused the commit. Nothing was cleared and nothing was
+    /// written: the walk is still under way and can be ended again.
+    case refused
+}
+
+extension TrailWalkEnd {
+    /// The row the walk became, if it became one. For a caller that has
+    /// nothing to say about a refusal; the one that does switches instead.
+    var walk: HikeWalk? {
+        guard case let .kept(walk) = self else { return nil }
+        return walk
+    }
+}
+
 @MainActor
 @Observable
 final class TrailWalkSession {
@@ -66,7 +93,18 @@ final class TrailWalkSession {
     /// recorder because the recorder is the single authority on that and
     /// this must not become a second one.
     @ObservationIgnored private let activeRecordingHikeID: () -> UUID?
+    @ObservationIgnored private let commit: (ModelContext) throws -> Void
     @ObservationIgnored private var lastPersistedAt: Date?
+    /// The hike whose walk was ended here, held until the walker leaves its
+    /// route or turns following on again.
+    ///
+    /// Without it End is not an end: the next accepted on-route fix finds no
+    /// record, starts a fresh walk, and the controls come straight back —
+    /// most visibly for a walk under 100 m, where End returns nothing and
+    /// the detail is still on screen. Cleared by ``recordOffRoute(hikeID:)``
+    /// and by turning Auto-Follow Trail back on, which are the two ways a
+    /// walker says they mean to walk this trail again.
+    @ObservationIgnored private var endedHikeID: UUID?
 
     /// - Parameters:
     ///   - context: where the sidecar column and the finished rows are
@@ -75,15 +113,21 @@ final class TrailWalkSession {
     ///   - tracker: the widget and Lock Screen feed, pinned to the walked
     ///     hike for the life of a walk. Optional so a suite about the state
     ///     machine alone needs no App Group.
+    ///   - save: the seam the commit goes through, so a test can refuse one
+    ///     and watch what the session does with a walk it could not write.
+    ///     The same seam ``HikeDeletion/delete(_:store:save:)`` takes. Last,
+    ///     so `activeRecordingHikeID` stays the trailing closure it was.
     init(
         context: ModelContext,
         tracker: BackgroundTrailTracker? = nil,
         clock: @escaping @Sendable () -> Date = { Date() },
-        activeRecordingHikeID: @escaping () -> UUID? = { nil }
+        activeRecordingHikeID: @escaping () -> UUID? = { nil },
+        save: @escaping (ModelContext) throws -> Void = { try $0.save() }
     ) {
         self.context = context
         self.tracker = tracker
         self.clock = clock
+        commit = save
         self.activeRecordingHikeID = activeRecordingHikeID
         tracker?.walkSession = self
     }
@@ -119,21 +163,39 @@ final class TrailWalkSession {
     /// A fix matched on-route at `distance` along `hike`, from the foreground
     /// follow loop. Starts a walk if one may start, extends the one under
     /// way, or does nothing for a hike that is not the walked one.
-    func recordForegroundMatch(hike: Hike, profile: RouteProfile, distance: Double) {
+    ///
+    /// - Returns: whether this fix *ended* the walk. A caller that publishes
+    ///   the fix afterwards must not: see ``recordMatch(hikeID:distance:at:)``.
+    @discardableResult func recordForegroundMatch(hike: Hike, profile: RouteProfile, distance: Double) -> Bool {
         let now = clock()
         endIfAbandoned(at: now)
         if record == nil {
             startIfEligible(hike: hike, profile: profile, at: now)
         }
-        recordMatch(hikeID: hike.id, distance: distance, at: now)
+        return recordMatch(hikeID: hike.id, distance: distance, at: now)
     }
 
     /// A fix matched on-route by the background feed. Never starts a walk —
     /// selection alone starts nothing, and neither does a significant
     /// change — but keeps one accruing while the phone is in a pocket.
-    func recordBackgroundMatch(hikeID: UUID, distance: Double, at timestamp: Date) {
+    ///
+    /// - Returns: whether this fix ended the walk, as above.
+    @discardableResult func recordBackgroundMatch(hikeID: UUID, distance: Double, at timestamp: Date) -> Bool {
         endIfAbandoned(at: clock())
-        recordMatch(hikeID: hikeID, distance: distance, at: timestamp)
+        return recordMatch(hikeID: hikeID, distance: distance, at: timestamp)
+    }
+
+    /// An accepted fix that did not match `hikeID`'s route: the walker is
+    /// off the trail. Rearms auto-start for a hike whose walk was ended
+    /// here — leaving the route is the boundary an End waits for.
+    func recordOffRoute(hikeID: UUID) {
+        rearmStart(hikeID: hikeID)
+    }
+
+    /// Lets `hikeID` start a walk again after one was ended along it.
+    private func rearmStart(hikeID: UUID) {
+        guard endedHikeID == hikeID else { return }
+        endedHikeID = nil
     }
 
     /// Ends a walk that has gone unmatched for ``TrailWalkPolicy/abandonAfter``.
@@ -144,13 +206,18 @@ final class TrailWalkSession {
         finish(reason: .abandoned, at: now ?? clock())
     }
 
-    private func recordMatch(hikeID: UUID, distance: Double, at now: Date) {
-        guard var current = record, current.hikeID == hikeID else { return }
+    /// - Returns: whether the match closed the walk. Both callers publish the
+    ///   fix they just fed in, and a fix that completed a walk must not be
+    ///   published: with the record cleared, `publishes(_:)` says yes and
+    ///   `payload(for:)` says nothing, so the write would start a fresh plain
+    ///   follow over the finished panel ``walkDidEnd(final:)`` just queued.
+    @discardableResult private func recordMatch(hikeID: UUID, distance: Double, at now: Date) -> Bool {
+        guard var current = record, current.hikeID == hikeID else { return false }
         current.lastMatchedAt = now
         guard current.phase == .following else {
             // Seen, so the walk is not abandoned — but not walked.
             record = current
-            return
+            return false
         }
         current.coverage.record(distance: distance)
         record = current
@@ -159,18 +226,23 @@ final class TrailWalkSession {
         let furthest = current.coverage.furthestDistanceMeters
         if furthestDistanceMeters != furthest { furthestDistanceMeters = furthest }
         if current.reachesEnd(atMatch: distance) {
-            finish(reason: .reachedEnd, at: now)
-            return
+            // A refused commit leaves the walk under way, and the fix that
+            // fed it is an ordinary one again.
+            if case .refused = finish(reason: .reachedEnd, at: now) { return false }
+            return true
         }
         persistIfDue(at: now)
+        return false
     }
 
     // MARK: Start
 
     /// Whether `hike` may start a walk right now: nothing else is being
-    /// walked, following is on, and this is not a recording's own draft.
+    /// walked, the last walk along it has not just been ended, following is
+    /// on, and this is not a recording's own draft.
     func canStart(_ hike: Hike) -> Bool {
         record == nil
+            && endedHikeID != hike.id
             && hike.autoFollowEnabled
             && hike.isAttached
             && !hike.belongsToActiveRecording(currentHikeID: activeRecordingHikeID())
@@ -192,6 +264,7 @@ final class TrailWalkSession {
     private func adopt(_ walk: TrailWalkRecord, hike: Hike) {
         record = walk
         walkedHike = hike
+        endedHikeID = nil
         lastEndedWalk = nil
         walkedHikeID = hike.id
         walkedHikeTitle = hike.displayTitle
@@ -232,7 +305,13 @@ final class TrailWalkSession {
     /// following*. Returns whether a walk was paused by it, so the caller
     /// knows the Lock Screen is saying Paused rather than coming down.
     @discardableResult func autoFollowDidChange(hikeID: UUID, enabled: Bool) -> Bool {
-        guard !enabled, let record, record.hikeID == hikeID, record.phase == .following else { return false }
+        guard !enabled else {
+            // Turning it back on is the walker asking to follow this trail
+            // again — the other way an End's boundary is rearmed.
+            rearmStart(hikeID: hikeID)
+            return false
+        }
+        guard let record, record.hikeID == hikeID, record.phase == .following else { return false }
         pause()
         return true
     }
@@ -244,9 +323,10 @@ final class TrailWalkSession {
 
     // MARK: End
 
-    /// The walker tapped End. Returns the row it became, or `nil` for a walk
-    /// under the minimum, which is simply cleared.
-    @discardableResult func end() -> HikeWalk? {
+    /// The walker tapped End. Returns the row it became, a walk under the
+    /// minimum that was simply cleared, or a commit the store refused — see
+    /// ``TrailWalkEnd``.
+    @discardableResult func end() -> TrailWalkEnd {
         finish(reason: .ended, at: clock())
     }
 
@@ -258,8 +338,18 @@ final class TrailWalkSession {
         tracker?.walkDidEnd(final: nil)
     }
 
-    @discardableResult private func finish(reason: TrailWalkEndReason, at now: Date) -> HikeWalk? {
-        guard let closing = record else { return nil }
+    /// Closes the walk under way and writes what it came to.
+    ///
+    /// The commit is the whole of it. Nothing here is cleared, published or
+    /// handed back until the store has accepted the row and the cleared
+    /// column together: on a refusal the inserted row and the cleared
+    /// sidecar exist only as pending edits, and a process that exits there
+    /// would find a sidecar still describing an open walk with the row gone.
+    /// So a refusal rolls the context back and leaves the walk exactly as it
+    /// was — the same refusal ``HikeDeletion`` and ``HikeRecorder`` make, and
+    /// the caller either says so or tries again on the next fix.
+    @discardableResult private func finish(reason: TrailWalkEndReason, at now: Date) -> TrailWalkEnd {
+        guard let closing = record else { return .discarded }
         let kept = closing.coverage.meetsMinimum
         var row: HikeWalk?
         if kept, let hike = walkedHike, hike.isAttached {
@@ -270,19 +360,41 @@ final class TrailWalkSession {
         }
         // The row and the cleared column land in one save.
         walkedHike?.walkInProgress = nil
-        save(reason: "ending a walk")
+        guard save(reason: "ending a walk") else {
+            // Put both edits back by hand rather than through
+            // `ModelContext.rollback()`, which does not do the second one:
+            // measured in ``StoredTileDeletion``, a rolled-back context still
+            // holds an attribute written over an existing row. Undoing the
+            // row by hand as well keeps the pair symmetrical and leaves every
+            // other pending edit in the context alone.
+            if let row {
+                row.hike = nil
+                context.delete(row)
+            }
+            walkedHike?.walkInProgress = closing
+            // The column on disk is whatever the last accepted write left, so
+            // the next milestone has to write again rather than wait out the
+            // cadence.
+            lastPersistedAt = nil
+            return .refused
+        }
         RenderSignpost.mark("TrailWalkEnded", reason.rawValue)
-        let lingers = kept && reason != .abandoned
+        let lingers = row != nil && reason != .abandoned
         let final = lingers ? Self.payload(for: closing, at: now, state: .finished) : nil
+        let endedID = closing.hikeID
         clearState()
+        // After `clearState`, which clears it: an ended walk is exactly what
+        // has to stop the next matched fix from starting another one.
+        if reason != .abandoned { endedHikeID = endedID }
         if lingers { lastEndedWalk = row }
         tracker?.walkDidEnd(final: final)
-        return row
+        return row.map { .kept($0) } ?? .discarded
     }
 
     private func clearState() {
         record = nil
         walkedHike = nil
+        endedHikeID = nil
         lastPersistedAt = nil
         walkedHikeID = nil
         walkedHikeTitle = ""
@@ -345,12 +457,18 @@ final class TrailWalkSession {
         save(reason: "writing the walk in progress")
     }
 
-    private func save(reason: String) {
+    /// - Returns: whether the store accepted it. Only ``finish(reason:at:)``
+    ///   reads the answer: a sidecar write that fails is written again at the
+    ///   next milestone, and a walk that ends is the one commit with nothing
+    ///   behind it to try again.
+    @discardableResult private func save(reason: String) -> Bool {
         do {
-            try context.save()
+            try commit(context)
+            return true
         } catch {
             let description = error.localizedDescription
             Self.logger.error("Could not save while \(reason, privacy: .public): \(description, privacy: .public)")
+            return false
         }
     }
 

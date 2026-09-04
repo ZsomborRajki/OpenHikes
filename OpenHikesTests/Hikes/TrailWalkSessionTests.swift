@@ -16,8 +16,8 @@ import Testing
 @Suite("Trail walk session")
 struct TrailWalkSessionTests {
     private let container: ModelContainer
-    private let context: ModelContext
-    private let clock = TestClock()
+    let context: ModelContext
+    let clock = TestClock()
     private var recordingHikeID: UUID?
 
     init() throws {
@@ -25,17 +25,17 @@ struct TrailWalkSessionTests {
         context = ModelContext(container)
     }
 
-    private func session(recordingHikeID: UUID? = nil) -> TrailWalkSession {
+    func session(recordingHikeID: UUID? = nil) -> TrailWalkSession {
         TrailWalkSession(context: context, clock: clock.read) { recordingHikeID }
     }
 
-    private func hike(title: String = "Ridge Loop", configure: (Hike) -> Void = { _ in /* no-op */ }) -> Hike {
+    func hike(title: String = "Ridge Loop", configure: (Hike) -> Void = { _ in /* no-op */ }) -> Hike {
         Fixture.hike(in: context, title: title, route: Fixture.outAndBackRoute, configure: configure)
     }
 
     /// Feeds the session one match per route point from `start` to `end`,
     /// a minute apart — a walker, not a teleport.
-    private func walk(
+    func walk(
         _ session: TrailWalkSession,
         hike: Hike,
         profile: RouteProfile,
@@ -48,7 +48,7 @@ struct TrailWalkSessionTests {
         }
     }
 
-    private func walks(of hike: Hike) throws -> [HikeWalk] {
+    func walks(of hike: Hike) throws -> [HikeWalk] {
         let id = hike.id
         return try context.fetch(FetchDescriptor<HikeWalk>(predicate: #Predicate { $0.hikeID == id }))
     }
@@ -150,7 +150,7 @@ struct TrailWalkSessionTests {
         #expect(session.activeSeconds() > beforePause)
         #expect(abs(session.activeSeconds() - (beforePause + 4 * 60)) < 1)
 
-        let ended = try #require(session.end())
+        let ended = try #require(session.end().walk)
         #expect(ended.endReason == .ended)
         #expect(abs(ended.activeSeconds - (beforePause + 4 * 60)) < 1)
         #expect(session.walkedHikeID == nil)
@@ -168,7 +168,7 @@ struct TrailWalkSessionTests {
         walk(session, hike: hike, profile: profile, from: 0, through: 5)
         session.pause()
 
-        let ended = try #require(session.end())
+        let ended = try #require(session.end().walk)
 
         #expect(ended.coveredFraction > 0)
         #expect(ended.endReason == .ended)
@@ -218,6 +218,55 @@ struct TrailWalkSessionTests {
         #expect(try walks(of: hike).count == 1)
     }
 
+    /// A pause says the walk continues, and a paused walker produces nothing
+    /// that could advance the clock abandonment is measured from: they are not
+    /// moving, so no significant change wakes the background feed either.
+    /// Measured against the six-hour rule, a hut evening closes the walk with
+    /// the walker looking at it.
+    @Test("a pause outlasts the abandonment bound")
+    func pauseOutlastsTheAbandonmentBound() {
+        let session = session()
+        let hike = hike()
+        let profile = RouteProfile(route: hike.route)
+        walk(session, hike: hike, profile: profile, from: 0, through: 5)
+        session.pause()
+
+        clock.advance(by: TrailWalkPolicy.abandonAfter + 3600)
+        session.endIfAbandoned()
+
+        #expect(session.walkedHikeID == hike.id)
+        #expect(session.phase == .paused)
+        session.resume()
+        #expect(session.phase == .following, "and it is still the walk that resumes")
+    }
+
+    /// The gap bound bridges a lost signal, on the reasoning that the walker
+    /// probably did walk the stretch in between. A pause is the opposite
+    /// statement, and the one case where the bridge is known to be wrong.
+    @Test("the stretch walked while paused is not counted on resume")
+    func resumeDoesNotBridgeThePause() throws {
+        let session = session()
+        let hike = hike()
+        let profile = RouteProfile(route: hike.route)
+        walk(session, hike: hike, profile: profile, from: 0, through: 3)
+        let covered = try #require(session.record).coverage.coveredMeters
+        session.pause()
+
+        // 400 m of ridge, walked with the walk explicitly paused — inside the
+        // gap bound, so it is a stretch that would have been bridged.
+        let resumedAt = profile.distances[3] + 400
+        #expect(resumedAt - profile.distances[3] <= TrailWalkPolicy.gapBoundMeters, "precondition: bridgeable")
+        session.resume()
+        clock.advance(by: 60)
+        session.recordForegroundMatch(hike: hike, profile: profile, distance: resumedAt)
+
+        #expect(try #require(session.record).coverage.coveredMeters == covered)
+        #expect(
+            try #require(session.record).coverage.furthestDistanceMeters == resumedAt,
+            "the walker did get there, they just did not walk it as part of this walk"
+        )
+    }
+
     @Test("six hours without a match closes the walk as abandoned, and keeps it")
     func abandonedAfterSixHours() throws {
         let session = session()
@@ -265,7 +314,7 @@ struct TrailWalkSessionTests {
         session.recordForegroundMatch(hike: hike, profile: profile, distance: profile.distances[0])
         session.recordForegroundMatch(hike: hike, profile: profile, distance: profile.distances[0] + 30)
 
-        #expect(session.end() == nil)
+        #expect(session.end().walk == nil)
 
         #expect(session.walkedHikeID == nil)
         #expect(hike.walkInProgress == nil)

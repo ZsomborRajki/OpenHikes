@@ -31,6 +31,13 @@ nonisolated enum TrailWalkPolicy {
     static let reachedEndFraction: Double = 0.95
     static let reachedEndProximityMeters: Double = 50
     /// No on-route match for this long ends the walk as abandoned.
+    ///
+    /// A *following* walk only: a pause is the walker saying the walk
+    /// continues, and nothing advances a paused walk's last match — they are
+    /// not moving, so no significant change wakes the background feed either.
+    /// Measured against this, a hut evening or an overnight on a two-day
+    /// trail would close the walk with the walker looking at it.
+    /// ``staleAtLaunchAfter`` is the backstop for a pause nobody came back to.
     static let abandonAfter: TimeInterval = 6 * 3600
     /// A walk found still open at launch, whose last activity is older than
     /// this, is closed as abandoned before anything adopts it.
@@ -111,6 +118,19 @@ nonisolated struct TrailWalkCoverage: Codable, Equatable, Sendable {
               abs(distance - last) <= TrailWalkPolicy.gapBoundMeters
         else { return }
         insert(min(last, distance), max(last, distance))
+    }
+
+    /// Drops the continuity reference, so the next match starts a fresh
+    /// interval the way a walk's first match does.
+    ///
+    /// What a pause needs. The gap bound is the right rule for a lost
+    /// signal — the walker probably did walk the stretch in between — and it
+    /// is exactly wrong across a pause, which is the walker saying they did
+    /// not walk what comes next. Without this, pausing at the col and
+    /// walking 400 m down the ridge hands the union that 400 m on the first
+    /// fix after Resume.
+    mutating func breakContinuity() {
+        lastMatchedDistance = nil
     }
 
     /// The union's total length, in metres.
@@ -224,6 +244,9 @@ nonisolated struct TrailWalkRecord: Codable, Equatable, Sendable {
         bankedActiveSeconds = activeSeconds(at: now)
         phase = .paused
         phaseChangedAt = now
+        // Whatever is walked while paused is not this walk's, and the first
+        // match after a Resume must not be bridged back to here.
+        coverage.breakContinuity()
     }
 
     mutating func resume(at now: Date) {
@@ -247,8 +270,14 @@ nonisolated struct TrailWalkRecord: Codable, Equatable, Sendable {
 
     /// Whether the walk has gone unmatched for long enough to count as
     /// abandoned.
+    ///
+    /// A paused walk never is — see ``TrailWalkPolicy/abandonAfter``. It is
+    /// a walk nobody forgot: someone said *stop following*, and the only
+    /// thing that would advance the clock this is measured from is the
+    /// movement they just said they were not making.
     func isAbandoned(at now: Date) -> Bool {
-        now.timeIntervalSince(lastActivityAt) > TrailWalkPolicy.abandonAfter
+        guard phase == .following else { return false }
+        return now.timeIntervalSince(lastActivityAt) > TrailWalkPolicy.abandonAfter
     }
 
     /// Whether a walk found still open at launch is too old to adopt.

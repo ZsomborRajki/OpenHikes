@@ -372,6 +372,38 @@ final class BackgroundDeliveryTests {
         #expect(snapshot.walk?.coveredFraction == session.coveredFraction)
     }
 
+    /// Abandonment used to be checked only inside the matched branch. Once
+    /// the walker left the trail every significant change was unmatched, so
+    /// nothing reached the session and the six-hour rule never fired while
+    /// the app stayed backgrounded — the widget and the Lock Screen kept an
+    /// off-trail walk indefinitely, until the app came back to the foreground.
+    @Test("an off-route background fix still closes a walk abandoned six hours ago")
+    func offRouteBackgroundFixClosesAnAbandonedWalk() async throws {
+        let walked = Fixture.hike(in: context, title: "Walked", route: Fixture.ridgeRoute)
+        let profile = RouteProfile(route: walked.route)
+        var record = TrailWalkRecord(
+            hikeID: walked.id,
+            routeDistanceMeters: profile.totalDistanceMeters,
+            startedAt: Date(timeIntervalSinceNow: -TrailWalkPolicy.abandonAfter - 7200)
+        )
+        record.coverage.record(distance: profile.distances[0])
+        record.coverage.record(distance: profile.distances[1])
+        record.lastMatchedAt = Date(timeIntervalSinceNow: -TrailWalkPolicy.abandonAfter - 60)
+        walked.walkInProgress = record
+        try context.save()
+        defaults.set(walked.id.uuidString, forKey: SettingsKey.lastSelectedHikeID)
+        let tracker = relaunchedTracker()
+        let session = TrailWalkSession(context: context, tracker: tracker)
+        session.restoreAtLaunch()
+        #expect(session.walkedHikeID == walked.id, "precondition: adopted, since it is not stale enough to close")
+
+        // ~900 m west of the ridge: accepted, and matched against nothing.
+        await deliver(fix(at: CLLocationCoordinate2D(latitude: 37.3340, longitude: -122.0400)))
+
+        #expect(session.walkedHikeID == nil, "an unmatched fix is still a fix the rule can be asked about")
+        #expect(walked.walkInProgress == nil)
+    }
+
     /// The whole feature in one test: woken with no in-memory state, the app
     /// matches the fix against the hike `UserDefaults` says was selected and
     /// publishes progress along it.
