@@ -176,7 +176,9 @@ struct HikeDetailView: View {
     )
     @State var storedBytesMeasurementTask: Task<Void, Never>?
     @State var storedBytesMeasurementGeneration = 0
-    @State var storageDeletionFailed = false
+    /// Why the last attempt to delete this hike's offline tiles did not
+    /// happen, and so which alert is raised — see ``StoredTileDeletion``.
+    @State var storageDeletionFailure: StoredTileDeletion.Failure?
     // swiftlint:enable private_swiftui_state
     @State private var isEditingTitle = false
     /// Draft text while the inline title field is open.
@@ -345,7 +347,7 @@ struct HikeDetailView: View {
         }
         .offlineStorageAlerts(
             downloader: downloader,
-            deletionFailed: $storageDeletionFailed
+            deletionFailure: $storageDeletionFailure
         )
     }
 }

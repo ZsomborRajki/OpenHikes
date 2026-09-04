@@ -110,47 +110,32 @@ extension HikeDetailView {
         storedBytesMeasurementGeneration &+= 1
     }
 
-    /// Forgets this hike's downloads and auto-saved tiles, and deletes them from
-    /// disk. The key computation (tile-grid enumeration per download record) is
-    /// real CPU work, so it happens inside ``StoredTileDeletionPlan``'s
-    /// `@concurrent` removal rather than here, mirroring ``refreshStoredBytes()``.
+    /// Forgets this hike's downloads and auto-saved tiles, and deletes them
+    /// from disk once the store has accepted that it has.
+    ///
+    /// The order — and putting everything back when the commit is refused —
+    /// is ``StoredTileDeletion``'s. What is left here is the screen: the byte
+    /// row, the measurement behind it, and the alert.
     func deleteStoredTiles() {
-        // Before the manifest is read: switching auto-save off folds in the
-        // tiles saved since the last drain. Reading the manifest ahead of that
-        // would delete a snapshot taken up to two seconds ago and strand
-        // everything saved since — durably, where nothing would reclaim it.
-        let hikes: [Hike]
-        do {
-            hikes = try modelContext.fetch(FetchDescriptor<Hike>())
-        } catch {
-            storageDeletionFailed = true
-            return
-        }
-        autoSave.setEnabled(false, for: hike)
-        // Before a single manifest is touched: a plan that cannot be built is
-        // a claim set that is short by at least one hike, and emptying this
-        // hike's manifest against it would either strip a neighbour's offline
-        // map or — if this hike's own sidecar is the unreadable one — write
-        // the removals through to a freshly materialised empty row, leaving
-        // the real one behind still claiming everything.
-        guard let deletionPlan = StoredTileDeletionPlan(removing: hike, among: hikes) else {
-            storageDeletionFailed = true
-            return
-        }
-        // The point of no return, and so where the other writer stands down: a
-        // bulk download in flight would go on writing tiles this plan cannot
-        // see and then claim them, putting the hike's coverage back moments
-        // after the walker deleted it. `reset()` used to stand here and could
-        // not do it — it declines while a download is running, which is
-        // exactly when it matters — while `cancel()` also leaves the button
-        // idle, which is what `reset()` was here for.
-        downloader.cancel()
-        hike.offlineDownloads.removeAll()
-        hike.autoSavedTileKeys.removeAll()
-        invalidateStoredBytesMeasurement()
-        storedBytes = 0
-        Task(priority: .utility) {
-            await deletionPlan.removeExclusiveTiles(from: .shared)
+        switch StoredTileDeletion.delete(
+            storedTilesOf: hike,
+            autoSave: autoSave,
+            downloader: downloader,
+            fetchingHikes: { try modelContext.fetch(FetchDescriptor<Hike>()) }
+        ) {
+        case let .committed(deletionPlan):
+            // Only now the coverage is really gone: a refusal has to leave the
+            // row describing the map the hike still has.
+            invalidateStoredBytesMeasurement()
+            storedBytes = 0
+            // The key computation (tile-grid enumeration per download record)
+            // is real CPU work, so it happens inside the plan's `@concurrent`
+            // removal rather than here, mirroring ``refreshStoredBytes()``.
+            Task(priority: .utility) {
+                await deletionPlan.removeExclusiveTiles(from: .shared)
+            }
+        case let .refused(failure):
+            storageDeletionFailure = failure
         }
     }
 

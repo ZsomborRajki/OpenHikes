@@ -184,23 +184,26 @@ final class AutoSaveController {
     ///
     /// The keys are the payload: they were moved out of
     /// ``AutoSaveTileStore``'s pending set into the hike's manifest as an
-    /// *unsaved* write, so the rollback that returns the hike takes them back
-    /// out again, and the store no longer has them either.
+    /// *unsaved* write, so whatever returns the hike — or its manifest — to
+    /// the last committed state takes them back out with it, and the store no
+    /// longer has them either.
     struct StandDown {
         let hikeID: UUID
         let foldedKeys: [String]
     }
 
-    /// Called just before `hike` is deleted, so the delete that follows sees a
-    /// complete manifest. Waiting for the selection change to propagate back
-    /// through SwiftUI would leave the tiles saved in the last drain window on
-    /// disk with nothing claiming them — and they're durable, so nothing would
-    /// ever reclaim them.
+    /// Called just before something the store may refuse takes this hike's
+    /// tiles away — the hike itself in ``HikeDeletion``, its saved map in
+    /// ``StoredTileDeletion`` — so what follows sees a complete manifest.
+    /// Waiting for the selection change to propagate back through SwiftUI
+    /// would leave the tiles saved in the last drain window on disk with
+    /// nothing claiming them — and they're durable, so nothing would ever
+    /// reclaim them.
     ///
-    /// - Returns: what ``hikeDeletionWasRefused(_:for:)`` needs to undo this,
+    /// - Returns: what ``restoreAfterRefusal(_:for:)`` needs to undo this,
     ///   or `nil` when this hike wasn't the one auto-saving and nothing stood
     ///   down. A deletion that can be refused has to hold on to it.
-    func hikeWillBeDeleted(_ hike: Hike) -> StandDown? {
+    func standDown(for hike: Hike) -> StandDown? {
         guard activeHike?.id == hike.id else { return nil }
         return StandDown(
             hikeID: hike.id,
@@ -208,16 +211,17 @@ final class AutoSaveController {
         )
     }
 
-    /// Puts auto-save back on a hike whose deletion the store would not accept.
+    /// Puts auto-save back on a hike whose deletion the store would not
+    /// accept — of the hike, or of the tiles it had saved.
     ///
-    /// Both halves have to be undone. The rollback returned the hike, but it
-    /// returned its manifest to the last committed state with it, so the keys
-    /// folded in on the way out claim nothing — and their tiles are durable,
-    /// so the next launch trim would delete a walk's worth of map the user
-    /// still has the hike for. And the selection never changed, so nothing
-    /// else is going to re-arm the controller: without this the still-selected
-    /// hike would quietly stop auto-saving until it was selected again.
-    func hikeDeletionWasRefused(_ standDown: StandDown, for hike: Hike) {
+    /// Both halves have to be undone. The refusal returned the manifest to
+    /// the last committed state, so the keys folded in on the way out claim
+    /// nothing — and their tiles are durable, so the next launch trim would
+    /// delete a walk's worth of map the user still has the hike for. And the
+    /// selection never changed, so nothing else is going to re-arm the
+    /// controller: without this the still-selected hike would quietly stop
+    /// auto-saving until it was selected again.
+    func restoreAfterRefusal(_ standDown: StandDown, for hike: Hike) {
         guard standDown.hikeID == hike.id else { return }
         hike.autoSavedTileKeys.append(contentsOf: standDown.foldedKeys)
         // The path a re-selection takes, so eligibility and a suspended scene

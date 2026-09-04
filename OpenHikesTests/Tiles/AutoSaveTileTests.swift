@@ -586,7 +586,7 @@ struct AutoSaveLifecycleTests {
     }
 
     /// The same window, reached the other way: deleting the hike outright.
-    /// `hikeWillBeDeleted` exists precisely to flush regardless of suspension
+    /// `standDown(for:)` exists precisely to flush regardless of suspension
     /// (`flushWhileSuspended: true`), so this one must hold — it's the
     /// contrast that shows the gap above is an omission rather than the
     /// intended policy.
@@ -603,7 +603,7 @@ struct AutoSaveLifecycleTests {
 
         controller.sceneWillResignActive { /* scene resigned active */ }
         let standDown = try #require(
-            controller.hikeWillBeDeleted(hike),
+            controller.standDown(for: hike),
             "the active hike's stand-down is what a refused deletion would put back"
         )
 

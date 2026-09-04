@@ -5,7 +5,7 @@
 //  The other thing a whole-hike deletion has to stand down first, and put
 //  back if the store refuses it.
 //
-//  `AutoSaveController.hikeWillBeDeleted` is not a notification: it folds the
+//  `AutoSaveController.standDown(for:)` is not a notification: it folds the
 //  last drain window's tile keys out of `AutoSaveTileStore`'s pending set and
 //  into the hike's manifest — an unsaved write — and then stops saving. A
 //  rollback takes that write back with the deletion, and the selection never
@@ -34,7 +34,7 @@ extension HikeDeletionTests {
 
     /// A hike that is auto-saving, with one tile saved since the last drain:
     /// on disk, claimed in memory, and not yet in the manifest. Exactly the
-    /// window `hikeWillBeDeleted` exists for.
+    /// window `standDown(for:)` exists for.
     private static func autoSavingHike(
         in context: ModelContext,
         sandbox: TileSandbox

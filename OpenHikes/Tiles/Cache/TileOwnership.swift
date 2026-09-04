@@ -132,6 +132,19 @@ nonisolated struct StoredTileDeletionPlan: Sendable {
         survivors = claims
     }
 
+    /// The plan a caller has already read both claims for.
+    ///
+    /// The failable initialisers above exist to *refuse* a plan whose claim
+    /// set could not be established. A caller that established it itself
+    /// before writing anything — which is the order ``StoredTileDeletion``
+    /// works in, so that a refusal costs the walker nothing — has nothing
+    /// left to refuse, and a second optional there would be a `nil` branch no
+    /// test could reach.
+    init(doomed: TileOwnership, survivors: [TileOwnership]) {
+        self.doomed = doomed
+        self.survivors = survivors
+    }
+
     func exclusiveTileKeys() throws(CancellationError) -> Set<String> {
         try doomed.exclusiveTileKeys(against: survivors)
     }

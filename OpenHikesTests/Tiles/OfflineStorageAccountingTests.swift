@@ -157,22 +157,33 @@ struct StorageAccountingTests {
     /// the save — and putting the stand-down back when the save is refused —
     /// belongs to ``HikeDeletion`` and is checked in `HikeDeletionTests`.
     func deleteHike(_ hike: Hike, using controller: AutoSaveController, survivors: [Hike] = []) async throws {
-        _ = controller.hikeWillBeDeleted(hike)
+        _ = controller.standDown(for: hike)
         let deletionPlan = try #require(StoredTileDeletionPlan(removing: hike, among: [hike] + survivors))
         await deletionPlan.removeExclusiveTiles(from: sandbox.cache)
         context.delete(hike)
     }
 
-    /// The Delete button in `HikeDetailView`, minus the SwiftUI.
+    /// The Delete button in `HikeDetailView`, minus the SwiftUI: the sequence
+    /// ``StoredTileDeletion`` owns, called rather than restated, so this
+    /// suite's answers about which tiles are freed cannot drift away from the
+    /// order the app really deletes them in. That order — and putting
+    /// everything back when the store refuses it — is checked in
+    /// `StoredTileDeletionTests`.
     func clearStoredTiles(
         for hike: Hike,
         among hikes: [Hike],
         using controller: AutoSaveController
-    ) async throws {
-        controller.setEnabled(false, for: hike)
-        let deletionPlan = try #require(StoredTileDeletionPlan(removing: hike, among: hikes))
-        hike.offlineDownloads.removeAll()
-        hike.autoSavedTileKeys.removeAll()
+    ) async {
+        let outcome = StoredTileDeletion.delete(
+            storedTilesOf: hike,
+            autoSave: controller,
+            downloader: OfflineTileDownloader(isOnline: { false }, registry: OfflineDownloadRegistry()),
+            fetchingHikes: { hikes }
+        )
+        guard case let .committed(deletionPlan) = outcome else {
+            Issue.record("the deletion was refused")
+            return
+        }
         await deletionPlan.removeExclusiveTiles(from: sandbox.cache)
     }
 
