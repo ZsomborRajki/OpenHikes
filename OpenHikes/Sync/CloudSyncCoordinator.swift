@@ -20,6 +20,11 @@
 //  behaviour something the settings screen says out loud rather than something
 //  the user discovers.
 //
+//  That relaunch is the answer, not a placeholder for one. Rebuilding the
+//  container in place was considered and declined — see *Settled decisions* in
+//  `.github/copilot-instructions.md`, and `CloudSyncRecordingTests` for the
+//  case that decided it.
+//
 
 import CloudKit
 import CoreData
@@ -65,6 +70,12 @@ final class CloudSyncCoordinator {
     /// True exactly between flipping the switch and relaunching. Read by
     /// ``CloudSyncStatus`` so the row explains itself instead of claiming a
     /// state the store is not in.
+    ///
+    /// Nothing here closes that gap on the user's behalf, deliberately: this
+    /// object has no container to rebuild and is not given one. A recording in
+    /// progress owns a live trace, a journal and the store that has to finish
+    /// them, and swapping that store underneath it is a worse failure than the
+    /// prompt is an inconvenience.
     var pendingRelaunch: Bool { isEnabled != isSyncingThisLaunch }
 
     @ObservationIgnored private let defaults: UserDefaults
