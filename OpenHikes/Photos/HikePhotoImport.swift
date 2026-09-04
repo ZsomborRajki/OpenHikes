@@ -202,27 +202,35 @@ nonisolated enum HikePhotoImport {
         }
     }
 
-    /// Deletes every file behind a hike that is being deleted.
-    ///
-    /// Called *before* the hike leaves the store, while its metadata can still
-    /// be read — the same ordering the tile deletion in ``MapSheet`` uses, and
-    /// for the same reason: a detached `@Model` has nothing left to enumerate.
-    @MainActor
-    static func discardFiles(of hike: Hike, store: HikePhotoStore = .shared) {
-        discardFiles(hike.photos, from: store)
-    }
-
     /// Fire-and-forget: by the time this is reached the metadata half is
     /// already settled, so a delete that fails costs disk space until the next
     /// launch sweep and nothing else — and there is no screen where waiting
     /// for it would tell the user anything.
+    ///
+    /// "Already settled" is a precondition, not an observation. Every caller
+    /// has to have committed the metadata half first — see
+    /// ``remove(_:from:store:save:)`` for one photo and
+    /// ``HikeDeletion/delete(_:store:save:)`` for a whole hike.
     @MainActor
     static func discardFiles(
         _ photos: [HikePhoto],
         from store: HikePhotoStore = .shared
     ) {
-        guard !photos.isEmpty else { return }
-        Task(priority: .utility) { await erase(photos, in: store) }
+        discardFiles(photos.map(HikePhotoStore.PhotoFiles.init), from: store)
+    }
+
+    /// The same, from names snapshotted while the photos were still attached.
+    ///
+    /// What a whole-hike deletion holds: its photos go out of the store with
+    /// the hike, so the only thing left to erase them by is what was read
+    /// before they went.
+    @MainActor
+    static func discardFiles(
+        _ files: [HikePhotoStore.PhotoFiles],
+        from store: HikePhotoStore = .shared
+    ) {
+        guard !files.isEmpty else { return }
+        Task(priority: .utility) { await erase(files, in: store) }
     }
 
     // MARK: - Off the main thread
@@ -255,9 +263,9 @@ nonisolated enum HikePhotoImport {
 
     @concurrent
     private static func erase(
-        _ photos: [HikePhoto],
+        _ files: [HikePhotoStore.PhotoFiles],
         in store: HikePhotoStore
     ) async {
-        store.remove(photos)
+        store.remove(files)
     }
 }

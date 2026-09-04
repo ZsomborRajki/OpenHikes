@@ -175,7 +175,7 @@ struct HikePhotoStoreTests {
         )
         _ = await offMain { sandbox.store.thumbnail(for: photo) }
 
-        await offMain { sandbox.store.remove([photo]) }
+        await offMain { sandbox.store.remove([HikePhotoStore.PhotoFiles(photo)]) }
 
         #expect(!FileManager.default.fileExists(atPath: sandbox.store.url(for: photo).path))
         let bytes = await offMain { sandbox.store.byteCount(of: [photo]) }
@@ -189,7 +189,7 @@ struct HikePhotoStoreTests {
         // under it.
         let orphan = HikePhoto()
 
-        await offMain { sandbox.store.remove([orphan]) }
+        await offMain { sandbox.store.remove([HikePhotoStore.PhotoFiles(orphan)]) }
 
         #expect(await offMain { sandbox.store.byteCount(of: [orphan]) } == 0)
     }
@@ -241,7 +241,7 @@ struct HikePhotoStoreTests {
         )
         #expect(await offMain { sandbox.store.hasImage(for: photo) })
 
-        await offMain { sandbox.store.remove([photo]) }
+        await offMain { sandbox.store.remove([HikePhotoStore.PhotoFiles(photo)]) }
 
         #expect(await offMain { !sandbox.store.hasImage(for: photo) })
         // A row that was never written here at all — a photo taken on another
