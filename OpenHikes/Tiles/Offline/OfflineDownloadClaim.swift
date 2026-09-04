@@ -44,8 +44,10 @@ nonisolated enum OfflineDownloadClaim {
         /// ``Hike`` is a no-op rather than an error, so this is checked here
         /// rather than discovered by a manifest that stayed empty.
         case hikeIsGone
-        /// The store refused the commit. The merge is rolled back with it, so
-        /// the manifest still describes what the store really holds.
+        /// The store refused the commit, or would not say what the hike's
+        /// sidecar already holds. The merge is rolled back with the former and
+        /// never attempted on the latter, so the manifest still describes what
+        /// the store really holds either way.
         case notSaved
     }
 
@@ -67,6 +69,27 @@ nonisolated enum OfflineDownloadClaim {
         save: (ModelContext) throws -> Void = { try $0.save() }
     ) throws(Failure) {
         guard hike.isAttached, let context = hike.modelContext else { throw .hikeIsGone }
+        // Resolved through the throwing spelling before a single passthrough is
+        // touched, which is the same order ``OfflineStorageActions`` clears
+        // manifests in and for the same reason. ``Hike/offlineDownloads`` reads
+        // through ``Hike/localState``, which turns a failed sidecar fetch into
+        // "this device has stored nothing", and writing through that answer
+        // materialises a *second* sidecar row holding only this record. The
+        // real one is then unreachable behind a `fetchLimit` of one, and every
+        // download it still claims is a trim away from being deleted.
+        // Resolving here also warms the cache the merge reads, so the two
+        // cannot disagree a line apart.
+        do {
+            _ = try hike.resolveLocalState()
+        } catch {
+            logger.error(
+                """
+                Offline download coverage could not be committed for hike \
+                \(hike.id, privacy: .public): its device-local record could not be read.
+                """
+            )
+            throw .notSaved
+        }
         hike.mergeOfflineDownload(record)
         do {
             try save(context)
