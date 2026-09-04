@@ -35,10 +35,12 @@ final class WidgetFeedBudgetTests {
         defaults = try makeScratchDefaults()
         tracker = BackgroundTrailTracker(container: container, defaults: defaults)
         SharedStore.clear()
+        try? SharedStore.clearRecording()
     }
 
     deinit {
         SharedStore.clear()
+        try? SharedStore.clearRecording()
     }
 
     /// A five-hour recording at 1 Hz — the size of track this app is built to
@@ -142,6 +144,64 @@ final class WidgetFeedBudgetTests {
         }
 
         #expect(writes <= 2, "one window, at most a first flip and a recovery")
+    }
+
+    /// The reload the *recording* takeover would otherwise let this feed spend
+    /// on a picture it no longer owns.
+    ///
+    /// `TrailWidgetEntry` discards the stored trail outright while a recording
+    /// payload exists — the precedence rule, stated there — so a trail redraw
+    /// during a recording produces a byte-identical timeline. The rates are
+    /// what make it worth gating rather than tolerating: this feed publishes
+    /// every 45 seconds while `HikeRecorder.sharedSnapshotInterval` rewrites
+    /// the recording every fifteen minutes, so ungated the losing feed spends
+    /// the budget roughly twenty times as fast as the winning one.
+    ///
+    /// The store keeps being *written* throughout, which is the half that must
+    /// not be gated: the unconditional reload the recorder issues when the
+    /// walk ends has to find the walker's selection already current.
+    @Test("the trail feed spends no reload while a recording owns the widget")
+    func recordingOwnershipSuppressesTrailReloads() async throws {
+        #expect(await requestedAReload(), "precondition: with nothing recording, a redraw is worth asking for")
+
+        try SharedStore.saveRecording(Self.recording())
+        defer { try? SharedStore.clearRecording() }
+        #expect(await requestedAReload() == false)
+
+        // A paused recording owns the widget just as a running one does — the
+        // takeover is total, so the suppression has to be too. This is the
+        // line that fails if the rule is ever narrowed to "capturing fixes",
+        // which is a different question the widget asks elsewhere.
+        try SharedStore.saveRecording(Self.recording(isCapturingFixes: false))
+        #expect(await requestedAReload() == false)
+
+        try SharedStore.clearRecording()
+        #expect(await requestedAReload(), "the walk is over — the selection is the widget's again")
+    }
+
+    /// Off the main thread, which is both where the gate reads the App Group
+    /// and where it asserts it is being called from. `Task.detached` rather
+    /// than a bare `Task`, for the reason ``offMainSeamLeavesTheMainThread``
+    /// spells out: on a `@MainActor` suite the two look identical and only one
+    /// of them leaves.
+    private func requestedAReload() async -> Bool {
+        await Task.detached { TrailWidgetReload.requestUnlessRecording() }.value
+    }
+
+    private static func recording(
+        isCapturingFixes: Bool = true
+    ) -> SharedRecordingSnapshot {
+        SharedRecordingSnapshot(
+            sessionID: UUID(),
+            startedAt: Date(timeIntervalSince1970: 1_750_000_000),
+            distanceMeters: 900,
+            pointCount: 180,
+            polyline: [
+                .init(latitude: 47.6300, longitude: 12.8600),
+                .init(latitude: 47.6320, longitude: 12.8620),
+            ],
+            isCapturingFixes: isCapturingFixes
+        )
     }
 
     /// The other half of the fix, and the one that addresses the actual field
