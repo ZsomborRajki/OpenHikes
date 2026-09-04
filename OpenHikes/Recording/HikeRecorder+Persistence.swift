@@ -597,12 +597,15 @@ extension HikeRecorder {
         publishSharedRecordingSnapshot(force: true)
     }
 
+    /// The name the walker typed into the Stop alert, as it should be stored.
+    ///
+    /// Its own name rather than a bare ``HikeTitle/bounded(_:)`` call because
+    /// this is the recorder's vocabulary and `RecordingView` reasons about it
+    /// by that name — but the rule itself lives in one place, so the alert's
+    /// field and the rename field cannot drift apart.
     nonisolated static func normalizedCustomName(
         _ customName: String?
     ) -> String? {
-        let trimmed = customName?.trimmingCharacters(
-            in: .whitespacesAndNewlines
-        )
-        return trimmed?.isEmpty == false ? trimmed : nil
+        HikeTitle.bounded(customName)
     }
 }
