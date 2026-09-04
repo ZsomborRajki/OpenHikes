@@ -2,7 +2,7 @@
 
 ## Build and test
 
-The main project requires Xcode 26.5+, the iOS 26.5 platform, and a development team capable of signing the WeatherKit entitlement, the shared App Group, the iCloud container and the push entitlement. The shared package can be built and tested independently on macOS.
+The main project requires Xcode 26.5+, the iOS 26.0 platform, and a development team capable of signing the WeatherKit entitlement, the shared App Group, the iCloud container and the push entitlement. The shared package can be built and tested independently on macOS.
 
 ```sh
 # Build the app and its embedded widget target
