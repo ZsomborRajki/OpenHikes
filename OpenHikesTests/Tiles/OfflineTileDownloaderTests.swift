@@ -284,6 +284,7 @@ struct OfflineDownloadStateTests {
         downloader.start(
             route: Fixture.ridgeRoute,
             source: ActiveTileSource(.openStreetMap),
+            claim: Fixture.unrecordedClaim,
         )
 
         #expect(downloader.isFailed)
@@ -308,6 +309,7 @@ struct OfflineDownloadStateTests {
                 urlTemplate: "https://example.invalid/{z}/{x}/{y}.png",
                 maximumZ: 12
             ),
+            claim: Fixture.unrecordedClaim,
         )
 
         #expect(downloader.isFailed)
@@ -317,13 +319,14 @@ struct OfflineDownloadStateTests {
     @Test("a route with nothing to draw is refused with a reason")
     func refusesEmptyRoute() {
         let downloader = OfflineTileDownloader()
-        downloader.start(route: [], source: unreachable)
+        downloader.start(route: [], source: unreachable, claim: Fixture.unrecordedClaim)
         #expect(downloader.isFailed)
         #expect(downloader.phase == .failed("No route to save."))
 
         downloader.start(
             route: [RouteCoordinate(latitude: 47.63, longitude: 12.86)],
             source: unreachable,
+            claim: Fixture.unrecordedClaim,
         )
         #expect(downloader.isFailed)
     }
@@ -340,7 +343,7 @@ struct OfflineDownloadStateTests {
     @Test("a failed download can be reset back to idle")
     func resetAfterFailure() {
         let downloader = OfflineTileDownloader()
-        downloader.start(route: [], source: unreachable)
+        downloader.start(route: [], source: unreachable, claim: Fixture.unrecordedClaim)
         #expect(downloader.isFailed)
         downloader.reset()
         #expect(downloader.phase == .idle)
@@ -356,7 +359,7 @@ struct OfflineDownloadStateTests {
     @Test("starting a download counts the tiles it's going to fetch")
     func startCountsTiles() async {
         let downloader = OfflineTileDownloader(isOnline: { true }, saveTile: { _, _ in false })
-        downloader.start(route: Fixture.ridgeRoute, source: unreachable)
+        downloader.start(route: Fixture.ridgeRoute, source: unreachable, claim: Fixture.unrecordedClaim)
         #expect(downloader.phase == .downloading)
         await downloader.waitForPlanning()
         #expect(downloader.total > 0)
@@ -381,7 +384,7 @@ struct OfflineDownloadStateTests {
             saveTile: { _, _ in true }
         )
 
-        downloader.start(route: route, source: controlled)
+        downloader.start(route: route, source: controlled, claim: Fixture.unrecordedClaim)
         let waiter = Task { await downloader.waitForPlanning() }
         downloader.cancel()
 
@@ -412,7 +415,7 @@ struct OfflineDownloadStateTests {
             saveTile: { _, _ in true }
         )
 
-        downloader.start(route: route, source: controlled)
+        downloader.start(route: route, source: controlled, claim: Fixture.unrecordedClaim)
         downloader.cancel()
         await downloader.waitForCurrentRun()
 
@@ -436,7 +439,7 @@ struct OfflineDownloadStateTests {
             isOnline: { true },
             saveTile: { _, _ in await held.save() }
         )
-        downloader.start(route: Fixture.ridgeRoute, source: unreachable)
+        downloader.start(route: Fixture.ridgeRoute, source: unreachable, claim: Fixture.unrecordedClaim)
         #expect(downloader.phase == .downloading)
 
         downloader.cancel()
@@ -460,9 +463,9 @@ struct OfflineDownloadStateTests {
             saveTile: { _, _ in await held.save() }
         )
         let route = Fixture.ridgeRoute
-        downloader.start(route: route, source: unreachable)
+        downloader.start(route: route, source: unreachable, claim: Fixture.unrecordedClaim)
         downloader.cancel()
-        downloader.start(route: route, source: unreachable)
+        downloader.start(route: route, source: unreachable, claim: Fixture.unrecordedClaim)
         #expect(downloader.phase == .downloading)
 
         // Both runs' saves complete now, so the abandoned one's tail unwinds
@@ -484,7 +487,7 @@ struct OfflineDownloadStateTests {
             saveTile: { _, _ in await attempts.succeedAlternating() }
         )
 
-        downloader.start(route: Fixture.ridgeRoute, source: controlled)
+        downloader.start(route: Fixture.ridgeRoute, source: controlled, claim: Fixture.unrecordedClaim)
         await downloader.waitForCurrentRun()
 
         #expect(downloader.isFailed)
@@ -506,7 +509,7 @@ struct OfflineDownloadStateTests {
             saveTile: { _, _ in false }
         )
 
-        downloader.start(route: Fixture.ridgeRoute, source: controlled)
+        downloader.start(route: Fixture.ridgeRoute, source: controlled, claim: Fixture.unrecordedClaim)
         await downloader.waitForCurrentRun()
 
         #expect(downloader.isFailed)
@@ -525,7 +528,7 @@ struct OfflineDownloadStateTests {
             saveTile: { _, _ in true }
         )
 
-        downloader.start(route: Fixture.ridgeRoute, source: controlled)
+        downloader.start(route: Fixture.ridgeRoute, source: controlled, claim: Fixture.unrecordedClaim)
         await downloader.waitForCurrentRun()
 
         #expect(downloader.completed == downloader.total)
@@ -539,7 +542,7 @@ struct OfflineDownloadStateTests {
             saveTile: { _, _ in true }
         )
 
-        downloader.start(route: Fixture.ridgeRoute, source: controlled)
+        downloader.start(route: Fixture.ridgeRoute, source: controlled, claim: Fixture.unrecordedClaim)
         await downloader.waitForCurrentRun()
 
         #expect(downloader.phase == .finished)
