@@ -18,17 +18,24 @@ import SwiftUI
 
 private struct OfflineStorageAlerts: ViewModifier {
     let downloader: OfflineTileDownloader
-    @Binding var deletionFailed: Bool
+    @Binding var deletionFailure: StoredTileDeletion.Failure?
 
     func body(content: Content) -> some View {
         content
-        .alert("Couldn’t Delete Offline Tiles", isPresented: $deletionFailed) {
+        .alert(
+            "Couldn’t Delete Offline Tiles",
+            isPresented: Binding(
+                get: { deletionFailure != nil },
+                set: { presented in
+                    guard !presented else { return }
+                    deletionFailure = nil
+                }
+            ),
+            presenting: deletionFailure
+        ) { _ in
             Button("OK", role: .cancel) { /* dismiss */ }
-        } message: {
-            Text(
-                "OpenHikes couldn’t read the other hikes’ offline coverage."
-                + " No tiles were deleted."
-            )
+        } message: { failure in
+            Text(Self.deletionMessage(for: failure))
         }
         .alert(
             "Not Enough Space for This Map",
@@ -49,6 +56,22 @@ private struct OfflineStorageAlerts: ViewModifier {
             }
         } message: { shortfall in
             Text(Self.reclaimMessage(for: shortfall))
+        }
+    }
+
+    /// Says which half of the deletion refused, because the two leave the
+    /// walker in different places: a claim that could not be read is a
+    /// deletion that was never attempted, a commit the store refused is one
+    /// that was taken back. Both end with every tile still on the device,
+    /// which is the sentence they share and the one that matters.
+    static func deletionMessage(for failure: StoredTileDeletion.Failure) -> String {
+        switch failure {
+        case .claimsUnreadable:
+            "OpenHikes couldn’t read the other hikes’ offline coverage."
+            + " No tiles were deleted."
+        case .notSaved:
+            "OpenHikes couldn’t record the change, so no tiles were deleted."
+            + " This hike’s saved map is still on your device. Try again."
         }
     }
 
@@ -77,8 +100,8 @@ extension View {
     /// should not carry either of them inline.
     func offlineStorageAlerts(
         downloader: OfflineTileDownloader,
-        deletionFailed: Binding<Bool>
+        deletionFailure: Binding<StoredTileDeletion.Failure?>
     ) -> some View {
-        modifier(OfflineStorageAlerts(downloader: downloader, deletionFailed: deletionFailed))
+        modifier(OfflineStorageAlerts(downloader: downloader, deletionFailure: deletionFailure))
     }
 }

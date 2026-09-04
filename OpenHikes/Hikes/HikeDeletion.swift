@@ -79,7 +79,7 @@ nonisolated enum HikeDeletion {
         store: HikePhotoStore = .shared,
         save: (ModelContext) throws -> Void = { try $0.save() }
     ) -> Outcome {
-        let standDown = autoSave.hikeWillBeDeleted(hike)
+        let standDown = autoSave.standDown(for: hike)
         let plan = hike.hasStoredTiles
             ? StoredTileDeletionPlan(removing: hike, among: hikes)
             : nil
@@ -87,7 +87,7 @@ nonisolated enum HikeDeletion {
             try delete([hike], store: store, save: save)
         } catch {
             if let standDown {
-                autoSave.hikeDeletionWasRefused(standDown, for: hike)
+                autoSave.restoreAfterRefusal(standDown, for: hike)
             }
             return .refused
         }

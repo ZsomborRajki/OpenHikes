@@ -116,7 +116,7 @@ extension StorageAccountingTests {
         controller.flushPendingKeys()
         survivor.autoSavedTileKeys = [shared]
 
-        try await clearStoredTiles(for: cleared, among: [cleared, survivor], using: controller)
+        await clearStoredTiles(for: cleared, among: [cleared, survivor], using: controller)
 
         #expect(cleared.autoSavedTileKeys.isEmpty)
         #expect(cleared.offlineDownloads.isEmpty)
