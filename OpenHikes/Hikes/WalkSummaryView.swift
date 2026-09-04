@@ -23,14 +23,35 @@ struct WalkSummaryView: View {
     /// out of the way of the map it just changed.
     var onShowOnMap: () -> Void = { /* no-op default */ }
 
-    /// The trail's climb, computed once off the main actor: the route is
+    /// The trail's profile, built once off the main actor: the route is
     /// walked for it, and a summary is not the place to pay that on the
-    /// frame that pushed it.
-    @State private var ascentMeters: Double?
+    /// frame that pushed it. It answers all three questions this screen has
+    /// of the route — the ascent it shows, whether the trail is still the one
+    /// the walk was walked along, and the geometry *Show on Map* draws the
+    /// covered stretches over.
+    @State private var profile: RouteProfile?
+    /// Bumped by *Show on Map*, so the drawing runs as a `.task` the view
+    /// owns rather than as a `Task` that outlives it — see ``showOnMap()``.
+    @State private var showOnMapRequest = 0
 
     private var hike: Hike? { walk.hike }
     private var tint: Color { hike?.tintOpaque ?? .green }
     private var percent: Int { Int((walk.coveredFraction * 100).rounded()) }
+    private var ascentMeters: Double? { profile?.elevation.gainMeters }
+
+    /// Whether the trail on screen is still the one this walk was walked
+    /// along. The stretches are measured in metres from the start of *that*
+    /// route, so a route re-imported or edited since would draw them against
+    /// the wrong geometry. `false` while the profile is still being built:
+    /// there is nothing to draw along yet either way.
+    private var routeMatchesWalk: Bool {
+        guard let profile else { return false }
+        return abs(profile.totalDistanceMeters - walk.routeDistanceMeters) < 1
+    }
+
+    /// The same disagreement, once it is known to be one rather than a
+    /// profile that has not arrived — which is what the button explains.
+    private var trailHasChanged: Bool { profile != nil && !routeMatchesWalk }
 
     var body: some View {
         ScrollView {
@@ -48,7 +69,16 @@ struct WalkSummaryView: View {
         #endif
         .task(id: walk.id) {
             guard let route = hike?.route, !route.isEmpty else { return }
-            ascentMeters = await Self.ascent(of: route)
+            profile = await Self.profile(of: route)
+        }
+        // A `.task` rather than the unstructured `Task` the button used to
+        // start: that one outlived this view, and a walker who backed out and
+        // opened another trail during the await had the old walk's stretches
+        // drawn over it by a task nothing could stop. This one is cancelled
+        // when the summary goes away.
+        .task(id: showOnMapRequest) {
+            guard showOnMapRequest > 0 else { return }
+            await showOnMap()
         }
     }
 
@@ -111,30 +141,41 @@ struct WalkSummaryView: View {
         }
     }
 
+    /// *Show on Map*, and the one case where it cannot draw.
+    ///
+    /// The length disagreement is a state the button is in, not something the
+    /// tap discovers: it used to stay live on a re-imported route, return
+    /// silently, and leave the walker tapping a control that did nothing and
+    /// explained nothing.
     private var showOnMapButton: some View {
-        Button("Show on Map", systemImage: "map") {
-            Task { await showOnMap() }
+        VStack(spacing: 8) {
+            Button("Show on Map", systemImage: "map") {
+                showOnMapRequest += 1
+            }
+            .prominentGlassButtonStyle()
+            .tint(tint)
+            .frame(maxWidth: .infinity)
+            .disabled(hike == nil || walk.coverage.ranges.isEmpty || !routeMatchesWalk)
+            .accessibilityIdentifier("walk-show-on-map")
+            if trailHasChanged {
+                Text("This trail has changed since the walk, so the stretches "
+                    + "it covered can no longer be drawn along it.")
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
+                    .frame(maxWidth: .infinity, alignment: .leading)
+                    .accessibilityIdentifier("walk-trail-changed")
+            }
         }
-        .prominentGlassButtonStyle()
-        .tint(tint)
-        .frame(maxWidth: .infinity)
-        .disabled(hike == nil || walk.coverage.ranges.isEmpty)
-        .accessibilityIdentifier("walk-show-on-map")
     }
 
     /// Draws the covered stretches over the route and fits the map to it.
-    ///
-    /// The route the stretches are measured against is the hike's *current*
-    /// one, and `routeDistanceMeters` is the length it had at the time of the
-    /// walk. A route re-imported since would draw the stretches against the
-    /// wrong geometry, so the two lengths have to agree before anything is
-    /// drawn.
     private func showOnMap() async {
-        guard let hike else { return }
-        let route = hike.route
-        let profile = await Self.profile(of: route)
-        guard abs(profile.totalDistanceMeters - walk.routeDistanceMeters) < 1 else { return }
+        guard routeMatchesWalk, let profile else { return }
         let segments = await WalkHighlight.segments(covering: walk.coverage.ranges, along: profile)
+        // The await above is where a selection change gets in. Cancellation
+        // is what this view's lifetime speaks through, so it is asked again
+        // here rather than only before the await.
+        guard !Task.isCancelled else { return }
         walkHighlight.show(segments)
         mapController.fitToRoute()
         onShowOnMap()
@@ -143,11 +184,6 @@ struct WalkSummaryView: View {
     @concurrent
     private static func profile(of route: [RouteCoordinate]) async -> RouteProfile {
         RouteProfile(route: route)
-    }
-
-    @concurrent
-    private static func ascent(of route: [RouteCoordinate]) async -> Double? {
-        RouteProfile(route: route).elevation.gainMeters
     }
 
     private static func length(_ meters: Double) -> String {

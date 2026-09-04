@@ -30,6 +30,10 @@ struct WalkControls: View {
     let onOpenWalk: (HikeWalk) -> Void
 
     @State private var showEndConfirmation = false
+    /// A commit the store refused. The walk is still under way and its
+    /// controls are still on screen — this is what says so, rather than
+    /// letting a refusal read as a walk too short to keep.
+    @State private var showEndRefusal = false
 
     var body: some View {
         Group {
@@ -52,11 +56,20 @@ struct WalkControls: View {
             titleVisibility: .visible
         ) {
             Button("End Walk", role: .destructive) {
-                if let walk = session.end() { onOpenWalk(walk) }
+                switch session.end() {
+                case let .kept(walk): onOpenWalk(walk)
+                case .discarded: break
+                case .refused: showEndRefusal = true
+                }
             }
             Button("Cancel", role: .cancel) { /* no-op */ }
         } message: {
             Text("What it covered so far is kept as a record. A walk under 100 m is not.")
+        }
+        .alert("Could not end this walk", isPresented: $showEndRefusal) {
+            Button("OK", role: .cancel) { /* no-op */ }
+        } message: {
+            Text("Its record could not be saved, so the walk is still under way. Try ending it again.")
         }
         // A walk that reached the end on its own has no tap to push its
         // summary from; this is what does it. A tapped End pushed from its

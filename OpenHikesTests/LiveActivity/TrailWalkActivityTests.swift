@@ -142,7 +142,7 @@ final class TrailWalkActivityTests {
         let fraction = session.coveredFraction
 
         clock.advance(by: 1)
-        let ended = try #require(session.end())
+        let ended = try #require(session.end().walk)
         await tracker.waitForLiveFixPublish()
         await controller.settle()
 
@@ -157,6 +157,44 @@ final class TrailWalkActivityTests {
         #expect(dismissAfter == HikeLiveActivityController.finishedDismissAfter)
         #expect(SharedStore.load()?.walk == nil, "the widget flips back to the plain trail at once")
         #expect(tracker.walkedHikeID == nil)
+    }
+
+    /// The deferred selection used to be applied beside the walk's terminal
+    /// write rather than after it. It bumped the revision that write was
+    /// gated on, so the write was rejected, the completion carrying the
+    /// closing figures never ran, and the panel came down with nothing — the
+    /// abandoned walk's ending, for a walk the walker had just finished.
+    @Test("a walk that ends with another trail waiting still lingers with its result")
+    func endLingersWithASelectionWaiting() async throws {
+        let clock = TestClock()
+        let session = walkSession(clock: clock)
+        let hike = hike()
+        let profile = RouteProfile(route: hike.route)
+        tracker.hikeSelectionChanged(to: hike)
+        await tracker.waitForSelectionPublish()
+        try await startWalk(session, hike: hike, profile: profile, clock: clock)
+        let fraction = session.coveredFraction
+
+        // Another trail opened to compare it: remembered, not applied.
+        let other = Fixture.hike(in: context, title: "Compared", route: Fixture.loopRoute)
+        tracker.hikeSelectionChanged(to: other)
+        await tracker.waitForSelectionPublish()
+
+        clock.advance(by: 1)
+        session.end()
+        await tracker.waitForLiveFixPublish()
+        await tracker.waitForSelectionPublish()
+        await controller.settle()
+
+        guard case let .end(finalState, dismissAfter)? = presenter.calls.last else {
+            Issue.record("ending the walk should end the activity, got \(presenter.calls)")
+            return
+        }
+        let final = try #require(finalState, "the closing figures, not the abandoned walk's nothing")
+        #expect(final.runState == .finished)
+        #expect(final.coveredFractionComplete == fraction)
+        #expect(dismissAfter == HikeLiveActivityController.finishedDismissAfter)
+        #expect(tracker.trackedHikeID == other.id, "and the deferred selection still lands")
     }
 
     /// An abandoned walk has no result the walker was waiting for: the panel

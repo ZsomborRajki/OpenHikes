@@ -90,6 +90,23 @@ struct TrailWalkCoverageTests {
         #expect(broken.coveredMeters == 0)
     }
 
+    /// What a pause needs from the union. The gap bound is the right rule for
+    /// a lost signal — the walker probably did walk the stretch in between —
+    /// and it is exactly wrong across a pause, which is the walker saying
+    /// they did not walk what comes next.
+    @Test("a broken continuity reference starts a fresh interval")
+    func brokenContinuityIsNotBridged() {
+        var coverage = TrailWalkCoverage()
+        walk(from: 0, to: 300, into: &coverage)
+        let covered = coverage.coveredMeters
+
+        coverage.breakContinuity()
+        coverage.record(distance: 600)
+
+        #expect(coverage.coveredMeters == covered, "the 300 m in between is inside the gap bound and still not bridged")
+        #expect(coverage.furthestDistanceMeters == 600, "but the walker did get there")
+    }
+
     /// Two stretches walked apart merge the moment a third joins them.
     @Test("stretches merge when a walk joins them")
     func stretchesMerge() {

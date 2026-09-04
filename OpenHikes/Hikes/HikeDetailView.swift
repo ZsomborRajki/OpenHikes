@@ -699,6 +699,9 @@ private extension HikeDetailView {
             <= RouteProfile.followMatchThresholdMeters
         offRouteSearch.record(matched: onRoute, scope: searchScope)
         guard onRoute, let match else {
+            // Leaving the route is what rearms auto-start after an End: the
+            // walker is off this trail, so coming back to it is a new walk.
+            walkSession.recordOffRoute(hikeID: hike.id)
             clearLiveFollow(profile: profile, reason: "off-route")
             return
         }
@@ -706,7 +709,11 @@ private extension HikeDetailView {
         // The walk starts here, on the first matched fix with following on,
         // and this is where every later match extends it. Selection alone
         // starts nothing.
-        walkSession.recordForegroundMatch(hike: hike, profile: profile, distance: match.distanceAlongRoute)
+        let completedWalk = walkSession.recordForegroundMatch(
+            hike: hike,
+            profile: profile,
+            distance: match.distanceAlongRoute
+        )
         let moved = tracker.liveTrackerDistance != match.distanceAlongRoute
         // Guarded like `trackerDistance` below — reassigning `@Observable`
         // storage to an equal value still triggers dependent views, so an
@@ -737,8 +744,11 @@ private extension HikeDetailView {
         // `move(to:)` does the comparison this path used to do by hand.
         highlight.move(to: nil)
         RenderSignpost.mark("LiveFollowUpdate", moved ? "moved" : "unchanged")
-        // A paused walk still moves the dot above, and publishes nothing.
-        guard walkSession.publishes(hikeID: hike.id) else { return }
+        // A paused walk still moves the dot above, and publishes nothing. Nor
+        // does the fix that just completed a walk: with the record gone the
+        // two questions below say "publish, with no walk", which is a fresh
+        // plain follow over the finished panel the end has already queued.
+        guard !completedWalk, walkSession.publishes(hikeID: hike.id) else { return }
         backgroundTracker.publishLiveFix(
             hike: hike,
             profile: profile,
