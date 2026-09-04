@@ -204,6 +204,7 @@ struct HikePhotoStoreTests {
         #expect(await offMain { sandbox.store.imageData(for: orphan) } == nil)
     }
 
+    /// Two roots stand in for two devices: the row travels, the file does not.
     @Test("two stores with different roots don't see each other's photos")
     func storesAreIsolatedByRoot() async throws {
         let first = PhotoSandbox()
@@ -219,6 +220,33 @@ struct HikePhotoStoreTests {
         )
 
         #expect(await offMain { second.store.displayImage(for: photo) } == nil)
+        #expect(await offMain { !second.store.hasImage(for: photo) })
+        #expect(await offMain { first.store.hasImage(for: photo) })
+    }
+
+    /// The question everything above the store asks to tell "this device never
+    /// had it" apart from "this device cannot read it" — the two empty answers
+    /// a decode gives back as one `nil`.
+    @Test("a photo's pixels are reported present exactly while its file is there")
+    func hasImageFollowsTheFile() async throws {
+        let sandbox = PhotoSandbox()
+        let photo = try #require(
+            await offMain {
+                sandbox.store.store(
+                    Self.sampleImageData(),
+                    capturedAt: .now,
+                    coordinate: nil
+                )
+            }
+        )
+        #expect(await offMain { sandbox.store.hasImage(for: photo) })
+
+        await offMain { sandbox.store.remove([photo]) }
+
+        #expect(await offMain { !sandbox.store.hasImage(for: photo) })
+        // A row that was never written here at all — a photo taken on another
+        // device, arriving as metadata by itself.
+        #expect(await offMain { !sandbox.store.hasImage(for: HikePhoto()) })
     }
 
     // MARK: - Reclaiming orphans

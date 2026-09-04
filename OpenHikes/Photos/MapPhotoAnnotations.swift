@@ -98,14 +98,26 @@ final class PhotoCalloutPreview: UIControl {
         accessibilityLabel = Self.label(for: pin)
         guard photoID != pin.photo.id else { return }
         photoID = pin.photo.id
-        showPlaceholder()
+        showPlaceholder("photo")
         loadTask?.cancel()
-        let photo = pin.photo
         loadTask = Task { [weak self] in
-            let loaded = await HikePhotoLoader.thumbnail(for: photo, in: store)
-            guard let self, photoID == photo.id, let image = loaded?.image else { return }
-            imageView.contentMode = .scaleAspectFill
-            imageView.image = image
+            let display = await HikePhotoLoader.thumbnail(for: pin.photo, in: store)
+            guard let self, photoID == pin.photo.id else { return }
+            switch display {
+            case .ready(let loaded):
+                imageView.contentMode = .scaleAspectFill
+                imageView.image = loaded.image
+            case .unavailable(let reason):
+                // The callout is the one place a photo is shown without the
+                // user having asked for it, so it says the least it can and
+                // leaves the explanation to the page a tap opens.
+                showPlaceholder(Self.symbol(for: reason))
+                accessibilityLabel = Self.label(for: pin, unavailable: reason)
+            case .loading:
+                // Cancelled before it ran — this preview is being recycled
+                // onto another pin, which will set its own placeholder.
+                break
+            }
         }
     }
 
@@ -140,15 +152,25 @@ final class PhotoCalloutPreview: UIControl {
     /// A glyph rather than a spinner, for the reason the gallery strip's tiles
     /// use one: a thumbnail already on disk arrives within a frame or two, and
     /// a spinner that appears and vanishes reads as a glitch.
-    private func showPlaceholder() {
+    ///
+    /// Which glyph carries the whole difference between "in a moment" and "not
+    /// here at all", exactly as the strip's tiles do.
+    private func showPlaceholder(_ symbolName: String) {
         imageView.contentMode = .center
         imageView.tintColor = .tertiaryLabel
         imageView.image = UIImage(
-            systemName: "photo",
+            systemName: symbolName,
             withConfiguration: UIImage.SymbolConfiguration(
                 pointSize: Self.placeholderPointSize
             )
         )
+    }
+
+    private static func symbol(for reason: PhotoUnavailability) -> String {
+        switch reason {
+        case .notOnThisDevice: "icloud.slash"
+        case .unreadable: "exclamationmark.triangle"
+        }
     }
 
     @objc private func handleTap() {
@@ -164,6 +186,23 @@ final class PhotoCalloutPreview: UIControl {
         return pin.count > 1
             ? String(localized: "Open photo taken \(taken), first of \(pin.count) taken here")
             : String(localized: "Open photo taken \(taken)")
+    }
+
+    /// The same, once the decode has come back with nothing: a glyph says as
+    /// much to a sighted user, and this is the sentence that says it to
+    /// everyone else. Still "open", because the page a tap opens is where the
+    /// state is explained.
+    private static func label(
+        for pin: PhotoMapPin,
+        unavailable reason: PhotoUnavailability
+    ) -> String {
+        let base = label(for: pin)
+        switch reason {
+        case .notOnThisDevice:
+            return String(localized: "\(base), not on this device")
+        case .unreadable:
+            return String(localized: "\(base), unavailable")
+        }
     }
 }
 #endif

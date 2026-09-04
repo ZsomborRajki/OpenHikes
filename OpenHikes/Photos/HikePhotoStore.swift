@@ -223,46 +223,21 @@ nonisolated final class HikePhotoStore: @unchecked Sendable {
         #endif
     }
 
-    // periphery:ignore - the other half of the unbuilt photo-sync path
-    // described on `hasImage(for:)`.
-    /// Writes bytes whose identity was decided elsewhere — a photo arriving
-    /// from another device, which has to land under the file name the device
-    /// that took it gave it, or the metadata that travelled with it would
-    /// point at nothing.
+    /// Whether this device holds this photo's pixels.
     ///
-    /// Unlike ``store(_:capturedAt:coordinate:)`` this neither invents an id
-    /// nor sniffs the format: both already came over with the record, and
-    /// deriving them again here is how the two devices would end up disagreeing
-    /// about a file name.
-    @discardableResult func install(_ data: Data, as photo: HikePhoto) -> Bool {
-        assertOffMainThread("Photo storage must stay off the main thread")
-        do {
-            try createDirectories()
-            try data.write(to: url(for: photo), options: .atomic)
-        } catch {
-            Self.logger.error(
-                """
-                Could not install a synced photo: \
-                \(error.localizedDescription, privacy: .public)
-                """
-            )
-            return false
-        }
-        return true
-    }
-
-    // periphery:ignore - nothing calls this yet, and the gap is the finding
-    // rather than the function; see the doc comment below.
-    /// Whether this photo's pixels are already on this device.
+    /// The question a second device has to be able to ask. Mirroring carries
+    /// ``Hike/photos`` — a column of metadata — and carries no files, and
+    /// keeping it that way is a decision rather than a gap: see *Settled
+    /// decisions* in the repository instructions. So a photo row can be
+    /// perfectly good and have nothing behind it here, forever.
     ///
-    /// Read before a sync re-download so that a hike arriving with twenty
-    /// pictures the device already has doesn't fetch twenty assets again.
-    ///
-    /// Nothing calls it. ``Hike/photos`` documents this as what the UI asks
-    /// before offering a synced photo, and that call site does not exist — so
-    /// a second device currently offers pictures it has no file for.
+    /// Asked by ``HikePhotoLoader`` once a decode has already come back
+    /// empty, which is what separates that from the other empty answer — a
+    /// file that is here and cannot be read. The two are different things to
+    /// say and only one of them is worth offering a retry for.
     func hasImage(for photo: HikePhoto) -> Bool {
-        FileManager.default.fileExists(atPath: url(for: photo).path)
+        assertOffMainThread("Photo file checks must stay off the main thread")
+        return FileManager.default.fileExists(atPath: url(for: photo).path)
     }
 
     // MARK: - Reading

@@ -136,10 +136,17 @@ final class Hike {
     /// the row is touched and a walk's worth of captures in one would be paid
     /// for by the hikes list.
     ///
-    /// Which is also why a photo's pixels do not sync: mirroring carries this
-    /// column and nothing else, so a second device receives the metadata and
-    /// finds no file behind it. ``HikePhotoStore/hasImage(for:)`` is what the
-    /// UI asks before it offers to show one.
+    /// Which is also why a photo's pixels do not sync, and deliberately do
+    /// not: mirroring carries this column and nothing else, so a second device
+    /// receives the metadata and finds no file behind it — see *Settled
+    /// decisions* in the repository instructions for what was weighed and what
+    /// it would cost to change.
+    ///
+    /// That state is answered rather than hidden.
+    /// ``HikePhotoStore/hasImage(for:)`` is what ``HikePhotoLoader`` asks once
+    /// a decode has come back empty, and ``PhotoUnavailability/notOnThisDevice``
+    /// is what the gallery tile, the map callout and the viewer each say about
+    /// it.
     var photos: [HikePhoto] = []
 
     /// The resolved ``HikeLocalState``, remembered so repeated tile-ownership

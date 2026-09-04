@@ -55,19 +55,27 @@ nonisolated struct CapturedFrame: @unchecked Sendable {
 /// dropped. That is the honest limit of it: the win is a fast scroll not
 /// queueing a decode per tile it passed, not a decode being cut short.
 nonisolated enum HikePhotoLoader {
+    /// The strip's read, and the map callout's.
+    ///
+    /// Three-state like the viewer's below, and for the same reason: a tile
+    /// that drew the same grey square for "decoding" and for "there is no
+    /// file" was a broken picture with nothing said about it, on the surface a
+    /// second device sees first.
     @concurrent
     static func thumbnail(
         for photo: HikePhoto,
         in store: HikePhotoStore
-    ) async -> LoadedPhotoImage? {
-        guard !Task.isCancelled else { return nil }
+    ) async -> PhotoDisplay {
+        guard !Task.isCancelled else { return .loading }
         return RenderSignpost.interval("PhotoThumbnailDecoded") {
-            store.thumbnail(for: photo).map(LoadedPhotoImage.init)
+            guard let image = store.thumbnail(for: photo) else {
+                return PhotoDisplay.unavailable(unavailability(of: photo, in: store))
+            }
+            return .ready(LoadedPhotoImage(image: image))
         }
     }
 
-    /// The viewer's read, which unlike the strip's has to say *which* of two
-    /// things happened when no image comes back.
+    /// The viewer's read: the full picture rather than the strip's square.
     ///
     /// A cancelled task reports ``PhotoDisplay/loading`` rather than a
     /// failure: nothing was observed about the file, and the page that asked
@@ -80,29 +88,63 @@ nonisolated enum HikePhotoLoader {
         guard !Task.isCancelled else { return .loading }
         return RenderSignpost.interval("PhotoImageDecoded") {
             guard let image = store.displayImage(for: photo) else {
-                return PhotoDisplay.unavailable
+                return PhotoDisplay.unavailable(unavailability(of: photo, in: store))
             }
             return .ready(LoadedPhotoImage(image: image))
         }
     }
+
+    /// Which of the two empty answers this is, asked only once a decode has
+    /// already failed.
+    ///
+    /// The `fileExists` behind it is never paid on the path where the picture
+    /// draws, which is the overwhelming majority of them — and the answer is
+    /// worth a stat call on the path where it doesn't, because the two states
+    /// deserve different words and only one of them can be retried.
+    private static func unavailability(
+        of photo: HikePhoto,
+        in store: HikePhotoStore
+    ) -> PhotoUnavailability {
+        store.hasImage(for: photo) ? .unreadable : .notOnThisDevice
+    }
 }
 
-/// What one page of the full-screen viewer is showing.
+/// Why a photo the hike still lists cannot be drawn.
+///
+/// The distinction is the whole of what a second device is owed. Photo files
+/// do not travel — mirroring carries ``Hike/photos`` and carries no files, and
+/// that is a decision rather than a gap; see *Settled decisions* in the
+/// repository instructions — so the ordinary case on a second device is a
+/// photo that is fine everywhere except here, which is a sentence to say
+/// rather than a picture to fail at drawing.
+nonisolated enum PhotoUnavailability: Sendable {
+    /// No file under the name the row claims. What a mirrored photo looks like
+    /// on every device but the one that took it, and what a file deleted
+    /// underneath the app looks like anywhere.
+    case notOnThisDevice
+    /// A file is there and could not be decoded — bytes still arriving from a
+    /// restore, a volume that wasn't mounted, a truncated write. The one of
+    /// the two that is worth asking about again.
+    case unreadable
+}
+
+/// What one page of the full-screen viewer, or one tile of the strip, is
+/// showing.
 ///
 /// Three cases rather than an optional image, because the optional could not
 /// tell the two empty answers apart: ``HikePhotoStore/displayImage(for:)``
 /// returns `nil` both for a decode still to come and for a file that is not
 /// there at all, and the viewer drew a spinner for both. A photo whose bytes
-/// had gone — never synced onto this device, restored from a backup that
-/// didn't carry it, deleted underneath the app — therefore spun forever, with
-/// nothing said and nothing to press.
+/// had gone — never on this device, restored from a backup that didn't carry
+/// it, deleted underneath the app — therefore spun forever, with nothing said
+/// and nothing to press.
 nonisolated enum PhotoDisplay: Sendable {
     /// A decode is in flight, or was cancelled before it ran. The two states a
     /// spinner is the honest answer for.
     case loading
     case ready(LoadedPhotoImage)
-    /// The store had nothing to give for a photo the hike still lists. Final
-    /// until the file comes back or the row goes — which is why the page that
-    /// draws this offers both.
-    case unavailable
+    /// The store had nothing to give for a photo the hike still lists, and
+    /// which of the two reasons it was. Final until the file comes back or the
+    /// row goes.
+    case unavailable(PhotoUnavailability)
 }

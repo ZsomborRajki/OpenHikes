@@ -16,12 +16,18 @@
 //  swipe and the two buttons drive the same `scrollPosition` and cannot
 //  disagree about which photo is showing.
 //
-//  A page that cannot be drawn says so. The store answers "not decoded yet"
-//  and "there is no file" with the same `nil`, and a viewer that renders a
-//  spinner for both turns a missing photo into a screen that never resolves;
-//  ``PhotoDisplay`` is what separates them, and the failed state carries the
-//  two things there are to do about it — ask again, or take the row that
-//  claims the file out of the hike.
+//  A page that cannot be drawn says so, and says which thing happened. The
+//  store answers "not decoded yet" and "there is no file" with the same `nil`,
+//  and a viewer that renders a spinner for both turns a missing photo into a
+//  screen that never resolves; ``PhotoDisplay`` is what separates them.
+//
+//  The two failures are not the same news either. A file that is here and
+//  unreadable may be readable in a moment, so that page offers to ask again or
+//  to take the row that claims the file out of the hike. A file that is not
+//  here has nothing to wait for: photo pixels stay on the device that took
+//  them — see *Settled decisions* in the repository instructions — so that
+//  page explains itself and offers nothing, because both of the other page's
+//  buttons would be lies about what pressing them does.
 //
 
 import CoreLocation
@@ -328,7 +334,9 @@ private struct HikePhotoPage: View {
     /// Retry is worth offering rather than being a placebo: an unreadable file
     /// is often a temporary condition — a photo whose bytes haven't finished
     /// coming down from a restore, a volume that wasn't mounted — and the
-    /// alternative to a button is leaving the screen and coming back.
+    /// alternative to a button is leaving the screen and coming back. Which is
+    /// also why only that state offers it: nothing is on its way to a device
+    /// that simply never had the file.
     @State private var attempt = 0
 
     var body: some View {
@@ -346,8 +354,8 @@ private struct HikePhotoPage: View {
                     .scaledToFit()
                     .accessibilityElement()
                     .accessibilityLabel(Self.label(for: photo))
-            case .unavailable:
-                unavailable
+            case .unavailable(let reason):
+                unavailable(reason)
             }
         }
         .frame(maxWidth: .infinity, maxHeight: .infinity)
@@ -357,22 +365,60 @@ private struct HikePhotoPage: View {
         }
     }
 
-    /// A photo the hike still lists and the disk cannot produce.
+    /// A photo the hike still lists and the disk cannot produce, in whichever
+    /// of the two ways that happened.
+    @ViewBuilder
+    private func unavailable(_ reason: PhotoUnavailability) -> some View {
+        switch reason {
+        case .notOnThisDevice:
+            notOnThisDevice
+        case .unreadable:
+            unreadable
+        }
+    }
+
+    /// A photo whose file is not here and is not coming.
+    ///
+    /// Nothing to press, on purpose. "Try Again" would be a placebo — photo
+    /// files do not travel between devices and nothing is fetching this one,
+    /// which is a decision rather than an omission; see *Settled decisions* in
+    /// the repository instructions. And the removal the other state offers
+    /// would take the row out of the hike on *every* device, including the one
+    /// whose copy of the picture is perfectly fine. The toolbar's trash is
+    /// still there for somebody who means exactly that; it is not what this
+    /// page suggests they meant.
+    private var notOnThisDevice: some View {
+        ContentUnavailableView {
+            Label("Not on This Device", systemImage: "icloud.slash")
+        } description: {
+            Text(
+                """
+                OpenHikes keeps photo files on the device that took them \u{2014} \
+                only where and when the photo was taken travels with the hike.
+                """
+            )
+        }
+        .accessibilityIdentifier("photo-not-on-this-device")
+        .environment(\.colorScheme, .dark)
+    }
+
+    /// A file that is here and could not be read.
     ///
     /// Both ways out are here because neither one is always right. The file
-    /// may yet arrive, so the load can be asked for again; and when it never
-    /// will, the row claiming it is the thing to remove — the exit this state
-    /// had none of, since it was indistinguishable from a load in progress and
-    /// the toolbar's own delete was the only thing that could end it.
-    private var unavailable: some View {
+    /// may yet be readable — bytes still arriving from a restore, a volume
+    /// that wasn't mounted — so the load can be asked for again; and when it
+    /// never will be, the row claiming it is the thing to remove. That exit is
+    /// what this state had none of, since it was indistinguishable from a load
+    /// in progress and the toolbar's own delete was the only thing that could
+    /// end it.
+    private var unreadable: some View {
         VStack(spacing: Self.recoverySpacing) {
             ContentUnavailableView {
                 Label("Photo Unavailable", systemImage: "exclamationmark.triangle")
             } description: {
                 Text(
                     """
-                    The file behind this photo is missing or couldn\u{2019}t be \
-                    read. It may not have made it onto this device.
+                    The file behind this photo is here but couldn\u{2019}t be read.
                     """
                 )
             }
