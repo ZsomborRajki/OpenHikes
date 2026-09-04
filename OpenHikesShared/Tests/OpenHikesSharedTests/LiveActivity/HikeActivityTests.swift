@@ -251,18 +251,25 @@ struct HikeActivityPayloadTests {
     /// ``HikeActivityAttributes/ContentState`` would show up in first.
     private static let updateCeilingBytes = activityBudgetBytes / 8
 
-    /// A trail name at the worst case this test is willing to defend: 128
-    /// characters in a script where they cost three and four UTF-8 bytes
-    /// each, rather than 128 bytes of ASCII.
+    /// A trail name at the worst case: 128 characters in a script where they
+    /// cost three and four UTF-8 bytes each, rather than 128 bytes of ASCII.
     ///
-    /// Nothing in the app bounds the real one. ``Hike/displayTitle`` returns
-    /// `customName` or `title`; the rename field trims whitespace and stores
-    /// whatever is left, with no length check, and an imported GPX `<name>`
-    /// arrives unbounded too. So 128 characters is *this test's* bound and not
-    /// the app's, chosen because the job here is to catch a structural
-    /// regression — a field that carries geometry — rather than to prove that
-    /// a hostile hundred-kilobyte title fits. Nothing would make it fit; the
-    /// answer to that one is a bound on the title, not a smaller payload.
+    /// 128 was this test's own bound for as long as the app had none — the
+    /// rename field trimmed whitespace and stored whatever was left, and an
+    /// imported GPX `<name>` arrived unbounded. The answer to a hostile
+    /// hundred-kilobyte title was always a bound on the title rather than a
+    /// smaller payload, and the app now has one: `HikeTitle` bounds every
+    /// entry point — the rename field, the Stop alert and the importer — at
+    /// 128 characters *and* 512 UTF-8 bytes, the second because a grapheme
+    /// cluster has no length limit and a character count alone therefore
+    /// bounds nothing about what crosses to the system.
+    ///
+    /// So this is no longer a hypothesis about what a title might cost. The
+    /// 498 bytes below are within a rounding error of the most one can, and
+    /// the numbers have to stay in step — the shared package cannot import the
+    /// app, so nothing but this sentence connects them. Raising the app's
+    /// bound without raising this leaves the payload defended at a case that
+    /// can no longer occur.
     private static let worstCaseTitle: String = {
         let name = "北アルプス表銀座縦走路 🏔"
         return name + String(repeating: "🏔", count: 128 - name.count)

@@ -60,12 +60,17 @@ struct HikeRenameTests {
         #expect(hike.displayTitle == "Ridge Loop")
     }
 
-    // MARK: commitTitleEdit logic (mirrors HikeDetailView.commitTitleEdit)
+    // MARK: commitTitleEdit logic
 
-    /// Simulates what `HikeDetailView.commitTitleEdit()` does.
+    /// The whole of what `HikeDetailView.commitTitleEdit()` does to the draft,
+    /// rather than a copy of it.
+    ///
+    /// It used to be a copy — the rule was spelled out inline in the view, so
+    /// a test could only restate it and hope the two stayed the same. Now that
+    /// ``HikeTitle/bounded(_:)`` owns the rule, this drives the shipping one
+    /// and the assertions below are about the app rather than about this file.
     private func applyRename(to hike: Hike, draft: String) {
-        let trimmed = draft.trimmingCharacters(in: .whitespacesAndNewlines)
-        hike.customName = trimmed.isEmpty ? nil : trimmed
+        hike.customName = HikeTitle.bounded(draft)
     }
 
     @Test("committing a non-empty draft sets customName")
@@ -100,6 +105,33 @@ struct HikeRenameTests {
         applyRename(to: hike, draft: "  Sunrise Walk  ")
         #expect(hike.customName == "Sunrise Walk")
         #expect(hike.displayTitle == "Sunrise Walk")
+    }
+
+    /// The rename field is one of the two places a person's own text becomes a
+    /// title, and the bound has to hold here or it holds nowhere — see
+    /// ``HikeTitle`` for why the cut is here rather than in the payload.
+    @Test("committing an overlong draft stores the bounded name")
+    func commitDraftIsBounded() {
+        let hike = Hike(title: "Ridge Loop", distanceMeters: 1000)
+        let draft = String(repeating: "a", count: HikeTitle.maximumCharacters * 4)
+
+        applyRename(to: hike, draft: draft)
+
+        #expect(hike.customName?.count == HikeTitle.maximumCharacters)
+        #expect(hike.displayTitle == hike.customName)
+    }
+
+    /// A name that already fits is stored as written. Without this, a bound
+    /// that quietly cut every title by a character would look identical to a
+    /// working one in the test above.
+    @Test("a draft at the bound is stored untouched")
+    func commitDraftAtTheBoundIsUnchanged() {
+        let hike = Hike(title: "Ridge Loop", distanceMeters: 1000)
+        let draft = String(repeating: "b", count: HikeTitle.maximumCharacters)
+
+        applyRename(to: hike, draft: draft)
+
+        #expect(hike.customName == draft)
     }
 
     // MARK: Persistence

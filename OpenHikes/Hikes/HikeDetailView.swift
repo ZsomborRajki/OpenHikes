@@ -533,8 +533,7 @@ private extension HikeDetailView {
     }
 
     private func commitTitleEdit() {
-        let trimmed = titleDraft.trimmingCharacters(in: .whitespacesAndNewlines)
-        hike.customName = trimmed.isEmpty ? nil : trimmed
+        hike.customName = HikeTitle.bounded(titleDraft)
         isEditingTitle = false
     }
 

@@ -208,8 +208,9 @@ final class OpenHikesModel {
         guard track.points.count > 1 else { throw .tooShort }
 
         let hike = Hike(
-            title: track.name
-                ?? url.deletingPathExtension().lastPathComponent,
+            // Bounded here rather than absorbed downstream: this name came out
+            // of a file the walker may never have opened. See ``HikeTitle``.
+            title: HikeTitle.imported(trackName: track.name, fileURL: url),
             distanceMeters: track.distanceMeters,
             date: track.startTime ?? .now,
             tintHex: Hike.randomTintHex(),
