@@ -33,7 +33,9 @@ extension ModelConfiguration {
     /// - Parameter syncsToCloud: False for a store that must never reach
     ///   iCloud — an in-memory one, which cannot mirror at all, and the user's
     ///   own switch, which is read once at launch because a
-    ///   `ModelConfiguration` is fixed for the life of its container.
+    ///   `ModelConfiguration` is fixed for the life of its container. Once at
+    ///   launch is the settled answer rather than the easy one: see
+    ///   ``CloudSyncCoordinator/pendingRelaunch``.
     static func openHikes(
         schema: Schema,
         isStoredInMemoryOnly: Bool = false,

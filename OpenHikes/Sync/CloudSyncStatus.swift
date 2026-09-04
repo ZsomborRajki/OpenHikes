@@ -84,6 +84,11 @@ final class CloudSyncStatus {
     /// while the switch reads off is not "Synced with iCloud", and saying so
     /// would be the one sentence a person in that state would be right to call
     /// a lie.
+    ///
+    /// This is a state the app is designed to reach, not one it is waiting to
+    /// stop reaching, so the strings below are the feature rather than a
+    /// stopgap: the relaunch is what applies the switch, and the row is where
+    /// a person finds that out.
     var pendingRelaunch = false
 
     /// What the pass currently running has raised, if anything.

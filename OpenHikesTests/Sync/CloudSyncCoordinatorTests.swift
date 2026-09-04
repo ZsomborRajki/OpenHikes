@@ -12,6 +12,9 @@
 //  iCloud" in that state would be telling a person their hikes were leaving a
 //  device they had just told it not to leave.
 //
+//  Why the store is not simply rebuilt instead is a separate question with a
+//  separate suite: `CloudSyncRecordingTests` holds the case that decided it.
+//
 
 import Foundation
 @testable import OpenHikes
