@@ -54,6 +54,34 @@ final class MapEntitlementStore {
         case failed(String)
     }
 
+    /// What a tap on **Restore Purchases** turned out to be.
+    ///
+    /// A `Bool` cannot say this, and saying it wrongly is expensive. Restoring
+    /// is two steps — `AppStore.sync()`, then a re-read of what this account
+    /// owns — and only the *second* one can report an empty purchase history.
+    /// Collapsing them meant an offline device, an unreachable App Store or a
+    /// failed authentication all arrived at the paywall as "no previous
+    /// purchase was found for this Apple Account", which told a paying
+    /// customer to go and sign in to a different account over a dropped
+    /// connection.
+    ///
+    /// The restore path exists to satisfy App Review's requirement that a
+    /// restorable purchase be restorable, so it is a customer contract as much
+    /// as a feature: reporting its failures accurately is part of honouring it.
+    enum RestoreOutcome: Equatable {
+        /// The sync landed and this Apple Account owns the subscription.
+        case restored
+        /// The sync landed and it does not. The only outcome entitled to say
+        /// that nothing was found.
+        case nothingToRestore
+        /// The password prompt was dismissed, or a restore was already
+        /// running. Says nothing to the user: they know what they just did.
+        case cancelled
+        /// The App Store could not be reached, or refused. The entitlement is
+        /// left exactly as it was — a failure to *ask* is not an answer.
+        case failed(String)
+    }
+
     private(set) var state: MapEntitlementState = .unknown
     private(set) var product: Product?
     /// The offer in the words the paywall shows, or `nil` until the product
@@ -108,6 +136,15 @@ final class MapEntitlementStore {
     /// Injectable so a suite can drive the store without StoreKit. The default
     /// reads the real one.
     private let currentEntitlements: @Sendable () async -> Bool
+    /// The other half of that seam, and the one ``restore()`` is built on.
+    ///
+    /// `AppStore.sync()` never returns under `xcodebuild test` — observed
+    /// still running after ten minutes — so a suite calling the real one would
+    /// hang the whole hosted bundle rather than fail a single test. Behind
+    /// this closure, every branch of ``restore()`` is reachable without an App
+    /// Store: the throw is a thrown error, and the entitlement the sync would
+    /// have revealed is whatever `currentEntitlements` is set to answer next.
+    private let syncPurchases: @Sendable () async throws -> Void
     /// Where the last resolved answer is remembered across launches.
     private let defaults: UserDefaults
 
@@ -137,10 +174,14 @@ final class MapEntitlementStore {
         defaults: UserDefaults = .standard,
         currentEntitlements: @escaping @Sendable () async -> Bool = {
             await MapEntitlementStore.hasProEntitlement()
+        },
+        syncPurchases: @escaping @Sendable () async throws -> Void = {
+            try await AppStore.sync()
         }
     ) {
         self.defaults = defaults
         self.currentEntitlements = currentEntitlements
+        self.syncPurchases = syncPurchases
         if defaults.object(forKey: SettingsKey.lastKnownMapEntitlement) != nil,
            !defaults.bool(forKey: SettingsKey.lastKnownMapEntitlement) {
             publish(.notEntitled)
@@ -234,19 +275,30 @@ final class MapEntitlementStore {
     /// Restores on a new device. `AppStore.sync()` prompts for a password, so
     /// it belongs behind an explicit button and not on launch — the launch
     /// path reads `currentEntitlements`, which needs no authentication.
-    func restore() async -> Bool {
-        guard !isWorking else { return isEntitled }
+    ///
+    /// A failed sync returns *before* the re-read, and that ordering is the
+    /// point. `currentEntitlements` is a local query that answers "no" for a
+    /// device whose receipt has not arrived yet, so refreshing on the failure
+    /// path would take the entitlement away from the returning subscriber the
+    /// button exists to serve — on the strength of the one query that could
+    /// not be completed. Nothing asked, nothing changed; ``RestoreOutcome``
+    /// carries the reason to the paywall instead.
+    func restore() async -> RestoreOutcome {
+        guard !isWorking else { return .cancelled }
         isWorking = true
         defer { isWorking = false }
         do {
-            try await AppStore.sync()
+            try await syncPurchases()
+        } catch StoreKitError.userCancelled {
+            return .cancelled
         } catch {
             Self.logger.error(
                 "Restore failed: \(error.localizedDescription, privacy: .public)"
             )
+            return .failed(error.localizedDescription)
         }
         await refresh()
-        return isEntitled
+        return isEntitled ? .restored : .nothingToRestore
     }
 
     private func handle(_ update: VerificationResult<Transaction>) async {

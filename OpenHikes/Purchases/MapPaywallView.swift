@@ -20,7 +20,11 @@ struct MapPaywallView: View {
     let store: MapEntitlementStore
 
     @State private var message: String?
-    @State private var showRestoreFailed = false
+    /// Raised only by ``MapEntitlementStore/RestoreOutcome/nothingToRestore``,
+    /// which is the one outcome that has actually asked the App Store and been
+    /// told this account owns nothing. Every other way a restore can end is a
+    /// dismissal or an error, and neither may claim that.
+    @State private var showNothingToRestore = false
 
     private static let features: [(icon: String, title: String, detail: String)] = [
         (
@@ -159,7 +163,7 @@ struct MapPaywallView: View {
             .disabled(!store.canRestore)
             .accessibilityIdentifier("paywall-restore-button")
         }
-        .alert("Nothing to Restore", isPresented: $showRestoreFailed) {
+        .alert("Nothing to Restore", isPresented: $showNothingToRestore) {
             Button("OK", role: .cancel) { /* dismiss */ }
         } message: {
             Text(
@@ -213,8 +217,21 @@ struct MapPaywallView: View {
 
     private func restore() async {
         message = nil
-        if await store.restore() == false {
-            showRestoreFailed = true
+        switch await store.restore() {
+        case .restored, .cancelled:
+            // `.restored` closes the screen the same way a purchase does; a
+            // cancel says nothing, because the user already knows what they
+            // just did.
+            break
+        case .nothingToRestore:
+            showNothingToRestore = true
+        case .failed(let reason):
+            // Deliberately not the alert above. The App Store was not reached,
+            // so nothing is known about what this account owns — telling the
+            // customer to sign in to another one would be a guess, and a
+            // discouraging one to hand somebody who is already paying.
+            message = "Restore couldn’t be completed. \(reason) Nothing has "
+                + "changed — you can try again in a moment."
         }
     }
 }
