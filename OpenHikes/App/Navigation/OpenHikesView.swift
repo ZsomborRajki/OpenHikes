@@ -228,6 +228,10 @@ struct OpenHikesView: View {
                 if !AppLaunchEnvironment.isRunningTests, appModel.startupIssue == nil {
                     appModel.trimTileCache(in: modelContext)
                     appModel.reclaimOrphanedPhotos(in: modelContext)
+                    // After the trim, which reads the sidecars this deletes
+                    // rows from — the ones it reads belong to hikes that are
+                    // still here, and are never the ones swept.
+                    appModel.reclaimOrphanedLocalStates(in: modelContext)
                 }
             }
             .task {

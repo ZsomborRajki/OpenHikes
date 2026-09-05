@@ -168,6 +168,7 @@ final class TrailWalkSession {
     ///   the fix afterwards must not: see ``recordMatch(hikeID:distance:at:)``.
     @discardableResult func recordForegroundMatch(hike: Hike, profile: RouteProfile, distance: Double) -> Bool {
         let now = clock()
+        discardWalkIfHikeGone()
         endIfAbandoned(at: now)
         if record == nil {
             startIfEligible(hike: hike, profile: profile, at: now)
@@ -181,6 +182,7 @@ final class TrailWalkSession {
     ///
     /// - Returns: whether this fix ended the walk, as above.
     @discardableResult func recordBackgroundMatch(hikeID: UUID, distance: Double, at timestamp: Date) -> Bool {
+        discardWalkIfHikeGone()
         endIfAbandoned(at: clock())
         return recordMatch(hikeID: hikeID, distance: distance, at: timestamp)
     }
@@ -338,6 +340,24 @@ final class TrailWalkSession {
         tracker?.walkDidEnd(final: nil)
     }
 
+    /// The same, for a hike that went away without anything telling us.
+    ///
+    /// `MapSheet`'s swipe is the one deletion that calls the method above; a
+    /// deletion mirrored from the walker's other device calls nothing, and
+    /// there is no remote-change handling to hang it off. Checked beside
+    /// ``endIfAbandoned(at:)``, on every fix, because until the walk is
+    /// cleared no trail can start one — ``canStart(_:)`` needs `record ==
+    /// nil` — and every *other* trail offers to end this one on a screen that
+    /// no longer exists.
+    ///
+    /// Nothing is written: the hike is detached, so the sidecar column cannot
+    /// be reached through it, and the row goes whole at the next launch —
+    /// see ``OpenHikesModel/reclaimOrphanedLocalStates(in:)``.
+    private func discardWalkIfHikeGone() {
+        guard let record, walkedHike?.isAttached == false else { return }
+        discardWalk(forDeletedHike: record.hikeID)
+    }
+
     /// Closes the walk under way and writes what it came to.
     ///
     /// The commit is the whole of it. Nothing here is cleared, published or
@@ -433,17 +453,34 @@ final class TrailWalkSession {
             return
         case let .abandon(state, stale):
             guard let hike = fetchHike(stale.hikeID) else {
-                state.walkInProgress = nil
-                save(reason: "clearing an orphaned walk")
+                clearOrphanedWalk(on: state)
                 return
             }
             adopt(stale, hike: hike)
             finish(reason: .abandoned, at: now)
-        case let .resume(_, open):
-            guard let hike = fetchHike(open.hikeID) else { return }
+        case let .resume(state, open):
+            guard let hike = fetchHike(open.hikeID) else {
+                clearOrphanedWalk(on: state)
+                return
+            }
             adopt(open, hike: hike)
             tracker?.walkDidStart(hikeID: hike.id)
         }
+    }
+
+    /// Clears a walk whose hike is no longer in the store, on either branch
+    /// above: a hike deleted on the walker's other device takes the mirrored
+    /// row and cannot touch this sidecar, so the column outlives it.
+    ///
+    /// Left uncleared it is picked again at every launch — it is the newest
+    /// open walk, and ``OpenHikesModel/openWalkAtLaunch(now:fetchingLocalStates:)``
+    /// returns exactly one — so a genuine open walk on another hike is never
+    /// adopted. The row itself is not deleted here:
+    /// ``OpenHikesModel/reclaimOrphanedLocalStates(in:)`` owns that, and this
+    /// runs in background relaunches where no sweep ever gets to.
+    private func clearOrphanedWalk(on state: HikeLocalState) {
+        state.walkInProgress = nil
+        save(reason: "clearing an orphaned walk")
     }
 
     private func fetchHike(_ id: UUID) -> Hike? {
