@@ -76,12 +76,15 @@ struct TrailProgressView: View {
         // tracker was last left: a scrub, or the start of the trail.
         let live = tracker.liveTrackerDistance
         let distance = live ?? tracker.trackerDistance
-        let remaining = profile.remainingDistanceMeters(atDistance: distance)
         // While this hike is being walked, the figure is coverage: what the
         // walk has actually spanned rather than where the walker stands.
         let walked = walk.flatMap { session in
             session.walkedHikeID == hikeID ? session.coveredFraction : nil
         }
+        // Both figures describe coverage during a walk, including a reverse
+        // walk or one with gaps. The chart's manual position is independent.
+        let remaining = walked.map { (1 - $0) * profile.totalDistanceMeters }
+            ?? profile.remainingDistanceMeters(atDistance: distance)
         let fraction = walked ?? profile.fractionComplete(atDistance: distance) ?? 0
         let percent = Int((fraction * 100).rounded())
         let caption = walked == nil ? "\(percent)%" : "\(percent)% walked"

@@ -201,13 +201,29 @@ nonisolated final class WalkUITests: XCTestCase {
         let parked = chart.value as? String
         XCTAssertNotNil(parked)
         let before = progress.value as? String
+        let remainingBefore = before?.components(separatedBy: ", ").last
         // One move spans 116 m, within the walk's gap bound. It proves the
         // foreground still accrues without depending on rapid static fixes,
         // which Core Location does not redeliver after the publish throttle.
         setSimulatedLocation(UITestFixture.trailPoints[3])
         XCTAssertTrue(waitUntilValueChanges(from: before, on: progress))
+        let advanced = progress.value as? String
+        XCTAssertNotEqual(
+            advanced?.components(separatedBy: ", ").last,
+            remainingBefore,
+            "remaining distance must advance with coverage while the chart is parked"
+        )
         XCTAssertEqual(chart.value as? String, parked, "coverage moves, the manual tracker stays put")
         expectPhase(phase, contains: "Active")
+
+        popScreen(in: app)
+        openHikeDetail(in: app)
+        XCTAssertTrue(scrollUntilVisible(progress, in: app))
+        XCTAssertEqual(
+            progress.value as? String,
+            advanced,
+            "reopening must preserve both coverage and remaining distance"
+        )
 
         XCTAssertTrue(scrollUntilVisible(app.buttons["Pause Walk"], in: app))
         app.buttons["Pause Walk"].tap()
