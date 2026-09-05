@@ -131,15 +131,21 @@ struct TrailWalkCoverageTests {
     }
 
     /// The end is reached at the threshold and not one step before it, on
-    /// both halves of the test: coverage, and proximity to the route's end.
+    /// both halves of the test: coverage, and proximity to the nearer end.
     @Test("reaching the end fires at the threshold and not one step before")
     func reachedEndThreshold() {
         let proximity = TrailWalkPolicy.reachedEndProximityMeters
         let fraction = TrailWalkPolicy.reachedEndFraction
-        #expect(TrailWalkPolicy.hasReachedEnd(coveredFraction: fraction, distanceToEndMeters: proximity))
-        #expect(!TrailWalkPolicy.hasReachedEnd(coveredFraction: fraction - 0.001, distanceToEndMeters: proximity))
-        #expect(!TrailWalkPolicy.hasReachedEnd(coveredFraction: fraction, distanceToEndMeters: proximity + 1))
-        #expect(TrailWalkPolicy.hasReachedEnd(coveredFraction: 1, distanceToEndMeters: 0))
+        #expect(TrailWalkPolicy.hasReachedEnd(coveredFraction: fraction, distanceToNearestEndMeters: proximity))
+        #expect(!TrailWalkPolicy.hasReachedEnd(
+            coveredFraction: fraction - 0.001,
+            distanceToNearestEndMeters: proximity
+        ))
+        #expect(!TrailWalkPolicy.hasReachedEnd(
+            coveredFraction: fraction,
+            distanceToNearestEndMeters: proximity + 1
+        ))
+        #expect(TrailWalkPolicy.hasReachedEnd(coveredFraction: 1, distanceToNearestEndMeters: 0))
     }
 
     /// The same rule over a real record: a walker who reaches the far end of
@@ -165,6 +171,32 @@ struct TrailWalkCoverageTests {
         let last = profile.distances[profile.coordinates.count - 1]
         record.coverage.record(distance: last)
         #expect(record.reachesEnd(atMatch: last))
+    }
+
+    /// The same route walked the other way. The direction a GPX stores its
+    /// points in is the importer's, not the walker's, and the coverage union
+    /// never cared: a walk from the stored end to the stored start covers the
+    /// whole route, so the trailhead it finishes at is an end it reached.
+    @Test("a record walked in the route's reverse direction reaches the end too")
+    func recordReachesTheEndWalkedBackwards() {
+        let profile = RouteProfile(route: Fixture.outAndBackRoute)
+        var record = TrailWalkRecord(
+            hikeID: UUID(),
+            routeDistanceMeters: profile.totalDistanceMeters,
+            startedAt: .now
+        )
+        let turn = profile.coordinates.count / 2
+        for index in stride(from: profile.coordinates.count - 1, through: turn, by: -1) {
+            record.coverage.record(distance: profile.distances[index])
+        }
+        #expect(!record.reachesEnd(atMatch: profile.distances[turn]), "the turn is not the end")
+        for index in stride(from: turn - 1, through: 1, by: -1) {
+            record.coverage.record(distance: profile.distances[index])
+            #expect(!record.reachesEnd(atMatch: profile.distances[index]), "not at point \(index)")
+        }
+        let first = profile.distances[0]
+        record.coverage.record(distance: first)
+        #expect(record.reachesEnd(atMatch: first))
     }
 
     /// Opening a trail at the trailhead for a look leaves no row behind.

@@ -34,7 +34,8 @@ struct TrailWalkSessionTests {
     }
 
     /// Feeds the session one match per route point from `start` to `end`,
-    /// a minute apart — a walker, not a teleport.
+    /// a minute apart — a walker, not a teleport. `end` before `start` walks
+    /// the route the way it is not stored, which is a walk like any other.
     func walk(
         _ session: TrailWalkSession,
         hike: Hike,
@@ -42,7 +43,7 @@ struct TrailWalkSessionTests {
         from start: Int,
         through end: Int
     ) {
-        for index in start...end {
+        for index in stride(from: start, through: end, by: start <= end ? 1 : -1) {
             clock.advance(by: 60)
             session.recordForegroundMatch(hike: hike, profile: profile, distance: profile.distances[index])
         }
