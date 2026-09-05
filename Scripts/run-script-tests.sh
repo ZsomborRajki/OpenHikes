@@ -101,9 +101,20 @@ case "${1:-}" in
 esac
 STUB
 
+# STUB_SCENARIO_LOGS names the scenario logs this run "writes", standing in for
+# the app writing them into its own container while the suite drives it. It
+# only ever fills a PerformanceLogs directory that already exists, so the cases
+# about a container with no directory and a run that logged nothing still see
+# what they are about.
 cat > "$stub_bin/xcodebuild" <<'STUB'
 #!/usr/bin/env bash
 printf 'xcodebuild %s\n' "$*" >> "$STUB_CALL_LOG"
+logs="${STUB_CONTAINER:-}/Documents/PerformanceLogs"
+if [[ -n "${STUB_CONTAINER:-}" && -d "$logs" ]]; then
+    for scenario in ${STUB_SCENARIO_LOGS:-}; do
+        printf '# scenario\t%s\n' "$scenario" > "$logs/$scenario.tsv"
+    done
+fi
 echo "Test Suite 'All tests' passed at 2026-08-30 12:00:00.000."
 exit "${STUB_XCODEBUILD_STATUS:-0}"
 STUB
@@ -418,18 +429,22 @@ fi
 
 echo "Performance collection"
 
-# The app container the stubbed get_app_container hands back.
+# The app container the stubbed get_app_container hands back. The two files
+# seeded here are what a *previous* run left in it — a scenario this suite has
+# since renamed, or one that only exists on another branch — which is exactly
+# what used to be copied out and reported as though it had just been measured.
 container="$work/container"
+report_root="$work/reports"
 mkdir -p "$container/Documents/PerformanceLogs"
 printf 'stub\n' > "$container/Documents/PerformanceLogs/live-recording.tsv"
 printf 'stub\n' > "$container/Documents/PerformanceLogs/map-pan.tsv"
 
 run_performance() {
     run_script "$1" "$performance_tests" --device "iPhone 17 Pro" \
-        --output "$work/reports-$RANDOM"
+        --output "$report_root-$RANDOM"
 }
 
-STUB_CONTAINER="$container" \
+STUB_CONTAINER="$container" STUB_SCENARIO_LOGS="background-recording idle" \
     run_performance "run-performance-tests addresses one device throughout"
 if expect_status 0 \
     && expect_contains "$calls" "id=$pro_udid" "the xcodebuild call" \
@@ -437,6 +452,17 @@ if expect_status 0 \
     && expect_contains "$calls" "xcrun simctl get_app_container $pro_udid" "the recorded calls" \
     && expect_absent "$calls" "booted " "the recorded calls" \
     && expect_contains "$output" "Collected 2 event file(s)" "the output"; then
+    pass
+fi
+
+# The run above cleared two stale logs and collected two of its own. What it
+# must not do is report four scenarios, two of which no test drove.
+current="run-performance-tests reports no scenario a previous run left behind"
+collected_events="$(find "$report_root"-* -type d -name events -exec ls {} \; 2>/dev/null | sort -u)"
+if expect_contains "$output" "Cleared:   2 stale scenario log(s)" "the output" \
+    && expect_contains "$collected_events" "background-recording.tsv" "the events collected" \
+    && expect_absent "$collected_events" "live-recording.tsv" "the events collected" \
+    && expect_absent "$collected_events" "map-pan.tsv" "the events collected"; then
     pass
 fi
 
@@ -565,6 +591,28 @@ write_events() {
 write_events "$report_work/events/photo-gallery.tsv" 40.2
 write_events "$report_work/events/settings.tsv" 43.8
 
+# Two scenes going into a pocket and coming back out of one. A scene returns
+# through `background → inactive → active`, so the `inactive` here is the app
+# already on its way onto the screen and not a second of pocket — and an
+# interval is stamped when it *finishes*, so the fetch below ran from 2.08 to
+# 2.2 and never overlapped the dark. `pocket-woken` is the same shape with the
+# radio genuinely woken inside the window, and is what stops the fix above
+# from being "report nothing".
+{
+    printf '# epoch_s\telapsed_s\tkind\tname\tvalue\tdetail\n'
+    printf '1001.0\t1.0\tmark\tScenePhaseChanged\t\tbackground\n'
+    printf '1002.0\t2.0\tmark\tScenePhaseChanged\t\tinactive\n'
+    printf '1002.2\t2.2\tinterval\tTileNetworkFetch\t120.0\tthread=off-main\n'
+    printf '1002.5\t2.5\tmark\tScenePhaseChanged\t\tactive\n'
+} > "$report_work/events/pocket.tsv"
+{
+    printf '# epoch_s\telapsed_s\tkind\tname\tvalue\tdetail\n'
+    printf '1001.0\t1.0\tmark\tScenePhaseChanged\t\tbackground\n'
+    printf '1001.5\t1.5\tinterval\tTileNetworkFetch\t100.0\tthread=off-main\n'
+    printf '1002.0\t2.0\tmark\tScenePhaseChanged\t\tinactive\n'
+    printf '1002.5\t2.5\tmark\tScenePhaseChanged\t\tactive\n'
+} > "$report_work/events/pocket-woken.tsv"
+
 # Sets `findings` to the report's findings list alone, which is the section
 # these cases are about.
 run_report() {
@@ -600,6 +648,19 @@ if expect_status 0 \
     && expect_absent "$findings" "PhotoImageDecoded" "the findings" \
     && expect_absent "$findings" "TileUnclaimedSweep" "the findings" \
     && expect_contains "$findings" "ModelContainerInit" "the findings"; then
+    pass
+fi
+
+run_report "perf-report does not charge a returning scene's fetches to the pocket"
+if expect_status 0 \
+    && expect_absent "$findings" "\`pocket\` woke the radio" "the findings"; then
+    pass
+fi
+
+run_report "perf-report still catches a radio woken inside the pocket"
+if expect_status 0 \
+    && expect_contains "$findings" "\`pocket-woken\` woke the radio 1 time(s)" \
+        "the findings"; then
     pass
 fi
 
