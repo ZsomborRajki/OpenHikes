@@ -2,7 +2,7 @@
 //  OpenHikesModel+LaunchSweeps.swift
 //  OpenHikes
 //
-//  The two sweeps that run once at launch, and what authorizes them to delete
+//  The sweeps that run once at launch, and what authorizes them to delete
 //  anything.
 //
 //  Files written outside SwiftData need an owner and a backstop: photo and tile
@@ -18,7 +18,16 @@
 //
 
 import Foundation
+import os
 import SwiftData
+
+// MARK: - Logging
+
+extension OpenHikesModel {
+    /// One logger for the sweeps, for the one thing they have to say: a
+    /// deletion the store refused.
+    static let sweepLogger = Logger(subsystem: "OpenHikes", category: "LaunchSweeps")
+}
 
 // MARK: - Claims
 
@@ -157,6 +166,69 @@ extension OpenHikesModel {
     @concurrent
     private static func reclaim(_ claimed: Set<String>, in store: HikePhotoStore) async {
         store.reclaimOrphans(claimedBy: claimed)
+    }
+
+    /// Deletes ``HikeLocalState`` rows whose hike is no longer in the store.
+    ///
+    /// The third backstop, and the one whose leak is not a file on disk. The
+    /// two stores cannot be related, so nothing cascades and nothing ever
+    /// fetches a sidecar except by the id of a hike that still exists — see
+    /// ``Hike/deleteLocalState()``, the *only* thing that removes one, which
+    /// only a deletion made on this device reaches. A hike deleted on the
+    /// walker's other device arrives as a mirrored row deletion that cannot
+    /// touch this store at all, and leaves a row behind that is unreachable
+    /// and, until this sweep, unsweepable — carrying a `walkInProgress` that
+    /// ``openWalkAtLaunch(now:fetchingLocalStates:)`` goes on choosing over
+    /// every real one, launch after launch.
+    ///
+    /// A fetch that fails sweeps nothing, the same rule the two above follow
+    /// and for a sharper version of the same reason: a `Hike` fetch that came
+    /// back empty because it failed makes *every* sidecar on the device an
+    /// orphan, and takes this device's whole offline tile inventory with it.
+    /// The sidecar fetch is guarded too, though a failure there is only an
+    /// empty orphan list: there is nothing to spend a claim set on.
+    func reclaimOrphanedLocalStates(in modelContext: ModelContext) {
+        Self.reclaimOrphanedLocalStates(
+            fetchingHikes: { try modelContext.fetch(FetchDescriptor<Hike>()) },
+            fetchingLocalStates: { try modelContext.fetch(FetchDescriptor<HikeLocalState>()) },
+            deleting: { orphans in
+                for orphan in orphans { modelContext.delete(orphan) }
+                try modelContext.save()
+            }
+        )
+    }
+
+    /// The rule itself, with both fetches and the deletion handed in — the
+    /// same seam ``reclaimOrphanedPhotos(from:fetchingHikes:)`` takes, and
+    /// there for the same reason: nothing makes a `ModelContext` throw on
+    /// demand, so without it the `guard` could be rewritten as `?? []` and
+    /// every test in the bundle would still pass.
+    ///
+    /// - Returns: the rows deleted — empty for a refused fetch, an honest
+    ///   absence of orphans, or a commit the store would not take.
+    @discardableResult static func reclaimOrphanedLocalStates(
+        fetchingHikes fetchHikes: () throws -> [Hike],
+        fetchingLocalStates fetchStates: () throws -> [HikeLocalState],
+        deleting delete: ([HikeLocalState]) throws -> Void
+    ) -> [HikeLocalState] {
+        guard let hikes = try? fetchHikes(), let states = try? fetchStates() else { return [] }
+        let live = Set(hikes.map(\.id))
+        let orphans = states.filter { !live.contains($0.hikeID) }
+        guard !orphans.isEmpty else { return [] }
+        do {
+            try delete(orphans)
+        } catch {
+            // Nothing is put back: an orphan is still an orphan, and the next
+            // launch sweeps it again.
+            sweepLogger.error(
+                """
+                Kept \(orphans.count) orphaned local state row(s) the store would not delete: \
+                \(error.localizedDescription, privacy: .public)
+                """
+            )
+            return []
+        }
+        return orphans
     }
 }
 

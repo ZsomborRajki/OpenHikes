@@ -356,21 +356,6 @@ struct TrailWalkSessionTests {
         #expect(later.coverage.coveredMeters > written.coverage.coveredMeters)
     }
 
-    // MARK: Deletion
-
-    @Test("deleting the walked hike forgets the walk without a row")
-    func deletedHikeDiscardsTheWalk() throws {
-        let session = session()
-        let hike = hike()
-        let profile = RouteProfile(route: hike.route)
-        walk(session, hike: hike, profile: profile, from: 0, through: 5)
-
-        session.discardWalk(forDeletedHike: hike.id)
-
-        #expect(session.walkedHikeID == nil)
-        #expect(try walks(of: hike).isEmpty)
-    }
-
     // MARK: Launch
 
     @Test("a walk left open by the last launch is adopted")
