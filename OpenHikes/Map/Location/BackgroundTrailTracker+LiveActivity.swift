@@ -33,12 +33,24 @@ extension BackgroundTrailTracker {
     /// one. The difference matters: "off the trail" is worth saying to a
     /// walker who is following it, and is not a reason to put an activity in
     /// front of someone who merely opened a trail to look at it.
+    ///
+    /// Neither does a fix along a trail whose walk has just been ended. That
+    /// end left its closing figures on the Lock Screen for
+    /// ``HikeLiveActivityController/finishedDismissAfter``, and every fix
+    /// after it — the walker still standing on the route, or a background
+    /// match that was already in flight when End landed — carries no walk and
+    /// so reads as an ordinary follow. Starting one would put a second panel
+    /// beside a result that was deliberately left up, or replace it outright.
+    /// Only the *start* is refused: the widget going back to plain following
+    /// is the right thing for it to do, and a running activity keeps taking
+    /// its updates, which is what lets an already-published fix land in front
+    /// of the end that is queued behind it.
     func publishFollowActivity(_ snapshot: SharedTrailSnapshot) {
         guard let liveActivityController else { return }
         let subject = HikeActivityAttributes.Subject.following(hikeID: snapshot.hikeID)
-        guard snapshot.liveFix != nil
-            || liveActivityController.activeSubject == subject
-        else { return }
+        let isRunning = liveActivityController.activeSubject == subject
+        guard isRunning || snapshot.liveFix != nil else { return }
+        guard isRunning || walkSession?.hasEndedWalk(hikeID: snapshot.hikeID) != true else { return }
         liveActivityController.update(
             HikeActivityRequest(
                 attributes: .following(from: snapshot, startedAt: clock()),
