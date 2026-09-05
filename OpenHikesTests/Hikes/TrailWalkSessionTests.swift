@@ -277,12 +277,21 @@ struct TrailWalkSessionTests {
         clock.advance(by: TrailWalkPolicy.abandonAfter - 60)
         session.endIfAbandoned()
         #expect(session.walkedHikeID == hike.id, "not yet")
+        // What the walk came to while it was still a walk, read before the
+        // hours that end it are on the clock.
+        let lastKnown = try #require(session.record).lastActivityAt
+        let walked = try #require(session.record).activeSeconds(at: lastKnown)
 
         clock.advance(by: 120)
         session.endIfAbandoned()
         #expect(session.walkedHikeID == nil)
         let kept = try #require(try walks(of: hike).first)
         #expect(kept.endReason == .abandoned)
+        // The six idle hours are not walking. The row closes where the walk
+        // did — at its last match — rather than where the sweep noticed.
+        #expect(kept.endedAt == lastKnown)
+        #expect(kept.activeSeconds == walked)
+        #expect(kept.activeSeconds < TrailWalkPolicy.abandonAfter, "the bound is not the walk")
         #expect(session.lastEndedWalk == nil, "nothing to push and nothing to linger")
     }
 
@@ -388,6 +397,8 @@ struct TrailWalkSessionTests {
         let profile = RouteProfile(route: hike.route)
         let first = session()
         walk(first, hike: hike, profile: profile, from: 0, through: 5)
+        let lastKnown = try #require(first.record).lastActivityAt
+        let walked = try #require(first.record).activeSeconds(at: lastKnown)
 
         clock.advance(by: TrailWalkPolicy.staleAtLaunchAfter + 60)
         let relaunched = session()
@@ -397,6 +408,10 @@ struct TrailWalkSessionTests {
         #expect(hike.walkInProgress == nil)
         let closed = try #require(try walks(of: hike).first)
         #expect(closed.endReason == .abandoned)
+        // A launch a day later is when the walk was found, not when it ended.
+        #expect(closed.endedAt == lastKnown)
+        #expect(closed.activeSeconds == walked)
+        #expect(closed.activeSeconds < TrailWalkPolicy.staleAtLaunchAfter, "the sweep is not the walk")
         #expect(relaunched.lastEndedWalk == nil)
     }
 }

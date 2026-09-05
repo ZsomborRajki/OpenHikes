@@ -350,10 +350,20 @@ final class TrailWalkSession {
     /// the caller either says so or tries again on the next fix.
     @discardableResult private func finish(reason: TrailWalkEndReason, at now: Date) -> TrailWalkEnd {
         guard let closing = record else { return .discarded }
+        // An abandonment is noticed long after it happened — six hours later
+        // at best, and at the next launch for a walk found stale — so `now` is
+        // when nobody was walking any more, not when the walk ended.
+        // ``TrailWalkRecord/lastActivityAt`` is the end: the last moment the
+        // walk was known to be on the route, and what both abandonment rules
+        // are already measured from. Closing at `now` banked the idle hours as
+        // active time, which is what the History row and the summary's "Active
+        // Time" then said — a four-minute walk swept at the next day's launch
+        // read as twenty-four hours. The other two reasons end when they say.
+        let endedAt = reason == .abandoned ? closing.lastActivityAt : now
         let kept = closing.coverage.meetsMinimum
         var row: HikeWalk?
         if kept, let hike = walkedHike, hike.isAttached {
-            let walk = HikeWalk(closing: closing, at: now, reason: reason)
+            let walk = HikeWalk(closing: closing, at: endedAt, reason: reason)
             context.insert(walk)
             walk.hike = hike
             row = walk
@@ -380,7 +390,7 @@ final class TrailWalkSession {
         }
         RenderSignpost.mark("TrailWalkEnded", reason.rawValue)
         let lingers = row != nil && reason != .abandoned
-        let final = lingers ? Self.payload(for: closing, at: now, state: .finished) : nil
+        let final = lingers ? Self.payload(for: closing, at: endedAt, state: .finished) : nil
         let endedID = closing.hikeID
         clearState()
         // After `clearState`, which clears it: an ended walk is exactly what
