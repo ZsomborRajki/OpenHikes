@@ -131,7 +131,7 @@ final class MapEntitlementStore {
     /// ``sceneDidBecomeActive()`` is the backstop for a lapse that happened
     /// while the process was not running.
     private var statusTask: Task<Void, Never>?
-    private static let logger = Logger(subsystem: "com.openhikes", category: "Purchases")
+    private static let logger = Logger(subsystem: "OpenHikes", category: "Purchases")
 
     /// Injectable so a suite can drive the store without StoreKit. The default
     /// reads the real one.
