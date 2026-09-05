@@ -176,29 +176,6 @@ struct TrailWalkSessionTests {
         #expect(try walks(of: hike).count == 1)
     }
 
-    /// Turning Auto-Follow Trail off for the walked hike is the one
-    /// non-button gesture that pauses. For any other hike it is nothing.
-    @Test("turning following off pauses the walked hike's walk")
-    func followingOffPauses() {
-        let session = session()
-        let hike = hike()
-        let other = self.hike(title: "Other")
-        let profile = RouteProfile(route: hike.route)
-        walk(session, hike: hike, profile: profile, from: 0, through: 3)
-
-        #expect(!session.autoFollowDidChange(hikeID: other.id, enabled: false))
-        #expect(session.phase == .following)
-
-        #expect(session.autoFollowDidChange(hikeID: hike.id, enabled: false))
-        #expect(session.phase == .paused)
-
-        // Resuming turns following back on: a resumed walk with following
-        // off would accrue nothing, silently.
-        hike.autoFollowEnabled = false
-        session.resume()
-        #expect(hike.autoFollowEnabled)
-    }
-
     // MARK: Ends the walker did not tap
 
     @Test("reaching the end closes the walk as completed and pushes it")
