@@ -55,7 +55,10 @@ extension TrailWalkSessionTests {
         session.end()
         #expect(!session.canStart(hike))
 
+        hike.autoFollowEnabled = false
         session.autoFollowDidChange(hikeID: hike.id, enabled: false)
+        #expect(!session.canStart(hike))
+        hike.autoFollowEnabled = true
         session.autoFollowDidChange(hikeID: hike.id, enabled: true)
 
         #expect(session.canStart(hike))

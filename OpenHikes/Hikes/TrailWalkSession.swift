@@ -7,7 +7,7 @@
 //
 //  Following a trail used to answer one question — *where am I on this trail
 //  right now* — and forget the answer. This is what remembers it. A walk
-//  begins on the first matched fix with Auto-Follow Trail on, keeps the
+//  begins on the first matched fix with Follow This Trail on, keeps the
 //  union of along-route intervals its consecutive matches spanned, can be
 //  paused and resumed, and ends into a `HikeWalk` row the History segment
 //  lists. It outlives the screen that started it: popping the detail,
@@ -102,7 +102,7 @@ final class TrailWalkSession {
     /// record, starts a fresh walk, and the controls come straight back —
     /// most visibly for a walk under 100 m, where End returns nothing and
     /// the detail is still on screen. Cleared by ``recordOffRoute(hikeID:)``
-    /// and by turning Auto-Follow Trail back on, which are the two ways a
+    /// and by turning Follow This Trail back on, which are the two ways a
     /// walker says they mean to walk this trail again.
     @ObservationIgnored private var endedHikeID: UUID?
 
@@ -309,27 +309,16 @@ final class TrailWalkSession {
         current.lastMatchedAt = now
         record = current
         phase = .following
-        // A resumed walk with following off would accrue nothing, silently.
-        walkedHike?.autoFollowEnabled = true
         RenderSignpost.mark("TrailWalkPhase", "following")
         persist(at: now)
         publishState()
     }
 
-    /// Turning Auto-Follow Trail off for the walked hike is the one
-    /// non-button gesture that pauses: it is the walker saying *stop
-    /// following*. Returns whether a walk was paused by it, so the caller
-    /// knows the Lock Screen is saying Paused rather than coming down.
-    @discardableResult func autoFollowDidChange(hikeID: UUID, enabled: Bool) -> Bool {
-        guard !enabled else {
-            // Turning it back on is the walker asking to follow this trail
-            // again — the other way an End's boundary is rearmed.
-            rearmStart(hikeID: hikeID)
-            return false
-        }
-        guard let record, record.hikeID == hikeID, record.phase == .following else { return false }
-        pause()
-        return true
+    /// Enabling Follow This Trail rearms auto-start after an End. Neither
+    /// direction changes a walk already under way: its phase belongs to
+    /// Pause / Resume / End, independently of the detail's live marker.
+    func autoFollowDidChange(hikeID: UUID, enabled: Bool) {
+        if enabled { rearmStart(hikeID: hikeID) }
     }
 
     private func publishState() {
