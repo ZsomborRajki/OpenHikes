@@ -212,6 +212,67 @@ struct HikePersistenceTests {
         #expect(try context.fetch(FetchDescriptor<HikeWalk>()).isEmpty, "the cascade took the walk with the hike")
     }
 
+    /// A walk's phase is a commit rather than a report. The sidecar is the
+    /// only thing that survives the process, so a Pause the store refuses
+    /// must leave the walk following everywhere — otherwise the next launch
+    /// reads a walk that was never paused, and banks the whole stop as active
+    /// time on a screen that had said Paused since the tap.
+    @Test("a Pause the store refuses does not come back as a paused walk")
+    func refusedPauseIsNotDurable() throws {
+        try makeDirectory()
+        defer { removeDirectory() }
+
+        let hikeID = UUID()
+        let startedAt = Date(timeIntervalSince1970: 1_750_000_000)
+        let now = startedAt.addingTimeInterval(600)
+        do {
+            let container = try openContainer()
+            let context = ModelContext(container)
+            let hike = Hike(title: "Ridge Loop", distanceMeters: 2000, id: hikeID, route: Fixture.ridgeRoute)
+            context.insert(hike)
+            hike.walkInProgress = TrailWalkRecord(
+                hikeID: hikeID,
+                routeDistanceMeters: 2000,
+                startedAt: startedAt
+            )
+            try context.save()
+        }
+
+        do {
+            let container = try openContainer()
+            let session = TrailWalkSession(
+                context: ModelContext(container),
+                clock: { now },
+                save: { _ in throw CocoaError(.fileWriteUnknown) }
+            )
+            session.restoreAtLaunch()
+            #expect(session.phase == .following, "precondition: it adopted the open walk")
+
+            #expect(!session.pause(), "a store that refuses the write refuses the pause")
+            #expect(session.phase == .following, "and the walk is left as the disk still has it")
+        }
+
+        do {
+            let container = try openContainer()
+            let context = ModelContext(container)
+            #expect(try walkedHike(hikeID, in: context).walkInProgress?.phase == .following)
+            // The other half of the claim: a Pause the store takes is durable.
+            let session = TrailWalkSession(context: context, clock: { now })
+            session.restoreAtLaunch()
+            #expect(session.pause())
+        }
+
+        let context = ModelContext(try openContainer())
+        #expect(try walkedHike(hikeID, in: context).walkInProgress?.phase == .paused)
+    }
+
+    /// The hike a walk hangs off, refetched from a freshly opened store.
+    private func walkedHike(_ id: UUID, in context: ModelContext) throws -> Hike {
+        try #require(
+            try context.fetch(FetchDescriptor<Hike>(predicate: #Predicate { $0.id == id })).first
+        )
+    }
+
     /// An end reason this build does not know decodes as no reason rather
     /// than failing the row — the same degradation `routeLinePatternID` has.
     @Test("an unknown end reason degrades rather than failing to decode")

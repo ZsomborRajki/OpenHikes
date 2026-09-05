@@ -34,6 +34,12 @@ struct WalkControls: View {
     /// controls are still on screen — this is what says so, rather than
     /// letting a refusal read as a walk too short to keep.
     @State private var showEndRefusal = false
+    /// The same for a phase the store refused, and the phase that tap asked
+    /// for. Without it a refused Pause is a button that does nothing: the
+    /// walk is deliberately left following, because that is what the sidecar
+    /// still says, and the row above goes on reading Walk Active.
+    @State private var showPhaseRefusal = false
+    @State private var refusedPhase: TrailWalkPhase = .paused
 
     var body: some View {
         Group {
@@ -71,6 +77,15 @@ struct WalkControls: View {
         } message: {
             Text("Its record could not be saved, so the walk is still under way. Try ending it again.")
         }
+        .alert("Could not change this walk", isPresented: $showPhaseRefusal) {
+            Button("OK", role: .cancel) { /* no-op */ }
+        } message: {
+            Text(
+                refusedPhase == .paused
+                    ? "Pausing it could not be saved, so the walk is still under way. Try pausing it again."
+                    : "Resuming it could not be saved, so the walk is still paused. Try resuming it again."
+            )
+        }
         // A walk that reached the end on its own has no tap to push its
         // summary from; this is what does it. A tapped End pushed from its
         // own action above, so only the automatic case is answered here.
@@ -89,12 +104,12 @@ struct WalkControls: View {
                 switch phase {
                 case .following:
                     Button("Pause Walk", systemImage: "pause.fill") {
-                        session.pause()
+                        refuse(.paused, unless: session.pause())
                     }
                     .glassButtonStyle()
                 case .paused:
                     Button("Resume Walk", systemImage: "play.fill") {
-                        session.resume()
+                        refuse(.following, unless: session.resume())
                     }
                     .glassButtonStyle()
                 }
@@ -111,6 +126,13 @@ struct WalkControls: View {
         }
         .tint(hike.tintOpaque)
         .frame(maxWidth: .infinity)
+    }
+
+    /// Says so when a tap asking for `attempted` was not written down.
+    private func refuse(_ attempted: TrailWalkPhase, unless changed: Bool) {
+        guard !changed else { return }
+        refusedPhase = attempted
+        showPhaseRefusal = true
     }
 }
 
