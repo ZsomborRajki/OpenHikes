@@ -7,7 +7,6 @@
 	objects = {
 
 /* Begin PBXBuildFile section */
-		A84425B0303F710A0052FB84 /* OpenHikes.storekit in Resources */ = {isa = PBXBuildFile; fileRef = A84425AF303F710A0052FB84 /* OpenHikes.storekit */; };
 		A8838AE7302A232300FAEEEE /* WidgetKit.framework in Frameworks */ = {isa = PBXBuildFile; fileRef = A8838AE6302A232300FAEEEE /* WidgetKit.framework */; };
 		A8838AE9302A232300FAEEEE /* SwiftUI.framework in Frameworks */ = {isa = PBXBuildFile; fileRef = A8838AE8302A232300FAEEEE /* SwiftUI.framework */; };
 		A8838AF6302A232400FAEEEE /* OpenWidgetExtension.appex in Embed Foundation Extensions */ = {isa = PBXBuildFile; fileRef = A8838AE4302A232300FAEEEE /* OpenWidgetExtension.appex */; platformFilter = ios; settings = {ATTRIBUTES = (RemoveHeadersOnCopy, ); }; };
@@ -424,7 +423,6 @@
 			isa = PBXResourcesBuildPhase;
 			buildActionMask = 2147483647;
 			files = (
-				A84425B0303F710A0052FB84 /* OpenHikes.storekit in Resources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
@@ -724,6 +722,7 @@
 				ENABLE_HARDENED_RUNTIME = YES;
 				ENABLE_PREVIEWS = YES;
 				ENABLE_USER_SELECTED_FILES = readonly;
+				EXCLUDED_SOURCE_FILE_NAMES = "*/SimulatedLocations/*";
 				GENERATE_INFOPLIST_FILE = YES;
 				INFOPLIST_FILE = OpenHikes/Info.plist;
 				INFOPLIST_KEY_LSApplicationCategoryType = "public.app-category.navigation";

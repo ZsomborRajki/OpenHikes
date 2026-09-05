@@ -436,7 +436,7 @@ jobs:
       # the widget, or without its dSYMs is a green job that proves nothing —
       # and all three are silent, since xcodebuild reports ARCHIVE SUCCEEDED
       # either way.
-      - name: Verify the archive has what it should
+      - name: Verify what the archive does and does not carry
         run: |
           set -euo pipefail
           app="build/OpenHikes.xcarchive/Products/Applications/OpenHikes.app"
@@ -458,6 +458,42 @@ jobs:
           echo "  arches  $arches"
           if [[ "$arches" != *arm64* ]]; then
             echo "::error::The archived binary has no arm64 slice — this is not a device build."
+            status=1
+          fi
+          # And what it should *not* have. The StoreKit configuration is the
+          # scheme's local testing configuration and the SimulatedLocations
+          # fixtures drive `--ui-testing` launches whose consumers are all
+          # `#if DEBUG`. Neither belongs in a shipped bundle, and both are kept
+          # out of it by project configuration rather than by anything that
+          # fails loudly — so shipping them again would be exactly as silent as
+          # it was the first time.
+          #
+          # The fixture names are read off the folder instead of being listed
+          # here, because the next fixture is a fifth file in that folder and
+          # would otherwise ship unchecked. A synchronized group copies them
+          # flat into the bundle root, so the basename is the whole path.
+          # A list built by scanning is a list that can come back empty, and an
+          # empty list is a check that passes about nothing.
+          fixtures="$(find OpenHikes/SimulatedLocations -type f ! -name '.*')"
+          if [[ -z "$fixtures" ]]; then
+            echo "::error::Found no UI-test fixtures to look for — OpenHikes/SimulatedLocations moved or emptied, and this check now proves nothing."
+            exit 1
+          fi
+          strays=0
+          while IFS= read -r fixture; do
+            name="$(basename "$fixture")"
+            if [[ -e "$app/$name" ]]; then
+              echo "::error::UI-test fixture in the archived app: $name"
+              strays=1
+            fi
+          done <<< "$fixtures"
+          while IFS= read -r configuration; do
+            echo "::error::StoreKit configuration in the archived app: ${configuration#"$app/"}"
+            strays=1
+          done < <(find "$app" -name '*.storekit')
+          if [[ "$strays" == 0 ]]; then
+            echo "  ok      no StoreKit configuration or UI-test fixture in the app"
+          else
             status=1
           fi
           exit "$status"
