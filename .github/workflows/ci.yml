@@ -111,11 +111,39 @@ jobs:
           sudo installer -pkg SwiftLint.pkg -target /
           rm SwiftLint.pkg
 
+      # Ruff is to the Python in this repository what SwiftLint is to the
+      # Swift, and is pinned the same way and for the same reason: a rule set
+      # that moves underneath a branch reports violations that are about the
+      # tool's release notes rather than about the change, and a contributor
+      # cannot tell the two apart. The checksum is the release's own and is
+      # tied to this version *and* to the runner's architecture, so bumping
+      # `.ruff-version` means replacing the line below with it.
+      - name: Install pinned ruff
+        run: |
+          version="$(cat .ruff-version)"
+          curl --fail --location --retry 3 \
+            --output ruff.tar.gz \
+            "https://github.com/astral-sh/ruff/releases/download/${version}/ruff-aarch64-apple-darwin.tar.gz"
+          echo "77513748c833b435b82453ba20e07db808ef6c5121945ede80a6cf21bee468a4  ruff.tar.gz" \
+            | shasum --algorithm 256 --check
+          tar --extract --gunzip --file ruff.tar.gz --strip-components 1 \
+            --directory "$RUNNER_TEMP" ruff-aarch64-apple-darwin/ruff
+          rm ruff.tar.gz
+          echo "$RUNNER_TEMP" >> "$GITHUB_PATH"
+
       # The same script a developer runs locally, and the same one the
       # opt-in pre-push hook runs — so a violation cannot be green in one
       # place and red in another.
       - name: Run strict SwiftLint
         run: Scripts/lint.sh
+
+      # Three programs and their tests, at the version `.ruff-version` pins
+      # and under the rules `ruff.toml` sets, both of which a developer reads
+      # too. `--no-cache` because a cache written into the workspace is one
+      # more thing the checkout carries between steps for no gain on a runner
+      # that starts clean.
+      - name: Run ruff
+        run: ruff check --no-cache Scripts
 
       # SwiftLint sees no shell. Nothing else in this repository executes
       # ci_scripts/ci_post_clone.sh either — Xcode Cloud runs it by name, and a
@@ -146,6 +174,26 @@ jobs:
           done < <(find Scripts ci_scripts -name '*.sh' | sort)
           exit "$status"
 
+      # The same argument as above, for the other interpreter in the tree.
+      # Nothing compiles a Python file either: `Scripts/perf-report.py` is run
+      # by `Scripts/run-performance-tests.sh` long after a pull request has
+      # merged, and the two gate programs beside it are run by jobs that can
+      # each fail one — so a syntax error in any of them surfaces as a broken
+      # measurement or a broken merge rather than as a red pull request.
+      - name: Check Python programs parse
+        run: |
+          set -euo pipefail
+          status=0
+          while IFS= read -r program; do
+            if python3 -m py_compile "$program"; then
+              echo "  ok   $program"
+            else
+              echo "::error file=$program::$program is not valid Python syntax."
+              status=1
+            fi
+          done < <(find Scripts ci_scripts -name '*.py' | sort)
+          exit "$status"
+
       # Parsing is not behaviour. Scripts/run-ui-tests.sh and
       # Scripts/run-performance-tests.sh decide which simulator a run lands on
       # and whether a performance report was assembled out of anything at all,
@@ -154,6 +202,17 @@ jobs:
       # xcodebuild, so nothing is built and no simulator is touched.
       - name: Run script smoke tests
         run: Scripts/run-script-tests.sh
+
+      # Parsing is not behaviour here either. `Scripts/perf-report.py` decides
+      # what a person reads first after a performance run and has shipped a
+      # finding it invented — "52.2 network requests per accepted fix", for a
+      # recording that woke the radio zero times — so its ratios are asserted
+      # against input small enough to check by hand. The two gate programs are
+      # covered for a plainer reason: one of them can fail a merge, and the
+      # other is the only thing that would notice a sanitized suite silently
+      # not running.
+      - name: Run Python unit tests
+        run: python3 -m unittest discover --start-directory Scripts/tests --verbose
 
       - name: Test shared package
         run: |
@@ -291,45 +350,7 @@ jobs:
           xcrun xccov view --report TestResults/UnitTests.xcresult
           xcrun xccov view --report --json TestResults/UnitTests.xcresult \
             > TestResults/coverage.json
-          python3 - <<'PY'
-          import json
-          import os
-          import sys
-
-          floor = float(os.environ["COVERAGE_FLOOR"])
-          wanted = os.environ["COVERAGE_TARGET"]
-          report = json.load(open("TestResults/coverage.json"))
-          targets = report.get("targets", [])
-          target = next((t for t in targets if t.get("name") == wanted), None)
-
-          if target is None:
-              seen = ", ".join(t.get("name", "?") for t in targets) or "nothing"
-              sys.exit(
-                  f"::error::No {wanted} in the coverage report — saw {seen}. "
-                  "Either the target was renamed or the build was not instrumented."
-              )
-
-          measured = target["lineCoverage"] * 100
-          verdict = "below" if measured < floor else "at or above"
-          line = (
-              f"`{wanted}` line coverage **{measured:.2f}%**, "
-              f"{verdict} the {floor:.2f}% floor "
-              f"({target['coveredLines']}/{target['executableLines']} lines), "
-              f"measured over `{os.environ['COVERAGE_SELECTION']}`."
-          )
-          print(line)
-
-          summary = os.environ.get("GITHUB_STEP_SUMMARY")
-          if summary:
-              with open(summary, "a", encoding="utf-8") as handle:
-                  handle.write(line + "\n")
-
-          if measured < floor:
-              sys.exit(
-                  f"::error::Coverage fell to {measured:.2f}%, under the "
-                  f"{floor:.2f}% floor set in .github/workflows/ci.yml."
-              )
-          PY
+          python3 Scripts/check-coverage-floor.py TestResults/coverage.json
 
   # Both entries build for the *simulator*. What that proves is that the code
   # compiles and links at `-Onone` and at `-O` with whole-module optimisation,
@@ -688,62 +709,7 @@ jobs:
           xcrun xcresulttool get test-results tests \
             --path TestResults/ThreadSanitizer.xcresult \
             --compact > TestResults/tsan-tests.json
-          python3 - <<'PY'
-          import json
-          import os
-          import sys
-
-          expected_suites = int(os.environ["EXPECTED_SUITES"])
-          test_floor = int(os.environ["TEST_FLOOR"])
-          report = json.load(open("TestResults/tsan-tests.json"))
-
-          suites = []
-          tests = []
-
-          def visit(node, trail):
-              kind = node.get("nodeType")
-              name = node.get("name", "?")
-              if kind == "Test Suite":
-                  suites.append("/".join(trail + [name]))
-              elif kind == "Test Case":
-                  tests.append("/".join(trail + [name]))
-              for child in node.get("children", []):
-                  visit(child, trail + [name])
-
-          for node in report.get("testNodes", []):
-              visit(node, [])
-
-          line = (
-              f"ThreadSanitizer ran **{len(tests)} tests** in "
-              f"**{len(suites)} suites** "
-              f"(pinned at {expected_suites} suites, floor {test_floor} tests)."
-          )
-          print(line)
-          for suite in sorted(suites):
-              print(f"  {suite}")
-
-          summary = os.environ.get("GITHUB_STEP_SUMMARY")
-          if summary:
-              with open(summary, "a", encoding="utf-8") as handle:
-                  handle.write(line + "\n")
-
-          if len(suites) != expected_suites:
-              direction = "fell to" if len(suites) < expected_suites else "rose to"
-              sys.exit(
-                  f"::error::The sanitized suite count {direction} {len(suites)}, "
-                  f"against the {expected_suites} pinned in "
-                  ".github/workflows/ci.yml. A fall means an -only-testing: "
-                  "identifier no longer resolves and its suite was silently "
-                  "skipped; a rise means the list grew and the pin did not."
-              )
-
-          if len(tests) < test_floor:
-              sys.exit(
-                  f"::error::Only {len(tests)} tests ran under ThreadSanitizer, "
-                  f"under the {test_floor} floor set in "
-                  ".github/workflows/ci.yml."
-              )
-          PY
+          python3 Scripts/check-sanitized-selection.py TestResults/tsan-tests.json
 
       - name: Delete the private simulator
         if: always() && steps.sim.outputs.udid != ''

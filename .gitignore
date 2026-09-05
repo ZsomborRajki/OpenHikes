@@ -34,3 +34,7 @@ PerformanceReports/
 # Test result bundles — CI writes one here, and so does anyone running the
 # same `xcodebuild ... -resultBundlePath` command locally.
 TestResults/
+
+# Python bytecode — `python3 -m py_compile` and the unittest run under
+# `Scripts/tests/` both write it beside the source.
+__pycache__/

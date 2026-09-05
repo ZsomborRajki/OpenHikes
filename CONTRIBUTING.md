@@ -56,6 +56,21 @@ swift test --package-path OpenHikesShared
 `Scripts/install-git-hooks.sh` installs an opt-in pre-push hook that runs the
 linter for you.
 
+Changing something under `Scripts/` rather than the app? CI gates on those too,
+and none of the commands above touches them:
+
+```sh
+# The shell scripts, run for real against stubbed xcrun/xcodebuild/swiftlint
+Scripts/run-script-tests.sh
+
+# The Python — the report generator and the two CI gate programs
+ruff check Scripts
+python3 -m unittest discover --start-directory Scripts/tests
+```
+
+`ruff` is pinned in `.ruff-version`; install that version, the way CI does, so
+a clean run here is a clean run there.
+
 Two suites stay out of CI because a shared runner makes real gestures and
 timing-sensitive waits slow and unreliable. Run them locally when you touch
 recording, the map, or anything on the render path:

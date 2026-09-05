@@ -1,0 +1,22 @@
+# Ruff's configuration, which is deliberately almost none of it.
+#
+# There is no Python environment here to describe: three programs and their
+# tests, run by whichever `python3` the machine already has, with no package,
+# no requirements file and nothing to import beyond the standard library. So
+# the rules are ruff's own defaults — the ones about code that is wrong rather
+# than code that is unfashionable — plus a line length, which is the single
+# thing a default cannot know about a repository.
+#
+# The version is pinned in `.ruff-version` and installed from it by the CI
+# `quality` job, exactly as SwiftLint is pinned in `.swiftlint-version`. A lint
+# whose rule set moves underneath a branch reports violations that are about
+# the tool's release notes rather than about the change, and a contributor
+# cannot tell the two apart.
+target-version = "py313"
+line-length = 100
+
+[lint]
+# The only rule added to the defaults, and the one this repository's prose-heavy
+# comments most need: a wrapped line is read, and a line that runs off the side
+# of a diff is not.
+extend-select = ["E501"]
