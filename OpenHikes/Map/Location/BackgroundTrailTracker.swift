@@ -554,6 +554,16 @@ final class BackgroundTrailTracker: NSObject {
                 // below would carry no walk and start a plain follow over the
                 // finished panel `walkDidEnd` has just queued.
                 if completedWalk { return }
+            } else {
+                // Off the trail, and the session has to hear it: leaving the
+                // route is the boundary an End waits for, and until this the
+                // only thing that ever reported one was the detail view's own
+                // matcher. A walker who tapped End, pocketed the phone, left
+                // and came back found the first foreground match still
+                // refused — the leave had happened where nothing was looking.
+                // A rejected fix never gets here, so "off route" still means
+                // matched and found off it rather than no usable evidence.
+                walkSession?.recordOffRoute(hikeID: hikeID)
             }
             // A paused walk neither extends the union nor publishes: the
             // widget already says Paused, and a moving dot would contradict it.
