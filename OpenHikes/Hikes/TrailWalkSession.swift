@@ -145,6 +145,20 @@ final class TrailWalkSession {
         return record.phase == .following
     }
 
+    /// Whether the walk along `hikeID` was ended here and nothing has yet
+    /// said the walker means to walk it again.
+    ///
+    /// The same boundary ``canStart(_:)`` refuses to start a second walk on,
+    /// asked by the feeds rather than by the start path. An End leaves its
+    /// closing figures on the Lock Screen for
+    /// ``HikeLiveActivityController/finishedDismissAfter``, and the fixes
+    /// that keep arriving along the same trail carry no walk — so without
+    /// this they read as an ordinary follow and put a second panel beside a
+    /// result that was deliberately left up. Cleared by the same two gestures
+    /// that rearm the start, which is what makes a genuinely new walk's
+    /// activity start normally.
+    func hasEndedWalk(hikeID: UUID) -> Bool { endedHikeID == hikeID }
+
     /// The walk's figures for the widget and the Lock Screen, or `nil` when
     /// `hikeID` is not being walked.
     func payload(for hikeID: UUID, state: SharedTrailSnapshot.Walk.State? = nil) -> SharedTrailSnapshot.Walk? {
