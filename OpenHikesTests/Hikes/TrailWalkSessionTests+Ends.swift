@@ -57,7 +57,7 @@ extension TrailWalkSessionTests {
 
         hike.autoFollowEnabled = false
         session.autoFollowDidChange(hikeID: hike.id, enabled: false)
-        #expect(!session.canStart(hike))
+        #expect(session.hasEndedWalk(hikeID: hike.id), "turning following off must preserve the End boundary")
         hike.autoFollowEnabled = true
         session.autoFollowDidChange(hikeID: hike.id, enabled: true)
 

@@ -713,7 +713,7 @@ private extension HikeDetailView {
             distance: match.distanceAlongRoute
         )
         if hike.autoFollowEnabled {
-            guard updateLiveTracker(distance: match.distanceAlongRoute) else { return }
+            updateLiveTracker(distance: match.distanceAlongRoute)
         } else {
             RenderSignpost.mark("LiveFollowUpdate", "walk-only")
         }
@@ -730,9 +730,9 @@ private extension HikeDetailView {
         )
     }
 
-    /// Updates only the detail's live display. Returns false during a scrub,
-    /// preserving the feed's existing wait until the finger is lifted.
-    private func updateLiveTracker(distance: Double) -> Bool {
+    /// Updates only the detail's live display. Scrubbing parks the manual
+    /// tracker without suspending the walk's widget or Lock Screen feed.
+    private func updateLiveTracker(distance: Double) {
         let moved = tracker.liveTrackerDistance != distance
         // Guarded like `trackerDistance` below — reassigning `@Observable`
         // storage to an equal value still triggers dependent views, so an
@@ -746,7 +746,7 @@ private extension HikeDetailView {
             isScrubbing: isScrubbing
         ) else {
             RenderSignpost.mark("LiveFollowUpdate", moved ? "moved-scrubbing" : "unchanged-scrubbing")
-            return false
+            return
         }
         // Skip the tracker write when the projected position hasn't actually
         // moved (e.g. paused, or GPS noise below the route-matching
@@ -763,7 +763,6 @@ private extension HikeDetailView {
         // `move(to:)` does the comparison this path used to do by hand.
         highlight.move(to: nil)
         RenderSignpost.mark("LiveFollowUpdate", moved ? "moved" : "unchanged")
-        return true
     }
 
 }
