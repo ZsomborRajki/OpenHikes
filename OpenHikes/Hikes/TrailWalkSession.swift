@@ -231,8 +231,12 @@ final class TrailWalkSession {
         guard var current = record, current.hikeID == hikeID else { return false }
         current.lastMatchedAt = now
         guard current.phase == .following else {
-            // Seen, so the walk is not abandoned — but not walked.
+            // Seen, so the walk is not abandoned — but not walked. Still
+            // offered to the sidecar: a paused walk accrues nothing of its
+            // own, so these fixes are the only thing that can carry a write
+            // the store refused earlier, and the cadence keeps them cheap.
             record = current
+            persistIfDue(at: now)
             return false
         }
         current.coverage.record(distance: distance)
@@ -273,7 +277,10 @@ final class TrailWalkSession {
         )
         adopt(started, hike: hike)
         RenderSignpost.mark("TrailWalkStarted")
-        persist(at: now)
+        // A refused first write is not a refused start: nothing on disk says
+        // otherwise yet, and the walk is under way in memory. `persist` left
+        // the next write due at once, so the next matched fix writes it.
+        persist(started, at: now)
         tracker?.walkDidStart(hikeID: hike.id)
     }
 
@@ -291,35 +298,60 @@ final class TrailWalkSession {
 
     // MARK: Pause and resume
 
-    func pause() {
+    /// The walker tapped Pause, or turned Auto-Follow Trail off.
+    ///
+    /// - Returns: whether the walk is now paused. A phase is a milestone and
+    ///   is committed the way an end is: the record, the screens and both
+    ///   feeds are moved only once the sidecar has taken the new phase, so a
+    ///   refusal leaves the walk following rather than saying Paused about a
+    ///   walk the disk still calls under way. Nothing else would put that
+    ///   right — a paused walk accrues nothing to write later, so the
+    ///   sidecar's Following would outlive the pause and a relaunch would
+    ///   bank the whole stop as active time.
+    @discardableResult func pause() -> Bool {
         let now = clock()
-        guard var current = record, current.phase == .following else { return }
+        guard var current = record, current.phase == .following else { return false }
         current.pause(at: now)
+        guard persist(current, at: now) else { return false }
         record = current
         phase = .paused
         RenderSignpost.mark("TrailWalkPhase", "paused")
-        persist(at: now)
         publishState()
+        return true
     }
 
-    func resume() {
+    /// The walker tapped Resume.
+    ///
+    /// - Returns: whether the walk is following again, refused for the reason
+    ///   above — with the walk left paused, which is what it still is on disk.
+    @discardableResult func resume() -> Bool {
         let now = clock()
-        guard var current = record, current.phase == .paused else { return }
+        guard var current = record, current.phase == .paused else { return false }
         current.resume(at: now)
         current.lastMatchedAt = now
+        // A resumed walk with following off would accrue nothing, silently.
+        // It rides in the same save as the phase, so a refusal takes it back
+        // too: following turned on for a walk that did not resume is the
+        // switch moving under the walker.
+        let wasFollowing = walkedHike?.autoFollowEnabled ?? false
+        walkedHike?.autoFollowEnabled = true
+        guard persist(current, at: now) else {
+            walkedHike?.autoFollowEnabled = wasFollowing
+            return false
+        }
         record = current
         phase = .following
-        // A resumed walk with following off would accrue nothing, silently.
-        walkedHike?.autoFollowEnabled = true
         RenderSignpost.mark("TrailWalkPhase", "following")
-        persist(at: now)
         publishState()
+        return true
     }
 
     /// Turning Auto-Follow Trail off for the walked hike is the one
     /// non-button gesture that pauses: it is the walker saying *stop
     /// following*. Returns whether a walk was paused by it, so the caller
-    /// knows the Lock Screen is saying Paused rather than coming down.
+    /// knows the Lock Screen is saying Paused rather than coming down — and
+    /// so a pause the store refused takes the panel down rather than leaving
+    /// it claiming a pause that was never written.
     @discardableResult func autoFollowDidChange(hikeID: UUID, enabled: Bool) -> Bool {
         guard !enabled else {
             // Turning it back on is the walker asking to follow this trail
@@ -328,8 +360,7 @@ final class TrailWalkSession {
             return false
         }
         guard let record, record.hikeID == hikeID, record.phase == .following else { return false }
-        pause()
-        return true
+        return pause()
     }
 
     private func publishState() {
@@ -504,24 +535,46 @@ final class TrailWalkSession {
     // MARK: Persistence
 
     private func persistIfDue(at now: Date) {
+        guard let record else { return }
         if let lastPersistedAt, now.timeIntervalSince(lastPersistedAt) < TrailWalkPolicy.persistInterval {
             return
         }
-        persist(at: now)
+        persist(record, at: now)
     }
 
-    private func persist(at now: Date) {
-        guard let record, let walkedHike, walkedHike.isAttached else { return }
-        walkedHike.walkInProgress = record
-        lastPersistedAt = now
+    /// Writes `walk` to the sidecar as the walk in progress.
+    ///
+    /// - Returns: whether it may be presented as written down. A refusal puts
+    ///   the column back by hand — the same undo ``finish(reason:at:)`` does,
+    ///   and for the same reason: the write exists only as a pending edit, so
+    ///   a context left holding it would hand a later unrelated save a phase
+    ///   nobody committed. The cadence marker only ever moves on a commit, so
+    ///   a refused write leaves the next one due at once rather than in
+    ///   ``TrailWalkPolicy/persistInterval``.
+    @discardableResult private func persist(_ walk: TrailWalkRecord, at now: Date) -> Bool {
+        guard let walkedHike, walkedHike.isAttached else {
+            // No sidecar to reach: the hike is gone, the walk goes with it at
+            // the next fix — ``discardWalkIfHikeGone()`` — and the row left
+            // behind names a hike no launch can fetch, so nothing can be
+            // restored from it. Not a refusal; there is nothing to refuse.
+            return true
+        }
+        let previous = walkedHike.walkInProgress
+        walkedHike.walkInProgress = walk
         RenderSignpost.mark("TrailWalkPersisted")
-        save(reason: "writing the walk in progress")
+        guard save(reason: "writing the walk in progress") else {
+            walkedHike.walkInProgress = previous
+            lastPersistedAt = nil
+            return false
+        }
+        lastPersistedAt = now
+        return true
     }
 
-    /// - Returns: whether the store accepted it. Only ``finish(reason:at:)``
-    ///   reads the answer: a sidecar write that fails is written again at the
-    ///   next milestone, and a walk that ends is the one commit with nothing
-    ///   behind it to try again.
+    /// - Returns: whether the store accepted it. Every caller reads the
+    ///   answer: a walk's phase is not a phase until the sidecar holds it,
+    ///   and a walk that ends is the one commit with nothing behind it to try
+    ///   again.
     @discardableResult private func save(reason: String) -> Bool {
         do {
             try commit(context)
