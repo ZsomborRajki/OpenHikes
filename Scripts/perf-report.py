@@ -24,7 +24,9 @@ from collections import defaultdict
 from dataclasses import dataclass, field
 from pathlib import Path
 
-MEASURED = re.compile(r"measured \[([^\]]+)\] average: ([0-9.]+), relative standard deviation: ([0-9.]+)%")
+MEASURED = re.compile(
+    r"measured \[([^\]]+)\] average: ([0-9.]+), relative standard deviation: ([0-9.]+)%"
+)
 TEST_CASE = re.compile(r"Test Case '-\[(\S+) (\S+)\]' (passed|failed)")
 # A body that runs at most this often during a phase is not what a report
 # should lead with; the interesting entries are the ones that repeat.
@@ -189,7 +191,7 @@ def percentile(values: list[float], fraction: float) -> float:
     if not values:
         return 0.0
     ordered = sorted(values)
-    index = min(len(ordered) - 1, int(round(fraction * (len(ordered) - 1))))
+    index = min(len(ordered) - 1, round(fraction * (len(ordered) - 1)))
     return ordered[index]
 
 
@@ -440,8 +442,11 @@ def energy_section(scenario: Scenario) -> list[str]:
         woken = count_within(pocket, network)
         lines.extend(
             [
-                f"{woken} of {len(network)} requests were made while backgrounded, "
-                f"over {sum(end - start for start, end in pocket):.1f} s in a pocket.",
+                (
+                    f"{woken} of {len(network)} requests were made while "
+                    f"backgrounded, over "
+                    f"{sum(end - start for start, end in pocket):.1f} s in a pocket."
+                ),
                 "",
             ]
         )

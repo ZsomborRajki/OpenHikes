@@ -13,7 +13,10 @@
 # Scripts/perf-report.py is the third: it decides what a person reads first
 # after a performance run, and a finding about the instrument rather than about
 # the app reads exactly like a regression until somebody checks it against the
-# event file by hand. Those cases run the real script against a fixture.
+# event file by hand. Those cases run the real script against a fixture; the
+# arithmetic underneath each finding — the per-fix ratio, the backgrounded
+# window, the rejection rate — is asserted a level down, in Scripts/tests/,
+# which `python3 -m unittest discover --start-directory Scripts/tests` runs.
 # Scripts/periphery.sh is the fourth, and for the same reason as lint.sh: a
 # Periphery that read none of .periphery.yml scans on anyway and prints a
 # result, and on this project the result it prints is a clean one.
