@@ -104,8 +104,8 @@ leaked nothing, whatever its peak said.
 
 `## Findings` is the first thing in the generated report and the only part of it
 anyone reads in a hurry, so what it is allowed to flag is a decision rather than
-a leftover. Three rules keep it about the app rather than about the instrument,
-and a fourth keeps it short enough to finish.
+a leftover. Four rules keep it about the app rather than about the instrument,
+and a fifth keeps it short enough to finish.
 
 The 16 ms frame budget applies only to intervals that **held the main thread**.
 `RenderSignpost` stamps every interval it records with the thread it ran on, and
@@ -131,6 +131,14 @@ scenario, so reading it as work done while idle flags every scenario longer than
 two seconds whatever the app is doing; the other two are gauges whose "count" is
 a number of megabytes and a number of seconds.
 
+A request is backgrounded only if the radio was **on while the screen was off**
+— see *What a hike costs a battery* for the two boundaries that decide it. The
+pocket ends at the first phase mark that is not `background`, because a scene
+returns through `inactive`; and a request is placed by its span rather than by
+the timestamp it was logged at, because an interval is stamped when it
+finishes. With either read the wrong way round, the map filling in as the app
+comes forward is reported as eighteen wake-ups nobody could see.
+
 A finding the whole app shares is stated **once**, naming the scenarios that saw
 it and the worst number among them. Ten scenarios run against one app, so a
 launch cost every one of them pays is one fact, not nine findings.
@@ -151,10 +159,22 @@ hit-testing; backgrounded recording reads *above* screen-on recording for the
 same reason, since it polls the counters hardest.
 
 The comparable pair is per accepted fix, where the phases are like for like:
-**0.488 s screen on against 0.225 s backgrounded**. Putting the phone in a
+**0.416 s screen on against 0.225 s backgrounded**. Putting the phone in a
 pocket halves the per-fix cost, which is the right shape — and since that is how
 the app is used for all but a few minutes of a walk, the backgrounded number is
-the one that decides whether the battery lasts.
+the one that decides whether the battery lasts. The ratio is the durable half
+of that: both absolute figures move by around a fifth between runs, and the
+2:1 between them has not.
+
+A request is charged to the pocket only if the radio was actually on while the
+screen was off, which is narrower than it sounds in two ways that both used to
+be got wrong. A scene comes back through `background → inactive → active`, so
+the window closes on the **first phase mark that is not `background`** — the
+`inactive` leg is the app already on its way onto the screen. And an interval
+is stamped when it *finishes*, so a request is compared by its span rather
+than by its end. Before both, a run reported eighteen tile fetches as radio
+wake-ups "nothing could see" when every one of them was the map filling in as
+the app came forward, and none at all had happened in the dark.
 
 Every scenario's report also includes the location funnels, because "the GPS is
 busy" and "the GPS is busy and we are throwing the results away" cost identical
@@ -187,27 +207,37 @@ duty paid, half a route recorded.
 
 ## Open findings
 
-### P1 — Launch blocks the main thread for ~600 ms
+### P1 — Launch blocks the main thread for ~500 ms
 
-`XCTApplicationLaunchMetric` puts first-responsive-frame at **1.471 s**, and the
-watchdog reports a **544–595 ms** unbroken main-thread stall in *every*
-scenario. That stall begins before `PerformanceLog` itself exists and ends at
-t≈0.55 s on its clock, by which point the map and sheet have already drawn. The
-timeline inside it bisects as:
+`XCTApplicationLaunchMetric` puts first-responsive-frame at **1.308 s**, and the
+watchdog reports a **428–546 ms** unbroken main-thread stall in *every*
+scenario. That stall begins before `PerformanceLog` itself exists and ends
+between t≈0.38 s and t≈0.50 s on its clock, by which point the map and sheet
+have already drawn. The timeline inside it bisects as:
 
 | Span | Cost |
 |---|---|
-| `ModelContainerInit` (SwiftData), at t=0.003 | 36.4–39.0 ms |
-| `AppModelInit` (whole `OpenHikesModel`, includes the above) | 64.7–71.3 ms |
-| Model built → first SwiftUI body, at t=0.226 | **~130 ms** of framework bootstrap |
-| `MapViewCreated` → `MapRecordingTraceApplied` | **~52 ms** of `MKMapView` construction |
-| First body → main thread free again | **~330 ms** |
+| `ModelContainerInit` (SwiftData) | 42.0–48.1 ms |
+| `AppModelInit` (whole `OpenHikesModel`, includes the above) | 67.8–87.0 ms |
+| Model built → first SwiftUI body, at t≈0.17–0.20 | **146–161 ms** of framework bootstrap |
+| `MapViewCreated` → `MapRecordingTraceApplied` | **41–46 ms** of `MKMapView` construction |
+| First body → main thread free again | **207–322 ms** |
 
-The sheet body runs five times and the hike list eight before the app settles at
-t≈0.68 s. The framework bootstrap is not ours; the rest of the first render
-largely is. **This is also the largest single energy item in a short session**:
-a walker who opens the app to check where they are, and closes it, pays this and
-almost nothing else.
+The sheet body runs six to eight times and the hike list four to nine before
+the app settles at t≈0.54–0.62 s. The framework bootstrap is not ours; the rest
+of the first render largely is. **This is also the largest single energy item in
+a short session**: a walker who opens the app to check where they are, and
+closes it, pays this and almost nothing else.
+
+**Some of the worst is the first launch, not the scenario named.** The suite
+runs alphabetically, so `background-recording` launches into a container the
+build has just replaced, and it holds the top of both init ranges — 48.1 ms and
+87.0 ms, against 42.0–47.9 and 67.8–78.2 across the other nine — in both runs
+this table was built from. The findings list names it as the worst scenario for
+both, and it is, of a cost that belongs to the first launch rather than to
+recording. The stall does not follow that pattern: its worst moved to
+`recording` between the two runs, so read that one as a range and not as a
+scenario's property.
 
 Two things are known about the bisection intervals and neither is fixed.
 `ModelContainerInit` carries three `#Index<Hike>` indexes built at store-open,
@@ -232,18 +262,23 @@ launch is over before any measured phase begins, so it reads the watchdog's
 
 ### P2 — Panning still reaches the sheet, sometimes
 
-Four consecutive runs of the browsing phase against the current build:
+Four consecutive runs of the browsing phase before the trail-walk feature
+landed, and one against the build that has it:
 
-| `browsing` phase | Four runs |
-|---|---|
-| `MapSheetHikesBody` | **0, 1, 0, 0** |
-| `OpenHikesViewBody` | **0, 1, 0, 0** |
-| `MapSheetBody` | 2, 4, 2, 2 |
+| `browsing` phase | Four runs, pre-walk | This build |
+|---|---|---|
+| `MapSheetHikesBody` | **0, 1, 0, 0** | **1** |
+| `OpenHikesViewBody` | **0, 1, 0, 0** | **1** |
+| `MapSheetBody` | 2, 4, 2, 2 | 4 |
 
-Three of four are clean and the worst case is 1, down from 4 before
-`SheetPresentation` removed the root's `@State` invalidation and `MapSheetHikes`
-became `Equatable`. But it is not zero, it is still run-dependent, and
-`MapSheetBody` did not improve at all — that column is the unexplained part.
+Three of the four earlier runs are clean and the worst case is 1, down from 4
+before `SheetPresentation` removed the root's `@State` invalidation and
+`MapSheetHikes` became `Equatable`. The current build landed on exactly that
+worst case in its one run — 1, 1, 4, the same column the fourth pre-walk run
+produced — so this has not improved, and whether it got worse is not something
+one run can say. `MapSheetHikes` gained a `TrailWalkSession` in that
+feature, read per row for the walk badge and compared by identity in its
+`Equatable`, which is the first thing to look at if a second run agrees.
 
 This was never a stable number: earlier runs against one unchanged build
 reported 4/3/2, then 1/1/1, then 4/3/2 again, which is why the measurement above
@@ -255,7 +290,7 @@ that becomes expensive when somebody has two hundred hikes.
 ### P3 — A tap on the elevation chart scrubs nothing
 
 Nine taps along the elevation profile produce **zero** `ElevationChartBody`
-evaluations, where a continuous drag over the same pixels produces 17. So the
+evaluations, where a continuous drag over the same pixels produces 25. So the
 render cost of a tap is nil, and what is left is behavioural: a tap does not
 scrub.
 
@@ -272,31 +307,47 @@ against the actual view, not another reading.
 Low priority, since nobody taps a chart repeatedly, but it is where a scrub's
 start/stop edges would show a regression first.
 
-### P4 — Backgrounding blocks the main thread for 115–272 ms, in UIKit's snapshot
+### P4 — Backgrounding blocks the main thread for 115–289 ms, in UIKit's snapshot
 
-Going to the background, the main thread is busy for **115–272 ms** in a single
-run-loop turn, in every scenario. It is not the app's resign handler:
-`SceneResignActive` runs in **1–2 ms** and the `mainContext.save()` inside it in
-**0.7–1.2 ms**. Almost all of it happens *after* that handler has returned.
+Going to the background, the main thread is busy for **115–289 ms** in a single
+run-loop turn, in every scenario. Most of it is not the app's resign handler:
+`SceneResignActive` runs in **1.2–2.0 ms** on seven of the ten screens, and
+almost all of the turn happens *after* that handler has returned.
 
 `ScenePhaseTurn` is what reads it. The span opens in
 `OpenHikesModel.scenePhaseChanged(to:)` and closes on the next main-queue drain,
 which is a different run-loop stage from the scene-settings callout the handler
 is called inside — so it covers everything the main thread goes on to do before
 it is free again, including the part the app has no callback for. Worst turn per
-scenario, in each of two whole-suite runs:
+scenario, in each of four whole-suite runs:
 
-| Scenario | Worst turn, two runs | What is on screen |
+| Scenario | Worst turn, four runs | What is on screen |
 |---|---|---|
-| `chart-scrub` | **272, 271 ms** | hike detail, elevation chart |
-| `photo-discovery` | **231, 226 ms** | discovery sheet over hike detail |
-| `settings` | 186, 184 ms | Settings pushed |
-| `recording` | 143, 138 ms | recording |
-| `background-recording` | 140, 138 ms | recording |
-| `idle` | 133, 136 ms | bare map |
-| `photo-gallery` | 129, 129 ms | photo strip |
-| `map-browsing` | 117, 123 ms | bare map |
-| `offline-browsing` | 115, 123 ms | bare map |
+| `chart-scrub` | **272, 271, 289, 287 ms** | hike detail, elevation chart |
+| `walk` | — , — , — , **284 ms** | hike detail, walk in progress |
+| `photo-discovery` | **231, 226, 251, 238 ms** | discovery sheet over hike detail |
+| `settings` | 186, 184, 197, 187 ms | Settings pushed |
+| `recording` | 143, 138, 146, 142 ms | recording |
+| `background-recording` | 140, 138, 142, 142 ms | recording |
+| `idle` | 133, 136, 138, 137 ms | bare map |
+| `photo-gallery` | 129, 129, 123, 129 ms | photo strip |
+| `map-browsing` | 117, 123, 120, 121 ms | bare map |
+| `offline-browsing` | 115, 123, 127, 123 ms | bare map |
+
+`walk` joins `chart-scrub` at the top on the run that first measured it, which
+is what the "it tracks the screen" reading predicts: it is the same hike detail
+with the same elevation chart on it.
+
+**In three scenarios of every run, the resign handler itself costs a frame.**
+`SceneResignActive` reads **22.1–28.1 ms** there, of which the
+`mainContext.save()` inside it is **20.8–21.0 ms**; in the other seven the
+handler is 1.2–2.0 ms and the save is 1.3 ms or less. **Which** three moves
+between runs — `idle`, `map-browsing` and `offline-browsing` in one,
+`idle`, `offline-browsing` and `photo-discovery` in the next — so it is not a
+property of a screen and no explanation here is worth writing yet. It is a
+frame of the app's own work rather than the system's, and unlike the snapshot
+below it has a callback and an owner. What a scenario leaves unsaved until the
+screen goes dark is the question; it is not answered here.
 
 **What it is.** A `sample` of the process across a `press(.home)` puts the main
 thread, in every sample taken inside the window, under
@@ -314,7 +365,9 @@ scenario: ~120 ms for the map alone, ~270 ms with the elevation chart up. Only
 and their own turns are 100 ms or less.
 
 **None of the three candidates this section used to list owns it.** The
-`mainContext.save()` is 0.7–1.2 ms of a 272 ms turn. The `MapSheetHikesBody`
+`mainContext.save()` is 1.1 ms of a 287 ms turn on the screen where the turn is
+worst, and 21 ms of a 137 ms one where the save is worst — a frame in its own
+right, per the paragraph above, but never the turn. The `MapSheetHikesBody`
 `@Query` refresh the window appeared to close on happens *after* the turn ends,
 not inside it — the block is one run-loop turn and the refetch is the next one.
 UIKit's snapshot was the third guess and it is the whole of it.
@@ -367,10 +420,45 @@ for a passing grade.
   Check first that `RecordingSession` appears at all — an interval that outlives
   the 24-hour aggregation period is dropped silently, and a long walk is exactly
   the case that risks it.
-- **`Purchases/` and the widget's timeline provider.** Neither carries a single
-  `RenderSignpost` mark, so a rendering problem in the paywall or in a timeline
-  reload is invisible here. Both rendering findings this suite did catch were in
-  code that *had* marks.
+- **`Purchases/`, `Sync/`, `Intents/` and the widget's timeline provider.** None
+  of them carries a single `RenderSignpost` mark, so a rendering problem in the
+  paywall, a cost in an App Intent, or a timeline reload is invisible here. Both
+  rendering findings this suite did catch were in code that *had* marks.
+  `Sync/` is the one with an energy shape: `CloudSyncCoordinator.refreshStatus()`
+  does a `CKContainer.accountStatus()` round trip on every foregrounding, and it
+  is neither timed nor counted as a radio wake-up anywhere.
+- **The per-fix disk writes on the recording path.** `TrackJournal.append(_:)`
+  writes a point to a file per accepted fix, and `HikeRecorder+Persistence`
+  saves the model context three times over a recording's life. Neither carries a
+  mark, so logical writes — one of the four energy proxies this document claims
+  to put side by side — is the one with no instrument behind it. The path this
+  omits is the one the same document says decides the battery.
+- **Thirty-five of the app's ninety-one signposts fire in no scenario.** They
+  are instrumented and they are silent, which reads in a report exactly like
+  work that is not happening. The concentrations: seventeen `Tile*` marks
+  covering the whole durable-storage side of the cache (quota scan, enforce,
+  reclaim, trim, clear, legacy-key migration, keyed removal, `TileServedStale`,
+  `TileRetryAfterHonoured`); the four `OfflineDownload*`/`OfflineKey*` marks,
+  which item 5 of *Validating on a device* asks about by name; `WeatherFetch`,
+  `WeatherBadgeBody` and `WeatherDetailBody`, since no perf scenario passes
+  `--ui-test-weather`; `TrailGraphFetch`, since every recording scenario is
+  handed a `--ui-test-trail-graph=` fixture instead; `PowerStateChanged`;
+  `BackgroundFixDelivered` and `BackgroundFixMatched`, which is the whole of the
+  third location funnel this document prints a table for; `TrailWalkEnded`,
+  `TrailWalkPhase`, `MapWalkHighlightApplied` and `HikeWalkHistoryBody`, which
+  is four of the trail-walk feature's own marks and the newest gap here; and
+  `LiveActivityEnd`, `GPXExported`, `HikeTrailAnalysis`.
+- **The radio proxy, near enough.** `NETWORK_SIGNPOSTS` in
+  `Scripts/perf-report.py` is `TileNetworkFetch`, `WeatherFetch` and
+  `TrailGraphFetch`. Two of the three can never fire under this suite. The
+  third fires only when the tile cache happens to be cold — the first scenario
+  after a reinstall fetched 170 tiles, a later run of the same scenario none at
+  all — or when a test clears the cache, as `settings` does. So a scenario
+  printing "No request left the device. Every byte came from cache." is
+  reporting the state of a cache and the absence of a weather stub, not a
+  property of the app, and the one number worth reading off it is the
+  backgrounded share: **0 of 170** in a pocket of 15.2 s, which is the app's
+  policy working and is the only part of that section a change could break.
 - **A long recording, and a gallery larger than the strip.** No scenario drives
   hundreds of fixes, so O(n)-per-fix shapes show up as an argument rather than a
   slope. `--ui-test-seed-photos` caps at 24, and the thumbnail tier is bounded at

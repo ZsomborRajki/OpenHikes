@@ -71,6 +71,16 @@ class Event:
     value: float | None
     detail: str
 
+    @property
+    def duration(self) -> float:
+        """How long it ran, in the same seconds ``elapsed`` is stamped in.
+
+        ``elapsed`` is when the event was *recorded*, which for an interval is
+        when it finished — so `elapsed - duration` is where it started. A mark
+        is a point and has no length, whatever a `value` on it happens to mean.
+        """
+        return (self.value or 0.0) / 1000 if self.kind == "interval" else 0.0
+
 
 @dataclass
 class Scenario:
@@ -316,6 +326,15 @@ def backgrounded_windows(events: list[Event]) -> list[tuple[float, float]]:
     doing its job; the same fetch with the phone in a pocket is a radio woken
     for output nobody can see, and it is the second one that decides whether
     the battery lasts the walk.
+
+    The window closes on the **first phase mark that is not `background`**,
+    which is `inactive` and not `active`: a scene coming back runs
+    `background → inactive → active`, and it is already on its way onto the
+    screen for the whole of that middle leg. Closing on `active` charged the
+    return to the pocket, which is how a run reported eighteen radio wake-ups
+    "nothing could see" for eighteen tiles fetched as the app came forward —
+    every one of them after the app had left `.background`, and none at all
+    inside it.
     """
     windows: list[tuple[float, float]] = []
     opened: float | None = None
@@ -323,9 +342,10 @@ def backgrounded_windows(events: list[Event]) -> list[tuple[float, float]]:
         if event.name != "ScenePhaseChanged":
             continue
         phase = (event.detail or "").strip()
-        if phase == "background" and opened is None:
-            opened = event.elapsed
-        elif phase == "active" and opened is not None:
+        if phase == "background":
+            if opened is None:
+                opened = event.elapsed
+        elif opened is not None:
             windows.append((opened, event.elapsed))
             opened = None
     if opened is not None:
@@ -334,8 +354,22 @@ def backgrounded_windows(events: list[Event]) -> list[tuple[float, float]]:
 
 
 def count_within(windows: list[tuple[float, float]], events: list[Event]) -> int:
+    """How many of `events` overlapped a window, by span rather than by end.
+
+    ``PerformanceLog`` stamps an interval when it *finishes*, so comparing that
+    one timestamp against a window asks "did it end in a pocket?" when the
+    question is "was the radio on in one". A 122 ms fetch begun in the
+    foreground and landing 20 ms after the screen went dark counted as wholly
+    backgrounded; one begun in a pocket and answered after the walker looked
+    again counted as nothing at all. A mark has no duration and is unaffected.
+    """
     return sum(
-        1 for event in events if any(start <= event.elapsed <= end for start, end in windows)
+        1
+        for event in events
+        if any(
+            start <= event.elapsed and event.elapsed - event.duration <= end
+            for start, end in windows
+        )
     )
 
 

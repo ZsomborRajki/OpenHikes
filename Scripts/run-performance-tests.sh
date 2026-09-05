@@ -235,6 +235,23 @@ xcrun simctl location "$device_udid" clear >/dev/null 2>&1 || true
 # simulator where the grant does not take.
 xcrun simctl privacy "$device_udid" grant location-always "$app_bundle_id" >/dev/null 2>&1 || true
 
+# Emptied before the run, because a scenario log the app did not write this
+# time is indistinguishable from one it did once the files are copied out.
+# `perf-report.py` turns every .tsv in the events directory into a scenario,
+# so anything an earlier run left behind is reported — with its own findings
+# and its own "worst" number — as though this run had measured it. The
+# container outlives a branch as well as a run: a `--test` of one scenario
+# reported findings from eight it never drove, and a run on a branch without
+# the walk scenario named `walk` as the worst of three. The app truncates its
+# own file at launch, which covers a scenario that runs again and nothing else.
+stale_logs="$(xcrun simctl get_app_container "$device_udid" "$app_bundle_id" data 2>/dev/null || true)"
+if [[ -n "$stale_logs" && -d "$stale_logs/Documents/PerformanceLogs" ]]; then
+    cleared="$(find "$stale_logs/Documents/PerformanceLogs" -maxdepth 1 -name '*.tsv' -print -delete | wc -l | tr -d ' ')"
+    if (( cleared > 0 )); then
+        echo "Cleared:   $cleared stale scenario log(s) left in the app container."
+    fi
+fi
+
 status=0
 set +e
 # A machine that has not trusted SwiftLintPlugins' fingerprint — any fresh
