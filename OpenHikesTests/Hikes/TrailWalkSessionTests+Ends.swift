@@ -91,6 +91,32 @@ extension TrailWalkSessionTests {
         #expect(try walks(of: hike).isEmpty, "with no row left behind")
     }
 
+    /// An end at the other end. The direction a GPX stores its points in is
+    /// the importer's, not the walker's, so a walker who covers the route
+    /// from its stored end to its stored start has walked the trail — and
+    /// what that has to leave behind is everything a forward walk leaves: a
+    /// row that reads Completed rather than Left open, and a
+    /// ``TrailWalkSession/lastEndedWalk`` for the summary to be pushed from
+    /// and the closing panel to linger on.
+    @Test("a walk in the route's reverse direction ends as completed")
+    func reverseWalkReachesTheEnd() throws {
+        let session = session()
+        // A point-to-point trail, where the trailhead and the far end are two
+        // different places — unlike the out-and-back the rest of these use.
+        let hike = Fixture.hike(in: context, title: "Ridge Line", route: Fixture.ridgeRoute)
+        let profile = RouteProfile(route: hike.route)
+        walk(session, hike: hike, profile: profile, from: profile.coordinates.count - 1, through: 1)
+        #expect(session.walkedHikeID == hike.id, "one point short of the trailhead is still walking")
+
+        walk(session, hike: hike, profile: profile, from: 0, through: 0)
+
+        #expect(session.walkedHikeID == nil)
+        let ended = try #require(session.lastEndedWalk, "so the summary has something to push and the panel lingers")
+        #expect(ended.endReason == .reachedEnd)
+        #expect(ended.coveredFraction > 0.99)
+        #expect(try walks(of: hike).count == 1)
+    }
+
     /// The fix that completes a walk has to say so. With the record cleared,
     /// `publishes` says yes and `payload` says nothing, so a caller that went
     /// on to publish would start a fresh plain follow over the finished panel

@@ -26,8 +26,17 @@ nonisolated enum TrailWalkPolicy {
     /// A walk that covered less than this is not kept. Opening a trail at
     /// the trailhead for a look leaves no row behind.
     static let minimumCoverageMeters: Double = 100
-    /// Coverage at or above this, with a match this close to the route's
-    /// end, is the walk reaching the end on its own.
+    /// Coverage at or above this, with a match this close to *either* end of
+    /// the route, is the walk reaching the end on its own.
+    ///
+    /// Either end, because the direction a track is stored in is the
+    /// importer's, not the walker's: a route planned or shared by someone
+    /// else is as likely to run the way they walk it as the other way round.
+    /// Coverage is a union and never cared which way it was accrued, so
+    /// measuring proximity to the stored end alone left a whole-route walk in
+    /// the other direction reading 100% and never finishing. The coverage
+    /// clause carries the *they actually walked it* requirement, so a walker
+    /// standing at the trailhead still completes nothing.
     static let reachedEndFraction: Double = 0.95
     static let reachedEndProximityMeters: Double = 50
     /// No on-route match for this long ends the walk as abandoned.
@@ -46,10 +55,10 @@ nonisolated enum TrailWalkPolicy {
     /// accruing: the widget feed's own cadence, never per fix.
     static let persistInterval: TimeInterval = 45
 
-    /// Whether `coveredFraction` and a match `distanceToEndMeters` from the
-    /// route's end amount to having reached it.
-    static func hasReachedEnd(coveredFraction: Double, distanceToEndMeters: Double) -> Bool {
-        coveredFraction >= reachedEndFraction && distanceToEndMeters <= reachedEndProximityMeters
+    /// Whether `coveredFraction` and a match `distanceToNearestEndMeters`
+    /// from the nearer of the route's two ends amount to having reached it.
+    static func hasReachedEnd(coveredFraction: Double, distanceToNearestEndMeters: Double) -> Bool {
+        coveredFraction >= reachedEndFraction && distanceToNearestEndMeters <= reachedEndProximityMeters
     }
 }
 
@@ -261,10 +270,18 @@ nonisolated struct TrailWalkRecord: Codable, Equatable, Sendable {
 
     /// Whether a match `distance` metres along the route is the walk
     /// reaching the end.
+    ///
+    /// Whichever end is nearer. A walker who covered the route from its
+    /// stored end to its stored start finishes at `distance` 0, and measuring
+    /// to the stored end alone would call that the route's whole length away
+    /// from finishing — see ``TrailWalkPolicy/reachedEndProximityMeters``.
+    /// An out-and-back is unaffected: its two termini are the same place, and
+    /// the walk that returns there is at `routeDistanceMeters` along the
+    /// route, not at 0.
     func reachesEnd(atMatch distance: Double) -> Bool {
         TrailWalkPolicy.hasReachedEnd(
             coveredFraction: coveredFraction,
-            distanceToEndMeters: max(0, routeDistanceMeters - distance)
+            distanceToNearestEndMeters: max(0, min(distance, routeDistanceMeters - distance))
         )
     }
 
