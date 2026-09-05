@@ -63,7 +63,7 @@ struct HikeWalkHistory: View {
                 .accessibilityHidden(true)
             Text("No walks yet")
                 .font(.headline)
-            Text("With Auto-Follow Trail on, setting off along this trail starts a walk. Each one is kept here.")
+            Text("Turn on Follow This Trail in Details, then set off along the trail. Finished walks are kept here.")
                 .font(.subheadline)
                 .foregroundStyle(.secondary)
         }

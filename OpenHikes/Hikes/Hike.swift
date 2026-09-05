@@ -95,8 +95,9 @@ final class Hike {
     /// there is no hook to hold a row back.
     var isRecording: Bool = false
 
-    /// Whether the elevation graph auto-scrolls to track the user's live
-    /// location while browsing this hike.
+    /// Whether Follow This Trail shows the live position while browsing and
+    /// allows a matched fix to start a new walk. An existing walk keeps its
+    /// own phase when this changes. The persisted column name stays stable.
     var autoFollowEnabled: Bool = true
 
     // Optional metadata pulled from the GPX file.

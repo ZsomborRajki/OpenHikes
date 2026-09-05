@@ -541,6 +541,69 @@ final class BackgroundDeliveryTests {
         let persisted = defaults.object(forKey: SettingsKey.lastMatchedDistance) as? Double
         #expect(abs(try #require(persisted) - profile.distances[3]) < 1)
     }
+
+    // MARK: The boundary an End leaves behind
+
+    /// Walks `hike` far enough to be worth keeping and then taps End, which
+    /// arms the boundary the next two tests are about.
+    private func endedWalk(on hike: Hike, profile: RouteProfile, session: TrailWalkSession) {
+        for index in 0...2 {
+            session.recordForegroundMatch(hike: hike, profile: profile, distance: profile.distances[index])
+        }
+        session.end()
+    }
+
+    /// The reported bug. Ending a walk holds the trail closed until the
+    /// walker leaves its route, and leaving used to be reported only by the
+    /// detail view's own matcher — so a walker who tapped End, locked the
+    /// phone, walked away and came back found the leave had happened where
+    /// nothing was looking. The first foreground match on their return was
+    /// still refused, and no second walk could start until another foreground
+    /// off-route fix or a trip through the Auto-Follow toggle.
+    @Test("an off-route background fix rearms a hike whose walk was ended")
+    func offRouteBackgroundFixRearmsAnEndedWalk() async {
+        let hike = selectedHike()
+        let profile = RouteProfile(route: hike.route)
+        let tracker = relaunchedTracker()
+        let session = TrailWalkSession(context: context, tracker: tracker)
+        endedWalk(on: hike, profile: profile, session: session)
+        #expect(!session.canStart(hike), "precondition: End holds the trail closed")
+
+        // The walk away from the trail, seen only by the background feed:
+        // ~900 m west of the ridge, well past the follow threshold.
+        await deliver(fix(at: CLLocationCoordinate2D(latitude: 37.3340, longitude: -122.0400)))
+
+        // Back on the trail, and the detail view opened again: the first
+        // foreground match is the one that used to be refused.
+        session.recordForegroundMatch(hike: hike, profile: profile, distance: profile.distances[0])
+
+        #expect(session.walkedHikeID == hike.id, "coming back to the trail is a walk of its own")
+    }
+
+    /// …but only for a fix that actually reached the route. A stale or
+    /// imprecise one is refused before matching and says nothing about where
+    /// the walker is relative to the trail — including whether they left it —
+    /// so it must not spend the boundary an End is holding.
+    @Test("a rejected background fix leaves the boundary standing")
+    func rejectedBackgroundFixDoesNotRearm() async {
+        let hike = selectedHike()
+        let profile = RouteProfile(route: hike.route)
+        let tracker = relaunchedTracker()
+        let session = TrailWalkSession(context: context, tracker: tracker)
+        endedWalk(on: hike, profile: profile, session: session)
+
+        // The same place off the ridge, reported twice in ways the fix policy
+        // refuses before matching ever runs.
+        let offTheRidge = CLLocationCoordinate2D(latitude: 37.3340, longitude: -122.0400)
+        await deliver(fix(at: offTheRidge, age: LocationFixPolicy.backgroundMaximumAge + 60))
+        #expect(!session.canStart(hike), "a cached fix from before the End proves nothing")
+
+        await deliver(fix(at: offTheRidge, accuracy: RouteProfile.followMatchThresholdMeters + 100))
+        #expect(!session.canStart(hike), "nor does one that cannot say which side of the trail it is on")
+
+        session.recordForegroundMatch(hike: hike, profile: profile, distance: profile.distances[0])
+        #expect(session.walkedHikeID == nil, "so End still stands, and no second walk starts")
+    }
 }
 }
 

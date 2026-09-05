@@ -57,10 +57,8 @@ extension TrailWalkSessionTests {
         #expect(relaunched.phase == .following, "the walk comes back as what it never stopped being")
     }
 
-    /// The symmetric one. A refused Resume leaves the walk paused — which is
-    /// what the sidecar still says — and takes Auto-Follow Trail back with
-    /// it, since that rides in the same save and a walk that did not resume
-    /// must not leave the switch flipped behind it.
+    /// A refused Resume leaves the walk paused on screen and on disk, and
+    /// preserves the independent Follow This Trail preference.
     @Test("a refused resume leaves the walk paused, and following off")
     func refusedResumeIsNotAResume() throws {
         var refusing = false
@@ -75,10 +73,9 @@ extension TrailWalkSessionTests {
         let hike = hike()
         let profile = RouteProfile(route: hike.route)
         walk(session, hike: hike, profile: profile, from: 0, through: 5)
-        // The walker turned Auto-Follow Trail off, which is the gesture that
-        // pauses; the toggle's own write is the walk's to undo on a refusal.
         hike.autoFollowEnabled = false
-        #expect(session.autoFollowDidChange(hikeID: hike.id, enabled: false))
+        session.autoFollowDidChange(hikeID: hike.id, enabled: false)
+        #expect(session.pause())
         let paused = try #require(hike.walkInProgress)
         #expect(paused.phase == .paused, "precondition: the pause was written")
 

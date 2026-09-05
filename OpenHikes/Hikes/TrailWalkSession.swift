@@ -7,7 +7,7 @@
 //
 //  Following a trail used to answer one question — *where am I on this trail
 //  right now* — and forget the answer. This is what remembers it. A walk
-//  begins on the first matched fix with Auto-Follow Trail on, keeps the
+//  begins on the first matched fix with Follow This Trail on, keeps the
 //  union of along-route intervals its consecutive matches spanned, can be
 //  paused and resumed, and ends into a `HikeWalk` row the History segment
 //  lists. It outlives the screen that started it: popping the detail,
@@ -23,7 +23,8 @@
 //
 //  The record itself is `@ObservationIgnored`: it is the thing that changes
 //  most and the thing no body draws. It is written to the sidecar at
-//  milestones and at most at the widget feed's cadence, never per fix.
+//  milestones and at the widget feed's cadence, with one prompt retry after
+//  a failure before returning to the cadence for persistent failures.
 //
 
 import Foundation
@@ -95,6 +96,10 @@ final class TrailWalkSession {
     @ObservationIgnored private let activeRecordingHikeID: () -> UUID?
     @ObservationIgnored private let commit: (ModelContext) throws -> Void
     @ObservationIgnored private var lastPersistedAt: Date?
+    @ObservationIgnored private var lastPersistenceAttemptAt: Date?
+    /// Capped at two: the first failure gets one prompt retry, then attempts
+    /// wait for the regular cadence until a write succeeds.
+    @ObservationIgnored private var persistenceFailures = 0
     /// The hike whose walk was ended here, held until the walker leaves its
     /// route or turns following on again.
     ///
@@ -102,7 +107,7 @@ final class TrailWalkSession {
     /// record, starts a fresh walk, and the controls come straight back —
     /// most visibly for a walk under 100 m, where End returns nothing and
     /// the detail is still on screen. Cleared by ``recordOffRoute(hikeID:)``
-    /// and by turning Auto-Follow Trail back on, which are the two ways a
+    /// and by turning Follow This Trail back on, which are the two ways a
     /// walker says they mean to walk this trail again.
     @ObservationIgnored private var endedHikeID: UUID?
 
@@ -298,7 +303,7 @@ final class TrailWalkSession {
 
     // MARK: Pause and resume
 
-    /// The walker tapped Pause, or turned Auto-Follow Trail off.
+    /// The walker tapped Pause.
     ///
     /// - Returns: whether the walk is now paused. A phase is a milestone and
     ///   is committed the way an end is: the record, the screens and both
@@ -329,16 +334,7 @@ final class TrailWalkSession {
         guard var current = record, current.phase == .paused else { return false }
         current.resume(at: now)
         current.lastMatchedAt = now
-        // A resumed walk with following off would accrue nothing, silently.
-        // It rides in the same save as the phase, so a refusal takes it back
-        // too: following turned on for a walk that did not resume is the
-        // switch moving under the walker.
-        let wasFollowing = walkedHike?.autoFollowEnabled ?? false
-        walkedHike?.autoFollowEnabled = true
-        guard persist(current, at: now) else {
-            walkedHike?.autoFollowEnabled = wasFollowing
-            return false
-        }
+        guard persist(current, at: now) else { return false }
         record = current
         phase = .following
         RenderSignpost.mark("TrailWalkPhase", "following")
@@ -346,21 +342,11 @@ final class TrailWalkSession {
         return true
     }
 
-    /// Turning Auto-Follow Trail off for the walked hike is the one
-    /// non-button gesture that pauses: it is the walker saying *stop
-    /// following*. Returns whether a walk was paused by it, so the caller
-    /// knows the Lock Screen is saying Paused rather than coming down — and
-    /// so a pause the store refused takes the panel down rather than leaving
-    /// it claiming a pause that was never written.
-    @discardableResult func autoFollowDidChange(hikeID: UUID, enabled: Bool) -> Bool {
-        guard !enabled else {
-            // Turning it back on is the walker asking to follow this trail
-            // again — the other way an End's boundary is rearmed.
-            rearmStart(hikeID: hikeID)
-            return false
-        }
-        guard let record, record.hikeID == hikeID, record.phase == .following else { return false }
-        return pause()
+    /// Enabling Follow This Trail rearms auto-start after an End. Neither
+    /// direction changes a walk already under way: its phase belongs to
+    /// Pause / Resume / End, independently of the detail's live marker.
+    func autoFollowDidChange(hikeID: UUID, enabled: Bool) {
+        if enabled { rearmStart(hikeID: hikeID) }
     }
 
     private func publishState() {
@@ -471,6 +457,8 @@ final class TrailWalkSession {
         walkedHike = nil
         endedHikeID = nil
         lastPersistedAt = nil
+        lastPersistenceAttemptAt = nil
+        persistenceFailures = 0
         walkedHikeID = nil
         walkedHikeTitle = ""
         phase = nil
@@ -536,7 +524,13 @@ final class TrailWalkSession {
 
     private func persistIfDue(at now: Date) {
         guard let record else { return }
-        if let lastPersistedAt, now.timeIntervalSince(lastPersistedAt) < TrailWalkPolicy.persistInterval {
+        if persistenceFailures > 0, let lastPersistenceAttemptAt {
+            let elapsed = now.timeIntervalSince(lastPersistenceAttemptAt)
+            // Start and its first match share a timestamp. Do not spend the
+            // prompt retry twice in that same fix, or across the two feeds.
+            guard elapsed > 0 else { return }
+            if persistenceFailures > 1, elapsed < TrailWalkPolicy.persistInterval { return }
+        } else if let lastPersistedAt, now.timeIntervalSince(lastPersistedAt) < TrailWalkPolicy.persistInterval {
             return
         }
         persist(record, at: now)
@@ -548,9 +542,9 @@ final class TrailWalkSession {
     ///   the column back by hand — the same undo ``finish(reason:at:)`` does,
     ///   and for the same reason: the write exists only as a pending edit, so
     ///   a context left holding it would hand a later unrelated save a phase
-    ///   nobody committed. The cadence marker only ever moves on a commit, so
-    ///   a refused write leaves the next one due at once rather than in
-    ///   ``TrailWalkPolicy/persistInterval``.
+    ///   nobody committed. The successful-write marker moves only on commit;
+    ///   a separate attempt marker bounds automatic retries. Explicit
+    ///   milestones always attempt their write, even during that retry wait.
     @discardableResult private func persist(_ walk: TrailWalkRecord, at now: Date) -> Bool {
         guard let walkedHike, walkedHike.isAttached else {
             // No sidecar to reach: the hike is gone, the walk goes with it at
@@ -561,13 +555,15 @@ final class TrailWalkSession {
         }
         let previous = walkedHike.walkInProgress
         walkedHike.walkInProgress = walk
+        lastPersistenceAttemptAt = now
         RenderSignpost.mark("TrailWalkPersisted")
         guard save(reason: "writing the walk in progress") else {
             walkedHike.walkInProgress = previous
-            lastPersistedAt = nil
+            persistenceFailures = min(persistenceFailures + 1, 2)
             return false
         }
         lastPersistedAt = now
+        persistenceFailures = 0
         return true
     }
 

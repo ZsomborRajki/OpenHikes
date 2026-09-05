@@ -174,14 +174,12 @@ struct HikeDetailView: View {
         // right away, rather than leaving a stale manual pin up until the
         // walker's next step publishes one.
         .onChange(of: hike.autoFollowEnabled) { _, enabled in
+            walkSession.autoFollowDidChange(hikeID: hike.id, enabled: enabled)
             if !enabled {
                 tracker.liveTrackerDistance = nil
-                // Turning following off for the walked hike is the walker
-                // saying *stop following*: the walk pauses and the Lock
-                // Screen says so. With no walk the panel comes down instead —
-                // nothing else would take it down, since the foreground feed
-                // stops publishing the moment auto-follow is off.
-                if !walkSession.autoFollowDidChange(hikeID: hike.id, enabled: false) {
+                // A walk keeps its phase and its feeds, just as it does when
+                // this screen closes. Only a plain follow loses its panel.
+                if !walkSession.isWalking(hike.id) {
                     backgroundTracker.endFollowActivity(hikeID: hike.id)
                 }
             }
@@ -377,11 +375,11 @@ private extension HikeDetailView {
         )
     }
 
-    /// Auto-scrolls the elevation graph to the user's live position along this
-    /// trail. On by default; the fix-driven loop in `followLocation` does the work.
+    /// Shows the live position and allows auto-start on a matched fix.
+    /// The walk's own controls pause or end one already under way.
     private var autoFollowToggle: some View {
         Toggle(isOn: autoFollowBinding) {
-            Label("Auto-Follow Trail", systemImage: "location.fill.viewfinder")
+            Label("Follow This Trail", systemImage: "location.fill.viewfinder")
         }
         .disabled(hike.pointCount < 2)
     }
@@ -630,9 +628,10 @@ private extension HikeDetailView {
 
     // MARK: Auto-follow
 
-    /// Projects each published fix onto the route to drive both the live chart
-    /// marker and the persistent tracker, while auto-follow is on. Runs for as
-    /// long as this hike stays selected; cancelled when it changes.
+    /// Projects each published fix onto the route while following is on or
+    /// this hike has a walk under way. Only following moves the chart and
+    /// persistent tracker; the walk and its feeds keep taking matches either
+    /// way. Runs while this hike stays selected; cancelled when it changes.
     ///
     /// Driven by ``LocationManager/fixes`` rather than by a 1 Hz timer: the
     /// source already throttles to one publish a second and already drops a
@@ -658,11 +657,10 @@ private extension HikeDetailView {
         } else {
             RenderSignpost.mark("LiveFollowUpdate", reason)
         }
-        // Only worth telling the widget "no fix" while auto-follow is
-        // actually trying to track this hike — if the user turned
-        // auto-follow off, leave whatever it last showed alone. A paused
-        // walk is left alone too: the widget says Paused, and that stands.
-        if hike.autoFollowEnabled, walkSession.publishes(hikeID: hike.id) {
+        // An active walk still reports losing the route with its chart off.
+        // A paused walk is left alone: the widget says Paused, and that stands.
+        if hike.autoFollowEnabled || walkSession.isWalking(hike.id),
+           walkSession.publishes(hikeID: hike.id) {
             backgroundTracker.publishLiveFix(
                 hike: hike,
                 profile: profile,
@@ -681,7 +679,7 @@ private extension HikeDetailView {
         // Before the match, so a walk left unmatched for six hours is closed
         // on the fix that would otherwise have quietly extended it.
         walkSession.endIfAbandoned()
-        guard hike.autoFollowEnabled,
+        guard hike.autoFollowEnabled || walkSession.isWalking(hike.id),
               let fix = locationManager.routeFix(
                 maximumHorizontalAccuracy: RouteProfile.followMatchThresholdMeters
               ) else {
@@ -714,13 +712,34 @@ private extension HikeDetailView {
             profile: profile,
             distance: match.distanceAlongRoute
         )
-        let moved = tracker.liveTrackerDistance != match.distanceAlongRoute
+        if hike.autoFollowEnabled {
+            updateLiveTracker(distance: match.distanceAlongRoute)
+        } else {
+            RenderSignpost.mark("LiveFollowUpdate", "walk-only")
+        }
+        // A paused walk still moves the dot above, and publishes nothing. Nor
+        // does the fix that just completed a walk: with the record gone the
+        // two questions below say "publish, with no walk", which is a fresh
+        // plain follow over the finished panel the end has already queued.
+        guard !completedWalk, walkSession.publishes(hikeID: hike.id) else { return }
+        backgroundTracker.publishLiveFix(
+            hike: hike,
+            profile: profile,
+            match: match,
+            walk: walkSession.payload(for: hike.id)
+        )
+    }
+
+    /// Updates only the detail's live display. Scrubbing parks the manual
+    /// tracker without suspending the walk's widget or Lock Screen feed.
+    private func updateLiveTracker(distance: Double) {
+        let moved = tracker.liveTrackerDistance != distance
         // Guarded like `trackerDistance` below — reassigning `@Observable`
         // storage to an equal value still triggers dependent views, so an
         // unconditional write here would invalidate `ElevationChartView` (and,
         // previously, `HikeDetailView` itself) on every fix that matched to
         // the same place too.
-        if moved { tracker.liveTrackerDistance = match.distanceAlongRoute }
+        if moved { tracker.liveTrackerDistance = distance }
         // Don't fight an in-progress manual scrub; the live dot still moves,
         // but the persistent tracker stays under the user's finger.
         guard FollowInteractionPolicy.appliesMatchToPersistentTracker(
@@ -733,8 +752,8 @@ private extension HikeDetailView {
         // moved (e.g. paused, or GPS noise below the route-matching
         // resolution) — avoids a redundant `TrackerState` update on a fix that
         // projects to the same distance along the route.
-        if tracker.trackerDistance != match.distanceAlongRoute {
-            tracker.trackerDistance = match.distanceAlongRoute
+        if tracker.trackerDistance != distance {
+            tracker.trackerDistance = distance
         }
         // Auto-follow owns the map: the live location puck already shows
         // where the user is, so the custom pin stays hidden here rather than
@@ -744,17 +763,6 @@ private extension HikeDetailView {
         // `move(to:)` does the comparison this path used to do by hand.
         highlight.move(to: nil)
         RenderSignpost.mark("LiveFollowUpdate", moved ? "moved" : "unchanged")
-        // A paused walk still moves the dot above, and publishes nothing. Nor
-        // does the fix that just completed a walk: with the record gone the
-        // two questions below say "publish, with no walk", which is a fresh
-        // plain follow over the finished panel the end has already queued.
-        guard !completedWalk, walkSession.publishes(hikeID: hike.id) else { return }
-        backgroundTracker.publishLiveFix(
-            hike: hike,
-            profile: profile,
-            match: match,
-            walk: walkSession.payload(for: hike.id)
-        )
     }
 
 }
