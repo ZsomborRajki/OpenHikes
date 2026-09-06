@@ -64,6 +64,21 @@ final class SystemMovementReminderNotifier: MovementReminderNotifying {
         #endif
     }
 
+    /// The same question ``authorize()`` asks, with nothing put on screen.
+    ///
+    /// No category registration either: this runs on every return to the
+    /// foreground, and there is nothing to register categories *for* until a
+    /// reminder is posted — every path that posts one has run ``authorize()``
+    /// first.
+    func canPost() async -> Bool {
+        #if canImport(UserNotifications)
+        let center = UNUserNotificationCenter.current()
+        return await center.notificationSettings().authorizationStatus != .denied
+        #else
+        return false
+        #endif
+    }
+
     func post(_ reminder: MovementReminder) async {
         #if canImport(UserNotifications)
         let content = UNMutableNotificationContent()

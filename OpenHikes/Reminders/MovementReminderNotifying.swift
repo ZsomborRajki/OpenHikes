@@ -35,6 +35,21 @@ protocol MovementReminderNotifying: AnyObject {
     /// question about something they may never do.
     func authorize() async -> Bool
 
+    /// Whether ``post(_:)`` would reach the walker at all, asked of the
+    /// system rather than of them.
+    ///
+    /// ``authorize()`` answers the same question, but prompts when it has
+    /// never been asked — which is right at the pause the walker just tapped
+    /// and wrong on every later return to the foreground, where the app would
+    /// be asking again about something they did half an hour ago. This is the
+    /// question without the prompt, and the only new thing it can report is a
+    /// permission taken away in iOS Settings while a pause was running.
+    ///
+    /// An unanswered prompt reads as allowed: a walker who has not said no
+    /// has not refused, and what this answer is used to take away is a watch
+    /// the system has actually silenced.
+    func canPost() async -> Bool
+
     /// Puts one reminder on the walker's screen, replacing any earlier one of
     /// the same kind. Silent on failure, for the reason a Live Activity
     /// refusal is silent: it is the system's answer about a banner, and there

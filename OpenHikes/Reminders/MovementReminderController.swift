@@ -37,14 +37,28 @@
 //  is no worse off than before this existed, which is the only failure mode
 //  this feature is allowed to have.
 //
+//  The one thing it does own in that direction is giving a watch *back*. A
+//  walker who has refused notification permission cannot be sent anything, so
+//  a recording paused under that refusal is spending a location feed on a
+//  question with no audience — see
+//  ``reconcileWithAuthorization(prompting:)``.
+//
 
 import CoreLocation
 import Foundation
+#if canImport(UIKit)
+import UIKit
+#endif
 
 @MainActor
 final class MovementReminderController {
     /// A paused recording, and how far it has moved since.
     private struct PausedRecording {
+        /// Tells this pause apart from any later one. The answer to a
+        /// permission prompt arrives whenever the walker gets round to
+        /// reading it, and by then this may not be the pause that asked —
+        /// see ``reconcileWithAuthorization(prompting:)``.
+        let id = UUID()
         let anchor: CLLocationCoordinate2D
         let pausedAt: Date
         var watch = MovementWatch()
@@ -131,6 +145,17 @@ final class MovementReminderController {
         defaults.object(forKey: SettingsKey.movementRemindersEnabled) as? Bool
             ?? SettingsDefault.movementRemindersEnabled
     }
+
+    /// Whether a paused recording is still worth a location feed, read at the
+    /// moment the recorder actually parks its sensors.
+    ///
+    /// ``recordingDidPause(at:on:)`` answers the same question earlier, and
+    /// the recorder cannot act on that answer until the pause is durably
+    /// written on its journal queue. Everything that can overtake it happens
+    /// in those milliseconds — a walker refusing the permission prompt, most
+    /// of all — so the answer that decides the sensors is taken here instead
+    /// of carried across the wait.
+    var isWatchingPausedRecording: Bool { pausedRecording != nil }
 }
 
 // MARK: - A paused recording
@@ -159,8 +184,10 @@ extension MovementReminderController {
         }
         pausedRecording = PausedRecording(anchor: coordinate, pausedAt: date)
         // Asked here rather than at launch: the walker is holding the phone,
-        // they have just tapped Pause, and the prompt is about that.
-        requestAuthorization()
+        // they have just tapped Pause, and the prompt is about that. `true`
+        // is the answer for a pause nobody has refused *yet* — a refusal
+        // arrives after this returns, and takes the watch back down itself.
+        reconcileWithAuthorization(prompting: true)
         return true
     }
 
@@ -270,7 +297,7 @@ extension MovementReminderController {
             anchorDistance: distance,
             pausedAt: date
         )
-        requestAuthorization()
+        reconcileWithAuthorization(prompting: true)
     }
 
     /// A fix that matched the trail while the walk was paused.
@@ -346,11 +373,30 @@ extension MovementReminderController {
         if wasWatching { watchingDidEnd() }
     }
 
-    /// Watches the walker's switch by the only means that reports it: the
-    /// defaults notification, scoped to this controller's own suite rather
-    /// than the process-wide one, which is how `SettingsView`'s `@AppStorage`
-    /// write arrives here.
+    /// Watches both things that can silence a reminder, each by the only
+    /// means that reports it: the walker's switch through the defaults
+    /// notification — scoped to this controller's own suite rather than the
+    /// process-wide one, which is how `SettingsView`'s `@AppStorage` write
+    /// arrives here — and iOS's permission on the way back into the
+    /// foreground.
     private func observePreferences() {
+        #if canImport(UIKit)
+        // The system's permission is not a default, and changing it means
+        // leaving for iOS Settings, so coming back is the only moment the app
+        // can re-ask. `UIApplication`'s notification rather than `scenePhase`
+        // keeps this off SwiftUI's render path — the same seam, watched the
+        // same way, that `HikeLiveActivityController` uses for the system's
+        // Live Activity switch.
+        observers.tokens.append(
+            NotificationCenter.default.addObserver(
+                forName: UIApplication.didBecomeActiveNotification,
+                object: nil,
+                queue: nil
+            ) { [weak self] _ in
+                onMainActor { self?.reconcileWithAuthorization(prompting: false) }
+            }
+        )
+        #endif
         observers.tokens.append(
             NotificationCenter.default.addObserver(
                 forName: UserDefaults.didChangeNotification,
@@ -374,15 +420,58 @@ extension MovementReminderController {
         enqueue { [weak self] in self?.notifier.withdraw(kind) }
     }
 
-    /// Puts the permission prompt up if it has not been answered yet.
+    /// Asks iOS whether a reminder can be delivered at all, and gives the
+    /// watch back if it cannot.
     ///
-    /// Enqueued rather than awaited: a pause has a journal write and a Live
-    /// Activity update to get on with, and the answer is only needed by the
-    /// post that may follow minutes later — which asks again anyway.
-    private func requestAuthorization() {
+    /// This is the half the walker's switch cannot see. ``isEnabled`` is read
+    /// on every decision, but iOS's own answer is not a default and cannot be
+    /// read without asking: a walker who refuses the prompt — or who refused
+    /// it months ago, so no prompt even appears — leaves a pause armed for a
+    /// banner that can never arrive. For the recording that is not merely
+    /// pointless, it is expensive: with When In Use authorization the feed a
+    /// pause keeps alive holds a background activity session and the location
+    /// indicator for as long as the pause lasts. A refusal is the walker
+    /// saying no as plainly as the switch does, and it has to cost them the
+    /// same nothing.
+    ///
+    /// Only the recording's watch is given back. A paused walk spends no
+    /// sensor of its own — it reads fixes the app was producing anyway — so
+    /// there is nothing to reclaim, and dropping its anchor would only lose a
+    /// reminder the walker could still enable permission for from Settings.
+    ///
+    /// - Parameter prompting: whether the walker may be asked. True at a
+    ///   pause, which is a question about something they are doing right now;
+    ///   false on the way back into the foreground, where the only new
+    ///   information is a permission revoked in iOS Settings and a prompt
+    ///   would be the app asking again about a pause taken half an hour ago.
+    ///   The foreground observer in ``observePreferences()`` is what passes
+    ///   `false`; a suite drives that half through this call rather than by
+    ///   posting `UIApplication.didBecomeActiveNotification`, which is
+    ///   process-wide — the same choice `OrphanedActivityTests` makes, and
+    ///   for the same reason.
+    ///
+    /// Enqueued rather than awaited, for the reason every other call to the
+    /// notifier is: a pause has a journal write and a Live Activity update to
+    /// get on with. The recorder reads ``isWatchingPausedRecording`` when it
+    /// parks its sensors rather than waiting on this.
+    ///
+    /// Which is why the pause's identity is captured and checked again on the
+    /// other side. The notification centre takes as long as the walker does
+    /// to read a prompt, and a denial that lands after they have resumed —
+    /// or resumed, walked on and paused again — would otherwise park the
+    /// sensors of a recording that is running, or take a watch from a pause
+    /// nobody refused.
+    func reconcileWithAuthorization(prompting: Bool) {
+        let watched = pausedRecording?.id
+        guard prompting || watched != nil else { return }
         enqueue { [weak self] in
             guard let self else { return }
-            _ = await notifier.authorize()
+            let mayPost = prompting
+                ? await notifier.authorize()
+                : await notifier.canPost()
+            guard !mayPost, let watched, pausedRecording?.id == watched else { return }
+            pausedRecording = nil
+            watchingDidEnd()
         }
     }
 

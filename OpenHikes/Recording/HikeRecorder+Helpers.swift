@@ -282,10 +282,10 @@ extension HikeRecorder {
     /// stopped, discarded or failed.
     ///
     /// Also where the reminders end, and every caller means it. A *pause* is
-    /// no longer one of them — see ``parkLocationSensors(watchingForMovement:)``
-    /// — so what is left here is a recording with no state left to remind
-    /// anybody about, and a banner asking a walker to resume a hike they have
-    /// already saved is the app disagreeing with its own store.
+    /// no longer one of them — see ``parkLocationSensors()`` — so what is left
+    /// here is a recording with no state left to remind anybody about, and a
+    /// banner asking a walker to resume a hike they have already saved is the
+    /// app disagreeing with its own store.
     func stopLocationSensors() {
         source.stopRecordingUpdates()
         elevationSource?.stop()

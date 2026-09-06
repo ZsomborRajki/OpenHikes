@@ -30,26 +30,42 @@ extension HikeRecorder {
     /// resume regardless. Only the location feed is kept, and only when
     /// something will read it — which is the whole of the energy argument for
     /// this feature. See ``RecordingLocationSource/startMovementWatch()``.
-    func parkLocationSensors(watchingForMovement: Bool) {
+    ///
+    /// The controller is asked here rather than handed its answer by the
+    /// caller, because the caller's answer is by then as old as the journal
+    /// write: a walker refusing the notification prompt does it in exactly
+    /// those seconds, and the refusal reaches
+    /// ``MovementReminderController/isWatchingPausedRecording`` before it can
+    /// reach this. A recorder with no controller keeps the behaviour a pause
+    /// has always had — everything off.
+    func parkLocationSensors() {
+        hasParkedPausedSensors = true
         elevationSource?.stop()
         motionSource?.stop()
-        guard watchingForMovement else {
+        guard movementReminders?.isWatchingPausedRecording == true else {
             source.stopRecordingUpdates()
             return
         }
         source.startMovementWatch()
     }
 
-    /// The walker turned reminders off while this pause was being watched.
+    /// This pause has stopped being watched — the walker turned reminders
+    /// off, or iOS said their reminders cannot be delivered at all.
     ///
-    /// Called by ``MovementReminderController/reconcileWithPreferences()``,
-    /// which is where the switch is *seen*; the recorder is where the feed
-    /// it started can actually be stopped. Guarded on the phase because the
-    /// controller does not know one: a switch flipped during a running
-    /// recording must not park its sensors.
+    /// Called by ``MovementReminderController/reconcileWithPreferences()``
+    /// for the switch and by
+    /// ``MovementReminderController/reconcileWithAuthorization(prompting:)``
+    /// for the refusal, because that is where each is *seen*; the recorder is
+    /// where the feed they started can actually be stopped.
+    ///
+    /// Guarded twice, because the controller can see neither. On the phase: a
+    /// switch flipped — or a permission prompt answered — during a running
+    /// recording must not park its sensors. And on the parking having already
+    /// happened, which is what makes this safe to reach before the pause's own
+    /// journal write has landed.
     func stopWatchingPausedRecording() {
-        guard phase == .paused else { return }
-        parkLocationSensors(watchingForMovement: false)
+        guard phase == .paused, hasParkedPausedSensors else { return }
+        parkLocationSensors()
     }
 
     /// Re-establishes — or clears — a pause's watch on a launch that found one
@@ -66,6 +82,7 @@ extension HikeRecorder {
             at: coordinate,
             on: clock()
         ) ?? false
+        hasParkedPausedSensors = true
         if watches {
             source.startMovementWatch()
         } else {

@@ -137,6 +137,69 @@ extension HikeRecorderTests {
         )
     }
 
+    /// The walker's switch is only half of "reminders are on". The other half
+    /// is iOS's, and a walker who has denied notifications — months ago, or at
+    /// the prompt this pause puts up — cannot be sent anything, so a pause
+    /// that keeps a feed alive for a banner is spending a background activity
+    /// session and the location indicator on nothing at all.
+    @Test("a pause the walker cannot be notified about stops the feed")
+    func pauseWithNotificationsDeniedStopsTheFeed() async {
+        let harness = MovementReminderHarness.harness()
+        harness.notifier.isAuthorized = false
+        let hikeRecorder = await recordingRecorder(harness)
+
+        hikeRecorder.pause()
+        await hikeRecorder.journalQueue.drain()
+        await harness.controller.settle()
+
+        #expect(
+            source.stopCount == 1,
+            "a refusal costs the walker what the switch costs them: nothing"
+        )
+    }
+
+    /// The other order of the same race, and the one the recorder decides.
+    /// The refusal is answered while the pause is still being written, so the
+    /// boolean the pause computed is stale by the time the sensors are parked
+    /// — which is why they ask the controller again instead.
+    @Test("a refusal answered during the journal write never starts the feed")
+    func refusalDuringTheJournalWriteNeverStartsTheWatch() async {
+        let harness = MovementReminderHarness.harness()
+        harness.notifier.isAuthorized = false
+        let hikeRecorder = await recordingRecorder(harness)
+
+        hikeRecorder.pause()
+        await harness.controller.settle()
+        await hikeRecorder.journalQueue.drain()
+
+        #expect(source.movementWatchStarts == 0)
+        #expect(source.stopCount == 1)
+    }
+
+    /// A walker who leaves the prompt on screen, taps Resume, and refuses it
+    /// half an hour later. The recording is running again by then, and
+    /// parking its sensors would stop the walk being recorded.
+    @Test("a refusal that lands after Resume leaves the recording running")
+    func lateRefusalDoesNotParkAResumedRecording() async {
+        let harness = MovementReminderHarness.harness()
+        harness.notifier.holdsThePrompt = true
+        let hikeRecorder = await recordingRecorder(harness)
+        hikeRecorder.pause()
+        await hikeRecorder.journalQueue.drain()
+        await harness.notifier.awaitPrompt()
+        await hikeRecorder.resume()
+        let stopsBefore = source.stopCount
+
+        harness.notifier.answerPrompt(allowing: false)
+        await harness.controller.settle()
+
+        #expect(hikeRecorder.phase != .paused, "precondition: the walker resumed")
+        #expect(
+            source.stopCount == stopsBefore,
+            "a late answer is about the pause that asked, and that pause is over"
+        )
+    }
+
     @Test("resuming stops the watch and takes the reminder down")
     func resumingStopsTheWatch() async {
         let harness = MovementReminderHarness.harness()
