@@ -1,0 +1,131 @@
+//
+//  HikeRecorderTests+Reminders.swift
+//  OpenHikesTests
+//
+//  That a pause reaches the reminders, and that it costs nothing when it must
+//  not.
+//
+//  ``MovementReminderControllerTests`` pins what the controller decides; these
+//  pin that the recorder asks it, at the two moments where the answer changes
+//  what the GPS is doing. The failure they exist to catch is the quiet one:
+//  the policy keeps returning the right answer, the controller keeps holding
+//  the right anchor, and no fix ever arrives to measure against it because the
+//  pause tore the feed down anyway.
+//
+
+import CoreLocation
+import Foundation
+@testable import OpenHikes
+import Testing
+
+extension HikeRecorderTests {
+    /// Where the recording starts, and a point about six hundred metres north
+    /// of it — far enough to cross ``MovementReminderPolicy/awayMeters`` and
+    /// close enough that nothing else in the recorder treats it as a jump.
+    private static let trailheadLatitude = 47.63
+    private static let downTheValleyLatitude = 47.6354
+
+    /// A recorder recording, with a reminder controller behind it.
+    private func recordingRecorder(
+        _ harness: MovementReminderHarness.Harness
+    ) async -> HikeRecorder {
+        let hikeRecorder = makeRecorder(movementReminders: harness.controller)
+        await hikeRecorder.start()
+        source.deliver(fix(latitude: Self.trailheadLatitude))
+        return hikeRecorder
+    }
+
+    @Test("a pause keeps a watch alive rather than stopping the feed")
+    func pauseWatchesForMovement() async {
+        let harness = MovementReminderHarness.harness()
+        let hikeRecorder = await recordingRecorder(harness)
+        let stopsBefore = source.stopCount
+
+        hikeRecorder.pause()
+        await hikeRecorder.journalQueue.drain()
+
+        #expect(source.movementWatchStarts == 1)
+        #expect(
+            source.stopCount == stopsBefore,
+            "the feed is swapped, not torn down — see startMovementWatch()"
+        )
+    }
+
+    /// The other half of the same decision, and the one that keeps this
+    /// feature free for a walker who does not want it.
+    @Test("a pause with reminders off stops everything, as it always did")
+    func pauseWithoutRemindersStopsTheFeed() async {
+        let harness = MovementReminderHarness.harness(remindersEnabled: false)
+        let hikeRecorder = await recordingRecorder(harness)
+
+        hikeRecorder.pause()
+        await hikeRecorder.journalQueue.drain()
+
+        #expect(source.movementWatchStarts == 0)
+        #expect(source.stopCount == 1)
+    }
+
+    /// The issue's own case: the walker left the restaurant without tapping
+    /// Resume, and half a kilometre later the phone says so.
+    @Test("a fix that arrives while paused can post the resume reminder")
+    func aPausedRecorderRemindsOnMovement() async {
+        let harness = MovementReminderHarness.harness()
+        let hikeRecorder = await recordingRecorder(harness)
+        hikeRecorder.pause()
+        await hikeRecorder.journalQueue.drain()
+
+        clock.advance(by: 1800)
+        source.deliver(fix(latitude: Self.downTheValleyLatitude, accuracy: 30))
+        await harness.controller.settle()
+
+        #expect(harness.notifier.postedKinds == [.resumeRecording])
+        #expect(
+            hikeRecorder.stats.pointCount == 1,
+            "a watch fix is evidence the walker moved, never part of the track"
+        )
+    }
+
+    /// The pause a walker most often forgets is one their phone died during:
+    /// the journal comes back at the next launch, the recording is parked, and
+    /// nothing in the new process is holding the anchor the previous one had.
+    @Test("a pause recovered from the journal is watched again")
+    func recoveredPauseIsRearmed() async throws {
+        let harness = MovementReminderHarness.harness()
+        let journal = TrackJournal(directory: directory, clock: clock.read)
+        try await journal.start(sessionID: UUID(), startedAt: clock.now)
+        try await journal.append(
+            RecordingPoint(
+                latitude: Self.trailheadLatitude,
+                longitude: 12.86,
+                timestamp: clock.now,
+                horizontalAccuracy: 8
+            )
+        )
+        try await journal.pause(at: clock.now)
+        try await journal.close()
+        let hikeRecorder = makeRecorder(movementReminders: harness.controller)
+
+        await hikeRecorder.recoverOpenSession()
+        clock.advance(by: 1800)
+        source.deliver(fix(latitude: Self.downTheValleyLatitude, accuracy: 30))
+        await harness.controller.settle()
+
+        #expect(hikeRecorder.phase == .paused)
+        #expect(source.movementWatchStarts == 1)
+        #expect(harness.notifier.postedKinds == [.resumeRecording])
+    }
+
+    @Test("resuming stops the watch and takes the reminder down")
+    func resumingStopsTheWatch() async {
+        let harness = MovementReminderHarness.harness()
+        let hikeRecorder = await recordingRecorder(harness)
+        hikeRecorder.pause()
+        await hikeRecorder.journalQueue.drain()
+
+        await hikeRecorder.resume()
+        await harness.controller.settle()
+
+        #expect(source.movementWatchStops >= 1)
+        #expect(harness.notifier.withdrawn.contains(.resumeRecording))
+    }
+}

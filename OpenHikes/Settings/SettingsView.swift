@@ -68,6 +68,8 @@ struct SettingsView: View {
     private var liveActivitiesEnabled = SettingsDefault.liveActivitiesEnabled
     @AppStorage(SettingsKey.savePhotosToLibrary)
     private var savePhotosToLibrary = SettingsDefault.savePhotosToLibrary
+    @AppStorage(SettingsKey.movementRemindersEnabled)
+    private var movementRemindersEnabled = SettingsDefault.movementRemindersEnabled
 
     private static let disabledOpacity: Double = 0.55
     private static let badgeHorizontalPadding: CGFloat = 7
@@ -112,6 +114,7 @@ struct SettingsView: View {
                 photosSection
                 backgroundTrackingSection
                 liveActivitySection
+                movementReminderSection
                 offlineStorageSection
                 FieldMetricsSection()
                 contactSection
@@ -511,6 +514,39 @@ private extension SettingsView {
         #endif
     }
 
+}
+
+// MARK: - Movement reminders
+
+/// The switch over the two banners a hike can put up. A section like any
+/// other, kept out of the view's body for length.
+private extension SettingsView {
+    /// On by default — see ``SettingsDefault/movementRemindersEnabled``. The
+    /// footer says what is watched and what it costs, because both are
+    /// surprising: a paused recording keeps a location feed alive when it
+    /// otherwise would not, and a paused *walk* is watched only by fixes that
+    /// were arriving anyway, so the two are not equally reliable and saying so
+    /// is cheaper than a walker discovering it on a trail.
+    @ViewBuilder var movementReminderSection: some View {
+        #if os(iOS)
+        Section {
+            Toggle("Remind Me to Pause and Resume", isOn: $movementRemindersEnabled)
+                .accessibilityIdentifier("movement-reminders-toggle")
+        } header: {
+            Text("Reminders")
+        } footer: {
+            Text(
+                "Notices when a paused hike has moved half a kilometre — or a"
+                + " quarter of one at cycling pace — and asks whether you meant to"
+                + " resume, with a button that does it without unlocking the phone."
+                + " It also offers to pause a recording you have not moved on for"
+                + " fifteen minutes. With Always location access a pause costs"
+                + " nothing to watch; without it the pause keeps a coarse location"
+                + " feed running."
+            )
+        }
+        #endif
+    }
 }
 
 // MARK: - Offline storage

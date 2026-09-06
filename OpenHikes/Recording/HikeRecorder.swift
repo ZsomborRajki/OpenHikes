@@ -87,6 +87,15 @@ final class HikeRecorder: NSObject {
     /// has no business reaching ActivityKit, and one built without an opinion
     /// simply doesn't draw an activity.
     @ObservationIgnored let liveActivityController: HikeLiveActivityController?
+    /// The reminders a pause can produce, when the app has any. Optional for
+    /// the reason ``liveActivityController`` is: a recorder built by a suite
+    /// has no business putting a banner on the developer's Lock Screen, and
+    /// one built without an opinion simply never reminds anybody of anything.
+    ///
+    /// The same instance the walk session holds — see
+    /// ``MovementReminderController`` for why a recording and a followed trail
+    /// cannot each have their own.
+    @ObservationIgnored let movementReminders: MovementReminderController?
     @ObservationIgnored let journal: TrackJournal?
     @ObservationIgnored let powerMonitor: PowerStateMonitor
     /// The profile the recorder last asked its source for. Kept here rather
@@ -252,6 +261,7 @@ final class HikeRecorder: NSObject {
         powerMonitor: PowerStateMonitor? = nil,
         sharedStateStore: (any RecordingSharedStateStoring)? = nil,
         liveActivityController: HikeLiveActivityController? = nil,
+        movementReminders: MovementReminderController? = nil,
         journalDirectory: URL? = nil,
         clock: @escaping @Sendable () -> Date = { Date() },
         uptime: @escaping @Sendable () -> TimeInterval = {
@@ -280,6 +290,7 @@ final class HikeRecorder: NSObject {
         self.powerMonitor = powerMonitor ?? PowerStateMonitor()
         self.sharedStateStore = sharedStateStore
         self.liveActivityController = liveActivityController
+        self.movementReminders = movementReminders
         journal = resolvedDirectory.map { directory in
             TrackJournal(directory: directory, clock: clock)
         }
@@ -323,6 +334,15 @@ extension HikeRecorder {
         journalFlushTask?.cancel()
         journalFlushTask = nil
         let pausedAt = clock()
+        // Asked before the journal write rather than after it, because the
+        // answer decides which sensors are torn down below and the walker has
+        // already left the trailhead by the time a queued write lands. A
+        // recorder with no reminders — or a walker who turned them off — gets
+        // the answer this pause has always had: everything off.
+        let watchesForMovement = movementReminders?.recordingDidPause(
+            at: lastAcceptedPoint?.coordinate,
+            on: pausedAt
+        ) ?? false
         guard let journal else {
             fail(.storageUnavailable)
             return
@@ -330,7 +350,7 @@ extension HikeRecorder {
         journalQueue.enqueue { [weak self] in
             do {
                 try await journal.pause(at: pausedAt)
-                await self?.stopLocationSensors()
+                await self?.parkLocationSensors(watchingForMovement: watchesForMovement)
             } catch {
                 await self?.fail(.storage(error.localizedDescription))
             }
@@ -362,6 +382,11 @@ extension HikeRecorder {
             fail(.storage(error.localizedDescription))
             return
         }
+        // Before any of the recording sensors start: the watch owns the same
+        // `CLLocationManager`, and starting a recording feed on top of
+        // significant-change monitoring leaves the monitoring behind.
+        source.stopMovementWatch()
+        movementReminders?.recordingDidResume()
         let elevationAnchor = lastAcceptedPoint?.elevation
         pendingResumeFlag = true
         lastAcceptedPoint = nil

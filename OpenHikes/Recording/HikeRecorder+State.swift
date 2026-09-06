@@ -64,6 +64,24 @@ protocol RecordingLocationSource: AnyObject {
     /// with them.
     func apply(_ profile: RecordingEnergyProfile)
     func stopRecordingUpdates()
+    /// Swaps a running recording's delivery for the cheapest one that can
+    /// still notice the walker has set off again, and back.
+    ///
+    /// Separate from the energy profile above because it is not a
+    /// configuration of the same feed: with Always authorization it is
+    /// significant-location-change monitoring, which needs neither the
+    /// background mode nor the activity session and so takes the status
+    /// indicator off the walker's screen for the length of the pause. Only
+    /// without it does the watch stay a — deliberately coarse — continuous
+    /// feed, because a when-in-use app that stops updating location is
+    /// suspended and would notice nothing at all.
+    ///
+    /// Started only when something will read it: see
+    /// ``MovementReminderController/recordingDidPause(at:on:)``, whose answer
+    /// is what the recorder calls this on. A pause with reminders off stops
+    /// the sensors outright, exactly as it did before either existed.
+    func startMovementWatch()
+    func stopMovementWatch()
     /// Ends a background activity session this app left outstanding when a
     /// previous launch died without stopping cleanly.
     ///
@@ -85,6 +103,16 @@ extension RecordingLocationSource {
     /// orphan, and nothing to do here.
     func releaseOrphanedBackgroundActivity() {
         // Nothing to do: the default source holds no background session.
+    }
+
+    /// And likewise: a source that models one feed keeps delivering it, which
+    /// is what a suite driving fixes into a paused recorder wants.
+    func startMovementWatch() {
+        // Nothing to do: the default source has one delivery mode.
+    }
+
+    func stopMovementWatch() {
+        // Nothing to do, for the same reason.
     }
 }
 
@@ -151,6 +179,13 @@ final class SystemRecordingLocationSource: RecordingLocationSource {
     }
 
     func startRecordingUpdates(profile: RecordingEnergyProfile) {
+        // A recording feed and a pause's watch are two answers to the same
+        // question, so starting one ends the other — including a watch armed
+        // by a launch that is no longer running, which is the case
+        // ``stopMovementWatch()`` is unconditional for. The paused-watch
+        // profile is the one caller that arrives *through* this and has
+        // nothing to clear.
+        if profile != .pausedWatch { stopMovementWatch() }
         manager.activityType = .fitness
         // Still `false`, and still deliberately. CoreLocation's automatic
         // pause is keyed on the device looking stationary *and* the app being
@@ -181,15 +216,65 @@ final class SystemRecordingLocationSource: RecordingLocationSource {
     }
 
     func stopRecordingUpdates() {
+        stopMovementWatch()
         manager.stopUpdatingLocation()
         appliedProfile = nil
         #if os(iOS)
-        sessionDiagnostics?.cancel()
-        sessionDiagnostics = nil
-        backgroundSession?.invalidate()
-        backgroundSession = nil
+        endBackgroundActivitySession()
         manager.allowsBackgroundLocationUpdates = false
         manager.showsBackgroundLocationIndicator = false
+        #endif
+    }
+
+    /// The two ways a paused recording can be watched, and which one this
+    /// walker's authorization allows.
+    ///
+    /// Always: significant location changes. They cost nothing — the system is
+    /// already computing them for other apps — they wake or relaunch this
+    /// process, and they arrive roughly every five hundred metres, which is
+    /// the same figure ``MovementReminderPolicy/awayMeters`` is written
+    /// against. The continuous feed, the background mode and the activity
+    /// session all go for the length of the pause, and the status indicator
+    /// goes with them: a paused hike stops showing the walker a pill that says
+    /// their location is being used.
+    ///
+    /// When in use: the feed has to keep running, because an app that stops
+    /// updating location is suspended and a suspended app notices nothing.
+    /// So the profile drops to ``RecordingEnergyProfile/pausedWatch`` and
+    /// everything else stays exactly where a running recording left it —
+    /// including the indicator, which is honest, since location really is
+    /// still being used.
+    func startMovementWatch() {
+        #if os(iOS)
+        guard manager.authorizationStatus == .authorizedAlways else {
+            // Started rather than merely reconfigured, because this is also
+            // the path a relaunch takes: a session recovered into a pause has
+            // no feed running to re-point, and `apply` alone would leave a
+            // watch that never delivers.
+            startRecordingUpdates(profile: .pausedWatch)
+            return
+        }
+        manager.stopUpdatingLocation()
+        appliedProfile = nil
+        endBackgroundActivitySession()
+        manager.allowsBackgroundLocationUpdates = false
+        manager.showsBackgroundLocationIndicator = false
+        manager.startMonitoringSignificantLocationChanges()
+        #endif
+    }
+
+    /// Unconditional, and that is the point rather than an oversight.
+    ///
+    /// Significant-change monitoring outlives the process that armed it — that
+    /// is what makes it able to relaunch an app — so a launch that died during
+    /// a pause leaves a walker's phone waking this app every five hundred
+    /// metres for a watch no object in the new process is holding. A flag
+    /// saying "this process started one" would be false in exactly that
+    /// launch, which is the one that has to clear it. The cost of being wrong
+    /// the other way is one no-op call into the daemon.
+    func stopMovementWatch() {
+        #if os(iOS)
+        manager.stopMonitoringSignificantLocationChanges()
         #endif
     }
 
@@ -223,6 +308,19 @@ final class SystemRecordingLocationSource: RecordingLocationSource {
     }
 
     #if os(iOS)
+    /// Ends the session this process is holding, if it is holding one.
+    ///
+    /// Factored out because a *pause* ends one too, and the two paths must not
+    /// disagree about what ending it involves: the diagnostics task is drained
+    /// from the session, so a session invalidated with the task still running
+    /// leaves a loop waiting on something that will never report again.
+    private func endBackgroundActivitySession() {
+        sessionDiagnostics?.cancel()
+        sessionDiagnostics = nil
+        backgroundSession?.invalidate()
+        backgroundSession = nil
+    }
+
     /// Starts — or, after a relaunch, reclaims — the session that keeps this
     /// app in use for as long as it is recording.
     ///
