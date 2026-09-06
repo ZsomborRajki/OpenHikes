@@ -115,6 +115,17 @@ nonisolated struct MovementWatch: Equatable, Sendable {
     /// a paused recording is watched at a hundred-metre filter at best, and
     /// anything older than the window is dropped on the next observation.
     private var samples: [Sample] = []
+    /// The newest observation this watch has taken, which is what makes the
+    /// window a window.
+    ///
+    /// Observations are stamped with the *fix's* own time rather than with
+    /// the moment it was handed over, and those do not arrive in order:
+    /// significant-location-change delivery batches, and the first event
+    /// after monitoring starts is routinely a cached one. An out-of-order
+    /// reading is dropped rather than reordered — it says where the walker
+    /// was, and the watch has already been told where they were later than
+    /// that.
+    private(set) var lastObservedAt: Date?
     private(set) var remindersSent = 0
     private(set) var lastReminderAt: Date?
 
@@ -123,12 +134,18 @@ nonisolated struct MovementWatch: Equatable, Sendable {
         remindersSent >= MovementReminderPolicy.maximumReminders
     }
 
-    /// Records how far from the anchor the walker now is.
+    /// Records how far from the anchor the walker was at `date`.
     ///
+    /// - Parameter date: when the reading was *taken*, not when it arrived.
+    ///   The pace rule is a statement about the walker's speed, so a batch of
+    ///   fixes handed over together must not read as a burst; a reading older
+    ///   than one already taken is dropped.
     /// - Returns: whether this reading is reason to remind them now. Sending
     ///   the reminder is the caller's job; consuming the allowance is this
     ///   type's, which is why a `true` is returned exactly once per crossing.
     mutating func observe(awayMeters: Double, at date: Date) -> Bool {
+        if let lastObservedAt, date <= lastObservedAt { return false }
+        lastObservedAt = date
         samples.removeAll { sample in
             date.timeIntervalSince(sample.at) > MovementReminderPolicy.paceWindow
         }

@@ -115,6 +115,28 @@ extension HikeRecorderTests {
         #expect(harness.notifier.postedKinds == [.resumeRecording])
     }
 
+    /// The switch is read at every decision, which stops the *reminders* —
+    /// but a pause has already told this recorder to keep a feed alive, and
+    /// with When In Use authorization that feed holds a background activity
+    /// session and the location indicator for the rest of the pause.
+    @Test("turning reminders off mid-pause stops the feed the pause started")
+    func disablingRemindersMidPauseStopsTheFeed() async {
+        let harness = MovementReminderHarness.harness()
+        let hikeRecorder = await recordingRecorder(harness)
+        hikeRecorder.pause()
+        await hikeRecorder.journalQueue.drain()
+        #expect(source.movementWatchStarts == 1, "precondition: the pause is being watched")
+        let stopsBefore = source.stopCount
+
+        harness.defaults.set(false, forKey: SettingsKey.movementRemindersEnabled)
+        await harness.controller.settle()
+
+        #expect(
+            source.stopCount == stopsBefore + 1,
+            "the coarse feed a pause started has to go with the switch"
+        )
+    }
+
     @Test("resuming stops the watch and takes the reminder down")
     func resumingStopsTheWatch() async {
         let harness = MovementReminderHarness.harness()

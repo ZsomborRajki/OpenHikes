@@ -72,9 +72,15 @@ enum MovementReminderHarness {
     nonisolated private static let metresPerDegreeLatitude = 111_320.0
 
     /// A fix `meters` north of ``anchor``, accurate enough to be measured.
+    ///
+    /// `takenAt` is the fix's own timestamp, which is not the moment it is
+    /// handed over: a cached significant-change event and a batched delivery
+    /// both arrive long after they were taken, and the controller is required
+    /// to tell the two apart.
     nonisolated static func fix(
         northOfAnchorBy meters: Double,
-        accuracy: CLLocationAccuracy = 20
+        accuracy: CLLocationAccuracy = 20,
+        takenAt timestamp: Date = start
     ) -> CLLocation {
         CLLocation(
             coordinate: CLLocationCoordinate2D(
@@ -84,7 +90,7 @@ enum MovementReminderHarness {
             altitude: anchorElevation,
             horizontalAccuracy: accuracy,
             verticalAccuracy: 5,
-            timestamp: start
+            timestamp: timestamp
         )
     }
 

@@ -227,6 +227,22 @@ nonisolated struct TrailWalkRecord: Codable, Equatable, Sendable {
     /// When the last on-route match landed, matched or merely seen while
     /// paused. What ``TrailWalkPolicy/abandonAfter`` is measured from.
     var lastMatchedAt: Date?
+    /// Where along the route the last *walked* match was — the position the
+    /// walk had reached, not the furthest it ever reached.
+    ///
+    /// Written only while following, which is what makes it the position the
+    /// walker paused at once they do: matches seen while paused move
+    /// ``lastMatchedAt`` (they prove the walk is not abandoned) and must not
+    /// move this, or the anchor a paused walk is measured against would
+    /// follow the walker and never register that they had moved at all.
+    ///
+    /// Optional because a record written before this existed decodes without
+    /// it, and because a walk can be paused before its first match.
+    /// ``TrailWalkCoverage/furthestDistanceMeters`` is the fallback and is
+    /// *not* an equivalent: it is a maximum, so a walker who turned round and
+    /// came back down before pausing would be measured against ground they
+    /// left behind.
+    var lastFollowedDistanceMeters: Double?
     /// The route's length *at the time of the walk*: a route re-imported or
     /// edited later must not rewrite history.
     var routeDistanceMeters: Double

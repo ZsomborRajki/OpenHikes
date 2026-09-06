@@ -50,7 +50,10 @@ struct MovementReminderControllerTests {
             on: start
         )
         harness.controller.recordingObserved(
-            MovementReminderHarness.fix(northOfAnchorBy: 2000),
+            MovementReminderHarness.fix(
+                northOfAnchorBy: 2000,
+                takenAt: start.addingTimeInterval(600)
+            ),
             at: start.addingTimeInterval(600)
         )
         await harness.controller.settle()
@@ -75,11 +78,17 @@ struct MovementReminderControllerTests {
         harness.controller.recordingDidPause(at: MovementReminderHarness.anchor, on: start)
 
         harness.controller.recordingObserved(
-            MovementReminderHarness.fix(northOfAnchorBy: 100),
+            MovementReminderHarness.fix(
+                northOfAnchorBy: 100,
+                takenAt: start.addingTimeInterval(300)
+            ),
             at: start.addingTimeInterval(300)
         )
         harness.controller.recordingObserved(
-            MovementReminderHarness.fix(northOfAnchorBy: 700),
+            MovementReminderHarness.fix(
+                northOfAnchorBy: 700,
+                takenAt: start.addingTimeInterval(1800)
+            ),
             at: start.addingTimeInterval(1800)
         )
         await harness.controller.settle()
@@ -101,11 +110,110 @@ struct MovementReminderControllerTests {
         harness.controller.recordingDidPause(at: MovementReminderHarness.anchor, on: start)
 
         harness.controller.recordingObserved(
-            MovementReminderHarness.fix(northOfAnchorBy: 900, accuracy: 800),
+            MovementReminderHarness.fix(
+                northOfAnchorBy: 900,
+                accuracy: 800,
+                takenAt: start.addingTimeInterval(600)
+            ),
             at: start.addingTimeInterval(600)
         )
         await harness.controller.settle()
 
+        #expect(harness.notifier.posted.isEmpty)
+    }
+
+    /// Core Location's first significant-change event is commonly a cached
+    /// one, and a cached fix from before the pause is a statement about where
+    /// the walker set off from — not about anything they have done since.
+    @Test("a fix taken before the pause is not evidence of leaving it")
+    func cachedFixesFromBeforeThePauseAreDropped() async {
+        let harness = MovementReminderHarness.harness()
+        harness.controller.recordingDidPause(at: MovementReminderHarness.anchor, on: start)
+
+        harness.controller.recordingObserved(
+            MovementReminderHarness.fix(
+                northOfAnchorBy: 800,
+                takenAt: start.addingTimeInterval(-3600)
+            ),
+            at: start.addingTimeInterval(1)
+        )
+        await harness.controller.settle()
+
+        #expect(harness.notifier.posted.isEmpty)
+    }
+
+    /// Significant-change delivery batches. Two fixes twenty minutes apart on
+    /// the ground, handed over in the same breath, are not a walker moving at
+    /// cycling pace — and the pace rule is the one that would say so if the
+    /// watch were stamped with the delivery instead of the fix.
+    @Test("a batch of delayed fixes is not a burst of speed")
+    func batchedFixesAreNotAPaceBurst() async {
+        let harness = MovementReminderHarness.harness()
+        harness.controller.recordingDidPause(at: MovementReminderHarness.anchor, on: start)
+        let deliveredAt = start.addingTimeInterval(1800)
+
+        harness.controller.recordingObserved(
+            MovementReminderHarness.fix(northOfAnchorBy: 0, takenAt: start),
+            at: deliveredAt
+        )
+        harness.controller.recordingObserved(
+            MovementReminderHarness.fix(
+                northOfAnchorBy: 300,
+                takenAt: start.addingTimeInterval(1200)
+            ),
+            at: deliveredAt
+        )
+        await harness.controller.settle()
+
+        #expect(
+            harness.notifier.posted.isEmpty,
+            "three hundred metres in twenty minutes is a stroll, and short of the distance rule"
+        )
+    }
+
+    @Test("an out-of-order fix is dropped rather than reordered")
+    func staleOrderedFixesAreDropped() async {
+        let harness = MovementReminderHarness.harness()
+        harness.controller.recordingDidPause(at: MovementReminderHarness.anchor, on: start)
+        let newest = start.addingTimeInterval(1800)
+
+        harness.controller.recordingObserved(
+            MovementReminderHarness.fix(northOfAnchorBy: 100, takenAt: newest),
+            at: newest
+        )
+        harness.controller.recordingObserved(
+            MovementReminderHarness.fix(
+                northOfAnchorBy: 900,
+                takenAt: start.addingTimeInterval(60)
+            ),
+            at: newest.addingTimeInterval(1)
+        )
+        await harness.controller.settle()
+
+        #expect(harness.notifier.posted.isEmpty)
+    }
+
+    /// The walker has just said they do not want this. Everything armed goes,
+    /// including whatever the recorder is spending to feed it.
+    @Test("turning the switch off mid-pause disarms the watch and the banners")
+    func disablingMidPauseDisarmsEverything() async {
+        let harness = MovementReminderHarness.harness()
+        var stopped = 0
+        harness.controller.watchingDidEnd = { stopped += 1 }
+        harness.controller.recordingDidPause(at: MovementReminderHarness.anchor, on: start)
+
+        harness.defaults.set(false, forKey: SettingsKey.movementRemindersEnabled)
+        harness.controller.recordingObserved(
+            MovementReminderHarness.fix(
+                northOfAnchorBy: 2000,
+                takenAt: start.addingTimeInterval(600)
+            ),
+            at: start.addingTimeInterval(600)
+        )
+        await harness.controller.settle()
+
+        #expect(stopped == 1, "the recorder has to be told to stop watching")
+        #expect(harness.notifier.withdrawn.contains(.resumeRecording))
         #expect(harness.notifier.posted.isEmpty)
     }
 
@@ -116,7 +224,10 @@ struct MovementReminderControllerTests {
 
         harness.controller.recordingDidResume()
         harness.controller.recordingObserved(
-            MovementReminderHarness.fix(northOfAnchorBy: 5000),
+            MovementReminderHarness.fix(
+                northOfAnchorBy: 5000,
+                takenAt: start.addingTimeInterval(600)
+            ),
             at: start.addingTimeInterval(600)
         )
         await harness.controller.settle()
@@ -135,7 +246,10 @@ struct MovementReminderControllerTests {
         harness.controller.recordingDidPause(at: MovementReminderHarness.anchor, on: start)
 
         harness.controller.recordingObserved(
-            MovementReminderHarness.fix(northOfAnchorBy: 900),
+            MovementReminderHarness.fix(
+                northOfAnchorBy: 900,
+                takenAt: start.addingTimeInterval(600)
+            ),
             at: start.addingTimeInterval(600)
         )
         await harness.controller.settle()

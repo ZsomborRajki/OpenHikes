@@ -40,6 +40,18 @@ extension HikeRecorder {
         source.startMovementWatch()
     }
 
+    /// The walker turned reminders off while this pause was being watched.
+    ///
+    /// Called by ``MovementReminderController/reconcileWithPreferences()``,
+    /// which is where the switch is *seen*; the recorder is where the feed
+    /// it started can actually be stopped. Guarded on the phase because the
+    /// controller does not know one: a switch flipped during a running
+    /// recording must not park its sensors.
+    func stopWatchingPausedRecording() {
+        guard phase == .paused else { return }
+        parkLocationSensors(watchingForMovement: false)
+    }
+
     /// Re-establishes — or clears — a pause's watch on a launch that found one
     /// in the journal.
     ///

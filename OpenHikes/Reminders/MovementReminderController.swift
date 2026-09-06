@@ -78,10 +78,36 @@ final class MovementReminderController {
     private var pausedWalk: PausedWalk?
     private var stillness = StillnessWatch()
 
+    /// What to do when a pause stops being watched for a reason the recorder
+    /// has not heard about — today, the walker turning the switch off with a
+    /// pause already under way.
+    ///
+    /// Assigned by the recorder that holds this controller, for the reason
+    /// ``hasActiveRecording`` is assigned rather than injected: the recorder
+    /// is handed this object, so the two cannot each be built first. Until it
+    /// is set the answer is "nothing to tear down", which is right for a
+    /// controller no recorder is using.
+    var watchingDidEnd: @MainActor () -> Void = { /* no recorder to tell */ }
+
     /// Chains the notification-centre calls so a post and the withdrawal that
     /// follows it cannot land in the other order — the same reasoning, and the
     /// same shape, as `HikeLiveActivityController.pendingWork`.
     private var pendingWork: Task<Void, Never>?
+
+    /// Held so they can be torn down with the controller, in a box for the
+    /// reason `HikeLiveActivityController.ObserverTokens` is one: `deinit` on
+    /// a `@MainActor` type is `nonisolated` and may not read main-actor
+    /// storage, and a block-based observer is retained by the notification
+    /// centre until it is removed by token.
+    nonisolated private final class ObserverTokens: @unchecked Sendable {
+        var tokens: [any NSObjectProtocol] = []
+
+        deinit {
+            for token in tokens { NotificationCenter.default.removeObserver(token) }
+        }
+    }
+
+    private let observers = ObserverTokens()
 
     init(
         notifier: any MovementReminderNotifying,
@@ -91,6 +117,7 @@ final class MovementReminderController {
         self.notifier = notifier
         self.defaults = defaults
         self.clock = clock
+        observePreferences()
     }
 
     /// The walker's own switch, read fresh every time.
@@ -132,14 +159,22 @@ extension MovementReminderController {
     }
 
     /// A fix that arrived while the recording was paused.
+    ///
+    /// - Parameter date: now, which is what the banner's "paused for" is
+    ///   measured against. The *watch* is fed `location.timestamp` instead —
+    ///   see ``isMeasurable(_:since:)`` for why the two cannot be the same
+    ///   value here.
     func recordingObserved(_ location: CLLocation, at date: Date) {
         guard isEnabled, var paused = pausedRecording else { return }
-        guard Self.isMeasurable(location) else { return }
+        guard Self.isMeasurable(location, since: paused.pausedAt) else { return }
         let moved = RouteGeometry.distanceMeters(
             from: paused.anchor,
             to: location.coordinate
         )
-        let shouldRemind = paused.watch.observe(awayMeters: moved, at: date)
+        let shouldRemind = paused.watch.observe(
+            awayMeters: moved,
+            at: location.timestamp
+        )
         pausedRecording = paused
         guard shouldRemind else { return }
         post(
@@ -177,17 +212,28 @@ extension MovementReminderController {
         withdraw(.pauseRecording)
     }
 
-    /// Whether a fix can be measured against an anchor at all.
+    /// Whether a fix is evidence about *this* pause at all.
+    ///
+    /// Two rules, and the second is the one a pause makes necessary.
     ///
     /// A significant-location-change delivery can be hundreds of metres wide,
     /// and a displacement computed between two of those says nothing about
     /// whether the walker moved. Dropped rather than softened: the next fix
     /// costs nothing to wait for, and the walk is not harmed by a reminder
     /// arriving one delivery later.
-    private static func isMeasurable(_ location: CLLocation) -> Bool {
+    ///
+    /// And a fix taken *before* the pause began is not evidence of anything
+    /// the walker did since. Core Location says as much about
+    /// `startMonitoringSignificantLocationChanges()`: the first event is
+    /// commonly a cached one, and its timestamp is the only thing that says
+    /// so. Without this a walker who paused at a hut they had walked to
+    /// half an hour earlier was told, one second later, that they had moved
+    /// eight hundred metres — the cached fix from where they set off.
+    private static func isMeasurable(_ location: CLLocation, since pausedAt: Date) -> Bool {
         location.horizontalAccuracy > 0
             && location.horizontalAccuracy <= MovementReminderPolicy.maximumFixAccuracy
             && CLLocationCoordinate2DIsValid(location.coordinate)
+            && location.timestamp >= pausedAt
     }
 }
 
@@ -242,6 +288,54 @@ extension MovementReminderController {
 // MARK: - Talking to the notification centre
 
 extension MovementReminderController {
+    /// Turning the switch off stops the reminders *and* whatever is being
+    /// spent to produce them.
+    ///
+    /// Reading the switch at each decision is not enough on its own, and this
+    /// is the half that was missing: a pause has already told the recorder to
+    /// keep a feed alive, and with When In Use authorization that feed is a
+    /// continuous one holding a background activity session and the location
+    /// indicator. Left running it would spend the rest of the pause producing
+    /// fixes that no longer decide anything — the worst version of this
+    /// feature, since the walker has just said they do not want it.
+    ///
+    /// Idempotent and cheap on purpose, exactly as
+    /// `HikeLiveActivityController.reconcileWithPreferences()` is:
+    /// `UserDefaults.didChangeNotification` fires for every key in the suite
+    /// and for same-value rewrites, so this runs far more often than the
+    /// switch moves, and when the feature is on it is one boolean read.
+    ///
+    /// The reverse is deliberately not symmetric. Turning reminders back on
+    /// mid-pause does not start a watch: there is no anchor — the pause it
+    /// would be measured from happened while the app was not looking — and a
+    /// watch armed at the walker's *current* position would quietly measure
+    /// the wrong thing. The next pause is watched normally.
+    func reconcileWithPreferences() {
+        guard !isEnabled else { return }
+        let wasWatching = pausedRecording != nil
+        pausedRecording = nil
+        pausedWalk = nil
+        stillness = StillnessWatch()
+        for kind in MovementReminderKind.allCases { withdraw(kind) }
+        if wasWatching { watchingDidEnd() }
+    }
+
+    /// Watches the walker's switch by the only means that reports it: the
+    /// defaults notification, scoped to this controller's own suite rather
+    /// than the process-wide one, which is how `SettingsView`'s `@AppStorage`
+    /// write arrives here.
+    private func observePreferences() {
+        observers.tokens.append(
+            NotificationCenter.default.addObserver(
+                forName: UserDefaults.didChangeNotification,
+                object: defaults,
+                queue: nil
+            ) { [weak self] _ in
+                onMainActor { self?.reconcileWithPreferences() }
+            }
+        )
+    }
+
     private func post(_ reminder: MovementReminder) {
         RenderSignpost.mark("MovementReminder", reminder.kind.rawValue)
         enqueue { [weak self] in

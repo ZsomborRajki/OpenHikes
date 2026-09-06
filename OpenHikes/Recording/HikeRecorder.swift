@@ -299,6 +299,12 @@ final class HikeRecorder: NSObject {
         self.journalFlushDelay = journalFlushDelay
         super.init()
         self.source.sourceDelegate = self
+        // The controller sees the walker's switch move; only the recorder can
+        // stop the feed a pause started for it. See
+        // ``stopWatchingPausedRecording()``.
+        movementReminders?.watchingDidEnd = { [weak self] in
+            self?.stopWatchingPausedRecording()
+        }
         observePowerState()
         if automaticallyRecovers, journal != nil {
             phase = .recovering
