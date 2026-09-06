@@ -732,10 +732,26 @@ jobs:
     if: needs.changes.outputs.code == 'true'
     runs-on: macos-26
     timeout-minutes: 30
-    # Reporting, not gating. UI automation on a shared runner has to earn a
-    # place in the merge path, so this runs for a while and its flake rate is
-    # observed before a red run is allowed to block anything.
-    continue-on-error: true
+    # Gating. The trial this job was admitted on ran from 2026-08-15 to
+    # 2026-09-06 and produced 192 completed runs with zero failures, at the
+    # job level and at the step level both — the `if: failure()` upload below
+    # never once fired, over a span in which the thread sanitizer uploaded 22
+    # failure bundles. That is the number the trial was for, so it is written
+    # down here rather than left as a period nobody ended.
+    #
+    # It is the post-retry rate: --retry below is
+    # `-retry-tests-on-failure -test-iterations 2`, so a test that failed once
+    # and passed on the second attempt is invisible in it, and permanently so,
+    # since the result bundle is only uploaded on failure. Post-retry is the
+    # rate that decides whether a red run should block, but it does not say
+    # how much slack the retry is absorbing. If that becomes worth knowing,
+    # upload the bundle unconditionally for a while and read the reruns out of
+    # it — do not infer it from a green job.
+    #
+    # This is also the slowest job in the workflow: 18m0s median, 21m34s p90,
+    # 24m51s p99 against the 30-minute timeout above. Raise the timeout rather
+    # than let a slow run start reporting as a real failure; a timeout that
+    # fires at p99 gates on the runner's mood, not on the VoiceOver contract.
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
 
