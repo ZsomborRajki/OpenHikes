@@ -94,6 +94,13 @@ final class TrailWalkSession {
     /// recorder because the recorder is the single authority on that and
     /// this must not become a second one.
     @ObservationIgnored private let activeRecordingHikeID: () -> UUID?
+    /// The reminder a paused walk can produce, when the app has one.
+    ///
+    /// The same instance the recorder holds, which is what makes "a recording
+    /// outranks a followed trail" expressible here as well — see
+    /// ``MovementReminderController``. Optional so a suite about the state
+    /// machine alone reaches no notification centre.
+    @ObservationIgnored private let reminders: MovementReminderController?
     @ObservationIgnored private let commit: (ModelContext) throws -> Void
     @ObservationIgnored private var lastPersistedAt: Date?
     @ObservationIgnored private var lastPersistenceAttemptAt: Date?
@@ -125,12 +132,14 @@ final class TrailWalkSession {
     init(
         context: ModelContext,
         tracker: BackgroundTrailTracker? = nil,
+        reminders: MovementReminderController? = nil,
         clock: @escaping @Sendable () -> Date = { Date() },
         activeRecordingHikeID: @escaping () -> UUID? = { nil },
         save: @escaping (ModelContext) throws -> Void = { try $0.save() }
     ) {
         self.context = context
         self.tracker = tracker
+        self.reminders = reminders
         self.clock = clock
         commit = save
         self.activeRecordingHikeID = activeRecordingHikeID
@@ -241,6 +250,9 @@ final class TrailWalkSession {
             // own, so these fixes are the only thing that can carry a write
             // the store refused earlier, and the cadence keeps them cheap.
             record = current
+            if current.phase == .paused {
+                reminders?.walkObserved(distanceAlongRoute: distance, at: now)
+            }
             persistIfDue(at: now)
             return false
         }
@@ -299,6 +311,11 @@ final class TrailWalkSession {
         phase = walk.phase
         coveredFraction = walk.coveredFraction
         furthestDistanceMeters = walk.coverage.furthestDistanceMeters
+        // A walk adopted from the sidecar was paused on a previous launch as
+        // often as it was started on this one, and the pause a background
+        // relaunch inherits is exactly the one a walker forgets: the phone has
+        // been in a pocket since.
+        updateReminder(for: walk)
     }
 
     // MARK: Pause and resume
@@ -320,6 +337,7 @@ final class TrailWalkSession {
         guard persist(current, at: now) else { return false }
         record = current
         phase = .paused
+        updateReminder(for: current)
         RenderSignpost.mark("TrailWalkPhase", "paused")
         publishState()
         return true
@@ -337,6 +355,7 @@ final class TrailWalkSession {
         guard persist(current, at: now) else { return false }
         record = current
         phase = .following
+        reminders?.walkDidResumeOrEnd()
         RenderSignpost.mark("TrailWalkPhase", "following")
         publishState()
         return true
@@ -453,6 +472,7 @@ final class TrailWalkSession {
     }
 
     private func clearState() {
+        reminders?.walkDidResumeOrEnd()
         record = nil
         walkedHike = nil
         endedHikeID = nil
@@ -593,6 +613,33 @@ final class TrailWalkSession {
             furthestDistanceMeters: record.coverage.furthestDistanceMeters,
             activeSeconds: record.activeSeconds(at: now),
             startedAt: record.startedAt
+        )
+    }
+}
+
+// MARK: - Reminders
+
+private extension TrailWalkSession {
+    /// Arms or disarms the reminder that a paused walk is being walked anyway.
+    ///
+    /// One function for the two places a walk's phase is set from a record —
+    /// the walker's own Pause, and a walk adopted from the sidecar at launch —
+    /// because a relaunched pause is exactly the one a walker forgets and the
+    /// two must not disagree about what watches it.
+    ///
+    /// Anchored at the furthest point the walk has reached rather than at a
+    /// coordinate: the feeds a paused walk still hears from speak in distance
+    /// along this route, and that is the measurement — which is also why the
+    /// controller takes the displacement in either direction, so a walker who
+    /// covers the trail backwards while paused is noticed just the same.
+    func updateReminder(for walk: TrailWalkRecord) {
+        guard walk.phase == .paused else {
+            reminders?.walkDidResumeOrEnd()
+            return
+        }
+        reminders?.walkDidPause(
+            trailTitle: walkedHikeTitle,
+            atDistance: walk.coverage.furthestDistanceMeters
         )
     }
 }

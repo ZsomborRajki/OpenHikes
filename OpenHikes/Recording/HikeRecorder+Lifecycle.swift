@@ -93,6 +93,7 @@ extension HikeRecorder {
             phase = .paused
             recoveryState = .needsDecision(summary)
             source.releaseOrphanedBackgroundActivity()
+            rearmPausedMovementWatch(at: session.points.last?.coordinate)
             publishSharedRecordingSnapshot(force: true)
             return
         }
@@ -112,6 +113,7 @@ extension HikeRecorder {
             // decision not to resume — and stay tappable, pointing at a
             // recording that is sitting paused rather than running.
             source.releaseOrphanedBackgroundActivity()
+            rearmPausedMovementWatch(at: session.points.last?.coordinate)
         }
         publishSharedRecordingSnapshot(force: true)
     }
@@ -182,6 +184,16 @@ extension HikeRecorder {
     }
 
     func accept(_ location: CLLocation) {
+        // A paused recording writes nothing, matches nothing and draws
+        // nothing — but it may still be watching, and this is the only place
+        // a fix from that watch arrives. Handed on before the phase guard
+        // rather than inside it, because everything below is about a fix that
+        // becomes part of the track and none of it applies to one that is
+        // only evidence the walker has moved.
+        if phase == .paused {
+            movementReminders?.recordingObserved(location, at: clock())
+            return
+        }
         guard phase == .waitingForFix || phase == .recording else { return }
         // Counted before any policy runs, but after the phase guard above, so
         // the report can show the whole funnel: what this manager delivered
@@ -223,6 +235,14 @@ extension HikeRecorder {
         }
         trace.append(accepted.coordinate, provisional: liveMatchingEnabled)
         stats.update(from: accumulator)
+        // The accumulator's own answer rather than a second opinion: it is
+        // already what the energy profile, the saved distance and the moving
+        // time are decided by, and a stillness rule of this feature's own
+        // would be a fourth.
+        movementReminders?.recordingObserved(
+            isStationary: accumulator.isStationary,
+            at: clock()
+        )
         stats.pointCount += 1
         stats.horizontalAccuracy = accepted.horizontalAccuracy
         // Explicitly conditional, not `phase = .recording`. `@Observable`'s

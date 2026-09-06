@@ -55,6 +55,15 @@ final class OpenHikesModel {
     /// outlive Settings: ``MapEntitlement`` is read on every provider
     /// resolution, including from off-main auto-save.
     let entitlement: MapEntitlementStore
+    /// The one reminder controller the app has, or `nil` when it must not have
+    /// one — see ``makeMovementReminderController(defaults:)``. Shared with
+    /// ``hikeRecorder`` and ``walkSession``, which is what makes the
+    /// precedence between a recording and a followed trail expressible.
+    let movementReminders: MovementReminderController?
+    /// What the buttons on a reminder do. Held because
+    /// `UNUserNotificationCenter.delegate` is a weak reference and this is the
+    /// object it points at; built only when there are reminders to act on.
+    @ObservationIgnored private var reminderActions: MovementReminderActions?
     var startupIssue: StorageStartupIssue?
 
     let defaults: UserDefaults
@@ -77,6 +86,7 @@ final class OpenHikesModel {
         locationManager: LocationManager,
         weatherManager: WeatherManager,
         trailGraphProvider: (any TrailGraphProviding)? = nil,
+        movementReminders: MovementReminderController? = nil,
         walkSession: TrailWalkSession? = nil,
         defaults: UserDefaults = .standard,
         startupIssue: StorageStartupIssue? = nil,
@@ -86,11 +96,13 @@ final class OpenHikesModel {
         self.backgroundTracker = backgroundTracker
         self.autoSaveController = autoSaveController
         self.hikeRecorder = hikeRecorder
+        self.movementReminders = movementReminders
         // The recorder stays the single authority on which hike is a draft;
         // the session only asks.
         self.walkSession = walkSession ?? TrailWalkSession(
             context: container.mainContext,
             tracker: backgroundTracker,
+            reminders: movementReminders,
             activeRecordingHikeID: { [weak hikeRecorder] in hikeRecorder?.currentHike?.id }
         )
         self.locationManager = locationManager
@@ -138,6 +150,29 @@ final class OpenHikesModel {
         // ``TrailWalkSession/restoreAtLaunch(now:)``.
         if !AppLaunchEnvironment.isRunningTests, startupIssue == nil {
             self.walkSession.restoreAtLaunch()
+        }
+        // Last, because both halves need dependencies built above: the
+        // recorder answers the precedence question the walk's reminder asks,
+        // and the buttons act on the recorder and the session. Only a launch
+        // that has a controller registers a delegate — a suite has neither.
+        if let movementReminders {
+            movementReminders.hasActiveRecording = { [weak hikeRecorder] in
+                hikeRecorder?.isActive ?? false
+            }
+            // A second `HikeIntentCoordinator` beside the one `OpenHikesApp`
+            // registers with `AppDependencyManager`, and deliberately: the
+            // coordinator owns no state of its own — it holds this recorder
+            // and this container and reads the phase back — so the two cannot
+            // disagree, and reaching for the registered one would mean asking
+            // `AppDependencyManager` for something a test launch never
+            // registers, which traps rather than returning nil.
+            reminderActions = MovementReminderActions(
+                recording: HikeIntentCoordinator(
+                    recorder: hikeRecorder,
+                    container: container
+                ),
+                walkSession: self.walkSession
+            ).registerAsNotificationDelegate()
         }
     }
 

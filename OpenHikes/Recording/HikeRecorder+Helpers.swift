@@ -278,13 +278,19 @@ extension HikeRecorder {
 
     // MARK: Sensors
 
-    /// Releases the sensors a session holds. Shared because the journal
-    /// queue also does this once a pause is durably written, so the walker
-    /// can't lose a pause boundary to a crash between the two.
+    /// Releases the sensors a session holds, for a recording that is over:
+    /// stopped, discarded or failed.
+    ///
+    /// Also where the reminders end, and every caller means it. A *pause* is
+    /// no longer one of them — see ``parkLocationSensors(watchingForMovement:)``
+    /// — so what is left here is a recording with no state left to remind
+    /// anybody about, and a banner asking a walker to resume a hike they have
+    /// already saved is the app disagreeing with its own store.
     func stopLocationSensors() {
         source.stopRecordingUpdates()
         elevationSource?.stop()
         motionSource?.stop()
+        movementReminders?.recordingDidEnd()
     }
 
     // MARK: Journal

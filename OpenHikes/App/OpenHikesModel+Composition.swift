@@ -68,6 +68,7 @@ extension OpenHikesModel {
         let load = Self.loadDefaultContainer(syncsToCloud: syncsToCloud)
         let graphProvider = OverpassTrailGraphProvider()
         let liveActivities = Self.makeLiveActivityController(defaults: launchDefaults)
+        let reminders = Self.makeMovementReminderController(defaults: launchDefaults)
 
         self.init(
             container: load.container,
@@ -82,11 +83,13 @@ extension OpenHikesModel {
                 container: load.container,
                 trailGraphProvider: graphProvider,
                 defaults: launchDefaults,
-                liveActivityController: liveActivities
+                liveActivityController: liveActivities,
+                movementReminders: reminders
             ),
             locationManager: LocationManager(manager: Self.dormantLocationSource()),
             weatherManager: WeatherManager(),
             trailGraphProvider: graphProvider,
+            movementReminders: reminders,
             defaults: launchDefaults,
             startupIssue: load.startupIssue,
             isSyncingThisLaunch: syncsToCloud
@@ -197,7 +200,8 @@ private extension OpenHikesModel {
         container: ModelContainer,
         trailGraphProvider: any TrailGraphProviding,
         defaults: UserDefaults,
-        liveActivityController: HikeLiveActivityController?
+        liveActivityController: HikeLiveActivityController?,
+        movementReminders: MovementReminderController? = nil
     ) -> HikeRecorder {
         HikeRecorder(
             container: container,
@@ -214,7 +218,38 @@ private extension OpenHikesModel {
             },
             defaults: defaults,
             sharedStateStore: AppGroupRecordingSharedStateStore(),
-            liveActivityController: liveActivityController
+            liveActivityController: liveActivityController,
+            movementReminders: movementReminders
+        )
+    }
+
+    /// The one movement-reminder controller the app has, or `nil` when it must
+    /// not have one.
+    ///
+    /// `nil` under the app-hosted unit bundles for the reason the Live
+    /// Activity controller is: the host app launches and runs its startup work
+    /// before any test does, and a suite has no business asking the developer
+    /// for notification permission or leaving a banner on their phone.
+    ///
+    /// `nil` under UI testing too, which is where this differs from the Live
+    /// Activity controller — and the reason is the prompt rather than the
+    /// banner. Notification authorization is asked for at the first pause, and
+    /// a *system* alert in front of a UI test is not a thing the run can tap
+    /// its way past: it would fail whichever test happened to pause first,
+    /// which is a pause the walk suites take deliberately. `isRunningTests`
+    /// rather than `isHostingTests` is what says both of those at once.
+    ///
+    /// The walker's own switch is *not* read here. It is read on every
+    /// decision instead, so turning reminders off mid-hike stops the next one
+    /// rather than the one after the next launch — see
+    /// ``MovementReminderController/isEnabled``.
+    static func makeMovementReminderController(
+        defaults: UserDefaults
+    ) -> MovementReminderController? {
+        guard !AppLaunchEnvironment.isRunningTests else { return nil }
+        return MovementReminderController(
+            notifier: SystemMovementReminderNotifier(),
+            defaults: defaults
         )
     }
 

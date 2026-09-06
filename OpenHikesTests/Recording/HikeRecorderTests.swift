@@ -17,6 +17,11 @@ final class StubRecordingLocationSource: RecordingLocationSource {
 
     private(set) var startCount = 0
     private(set) var stopCount = 0
+    /// What a pause did with the location feed. Counted rather than inferred
+    /// from ``stopCount``, because the whole question a pause now answers is
+    /// *which* of the two it did.
+    private(set) var movementWatchStarts = 0
+    private(set) var movementWatchStops = 0
     private(set) var releaseOrphanedBackgroundActivityCount = 0
     private(set) var authorizationRequests = 0
     private(set) var fullAccuracyRequests = 0
@@ -56,6 +61,17 @@ final class StubRecordingLocationSource: RecordingLocationSource {
 
     func releaseOrphanedBackgroundActivity() {
         releaseOrphanedBackgroundActivityCount += 1
+    }
+
+    /// Deliberately keeps delivering, unlike the system source: a suite that
+    /// drives fixes into a paused recorder is testing what the watch is for,
+    /// and modelling the real feed swap would only stop it doing so.
+    func startMovementWatch() {
+        movementWatchStarts += 1
+    }
+
+    func stopMovementWatch() {
+        movementWatchStops += 1
     }
 
     func deliver(_ location: CLLocation) {
@@ -275,6 +291,7 @@ final class HikeRecorderTests {
         ) -> TileNetworkDecision = { _ in .allowed },
         sharedStateStore: (any RecordingSharedStateStoring)? = nil,
         liveActivityController: HikeLiveActivityController? = nil,
+        movementReminders: MovementReminderController? = nil,
         automaticallyRecovers: Bool = false,
         powerMonitor: PowerStateMonitor? = nil,
         saveModelContext: @escaping (ModelContext) throws -> Void = { context in
@@ -310,6 +327,7 @@ final class HikeRecorderTests {
                 ),
             sharedStateStore: sharedStateStore,
             liveActivityController: liveActivityController,
+            movementReminders: movementReminders,
             journalDirectory: directory,
             clock: clock.read,
             journalFlushDelay: .zero,

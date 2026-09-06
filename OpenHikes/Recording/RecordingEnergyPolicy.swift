@@ -56,6 +56,26 @@ nonisolated struct RecordingEnergyProfile: Equatable, Sendable {
         distanceFilter: RecordingEnergyPolicy.walkingDistanceFilter,
         reason: nil
     )
+
+    /// What a *paused* recording watches with, when it is watching at all.
+    ///
+    /// Nothing about this configuration is meant to draw a line: no fix taken
+    /// under it is written to the journal, and the only question asked of it
+    /// is whether the walker is half a kilometre from where they stopped —
+    /// see ``MovementReminderPolicy``. So it is the cheapest configuration
+    /// that can still answer that, and it is the *second* choice: a walker who
+    /// granted Always authorization is watched by significant location changes
+    /// instead, which cost nothing at all.
+    ///
+    /// The reason is phrased for the recording screen like every other one,
+    /// because a paused recording still shows the profile in force and
+    /// "recording at hundred-metre accuracy" would be alarming and wrong.
+    static let pausedWatch = Self(
+        name: "paused-watch",
+        desiredAccuracy: RecordingEnergyPolicy.pausedWatchAccuracy,
+        distanceFilter: RecordingEnergyPolicy.pausedWatchDistanceFilter,
+        reason: "Paused — watching for a hundred metres at a time in case you set off again."
+    )
 }
 
 nonisolated enum RecordingEnergyPolicy {
@@ -76,6 +96,13 @@ nonisolated enum RecordingEnergyPolicy {
     /// The filter that pairs with the above: no point asking for ten-metre
     /// accuracy and then waking for every ten metres.
     static let conservingDistanceFilter: CLLocationDistance = 20
+    /// What a paused recording asks for while it watches for the walker
+    /// setting off again — see ``RecordingEnergyProfile/pausedWatch``. Coarse
+    /// on both axes deliberately: the question is a five-hundred-metre one,
+    /// and a hundred-metre filter is roughly one wakeup per two minutes of
+    /// walking rather than one per ten seconds.
+    static let pausedWatchAccuracy = kCLLocationAccuracyHundredMeters
+    static let pausedWatchDistanceFilter: CLLocationDistance = 100
 
     /// Everything the policy is allowed to look at. A struct rather than three
     /// arguments so a caller that learns about a new condition updates one

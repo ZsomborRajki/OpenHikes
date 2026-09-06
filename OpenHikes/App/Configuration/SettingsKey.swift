@@ -62,6 +62,13 @@ nonisolated enum SettingsKey {
     /// ``MapEntitlementStore/init(defaults:currentEntitlements:)`` for what it
     /// is and is not for.
     static let lastKnownMapEntitlement = "purchases.lastKnownMapEntitlement"
+    /// Whether the app may notice that a paused hike has started moving again,
+    /// or that a running one has stopped, and say so. Read by
+    /// ``MovementReminderController`` on every decision rather than captured,
+    /// so turning it off mid-hike stops the next reminder — and read *before*
+    /// a pause arms anything, which is what keeps a pause exactly as cheap as
+    /// it was for a walker who does not want them.
+    static let movementRemindersEnabled = "settings.movementRemindersEnabled"
 }
 
 /// Defaults for keys where "absent" and "false" are different answers, so the
@@ -86,4 +93,11 @@ nonisolated enum SettingsDefault {
     /// unlocking a phone with wet gloves on. The system's own per-app switch
     /// is still the walker's veto.
     static let liveActivitiesEnabled = true
+    /// On. The reminder the walker never sees costs nothing: a paused
+    /// recording is watched by the cheapest delivery Core Location has, and a
+    /// paused walk is watched by fixes that were arriving anyway. The failure
+    /// it prevents is the expensive one — a hike whose second half is missing
+    /// because the walker set off from lunch without tapping Resume, which no
+    /// later screen can put right.
+    static let movementRemindersEnabled = true
 }
