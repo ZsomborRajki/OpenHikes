@@ -47,6 +47,37 @@ extension TrailWalkSessionTests {
         #expect(session.phase == .paused, "the reminder asks; it does not resume anything")
     }
 
+    /// The walker went out to the summit, came back down, and paused at the
+    /// hut on the way. Anchoring at the coverage *maximum* rather than at
+    /// where they stopped told them, on the very next fix and while standing
+    /// still, that they had covered the distance back down the hill.
+    @Test("a walk that backtracked before pausing is anchored where it stopped")
+    func backtrackedWalkIsAnchoredAtThePausePosition() async {
+        let harness = MovementReminderHarness.harness()
+        let session = remindingSession(harness)
+        let walked = hike()
+        let profile = RouteProfile(route: walked.route)
+        // Out to the far end of the outbound leg, then back down to near the
+        // trailhead — the same trail, walked the way it is not stored.
+        walk(session, hike: walked, profile: profile, from: 0, through: 19)
+        walk(session, hike: walked, profile: profile, from: 18, through: 6)
+        #expect(session.pause())
+
+        // Standing still: the same position, matched again.
+        clock.advance(by: 60)
+        session.recordForegroundMatch(
+            hike: walked,
+            profile: profile,
+            distance: profile.distances[6]
+        )
+        await harness.controller.settle()
+
+        #expect(
+            harness.notifier.posted.isEmpty,
+            "a walker who has not moved since pausing has not resumed anything"
+        )
+    }
+
     @Test("resuming the walk takes its reminder down")
     func resumingTheWalkWithdraws() async {
         let harness = MovementReminderHarness.harness()

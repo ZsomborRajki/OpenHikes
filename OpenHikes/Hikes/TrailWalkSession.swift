@@ -257,6 +257,11 @@ final class TrailWalkSession {
             return false
         }
         current.coverage.record(distance: distance)
+        // The walk's *position*, kept beside the coverage union rather than
+        // derived from it: the union's maximum is where the walk has been,
+        // and a pause has to be anchored at where the walker is. See
+        // ``TrailWalkRecord/lastFollowedDistanceMeters``.
+        current.lastFollowedDistanceMeters = distance
         record = current
         let fraction = current.coveredFraction
         if coveredFraction != fraction { coveredFraction = fraction }
@@ -627,11 +632,16 @@ private extension TrailWalkSession {
     /// because a relaunched pause is exactly the one a walker forgets and the
     /// two must not disagree about what watches it.
     ///
-    /// Anchored at the furthest point the walk has reached rather than at a
+    /// Anchored at the position the walk had reached rather than at a
     /// coordinate: the feeds a paused walk still hears from speak in distance
     /// along this route, and that is the measurement — which is also why the
     /// controller takes the displacement in either direction, so a walker who
     /// covers the trail backwards while paused is noticed just the same.
+    ///
+    /// The *position*, emphatically not the coverage maximum. A walker who
+    /// went out to a summit and came back down before pausing has a maximum
+    /// half a walk away from where they are standing, and anchoring there
+    /// told them they had covered eight hundred metres for standing still.
     func updateReminder(for walk: TrailWalkRecord) {
         guard walk.phase == .paused else {
             reminders?.walkDidResumeOrEnd()
@@ -639,7 +649,8 @@ private extension TrailWalkSession {
         }
         reminders?.walkDidPause(
             trailTitle: walkedHikeTitle,
-            atDistance: walk.coverage.furthestDistanceMeters
+            atDistance: walk.lastFollowedDistanceMeters
+                ?? walk.coverage.furthestDistanceMeters
         )
     }
 }
