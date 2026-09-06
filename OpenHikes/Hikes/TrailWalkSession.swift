@@ -642,12 +642,26 @@ private extension TrailWalkSession {
     /// Kept to the cadence rather than committed like a milestone: this
     /// arrives per fix, and a walk that never comes back to the route is
     /// abandoned or ended, both of which write.
+    ///
+    /// Which is why the write is offered on *every* off-route fix and not
+    /// only on the one that made the break. An excursion accrues nothing of
+    /// its own, so these fixes are the only thing that can carry a write the
+    /// cadence deferred or the store refused — the same reason a paused
+    /// walk's matches still reach ``persistIfDue(at:)``. Without that, a
+    /// break made inside the 45-second window would live in memory alone,
+    /// and a relaunch during the excursion would restore the old anchor and
+    /// credit the shortcut after all.
     func breakCoverage(hikeID: UUID) {
-        guard var current = record, current.hikeID == hikeID,
-              current.coverage.lastMatchedDistance != nil
-        else { return }
-        current.coverage.breakContinuity()
-        record = current
+        guard var current = record, current.hikeID == hikeID else { return }
+        if current.coverage.lastMatchedDistance != nil {
+            current.coverage.breakContinuity()
+            record = current
+        }
+        // Nothing to carry once the sidecar holds this record: the walker can
+        // be off the route for hours, and an unchanged rewrite every cadence
+        // is a save and a `@Query` tick for nothing. A refused write left the
+        // column as it was, so it still differs here and is still retried.
+        guard walkedHike?.walkInProgress != current else { return }
         persistIfDue(at: clock())
     }
 }
