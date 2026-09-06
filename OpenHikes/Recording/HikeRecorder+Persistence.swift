@@ -183,10 +183,18 @@ extension HikeRecorder {
             existing.rawRoute = prepared.rawRoute
             existing.customName = customName
             existing.isRecording = false
+            // The walk this recording was, in the same commit as the hike it
+            // finalizes — see ``RecordedWalk``.
+            let walk = insertRecordedWalk(
+                for: existing,
+                session: session,
+                prepared: prepared
+            )
             do {
                 try saveModelContext(container.mainContext)
                 return existing
             } catch {
+                discardRecordedWalk(walk)
                 existing.distanceMeters = previousDistance
                 existing.date = previousDate
                 existing.route = previousRoute
@@ -209,10 +217,16 @@ extension HikeRecorder {
         )
         hike.customName = customName
         container.mainContext.insert(hike)
+        let walk = insertRecordedWalk(
+            for: hike,
+            session: session,
+            prepared: prepared
+        )
         do {
             try saveModelContext(container.mainContext)
             return hike
         } catch {
+            discardRecordedWalk(walk)
             container.mainContext.delete(hike)
             throw .save(error.localizedDescription)
         }

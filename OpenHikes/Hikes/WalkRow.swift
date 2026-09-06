@@ -80,6 +80,7 @@ struct WalkRow: View {
         switch reason {
         case .reachedEnd: "Completed"
         case .abandoned: "Left open"
+        case .recorded: "Recorded"
         case .ended, nil: "Ended"
         }
     }
