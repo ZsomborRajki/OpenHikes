@@ -216,9 +216,11 @@ final class TrailWalkSession {
     }
 
     /// An accepted fix that did not match `hikeID`'s route: the walker is
-    /// off the trail. Rearms auto-start for a hike whose walk was ended
-    /// here — leaving the route is the boundary an End waits for.
+    /// off the trail. Breaks the walk under way's coverage continuity, and
+    /// rearms auto-start for a hike whose walk was ended here — leaving the
+    /// route is the boundary an End waits for.
     func recordOffRoute(hikeID: UUID) {
+        breakCoverage(hikeID: hikeID)
         rearmStart(hikeID: hikeID)
     }
 
@@ -619,6 +621,34 @@ final class TrailWalkSession {
             activeSeconds: record.activeSeconds(at: now),
             startedAt: record.startedAt
         )
+    }
+}
+
+// MARK: - Coverage
+
+private extension TrailWalkSession {
+    /// Closes the walked interval at the last on-route match, so the fix that
+    /// brings the walker back to the trail starts a fresh one.
+    ///
+    /// The gap bound bridges a *lost signal*, on the reasoning that the
+    /// walker probably did walk the stretch in between. Here the evidence is
+    /// the opposite: a fix was accepted, matched, and found off the route.
+    /// Without this, cutting a switchback by road and rejoining within
+    /// ``TrailWalkPolicy/gapBoundMeters`` hands the union the whole shortcut —
+    /// and this is the coverage that reaches `HikeWalk`, History, Show on Map
+    /// and the completion rule. The same statement a pause makes, made by the
+    /// matcher instead of the walker.
+    ///
+    /// Kept to the cadence rather than committed like a milestone: this
+    /// arrives per fix, and a walk that never comes back to the route is
+    /// abandoned or ended, both of which write.
+    func breakCoverage(hikeID: UUID) {
+        guard var current = record, current.hikeID == hikeID,
+              current.coverage.lastMatchedDistance != nil
+        else { return }
+        current.coverage.breakContinuity()
+        record = current
+        persistIfDue(at: clock())
     }
 }
 

@@ -141,12 +141,14 @@ nonisolated struct TrailWalkCoverage: Codable, Equatable, Sendable {
     /// Drops the continuity reference, so the next match starts a fresh
     /// interval the way a walk's first match does.
     ///
-    /// What a pause needs. The gap bound is the right rule for a lost
-    /// signal — the walker probably did walk the stretch in between — and it
-    /// is exactly wrong across a pause, which is the walker saying they did
-    /// not walk what comes next. Without this, pausing at the col and
-    /// walking 400 m down the ridge hands the union that 400 m on the first
-    /// fix after Resume.
+    /// What a pause needs, and what a confirmed off-route fix needs. The gap
+    /// bound is the right rule for a lost signal — the walker probably did
+    /// walk the stretch in between — and it is exactly wrong when something
+    /// says they did not: a pause is the walker saying so, an accepted fix
+    /// matched off the route is the matcher saying so. Without this, pausing
+    /// at the col and walking 400 m down the ridge hands the union that
+    /// 400 m on the first fix after Resume, and a road shortcut rejoined
+    /// inside the bound hands it the section it skipped.
     mutating func breakContinuity() {
         lastMatchedDistance = nil
     }
