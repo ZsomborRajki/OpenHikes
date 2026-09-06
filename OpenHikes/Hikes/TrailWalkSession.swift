@@ -194,14 +194,32 @@ final class TrailWalkSession {
     ///
     /// - Returns: whether this fix *ended* the walk. A caller that publishes
     ///   the fix afterwards must not: see ``recordMatch(hikeID:distance:at:)``.
-    @discardableResult func recordForegroundMatch(hike: Hike, profile: RouteProfile, distance: Double) -> Bool {
+    ///
+    /// - Parameter timestamp: when the receiver *took* the fix, which is not
+    ///   when the follow loop got round to it. A fix as much as
+    ///   ``LocationFixPolicy/foregroundMaximumAge`` old is accepted for
+    ///   matching, and stamping one of those with the delivery time is what
+    ///   makes half-minute-old evidence look newer than a fix that really is
+    ///   — which is the whole of what orders this feed against the background
+    ///   one. `nil` for a caller with no fix time to hand, where the clock is
+    ///   the honest answer.
+    @discardableResult func recordForegroundMatch(
+        hike: Hike,
+        profile: RouteProfile,
+        distance: Double,
+        at timestamp: Date? = nil
+    ) -> Bool {
         let now = clock()
+        let matchedAt = timestamp ?? now
         discardWalkIfHikeGone()
+        // Asked of the clock rather than of the fix: whether anything has been
+        // seen for six hours is a question about now, and a walk must not
+        // outlive its bound because the fix that closed it was taken early.
         endIfAbandoned(at: now)
         if record == nil {
-            startIfEligible(hike: hike, profile: profile, at: now)
+            startIfEligible(hike: hike, profile: profile, at: matchedAt)
         }
-        return recordMatch(hikeID: hike.id, distance: distance, at: now)
+        return recordMatch(hikeID: hike.id, distance: distance, at: matchedAt)
     }
 
     /// A fix matched on-route by the background feed. Never starts a walk —
@@ -245,6 +263,21 @@ final class TrailWalkSession {
     ///   follow over the finished panel ``walkDidEnd(final:)`` just queued.
     @discardableResult private func recordMatch(hikeID: UUID, distance: Double, at now: Date) -> Bool {
         guard var current = record, current.hikeID == hikeID else { return false }
+        // A fix something newer has already overtaken says nothing that has
+        // not been said better since, and it is not this walk's most recent
+        // news whatever order it arrived in. Rejected before the record is
+        // touched, because both things it would do are wrong: it would move
+        // the walk's last-seen time backwards, and — while paused — offer a
+        // stretch of trail the walker covered *before* they stopped as
+        // evidence that they have set off again.
+        //
+        // Not a hypothetical ordering. ``BackgroundTrailTracker`` matches off
+        // the main thread behind an await, so a fix taken earlier can be
+        // handed over later than a foreground one; a significant-change
+        // delivery is routinely a cached fix from where the walker set off;
+        // and serialising the background feed against itself orders it
+        // against nothing else.
+        guard now >= current.lastActivityAt else { return false }
         current.lastMatchedAt = now
         guard current.phase == .following else {
             // Seen, so the walk is not abandoned — but not walked. Still
@@ -547,9 +580,25 @@ final class TrailWalkSession {
         try? context.fetch(FetchDescriptor<Hike>(predicate: #Predicate { $0.id == id })).first
     }
 
-    // MARK: Persistence
+    private static func payload(
+        for record: TrailWalkRecord,
+        at now: Date,
+        state: SharedTrailSnapshot.Walk.State? = nil
+    ) -> SharedTrailSnapshot.Walk {
+        SharedTrailSnapshot.Walk(
+            state: state ?? (record.phase == .paused ? .paused : .active),
+            coveredFraction: record.coveredFraction,
+            furthestDistanceMeters: record.coverage.furthestDistanceMeters,
+            activeSeconds: record.activeSeconds(at: now),
+            startedAt: record.startedAt
+        )
+    }
+}
 
-    private func persistIfDue(at now: Date) {
+// MARK: - Persistence
+
+private extension TrailWalkSession {
+    func persistIfDue(at now: Date) {
         guard let record else { return }
         if persistenceFailures > 0, let lastPersistenceAttemptAt {
             let elapsed = now.timeIntervalSince(lastPersistenceAttemptAt)
@@ -572,7 +621,7 @@ final class TrailWalkSession {
     ///   nobody committed. The successful-write marker moves only on commit;
     ///   a separate attempt marker bounds automatic retries. Explicit
     ///   milestones always attempt their write, even during that retry wait.
-    @discardableResult private func persist(_ walk: TrailWalkRecord, at now: Date) -> Bool {
+    @discardableResult func persist(_ walk: TrailWalkRecord, at now: Date) -> Bool {
         guard let walkedHike, walkedHike.isAttached else {
             // No sidecar to reach: the hike is gone, the walk goes with it at
             // the next fix — ``discardWalkIfHikeGone()`` — and the row left
@@ -598,7 +647,7 @@ final class TrailWalkSession {
     ///   answer: a walk's phase is not a phase until the sidecar holds it,
     ///   and a walk that ends is the one commit with nothing behind it to try
     ///   again.
-    @discardableResult private func save(reason: String) -> Bool {
+    @discardableResult func save(reason: String) -> Bool {
         do {
             try commit(context)
             return true
@@ -607,20 +656,6 @@ final class TrailWalkSession {
             Self.logger.error("Could not save while \(reason, privacy: .public): \(description, privacy: .public)")
             return false
         }
-    }
-
-    private static func payload(
-        for record: TrailWalkRecord,
-        at now: Date,
-        state: SharedTrailSnapshot.Walk.State? = nil
-    ) -> SharedTrailSnapshot.Walk {
-        SharedTrailSnapshot.Walk(
-            state: state ?? (record.phase == .paused ? .paused : .active),
-            coveredFraction: record.coveredFraction,
-            furthestDistanceMeters: record.coverage.furthestDistanceMeters,
-            activeSeconds: record.activeSeconds(at: now),
-            startedAt: record.startedAt
-        )
     }
 }
 
@@ -682,6 +717,13 @@ private extension TrailWalkSession {
     /// controller takes the displacement in either direction, so a walker who
     /// covers the trail backwards while paused is noticed just the same.
     ///
+    /// Stamped with the record's own ``TrailWalkRecord/phaseChangedAt``
+    /// rather than with the clock, for the same reason one function serves
+    /// both callers: a pause adopted at launch happened whenever the walker
+    /// tapped it, possibly hours before this process existed, and dating it
+    /// from launch would hand the watch a boundary every fix taken during the
+    /// pause falls before.
+    ///
     /// The *position*, emphatically not the coverage maximum. A walker who
     /// went out to a summit and came back down before pausing has a maximum
     /// half a walk away from where they are standing, and anchoring there
@@ -694,7 +736,8 @@ private extension TrailWalkSession {
         reminders?.walkDidPause(
             trailTitle: walkedHikeTitle,
             atDistance: walk.lastFollowedDistanceMeters
-                ?? walk.coverage.furthestDistanceMeters
+                ?? walk.coverage.furthestDistanceMeters,
+            on: walk.phaseChangedAt
         )
     }
 }

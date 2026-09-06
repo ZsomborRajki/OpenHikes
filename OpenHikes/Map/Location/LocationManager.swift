@@ -23,6 +23,12 @@ nonisolated struct RouteFix {
     /// carries none worth trusting. Route matching uses it to tell the
     /// outbound leg of a trail from the return one.
     let course: CLLocationDirection?
+    /// When the receiver took the fix, which is up to
+    /// ``LocationFixPolicy/foregroundMaximumAge`` before it is read here.
+    /// Carried so anything ordering this feed's evidence against the
+    /// background one's orders it by when the walker was somewhere rather
+    /// than by when the app got round to asking.
+    let timestamp: Date
 }
 
 nonisolated enum LocationFixPolicy {
@@ -205,7 +211,8 @@ final class LocationManager: NSObject {
               ) else { return nil }
         return RouteFix(
             coordinate: latestLocation.coordinate,
-            course: LocationFixPolicy.course(of: latestLocation)
+            course: LocationFixPolicy.course(of: latestLocation),
+            timestamp: latestLocation.timestamp
         )
     }
 

@@ -7,7 +7,7 @@
 //
 //  The walk's half of this feature costs no sensor at all: the matched fixes
 //  the detail screen and the background tracker were already feeding in are
-//  the measurement — see ``MovementReminderController/walkDidPause(trailTitle:atDistance:)``.
+//  the measurement — see ``MovementReminderController/walkDidPause(trailTitle:atDistance:on:)``.
 //  What these pin is that the paused branch of `recordMatch` really does hand
 //  them on, and that a pause restored from the sidecar arms the same reminder
 //  a tapped one does.
@@ -112,5 +112,75 @@ extension TrailWalkSessionTests {
         await harness.controller.settle()
 
         #expect(harness.notifier.postedKinds.contains(.resumeWalk))
+    }
+
+    /// The bug this pins: the background feed matches asynchronously, so a
+    /// fix taken before a newer foreground one can be handed over after it —
+    /// and after the Pause it happened before. Delivered as evidence, it says
+    /// the walker covered the distance back to where they were half a walk
+    /// ago, and it drags the walk's last-seen time backwards with it.
+    @Test("a match overtaken by a newer one reminds nobody and does not age the walk")
+    func overtakenMatchIsRejected() async {
+        let harness = MovementReminderHarness.harness()
+        let session = remindingSession(harness)
+        let walked = hike()
+        let profile = RouteProfile(route: walked.route)
+        walk(session, hike: walked, profile: profile, from: 0, through: 14)
+        let overtaken = clock.now
+
+        // A newer foreground match, back down the trail, and the Pause taken
+        // there — the walker is standing where this leaves them.
+        clock.advance(by: 60)
+        session.recordForegroundMatch(hike: walked, profile: profile, distance: profile.distances[4])
+        #expect(session.pause())
+
+        // The background feed finally delivers the older fix.
+        session.recordBackgroundMatch(
+            hikeID: walked.id,
+            distance: profile.distances[14],
+            at: overtaken
+        )
+        await harness.controller.settle()
+
+        #expect(
+            harness.notifier.posted.isEmpty,
+            "the walker moved before the pause, not since it"
+        )
+        #expect(
+            session.record?.lastMatchedAt == clock.now,
+            "and a stale fix does not make the walk older than it is"
+        )
+    }
+
+    /// The foreground loop's own version of the same hazard, and the one the
+    /// clock cannot see: a fix is accepted for matching up to
+    /// ``LocationFixPolicy/foregroundMaximumAge`` after it was taken, so the
+    /// loop can read a pre-pause fix a second after the walker tapped Pause.
+    @Test("a foreground fix taken before the pause is not movement since it")
+    func prePauseForegroundFixIsRejected() async {
+        let harness = MovementReminderHarness.harness()
+        let session = remindingSession(harness)
+        let walked = hike()
+        let profile = RouteProfile(route: walked.route)
+        walk(session, hike: walked, profile: profile, from: 0, through: 4)
+        let lastMatch = clock.now
+        clock.advance(by: 60)
+        #expect(session.pause())
+
+        // Taken half a minute before the Pause, half a kilometre up the
+        // trail, and read by the follow loop twenty seconds after it.
+        clock.advance(by: 20)
+        session.recordForegroundMatch(
+            hike: walked,
+            profile: profile,
+            distance: profile.distances[14],
+            at: lastMatch.addingTimeInterval(30)
+        )
+        await harness.controller.settle()
+
+        #expect(
+            harness.notifier.posted.isEmpty,
+            "the walker walked that stretch before they stopped"
+        )
     }
 }

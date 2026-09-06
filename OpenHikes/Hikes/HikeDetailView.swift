@@ -710,7 +710,8 @@ private extension HikeDetailView {
         let completedWalk = walkSession.recordForegroundMatch(
             hike: hike,
             profile: profile,
-            distance: match.distanceAlongRoute
+            distance: match.distanceAlongRoute,
+            at: fix.timestamp
         )
         if hike.autoFollowEnabled {
             updateLiveTracker(distance: match.distanceAlongRoute)
