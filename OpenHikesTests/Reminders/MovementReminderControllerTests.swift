@@ -6,6 +6,11 @@
 //  reminder belongs to, when one is worth sending, when it is taken back down,
 //  and the two switches that stop it happening at all.
 //
+//  The paused *recording* here; the paused walk is
+//  ``MovementReminderControllerTests`` extended in
+//  `MovementReminderControllerTests+Walk.swift`, split off for the reason the
+//  walk session's own suites are — one subject per file.
+//
 //  The notifier is a stub, because the framework half is unreachable from a
 //  hosted test and uninteresting anyway — see ``MovementReminderNotifying``.
 //
@@ -18,7 +23,7 @@ import Testing
 @MainActor
 @Suite("Movement reminder controller")
 struct MovementReminderControllerTests {
-    private let start = MovementReminderHarness.start
+    let start = MovementReminderHarness.start
 
     // MARK: A paused recording
 
@@ -314,64 +319,5 @@ struct MovementReminderControllerTests {
 
         #expect(harness.notifier.withdrawn.contains(.resumeRecording))
         #expect(harness.notifier.withdrawn.contains(.pauseRecording))
-    }
-
-    // MARK: A paused walk
-
-    @Test("covering the trail with the walk paused posts the walk reminder")
-    func walkingWhilePausedPostsTheReminder() async {
-        let harness = MovementReminderHarness.harness()
-        harness.controller.walkDidPause(trailTitle: "Ridge Loop", atDistance: 1200)
-
-        harness.controller.walkObserved(distanceAlongRoute: 1400, at: start)
-        harness.controller.walkObserved(
-            distanceAlongRoute: 1900,
-            at: start.addingTimeInterval(1800)
-        )
-        await harness.controller.settle()
-
-        #expect(harness.notifier.postedKinds == [.resumeWalk])
-        #expect(harness.notifier.posted.first?.body.contains("Ridge Loop") == true)
-    }
-
-    /// The same precedence the widget and the Lock Screen apply. A walker
-    /// recording their own track along an imported route has one walk, and
-    /// the recording is the half that would be lost.
-    @Test("a recording suppresses the walk's reminder")
-    func recordingOutranksTheWalk() async {
-        let harness = MovementReminderHarness.harness()
-        harness.controller.hasActiveRecording = { true }
-        harness.controller.walkDidPause(trailTitle: "Ridge Loop", atDistance: 0)
-
-        harness.controller.walkObserved(distanceAlongRoute: 2000, at: start)
-        await harness.controller.settle()
-
-        #expect(harness.notifier.posted.isEmpty)
-    }
-
-    /// Backwards along the route is movement too — a walker who turned round
-    /// at the summit with the walk paused is covering ground either way.
-    @Test("the walk's displacement is measured in both directions")
-    func walkingBackDownAlsoReminds() async {
-        let harness = MovementReminderHarness.harness()
-        harness.controller.walkDidPause(trailTitle: "Ridge Loop", atDistance: 2000)
-
-        harness.controller.walkObserved(distanceAlongRoute: 1400, at: start)
-        await harness.controller.settle()
-
-        #expect(harness.notifier.postedKinds == [.resumeWalk])
-    }
-
-    @Test("resuming or ending the walk withdraws its reminder")
-    func walkResumeWithdraws() async {
-        let harness = MovementReminderHarness.harness()
-        harness.controller.walkDidPause(trailTitle: "Ridge Loop", atDistance: 0)
-
-        harness.controller.walkDidResumeOrEnd()
-        harness.controller.walkObserved(distanceAlongRoute: 3000, at: start)
-        await harness.controller.settle()
-
-        #expect(harness.notifier.withdrawn.contains(.resumeWalk))
-        #expect(harness.notifier.posted.isEmpty)
     }
 }

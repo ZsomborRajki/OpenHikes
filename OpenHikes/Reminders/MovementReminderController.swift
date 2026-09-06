@@ -16,11 +16,13 @@
 //
 //  What it owns is the state a pause needs and nothing else:
 //
-//  * **Where the pause began**, per subject. The recording's anchor is a
-//    coordinate and the walk's is a distance along the route, which is what
-//    lets the walk be watched with no sensor of its own — a paused walk still
-//    receives matched fixes from the feeds that were already running, and the
-//    distance those carry *is* the measurement.
+//  * **Where and when the pause began**, per subject. The recording's anchor
+//    is a coordinate and the walk's is a distance along the route, which is
+//    what lets the walk be watched with no sensor of its own — a paused walk
+//    still receives matched fixes from the feeds that were already running,
+//    and the distance those carry *is* the measurement. The moment is kept
+//    beside it for both, because a fix taken before the pause is evidence
+//    about the walk that led to it and not about the pause.
 //  * **The watches**, which hold the thresholds, the repeat allowance and the
 //    quiet period. See ``MovementReminderPolicy``.
 //  * **The walker's switch**, read on every decision rather than captured, so
@@ -56,6 +58,10 @@ final class MovementReminderController {
     private struct PausedWalk {
         let trailTitle: String
         let anchorDistance: Double
+        /// When the walk was paused, which is the far side of the boundary a
+        /// fix has to fall on to say anything about it — the walk's half of
+        /// ``isMeasurable(_:since:)``.
+        let pausedAt: Date
         var watch = MovementWatch()
     }
 
@@ -250,18 +256,38 @@ extension MovementReminderController {
     /// whose phone is in a pocket with background tracking off. That is the
     /// honest trade: the alternative is a second location feed for a walk that
     /// is deliberately the cheap half of this app.
-    func walkDidPause(trailTitle: String, atDistance distance: Double) {
+    ///
+    /// - Parameter date: when the walk was paused, taken from the record
+    ///   rather than from the clock so a pause restored at launch is measured
+    ///   from the moment the walker tapped it.
+    func walkDidPause(trailTitle: String, atDistance distance: Double, on date: Date) {
         guard isEnabled, distance.isFinite else {
             pausedWalk = nil
             return
         }
-        pausedWalk = PausedWalk(trailTitle: trailTitle, anchorDistance: distance)
+        pausedWalk = PausedWalk(
+            trailTitle: trailTitle,
+            anchorDistance: distance,
+            pausedAt: date
+        )
         requestAuthorization()
     }
 
     /// A fix that matched the trail while the walk was paused.
+    ///
+    /// - Parameter date: when the fix was *taken*. The feeds hand their own
+    ///   timestamps through ``TrailWalkSession``, and both the boundary below
+    ///   and ``MovementWatch``'s window need them to: a fix delivered after
+    ///   the pause it was taken before is what the walk's whole first sample
+    ///   used to be, and there is no earlier reading for the watch to reject
+    ///   it against.
     func walkObserved(distanceAlongRoute distance: Double, at date: Date) {
         guard isEnabled, distance.isFinite, var paused = pausedWalk else { return }
+        // The recording's rule, in the units a walk is watched in. Ground
+        // covered before the walker stopped is the walk that ended at the
+        // pause, and offering it back to them as a reason to resume is the
+        // app telling them they are moving while they stand at the hut.
+        guard date >= paused.pausedAt else { return }
         // The recording wins outright. It is the walk that would be *lost* —
         // a follow is re-derived from the trail and the next fix — and it is
         // the one whose reminder the walker can act on.
