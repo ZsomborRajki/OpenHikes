@@ -696,13 +696,16 @@ jobs:
       # rise means the list grew without this number growing with it, and the
       # next fall would then be measured against a stale pin.
       #
-      # Tests are a floor for the reason the comment above gives: 436 run
+      # WidgetFeedSuites includes the nested Trail walk end boundary suite;
+      # selecting that parent now runs 39 suites in total.
+      #
+      # Tests are a floor for the reason the comment above gives: 444 run
       # today, and 418 sits far enough below that removing a test does not
       # turn the build red on its own, while a suite emptied out under a name
       # that still resolves does. Raise it when the measured number rises.
       - name: Check the sanitized selection actually ran
         env:
-          EXPECTED_SUITES: "38"
+          EXPECTED_SUITES: "39"
           TEST_FLOOR: "418"
         run: |
           set -o pipefail
