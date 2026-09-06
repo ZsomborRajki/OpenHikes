@@ -8,8 +8,9 @@ import Foundation
 @testable import OpenHikes
 import Testing
 
-/// The row a saved recording leaves in its own History: what it is measured
-/// against, and what it does with the walker's pauses.
+/// The row a saved recording leaves in its own History, and the two figures it
+/// is measured by — both taken from the prepared points rather than from the
+/// clock the walker's phone happened to be holding.
 @Suite("Recorded walk")
 struct RecordedWalkTests {
     private let start = Date(timeIntervalSince1970: 1_750_000_000)
@@ -19,7 +20,6 @@ struct RecordedWalkTests {
     private func metadata(
         startedAt: Date,
         endedAt: Date?,
-        pauses: [RecordingPauseInterval] = [],
         sessionID: UUID = UUID()
     ) -> TrackJournalMetadata {
         TrackJournalMetadata(
@@ -27,7 +27,7 @@ struct RecordedWalkTests {
             startedAt: startedAt,
             endedAt: endedAt,
             lastUpdatedAt: endedAt ?? startedAt,
-            pausedIntervals: pauses,
+            pausedIntervals: [],
             title: nil
         )
     }
@@ -35,6 +35,7 @@ struct RecordedWalkTests {
     private func prepared(
         startedAt: Date,
         routeLengthMeters: Double,
+        recordedSeconds: TimeInterval = 0,
         distanceMeters: Double = 0
     ) -> PreparedRecording {
         PreparedRecording(
@@ -42,6 +43,7 @@ struct RecordedWalkTests {
             rawRoute: [],
             distanceMeters: distanceMeters,
             routeLengthMeters: routeLengthMeters,
+            recordedSeconds: recordedSeconds,
             startedAt: startedAt,
             matchedTrailName: nil,
             matchResult: nil
@@ -80,92 +82,32 @@ struct RecordedWalkTests {
         return points
     }
 
+    /// Two minutes of walking with an hour's lunch in the middle of it: two
+    /// fixes a minute apart, then the resumed fix an hour later and one more
+    /// after it.
+    private func pausedWalkFixture() -> [RecordingPoint] {
+        [
+            point(47.63, 12.86, at: 0),
+            point(47.631, 12.86, at: 60),
+            point(47.632, 12.86, at: 3660, flags: .resumed),
+            point(47.633, 12.86, at: 3720),
+        ]
+    }
+
     private func point(
         _ latitude: Double,
         _ longitude: Double,
-        at offset: TimeInterval
+        at offset: TimeInterval,
+        flags: RecordingPointFlags = []
     ) -> RecordingPoint {
         RecordingPoint(
             latitude: latitude,
             longitude: longitude,
             timestamp: start.addingTimeInterval(offset),
             horizontalAccuracy: 8,
-            elevation: 600 + offset / 60
+            elevation: 600 + offset / 60,
+            flags: flags
         )
-    }
-
-    // MARK: Active time
-
-    @Test("a recording's active time is its clock minus the pauses inside it")
-    func activeTimeSubtractsPauses() {
-        let endedAt = start.addingTimeInterval(3600)
-        let seconds = RecordedWalk.activeSeconds(
-            from: start,
-            to: endedAt,
-            pauses: [
-                RecordingPauseInterval(
-                    startedAt: start.addingTimeInterval(600),
-                    endedAt: start.addingTimeInterval(900)
-                ),
-                RecordingPauseInterval(
-                    startedAt: start.addingTimeInterval(1800),
-                    endedAt: start.addingTimeInterval(2100)
-                ),
-            ]
-        )
-
-        #expect(seconds == 3000)
-    }
-
-    /// A pause the walker never came back from: Stop closes the interval in
-    /// the journal, but a session read some other way carries it open, and it
-    /// still has to end at the recording rather than run on.
-    @Test("an unclosed pause is counted only up to the end of the recording")
-    func openPauseEndsWithTheRecording() {
-        let endedAt = start.addingTimeInterval(1200)
-        let seconds = RecordedWalk.activeSeconds(
-            from: start,
-            to: endedAt,
-            pauses: [
-                RecordingPauseInterval(
-                    startedAt: start.addingTimeInterval(900),
-                    endedAt: nil
-                ),
-            ]
-        )
-
-        #expect(seconds == 900)
-    }
-
-    /// Clock corrections and a journal recovered across launches can both put
-    /// a boundary outside the span. Neither may hand back more active time
-    /// than the recording had, or less than none.
-    @Test("a pause outside the recording's own span subtracts nothing extra")
-    func pausesAreClampedToTheSpan() {
-        let endedAt = start.addingTimeInterval(600)
-        let straddling = RecordedWalk.activeSeconds(
-            from: start,
-            to: endedAt,
-            pauses: [
-                RecordingPauseInterval(
-                    startedAt: start.addingTimeInterval(-3600),
-                    endedAt: start.addingTimeInterval(3600)
-                ),
-            ]
-        )
-        let outside = RecordedWalk.activeSeconds(
-            from: start,
-            to: endedAt,
-            pauses: [
-                RecordingPauseInterval(
-                    startedAt: start.addingTimeInterval(-1800),
-                    endedAt: start.addingTimeInterval(-900)
-                ),
-            ]
-        )
-
-        #expect(straddling == 0)
-        #expect(outside == 600)
     }
 
     // MARK: The row
@@ -176,18 +118,12 @@ struct RecordedWalkTests {
         let endedAt = start.addingTimeInterval(2400)
         let walk = try #require(
             HikeWalk.recorded(
-                metadata(
+                metadata(startedAt: start, endedAt: endedAt, sessionID: sessionID),
+                prepared: prepared(
                     startedAt: start,
-                    endedAt: endedAt,
-                    pauses: [
-                        RecordingPauseInterval(
-                            startedAt: start.addingTimeInterval(1200),
-                            endedAt: start.addingTimeInterval(1500)
-                        ),
-                    ],
-                    sessionID: sessionID
-                ),
-                prepared: prepared(startedAt: start, routeLengthMeters: 4200)
+                    routeLengthMeters: 4200,
+                    recordedSeconds: 2100
+                )
             )
         )
 
@@ -220,6 +156,8 @@ struct RecordedWalkTests {
         #expect(unfinished == nil)
         #expect(lengthless == nil)
     }
+
+    // MARK: What the two figures are measured on
 
     /// The invariant `WalkSummaryView` reads a walk against: its stored route
     /// length has to be the length `RouteProfile` measures on the saved row,
@@ -260,5 +198,32 @@ struct RecordedWalkTests {
         )
         #expect(abs(walk.routeDistanceMeters - profileLength) < 0.01)
         #expect(walk.coveredFraction == 1)
+    }
+
+    /// The time a recording *ran*, which is not the time the session was open:
+    /// the hour at lunch is left out because the resumed fix carries a pause
+    /// boundary, and the stretch before the first fix and after the last —
+    /// waiting for GPS, and standing at the summit before reaching for Stop —
+    /// was never recorded at all.
+    @Test("a recorded walk's active time is the time the recording ran")
+    func recordedWalkActiveTimeComesFromThePoints() throws {
+        let prepared = try RecordingPreparation.prepare(
+            points: pausedWalkFixture(),
+            startedAt: start.addingTimeInterval(-30)
+        )
+        let walk = try #require(
+            HikeWalk.recorded(
+                metadata(
+                    startedAt: start.addingTimeInterval(-30),
+                    endedAt: start.addingTimeInterval(3900)
+                ),
+                prepared: prepared
+            )
+        )
+
+        // Two minutes of walking inside a session open for an hour and a half.
+        #expect(walk.activeSeconds == 120)
+        #expect(walk.startedAt == start.addingTimeInterval(-30))
+        #expect(walk.endedAt == start.addingTimeInterval(3900))
     }
 }

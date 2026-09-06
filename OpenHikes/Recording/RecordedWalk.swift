@@ -9,8 +9,7 @@
 //  a row. A recording has no such trail to be matched against: it *is* the
 //  route, and the walk along it is finished by the time there is anything to
 //  match. So the row is written once, at the moment the recording becomes a
-//  `Hike`, from the two things the recorder already knows — the journal's own
-//  clock and the geometry it just prepared.
+//  `Hike`, out of what the recorder prepared from the journalled points.
 //
 //  Coverage is the whole of the route by construction, which is not a claim
 //  about the walker so much as a statement of what the route is: the line was
@@ -18,40 +17,16 @@
 //  recorded hike used to have nothing to show and now leads with the walk that
 //  made it, above whatever follows were made along it afterwards.
 //
+//  Both figures the row is measured by come from the prepared geometry rather
+//  than from the clock or the journal's metadata, and for the same reason in
+//  each case: the points are the only record of the walk that cannot say
+//  something the recorder never watched happen. See
+//  ``PreparedRecording/routeLengthMeters`` and
+//  ``PreparedRecording/recordedSeconds``.
+//
 
 import Foundation
 import SwiftData
-
-nonisolated enum RecordedWalk {
-    /// The recording's clock between `startedAt` and `endedAt`, minus every
-    /// pause that fell inside it.
-    ///
-    /// The same reading ``TrailWalkRecord/activeSeconds(at:)`` gives a
-    /// followed walk, arrived at the other way round: a followed walk banks
-    /// its active stretches as it goes because nothing else remembers them,
-    /// while a recording's pauses are already written down in
-    /// ``TrackJournalMetadata/pausedIntervals`` and can simply be subtracted.
-    ///
-    /// Each interval is clamped to the span before it is counted, so a pause
-    /// still open at the end — `endedAt == nil`, which
-    /// ``TrackJournal/finish(at:)`` closes but a session read some other way
-    /// may not have — takes off the time up to the end and no more, and a
-    /// clock correction that pushed a boundary outside the span subtracts
-    /// nothing rather than going negative.
-    static func activeSeconds(
-        from startedAt: Date,
-        to endedAt: Date,
-        pauses: [RecordingPauseInterval]
-    ) -> TimeInterval {
-        let span = max(0, endedAt.timeIntervalSince(startedAt))
-        let paused = pauses.reduce(into: 0.0) { total, interval in
-            let from = max(interval.startedAt, startedAt)
-            let to = min(interval.endedAt ?? endedAt, endedAt)
-            total += max(0, to.timeIntervalSince(from))
-        }
-        return max(0, span - paused)
-    }
-}
 
 extension HikeWalk {
     /// The row a finished recording leaves in its own History, or `nil` when
@@ -82,11 +57,11 @@ extension HikeWalk {
             hikeID: metadata.sessionID,
             startedAt: prepared.startedAt,
             endedAt: endedAt,
-            activeSeconds: RecordedWalk.activeSeconds(
-                from: prepared.startedAt,
-                to: endedAt,
-                pauses: metadata.pausedIntervals
-            ),
+            // `startedAt` and `endedAt` still bound the walk, which is what
+            // the summary's Started and Ended read; they are just not what its
+            // active time is measured from — see
+            // ``PreparedRecording/recordedSeconds``.
+            activeSeconds: prepared.recordedSeconds,
             // One interval covering the whole route, which is the union a
             // walk along this line could ever have reached.
             coveredIntervals: [0, routeLength],

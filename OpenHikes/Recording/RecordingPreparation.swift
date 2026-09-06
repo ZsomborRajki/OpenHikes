@@ -31,6 +31,25 @@ nonisolated struct PreparedRecording: Sendable {
     /// twenty thousand points of trigonometry on the main actor, at the one
     /// moment a walker is waiting for their hike to appear.
     let routeLengthMeters: Double
+    /// How long the recording was actually recording: the sum of the gaps
+    /// between consecutive saved points, with the leg a pause opened left
+    /// out — ``RecordingDistanceAccumulator/recordedDuration``, the same
+    /// figure the live average speed is divided by.
+    ///
+    /// The evidence is the points rather than the clock, because the clock
+    /// counts time nothing was recorded. `TrackJournalMetadata.pausedIntervals`
+    /// is not the whole record of when a recording was not running:
+    /// `HikeRecorder.finishRecovery` parks a session recovered at launch in
+    /// `.paused` / `.needsDecision` without writing a pause, and no interval
+    /// exists at all for the stretch between the process being killed and the
+    /// relaunch that found the journal. A walk measured on wall-clock minus
+    /// those intervals reported a walk of one minute, recovered an hour later,
+    /// as an hour and eleven minutes of walking.
+    ///
+    /// A gap the walker *did* walk still counts: a lost signal is an ordinary
+    /// gap between two consecutive points and is summed like any other. Only a
+    /// pause boundary — see ``RouteBoundary`` — takes its leg out.
+    let recordedSeconds: TimeInterval
     let startedAt: Date
     let matchedTrailName: String?
     let matchResult: TrailMatchResult?
@@ -174,6 +193,7 @@ nonisolated enum RecordingPreparation {
             rawRoute: usesMatchedRoute ? rawRoute : [],
             distanceMeters: accumulator.distanceMeters,
             routeLengthMeters: routeLength,
+            recordedSeconds: accumulator.recordedDuration,
             startedAt: startedAt,
             matchedTrailName: usesMatchedRoute
                 ? match?.matchedTrailName

@@ -79,4 +79,52 @@ extension HikeRecorderTests {
         #expect(walks.first?.hikeID == hike.id)
         #expect(walks.first?.endReason == .recorded)
     }
+
+    /// A recording found open at launch and parked on the recovery screen.
+    ///
+    /// The journal knows nothing about that wait: `finishRecovery` moves to
+    /// `.paused` / `.needsDecision` without writing a pause interval, and no
+    /// interval could exist at all for the stretch between the process being
+    /// killed and the relaunch that found the journal. Measured on the clock
+    /// minus the journal's own pauses, this walk of one minute reported an
+    /// hour and eleven minutes of walking — see
+    /// ``PreparedRecording/recordedSeconds``.
+    @Test("time spent on the recovery screen is not walking")
+    func recoveredSessionDoesNotBankItsWaitAsActiveTime() async throws {
+        let journal = TrackJournal(directory: directory, clock: clock.read)
+        try await journal.start(sessionID: UUID(), startedAt: clock.now)
+        try await journal.append(
+            RecordingPoint(
+                latitude: 47.63,
+                longitude: 12.86,
+                timestamp: clock.now,
+                horizontalAccuracy: 8
+            )
+        )
+        clock.advance(by: 60)
+        try await journal.append(
+            RecordingPoint(
+                latitude: 47.631,
+                longitude: 12.86,
+                timestamp: clock.now,
+                horizontalAccuracy: 8
+            )
+        )
+        try await journal.close()
+
+        // Ten minutes dead, then an hour on the recovery screen: too old to
+        // resume automatically, so the walker is asked.
+        clock.advance(by: 600)
+        let recorder = makeRecorder()
+        await recorder.recoverOpenSession()
+        #expect(recorder.phase == .paused)
+        #expect(source.startCount == 0)
+        clock.advance(by: 3600)
+
+        _ = try savedHike(from: await recorder.stop())
+        let walks = try storedWalks()
+        let walk = try #require(walks.first)
+
+        #expect(walk.activeSeconds == 60)
+    }
 }
