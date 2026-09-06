@@ -3,6 +3,7 @@
 //  OpenHikes
 //
 
+import CoreLocation
 import Foundation
 import OpenHikesShared
 
@@ -11,6 +12,25 @@ nonisolated struct PreparedRecording: Sendable {
     /// The unmatched trace, kept once matching makes `route` differ from it.
     let rawRoute: [RouteCoordinate]
     let distanceMeters: Double
+    /// The saved line's own length: the plain sum along `route`, with none of
+    /// the stationary windows ``distanceMeters`` retracts.
+    ///
+    /// Not a second opinion about how far the walker went — `distanceMeters`
+    /// is that, and is the figure the hike shows. This is the *axis* a walk's
+    /// coverage is measured on, which is `RouteProfile.totalDistanceMeters`
+    /// and nothing else: `TrailWalkSession` starts every followed walk
+    /// against that number, and `WalkSummaryView` compares a walk's stored
+    /// route length back against it to decide whether the trail on screen is
+    /// still the one that was walked. So the recording's own walk — see
+    /// ``HikeWalk/recorded(_:prepared:)`` — has to be written on the same
+    /// scale, or it would read as a walk along a trail that has since
+    /// changed.
+    ///
+    /// Summed here, where the points are already being walked off the main
+    /// thread, rather than by building a `RouteProfile` at save time: that is
+    /// twenty thousand points of trigonometry on the main actor, at the one
+    /// moment a walker is waiting for their hike to appear.
+    let routeLengthMeters: Double
     let startedAt: Date
     let matchedTrailName: String?
     let matchResult: TrailMatchResult?
@@ -132,8 +152,20 @@ nonisolated enum RecordingPreparation {
         // live readout retracted — so the hike came out longer than the walk
         // the walker watched, with nothing to say which figure to believe.
         var accumulator = RecordingDistanceAccumulator()
+        // The geometric length rides along in the same pass, by the same
+        // arithmetic `RouteProfile` uses on the saved row — see
+        // ``PreparedRecording/routeLengthMeters``.
+        var routeLength = 0.0
+        var previousCoordinate: CLLocationCoordinate2D?
         for point in preparedPoints {
             accumulator.append(point)
+            if let previousCoordinate {
+                routeLength += RouteGeometry.distanceMeters(
+                    from: previousCoordinate,
+                    to: point.coordinate
+                )
+            }
+            previousCoordinate = point.coordinate
         }
         return PreparedRecording(
             route: preparedPoints.map(\.routeCoordinate),
@@ -141,6 +173,7 @@ nonisolated enum RecordingPreparation {
             // would double the row without preserving any additional fact.
             rawRoute: usesMatchedRoute ? rawRoute : [],
             distanceMeters: accumulator.distanceMeters,
+            routeLengthMeters: routeLength,
             startedAt: startedAt,
             matchedTrailName: usesMatchedRoute
                 ? match?.matchedTrailName

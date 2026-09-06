@@ -73,6 +73,15 @@ nonisolated enum TrailWalkEndReason: String, Codable, Hashable, Sendable {
     case ended = "ended"
     /// Coverage and proximity said the walk reached the route's end.
     case reachedEnd = "reachedEnd"
+    /// The walk *was* the recording: a hike recorded and saved writes one row
+    /// covering the whole of the route it just created — see
+    /// ``HikeWalk/recorded(_:prepared:)``.
+    ///
+    /// A reason of its own rather than ``ended``, which it otherwise is: this
+    /// is the only walk not accrued fix by fix along a trail that already
+    /// existed, and a History list that also holds the follows made along the
+    /// saved hike afterwards has to be able to say which row is the original.
+    case recorded = "recorded"
 }
 
 /// Whether a walk is accruing coverage or deliberately not.
