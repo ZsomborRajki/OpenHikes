@@ -110,6 +110,18 @@ final class HikeRecorder: NSObject {
     @ObservationIgnored var sessionID: UUID?
     @ObservationIgnored var sessionUptimeBase: TimeInterval?
     @ObservationIgnored var lastAcceptedPoint: RecordingPoint?
+    /// Whether this pause has reached the point where its sensors were parked
+    /// — see ``parkLocationSensors()``, which runs on the journal queue once
+    /// the pause is durably written, and ``rearmPausedMovementWatch(at:)``,
+    /// which is the launch's version of the same moment.
+    ///
+    /// Read by ``stopWatchingPausedRecording()``, so that a refusal or a
+    /// switch arriving in the milliseconds *before* that is left to the
+    /// parking itself: it asks the controller for a fresh answer and will not
+    /// start a watch nobody wants. Without this both would park the same
+    /// pause, and the second would be telling the location daemon to stop a
+    /// feed the first never started.
+    @ObservationIgnored var hasParkedPausedSensors = false
     @ObservationIgnored var accumulator = RecordingDistanceAccumulator()
     @ObservationIgnored var elevationFilter = RecordingElevationFilter()
     @ObservationIgnored var latestMotionState: RecordingMotionState = .unknown
@@ -340,15 +352,17 @@ extension HikeRecorder {
         journalFlushTask?.cancel()
         journalFlushTask = nil
         let pausedAt = clock()
-        // Asked before the journal write rather than after it, because the
-        // answer decides which sensors are torn down below and the walker has
-        // already left the trailhead by the time a queued write lands. A
-        // recorder with no reminders — or a walker who turned them off — gets
-        // the answer this pause has always had: everything off.
-        let watchesForMovement = movementReminders?.recordingDidPause(
+        hasParkedPausedSensors = false
+        // Told before the journal write rather than after it: the prompt this
+        // puts up belongs to the tap the walker has just made, not to a queued
+        // write landing after they have left the trailhead. The answer is not
+        // carried across that wait — `parkLocationSensors()` asks the
+        // controller for a fresh one, which is what lets a refusal answered in
+        // those same seconds be heard.
+        movementReminders?.recordingDidPause(
             at: lastAcceptedPoint?.coordinate,
             on: pausedAt
-        ) ?? false
+        )
         guard let journal else {
             fail(.storageUnavailable)
             return
@@ -356,7 +370,7 @@ extension HikeRecorder {
         journalQueue.enqueue { [weak self] in
             do {
                 try await journal.pause(at: pausedAt)
-                await self?.parkLocationSensors(watchingForMovement: watchesForMovement)
+                await self?.parkLocationSensors()
             } catch {
                 await self?.fail(.storage(error.localizedDescription))
             }
