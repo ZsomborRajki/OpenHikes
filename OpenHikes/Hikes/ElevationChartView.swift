@@ -108,6 +108,13 @@ struct ElevationChartView: View, Equatable {
             liveMarks(sample: liveSample)
         }
         .chartXSelection(value: $selectedDistance)
+        // The default selection gesture ignores a stationary tap. Start at
+        // touch-down so tapping and dragging use the same selection path.
+        .chartGesture { proxy in
+            DragGesture(minimumDistance: 0)
+                .onChanged { proxy.selectXValue(at: $0.location.x) }
+                .onEnded { _ in selectedDistance = nil }
+        }
         .chartXScale(domain: 0...(profile.samples.last?.distanceMeters ?? 1))
         .chartYScale(domain: domain)
         .chartXAxis {
@@ -141,10 +148,8 @@ struct ElevationChartView: View, Equatable {
         // it, since it replaces the subtree it wraps — including any
         // identifier hung underneath.
         .accessibilityElement()
-        // Kept on the same view as the selection, which Swift Charts installs
-        // through `.chartXSelection` above rather than as a gesture of ours:
-        // UI automation scrubs the plot area by coordinate, and there is no
-        // leaf inside a chart to hang this on.
+        // Kept on the chart itself: UI automation taps and scrubs the plot
+        // area by coordinate, and there is no leaf inside to hang this on.
         .accessibilityIdentifier("elevation-chart")
         .accessibilityLabel("Elevation profile")
         .accessibilityValue(Self.description(of: trackerSample, in: profile))
