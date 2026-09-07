@@ -87,7 +87,12 @@ extension OpenHikesModel {
                 movementReminders: reminders
             ),
             locationManager: LocationManager(manager: Self.dormantLocationSource()),
-            weatherManager: WeatherManager(),
+            weatherManager: WeatherManager(
+                store: WeatherReadingStore(defaults: launchDefaults)
+            ),
+            significantLocations: SignificantLocationFeed(
+                monitor: Self.dormantLocationSource()
+            ),
             trailGraphProvider: graphProvider,
             movementReminders: reminders,
             defaults: launchDefaults,
@@ -131,7 +136,12 @@ extension OpenHikesModel {
                 automaticallyRecovers: false
             ),
             locationManager: LocationManager(manager: Self.dormantLocationSource()),
-            weatherManager: WeatherManager(),
+            weatherManager: WeatherManager(
+                store: WeatherReadingStore(defaults: uiTestingDefaults)
+            ),
+            significantLocations: SignificantLocationFeed(
+                monitor: Self.dormantLocationSource()
+            ),
             trailGraphProvider: graphProvider,
             defaults: uiTestingDefaults
         )

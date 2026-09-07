@@ -2,34 +2,47 @@
 //  OpenHikesModel+Weather.swift
 //  OpenHikes
 //
-//  Keeping ``WeatherManager`` current for wherever the walker is.
+//  Keeping ``WeatherManager`` current for whatever the badge is about.
 //
 //  Its own file rather than a method on the model because it is a loop with a
 //  policy, not a piece of coordination: what it costs is decided by
-//  ``WeatherPollState`` and ``WeatherPollingPolicy``, both of which are pure
-//  and asserted directly, and this is only what drives them.
+//  ``WeatherRequestState`` and ``WeatherPollingPolicy``, both of which are
+//  pure and asserted directly, and this is only what drives them.
+//
+//  The loop used to be about the walker's position, waking on every accepted
+//  fix and rounding it onto a grid to decide whether that position was news.
+//  It is now about ``WeatherFocus/subject`` — see ``WeatherSubject`` for why —
+//  and wakes on three things:
+//
+//  - the subject changed, because a recording started, a hike was selected or
+//    a search resolved;
+//  - the walker moved appreciably, via significant-change delivery, and the
+//    subject is one that follows them;
+//  - the reading for the current subject came due, which is one sleep to an
+//    exact deadline re-armed after each pass rather than a tick.
+//
+//  Which of the three it was is carried into ``WeatherRequestState`` as a
+//  ``WeatherRequestReason``, because they do not deserve the same answer: a
+//  search the user just typed is owed a request now, and a cell handoff is
+//  not.
 //
 
 import AsyncAlgorithms
 import CoreLocation
 import Foundation
 
+/// Why the loop woke. Mapped onto ``WeatherRequestReason`` below; kept
+/// separate because "the walker moved" also has to be *applied* to the focus
+/// before anything is asked about it.
+private enum WeatherWake: Sendable {
+    case expiry
+    case focus
+    case movement
+}
+
 extension OpenHikesModel {
-    /// Keeps ``WeatherManager`` current for wherever the walker is, waking on
-    /// two things and nothing else: a new position, and the moment
-    /// ``WeatherPollState`` would next allow a request for the position it
-    /// already holds.
-    ///
-    /// The second wake-up is one sleep to an exact deadline, re-armed after
-    /// each pass — not a tick. Standing still with a fresh reading, this loop
-    /// wakes twice in a quarter of an hour; the 1 Hz timer it replaces woke
-    /// nine hundred times over the same stretch to conclude it had nothing to
-    /// do, and `WeatherPollState` threw all but one of those away. Keeping the
-    /// deadline is what stops the other extreme: purely fix-driven polling
-    /// would leave an expired reading, or a failure's backoff, waiting on the
-    /// walker to move again.
     func pollWeather(policy: WeatherPollingPolicy = .standard) async {
-        var state = WeatherPollState()
+        var state = WeatherRequestState()
         let (dueDates, dueDatesContinuation) = AsyncStream<Void>.makeStream(
             bufferingPolicy: .bufferingNewest(1)
         )
@@ -39,18 +52,52 @@ extension OpenHikesModel {
             dueDatesContinuation.finish()
         }
 
-        for await _ in merge(locationManager.fixes.map { _ in () }, dueDates) {
-            guard let coordinate = locationManager.coordinate else { continue }
-            let key = Self.weatherKey(for: coordinate)
-            if state.shouldRequest(key: key, at: .now, policy: policy) {
-                if await weatherManager.update(for: coordinate) {
+        let wakes = merge(
+            weatherFocus.subjects.map { _ in WeatherWake.focus },
+            significantLocations.movements.map { _ in WeatherWake.movement },
+            dueDates.map { _ in WeatherWake.expiry }
+        )
+
+        for await wake in wakes {
+            // Applied before the subject is read, so a movement wake asks
+            // about where the walker is now rather than where they were.
+            // `walkerMoved` is a no-op for a searched place, and
+            // `defaultToWalker` only lands when nothing else has claimed the
+            // subject — the precedence lives in `WeatherFocus`, not here.
+            if wake == .movement, let coordinate = significantLocations.coordinate {
+                weatherFocus.defaultToWalker(at: coordinate)
+                weatherFocus.walkerMoved(to: coordinate)
+            }
+
+            guard let subject = weatherFocus.subject else { continue }
+            let key = subject.key
+            let willRequest = state.shouldRequest(
+                key: key,
+                reason: wake.requestReason,
+                at: .now,
+                policy: policy
+            )
+            // Every pass, not only the ones that fetch: this is what carries a
+            // changed subject — a new city, or `me` with a new coordinate — to
+            // the badge, and what decides between a spinner and a plain
+            // "unavailable" when the backoff has ruled a request out.
+            weatherManager.focus(on: subject, willRequest: willRequest)
+
+            if willRequest {
+                if await weatherManager.update(for: subject) {
                     state.recordSuccess(key: key, at: .now)
                 } else {
                     state.recordFailure(key: key, at: .now, policy: policy)
                 }
             }
+
+            // Re-armed against whatever the subject is *now*, which after an
+            // await may not be the one this pass started with. Cancelling
+            // first is what stops a subject the user has moved on from
+            // waking the loop on its own deadline.
             dueTask?.cancel()
-            guard let due = state.nextEligibleDate(key: key, policy: policy) else { continue }
+            guard let currentKey = weatherFocus.subject?.key,
+                  let due = state.nextEligibleDate(key: currentKey, policy: policy) else { continue }
             dueTask = Task {
                 try? await Task.sleep(until: .now + .seconds(max(0, due.timeIntervalSinceNow)))
                 guard !Task.isCancelled else { return }
@@ -58,10 +105,14 @@ extension OpenHikesModel {
             }
         }
     }
+}
 
-    private static func weatherKey(
-        for coordinate: CLLocationCoordinate2D
-    ) -> String {
-        "\(Int(coordinate.latitude * 100)),\(Int(coordinate.longitude * 100))"
+private extension WeatherWake {
+    var requestReason: WeatherRequestReason {
+        switch self {
+        case .expiry: .expiry
+        case .focus: .focus
+        case .movement: .movement
+        }
     }
 }

@@ -18,6 +18,7 @@ struct WeatherFreshnessTests {
     private let capturedAt = Date(timeIntervalSinceReferenceDate: 1_000_000)
     private let policy = WeatherPollingPolicy(
         freshnessInterval: 900,
+        minimumRequestInterval: 60,
         retryDelays: [5, 30, 120]
     )
 

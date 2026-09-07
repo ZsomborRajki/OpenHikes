@@ -143,6 +143,14 @@ struct OpenHikesView: View {
         appModel.hikeRecorder.currentHike?.id
     }
 
+    /// What the weather badge should be about when nothing outranks the
+    /// selection. `nil` when nothing is selected, or when the selection has no
+    /// geometry to be about yet.
+    private var selectedTrailSubject: WeatherSubject? {
+        guard let hike = selectedHike, let route = displayedRoute else { return nil }
+        return .trail(id: hike.id, name: hike.title, along: route.coordinates)
+    }
+
     /// Resolves the selected provider (with API key substituted) for the map.
     /// `nil` when the selection draws MapKit's own base map, which installs no
     /// overlay and starts none of the tile pipeline.
@@ -207,12 +215,17 @@ struct OpenHikesView: View {
 
     var body: some View {
         // Fires on every re-evaluation of this view's body. The observable
-        // inputs here are `appModel.weatherManager.current` (~15 min) and
-        // `appModel.hikeRecorder.currentHike` (start/stop) — everything
+        // inputs here are `appModel.weatherManager.state` (a focus change, or
+        // ~15 min), `appModel.hikeRecorder.currentHike` (start/stop) and
+        // `appModel.hikeRecorder.isActive`, which reads the recorder's phase
+        // and so moves a handful of times per session — everything
         // high-frequency is passed by reference and read inside MapKit
         // instead. `locationManager.coordinate` in particular is deliberately
         // *not* an input, so a rate here that tracks the ~1 Hz fix rate means
-        // something upstream has started reading it. Compare against the
+        // something upstream has started reading it, and neither is
+        // `weatherFocus.subject`: the badge's subject reaches this body only
+        // through the state above, which is written once per focus rather
+        // than once per significant-change delivery. Compare against the
         // `MapUpdateCalled` mark in MapView and `MapCentered` in
         // MapCoordinator.
         RenderSignpost.mark("OpenHikesViewBody")
@@ -232,8 +245,10 @@ struct OpenHikesView: View {
             }
         }
             .overlay(alignment: .topLeading) {
-                if let current = appModel.weatherManager.current {
-                    WeatherBadge(weather: current) { weatherDetail.present() }
+                if appModel.weatherManager.state != .idle {
+                    WeatherBadge(state: appModel.weatherManager.state) {
+                        weatherDetail.present()
+                    }
                         // Beside the panel in landscape, for the same reason
                         // the map's own controls are moved off that edge —
                         // this overlay is drawn under it otherwise, and a
@@ -282,7 +297,7 @@ struct OpenHikesView: View {
             // line knows whether there is a badge above it to hang from. Read
             // here rather than there because a `@ViewBuilder` closure cannot
             // hand a value back to the view it decorates.
-            showsWeatherBadge: appModel.weatherManager.current != nil
+            showsWeatherBadge: appModel.weatherManager.state != .idle
         )
             .equatable()
             .accessibilityIdentifier("trail-map")
@@ -469,6 +484,18 @@ struct OpenHikesView: View {
                 selectedHike = hike
                 highlight.move(to: nil)
             }
+            // Which place the weather badge is about — see ``WeatherFocus``.
+            // In a modifier so the recorder's phase and the route's geometry
+            // are read there rather than here.
+            .weatherFocus(
+                appModel.weatherFocus,
+                trail: selectedTrailSubject,
+                isRecording: appModel.hikeRecorder.isActive,
+                walker: {
+                    appModel.locationManager.coordinate
+                        ?? appModel.significantLocations.coordinate
+                }
+            )
     }
 
     /// Restores an active recording draft when recovery has already found it;
@@ -840,7 +867,9 @@ struct ImportSelectionGate {
             automaticallyRecovers: false
         ),
         locationManager: LocationManager(),
-        weatherManager: WeatherManager()
+        weatherManager: WeatherManager(),
+        // Dormant: a preview must not arm significant-change monitoring.
+        significantLocations: SignificantLocationFeed(monitor: DormantLocationSource())
     )
     return OpenHikesView()
         .environment(model)

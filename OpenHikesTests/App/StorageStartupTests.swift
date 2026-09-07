@@ -313,6 +313,10 @@ private final class StartupModelProbe {
             hikeRecorder: HikeRecorder(container: container),
             locationManager: LocationManager(),
             weatherManager: WeatherManager(),
+            // Dormant, like the rest of this model's location stack: nothing
+            // here asks about the weather, and a live feed would arm
+            // significant-change monitoring under a suite about storage.
+            significantLocations: SignificantLocationFeed(monitor: DormantLocationSource()),
             defaults: modelDefaults,
             startupIssue: startupIssue
         )
