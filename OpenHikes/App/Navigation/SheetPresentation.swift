@@ -120,8 +120,11 @@ final class SheetPresentation {
     /// resting height for. A side panel rests at no detent and reports none.
     private(set) var isAtMiddleDetent: Bool
 
-    /// Which shape the contents are drawn in. Written by `OpenHikesView` when
-    /// the vertical size class changes, which on iPhone is a rotation.
+    /// Which shape the contents are drawn in. Written by ``SheetLayoutReader``,
+    /// which is where the vertical size class is read — on iPhone, a change to
+    /// it is a rotation. Read by `OpenHikesView`, which is why it is a
+    /// published flag and not an environment value: see that file for what the
+    /// environment read cost when it was in the root view's body.
     var layout: SheetLayout {
         get {
             access(keyPath: \.layout)

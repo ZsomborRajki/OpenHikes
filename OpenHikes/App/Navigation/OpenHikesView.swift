@@ -91,24 +91,17 @@ struct OpenHikesView: View {
     @State var photoPresentation = PhotoCaptureState()
     // swiftlint:enable private_swiftui_state
 
-    #if os(macOS)
-    /// No compact height to answer to on a platform this app does not build
-    /// for yet — see the `canImport` note in the repository instructions.
-    private var usesSidePanel: Bool { false }
-    #else
-    @Environment(\.verticalSizeClass)
-    private var verticalSizeClass
-
     /// Whether the sheet's contents belong in ``MapSidePanel`` rather than in
     /// the sheet: iPhone landscape, where the system ignores
     /// `.presentationDetents` and would present the sheet — the one this view
     /// keeps up permanently — over the whole map. See ``SheetLayout``.
     ///
-    /// An `@Environment` read, so a rotation re-evaluates this body. That is
-    /// the point rather than a cost: it is what swaps the two shapes, and it
-    /// happens when the device turns over and at no other time.
-    private var usesSidePanel: Bool { verticalSizeClass == .compact }
-    #endif
+    /// The flag, not the environment. `verticalSizeClass` is read in
+    /// ``SheetLayoutReader`` and reaches this body as a coarse published
+    /// property, which changes when the device is turned over and at no other
+    /// time. Reading the environment here instead re-ran this body on every
+    /// scene transition, and the measurement that says so is in that file.
+    private var usesSidePanel: Bool { sheet.layout == .sidePanel }
 
     /// The selected tile provider, persisted by the settings sheet.
     @AppStorage(SettingsKey.tileProviderID)
@@ -169,21 +162,6 @@ struct OpenHikesView: View {
             id: tileProviderID,
             entitlement: appModel.entitlement.state
         ).renderedSource
-    }
-
-    /// Whether the detented sheet is the shape currently in use.
-    ///
-    /// Derived rather than stored: ``showSheet`` stays the app's own "the
-    /// primary surface is up" flag — including the re-presentation below that
-    /// survives the document picker tearing it down — and this is the second
-    /// condition on top of it. A rotation into landscape therefore takes the
-    /// sheet down without ever writing `false` into that flag, and rotating
-    /// back puts it straight up again.
-    private var bottomSheetPresented: Binding<Bool> {
-        Binding(
-            get: { showSheet && !usesSidePanel },
-            set: { showSheet = $0 }
-        )
     }
 
     /// The app's primary surface, built once for both shapes it is drawn in.
@@ -253,6 +231,12 @@ struct OpenHikesView: View {
                 MapSidePanel { mapSheet() }
             }
         }
+            // Draws nothing. It is where the vertical size class is read —
+            // out of this body, deliberately and at a measured cost if it
+            // moves back in. See ``SheetLayoutReader``.
+            .background {
+                SheetLayoutReader(presentation: sheet, metrics: sheetMetrics)
+            }
     }
 
     /// The map, and everything presented over it.
@@ -358,7 +342,7 @@ struct OpenHikesView: View {
             }
             .task { await importRequestedGPXFixture() }
             .task { await seedRequestedLaunchFixtures() }
-            .sheet(isPresented: bottomSheetPresented) {
+            .sheet(isPresented: $showSheet) {
                 mapSheet(
                     onSheetTopChange: { topY in
                         // Read when the sheet reports, not when this body runs:
@@ -393,21 +377,29 @@ struct OpenHikesView: View {
                     .presentationDragIndicator(.visible)
                     .interactiveDismissDisabled()
             }
-            // The sheet is the app's primary surface and must always stay up. The
-            // GPX document picker (a UIKit controller presented from within a
-            // detented sheet) tears the sheet down on dismissal — a known SwiftUI
-            // issue — so if it ever goes away, bring it right back.
+            // The sheet is the app's primary surface in portrait and must always
+            // stay up there. The GPX document picker (a UIKit controller
+            // presented from within a detented sheet) tears the sheet down on
+            // dismissal — a known SwiftUI issue — so if it ever goes away, bring
+            // it right back. Landscape is the one dismissal that is meant, and
+            // the condition below is what tells the two apart.
             .onChange(of: showSheet) { _, shown in
-                if !shown { showSheet = true }
+                if !shown, !usesSidePanel { showSheet = true }
             }
-            // Tells the sheet's own screens which shape they are being drawn
-            // in, and takes the sheet's last measured edge away from the map
-            // when there is no longer a sheet to measure. `initial` because a
-            // launch straight into landscape is a rotation this view never
-            // sees.
-            .onChange(of: usesSidePanel, initial: true) { _, isPanel in
-                sheet.layout = isPanel ? .sidePanel : .bottomSheet
-                if isPanel { sheetMetrics.withdraw() }
+            // Rotation takes the sheet down and puts it back up: in landscape
+            // the contents are in ``MapSidePanel`` and there is no sheet.
+            //
+            // Written into the flag rather than filtered through a `Binding`
+            // built here, because such a binding is a new one on every pass of
+            // this body and re-runs the sheet's content with it — measured, in
+            // the report `Scripts/run-performance-tests.sh` writes, as one or
+            // two extra `MapSheetBody` evaluations per scenario. No `initial:`
+            // for the same reason: a portrait launch, which is nearly all of
+            // them, then writes nothing at all. A launch straight into
+            // landscape is a real change of ``SheetPresentation/layout`` and
+            // arrives here as one.
+            .onChange(of: usesSidePanel) { _, isPanel in
+                showSheet = !isPanel
             }
             // Presented from here rather than from the sheet: the document
             // picker's dismissal tears the sheet down (see above), and an alert
