@@ -175,12 +175,12 @@ extension HikeRecorderTests {
         let harness = MovementReminderHarness.harness()
         harness.notifier.isAuthorized = false
         let hikeRecorder = await recordingRecorder(harness)
-        let write = JournalGate()
-        hikeRecorder.journalQueue.enqueue { await write.hold() }
+        let write = TestGate()
+        hikeRecorder.journalQueue.enqueue { await write.wait() }
 
         hikeRecorder.pause()
         await harness.controller.settle()
-        await write.release()
+        write.open()
         await hikeRecorder.journalQueue.drain()
 
         #expect(source.movementWatchStarts == 0)
@@ -223,33 +223,5 @@ extension HikeRecorderTests {
 
         #expect(source.movementWatchStops >= 1)
         #expect(harness.notifier.withdrawn.contains(.resumeRecording))
-    }
-}
-
-/// A hold placed on ``HikeRecorder/journalQueue`` so a test can say what lands
-/// before the pause's write does.
-///
-/// The queue is serial, so an operation enqueued before `pause()` keeps the
-/// pause's write — and the parking behind it — waiting until this is released.
-/// An actor rather than a bare continuation because the operation is
-/// `@Sendable` and runs off the main actor, and because releasing a gate
-/// nobody has reached yet has to be allowed: the test releases on its own
-/// schedule, not the queue's.
-private actor JournalGate {
-    private var waiter: CheckedContinuation<Void, Never>?
-    private var isReleased = false
-
-    /// Called from the queue. Returns at once if the test already released.
-    func hold() async {
-        guard !isReleased else { return }
-        await withCheckedContinuation { waiter = $0 }
-    }
-
-    /// Called from the test, once whatever had to happen first has happened.
-    func release() {
-        isReleased = true
-        let held = waiter
-        waiter = nil
-        held?.resume()
     }
 }
