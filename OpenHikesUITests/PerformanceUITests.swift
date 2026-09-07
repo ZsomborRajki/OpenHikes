@@ -428,6 +428,12 @@ nonisolated final class PerformanceUITests: XCTestCase {
         // Each tap is a complete scrub cycle, so a handful of edge renders is
         // expected; what must not happen is the route being rebuilt or the
         // detail re-preparing itself.
+        assertAtLeast(
+            Double(Self.scrubSteps),
+            of: "ElevationChartBody",
+            in: taps,
+            phase: "scrub-taps"
+        )
         assertNoMoreThan(0, of: "MapRouteRebuilt", in: taps, phase: "scrub-taps")
         assertNoMoreThan(0, of: "HikeDetailPrepared", in: taps, phase: "scrub-taps")
         finish(in: app)

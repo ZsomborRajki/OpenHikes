@@ -153,10 +153,8 @@ screen work.
 Per-scenario CPU-per-hour figures are in the generated report, and they are
 **shapes rather than values**: they are whole-run figures that include launch
 and the automation's own polling, and they say more about how hard a scenario
-queries the accessibility tree than about the feature they name. The chart phase
-burns 2.21 CPU-s while evaluating *zero* chart bodies, which is XCUITest
-hit-testing; backgrounded recording reads *above* screen-on recording for the
-same reason, since it polls the counters hardest.
+queries the accessibility tree than about the feature they name. Backgrounded
+recording reads *above* screen-on recording because it polls the counters hardest.
 
 The comparable pair is per accepted fix, where the phases are like for like:
 **0.416 s screen on against 0.225 s backgrounded**. Putting the phone in a
@@ -286,26 +284,6 @@ is four runs rather than one. The budget stays at 4 until four consecutive clean
 runs justify lowering it. Panning is the single most common thing anyone does in
 this app, and a `@Query`-backed list re-evaluating on it is exactly the shape
 that becomes expensive when somebody has two hundred hikes.
-
-### P3 — A tap on the elevation chart scrubs nothing
-
-Nine taps along the elevation profile produce **zero** `ElevationChartBody`
-evaluations, where a continuous drag over the same pixels produces 25. So the
-render cost of a tap is nil, and what is left is behavioural: a tap does not
-scrub.
-
-**The cause is unknown.** An earlier version of this document said "the gesture
-is drag-only"; there is no hand-written gesture involved. Scrubbing is
-`.chartXSelection(value:)` (`ElevationChartView.swift:94`), which Swift Charts
-documents as handling taps as well as drags, and the tree contains no
-`DragGesture`, `onTapGesture`, `chartGesture` or `chartOverlay` anywhere. The
-candidates are the chart's hit area, the `.accessibilityElement()` applied after
-it — which flattens the subtree and is the most likely of the three — or the
-selection resolving and being immediately discarded. Settling it needs a run
-against the actual view, not another reading.
-
-Low priority, since nobody taps a chart repeatedly, but it is where a scrub's
-start/stop edges would show a regression first.
 
 ### P4 — Backgrounding blocks the main thread for 115–289 ms, in UIKit's snapshot
 
