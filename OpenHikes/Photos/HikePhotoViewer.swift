@@ -38,7 +38,7 @@ import SwiftUI
 struct HikePhotoViewer: View {
     let hike: Hike
     /// The photo the gallery strip was tapped on. Only the initial position —
-    /// paging afterwards is this view's own state.
+    /// paging afterwards is remembered by the navigation session.
     let startID: UUID
     var highlight: RouteHighlight
     var mapController: MapController
@@ -47,6 +47,8 @@ struct HikePhotoViewer: View {
     /// back over the coordinate it was asked to reveal.
     var onShowOnMap: () -> Void = { /* no-op default */ }
     var store: HikePhotoStore = .shared
+
+    var selection = PhotoViewerSelection()
 
     @State private var currentID: UUID?
     @State private var didRestoreStart = false
@@ -105,9 +107,15 @@ struct HikePhotoViewer: View {
             // was last looking at.
             guard !didRestoreStart else { return }
             didRestoreStart = true
-            currentID = photos.contains { $0.id == startID }
-                ? startID
+            let restoredID = selection.currentID ?? startID
+            currentID = photos.contains { $0.id == restoredID }
+                ? restoredID
                 : photos.first?.id
+        }
+        .onChange(of: currentID) { _, id in
+            // A scroll view may report nil while its host is being removed.
+            // Only an actual page replaces the remembered selection.
+            if let id { selection.currentID = id }
         }
         // A viewer with nothing left to view is a dead end; deleting the last
         // photo returns to the hike. Through the modifier rather than an

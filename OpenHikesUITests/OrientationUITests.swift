@@ -123,6 +123,73 @@ nonisolated final class OrientationUITests: XCTestCase {
         XCTAssertTrue(element("trail-map", in: app).exists)
     }
 
+    @MainActor
+    func testRotationKeepsTheSelectedHistorySegment() {
+        addTeardownBlock {
+            await MainActor.run { XCUIDevice.shared.orientation = .portrait }
+        }
+        let app = launchUpright(arguments: [
+            "--ui-test-import-gpx=\(UITestFixture.gpxName)",
+            "--ui-test-seed-walks=HalfLoop",
+        ])
+        openHikeDetail(in: app)
+        let history = app.segmentedControls["walk-segment"].buttons["History"]
+        history.tap()
+        XCTAssertTrue(history.isSelected)
+        for orientation in [UIDeviceOrientation.landscapeLeft, .landscapeRight, .portrait] {
+            XCUIDevice.shared.orientation = orientation
+            XCTAssertTrue(orientation == .portrait ? waitForPortrait(app) : waitForLandscape(app))
+            XCTAssertTrue(history.waitForExistence(timeout: UITestTimeout.navigation))
+            XCTAssertTrue(history.isSelected, "rotation must preserve the selected section")
+        }
+    }
+
+    @MainActor
+    func testRotationKeepsTheCurrentPhoto() {
+        addTeardownBlock {
+            await MainActor.run { XCUIDevice.shared.orientation = .portrait }
+        }
+        let app = launchUpright(arguments: [
+            "--ui-test-expanded-sheet",
+            "--ui-test-import-gpx=\(UITestFixture.gpxName)",
+            "--ui-test-seed-photos=3",
+        ])
+        openHikeDetail(in: app)
+        XCTAssertTrue(scrollIntoView(element("hike-photo-strip", in: app), in: app))
+        photoTile(at: 1, of: 3, in: app).tap()
+        let next = app.buttons["Next photo"]
+        XCTAssertTrue(next.waitForExistence(timeout: UITestTimeout.navigation))
+        next.tap()
+        XCTAssertTrue(app.navigationBars["2 of 3"].waitForExistence(timeout: UITestTimeout.navigation))
+        for orientation in [UIDeviceOrientation.landscapeLeft, .landscapeRight, .portrait] {
+            XCUIDevice.shared.orientation = orientation
+            XCTAssertTrue(orientation == .portrait ? waitForPortrait(app) : waitForLandscape(app))
+            XCTAssertTrue(app.navigationBars["2 of 3"].waitForExistence(timeout: UITestTimeout.navigation))
+        }
+        // The restored scroll position must also drive subsequent paging.
+        next.tap()
+        XCTAssertTrue(app.navigationBars["3 of 3"].waitForExistence(timeout: UITestTimeout.navigation))
+    }
+
+    @MainActor
+    func testLandscapeWeatherClearsThePanel() {
+        addTeardownBlock {
+            await MainActor.run { XCUIDevice.shared.orientation = .portrait }
+        }
+        let app = launchUpright(arguments: ["--ui-test-weather"])
+        let badge = element("weather-badge", in: app)
+        XCTAssertTrue(badge.waitForExistence(timeout: UITestTimeout.navigation))
+        for orientation in [UIDeviceOrientation.landscapeLeft, .landscapeRight] {
+            XCUIDevice.shared.orientation = orientation
+            XCTAssertTrue(waitForLandscape(app))
+            let panel = element("map-side-panel", in: app)
+            XCTAssertTrue(panel.waitForExistence(timeout: UITestTimeout.navigation))
+            XCTAssertGreaterThanOrEqual(badge.frame.minX, panel.frame.maxX)
+            XCTAssertLessThanOrEqual(badge.frame.maxX, app.frame.maxX)
+            XCTAssertTrue(badge.isHittable)
+        }
+    }
+
     // MARK: - Turning the device
 
     /// Launches with the device upright, whatever was left behind.

@@ -271,7 +271,8 @@ struct MapSheet: View {
                 photoPins: photoPins,
                 onOpenPhoto: { photo in presentation.path.append(.photo(hike, photo.id)) },
                 onOpenWalk: { walk in presentation.path.append(.walk(walk)) },
-                onZoomToRoute: { withAnimation { presentation.detent = .medium } }
+                onZoomToRoute: { withAnimation { presentation.detent = .medium } },
+                interaction: presentation.hikeInteraction(for: hike)
             )
         case .recording:
             RecordingView(
@@ -291,7 +292,8 @@ struct MapSheet: View {
                 startID: photoID,
                 highlight: highlight,
                 mapController: mapController,
-                onShowOnMap: presentation.collapseWhenFullHeightScreenPops
+                onShowOnMap: presentation.collapseWhenFullHeightScreenPops,
+                selection: presentation.photoSelection(for: route)
             )
         case let .walk(walk):
             WalkSummaryView(

@@ -137,6 +137,26 @@ final class SheetPresentation {
         }
     }
 
+    /// The hosts are replaced on rotation, but their destinations keep these
+    /// objects until the corresponding route is popped. Cache lookup must not
+    /// subscribe MapSheet to a destination's interaction state.
+    @ObservationIgnored private var hikeInteractions: [UUID: HikeDetailInteraction] = [:]
+    @ObservationIgnored private var photoSelections: [SheetRoute: PhotoViewerSelection] = [:]
+
+    func hikeInteraction(for hike: Hike) -> HikeDetailInteraction {
+        if let existing = hikeInteractions[hike.id] { return existing }
+        let interaction = HikeDetailInteraction()
+        hikeInteractions[hike.id] = interaction
+        return interaction
+    }
+
+    func photoSelection(for route: SheetRoute) -> PhotoViewerSelection {
+        if let existing = photoSelections[route] { return existing }
+        let selection = PhotoViewerSelection()
+        photoSelections[route] = selection
+        return selection
+    }
+
     @ObservationIgnored private var storedPath: [SheetRoute] = []
     @ObservationIgnored private var storedDetent: PresentationDetent
     @ObservationIgnored private var storedLayout: SheetLayout = .bottomSheet
@@ -186,6 +206,10 @@ final class SheetPresentation {
     }
 
     private func pathDidChange() {
+        hikeInteractions = hikeInteractions.filter { id, _ in
+            storedPath.contains { $0.shows(hikeID: id) }
+        }
+        photoSelections = photoSelections.filter { storedPath.contains($0.key) }
         let recording = storedPath.last == .recording
         if isRecordingPresented != recording { isRecordingPresented = recording }
         let pushed = !storedPath.isEmpty

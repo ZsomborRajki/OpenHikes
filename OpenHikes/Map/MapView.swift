@@ -271,8 +271,8 @@ struct MapView: MapViewRepresentable, Equatable {
     /// The safe area the map's own controls are aligned to, which is the
     /// device's own until a ``MapSidePanel`` takes the leading edge.
     ///
-    /// The two horizontal constraints are kept so the panel's width can be
-    /// spent on them later; the vertical pair never moves.
+    /// The leading constraint is kept so the panel's width can be spent on
+    /// it later; the other three edges stay against the device's safe area.
     private func makeControlsGuide(in mapView: MKMapView, _ coordinator: Coordinator) -> UILayoutGuide {
         let safeArea = mapView.safeAreaLayoutGuide
         let controls = UILayoutGuide()
@@ -281,7 +281,6 @@ struct MapView: MapViewRepresentable, Equatable {
         let leading = controls.leadingAnchor.constraint(equalTo: safeArea.leadingAnchor)
         let trailing = controls.trailingAnchor.constraint(equalTo: safeArea.trailingAnchor)
         coordinator.controlsLeadingConstraint = leading
-        coordinator.controlsTrailingConstraint = trailing
 
         NSLayoutConstraint.activate([
             leading,
@@ -539,20 +538,15 @@ struct MapView: MapViewRepresentable, Equatable {
     /// the map itself full-bleed underneath. The tracking button is on the
     /// trailing edge and does not move; nothing is there.
     ///
-    /// A signed constant, not a `left`: in a right-to-left layout the leading
-    /// edge is the other side of the screen and the constraint's own sign flips
-    /// with it. Written only when it actually changes — this runs on every
-    /// update pass, and a constraint write lays the map out again.
+    /// Directional anchors already mirror the inset in a right-to-left layout.
+    /// Written only when it changes, since a constraint write requests layout.
     private func applySidePanelInset(to mapView: MKMapView, _ coordinator: Coordinator) {
         #if canImport(UIKit)
-        let isRightToLeft = mapView.effectiveUserInterfaceLayoutDirection == .rightToLeft
-        let leading = isRightToLeft ? 0 : sidePanelInset
-        let trailing = isRightToLeft ? -sidePanelInset : 0
-        if coordinator.controlsLeadingConstraint?.constant != leading {
-            coordinator.controlsLeadingConstraint?.constant = leading
-        }
-        if coordinator.controlsTrailingConstraint?.constant != trailing {
-            coordinator.controlsTrailingConstraint?.constant = trailing
+        coordinator.sidePanelInset = sidePanelInset
+        // These anchors are already directional: positive leading moves into
+        // the safe area in either direction. Mirroring again moves the wrong edge.
+        if coordinator.controlsLeadingConstraint?.constant != sidePanelInset {
+            coordinator.controlsLeadingConstraint?.constant = sidePanelInset
         }
         #endif
     }
