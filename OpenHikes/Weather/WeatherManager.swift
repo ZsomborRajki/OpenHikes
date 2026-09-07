@@ -127,9 +127,8 @@ final class WeatherManager {
 
     /// Readings by ``WeatherSubject/key``, least- to most-recently used.
     ///
-    /// Bounded by the same limit ``WeatherRequestState`` uses, so "this
-    /// subject is still fresh" and "this subject's reading is still here"
-    /// cannot come apart.
+    /// Uses the same limit and focus recency as ``WeatherRequestState``, so
+    /// revisiting a fresh subject keeps both its reading and request history.
     @ObservationIgnored private var cache: OrderedDictionary<String, WeatherSnapshot> = [:]
 
     @ObservationIgnored private let service = WeatherService.shared
@@ -154,8 +153,13 @@ final class WeatherManager {
     /// re-derived: it is the difference between a subject whose forecast is on
     /// its way and one the backoff has ruled out, and the badge should not
     /// spin for the second.
-    func focus(on subject: WeatherSubject, willRequest: Bool) {
+    func focus(on subject: WeatherSubject?, willRequest: Bool) {
+        guard let subject else {
+            state = .idle
+            return
+        }
         if let cached = cache[subject.key] {
+            remember(cached, for: subject)
             state = .reading(cached, subject: subject)
         } else if willRequest {
             state = .loading(subject)
@@ -195,7 +199,7 @@ final class WeatherManager {
             // can be read, but the *fact* of it now reaches the screen.
             Self.logger.error(
                 """
-                Weather update failed for \(subject.key, privacy: .public): \
+                Weather update failed for \(subject.key, privacy: .private): \
                 \(error.localizedDescription, privacy: .public)
                 """
             )

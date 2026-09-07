@@ -81,21 +81,22 @@ nonisolated enum WeatherSubject: Equatable, Sendable {
 
     /// The identity ``WeatherRequestState`` keys its freshness and backoff on.
     ///
-    /// Deliberately independent of the coordinate: `me` is one subject whose
+    /// Independent of the coordinate for moving subjects: `me` is one subject whose
     /// position changes, not a new subject every time the walker moves, and a
     /// trail re-selected after a detour is the same trail. This is what
     /// replaced the old ~1.1 km lat/lon grid, whose keys changed underneath a
     /// stationary walker often enough to need an eight-bucket LRU to absorb
-    /// the oscillation.
+    /// the oscillation. A searched place is fixed, so its coordinate distinguishes
+    /// cities or business branches that share a display name.
     var key: String {
         switch self {
         case .me: "me"
-        case .place(_, let name): "place:\(name)"
+        case let .place(coordinate, name): "place:\(coordinate.latitude):\(coordinate.longitude):\(name)"
         case .trail(_, let hikeID, _): "trail:\(hikeID.uuidString)"
         }
     }
 
-    /// The same subject moved to `coordinate`, keeping its identity.
+    /// The subject moved to `coordinate`. Walker and trail identities stay stable.
     func moved(to coordinate: CLLocationCoordinate2D) -> Self {
         switch self {
         case .me: .me(coordinate)
@@ -169,9 +170,11 @@ final class WeatherFocus {
 
     /// A recording became active: the badge is about the walker from here
     /// until it ends.
-    func pinToWalker(at coordinate: CLLocationCoordinate2D) {
+    func pinToWalker(at coordinate: CLLocationCoordinate2D?) {
         isPinnedToWalker = true
-        setSubject(.me(coordinate))
+        // Ownership cannot wait for a fix. Drop a previous place's subject
+        // until significant-change delivery can supply the walker's position.
+        subject = coordinate.map { .me($0) }
     }
 
     /// The recording ended. The pin lifts; the subject stays where it is.
@@ -208,17 +211,26 @@ final class WeatherFocus {
     /// a searched `place` never — someone reading Budapest's forecast from
     /// Vienna does not want it to become Vienna's because they walked to the
     /// shops.
-    func walkerMoved(to coordinate: CLLocationCoordinate2D) {
-        guard let subject else { return }
+    ///
+    /// Returns whether the subject changed, so irrelevant movement cannot
+    /// receive the poll loop's shorter request floor.
+    @discardableResult func walkerMoved(to coordinate: CLLocationCoordinate2D) -> Bool {
+        let previous = subject
+        if isPinnedToWalker || subject == nil {
+            setSubject(.me(coordinate))
+            return subject != previous
+        }
+        guard let subject else { return false }
         switch subject {
         case .me:
             setSubject(.me(coordinate))
         case .trail(let anchor, _, _):
-            guard Self.distance(from: anchor, to: coordinate) <= Self.trailFollowRadius else { return }
+            guard Self.distance(from: anchor, to: coordinate) <= Self.trailFollowRadius else { return false }
             setSubject(subject.moved(to: coordinate))
         case .place:
-            return
+            return false
         }
+        return self.subject != previous
     }
 
     /// The subject as an async sequence, for the poll loop to wake on.

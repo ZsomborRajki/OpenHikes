@@ -101,6 +101,38 @@ struct WeatherFocusTests {
         #expect(focus.subject == .me(vienna))
     }
 
+    @Test("a recording claims ownership before its first fix")
+    func recordingWithoutLocationOwnsTheNextFix() {
+        let focus = WeatherFocus(subject: .place(vienna, name: "Vienna"))
+        focus.pinToWalker(at: nil)
+        focus.focus(on: .place(budapest, name: "Budapest"))
+        focus.focus(on: trail(at: budapest))
+
+        #expect(focus.isPinnedToWalker)
+        #expect(focus.subject == nil)
+        #expect(focus.walkerMoved(to: vienna))
+        #expect(focus.subject == .me(vienna))
+    }
+
+    @Test("only movement that changes the forecast subject merits a movement request")
+    func irrelevantMovementDoesNotRequest() {
+        let place = WeatherSubject.place(budapest, name: "Budapest")
+        let selected = trail(at: budapest)
+        for subject in [place, selected, .me(vienna)] {
+            let focus = WeatherFocus(subject: subject)
+            #expect(!focus.walkerMoved(to: vienna))
+            #expect(focus.subject == subject)
+        }
+
+        let nearbyTrail = WeatherFocus(subject: selected)
+        #expect(nearbyTrail.walkerMoved(to: nearBudapest))
+        let walker = WeatherFocus(subject: .me(budapest))
+        #expect(walker.walkerMoved(to: vienna))
+        let empty = WeatherFocus()
+        #expect(empty.walkerMoved(to: vienna))
+        #expect(empty.subject == .me(vienna))
+    }
+
     /// The second half of "I start hiking on that imported trail": a walker
     /// who is out on the route they selected should get the weather where they
     /// are, not where the file's midpoint happens to be.

@@ -34,16 +34,35 @@ nonisolated final class PhotoUITests: XCTestCase {
 
         openHikeDetail(in: app)
 
+        // A map control can exist in the accessibility tree while the
+        // half-height sheet covers it. Move the sheet out of the way before
+        // aiming at the pill; an existence-only tap can land on the chart.
+        let grabber = app.buttons["Sheet Grabber"]
+        XCTAssertTrue(grabber.waitForExistence(timeout: UITestTimeout.navigation))
+        grabber.coordinate(withNormalizedOffset: CGVector(dx: 0.5, dy: 0.5))
+            .press(
+                forDuration: 0.1,
+                thenDragTo: app.coordinate(withNormalizedOffset: CGVector(dx: 0.5, dy: 0.95))
+            )
+        XCTAssertTrue(waitForCollapsedSheet(in: app))
+
         let library = element("map-photo-library-button", in: app)
-        XCTAssertTrue(
-            library.waitForExistence(timeout: UITestTimeout.navigation),
-            "opening a hike should offer the pill the picker is reached from"
+        let reachable = NSPredicate { _, _ in
+            self.isReachable(library, in: app)
+                && library.frame.maxY < self.element("map-sheet", in: app).frame.minY
+        }
+        XCTAssertEqual(
+            XCTWaiter.wait(
+                for: [expectation(for: reachable, evaluatedWith: library)],
+                timeout: UITestTimeout.navigation
+            ),
+            .completed,
+            "the library button must be reachable above the sheet before it is tapped"
         )
         library.tap()
 
-        // The picker is out of process, so its contents are not the app's to
-        // assert on; its cancel button carries that identifier in every
-        // locale, which is enough to know it is on screen.
+        // The picker is out of process. Its Cancel control gives us a
+        // presentation boundary without depending on the library's contents.
         let cancel = app.buttons["Cancel"]
         XCTAssertTrue(
             cancel.waitForExistence(timeout: UITestTimeout.existence),
@@ -51,6 +70,10 @@ nonisolated final class PhotoUITests: XCTestCase {
         )
 
         cancel.tap()
+        XCTAssertTrue(
+            cancel.waitForNonExistence(timeout: UITestTimeout.navigation),
+            "cancelling must dismiss the photo picker"
+        )
         XCTAssertTrue(
             element("map-sheet", in: app)
                 .waitForExistence(timeout: UITestTimeout.navigation),
