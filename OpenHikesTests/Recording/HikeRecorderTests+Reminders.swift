@@ -211,6 +211,37 @@ extension HikeRecorderTests {
         )
     }
 
+    /// The switch's version of the same race, and the one a walker is far
+    /// likelier to run into than a refusal: Settings is one swipe away while
+    /// the pause's journal write is still in flight. The controller disarms
+    /// itself and tells the recorder, but the recorder has not parked
+    /// anything yet — so the parking, arriving afterwards, must not start a
+    /// feed for a watch that no longer exists.
+    @Test("a switch flipped during the journal write never starts the feed")
+    func switchDuringTheJournalWriteNeverStartsTheWatch() async {
+        let harness = MovementReminderHarness.harness()
+        let hikeRecorder = await recordingRecorder(harness)
+        let write = TestGate()
+        hikeRecorder.journalQueue.enqueue { await write.wait() }
+
+        hikeRecorder.pause()
+        harness.defaults.set(false, forKey: SettingsKey.movementRemindersEnabled)
+        harness.controller.reconcileWithPreferences()
+        write.open()
+        await hikeRecorder.journalQueue.drain()
+        await harness.controller.settle()
+
+        #expect(source.movementWatchStarts == 0)
+        #expect(
+            harness.controller.isWatchingPausedRecording == false,
+            "the switch took the watch with it; the parking may not hand it back"
+        )
+        #expect(
+            source.stopCount == 1,
+            "the pause ends up as expensive as one taken with the switch already off"
+        )
+    }
+
     @Test("resuming stops the watch and takes the reminder down")
     func resumingStopsTheWatch() async {
         let harness = MovementReminderHarness.harness()
