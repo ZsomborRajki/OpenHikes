@@ -198,52 +198,6 @@ nonisolated final class StubPhotoLibraryFixture: PhotoLibraryReading {
     // swiftlint:enable async_without_await
 }
 
-/// A one-shot gate: whoever reaches it waits there until a test opens it.
-///
-/// A continuation rather than a sleep or a count of yields, for the reason
-/// ``settleDelegateHop(until:sourceLocation:condition:)`` exists: a yield buys
-/// an amount of progress that depends on how busy the machine is, while this
-/// resumes when the test says so and at no other moment. That is the only
-/// version of "caught mid-flight" that does not depend on load.
-nonisolated final class TestGate: Sendable {
-    private enum State {
-        case idle
-        case opened
-        case waiting(CheckedContinuation<Void, Never>)
-    }
-
-    private let state = Mutex(State.idle)
-
-    /// Whether something is being held here right now.
-    var isHolding: Bool {
-        state.withLock { state in
-            if case .waiting = state { true } else { false }
-        }
-    }
-
-    /// Suspends until ``open()``, or returns at once if it has already been
-    /// opened — so a gate can never deadlock a flow that reached it late.
-    func wait() async {
-        await withCheckedContinuation { (continuation: CheckedContinuation<Void, Never>) in
-            let passStraightThrough = state.withLock { state -> Bool in
-                guard case .idle = state else { return true }
-                state = .waiting(continuation)
-                return false
-            }
-            if passStraightThrough { continuation.resume() }
-        }
-    }
-
-    func open() {
-        let held = state.withLock { state -> CheckedContinuation<Void, Never>? in
-            defer { state = .opened }
-            guard case let .waiting(continuation) = state else { return nil }
-            return continuation
-        }
-        held?.resume()
-    }
-}
-
 /// A photo store with its own directory, removed when the test ends.
 ///
 /// Never `HikePhotoStore.shared`: both unit bundles are hosted by the app, so
