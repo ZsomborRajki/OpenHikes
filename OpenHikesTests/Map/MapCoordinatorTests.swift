@@ -72,6 +72,7 @@ struct MapCoordinatorTests {
     func mapView(
         route: DisplayedRoute? = nil,
         tileSource: ActiveTileSource? = osm,
+        sidePanelInset: CGFloat = 0,
         showsWeatherBadge: Bool = true
     ) -> MapView {
         MapView(
@@ -86,6 +87,7 @@ struct MapCoordinatorTests {
             mapController: mapController,
             photoCapture: photoCapture,
             photoPins: photoPins,
+            sidePanelInset: sidePanelInset,
             showsWeatherBadge: showsWeatherBadge
         )
     }

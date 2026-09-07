@@ -119,6 +119,56 @@ extension MapCoordinatorTests {
         #endif
     }
 
+    /// Landscape takes the sheet away entirely — the contents move into
+    /// ``MapSidePanel`` and nothing reports a top edge any more — so the last
+    /// portrait reading has to be dropped rather than left standing.
+    ///
+    /// It is dropped rather than refused because it is *plausible*: a reading
+    /// taken over a tall screen still lands on a short one, so the guard that
+    /// catches an impossible report above would follow this one straight to a
+    /// sheet that is no longer there.
+    @Test("a withdrawn sheet is forgotten rather than followed")
+    func withdrawnSheetIsForgotten() throws {
+        #if os(iOS)
+        let coordinator = MapView.Coordinator()
+        let map = makeMap(mapView(), coordinator)
+        defer { detach(map) }
+        let constraint = try #require(coordinator.trackingBottomConstraint)
+
+        settle(sheetMetrics, at: map.bounds.height * 0.45)
+        coordinator.applySheetTop(on: map)
+        let followed = constraint.constant
+        #expect(sheetMetrics.middleRestY != nil, "precondition: the sheet was measured")
+
+        sheetMetrics.withdraw()
+        coordinator.applySheetTop(on: map)
+
+        #expect(constraint.constant != followed, "the button stops riding a sheet that is gone")
+        #expect(sheetMetrics.middleRestY == nil, "and the resting place is measured again on the way back")
+        #endif
+    }
+
+    /// The other half of the same rotation: the credit line and the camera
+    /// pill hang off a guide of their own, and the panel's width is what pulls
+    /// that guide in from the leading edge.
+    @Test("a side panel moves the map's controls off the leading edge")
+    func sidePanelInsetsTheControls() throws {
+        #if os(iOS)
+        let coordinator = MapView.Coordinator()
+        let map = makeMap(mapView(), coordinator)
+        defer { detach(map) }
+        let leading = try #require(coordinator.controlsLeadingConstraint)
+        #expect(leading.constant == 0, "precondition: portrait has no panel")
+
+        let inset = MapSidePanelLayout.mapInset
+        mapView(sidePanelInset: inset).update(map, coordinator)
+        #expect(leading.constant == inset)
+
+        mapView().update(map, coordinator)
+        #expect(leading.constant == 0, "and rotating back gives the edge up again")
+        #endif
+    }
+
     /// Observed rather than passed in, so a drag never reaches SwiftUI.
     @Test("a sheet drag moves the button without an update pass")
     func sheetDragIsObserved() async throws {
