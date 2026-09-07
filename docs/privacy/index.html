@@ -40,8 +40,14 @@
 <p>This data lives in the Application&rsquo;s storage on your device. It is not sent to the Service Provider, who has no means of accessing it.</p>
 
 <h2>Does the Application collect precise real time location information of the device?</h2>
-<p><strong>Yes.</strong> Recording a hike requires precise, real-time location &mdash; that is what a recorded trail is. The Application requests location access when you first record a hike, and requests background location access only if you separately turn on Background Trail Tracking, which keeps a recording and its Home Screen widget accurate while the Application is not open.</p>
-<p>Location data is written to your device. It is not transmitted to the Service Provider, is not sold, is not shared for advertising, and is not used for any purpose other than showing and recording your position on the map. You can review or revoke location access at any time in the iOS Settings app. Hikes already recorded remain on your device until you delete them.</p>
+<p><strong>Yes.</strong> Recording a hike requires precise, real-time location &mdash; that is what a recorded trail is. The Application uses location in four distinct ways:</p>
+<ul>
+<li><strong>Showing where you are on the map.</strong> The Application asks for &ldquo;While Using the App&rdquo; location access the first time you open it, not the first time you record. This is what puts your position on the map and lets features centre on you. You can decline it and still browse maps and past hikes; recording a hike is what actually requires it.</li>
+<li><strong>Recording a hike.</strong> While a recording is running, the Application receives precise location continuously and keeps receiving it when you leave the Application or lock the phone, so that the trail does not stop at your pocket. iOS shows its own background-location indicator while this is happening. This does not depend on the Background Trail Tracking switch below. The points are written into the hike on your device.</li>
+<li><strong>Background Trail Tracking (optional, off by default).</strong> Turning this on in Settings is what asks for &ldquo;Always&rdquo; location access. It uses occasional, low-power updates to keep your Home Screen widget showing your progress along a selected trail while the Application is not open. It is a separate feature from recording, and turning it off does not affect recording.</li>
+<li><strong>Reminders while a hike is paused (&ldquo;Remind Me to Pause and Resume&rdquo;, on by default).</strong> When a recording is paused, the Application keeps watching your location so that it can notice you have set off again &mdash; about half a kilometre from where you paused, or a quarter of one at cycling pace &mdash; and send you a notification offering to resume. If you have granted &ldquo;Always&rdquo; access it does this with the coarse significant-change updates iOS already produces, at no additional battery cost and with no location indicator shown. With only &ldquo;While Using the App&rdquo; access it has to keep a coarse location feed running for the length of the pause, and iOS keeps showing the background-location indicator, which is accurate: location really is still in use. The same reminder covers a paused trail walk, using location the Application is already receiving. Locations used for this are read only to make that decision. They are not added to the recorded hike and not drawn on the map, and turning the switch off in Settings stops the watching entirely.</li>
+</ul>
+<p>Location data is written to your device. It is not transmitted to the Service Provider, is not sold, is not shared for advertising, and is not used for any purpose beyond the four above. You can review, downgrade, or revoke location access at any time in the iOS Settings app, and the Application&rsquo;s own switches for Background Trail Tracking and pause reminders are in its Settings screen. Hikes already recorded remain on your device until you delete them.</p>
 
 <h2>Does the Application use iCloud?</h2>
 <p>If iCloud sync is left enabled, your hikes are mirrored to your own private iCloud database so that they appear on your other devices. This uses Apple&rsquo;s CloudKit service and your personal Apple Account. The data is held in your private storage, not in any database belonging to the Service Provider, and the Service Provider cannot read, retrieve, or delete it. Apple&rsquo;s handling of that data is governed by Apple&rsquo;s own privacy policy. You can turn iCloud sync off in the Application&rsquo;s settings.</p>
@@ -60,7 +66,7 @@
 <p>These services may log request data, including your IP address, under their own policies. The Service Provider receives none of it.</p>
 
 <h2>What are my opt-out rights?</h2>
-<p>You can stop all collection by uninstalling the Application. Within the Application you can delete individual hikes and their photographs, turn off iCloud sync, and turn off Background Trail Tracking. Location, camera, and photo library access can be revoked at any time in the iOS Settings app. Uninstalling removes the data the Application stored on your device; hikes already mirrored to your iCloud storage are removed through iCloud in the usual way.</p>
+<p>You can stop all collection by uninstalling the Application. Within the Application you can delete individual hikes and their photographs, turn off iCloud sync, turn off Background Trail Tracking, and turn off &ldquo;Remind Me to Pause and Resume&rdquo;, which stops a paused hike being watched for movement. Location, camera, and photo library access can be revoked at any time in the iOS Settings app. Uninstalling removes the data the Application stored on your device; hikes already mirrored to your iCloud storage are removed through iCloud in the usual way.</p>
 <p>If you contact the Service Provider directly or voluntarily provide information by other means, you may request deletion of that information by contacting zsombor.rajki@gmail.com.</p>
 
 <h2>Children</h2>
@@ -75,7 +81,7 @@
 <h2>Changes</h2>
 <p>The Service Provider may update this Privacy Policy from time to time. The Service Provider will notify you of material changes by posting the updated Privacy Policy with an effective date. Where required by law, the Service Provider will seek your consent to material changes before they take effect.</p>
 <p>Previous versions of this Privacy Policy will be maintained and made available upon request by contacting the Service Provider at zsombor.rajki@gmail.com.</p>
-<p>This privacy policy is effective as of 2026-08-28.</p>
+<p>This privacy policy is effective as of 2026-09-07.</p>
 
 <h2>Your Consent</h2>
 <p>If you voluntarily provide information to the Service Provider and processing is based on consent, you may withdraw that consent at any time without affecting processing carried out before withdrawal.</p>
