@@ -2,6 +2,12 @@
 # Copy Secrets.example.plist to OpenHikes/Secrets.plist and fill in your key.
 **/Secrets.plist
 
+# Coding-agent config, which is per-machine and holds an access token of its
+# own. Ignored rather than merely left untracked: a `git add -A` picks up an
+# untracked file, and the token in it is the kind of mistake push protection
+# catches only after it is already in a commit.
+.codex/
+
 # Xcode user-specific state
 xcuserdata/
 *.xcuserstate
