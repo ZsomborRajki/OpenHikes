@@ -99,6 +99,8 @@ struct WeatherDetailView: View {
                 if let snapshot = weather.current {
                     conditionsSection(snapshot)
                     freshnessSection(snapshot)
+                } else if case .unavailable = weather.state {
+                    unavailableSection
                 }
                 attributionSection
             }
@@ -114,6 +116,15 @@ struct WeatherDetailView: View {
             }
         }
         .task { marks = await AppleWeatherAttribution.marks() }
+    }
+
+    /// Which place the reading is for, or `nil` when it is simply here.
+    ///
+    /// The badge can now be pointed at a searched city or a selected trail, so
+    /// "Current conditions" on its own is no longer always true — see
+    /// ``WeatherSubject``.
+    private var placeName: String? {
+        weather.state.subject?.placeName
     }
 
     private func conditionsSection(_ snapshot: WeatherSnapshot) -> some View {
@@ -134,9 +145,36 @@ struct WeatherDetailView: View {
             // A glyph, a number and a phrase that are one fact — the same
             // shape ``StatTile`` and ``DetailRow`` take.
             .accessibilityElement(children: .ignore)
-            .accessibilityLabel("Current conditions")
+            .accessibilityLabel(placeName.map { "Conditions in \($0)" } ?? "Current conditions")
             .accessibilityValue("\(snapshot.spokenTemperature()), \(snapshot.conditionDescription)")
             .accessibilityIdentifier("weather-detail-conditions")
+        } header: {
+            if let placeName {
+                Text(placeName)
+                    .accessibilityIdentifier("weather-detail-place")
+            }
+        }
+    }
+
+    /// Why there is no reading.
+    ///
+    /// The badge says only that something is off — a slashed cloud over the
+    /// map is as much as belongs there. This is where someone who tapped it to
+    /// ask gets a sentence, and it exists because the alternative, which is
+    /// what shipped before, was a badge that never appeared and no way at all
+    /// to find out why.
+    private var unavailableSection: some View {
+        Section {
+            Label(
+                placeName.map { "No forecast for \($0)" } ?? "No forecast available",
+                systemImage: "cloud.slash"
+            )
+                .accessibilityIdentifier("weather-detail-unavailable")
+        } footer: {
+            Text(
+                "OpenHikes couldn\u{2019}t reach Apple Weather. This is usually no signal; "
+                    + "it will try again on its own."
+            )
         }
     }
 

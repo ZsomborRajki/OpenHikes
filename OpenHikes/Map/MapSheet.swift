@@ -371,7 +371,7 @@ private func select(_ completion: MKLocalSearchCompletion) {
     searchText = completion.title
     searchFocused = false
     completer.commit(query: completion.title)
-    startSearch(request: .init(completion: completion))
+    startSearch(request: .init(completion: completion), fallbackName: completion.title)
 }
 
 /// Geocodes the raw search text (when the user hits Return without picking a
@@ -382,7 +382,7 @@ private func performSearch() {
     searchFocused = false
     let request = MKLocalSearch.Request()
     request.naturalLanguageQuery = query
-    startSearch(request: request)
+    startSearch(request: request, fallbackName: query)
 }
 
 /// Cancels and invalidates the previous request before starting another.
@@ -392,7 +392,7 @@ private func performSearch() {
 /// A failure is reported rather than swallowed. No network, a rate limit or a
 /// query MapKit cannot resolve all used to produce the same thing — nothing at
 /// all — which reads as a search field that has simply stopped working.
-private func startSearch(request: MKLocalSearch.Request) {
+private func startSearch(request: MKLocalSearch.Request, fallbackName: String) {
     searchTask?.cancel()
     searchTask = Task {
         let response: MKLocalSearch.Response
@@ -412,6 +412,22 @@ private func startSearch(request: MKLocalSearch.Request) {
             return
         }
         mapController.show(response.boundingRegion)
+        // The map moved, so the weather badge moves with it: a walker who has
+        // just zoomed to Budapest is asking about Budapest. Ignored while a
+        // recording holds the badge, which `WeatherFocus` decides rather than
+        // this call site.
+        //
+        // The region's centre rather than the first result's coordinate — the
+        // badge is about the place the map is now showing, and a search for a
+        // city resolves to a region whose centre is the city. MapKit's own
+        // name for the first result is preferred over what was typed, so
+        // "budapest" is drawn as "Budapest".
+        appModel.weatherFocus.focus(
+            on: .place(
+                response.boundingRegion.center,
+                name: response.mapItems.first?.name ?? fallbackName
+            )
+        )
         // Drop to a partial detent so the zoomed map is visible.
         withAnimation { presentation.detent = .medium }
     }

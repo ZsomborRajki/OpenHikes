@@ -37,6 +37,14 @@ final class OpenHikesModel {
     let walkSession: TrailWalkSession
     let locationManager: LocationManager
     let weatherManager: WeatherManager
+    /// What the weather badge is about. Written by the three places that can
+    /// say — the recorder, hike selection and search — and read by nothing
+    /// else; see ``WeatherSubject``.
+    let weatherFocus: WeatherFocus
+    /// Movement, coarsely, for the things that care about a region rather than
+    /// a position. Only the weather poll uses it today. Armed and disarmed
+    /// with the foreground — see ``sceneDidBecomeActive()``.
+    let significantLocations: SignificantLocationFeed
     /// The OSM walking graph, shared with ``hikeRecorder`` rather than built
     /// per consumer: it owns a durable cache, an in-flight request table and
     /// the retry deadline Overpass hands back when it rate-limits us. A second
@@ -85,6 +93,7 @@ final class OpenHikesModel {
         hikeRecorder: HikeRecorder,
         locationManager: LocationManager,
         weatherManager: WeatherManager,
+        significantLocations: SignificantLocationFeed,
         trailGraphProvider: (any TrailGraphProviding)? = nil,
         movementReminders: MovementReminderController? = nil,
         walkSession: TrailWalkSession? = nil,
@@ -107,6 +116,13 @@ final class OpenHikesModel {
         )
         self.locationManager = locationManager
         self.weatherManager = weatherManager
+        self.significantLocations = significantLocations
+        // Seeded from whatever the manager restored, so a launch that comes
+        // back with last night's reading is also pointed at the place that
+        // reading was for — otherwise the badge would show a subject the poll
+        // loop has never heard of and would not refresh until the user did
+        // something. A restored subject is replaced by the first real focus.
+        weatherFocus = WeatherFocus(subject: weatherManager.state.subject)
         self.trailGraphProvider = trailGraphProvider
         self.defaults = defaults
         self.startupIssue = startupIssue

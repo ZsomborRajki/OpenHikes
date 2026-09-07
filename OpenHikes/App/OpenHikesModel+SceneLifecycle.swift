@@ -75,6 +75,14 @@ extension OpenHikesModel {
         if !AppLaunchEnvironment.isRunningTests {
             backgroundTracker.refreshBasemaps()
         }
+        // Armed here and taken down on the way out, which is the whole of what
+        // keeps the weather badge's movement feed from becoming a background
+        // wake source: significant-change monitoring left running relaunches a
+        // suspended app, and nothing this feed drives is on screen when the
+        // app is not. See ``SignificantLocationFeed``.
+        if AppLaunchEnvironment.usesLiveLocation {
+            significantLocations.start()
+        }
         hikeRecorder.sceneDidBecomeActive()
         // A walk left in a pocket through the night has no fix to notice it
         // by; coming back is the other moment it can.
@@ -92,6 +100,7 @@ extension OpenHikesModel {
         // the app's own resign work, in what UIKit does next.
         let resign = RenderSignpost.beginInterval("SceneResignActive")
         defer { RenderSignpost.endInterval("SceneResignActive", resign) }
+        significantLocations.stop()
         hikeRecorder.sceneWillResignActive()
         // Backstop: a launch whose map never appeared — a failed store, an
         // error screen — would otherwise leave the extended launch task open

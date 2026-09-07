@@ -35,6 +35,14 @@ nonisolated enum SettingsKey {
     /// re-deriving it; absent means "no continuity reference yet", which is why
     /// it is removed rather than zeroed when the selection changes.
     static let lastMatchedDistance = "trailTracking.lastMatchedDistance"
+    /// The last weather reading and the subject it was for, as JSON. Written
+    /// by ``WeatherReadingStore`` on every successful fetch and read once at
+    /// launch, so the badge is on screen before the first network round trip
+    /// rather than half a minute after it.
+    ///
+    /// A hint, never authoritative: it is drawn dimmed if it is old, by the
+    /// same rule that dims a reading fetched in this session.
+    static let lastWeatherReading = "weather.lastReading"
     /// Whether a photo taken in OpenHikes is also written to the system photo
     /// library. Off unless the user turns it on — and the only reason the app
     /// ever asks for photo-library access, which it does on the first save
