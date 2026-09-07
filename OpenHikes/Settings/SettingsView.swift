@@ -526,7 +526,11 @@ private extension SettingsView {
     /// surprising: a paused recording keeps a location feed alive when it
     /// otherwise would not, and a paused *walk* is watched only by fixes that
     /// were arriving anyway, so the two are not equally reliable and saying so
-    /// is cheaper than a walker discovering it on a trail.
+    /// is cheaper than a walker discovering it on a trail. That is why the
+    /// footer names the walk's case in its own sentence rather than letting the
+    /// recording's "without Always access" clause stand for both: for a walk
+    /// there is no such feed to fall back on, and a phone in a pocket with
+    /// Background Trail Tracking off will hear nothing at all.
     @ViewBuilder var movementReminderSection: some View {
         #if os(iOS)
         Section {
@@ -540,9 +544,12 @@ private extension SettingsView {
                 + " quarter of one at cycling pace — and asks whether you meant to"
                 + " resume, with a button that does it without unlocking the phone."
                 + " It also offers to pause a recording you have not moved on for"
-                + " fifteen minutes. With Always location access a pause costs"
-                + " nothing to watch; without it the pause keeps a coarse location"
-                + " feed running."
+                + " fifteen minutes. A paused recording is watched either way: with"
+                + " Always location access that costs nothing, and without it the"
+                + " pause keeps a coarse location feed running. A paused walk along a"
+                + " trail starts no feed of its own — it is watched while OpenHikes is"
+                + " open, and behind it only with Background Trail Tracking on, so a"
+                + " pocketed phone may not be reminded."
             )
         }
         #endif
