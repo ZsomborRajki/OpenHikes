@@ -61,15 +61,18 @@ extension OpenHikesModel {
         for await wake in wakes {
             // Applied before the subject is read, so a movement wake asks
             // about where the walker is now rather than where they were.
-            // `walkerMoved` is a no-op for a searched place, and
-            // `defaultToWalker` only lands when nothing else has claimed the
-            // subject — the precedence lives in `WeatherFocus`, not here.
-            if wake == .movement, let coordinate = significantLocations.coordinate {
-                weatherFocus.defaultToWalker(at: coordinate)
-                weatherFocus.walkerMoved(to: coordinate)
+            // Ignore movements that leave a searched place or distant trail
+            // unchanged; those readings still wait for their freshness deadline.
+            if wake == .movement {
+                guard let coordinate = significantLocations.coordinate,
+                      weatherFocus.walkerMoved(to: coordinate) else { continue }
             }
 
-            guard let subject = weatherFocus.subject else { continue }
+            guard let subject = weatherFocus.subject else {
+                weatherManager.focus(on: nil, willRequest: false)
+                dueTask?.cancel()
+                continue
+            }
             let key = subject.key
             let willRequest = state.shouldRequest(
                 key: key,

@@ -68,13 +68,12 @@ private struct WeatherFocusModifier: ViewModifier {
             // Keyed on whether a recording is running rather than on its phase,
             // so a pause doesn't hand the badge back to a search the walker
             // made an hour ago.
-            .onChange(of: isRecording) { _, isRecording in
+            .onChange(of: isRecording, initial: true) { _, isRecording in
                 guard isRecording else {
                     focus.unpinFromWalker()
                     return
                 }
-                guard let coordinate = walker() else { return }
-                focus.pinToWalker(at: coordinate)
+                focus.pinToWalker(at: walker())
             }
     }
 }
