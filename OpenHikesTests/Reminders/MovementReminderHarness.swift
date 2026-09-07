@@ -16,6 +16,7 @@
 import CoreLocation
 import Foundation
 @testable import OpenHikes
+import Testing
 
 /// Everything the controller says, in the order it said it.
 ///
@@ -66,16 +67,27 @@ final class StubMovementReminderNotifier: MovementReminderNotifying {
     ///
     /// The controller *schedules* the ask rather than running it, so a test
     /// that answered straight after `recordingDidPause` would be answering a
-    /// prompt that had not been put up yet. Bounded rather than a bare loop:
-    /// a stub that never asks should fail an expectation, not hang a suite.
-    func awaitPrompt() async {
-        for _ in 0..<Self.promptPolls {
-            if pendingPrompt != nil { return }
-            await Task.yield()
-        }
+    /// prompt that had not been put up yet — and ``answerPrompt(allowing:)``
+    /// drops an answer no continuation is waiting for, so the `settle()` that
+    /// follows would then wait for the walker's reply for as long as the suite
+    /// is willing to run.
+    ///
+    /// Waits for the effect rather than for a number of scheduler turns, for
+    /// the reason ``settleDelegateHop(until:sourceLocation:condition:)``
+    /// exists: a yield hands the executor to whichever job is next, not to the
+    /// notifier's, so a fixed count of them buys an amount of progress that
+    /// depends entirely on how loaded the machine is.
+    ///
+    /// - Returns: whether the prompt arrived. A `false` has already been
+    ///   recorded as a failure by the settle; the caller's remaining job is to
+    ///   leave rather than answer a prompt that is not there.
+    func awaitPrompt(sourceLocation: SourceLocation = #_sourceLocation) async -> Bool {
+        await settleDelegateHop(
+            until: "the held permission prompt to be put up",
+            sourceLocation: sourceLocation
+        ) { self.pendingPrompt != nil }
+        return pendingPrompt != nil
     }
-
-    private static let promptPolls = 64
 
     /// The same answer with no prompt, counted separately so a suite can tell
     /// a foreground re-check apart from a question put to the walker.

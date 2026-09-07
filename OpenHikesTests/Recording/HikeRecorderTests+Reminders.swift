@@ -162,14 +162,25 @@ extension HikeRecorderTests {
     /// The refusal is answered while the pause is still being written, so the
     /// boolean the pause computed is stale by the time the sensors are parked
     /// — which is why they ask the controller again instead.
+    ///
+    /// The interleaving is held open rather than hoped for. `pause()` starts
+    /// the notification work and the journal work on two queues that do not
+    /// wait for each other, so awaiting the settle before the drain orders
+    /// only this test's own waits: with the write landing first the recorder
+    /// is still correct — it starts a watch and the refusal stops it — but it
+    /// is no longer the branch this test is named after. Gating the queue is
+    /// what makes the denial reach the controller before the parking does.
     @Test("a refusal answered during the journal write never starts the feed")
     func refusalDuringTheJournalWriteNeverStartsTheWatch() async {
         let harness = MovementReminderHarness.harness()
         harness.notifier.isAuthorized = false
         let hikeRecorder = await recordingRecorder(harness)
+        let write = JournalGate()
+        hikeRecorder.journalQueue.enqueue { await write.hold() }
 
         hikeRecorder.pause()
         await harness.controller.settle()
+        await write.release()
         await hikeRecorder.journalQueue.drain()
 
         #expect(source.movementWatchStarts == 0)
@@ -186,7 +197,7 @@ extension HikeRecorderTests {
         let hikeRecorder = await recordingRecorder(harness)
         hikeRecorder.pause()
         await hikeRecorder.journalQueue.drain()
-        await harness.notifier.awaitPrompt()
+        guard await harness.notifier.awaitPrompt() else { return }
         await hikeRecorder.resume()
         let stopsBefore = source.stopCount
 
@@ -212,5 +223,33 @@ extension HikeRecorderTests {
 
         #expect(source.movementWatchStops >= 1)
         #expect(harness.notifier.withdrawn.contains(.resumeRecording))
+    }
+}
+
+/// A hold placed on ``HikeRecorder/journalQueue`` so a test can say what lands
+/// before the pause's write does.
+///
+/// The queue is serial, so an operation enqueued before `pause()` keeps the
+/// pause's write — and the parking behind it — waiting until this is released.
+/// An actor rather than a bare continuation because the operation is
+/// `@Sendable` and runs off the main actor, and because releasing a gate
+/// nobody has reached yet has to be allowed: the test releases on its own
+/// schedule, not the queue's.
+private actor JournalGate {
+    private var waiter: CheckedContinuation<Void, Never>?
+    private var isReleased = false
+
+    /// Called from the queue. Returns at once if the test already released.
+    func hold() async {
+        guard !isReleased else { return }
+        await withCheckedContinuation { waiter = $0 }
+    }
+
+    /// Called from the test, once whatever had to happen first has happened.
+    func release() {
+        isReleased = true
+        let held = waiter
+        waiter = nil
+        held?.resume()
     }
 }

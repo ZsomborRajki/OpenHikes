@@ -55,7 +55,7 @@ extension MovementReminderControllerTests {
         var endedWatches = 0
         harness.controller.watchingDidEnd = { endedWatches += 1 }
         harness.controller.recordingDidPause(at: MovementReminderHarness.anchor, on: start)
-        await harness.notifier.awaitPrompt()
+        guard await harness.notifier.awaitPrompt() else { return }
         harness.controller.recordingDidResume()
 
         harness.notifier.answerPrompt(allowing: false)
@@ -74,7 +74,7 @@ extension MovementReminderControllerTests {
         var endedWatches = 0
         harness.controller.watchingDidEnd = { endedWatches += 1 }
         harness.controller.recordingDidPause(at: MovementReminderHarness.anchor, on: start)
-        await harness.notifier.awaitPrompt()
+        guard await harness.notifier.awaitPrompt() else { return }
         harness.controller.recordingDidResume()
         harness.controller.recordingDidPause(
             at: MovementReminderHarness.anchor,
