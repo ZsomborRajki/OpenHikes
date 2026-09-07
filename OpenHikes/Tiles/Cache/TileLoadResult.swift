@@ -17,7 +17,11 @@ nonisolated enum TileLoadDisposition: Sendable {
 
 /// The image returned by a tile load, plus the distinction the renderer needs
 /// between a request that failed and one network policy never allowed.
-nonisolated enum TileLoadResult: @unchecked Sendable {
+///
+/// Conformance is declared below rather than here, because which form is
+/// honest depends on the platform — `UIImage` is declared `NS_SWIFT_SENDABLE`
+/// and `NSImage` is not.
+nonisolated enum TileLoadResult {
     case failed
     case loaded(TileImage)
     case suppressed
@@ -35,6 +39,16 @@ nonisolated enum TileLoadResult: @unchecked Sendable {
         }
     }
 }
+
+#if canImport(UIKit)
+// Checked: the compiler reads the associated value rather than taking an
+// `@unchecked` at its word.
+extension TileLoadResult: Sendable {}
+#elseif canImport(AppKit)
+// Unchecked on the argument the case has always rested on: the tile is decoded
+// before it is wrapped and never written to again. Nothing builds this today.
+extension TileLoadResult: @unchecked Sendable {}
+#endif
 
 nonisolated extension TileCache {
     /// Loads a tile for display while hiding the renderer-only policy result.

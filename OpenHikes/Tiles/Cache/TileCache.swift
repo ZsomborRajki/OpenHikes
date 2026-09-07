@@ -79,10 +79,14 @@ nonisolated final class TileCache: @unchecked Sendable {
         }.value
     }
 
-    /// `@unchecked` because of `image`: `TileImage` (`UIImage`/`NSImage`) is
-    /// not declared `Sendable`, though a decoded tile is never mutated after
-    /// construction. The other two properties are immutable value types.
-    final class MemoryTile: @unchecked Sendable {
+    /// One tile in memory: the decoded image, plus what the tier needs to
+    /// decide whether it may still be served and what it costs.
+    ///
+    /// The `Sendable` conformance is declared at file scope below, because
+    /// which form is honest depends on the platform — `UIImage` is declared
+    /// `NS_SWIFT_SENDABLE` and `NSImage` is not. Either way a decoded tile is
+    /// never mutated after construction.
+    final class MemoryTile {
         let image: TileImage
         let storedAt: Date
         /// When this entry was admitted as *stale durable coverage* rather than
@@ -135,15 +139,6 @@ nonisolated final class TileCache: @unchecked Sendable {
         // bytes a pixel rather than charging nothing, which would exempt the
         // entry from the limit entirely — `NSCache` treats a zero cost as free.
         return max(Int(image.size.width * image.size.height * 4), 1)
-    }
-
-    /// One tile off the network: the bytes exactly as served, plus the decoded
-    /// image. `@unchecked Sendable` for the same reason ``MemoryTile`` is —
-    /// `TileImage` isn't `Sendable`, and a decoded tile is never mutated after
-    /// this is built.
-    private struct FetchedTile: @unchecked Sendable {
-        let data: Data
-        let image: TileImage
     }
 
     /// OSM requires cached tiles to honor response caching headers, or to use
@@ -345,6 +340,33 @@ nonisolated final class TileCache: @unchecked Sendable {
         if monitorsNetwork { monitor.cancel() }
     }
 }
+
+/// One tile off the network: the bytes exactly as served, plus the decoded
+/// image, on its way to whichever tier the caller decided it belongs in.
+///
+/// At file scope rather than nested inside ``TileCache`` only so the
+/// conditional conformance below can name it. Top-level `private` is the same
+/// visibility a nested `private` gave it: nothing outside this file sees it.
+private struct FetchedTile {
+    let data: Data
+    let image: TileImage
+}
+
+#if canImport(UIKit)
+// Checked, because `UIImage` is declared `NS_SWIFT_SENDABLE`, so the compiler
+// reads these types' stored properties rather than taking an `@unchecked` at
+// its word. Note this says nothing about ``TileCache`` itself, which stays
+// unchecked for its `NSCache`.
+extension TileCache.MemoryTile: Sendable {}
+extension FetchedTile: Sendable {}
+#elseif canImport(AppKit)
+// `NSImage` carries no such declaration, so this branch keeps the unchecked
+// form on the argument the types have always rested on: a tile is decoded
+// before it is boxed and never written to again. Nothing builds this today —
+// verify it before an AppKit target is taken seriously.
+extension TileCache.MemoryTile: @unchecked Sendable {}
+extension FetchedTile: @unchecked Sendable {}
+#endif
 
 nonisolated extension TileCache {
 
