@@ -5,26 +5,35 @@
 //  Getting a decoded image from ``HikePhotoStore`` to a SwiftUI view without
 //  decoding it on the main thread.
 //
-//  The store's work is off-main by contract and a `UIImage` is not `Sendable`,
-//  so the two ends need a box to meet in. Same shape, and same justification,
-//  as ``TileCache/MemoryTile``: the image is produced once and never written
-//  to again, so the only thing crossing the boundary is a reference nobody
+//  The store's work is off-main by contract, so a decoded image has a boundary
+//  to cross and these are the boxes it crosses in. Same shape, and same
+//  justification, as ``TileCache/MemoryTile``: the image is produced once and
+//  never written to again, so the only thing crossing is a reference nobody
 //  else holds.
+//
+//  Both conformances are declared below rather than on the types, because
+//  which form is honest depends on the platform: `UIImage` is declared
+//  `NS_SWIFT_SENDABLE` and `NSImage` is not.
 //
 
 import Foundation
 
 /// A decoded image on its way back to the main actor.
 ///
-/// `@unchecked Sendable` because `PhotoImage` isn't `Sendable` and there is no
-/// Swift-native image type to replace it with. The image is fully decoded
-/// before this is constructed and never mutated afterwards.
-nonisolated struct LoadedPhotoImage: @unchecked Sendable {
+/// Kept as a box even though `PhotoImage` crosses on its own under UIKit, and
+/// the reason is the AppKit branch: this is the one place either branch has to
+/// say anything about image sendability. ``PhotoDisplay``,
+/// ``PhotoLibraryReading/thumbnail(for:maxPixelSize:)`` and the discovery
+/// controller are all written in terms of this type and stay plainly
+/// `Sendable` on both, rather than each needing a platform conditional of its
+/// own. The image is fully decoded before this is constructed and never
+/// mutated afterwards.
+nonisolated struct LoadedPhotoImage {
     let image: PhotoImage
 }
 
 /// A frame on its way *out* of the camera, for the same reason.
-nonisolated struct CapturedFrame: @unchecked Sendable {
+nonisolated struct CapturedFrame {
     let image: PhotoImage
     /// When the shutter fired, as the camera reported it — see
     /// ``CameraCaptureMetadata``. `nil` when it reported nothing readable,
@@ -41,6 +50,22 @@ nonisolated struct CapturedFrame: @unchecked Sendable {
         self.capturedAt = capturedAt
     }
 }
+
+#if canImport(UIKit)
+// Checked, because `UIImage` is declared `NS_SWIFT_SENDABLE`. The point of
+// spelling it this way is that the compiler now reads the stored properties
+// above: a later one that isn't `Sendable` is a build error rather than
+// something an `@unchecked` silently absorbed.
+extension LoadedPhotoImage: Sendable {}
+extension CapturedFrame: Sendable {}
+#elseif canImport(AppKit)
+// `NSImage` carries no such declaration, so this branch keeps the unchecked
+// form on the same argument it always rested on: the image is decoded before
+// the box is built and never written to again. Verify that independently
+// before an AppKit target is taken seriously — nothing builds this today.
+extension LoadedPhotoImage: @unchecked Sendable {}
+extension CapturedFrame: @unchecked Sendable {}
+#endif
 
 /// The two reads a photo view makes, each on the concurrent executor.
 ///
