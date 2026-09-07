@@ -77,14 +77,9 @@ struct HikeDetailView: View {
     /// happen, and so which alert is raised — see ``StoredTileDeletion``.
     @State var storageDeletionFailure: StoredTileDeletion.Failure?
     // swiftlint:enable private_swiftui_state
-    @State private var isEditingTitle = false
-    /// Draft text while the inline title field is open.
-    @State private var titleDraft = ""
-    /// Which face of the screen is up. `@State` here rather than in a leaf,
-    /// deliberately: a flip is a tap, not a fix, and it has to replace the
-    /// whole scroll view. It invalidates this body — and only this body,
-    /// which `HikeDetailSegmentTests` pins from the sheet's side.
-    @State private var segment = HikeDetailSegment.details
+    /// Owned by the navigation session so changing presentation hosts keeps
+    /// the selected section and an unfinished rename. Read only by this screen.
+    @Bindable var interaction = HikeDetailInteraction()
     private static let storedBytesRefreshDebounce: Duration = .seconds(5)
 
     /// Built once per hike in `.task`, never in `init`. Scrubbing then resolves
@@ -127,7 +122,7 @@ struct HikeDetailView: View {
         RenderSignpost.mark("HikeDetailBody")
         return VStack(spacing: 0) {
             segmentPicker
-            switch segment {
+            switch interaction.segment {
             case .details: details
             case .history: HikeWalkHistory(hike: hike, onOpen: onOpenWalk)
             }
@@ -275,7 +270,7 @@ struct HikeDetailView: View {
     /// partial completions as well as full ones. Above the scroll view rather
     /// than inside it, so it stays put while either face scrolls.
     private var segmentPicker: some View {
-        Picker("Section", selection: $segment) {
+        Picker("Section", selection: $interaction.segment) {
             ForEach(HikeDetailSegment.allCases) { face in
                 Text(face.title).tag(face)
             }
@@ -417,8 +412,8 @@ private extension HikeDetailView {
             HikeHeaderSymbol(hike: hike)
 
             VStack(alignment: .leading, spacing: 4) {
-                if isEditingTitle {
-                    TextField(hike.title, text: $titleDraft)
+                if interaction.isEditingTitle {
+                    TextField(hike.title, text: $interaction.titleDraft)
                         .font(.title2.bold())
                         .accessibilityLabel("Hike name")
                         .accessibilityIdentifier("hike-title-field")
@@ -478,8 +473,8 @@ private extension HikeDetailView {
 
     private var renameButton: some View {
         Button {
-            titleDraft = hike.displayTitle
-            isEditingTitle = true
+            interaction.titleDraft = hike.displayTitle
+            interaction.isEditingTitle = true
         } label: {
             Image(systemName: "pencil")
                 .font(.subheadline)
@@ -491,8 +486,8 @@ private extension HikeDetailView {
     }
 
     private func commitTitleEdit() {
-        hike.customName = HikeTitle.bounded(titleDraft)
-        isEditingTitle = false
+        hike.customName = HikeTitle.bounded(interaction.titleDraft)
+        interaction.isEditingTitle = false
     }
 
     // MARK: Stats

@@ -122,7 +122,6 @@ extension MapView {
         // line. See `MapView.applySidePanelInset(to:_:)`.
 
         var controlsLeadingConstraint: NSLayoutConstraint?
-        var controlsTrailingConstraint: NSLayoutConstraint?
 
         // MARK: Camera pill
         // Stored state for `MapPhotoControls.swift`. The pill rides the sheet
@@ -229,11 +228,26 @@ extension MapView {
             (renderer as? DirectionalPolylineRenderer)?.pattern = routePattern
         }
 
+        /// Width occupied beyond the safe leading edge by the landscape panel.
+        var sidePanelInset: CGFloat = 0
+
         /// Fits the currently drawn route into view. Shared by the initial draw and
         /// the detail view's Zoom button.
         func fitToCurrentRoute(_ mapView: MKMapView, animated: Bool) {
             guard let polyline = routeOverlay else { return }
-            mapView.setVisibleMapRect(polyline.boundingMapRect, edgePadding: Self.routeInsets, animated: animated)
+            var insets = Self.routeInsets
+            #if canImport(UIKit)
+            if sidePanelInset > 0 {
+                // MapKit padding uses physical edges; the panel uses leading.
+                // Include the safe area the panel itself is positioned inside.
+                if mapView.effectiveUserInterfaceLayoutDirection == .rightToLeft {
+                    insets.right += sidePanelInset + mapView.safeAreaInsets.right
+                } else {
+                    insets.left += sidePanelInset + mapView.safeAreaInsets.left
+                }
+            }
+            #endif
+            mapView.setVisibleMapRect(polyline.boundingMapRect, edgePadding: insets, animated: animated)
         }
 
         /// Observes the detail view / search commands and applies them imperatively.

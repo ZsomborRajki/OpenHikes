@@ -231,6 +231,23 @@ struct OpenHikesView: View {
                 MapSidePanel { mapSheet() }
             }
         }
+            .overlay(alignment: .topLeading) {
+                if let current = appModel.weatherManager.current {
+                    WeatherBadge(weather: current) { weatherDetail.present() }
+                        // Beside the panel in landscape, for the same reason
+                        // the map's own controls are moved off that edge —
+                        // this overlay is drawn under it otherwise, and a
+                        // badge that cannot be tapped is a forecast withheld.
+                        .padding(
+                            .leading,
+                            WeatherBadge.leadingPadding
+                                + (usesSidePanel ? MapSidePanelLayout.mapInset : 0)
+                        )
+                        .padding(.top, WeatherBadge.topPadding)
+                        .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
+                        .ignoresSafeArea(.container, edges: .vertical)
+                }
+            }
             // Draws nothing. It is where the vertical size class is read —
             // out of this body, deliberately and at a measured cost if it
             // moves back in. See ``SheetLayoutReader``.
@@ -269,21 +286,6 @@ struct OpenHikesView: View {
         )
             .equatable()
             .accessibilityIdentifier("trail-map")
-            .overlay(alignment: .topLeading) {
-                if let current = appModel.weatherManager.current {
-                    WeatherBadge(weather: current) { weatherDetail.present() }
-                        // Beside the panel in landscape, for the same reason
-                        // the map's own controls are moved off that edge —
-                        // this overlay is drawn under it otherwise, and a
-                        // badge that cannot be tapped is a forecast withheld.
-                        .padding(
-                            .leading,
-                            WeatherBadge.leadingPadding
-                                + (usesSidePanel ? MapSidePanelLayout.mapInset : 0)
-                        )
-                        .padding(.top, WeatherBadge.topPadding)
-                }
-            }
             // Reads nothing and draws nothing outside a measured launch; see
             // ``PerformanceCounterProbe``.
             .overlay(alignment: .topTrailing) {
@@ -291,13 +293,9 @@ struct OpenHikesView: View {
                 PerformanceCounterProbe()
                 #endif
             }
-            // Below the two overlays above rather than above them: both are
-            // positioned against the map's own edges — `WeatherBadge.topPadding`
-            // is what clears the Dynamic Island, and `MapView.addAttribution`
-            // is built to agree with it — so the map and its overlays have to
-            // leave the safe area together. Only the map is full-bleed; the
-            // window around it keeps its safe area, which is what the landscape
-            // panel is laid out inside.
+            // The map and diagnostic probe fill the window. The weather
+            // overlay belongs to the safe-area container above so its leading
+            // edge agrees with the panel and the map's attribution guide.
             .ignoresSafeArea()
             .onAppear {
                 // Before the selection below, and before either sweep: it
