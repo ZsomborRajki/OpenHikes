@@ -38,7 +38,7 @@ nonisolated final class OrientationUITests: XCTestCase {
             await MainActor.run { XCUIDevice.shared.orientation = .portrait }
         }
 
-        let app = launchApp()
+        let app = launchUpright()
         let map = element("trail-map", in: app)
         XCTAssertTrue(
             map.waitForExistence(timeout: UITestTimeout.navigation),
@@ -107,7 +107,7 @@ nonisolated final class OrientationUITests: XCTestCase {
             await MainActor.run { XCUIDevice.shared.orientation = .portrait }
         }
 
-        let app = launchApp(
+        let app = launchUpright(
             arguments: ["--ui-test-import-gpx=\(UITestFixture.gpxName)"]
         )
         openHikeDetail(in: app)
@@ -121,6 +121,23 @@ nonisolated final class OrientationUITests: XCTestCase {
             "the hike's screen should still be the one on top"
         )
         XCTAssertTrue(element("trail-map", in: app).exists)
+    }
+
+    // MARK: - Turning the device
+
+    /// Launches with the device upright, whatever was left behind.
+    ///
+    /// The simulator keeps the orientation it was last put in — across test
+    /// classes, and across runs, including one that was killed before its
+    /// teardown — so upright is a precondition to establish rather than one to
+    /// assume. The teardown blocks above are what the *next* class gets; this
+    /// is what this one stands on.
+    @MainActor
+    private func launchUpright(arguments: [String] = []) -> XCUIApplication {
+        XCUIDevice.shared.orientation = .portrait
+        let app = launchApp(arguments: arguments)
+        XCTAssertTrue(waitForPortrait(app), "the app should have started upright")
+        return app
     }
 
     // MARK: - Waiting on the rotation
