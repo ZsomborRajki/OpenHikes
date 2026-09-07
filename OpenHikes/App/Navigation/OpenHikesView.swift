@@ -91,6 +91,25 @@ struct OpenHikesView: View {
     @State var photoPresentation = PhotoCaptureState()
     // swiftlint:enable private_swiftui_state
 
+    #if os(macOS)
+    /// No compact height to answer to on a platform this app does not build
+    /// for yet — see the `canImport` note in the repository instructions.
+    private var usesSidePanel: Bool { false }
+    #else
+    @Environment(\.verticalSizeClass)
+    private var verticalSizeClass
+
+    /// Whether the sheet's contents belong in ``MapSidePanel`` rather than in
+    /// the sheet: iPhone landscape, where the system ignores
+    /// `.presentationDetents` and would present the sheet — the one this view
+    /// keeps up permanently — over the whole map. See ``SheetLayout``.
+    ///
+    /// An `@Environment` read, so a rotation re-evaluates this body. That is
+    /// the point rather than a cost: it is what swaps the two shapes, and it
+    /// happens when the device turns over and at no other time.
+    private var usesSidePanel: Bool { verticalSizeClass == .compact }
+    #endif
+
     /// The selected tile provider, persisted by the settings sheet.
     @AppStorage(SettingsKey.tileProviderID)
     private var tileProviderID = TileProvider.default.id
@@ -152,6 +171,62 @@ struct OpenHikesView: View {
         ).renderedSource
     }
 
+    /// Whether the detented sheet is the shape currently in use.
+    ///
+    /// Derived rather than stored: ``showSheet`` stays the app's own "the
+    /// primary surface is up" flag — including the re-presentation below that
+    /// survives the document picker tearing it down — and this is the second
+    /// condition on top of it. A rotation into landscape therefore takes the
+    /// sheet down without ever writing `false` into that flag, and rotating
+    /// back puts it straight up again.
+    private var bottomSheetPresented: Binding<Bool> {
+        Binding(
+            get: { showSheet && !usesSidePanel },
+            set: { showSheet = $0 }
+        )
+    }
+
+    /// The app's primary surface, built once for both shapes it is drawn in.
+    ///
+    /// The two callbacks are the whole difference: a side panel does not move,
+    /// rests at no detent, and has nothing to report to ``SheetMetrics``.
+    ///
+    /// The camera, the library picker and the weather detail are attached here
+    /// rather than beside the presentation, for the reason the repository
+    /// instructions give under *Present modals from inside the sheet's
+    /// contents*: a view
+    /// can only have one modal up at a time, and in portrait this sheet is
+    /// never taken down, so a picker attached alongside it is never presented
+    /// at all. In landscape there is no sheet and the panel is an ordinary
+    /// overlay — attaching them to the contents is what keeps one answer right
+    /// in both shapes. Same reason the GPX importer hangs off ``MapSheet``.
+    private func mapSheet(
+        onSheetTopChange: @escaping (CGFloat) -> Void = { _ in /* no-op default */ },
+        onSheetDetentCommitted: @escaping (Bool) -> Void = { _ in /* no-op default */ }
+    ) -> some View {
+        MapSheet(
+            searchText: $searchText,
+            selectedHike: $selectedHike,
+            presentation: sheet,
+            highlight: highlight,
+            walkHighlight: walkHighlight,
+            mapController: mapController,
+            photoCapture: photoCapture,
+            photoPins: photoPins,
+            onImportGPX: importGPX,
+            onImportFailed: { importFailure = .file(.unreadable) },
+            onSearchFailed: { failure in searchFailure = failure },
+            onSheetTopChange: onSheetTopChange,
+            onSheetDetentCommitted: onSheetDetentCommitted
+        )
+            .photoCapturePickers(
+                $photoPresentation,
+                onCaptured: attachCapturedPhoto,
+                onPicked: attachPickedPhotos
+            )
+            .weatherDetailSheet(weatherDetail, weather: appModel.weatherManager)
+    }
+
     var body: some View {
         // Fires on every re-evaluation of this view's body. The observable
         // inputs here are `appModel.weatherManager.current` (~15 min) and
@@ -163,7 +238,31 @@ struct OpenHikesView: View {
         // `MapUpdateCalled` mark in MapView and `MapCentered` in
         // MapCoordinator.
         RenderSignpost.mark("OpenHikesViewBody")
-        return MapView(
+        // The landscape shape of the app's primary surface, beside the map
+        // rather than over it — see ``MapSidePanel``. Nothing about it is
+        // modal: the map keeps taking touches, and there is nothing to dismiss.
+        //
+        // A `ZStack` rather than one more overlay on the map, because an
+        // overlay inherits the `.ignoresSafeArea()` below and would put the
+        // panel under the Dynamic Island — which in landscape sits on the very
+        // edge the panel is against. Here the map ignores the safe area on its
+        // own and the panel is laid out inside it.
+        return ZStack(alignment: .leading) {
+            mapSurface
+            if usesSidePanel {
+                MapSidePanel { mapSheet() }
+            }
+        }
+    }
+
+    /// The map, and everything presented over it.
+    ///
+    /// A computed property rather than a second `View` type, which changes
+    /// nothing about what this body depends on: a `var` is inlined into the
+    /// body that reads it, so the inputs are the same ones they were when this
+    /// was written out in place. See *Render isolation, in practice*.
+    private var mapSurface: some View {
+        MapView(
             locationManager: appModel.locationManager,
             route: displayedRoute,
             routeStyle: routeStyle,
@@ -175,6 +274,9 @@ struct OpenHikesView: View {
             mapController: mapController,
             photoCapture: photoCapture,
             photoPins: photoPins,
+            // Keeps the credit line and the camera pill beside the landscape
+            // panel instead of behind it.
+            sidePanelInset: usesSidePanel ? MapSidePanelLayout.mapInset : 0,
             // The same condition the overlay below is built on, so the credit
             // line knows whether there is a badge above it to hang from. Read
             // here rather than there because a `@ViewBuilder` closure cannot
@@ -183,11 +285,18 @@ struct OpenHikesView: View {
         )
             .equatable()
             .accessibilityIdentifier("trail-map")
-            .ignoresSafeArea()
             .overlay(alignment: .topLeading) {
                 if let current = appModel.weatherManager.current {
                     WeatherBadge(weather: current) { weatherDetail.present() }
-                        .padding(.leading, WeatherBadge.leadingPadding)
+                        // Beside the panel in landscape, for the same reason
+                        // the map's own controls are moved off that edge —
+                        // this overlay is drawn under it otherwise, and a
+                        // badge that cannot be tapped is a forecast withheld.
+                        .padding(
+                            .leading,
+                            WeatherBadge.leadingPadding
+                                + (usesSidePanel ? MapSidePanelLayout.mapInset : 0)
+                        )
                         .padding(.top, WeatherBadge.topPadding)
                 }
             }
@@ -198,6 +307,14 @@ struct OpenHikesView: View {
                 PerformanceCounterProbe()
                 #endif
             }
+            // Below the two overlays above rather than above them: both are
+            // positioned against the map's own edges — `WeatherBadge.topPadding`
+            // is what clears the Dynamic Island, and `MapView.addAttribution`
+            // is built to agree with it — so the map and its overlays have to
+            // leave the safe area together. Only the map is full-bleed; the
+            // window around it keeps its safe area, which is what the landscape
+            // panel is laid out inside.
+            .ignoresSafeArea()
             .onAppear {
                 // Before the selection below, and before either sweep: it
                 // rewrites the manifests both of them read, and the hike
@@ -241,19 +358,8 @@ struct OpenHikesView: View {
             }
             .task { await importRequestedGPXFixture() }
             .task { await seedRequestedLaunchFixtures() }
-            .sheet(isPresented: $showSheet) {
-                MapSheet(
-                    searchText: $searchText,
-                    selectedHike: $selectedHike,
-                    presentation: sheet,
-                    highlight: highlight,
-                    walkHighlight: walkHighlight,
-                    mapController: mapController,
-                    photoCapture: photoCapture,
-                    photoPins: photoPins,
-                    onImportGPX: importGPX,
-                    onImportFailed: { importFailure = .file(.unreadable) },
-                    onSearchFailed: { failure in searchFailure = failure },
+            .sheet(isPresented: bottomSheetPresented) {
+                mapSheet(
                     onSheetTopChange: { topY in
                         // Read when the sheet reports, not when this body runs:
                         // a drag reports at display rate, and this closure is
@@ -286,21 +392,6 @@ struct OpenHikesView: View {
                     }
                     .presentationDragIndicator(.visible)
                     .interactiveDismissDisabled()
-                    // The camera and the library picker are presented from
-                    // here, not from the view that presents this sheet: a view
-                    // can only have one modal up at a time, and this sheet is
-                    // never taken down, so a picker attached alongside it is
-                    // never presented at all. Same reason the GPX importer
-                    // hangs off ``MapSheet``.
-                    .photoCapturePickers(
-                        $photoPresentation,
-                        onCaptured: attachCapturedPhoto,
-                        onPicked: attachPickedPhotos
-                    )
-                    // Here for exactly the same reason: the badge that opens
-                    // it is over the map, but a `.sheet` attached out there
-                    // would be a tap that silently does nothing.
-                    .weatherDetailSheet(weatherDetail, weather: appModel.weatherManager)
             }
             // The sheet is the app's primary surface and must always stay up. The
             // GPX document picker (a UIKit controller presented from within a
@@ -308,6 +399,15 @@ struct OpenHikesView: View {
             // issue — so if it ever goes away, bring it right back.
             .onChange(of: showSheet) { _, shown in
                 if !shown { showSheet = true }
+            }
+            // Tells the sheet's own screens which shape they are being drawn
+            // in, and takes the sheet's last measured edge away from the map
+            // when there is no longer a sheet to measure. `initial` because a
+            // launch straight into landscape is a rotation this view never
+            // sees.
+            .onChange(of: usesSidePanel, initial: true) { _, isPanel in
+                sheet.layout = isPanel ? .sidePanel : .bottomSheet
+                if isPanel { sheetMetrics.withdraw() }
             }
             // Presented from here rather than from the sheet: the document
             // picker's dismissal tears the sheet down (see above), and an alert

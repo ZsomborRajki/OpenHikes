@@ -15,6 +15,7 @@ bundle="OpenHikesUITests"
 # is run through Scripts/run-performance-tests.sh.
 suites=(
   OpenHikesUITests
+  OrientationUITests
   RecordingUITests
   WalkUITests
   PhotoUITests

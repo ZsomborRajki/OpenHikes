@@ -81,6 +81,23 @@ struct MapView: MapViewRepresentable, Equatable {
     /// annotations rather than this view — see ``PhotoMapPinController``.
     var photoPins: PhotoMapPinController
 
+    /// How far the landscape side panel reaches in from the leading edge, or
+    /// zero in portrait where there is no panel and the sheet is over the map
+    /// instead.
+    ///
+    /// Spent on the layout guide the map's own controls hang off — see
+    /// ``applySidePanelInset(to:_:)`` — so the credit line and the camera pill
+    /// sit beside ``MapSidePanel`` rather than behind it, while the map itself
+    /// stays full-bleed underneath. It is a guide rather than an inset on the
+    /// map because `additionalSafeAreaInsets` belongs to `UIViewController`
+    /// and this map is a `UIView`; and it is passed down rather than derived
+    /// here because what reaches `MKMapView.safeAreaInsets` comes from the
+    /// window, which knows nothing about a panel SwiftUI drew over it.
+    ///
+    /// A rotation is the only thing that changes it, so unlike the reference
+    /// types above it is a plain value compared in `==` below.
+    var sidePanelInset: CGFloat = 0
+
     /// Whether the weather badge is currently drawn over the map.
     ///
     /// The badge is a SwiftUI overlay in the root view's body and this map
@@ -116,6 +133,7 @@ struct MapView: MapViewRepresentable, Equatable {
             && lhs.photoCapture === rhs.photoCapture
             && lhs.photoPins === rhs.photoPins
             && lhs.showsWeatherBadge == rhs.showsWeatherBadge
+            && lhs.sidePanelInset == rhs.sidePanelInset
     }
 
     func makeCoordinator() -> Coordinator { Coordinator() }
@@ -235,7 +253,7 @@ struct MapView: MapViewRepresentable, Equatable {
         let bottom = tracking.bottomAnchor.constraint(equalTo: mapView.topAnchor, constant: initialTrackingButtonY)
         coordinator.trackingBottomConstraint = bottom
 
-        let guide = mapView.safeAreaLayoutGuide
+        let guide = makeControlsGuide(in: mapView, coordinator)
         NSLayoutConstraint.activate([
             tracking.trailingAnchor.constraint(equalTo: guide.trailingAnchor, constant: -Self.controlInset),
             bottom,
@@ -250,6 +268,30 @@ struct MapView: MapViewRepresentable, Equatable {
     }
 
     #if os(iOS)
+    /// The safe area the map's own controls are aligned to, which is the
+    /// device's own until a ``MapSidePanel`` takes the leading edge.
+    ///
+    /// The two horizontal constraints are kept so the panel's width can be
+    /// spent on them later; the vertical pair never moves.
+    private func makeControlsGuide(in mapView: MKMapView, _ coordinator: Coordinator) -> UILayoutGuide {
+        let safeArea = mapView.safeAreaLayoutGuide
+        let controls = UILayoutGuide()
+        mapView.addLayoutGuide(controls)
+
+        let leading = controls.leadingAnchor.constraint(equalTo: safeArea.leadingAnchor)
+        let trailing = controls.trailingAnchor.constraint(equalTo: safeArea.trailingAnchor)
+        coordinator.controlsLeadingConstraint = leading
+        coordinator.controlsTrailingConstraint = trailing
+
+        NSLayoutConstraint.activate([
+            leading,
+            trailing,
+            controls.topAnchor.constraint(equalTo: safeArea.topAnchor),
+            controls.bottomAnchor.constraint(equalTo: safeArea.bottomAnchor),
+        ])
+        return controls
+    }
+
     /// The credit line, hung directly beneath the weather badge on the leading
     /// edge and left-aligned with it. It stays on the map rather than moving
     /// into the sheet, as the providers' terms require. See
@@ -489,12 +531,39 @@ struct MapView: MapViewRepresentable, Equatable {
         }
     }
 
+    /// Keeps the map's own controls clear of ``MapSidePanel``.
+    ///
+    /// The guide the controls hang off is pulled in from the leading edge by
+    /// the panel's width, which moves the credit line and the camera pill —
+    /// both aligned to it — out from behind the panel in one write, and leaves
+    /// the map itself full-bleed underneath. The tracking button is on the
+    /// trailing edge and does not move; nothing is there.
+    ///
+    /// A signed constant, not a `left`: in a right-to-left layout the leading
+    /// edge is the other side of the screen and the constraint's own sign flips
+    /// with it. Written only when it actually changes — this runs on every
+    /// update pass, and a constraint write lays the map out again.
+    private func applySidePanelInset(to mapView: MKMapView, _ coordinator: Coordinator) {
+        #if canImport(UIKit)
+        let isRightToLeft = mapView.effectiveUserInterfaceLayoutDirection == .rightToLeft
+        let leading = isRightToLeft ? 0 : sidePanelInset
+        let trailing = isRightToLeft ? -sidePanelInset : 0
+        if coordinator.controlsLeadingConstraint?.constant != leading {
+            coordinator.controlsLeadingConstraint?.constant = leading
+        }
+        if coordinator.controlsTrailingConstraint?.constant != trailing {
+            coordinator.controlsTrailingConstraint?.constant = trailing
+        }
+        #endif
+    }
+
     func update(_ mapView: MKMapView, _ coordinator: Coordinator) {
         // Fires on every SwiftUI-driven update pass, whether or not any of the
         // steps below actually change anything — compare its rate against the
         // "Rebuilt"/"Centered"/"Restyled" marks to see how much of that is
         // real work vs. free no-ops.
         RenderSignpost.mark("MapUpdateCalled")
+        applySidePanelInset(to: mapView, coordinator)
         applyTileSource(to: mapView, coordinator)
         updateRoute(mapView, coordinator)
         // Restyling the line is deliberately absent: `observeRouteStyle` applies

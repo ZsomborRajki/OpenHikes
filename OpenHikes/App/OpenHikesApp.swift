@@ -87,10 +87,14 @@ struct OpenHikesApp: App {
 
     var body: some Scene {
         WindowGroup {
+            // No `.ignoresSafeArea()` here: the map asks for that itself, one
+            // level down, and asking for it out here as well threw the safe
+            // area away for everything else in the window — which is how the
+            // landscape side panel came to sit under the Dynamic Island. See
+            // ``MapSidePanel``.
             OpenHikesView()
                 .environment(model)
                 .defaultAppStorage(model.defaults)
-                .ignoresSafeArea()
         }
         .modelContainer(model.container)
         // The widget's basemaps need the network to render, so a trail

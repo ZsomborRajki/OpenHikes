@@ -26,8 +26,30 @@
 //  that is the whole point, and a view that reads `path` or `detent` in its
 //  body has quietly put the old cost back.
 //
+//  ``layout`` is the second input those flags are derived from. In landscape
+//  the sheet is not a sheet at all — see ``MapSidePanel`` — and a panel that
+//  fills its side of the screen is never compact and never at a detent,
+//  whatever the stored detent happens to say. Keeping that in the flags rather
+//  than at the call sites is what stops the sheet's own screens from having to
+//  ask which shape they are being drawn in.
+//
 
 import SwiftUI
+
+/// The shape the sheet's contents are drawn in.
+///
+/// Not a cosmetic choice: `.presentationDetents` are honoured only in a
+/// compact-width, regular-height presentation, and iPhone landscape is compact
+/// *height* — so the system presents the sheet full-screen there. For an app
+/// that keeps this sheet up permanently and re-presents it when it is
+/// dismissed, that is not a taller sheet but the whole UI, with the map behind
+/// it and no way back. Landscape gets a side panel instead.
+enum SheetLayout {
+    /// Portrait: an Apple Maps-style detented sheet over the map.
+    case bottomSheet
+    /// Compact height: a panel down the leading edge, with the map beside it.
+    case sidePanel
+}
 
 @Observable
 final class SheetPresentation {
@@ -85,18 +107,36 @@ final class SheetPresentation {
     /// a particular one.
     private(set) var hasPushedScreen = false
 
-    /// True at the smallest detent, where only the search field shows.
+    /// True at the smallest detent, where only the search field shows. Never
+    /// true in a side panel, which has the height for the hikes list whatever
+    /// detent the sheet would have rested at.
     private(set) var isCompact: Bool
 
-    /// True at the largest detent, where the sheet covers the map.
+    /// True where the sheet's contents have the full height available to them:
+    /// the largest detent, or a side panel, which is always that tall.
     private(set) var isFullHeight: Bool
 
     /// True at the middle detent — the only one ``SheetMetrics`` learns a
-    /// resting height for.
+    /// resting height for. A side panel rests at no detent and reports none.
     private(set) var isAtMiddleDetent: Bool
+
+    /// Which shape the contents are drawn in. Written by `OpenHikesView` when
+    /// the vertical size class changes, which on iPhone is a rotation.
+    var layout: SheetLayout {
+        get {
+            access(keyPath: \.layout)
+            return storedLayout
+        }
+        set {
+            guard newValue != storedLayout else { return }
+            withMutation(keyPath: \.layout) { storedLayout = newValue }
+            recomputeDetentFlags()
+        }
+    }
 
     @ObservationIgnored private var storedPath: [SheetRoute] = []
     @ObservationIgnored private var storedDetent: PresentationDetent
+    @ObservationIgnored private var storedLayout: SheetLayout = .bottomSheet
     /// Whether the top of the stack is currently a screen that wants the whole
     /// sheet, so ``applyFullHeightPolicy()`` acts on the transition rather than
     /// on every path write.
@@ -175,11 +215,23 @@ final class SheetPresentation {
     }
 
     private func detentDidChange() {
-        let compact = storedDetent == Self.compactDetent
+        recomputeDetentFlags()
+    }
+
+    /// The three coarse flags, from the detent *and* the layout.
+    ///
+    /// A side panel keeps the detent it would have rested at — a rotation back
+    /// to portrait puts the sheet where it was, and the full-height policy
+    /// above goes on working while a photo is open in landscape — but none of
+    /// the heights it describes are true of a panel, so the answers are fixed
+    /// rather than read while one is on screen.
+    private func recomputeDetentFlags() {
+        let isPanel = storedLayout == .sidePanel
+        let compact = !isPanel && storedDetent == Self.compactDetent
         if isCompact != compact { isCompact = compact }
-        let full = storedDetent == .large
+        let full = isPanel || storedDetent == .large
         if isFullHeight != full { isFullHeight = full }
-        let middle = storedDetent == .medium
+        let middle = !isPanel && storedDetent == .medium
         if isAtMiddleDetent != middle { isAtMiddleDetent = middle }
     }
 }

@@ -177,6 +177,23 @@ final class SheetMetrics {
     func detentCommitted(toMiddle: Bool) {
         awaitingMiddleRest = toMiddle
     }
+
+    /// Forgets the sheet: there isn't one over the map any more.
+    ///
+    /// Called when the contents move into ``MapSidePanel`` — landscape, where
+    /// nothing reports a top edge at all. Without this the last portrait
+    /// reading survives the rotation, and it is a plausible one: a value that
+    /// still lands on the (now much shorter) map is followed rather than
+    /// refused, which parks the "my location" button against a sheet that is no
+    /// longer there. Zeroing it puts the map back on the fallback it uses
+    /// before the sheet has ever reported, and re-arms the learning so the
+    /// resting height is measured again on the way back to portrait.
+    func withdraw() {
+        lastReportAt = nil
+        awaitingMiddleRest = true
+        if middleRestY != nil { middleRestY = nil }
+        if topY != 0 { topY = 0 }
+    }
 }
 
 /// One-shot map commands the UI issues: the detail view's Zoom button, a
