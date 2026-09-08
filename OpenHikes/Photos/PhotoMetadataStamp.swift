@@ -213,36 +213,42 @@ nonisolated enum PhotoMetadataStamp {
         }
     }
 
-    /// `yyyy:MM:dd` and `HH:mm:ss`, built from components rather than through
-    /// a `DateFormatter`.
+    /// `yyyy:MM:dd` and `HH:mm:ss`, the two halves EXIF keeps a timestamp in.
     ///
-    /// Not a style choice: a `DateFormatter` is not `Sendable`, so it could
-    /// not be a `static let` here, and building one per photograph to produce
-    /// a fixed-width numeric string is more machinery than the string is
-    /// worth.
+    /// A comment here used to say this was built from components because
+    /// `DateFormatter` is not `Sendable` and so could not be a `static let`.
+    /// The SDK says otherwise — `NSDateFormatter.h` declares
+    /// `NS_SWIFT_SENDABLE` — so the reason was stale, and the replacement is
+    /// not a formatter anyway: `Date.VerbatimFormatStyle` is the value-type
+    /// form Foundation offers for exactly this, a fixed non-localized format.
+    ///
+    /// Verbatim rather than `Date.FormatStyle`, and POSIX rather than the
+    /// walker's locale, because this string is read by other software: a
+    /// localized rendering would write Arabic-Indic digits into
+    /// `DateTimeOriginal` on an Arabic device, which no reader of EXIF
+    /// expects.
     private static func timestamp(
         of date: Date,
         in timeZone: TimeZone
     ) -> (date: String, time: String) {
         var calendar = Calendar(identifier: .gregorian)
         calendar.timeZone = timeZone
-        let parts = calendar.dateComponents(
-            [.year, .month, .day, .hour, .minute, .second],
-            from: date
-        )
-        return (
-            String(
-                format: "%04d:%02d:%02d",
-                parts.year ?? 0,
-                parts.month ?? 0,
-                parts.day ?? 0
-            ),
-            String(
-                format: "%02d:%02d:%02d",
-                parts.hour ?? 0,
-                parts.minute ?? 0,
-                parts.second ?? 0
+        func rendered(_ format: Date.FormatString) -> String {
+            date.formatted(
+                Date.VerbatimFormatStyle(
+                    format: format,
+                    locale: Locale(identifier: "en_US_POSIX"),
+                    timeZone: timeZone,
+                    calendar: calendar
+                )
             )
+        }
+        return (
+            rendered("\(year: .padded(4)):\(month: .twoDigits):\(day: .twoDigits)"),
+            rendered("""
+            \(hour: .twoDigits(clock: .twentyFourHour, hourCycle: .zeroBased)):\
+            \(minute: .twoDigits):\(second: .twoDigits)
+            """)
         )
     }
 }
