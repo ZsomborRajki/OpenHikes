@@ -417,7 +417,13 @@ struct TrailWidgetEntryView: View {
     }
 
     @ViewBuilder private var content: some View {
-        if let recording = entry.recordingSnapshot {
+        if family == .accessoryCircular {
+            AccessoryCircularContent(entry: entry)
+        } else if family == .accessoryInline {
+            AccessoryInlineContent(entry: entry)
+        } else if family == .accessoryRectangular {
+            AccessoryRectangularContent(entry: entry)
+        } else if let recording = entry.recordingSnapshot {
             RecordingWidgetContent(snapshot: recording, family: family)
         } else if let snapshot = entry.snapshot {
             TrailWidgetContent(snapshot: snapshot, basemaps: entry.basemaps, family: family)
@@ -637,7 +643,14 @@ private struct TrailWidgetContent: View {
 struct TrailWidget: Widget {
     /// Every size this widget offers. Named rather than inlined so a test can
     /// check that each one has a layout to draw with.
-    static let supportedFamilies: [WidgetFamily] = [.systemSmall, .systemMedium, .systemLarge, .systemExtraLarge]
+    static let supportedFamilies: [WidgetFamily] = [
+        .systemSmall,
+        .systemMedium,
+        .systemLarge,
+        .accessoryCircular,
+        .accessoryRectangular,
+        .accessoryInline,
+    ]
 
     var body: some WidgetConfiguration {
         // `AppIntentConfiguration`, not `StaticConfiguration` — the kind is
