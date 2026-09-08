@@ -14,6 +14,10 @@ import WidgetKit
 
 /// The size-dependent decisions the widget draws with, pulled out of the view
 /// so they can be checked for every family without rendering one.
+///
+/// Home Screen families only. The accessory families draw no map and no
+/// chips, so none of these three numbers has anything to decide for them —
+/// see `TrailWidget.accessoryFamilies` and `TrailWidgetAccessories.swift`.
 struct TrailWidgetLayout: Equatable {
     let routeLineWidth: Double
     let padding: Double
