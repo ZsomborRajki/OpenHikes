@@ -28,6 +28,7 @@
 //  rather than presenting itself as a measurement.
 //
 
+import Algorithms
 import CoreLocation
 import Foundation
 
@@ -161,24 +162,18 @@ nonisolated struct HikePhotoTimeline: Sendable {
         )
     }
 
-    /// The index `i` with `fixes[i].timestamp < date < fixes[i + 1].timestamp`.
+    /// The index `i` with `fixes[i].timestamp <= date < fixes[i + 1].timestamp`.
     ///
     /// Only ever called for a `date` strictly inside the span, which is what
-    /// makes the result safe to index a pair with. A route is tens of
-    /// thousands of points and a library scan asks this once per candidate
-    /// photo, so it is a binary search rather than a walk.
+    /// makes the result safe to index a pair with: `start < date` gives the
+    /// partition point at least one element to leave behind, and `date < end`
+    /// keeps it off the end, so `- 1` lands on a fix that has a successor. A
+    /// route is tens of thousands of points and a library scan asks this once
+    /// per candidate photo, so it is a binary search rather than a walk — the
+    /// same `partitioningIndex` ``RouteProfile`` and ``MapState`` already
+    /// index their sorted arrays with, rather than a fourth hand-written one.
     private func segmentIndex(containing date: Date) -> Int {
-        var low = 0
-        var high = fixes.count - 1
-        while high - low > 1 {
-            let middle = low + (high - low) / 2
-            if fixes[middle].timestamp <= date {
-                low = middle
-            } else {
-                high = middle
-            }
-        }
-        return low
+        fixes.partitioningIndex { $0.timestamp > date } - 1
     }
 }
 
