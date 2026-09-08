@@ -22,6 +22,7 @@ import Foundation
 @testable import OpenHikes
 import OpenHikesShared
 import Testing
+import UIKit
 
 @Suite("Hike Live Activity orphan takedown")
 @MainActor
@@ -377,11 +378,9 @@ struct LiveActivityPreferenceTests {
 
     /// The system's per-app switch, which is not a default and changes only in
     /// iOS Settings — so returning to the foreground is the only moment the
-    /// app can re-ask. Driven through `reconcileWithPreferences()` directly
-    /// rather than by posting `UIApplication.didBecomeActiveNotification`,
-    /// which is process-wide: the test host is a running app with its own
-    /// observers, and a suite that posted it would be reaching into them.
-    /// What is left untested is one `addObserver` call; the policy is here.
+    /// app can re-ask. Driven through `reconcileWithPreferences()` directly,
+    /// which is the policy; ``theAppBecomingActiveTakesDownAnOrphan()`` is the
+    /// registration that reaches it.
     ///
     /// Goes red if `endAll()` is deleted from `reconcileWithPreferences()`.
     @Test("the system's switch going off takes down an orphan on return")
@@ -397,6 +396,74 @@ struct LiveActivityPreferenceTests {
 
         #expect(harness.presenter.endUnownedKinds == [.recording])
         #expect(harness.presenter.activeSubject == nil)
+    }
+
+    /// The other half of that, and the half the policy above cannot see: the
+    /// registration itself. `observePreferences` asks for
+    /// `UIApplication.DidBecomeActiveMessage`, and a wrong message type, a
+    /// dropped token or a legacy post that no longer bridges into a typed
+    /// observer would all leave every test above green while the walker's
+    /// stale panel stayed on their Lock Screen forever.
+    ///
+    /// Posted on the controller's own centre rather than the process-wide one,
+    /// which is what makes this testable at all: the test host is a running
+    /// app, and posting `UIApplication.didBecomeActiveNotification` on
+    /// `.default` would reach into every other controller alive in it.
+    ///
+    /// Goes red if `observePreferences()`'s lifecycle observer is deleted, if
+    /// its token is dropped instead of appended to `lifecycleObservers`, or if
+    /// it is registered for a different message.
+    @Test("the app becoming active is what re-asks the system's switch")
+    func theAppBecomingActiveTakesDownAnOrphan() async {
+        let harness = LiveActivityHarness.harness()
+        harness.presenter.simulatePreviousLaunch(
+            .recording(sessionID: LiveActivityHarness.sessionID)
+        )
+        harness.presenter.areActivitiesEnabled = false
+
+        harness.postDidBecomeActive()
+        await harness.controller.settle()
+
+        #expect(harness.presenter.endUnownedKinds == [.recording])
+        #expect(harness.presenter.activeSubject == nil)
+    }
+
+    /// Teardown, which is the failure the app-hosted bundles would feel first:
+    /// they build hundreds of these controllers, and an observer that outlived
+    /// its controller would either keep the controller alive with it or go on
+    /// reconciling against a stub some earlier test has finished with.
+    ///
+    /// Two assertions rather than one, because they fail for different
+    /// reasons. That the controller is gone at all is the `[weak self]` in the
+    /// handler — a strong capture makes the centre the controller's owner. That
+    /// nothing was reconciled afterwards is the token's own lifetime, pinned
+    /// against Foundation in `LifecycleObservationTokenTests`.
+    @Test("a released controller is not kept alive by its own observer")
+    func aReleasedControllerObservesNothing() {
+        let presenter = StubHikeActivityPresenter()
+        let center = NotificationCenter()
+        weak var released: HikeLiveActivityController?
+
+        do {
+            let controller = HikeLiveActivityController(
+                presenter: presenter,
+                defaults: LiveActivityHarness.defaults(),
+                lifecycleCenter: center
+            )
+            released = controller
+            withExtendedLifetime(controller) { /* released at the end of this scope */ }
+        }
+
+        #expect(released == nil, "the notification centre must not own the controller")
+
+        presenter.simulatePreviousLaunch(
+            .recording(sessionID: LiveActivityHarness.sessionID)
+        )
+        presenter.areActivitiesEnabled = false
+        center.post(name: UIApplication.didBecomeActiveNotification, object: nil)
+
+        #expect(presenter.endUnownedKinds.isEmpty)
+        #expect(presenter.activeSubject != nil, "nothing is left to take the orphan down")
     }
 
     /// Reconciling while both switches say yes must leave everything exactly

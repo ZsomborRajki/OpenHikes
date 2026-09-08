@@ -111,6 +111,16 @@ final class HikeLiveActivityController {
     @ObservationIgnored private let defaults: UserDefaults
     @ObservationIgnored private let clock: @Sendable () -> Date
 
+    /// Where `UIApplication.DidBecomeActiveMessage` is observed. A seam and
+    /// nothing more: the app never passes anything but `.default`, and it
+    /// covers only the *lifecycle* observation, because
+    /// `UserDefaults.didChangeNotification` is posted by the system on
+    /// `NotificationCenter.default` and a controller listening for it anywhere
+    /// else would simply never hear it. A private centre is what lets a suite
+    /// drive the registration itself rather than the reconciliation behind it,
+    /// without posting a process-wide notification into a running test host.
+    @ObservationIgnored private let lifecycleCenter: NotificationCenter
+
     /// What this process believes is on screen. Not authoritative on its own —
     /// an activity outlives the process that started it — which is why
     /// ``SystemHikeActivityPresenter`` adopts a running activity rather than
@@ -137,40 +147,38 @@ final class HikeLiveActivityController {
     @ObservationIgnored private var pendingWork: Task<Void, Never>?
     @ObservationIgnored private var workSequence: UInt64 = 0
 
-    /// Held so they can be torn down with the controller. A block-based
-    /// observer is retained by the notification centre until it is removed by
-    /// token, and the app-hosted test bundles build hundreds of these.
-    ///
-    /// A box rather than an array field, because `deinit` on a `@MainActor`
-    /// type is itself `nonisolated` and so may not read main-actor storage —
-    /// the same constraint that makes `SystemHikeActivityPresenter` box its
-    /// `Activity`. Letting the box own the `deinit` sidesteps the isolation
-    /// question entirely: it is released exactly when the controller is, and
-    /// whoever is releasing it holds the last reference by definition.
-    @ObservationIgnored private let observers = ObserverTokens()
+    /// The typed lifecycle observation, held for exactly as long as the
+    /// controller is — which is the whole of its deregistration.
+    /// `NotificationCenter.ObservationToken` ends its observation when it goes
+    /// out of scope, so releasing this array is what takes the observer off
+    /// the centre; dropping the token at the end of `observePreferences`
+    /// would instead take the registration down before the walker ever left
+    /// the app. `LifecycleObservationTokenTests` pins both halves.
+    @ObservationIgnored private var lifecycleObservers: [NotificationCenter.ObservationToken] = []
 
-    /// The tokens, and the only thing that removes them.
-    ///
-    /// `nonisolated` is load-bearing, exactly as it is on
-    /// `SystemHikeActivityPresenter`'s handle: `SWIFT_DEFAULT_ACTOR_ISOLATION`
-    /// is `MainActor`, so without it the box would itself be main-actor
-    /// isolated and its own `deinit` could not read it either.
-    nonisolated private final class ObserverTokens: @unchecked Sendable {
-        var tokens: [any NSObjectProtocol] = []
+    /// The untyped one, which has no such lifetime: a block-based observer is
+    /// retained by the notification centre until it is removed by token, and
+    /// the app-hosted test bundles build hundreds of these controllers. That
+    /// is the entire job of the `isolated deinit` below — SE-0371 hops it back
+    /// to the main actor before it runs, which is what lets it read main-actor
+    /// storage and what removed the `nonisolated` box this used to need.
+    /// ``PowerStateMonitor`` makes the same choice.
+    @ObservationIgnored private var defaultsObservers: [any NSObjectProtocol] = []
 
-        deinit {
-            for token in tokens { NotificationCenter.default.removeObserver(token) }
-        }
+    isolated deinit {
+        for token in defaultsObservers { NotificationCenter.default.removeObserver(token) }
     }
 
     init(
         presenter: any HikeActivityPresenting,
         defaults: UserDefaults = .standard,
-        clock: @escaping @Sendable () -> Date = { Date() }
+        clock: @escaping @Sendable () -> Date = { Date() },
+        lifecycleCenter: NotificationCenter = .default
     ) {
         self.presenter = presenter
         self.defaults = defaults
         self.clock = clock
+        self.lifecycleCenter = lifecycleCenter
         observePreferences()
     }
 
@@ -373,26 +381,27 @@ final class HikeLiveActivityController {
     /// controller's own suite, never the process-wide one — is what sees it.
     /// The system's per-app switch is not a default at all and changing it
     /// means leaving for iOS Settings, so returning to the foreground is the
-    /// only moment the app can re-ask; `UIApplication`'s notification rather
-    /// than `scenePhase` keeps this off SwiftUI's render path entirely, which
-    /// is the same choice `MapView.Coordinator` makes and for the same reason.
+    /// only moment the app can re-ask; `UIApplication`'s lifecycle message
+    /// rather than `scenePhase` keeps this off SwiftUI's render path entirely,
+    /// which is the same choice `MapView.Coordinator` makes and for the same
+    /// reason.
+    ///
+    /// The two are not the same kind of observation and must not be collapsed
+    /// into one. `DidBecomeActiveMessage` is a `MainActorMessage`, so its
+    /// handler is synchronously main-actor isolated and needs no hop.
+    /// `UserDefaults.didChangeNotification` has no typed message and arrives
+    /// on whichever thread wrote the key, so it keeps its `onMainActor`.
     private func observePreferences() {
-        var names: [Notification.Name] = []
         #if canImport(UIKit)
-        names.append(UIApplication.didBecomeActiveNotification)
+        lifecycleObservers.append(
+            lifecycleCenter.addObserver(
+                for: UIApplication.DidBecomeActiveMessage.self
+            ) { [weak self] _ in
+                self?.reconcileWithPreferences()
+            }
+        )
         #endif
-        for name in names {
-            observers.tokens.append(
-                NotificationCenter.default.addObserver(
-                    forName: name,
-                    object: nil,
-                    queue: nil
-                ) { [weak self] _ in
-                    onMainActor { self?.reconcileWithPreferences() }
-                }
-            )
-        }
-        observers.tokens.append(
+        defaultsObservers.append(
             NotificationCenter.default.addObserver(
                 forName: UserDefaults.didChangeNotification,
                 object: defaults,

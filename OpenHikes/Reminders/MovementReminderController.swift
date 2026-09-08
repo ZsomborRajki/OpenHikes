@@ -82,6 +82,17 @@ final class MovementReminderController {
     private let notifier: any MovementReminderNotifying
     private let defaults: UserDefaults
     private let clock: @Sendable () -> Date
+
+    /// Where `UIApplication.DidBecomeActiveMessage` is observed. A seam and
+    /// nothing more: the app never passes anything but `.default`, and it
+    /// covers only the *lifecycle* observation, because
+    /// `UserDefaults.didChangeNotification` is posted by the system on
+    /// `NotificationCenter.default` and a controller listening for it anywhere
+    /// else would simply never hear it. A private centre is what lets a suite
+    /// drive the registration itself rather than the reconciliation behind it,
+    /// without posting a process-wide notification into a running test host.
+    private let lifecycleCenter: NotificationCenter
+
     /// Whether a recording exists at all, asked rather than remembered. A
     /// closure for the reason ``TrailWalkSession`` takes one for the same
     /// question: the recorder is the single authority on it, and a second copy
@@ -114,29 +125,38 @@ final class MovementReminderController {
     /// same shape, as `HikeLiveActivityController.pendingWork`.
     private var pendingWork: Task<Void, Never>?
 
-    /// Held so they can be torn down with the controller, in a box for the
-    /// reason `HikeLiveActivityController.ObserverTokens` is one: `deinit` on
-    /// a `@MainActor` type is `nonisolated` and may not read main-actor
-    /// storage, and a block-based observer is retained by the notification
-    /// centre until it is removed by token.
-    nonisolated private final class ObserverTokens: @unchecked Sendable {
-        var tokens: [any NSObjectProtocol] = []
+    /// The typed lifecycle observation, held for exactly as long as the
+    /// controller is — which is the whole of its deregistration. An
+    /// `ObservationToken` ends its observation when it goes out of scope, so
+    /// releasing this array is what takes the observer off the centre, and
+    /// dropping the token at the end of `observePreferences` would take the
+    /// registration down before the walker ever left the app.
+    /// `LifecycleObservationTokenTests` pins both halves.
+    private var lifecycleObservers: [NotificationCenter.ObservationToken] = []
 
-        deinit {
-            for token in tokens { NotificationCenter.default.removeObserver(token) }
-        }
+    /// The untyped one, which has no such lifetime: a block-based observer is
+    /// retained by the notification centre until it is removed by token. That
+    /// is the entire job of the `isolated deinit` below — SE-0371 hops it back
+    /// to the main actor before it runs, which is what lets it read main-actor
+    /// storage and what removed the `nonisolated` box this used to need, the
+    /// same choice `HikeLiveActivityController` and ``PowerStateMonitor``
+    /// make.
+    private var defaultsObservers: [any NSObjectProtocol] = []
+
+    isolated deinit {
+        for token in defaultsObservers { NotificationCenter.default.removeObserver(token) }
     }
-
-    private let observers = ObserverTokens()
 
     init(
         notifier: any MovementReminderNotifying,
         defaults: UserDefaults = .standard,
-        clock: @escaping @Sendable () -> Date = { Date() }
+        clock: @escaping @Sendable () -> Date = { Date() },
+        lifecycleCenter: NotificationCenter = .default
     ) {
         self.notifier = notifier
         self.defaults = defaults
         self.clock = clock
+        self.lifecycleCenter = lifecycleCenter
         observePreferences()
     }
 
@@ -383,21 +403,22 @@ extension MovementReminderController {
         #if canImport(UIKit)
         // The system's permission is not a default, and changing it means
         // leaving for iOS Settings, so coming back is the only moment the app
-        // can re-ask. `UIApplication`'s notification rather than `scenePhase`
-        // keeps this off SwiftUI's render path — the same seam, watched the
-        // same way, that `HikeLiveActivityController` uses for the system's
-        // Live Activity switch.
-        observers.tokens.append(
-            NotificationCenter.default.addObserver(
-                forName: UIApplication.didBecomeActiveNotification,
-                object: nil,
-                queue: nil
+        // can re-ask. `UIApplication`'s lifecycle message rather than
+        // `scenePhase` keeps this off SwiftUI's render path — the same seam,
+        // watched the same way, that `HikeLiveActivityController` uses for the
+        // system's Live Activity switch. A `MainActorMessage` handler is
+        // synchronously main-actor isolated, so there is no hop to make.
+        lifecycleObservers.append(
+            lifecycleCenter.addObserver(
+                for: UIApplication.DidBecomeActiveMessage.self
             ) { [weak self] _ in
-                onMainActor { self?.reconcileWithAuthorization(prompting: false) }
+                self?.reconcileWithAuthorization(prompting: false)
             }
         )
         #endif
-        observers.tokens.append(
+        // No typed message for this one, and it arrives on whichever thread
+        // wrote the key, so the hop stays explicit.
+        defaultsObservers.append(
             NotificationCenter.default.addObserver(
                 forName: UserDefaults.didChangeNotification,
                 object: defaults,
@@ -445,9 +466,9 @@ extension MovementReminderController {
     ///   information is a permission revoked in iOS Settings and a prompt
     ///   would be the app asking again about a pause taken half an hour ago.
     ///   The foreground observer in ``observePreferences()`` is what passes
-    ///   `false`; a suite drives that half through this call rather than by
-    ///   posting `UIApplication.didBecomeActiveNotification`, which is
-    ///   process-wide — the same choice `OrphanedActivityTests` makes, and
+    ///   `false`; a suite drives both halves — this call for the policy, and
+    ///   a post on the controller's own `lifecycleCenter` for the observer
+    ///   that reaches it. The same choice `OrphanedActivityTests` makes, and
     ///   for the same reason.
     ///
     /// Enqueued rather than awaited, for the reason every other call to the

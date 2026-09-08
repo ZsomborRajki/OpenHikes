@@ -21,6 +21,7 @@
 import Foundation
 @testable import OpenHikes
 import Testing
+import UIKit
 
 extension MovementReminderControllerTests {
     /// The switch is not the only thing that can silence a reminder, and the
@@ -91,8 +92,8 @@ extension MovementReminderControllerTests {
     /// Permission is not a default and taking it away means leaving for iOS
     /// Settings, so a pause that was watched when the walker left can be
     /// unwatchable by the time they come back. Driven through the reconcile
-    /// call rather than by posting `UIApplication.didBecomeActiveNotification`
-    /// — see the note on ``MovementReminderController/reconcileWithAuthorization(prompting:)``.
+    /// call, which is the policy; ``theAppBecomingActiveRechecksPermission()``
+    /// is the registration that reaches it.
     @Test("permission revoked during a pause stops the watch on the way back")
     func revokedPermissionEndsTheWatchOnReturn() async {
         let harness = MovementReminderHarness.harness()
@@ -112,6 +113,77 @@ extension MovementReminderControllerTests {
             "coming back to the app is not a moment to ask the walker anything"
         )
         #expect(harness.notifier.silentChecks == 1)
+    }
+
+    /// The registration the case above cannot see. `observePreferences` asks
+    /// for `UIApplication.DidBecomeActiveMessage`, and a wrong message type, a
+    /// dropped token or a legacy post that no longer bridges into a typed
+    /// observer would leave every test here green while a paused recording
+    /// went on holding a location feed for a banner iOS will never show.
+    ///
+    /// Posted on the controller's own centre rather than the process-wide one,
+    /// which is what makes this testable at all: the test host is a running
+    /// app, and posting `UIApplication.didBecomeActiveNotification` on
+    /// `.default` would reach into every other controller alive in it.
+    ///
+    /// Goes red if the lifecycle observer is deleted, if its token is dropped
+    /// instead of appended to `lifecycleObservers`, or if it is registered for
+    /// a different message.
+    @Test("the app becoming active is what re-checks the permission")
+    func theAppBecomingActiveRechecksPermission() async {
+        let harness = MovementReminderHarness.harness()
+        var endedWatches = 0
+        harness.controller.watchingDidEnd = { endedWatches += 1 }
+        harness.controller.recordingDidPause(at: MovementReminderHarness.anchor, on: start)
+        await harness.controller.settle()
+        #expect(endedWatches == 0, "precondition: the pause was allowed its watch")
+
+        harness.notifier.isAuthorized = false
+        harness.postDidBecomeActive()
+        await harness.controller.settle()
+
+        #expect(endedWatches == 1)
+        #expect(!harness.controller.isWatchingPausedRecording)
+        #expect(
+            harness.notifier.authorizationRequests == 1,
+            "coming back to the app is not a moment to ask the walker anything"
+        )
+    }
+
+    /// Teardown. The recorder builds one of these per launch and the
+    /// app-hosted bundles build one per test, so an observer that outlived its
+    /// controller would either keep the controller alive with it or go on
+    /// asking a stub some earlier test has finished with.
+    ///
+    /// Two assertions rather than one, because they fail for different
+    /// reasons. That the controller is gone at all is the `[weak self]` in the
+    /// handler — a strong capture makes the centre the controller's owner. That
+    /// nothing was asked afterwards is the token's own lifetime, pinned
+    /// against Foundation in `LifecycleObservationTokenTests`.
+    @Test("a released controller is not kept alive by its own observer")
+    func aReleasedControllerObservesNothing() {
+        let notifier = StubMovementReminderNotifier()
+        let center = NotificationCenter()
+        let suite = UserDefaults(suiteName: "movement-reminders-\(UUID().uuidString)") ?? .standard
+        suite.set(true, forKey: SettingsKey.movementRemindersEnabled)
+        weak var released: MovementReminderController?
+
+        do {
+            let controller = MovementReminderController(
+                notifier: notifier,
+                defaults: suite,
+                lifecycleCenter: center
+            )
+            released = controller
+            withExtendedLifetime(controller) { /* released at the end of this scope */ }
+        }
+
+        #expect(released == nil, "the notification centre must not own the controller")
+
+        center.post(name: UIApplication.didBecomeActiveNotification, object: nil)
+
+        #expect(notifier.silentChecks == 0)
+        #expect(notifier.authorizationRequests == 0)
     }
 
     /// The other half of that: a return to the foreground with nothing paused

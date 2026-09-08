@@ -99,11 +99,17 @@ struct MapCoordinatorLifecycleTests {
     /// Posts an app-lifecycle notification and returns once the observers
     /// registered before this call have handled it.
     ///
-    /// The coordinator observes on `OperationQueue.main`, so its block is
-    /// *scheduled* by the post rather than run by it. A sentinel registered on
-    /// the same queue afterwards is scheduled behind it, which turns "the
-    /// notification has been delivered" into an effect a test can wait for
-    /// instead of a number of scheduler turns it has to guess at.
+    /// A test host cannot be backgrounded, so the gate is driven by posting the
+    /// legacy notification name that `UIApplication.DidEnterBackgroundMessage`
+    /// and `WillEnterForegroundMessage` are built on. That reaches the
+    /// coordinator because it registers no subject — see
+    /// `startObservingScenePhaseIfNeeded`.
+    ///
+    /// The sentinel makes the delivery an effect to wait on rather than a
+    /// number of scheduler turns to guess at, and does so without asserting
+    /// *how* the centre delivers: registered before the post and on the same
+    /// terms as the observers under test, it cannot run ahead of them whether
+    /// the centre runs its blocks inline or schedules them.
     static func post(lifecycle name: Notification.Name) async {
         let sentinel = LifecycleDeliverySentinel()
         let token = NotificationCenter.default.addObserver(
@@ -208,6 +214,80 @@ struct MapCoordinatorLifecycleTests {
             backgrounded.recordingTailOverlay?.pointCount == route.count
         }
         #expect(backgroundedMap.addOverlayCount == addsBeforeLeaving + 2)
+    }
+
+    /// Both halves of the gate move inside the post itself, with no scheduler
+    /// turn in between — which is why every assertion below is made
+    /// synchronously.
+    ///
+    /// It is the one thing a `MainActorMessage` handler being *synchronously*
+    /// main-actor isolated is worth, and it matters beyond tidiness: the trace
+    /// hands a fix to the coordinator through a deferred re-entry, so a
+    /// lifecycle handler that opened with a hop of its own would land behind a
+    /// fix already in flight and draw it after the app had gone away. Watched
+    /// red against exactly that: wrapping either handler in
+    /// `Task { @MainActor in … }` rebuilds the line and adds an overlay here.
+    ///
+    /// Standing in for the trace's deferred re-entry by calling
+    /// `observeRecordingTrace` directly is what pins *when* the gate closed
+    /// rather than merely that it eventually did. The trace's own re-entry is
+    /// queued behind it by the append and is drained at the end rather than
+    /// left to arrive after the test has torn its map down — where revision
+    /// deduplication would have hidden it, which is the whole reason the last
+    /// assertion counts overlays rather than points.
+    @Test("the gate opens and closes at the post, not a turn later")
+    func lifecycleGateMovesSynchronously() async throws {
+        let seededPoints = 2
+        let route = Self.route(seededPoints + 2)
+        let trace = RecordingTrace()
+        for index in 0..<seededPoints {
+            trace.append(route[index])
+        }
+
+        let coordinator = MapView.Coordinator()
+        let map = Self.makeMap()
+        defer {
+            Self.restoreForeground()
+            Self.detach(map)
+        }
+        coordinator.observeRecordingTrace(trace, on: map)
+        let seededOverlay = try #require(coordinator.recordingTailOverlay)
+        let addsBeforeLeaving = map.addOverlayCount
+
+        NotificationCenter.default.post(
+            name: UIApplication.didEnterBackgroundNotification,
+            object: nil
+        )
+        trace.append(route[seededPoints])
+        coordinator.observeRecordingTrace(trace, on: map)
+
+        #expect(coordinator.recordingTailOverlay === seededOverlay, "the line was never rebuilt")
+        #expect(seededOverlay.pointCount == seededPoints)
+        #expect(map.addOverlayCount == addsBeforeLeaving)
+
+        NotificationCenter.default.post(
+            name: UIApplication.willEnterForegroundNotification,
+            object: nil
+        )
+
+        #expect(
+            coordinator.recordingTailOverlay?.pointCount == seededPoints + 1,
+            "returning has to catch the deferred fix up in the post itself"
+        )
+        #expect(map.addOverlayCount == addsBeforeLeaving + 1)
+
+        // The queued re-entry the append above armed is still owed, and it
+        // arrives holding this map. One more fix gives it something to be
+        // measured by: it runs first, applies the whole trace, and the second
+        // re-entry behind it finds nothing left to draw. Two overlays for the
+        // two applies that had work — the catch-up and this fix — is the
+        // single-pass claim stated in the units that can actually see a
+        // redundant pass.
+        trace.append(route[seededPoints + 1])
+        await settleDelegateHop(until: "the queued re-entry to catch the last fix up") {
+            coordinator.recordingTailOverlay?.pointCount == seededPoints + 2
+        }
+        #expect(map.addOverlayCount == addsBeforeLeaving + 2)
     }
 
     /// The case the deferral is actually for: a walk long enough for the trace

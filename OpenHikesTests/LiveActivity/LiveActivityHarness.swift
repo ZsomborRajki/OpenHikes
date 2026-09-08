@@ -15,6 +15,7 @@
 import Foundation
 @testable import OpenHikes
 import OpenHikesShared
+import UIKit
 
 @MainActor
 enum LiveActivityHarness {
@@ -51,6 +52,27 @@ enum LiveActivityHarness {
         /// switch the way `SettingsView`'s `@AppStorage` does — which is the
         /// only trigger that reaches a controller with no walk to publish.
         let defaults: UserDefaults
+        /// The controller's own notification centre, so a test can drive the
+        /// app-becoming-active registration itself. `.default` would work and
+        /// is what the app uses, but posting it here would reach every other
+        /// controller alive in the test host — and the host is a running app.
+        let lifecycleCenter: NotificationCenter
+
+        /// Posts the app-lifecycle notification the controller's typed
+        /// observer is built on.
+        ///
+        /// The *legacy* name rather than
+        /// `lifecycleCenter.post(UIApplication.DidBecomeActiveMessage())`,
+        /// deliberately: UIKit itself still posts the untyped notification,
+        /// so bridging into a `MainActorMessage` observer is the thing that
+        /// has to keep working, and a typed post would test the one path the
+        /// app never takes.
+        func postDidBecomeActive() {
+            lifecycleCenter.post(
+                name: UIApplication.didBecomeActiveNotification,
+                object: nil
+            )
+        }
 
         /// A clock the test moves by hand. The controller's whole job is
         /// deciding what is worth doing *yet*, so a suite that waited out a
@@ -66,16 +88,19 @@ enum LiveActivityHarness {
         let presenter = StubHikeActivityPresenter()
         let clock = Harness.Clock(start)
         let suite = defaults(liveActivities: liveActivities)
+        let center = NotificationCenter()
         let controller = HikeLiveActivityController(
             presenter: presenter,
             defaults: suite,
-            clock: { MainActor.assumeIsolated { clock.date } }
+            clock: { MainActor.assumeIsolated { clock.date } },
+            lifecycleCenter: center
         )
         return Harness(
             controller: controller,
             presenter: presenter,
             now: clock,
-            defaults: suite
+            defaults: suite,
+            lifecycleCenter: center
         )
     }
 
