@@ -43,6 +43,24 @@ struct WeatherBadgeStateTests {
         #expect(WeatherManager().state == .idle)
     }
 
+    @Test("the compact badge names searches but not hikes")
+    func badgeNamesOnlySearchedPlaces() {
+        let reading = snapshot(celsius: 12)
+        let place = WeatherBadgeState.reading(
+            reading,
+            subject: .place(budapest, name: "Budapest")
+        )
+        let trail = WeatherBadgeState.reading(
+            reading,
+            subject: .trail(budapest, hikeID: UUID(), name: "Pilis Loop")
+        )
+
+        #expect(place.badgeName == "Budapest")
+        #expect(place.badgeAccessibilityLabel == "Weather in Budapest")
+        #expect(trail.badgeName == nil)
+        #expect(trail.badgeAccessibilityLabel == "Trail weather")
+    }
+
     /// The spinner case. A subject with a request on its way is a badge, not
     /// an absence.
     @Test("focusing a subject with a request coming shows it loading")

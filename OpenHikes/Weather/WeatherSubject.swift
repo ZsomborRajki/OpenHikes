@@ -31,9 +31,9 @@ import Foundation
 
 /// The place the badge's reading belongs to.
 ///
-/// Carries a name for everything except ``me``, because a temperature for
-/// somewhere other than here is misleading without one. The badge draws that
-/// name; `nil` is what tells it to draw the "here" glyph instead.
+/// Carries a name for everything except ``me``, because the detail sheet must
+/// identify a forecast for somewhere other than here. The compact badge names
+/// searched places only; selected hike titles stay in the detail sheet.
 nonisolated enum WeatherSubject: Equatable, Sendable {
     /// Wherever the walker is. Owned by the recorder while a recording is
     /// active, and left in place afterwards so stopping a recording doesn't
@@ -69,8 +69,8 @@ nonisolated enum WeatherSubject: Equatable, Sendable {
         }
     }
 
-    /// What the badge writes beside the temperature, or `nil` for a reading
-    /// that is simply "here".
+    /// The name the detail sheet and persisted reading use, or `nil` for a
+    /// reading that is simply "here".
     var placeName: String? {
         switch self {
         case .me: nil

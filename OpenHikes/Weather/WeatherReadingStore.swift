@@ -44,6 +44,12 @@ final class WeatherReadingStore {
     /// build of the app, and the badge converts to the reader's own units on
     /// the way to the screen anyway.
     private struct Payload: Codable {
+        enum SubjectKind: String, Codable {
+            case me = "me"
+            case place = "place"
+            case trail = "trail"
+        }
+
         var symbolName: String
         var celsius: Double
         var conditionDescription: String
@@ -52,6 +58,10 @@ final class WeatherReadingStore {
         var longitude: Double
         /// `nil` for a reading that was about the walker.
         var placeName: String?
+        /// Optional so readings written before subject kinds were persisted
+        /// still decode through the legacy branch in ``load()``.
+        var subjectKind: SubjectKind?
+        var hikeID: UUID?
     }
 
     private let defaults: UserDefaults
@@ -74,20 +84,42 @@ final class WeatherReadingStore {
             conditionDescription: payload.conditionDescription,
             capturedAt: payload.capturedAt
         )
-        // A restored `trail` comes back as a `place` carrying the same name.
-        // The two draw identically — a name and a temperature — and the
-        // distinction only governs whether the subject follows the walker,
-        // which a reading that is about to be replaced has no use for. The
-        // alternative is persisting a hike ID that may since have been
-        // deleted, to reconstruct a case that lives for one second.
-        let subject: WeatherSubject = payload.placeName
-            .map { .place(coordinate, name: $0) }
-            ?? .me(coordinate)
+        let subject: WeatherSubject
+        switch payload.subjectKind {
+        case .some(.me):
+            subject = .me(coordinate)
+        case .some(.place):
+            guard let name = payload.placeName else { return nil }
+            subject = .place(coordinate, name: name)
+        case .some(.trail):
+            guard let name = payload.placeName, let hikeID = payload.hikeID else { return nil }
+            subject = .trail(coordinate, hikeID: hikeID, name: name)
+        case .none:
+            // The old payload did not distinguish a searched place from a
+            // selected trail. Keep its established interpretation so an
+            // on-disk reading survives this schema addition.
+            subject = payload.placeName
+                .map { .place(coordinate, name: $0) }
+                ?? .me(coordinate)
+        }
         return StoredWeatherReading(snapshot: snapshot, subject: subject)
     }
 
     func save(snapshot: WeatherSnapshot, subject: WeatherSubject) {
         let coordinate = subject.coordinate
+        let subjectKind: Payload.SubjectKind
+        let hikeID: UUID?
+        switch subject {
+        case .me:
+            subjectKind = .me
+            hikeID = nil
+        case .place:
+            subjectKind = .place
+            hikeID = nil
+        case .trail(_, let id, _):
+            subjectKind = .trail
+            hikeID = id
+        }
         let payload = Payload(
             symbolName: snapshot.symbolName,
             celsius: snapshot.temperature.converted(to: .celsius).value,
@@ -95,7 +127,9 @@ final class WeatherReadingStore {
             capturedAt: snapshot.capturedAt,
             latitude: coordinate.latitude,
             longitude: coordinate.longitude,
-            placeName: subject.placeName
+            placeName: subject.placeName,
+            subjectKind: subjectKind,
+            hikeID: hikeID
         )
         guard let data = try? JSONEncoder().encode(payload) else { return }
         defaults.set(data, forKey: SettingsKey.lastWeatherReading)

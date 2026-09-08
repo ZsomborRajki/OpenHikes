@@ -19,10 +19,10 @@
 //  walker out of signal used to be pixel-identical to a feature that had never
 //  been built, because all three drew nothing at all.
 //
-//  It names its subject whenever the subject is not "here". Once search and
-//  hike selection can point the badge at Budapest or at a trail two valleys
-//  over, a bare `14°` is not a smaller version of the truth, it is a different
-//  claim — see ``WeatherSubject``.
+//  It names a searched place, but not a selected hike. A city name says where
+//  a remote reading belongs; a hike title is user content rather than a place
+//  label, and putting it in this compact control makes the badge compete with
+//  the map. The detail sheet still names the selected hike.
 //
 //  The tap does not present anything from here. The app keeps ``MapSheet``
 //  presented permanently, and a view can only have one modal up at a time, so
@@ -55,7 +55,7 @@ struct WeatherBadge: View {
     private static let staleOpacity: Double = 0.45
     private static let contentSpacing: CGFloat = 8
     private static let horizontalPadding: CGFloat = 14
-    /// How wide a place name may get before it truncates. Roughly "Budapest"
+    /// How wide a searched place name may get before it truncates. Roughly "Budapest"
     /// at the default text size; beyond that the badge starts competing with
     /// the map it floats over.
     private static let maximumNameWidth: CGFloat = 120
@@ -112,7 +112,7 @@ struct WeatherBadge: View {
         RenderSignpost.mark("WeatherBadgeBody")
         return Button(action: onTap) {
             HStack(spacing: Self.contentSpacing) {
-                if let name = state.subject?.placeName {
+                if let name = state.badgeName {
                     Text(name)
                         .font(.subheadline)
                         .lineLimit(1)
@@ -152,7 +152,7 @@ struct WeatherBadge: View {
         // instead — which is what those two modifiers amount to here — leaves
         // the button itself in the tree underneath, labelled with the bare
         // temperature.
-        .accessibilityLabel(accessibilityLabel)
+        .accessibilityLabel(state.badgeAccessibilityLabel)
         .accessibilityValue(spokenValue)
         .accessibilityHint("Shows the conditions and where this forecast comes from")
         .accessibilityIdentifier("weather-badge")
@@ -194,11 +194,6 @@ struct WeatherBadge: View {
         case .reading: isStale
         case .unavailable: true
         }
-    }
-
-    private var accessibilityLabel: String {
-        guard let name = state.subject?.placeName else { return "Current weather" }
-        return "Weather in \(name)"
     }
 
     /// What VoiceOver reads out.
@@ -244,6 +239,27 @@ struct WeatherBadge: View {
         try? await Task.sleep(for: .seconds(max(0, remaining)))
         guard !Task.isCancelled else { return }
         isStale = true
+    }
+}
+
+extension WeatherBadgeState {
+    /// The compact badge names searched places only. A selected hike remains
+    /// identifiable in the detail sheet without spending map space on its title.
+    var badgeName: String? {
+        guard case .place(_, let name) = subject else { return nil }
+        return name
+    }
+
+    var badgeAccessibilityLabel: String {
+        guard let subject else { return "Current weather" }
+        switch subject {
+        case .me:
+            return "Current weather"
+        case .place(_, let name):
+            return "Weather in \(name)"
+        case .trail:
+            return "Trail weather"
+        }
     }
 }
 
