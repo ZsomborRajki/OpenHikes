@@ -15,10 +15,11 @@
 //
 //  What is deliberately *not* asserted is that a caller's body survives the
 //  edge changing. That was tried and it cannot fail: SwiftUI does not
-//  invalidate an ancestor's body from a `GeometryReader` in a `background`,
-//  and it does not do so from a `PreferenceKey` or from a `@State` inside a
-//  `ViewModifier` either — substituting a `@State`-storing implementation for
-//  the real one left every body count unchanged. Whether the *caller* stores
+//  invalidate an ancestor's body from `onGeometryChange`, and it did not do so
+//  from the `GeometryReader`-in-a-`background` this modifier was built on
+//  before either, nor from a `PreferenceKey` or a `@State` inside a
+//  `ViewModifier` — substituting a `@State`-storing implementation for the
+//  real one left every body count unchanged. Whether the *caller* stores
 //  the edge somewhere that invalidates it is the caller's business, and
 //  `SheetPresentationIsolationTests` is where that is held to account.
 //
@@ -223,10 +224,12 @@ struct TopEdgeReaderTests {
         #expect(recorder.count == readings, "a view whose top edge held still has nothing to report")
     }
 
-    /// A `GeometryReader` is a greedy container, so reading geometry through
-    /// one has to happen in a `background` — used directly it would stretch
-    /// the view it was measuring to fill everything available, and in
-    /// `MapSheet` that view is a row inside a scrolling stack.
+    /// Measuring must not size the thing being measured. `onGeometryChange`
+    /// reads its proxy without a container, but a `GeometryReader` used
+    /// directly — the shape this modifier was built on, and the one it is
+    /// easiest to fall back to — is greedy, and would stretch the view it was
+    /// measuring to fill everything available. In `MapSheet` that view is a
+    /// row inside a scrolling stack.
     @Test("reading the edge does not resize the view it is attached to")
     func doesNotChangeLayout() async throws {
         let first = TopEdgeRecorder()
