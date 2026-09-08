@@ -35,7 +35,15 @@ jobs:
   analyze:
     name: Analyze Swift
     runs-on: macos-26
-    timeout-minutes: 60
+    # Not a guess: this job has measured 47, 52, 53, 54, 55, 57 and 58 minutes
+    # across recent runs, so a 60-minute ceiling left it 2 minutes of margin on
+    # a bad day and it was duly killed mid-analysis on #214 — a red run that
+    # said nothing about the code that triggered it. The extractor traces a
+    # full Xcode build of the app and then queries the database it built, and
+    # neither half is getting shorter. Raised well clear of the spread rather
+    # than to just above the worst case, since the number this is protecting
+    # against is a runner having a slow hour, not the analysis growing.
+    timeout-minutes: 120
     # Reporting, not gating — the same stance the accessibility job in ci.yml
     # takes, for the same reason. CodeQL's Swift extractor tracks specific
     # Swift versions (2.26.2 added 6.3.3, which is what Xcode 26.6 ships), so a
