@@ -370,6 +370,11 @@
 				TargetAttributes = {
 					A85E854C2FE3EBF500558639 = {
 						CreatedOnToolsVersion = 26.5;
+						SystemCapabilities = {
+							com.apple.WeatherKit = {
+								enabled = 1;
+							};
+						};
 					};
 					A8838AE3302A232300FAEEEE = {
 						CreatedOnToolsVersion = 26.6;

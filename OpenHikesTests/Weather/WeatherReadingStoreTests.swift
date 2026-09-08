@@ -8,6 +8,16 @@ import Testing
 @MainActor
 @Suite("Weather reading store")
 struct WeatherReadingStoreTests {
+    private struct LegacyPayload: Encodable {
+        var symbolName: String
+        var celsius: Double
+        var conditionDescription: String
+        var capturedAt: Date
+        var latitude: Double
+        var longitude: Double
+        var placeName: String?
+    }
+
     private let budapest = CLLocationCoordinate2D(latitude: 47.4979, longitude: 19.0402)
     private let capturedAt = Date(timeIntervalSinceReferenceDate: 1_000_000)
 
@@ -38,6 +48,44 @@ struct WeatherReadingStoreTests {
 
         let restored = try #require(WeatherReadingStore(defaults: defaults).load())
         #expect(restored.snapshot == saved)
+        #expect(restored.subject == .place(budapest, name: "Budapest"))
+    }
+
+    @Test("a selected hike stays a trail across launches")
+    func roundTripsATrailSubject() throws {
+        let defaults = try makeDefaults()
+        let store = WeatherReadingStore(defaults: defaults)
+        let saved = snapshot(celsius: 4)
+        let subject = WeatherSubject.trail(
+            budapest,
+            hikeID: UUID(),
+            name: "Pilis Loop"
+        )
+        store.save(snapshot: saved, subject: subject)
+
+        let restored = try #require(WeatherReadingStore(defaults: defaults).load())
+        #expect(restored.snapshot == saved)
+        #expect(restored.subject == subject)
+    }
+
+    @Test("readings written before subject kinds still restore")
+    func restoresLegacyPayload() throws {
+        let defaults = try makeDefaults()
+        let payload = LegacyPayload(
+            symbolName: "cloud.rain.fill",
+            celsius: 4,
+            conditionDescription: "Rain",
+            capturedAt: capturedAt,
+            latitude: budapest.latitude,
+            longitude: budapest.longitude,
+            placeName: "Budapest"
+        )
+        defaults.set(
+            try JSONEncoder().encode(payload),
+            forKey: SettingsKey.lastWeatherReading
+        )
+
+        let restored = try #require(WeatherReadingStore(defaults: defaults).load())
         #expect(restored.subject == .place(budapest, name: "Budapest"))
     }
 

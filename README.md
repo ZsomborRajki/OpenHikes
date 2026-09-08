@@ -28,9 +28,10 @@ OpenStreetMap is the keyless default and Apple Maps needs no key either. Stadia 
 ## Setup
 
 1. Open `OpenHikes.xcodeproj` and set your development team for `OpenHikes` and `OpenWidgetExtension`.
-2. If your team cannot use `group.tappium.com.OpenHikes`, replace it in both entitlement files and in `SharedStore.appGroupID`.
-3. iCloud sync needs a CloudKit container. Xcode creates `iCloud.tappium.com.OpenHikes` on the first signed build; to use another identifier, replace it in `OpenHikes/OpenHikes.entitlements` and in `CloudSyncCoordinator.containerIdentifier`. SwiftData's mirroring creates the development schema from the model on first run.
-4. Optionally enable Stadia or Thunderforest:
+2. Enable WeatherKit for the app's App ID in Certificates, Identifiers & Profiles, in both **App Services** and **App Capabilities**, then refresh its signing assets. The capability and entitlement are checked in, but Apple still returns HTTP 401 until the App ID itself is enabled.
+3. If your team cannot use `group.tappium.com.OpenHikes`, replace it in both entitlement files and in `SharedStore.appGroupID`.
+4. iCloud sync needs a CloudKit container. Xcode creates `iCloud.tappium.com.OpenHikes` on the first signed build; to use another identifier, replace it in `OpenHikes/OpenHikes.entitlements` and in `CloudSyncCoordinator.containerIdentifier`. SwiftData's mirroring creates the development schema from the model on first run.
+5. Optionally enable Stadia or Thunderforest:
 
    ```sh
    cp Secrets.example.plist OpenHikes/Secrets.plist
@@ -38,7 +39,7 @@ OpenStreetMap is the keyless default and Apple Maps needs no key either. Stadia 
 
    Add your keys to the copied file. `OpenHikes/Secrets.plist` is gitignored and must never be committed; unavailable providers stay disabled in Settings.
 
-5. Build and run. `OpenHikes.storekit` at the repository root describes the paid-maps purchase and the shared scheme already points its Run action at it, so a local build has a working paywall with no Apple account involved.
+6. Build and run. `OpenHikes.storekit` at the repository root describes the paid-maps purchase and the shared scheme already points its Run action at it, so a local build has a working paywall with no Apple account involved.
 
 Shipping the paid maps for real additionally needs a matching auto-renewable subscription in App Store Connect and an active Paid Apps agreement; `.github/copilot-instructions.md` carries the exact contract, including the product ID that can never change.
 

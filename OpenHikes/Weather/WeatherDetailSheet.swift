@@ -172,8 +172,7 @@ struct WeatherDetailView: View {
                 .accessibilityIdentifier("weather-detail-unavailable")
         } footer: {
             Text(
-                "OpenHikes couldn\u{2019}t reach Apple Weather. This is usually no signal; "
-                    + "it will try again on its own."
+                "OpenHikes couldn\u{2019}t reach Apple Weather. It will try again automatically."
             )
         }
     }
