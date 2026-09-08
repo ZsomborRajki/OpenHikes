@@ -380,6 +380,21 @@ struct TrailWidgetTests {
 
     // MARK: Families
 
+    @Test("the widget offers iPhone home screen and Lock Screen families")
+    func supportedFamiliesMatchTheiPhoneSurface() {
+        #expect(
+            TrailWidget.supportedFamilies == [
+                .systemSmall,
+                .systemMedium,
+                .systemLarge,
+                .accessoryCircular,
+                .accessoryRectangular,
+                .accessoryInline,
+            ]
+        )
+        #expect(!TrailWidget.supportedFamilies.contains(.systemExtraLarge))
+    }
+
     /// Every size the widget offers has to have a layout to draw with.
     @Test("every supported family has a layout")
     func everyFamilyHasALayout() {
@@ -420,7 +435,7 @@ struct TrailWidgetTests {
         #expect(limits == limits.sorted())
         #expect(limits.first != limits.last, "otherwise the size makes no difference")
         #expect(
-            TrailWidgetLayout(family: .systemExtraLarge).metricLimit
+            TrailWidgetLayout(family: .accessoryRectangular).metricLimit
                 == TrailWidgetLayout(family: .systemLarge).metricLimit,
             "there is nothing further to add past the pair"
         )
