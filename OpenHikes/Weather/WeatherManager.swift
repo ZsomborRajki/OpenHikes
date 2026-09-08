@@ -213,8 +213,13 @@ final class WeatherManager {
     }
 
     private func remember(_ snapshot: WeatherSnapshot, for subject: WeatherSubject) {
-        cache.removeValue(forKey: subject.key)
+        // The reading is stored where the subject already sits and the entry
+        // is *then* moved to the end of the recency order, which is what makes
+        // `removeFirst` drop the least recently read subject. A subject not
+        // cached before is appended by the subscript, so the move finds it
+        // already last and does nothing.
         cache[subject.key] = snapshot
+        cache.move(keys: CollectionOfOne(subject.key), to: cache.count)
         if cache.count > WeatherRequestState.trackedSubjectLimit {
             cache.removeFirst()
         }

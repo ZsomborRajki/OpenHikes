@@ -83,7 +83,7 @@ nonisolated struct WeatherRequestState: Sendable {
     }
 
     /// Ordered least- to most-recently used, which is the whole eviction
-    /// policy: touching a subject re-inserts it at the end, so the one to drop
+    /// policy: touching a subject moves it to the end, so the one to drop
     /// is always the first.
     private var entries: OrderedDictionary<String, Entry> = [:]
 
@@ -169,12 +169,12 @@ nonisolated struct WeatherRequestState: Sendable {
     /// Applies `change` to `key`'s entry and marks it the most recently used,
     /// evicting the least recent one if that puts the memory over its limit.
     private mutating func update(_ key: String, _ change: (inout Entry) -> Void) {
-        // Removed and re-inserted rather than mutated in place, so the key
-        // moves to the end of the recency order instead of staying where it
-        // first appeared.
-        var entry = entries.removeValue(forKey: key) ?? Entry()
-        change(&entry)
-        entries[key] = entry
+        // Two separate things, said separately: the entry is changed where it
+        // sits, and *then* moved to the end of the recency order. A key not
+        // seen before is appended by `updateValue`, so the move that follows
+        // finds it already last and does nothing.
+        entries.updateValue(forKey: key, default: Entry(), with: change)
+        entries.move(keys: CollectionOfOne(key), to: entries.count)
         if entries.count > Self.trackedSubjectLimit {
             entries.removeFirst()
         }
