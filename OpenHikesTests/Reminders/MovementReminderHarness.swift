@@ -17,6 +17,7 @@ import CoreLocation
 import Foundation
 @testable import OpenHikes
 import Testing
+import UIKit
 
 /// Everything the controller says, in the order it said it.
 ///
@@ -157,6 +158,27 @@ enum MovementReminderHarness {
         /// The controller's own defaults suite, so a test can flip the
         /// walker's switch the way `SettingsView`'s `@AppStorage` does.
         let defaults: UserDefaults
+        /// The controller's own notification centre, so a test can drive the
+        /// app-becoming-active registration itself. `.default` would work and
+        /// is what the app uses, but posting it here would reach every other
+        /// controller alive in the test host — and the host is a running app.
+        let lifecycleCenter: NotificationCenter
+
+        /// Posts the app-lifecycle notification the controller's typed
+        /// observer is built on.
+        ///
+        /// The *legacy* name rather than
+        /// `lifecycleCenter.post(UIApplication.DidBecomeActiveMessage())`,
+        /// deliberately: UIKit itself still posts the untyped notification,
+        /// so bridging into a `MainActorMessage` observer is the thing that
+        /// has to keep working, and a typed post would test the one path the
+        /// app never takes.
+        func postDidBecomeActive() {
+            lifecycleCenter.post(
+                name: UIApplication.didBecomeActiveNotification,
+                object: nil
+            )
+        }
     }
 
     /// A defaults suite of its own, never the developer's: the controller
@@ -167,10 +189,16 @@ enum MovementReminderHarness {
         let suite = UserDefaults(suiteName: "movement-reminders-\(UUID().uuidString)")
             ?? .standard
         suite.set(remindersEnabled, forKey: SettingsKey.movementRemindersEnabled)
+        let center = NotificationCenter()
         return Harness(
-            controller: MovementReminderController(notifier: notifier, defaults: suite),
+            controller: MovementReminderController(
+                notifier: notifier,
+                defaults: suite,
+                lifecycleCenter: center
+            ),
             notifier: notifier,
-            defaults: suite
+            defaults: suite,
+            lifecycleCenter: center
         )
     }
 }

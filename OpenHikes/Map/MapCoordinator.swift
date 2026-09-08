@@ -63,18 +63,22 @@ extension MapView {
         private var pendingRecordingTrace = false
         private weak var observedRecordingTrace: RecordingTrace?
         private weak var observedRecordingMapView: MKMapView?
-        /// `nonisolated(unsafe)` for the same reason ``PowerStateMonitor``'s
-        /// tokens are: `deinit` is nonisolated and cannot touch main-actor
-        /// state. Registration reads and writes this on the main actor, and
-        /// `deinit` reads it only once the last reference is gone, so the two
-        /// can never overlap.
-        nonisolated(unsafe) private var scenePhaseObservers: [NSObjectProtocol] = []
+        /// The lifecycle observations, held for exactly as long as the
+        /// coordinator is — which is the whole of the deregistration.
+        /// `NotificationCenter.ObservationToken` ends its observation when it
+        /// goes out of scope, so releasing this array along with the
+        /// coordinator is what takes both observers off the centre. That is
+        /// why there is no `deinit` here at all any more, and with it went the
+        /// `nonisolated(unsafe)` that the old untyped tokens needed purely so
+        /// a nonisolated `deinit` could reach them.
+        ///
+        /// Stored rather than discarded for the same reason: a token dropped
+        /// at the end of `startObservingScenePhaseIfNeeded` would take the
+        /// registration down with it before the first fix ever arrived.
+        /// `LifecycleObservationTokenTests` pins both halves of that, since
+        /// neither is a `removeObserver` call a map test could watch.
+        private var scenePhaseObservers: [NotificationCenter.ObservationToken] = []
 
-        deinit {
-            for observer in scenePhaseObservers {
-                NotificationCenter.default.removeObserver(observer)
-            }
-        }
         /// The live renderer for the route line, kept so a tint change can recolor
         /// it in place without rebuilding the overlay.
         weak var routeRenderer: MKPolylineRenderer?
@@ -487,27 +491,39 @@ extension MapView {
 /// this is the one part of the map that changes at GPS frequency, and it
 /// reads better as a unit than buried among the other observers.
 private extension MapView.Coordinator {
-    /// Registers for the app-lifecycle notifications that gate the recording
+    /// Registers for the app-lifecycle messages that gate the recording
     /// trace. Lazily, from `observeRecordingTrace`, because a map that never
     /// shows a recording never needs them.
+    ///
+    /// Typed `MainActorMessage` observers rather than named notifications:
+    /// the handler is synchronously main-actor isolated, which is what removes
+    /// the `MainActor.assumeIsolated` these two used to open with. That the
+    /// body runs *in* the post rather than a turn later is load-bearing rather
+    /// than tidy — a fix already in flight would otherwise be drawn after the
+    /// app had gone away — so it is pinned rather than assumed, by
+    /// `MapCoordinatorLifecycleTests.lifecycleGateMovesSynchronously`. Neither
+    /// handler may grow a hop of its own.
+    ///
+    /// No subject is passed, so the registration is not scoped to
+    /// `UIApplication.shared`. There is exactly one application object in the
+    /// process, so scoping buys nothing in the app and costs interoperability
+    /// with an untyped post carrying no object — which is how
+    /// `MapCoordinatorLifecycleTests` drives this gate, having no way to
+    /// background a test host.
     func startObservingScenePhaseIfNeeded() {
         #if os(iOS) || os(visionOS)
         guard scenePhaseObservers.isEmpty else { return }
         let center = NotificationCenter.default
         scenePhaseObservers = [
             center.addObserver(
-                forName: UIApplication.didEnterBackgroundNotification,
-                object: nil,
-                queue: .main
+                for: UIApplication.DidEnterBackgroundMessage.self
             ) { [weak self] _ in
-                MainActor.assumeIsolated { self?.isForeground = false }
+                self?.isForeground = false
             },
             center.addObserver(
-                forName: UIApplication.willEnterForegroundNotification,
-                object: nil,
-                queue: .main
+                for: UIApplication.WillEnterForegroundMessage.self
             ) { [weak self] _ in
-                MainActor.assumeIsolated { self?.resumeForegroundDrawing() }
+                self?.resumeForegroundDrawing()
             },
         ]
         #endif
