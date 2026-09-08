@@ -196,6 +196,18 @@ nonisolated final class AutoSaveTileStore: Sendable {
         return stream
     }
 
+    /// How many consumers are waiting on ``pendingKeySignals()`` right now.
+    ///
+    /// **Test seam**, and the only trace a finished drain leaves: the stream's
+    /// `onTermination` drops its continuation, so a controller whose drain task
+    /// really did end is one this no longer counts. A drain nothing cancels
+    /// stays suspended on its iterator for the life of the store and keeps
+    /// being counted, which is what `AutoSaveTaskLifecycleTests` reads instead of
+    /// waiting out a duration.
+    var pendingSignalObserverCount: Int {
+        pendingObservers.withLock { observers in observers.count }
+    }
+
     /// Deliberately outside the state lock: this is called from the tile
     /// thread, and nothing a consumer does in response belongs inside the lock
     /// that the tile thread needs to claim the next tile.

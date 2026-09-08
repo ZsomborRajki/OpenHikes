@@ -20,12 +20,14 @@ final class AutoSaveController {
     /// selected-hike state, the pushed detail view); this controller shouldn't
     /// be the thing keeping a deleted hike around.
     private weak var activeHike: Hike?
-    /// Not UI state, so excluded from observation tracking. `nonisolated(unsafe)`
-    /// so `deinit` — which runs nonisolated on a main-actor-isolated class — can
-    /// cancel them; every write is on the main actor, and `Task` cancellation is
-    /// itself thread-safe.
-    @ObservationIgnored nonisolated(unsafe) private var drainTask: Task<Void, Never>?
-    @ObservationIgnored nonisolated(unsafe) private var activationTask: Task<Void, Never>?
+    /// Not UI state, so excluded from observation tracking. Ordinary isolated
+    /// storage: the `isolated deinit` below is what cancels them, and SE-0371
+    /// hops that deinit back to the main actor before it runs, so these are
+    /// only ever touched from the actor that wrote them — the same choice
+    /// ``PowerStateMonitor`` and ``MovementReminderController`` make, and what
+    /// removed the `nonisolated(unsafe)` this used to need.
+    @ObservationIgnored private var drainTask: Task<Void, Never>?
+    @ObservationIgnored private var activationTask: Task<Void, Never>?
     @ObservationIgnored private var isSuspended = false
     @ObservationIgnored private var hasDeferredSelectionChange = false
     @ObservationIgnored private var activationRevision: UInt64 = 0
@@ -85,7 +87,20 @@ final class AutoSaveController {
         }
     }
 
-    deinit {
+    /// Cancelling the drain is what ends its wait on
+    /// ``AutoSaveTileStore/pendingKeySignals()``; without it the task stays
+    /// suspended on that iterator for the life of the store, with no hike left
+    /// to fold anything into.
+    ///
+    /// SE-0371 makes a *final release taken off the main actor* schedule this
+    /// rather than run it, so cancellation is only synchronous when the
+    /// controller is dropped on the main actor — which is where it is created,
+    /// selected from and released. Nothing depends on the difference: both
+    /// tasks hold `self` weakly and re-check it after every suspension, so a
+    /// deinit that has not run yet still cannot let a pending activation
+    /// publish a corridor or a drain fold a key. `AutoSaveTaskLifecycleTests` pins
+    /// both halves.
+    isolated deinit {
         drainTask?.cancel()
         activationTask?.cancel()
     }
