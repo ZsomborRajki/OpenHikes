@@ -73,6 +73,14 @@ struct RecordingView: View {
         .onAppear {
             mapController.followUser()
         }
+        // A recording being read on this screen is the case the switch exists
+        // for — see ``ScreenWakePolicy``. `isActive` rather than
+        // `isCapturingFixes`, because a walker who paused at a junction to
+        // work out where they are is precisely the one asking not to have the
+        // screen dim on them. The read is in the closure so it belongs to the
+        // modifier's body, though this one is free either way: the body above
+        // already reads `phase`.
+        .keepsScreenAwake { recorder.isActive }
         // Each photo is pinned to the walker's last accepted fix — read at the
         // shutter, so a picture taken twenty minutes in is pinned twenty
         // minutes along. The recorder's live fix, not the draft `Hike`'s

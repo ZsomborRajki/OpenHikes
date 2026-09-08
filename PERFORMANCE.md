@@ -444,13 +444,10 @@ for a passing grade.
   long strip and the ~19 ms re-decode is the price. Whether that trade is sized
   right is a measurement nobody has taken.
 
-Two smaller gaps worth deciding rather than drifting on. `isIdleTimerDisabled`
-is never set, which is the right default — but a walker navigating a junction
-with the screen dimming every 30 s reaches for the power button repeatedly, and
-each wake costs more than the timeout saved; that wants a setting rather than a
-constant. And nothing has re-checked periodic work since 2026-08-26, when a
-reading of the tree found `RecordingClockTick` to be the only periodic path in
-the shipping app. That was a reading, not a measurement.
+One smaller gap worth deciding rather than drifting on. Nothing has re-checked
+periodic work since 2026-08-26, when a reading of the tree found
+`RecordingClockTick` to be the only periodic path in the shipping app. That was
+a reading, not a measurement.
 
 ## Validating on a device
 

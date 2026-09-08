@@ -70,6 +70,8 @@ struct SettingsView: View {
     private var savePhotosToLibrary = SettingsDefault.savePhotosToLibrary
     @AppStorage(SettingsKey.movementRemindersEnabled)
     private var movementRemindersEnabled = SettingsDefault.movementRemindersEnabled
+    @AppStorage(SettingsKey.keepScreenAwake)
+    private var keepScreenAwake = SettingsDefault.keepScreenAwake
 
     private static let disabledOpacity: Double = 0.55
     private static let badgeHorizontalPadding: CGFloat = 7
@@ -100,7 +102,7 @@ struct SettingsView: View {
     }
 
     var body: some View {
-        // This screen is a seven-section `Form` in one body, so every input it
+        // This screen is an eight-section `Form` in one body, so every input it
         // takes costs all of it. The mark is how an input that follows a
         // *hike* would show up — a recording writing to its draft per fix, or
         // auto-save folding tile keys in every couple of seconds — since
@@ -115,6 +117,7 @@ struct SettingsView: View {
                 backgroundTrackingSection
                 liveActivitySection
                 movementReminderSection
+                displaySection
                 offlineStorageSection
                 FieldMetricsSection()
                 contactSection
@@ -550,6 +553,38 @@ private extension SettingsView {
                 + " trail starts no feed of its own — it is watched while OpenHikes is"
                 + " open, and behind it only with Background Trail Tracking on, so a"
                 + " pocketed phone may not be reminded."
+            )
+        }
+        #endif
+    }
+}
+
+// MARK: - Display
+
+/// The one switch that can cost a walker battery rather than save it, and so
+/// the one whose footer has to say what it costs.
+private extension SettingsView {
+    /// Off by default — see ``SettingsDefault/keepScreenAwake``. The footer
+    /// names the scope in full because the scope is what makes the switch
+    /// affordable: it holds the display only on the screens where a live hike
+    /// is being read, only while that hike is live, and only while the app is
+    /// in front. A walker who reads "keep the screen on" as "for the whole
+    /// walk" would decline something they would in fact want.
+    @ViewBuilder var displaySection: some View {
+        #if os(iOS)
+        Section {
+            Toggle("Keep the Screen On", isOn: $keepScreenAwake)
+                .accessibilityIdentifier("keep-screen-awake-toggle")
+        } header: {
+            Text("Display")
+        } footer: {
+            Text(
+                "Stops the screen dimming while you are on the recording screen, or on a"
+                + " hike you are walking. Only while OpenHikes is open and the hike is"
+                + " under way — the screen locks as usual everywhere else, and once the"
+                + " phone is back in your pocket. The display is the hungriest thing on"
+                + " the device, so leave this off unless you are navigating with the map"
+                + " in your hand."
             )
         }
         #endif

@@ -239,6 +239,12 @@ struct HikeDetailView: View {
             downloader: downloader,
             deletionFailure: $storageDeletionFailure
         )
+        // A hike being *walked* is the other half of what the switch is for.
+        // Merely reading a trail's detail holds nothing, which is why the
+        // question is the walk session's rather than this screen's presence.
+        // The read is deliberately inside the closure: this body must not gain
+        // `walkSession` as an input — see the note on the signpost above.
+        .keepsScreenAwake { walkSession.isWalking(hike.id) }
     }
 
     /// The screen as it always was: everything derived from the file, with
