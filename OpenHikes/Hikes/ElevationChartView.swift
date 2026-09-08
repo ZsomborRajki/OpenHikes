@@ -26,6 +26,17 @@ struct ElevationChartView: View, Equatable {
     /// Live chart selection under the finger (transient); owned here so scrubbing
     /// doesn't touch the parent until it resolves a distance.
     @State private var selectedDistance: Double?
+    /// Whether a finger is currently on the plot area.
+    ///
+    /// `@GestureState` rather than `@State` because it is what makes the
+    /// release path *total*: SwiftUI resets it when a gesture is cancelled as
+    /// well as when it completes, while `onEnded` is delivered only on the
+    /// completed one. A selection left standing is not a cosmetic leak — it
+    /// reads upward as a scrub that never ended, which pins `isScrubbing`
+    /// true in `HikeDetailView` and stops ``FollowInteractionPolicy`` handing
+    /// the tracker and the map pin back to auto-follow for the life of the
+    /// screen.
+    @GestureState private var isTouchingChart = false
     /// Measured plot width, used to keep vertical exaggeration consistent
     /// regardless of screen size. `0` until the first layout pass reports it.
     @State private var plotWidth: CGFloat = 0
@@ -108,11 +119,20 @@ struct ElevationChartView: View, Equatable {
             liveMarks(sample: liveSample)
         }
         .chartXSelection(value: $selectedDistance)
-        // The default selection gesture ignores a stationary tap. Start at
-        // touch-down so tapping and dragging use the same selection path.
+        // Swift Charts' own selection gesture resolves nothing until the touch
+        // has lasted roughly a tenth of a second — measured on iOS 26.5 as
+        // between 0.08 s and 0.10 s, with a moving touch engaging it at once —
+        // so a brisk tap lands and lifts having selected nothing. Starting at
+        // touch-down is what puts a tap and a drag on the same selection path,
+        // and it is the response a scrubber is expected to have. See #206.
         .chartGesture { proxy in
             DragGesture(minimumDistance: 0)
+                .updating($isTouchingChart) { _, touching, _ in touching = true }
                 .onChanged { proxy.selectXValue(at: $0.location.x) }
+                // The ordinary release. A cancelled one never arrives here and
+                // is caught by `isTouchingChart` below instead; both clear, and
+                // clearing twice costs nothing because `onChange(of:)` only
+                // fires on a real change.
                 .onEnded { _ in selectedDistance = nil }
         }
         .chartXScale(domain: 0...(profile.samples.last?.distanceMeters ?? 1))
@@ -165,6 +185,11 @@ struct ElevationChartView: View, Equatable {
             onScrubbingChanged(distance != nil)
             guard let distance else { return }
             onScrub(distance)
+        }
+        // The cancellation half of the reset above — see ``isTouchingChart``.
+        .onChange(of: isTouchingChart) { _, touching in
+            guard !touching else { return }
+            selectedDistance = nil
         }
     }
 

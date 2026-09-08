@@ -63,6 +63,10 @@ nonisolated final class PerformanceUITests: XCTestCase {
     private var scenario = ""
     private static let browsingGestures = 3
     private static let scrubSteps = 9
+    /// Headroom over `2 × scrubSteps` for the tap phase's `HikeDetailBody`
+    /// budget — see ``assertScrubTapBudgets(_:)`` for what the spread is and
+    /// where it comes from.
+    private static let scrubTapEdgeAllowance: Double = 6
     private static let launchIterations = 3
     /// The watchdog has reported 489–711 ms here since this suite existed.
     /// A tripwire above the noise, not a target — the target is the launch
@@ -412,30 +416,8 @@ nonisolated final class PerformanceUITests: XCTestCase {
             start.press(forDuration: 0.1, thenDragTo: end)
         }
 
-        // The drag is the strict one: a continuous scrub must not escape the
-        // chart at all.
-        assertNoMoreThan(0, of: "OpenHikesViewBody", in: drag, phase: "scrub-drag")
-        assertNoMoreThan(0, of: "MapSheetBody", in: drag, phase: "scrub-drag")
-        assertNoMoreThan(0, of: "MapRouteRebuilt", in: drag, phase: "scrub-drag")
-        assertNoMoreThan(2, of: "HikeDetailBody", in: drag, phase: "scrub-drag")
-        assertAtLeast(
-            Double(Self.scrubSteps),
-            of: "ElevationChartBody",
-            in: drag,
-            phase: "scrub-drag"
-        )
-
-        // Each tap is a complete scrub cycle, so a handful of edge renders is
-        // expected; what must not happen is the route being rebuilt or the
-        // detail re-preparing itself.
-        assertAtLeast(
-            Double(Self.scrubSteps),
-            of: "ElevationChartBody",
-            in: taps,
-            phase: "scrub-taps"
-        )
-        assertNoMoreThan(0, of: "MapRouteRebuilt", in: taps, phase: "scrub-taps")
-        assertNoMoreThan(0, of: "HikeDetailPrepared", in: taps, phase: "scrub-taps")
+        assertScrubDragBudgets(drag)
+        assertScrubTapBudgets(taps)
         finish(in: app)
     }
 
@@ -564,6 +546,61 @@ nonisolated final class PerformanceUITests: XCTestCase {
         }
     }
 
+}
+
+// MARK: - Chart scrub budgets
+
+private extension PerformanceUITests {
+
+    /// A continuous scrub must not escape the chart at all.
+    @MainActor
+    func assertScrubDragBudgets(_ drag: PerformanceCounterDelta) {
+        assertNoMoreThan(0, of: "OpenHikesViewBody", in: drag, phase: "scrub-drag")
+        assertNoMoreThan(0, of: "MapSheetBody", in: drag, phase: "scrub-drag")
+        assertNoMoreThan(0, of: "MapRouteRebuilt", in: drag, phase: "scrub-drag")
+        assertNoMoreThan(2, of: "HikeDetailBody", in: drag, phase: "scrub-drag")
+        assertAtLeast(
+            Double(Self.scrubSteps),
+            of: "ElevationChartBody",
+            in: drag,
+            phase: "scrub-drag"
+        )
+    }
+
+    /// Each tap is a complete scrub cycle, so a handful of edge renders is
+    /// expected; what must not happen is the route being rebuilt or the detail
+    /// re-preparing itself.
+    ///
+    /// The lower bound is the one that says the tap *arrived*: Swift Charts'
+    /// own selection gesture resolves nothing under about a tenth of a second
+    /// of press, and `XCUICoordinate.tap()` is briefer than that, so this
+    /// phase read zero chart bodies for as long as the chart relied on it.
+    ///
+    /// `HikeDetailBody` then carries an upper bound for the same reason the
+    /// drag does: a tap writes `isScrubbing` twice — true at touch-down, false
+    /// on release — so the arithmetic says one start/stop pair per tap, and
+    /// `2 × steps` looks like the ceiling. Measured, it is the *floor*: four
+    /// runs read 18, 21, 21, 21, because the hand-back through
+    /// `.onChange(of: isScrubbing)` sometimes writes state of its own. Hence
+    /// the allowance — enough for the observed spread, still short of a
+    /// sustained three evaluations per tap.
+    @MainActor
+    func assertScrubTapBudgets(_ taps: PerformanceCounterDelta) {
+        assertAtLeast(
+            Double(Self.scrubSteps),
+            of: "ElevationChartBody",
+            in: taps,
+            phase: "scrub-taps"
+        )
+        assertNoMoreThan(
+            2 * Double(Self.scrubSteps) + Self.scrubTapEdgeAllowance,
+            of: "HikeDetailBody",
+            in: taps,
+            phase: "scrub-taps"
+        )
+        assertNoMoreThan(0, of: "MapRouteRebuilt", in: taps, phase: "scrub-taps")
+        assertNoMoreThan(0, of: "HikeDetailPrepared", in: taps, phase: "scrub-taps")
+    }
 }
 
 // MARK: - Phases

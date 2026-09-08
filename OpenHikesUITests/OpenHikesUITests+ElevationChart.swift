@@ -1,3 +1,21 @@
+//
+//  OpenHikesUITests+ElevationChart.swift
+//  OpenHikesUITests
+//
+//  The tap half of the elevation profile's scrub. Split out from the main
+//  bundle file because the drag half already has a home —
+//  `AccessibilityLabelUITests.testElevationChartIsReadableAndAdjustable`
+//  scrubs by dragging and reads the spoken value back — and the two failed
+//  independently: Swift Charts' own selection gesture needs about a tenth of
+//  a second of press before it resolves anything, so a drag has always worked
+//  while a brisk tap selected nothing at all. See #206.
+//
+//  `XCUICoordinate.tap()` is the assertion's whole point rather than an
+//  implementation detail: its synthesised touch is instantaneous, so it is
+//  strictly briefer than any human tap, and a chart that answers it answers
+//  every real one.
+//
+
 import XCTest
 
 extension OpenHikesUITests {
