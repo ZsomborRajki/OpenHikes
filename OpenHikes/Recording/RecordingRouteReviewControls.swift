@@ -57,7 +57,7 @@ struct RecordingRouteReviewControls: View {
             GlassStack(spacing: choiceGlassSpacing) {
                 VStack(alignment: .leading, spacing: choiceSpacing) {
                     ForEach(
-                        Array(section.availableChoices.enumerated()),
+                        section.availableChoices.enumerated(),
                         id: \.offset
                     ) { _, choice in
                         choiceButton(choice, in: section)

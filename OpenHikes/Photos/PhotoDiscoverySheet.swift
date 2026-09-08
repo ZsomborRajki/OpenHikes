@@ -115,7 +115,7 @@ struct PhotoDiscoverySheet: View {
                 ],
                 spacing: Self.cellSpacing
             ) {
-                ForEach(Array(controller.matches.enumerated()), id: \.element.id) { index, match in
+                ForEach(controller.matches.enumerated(), id: \.element.id) { index, match in
                     DiscoveredPhotoCell(
                         match: match,
                         controller: controller,
