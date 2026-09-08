@@ -380,26 +380,43 @@ struct TrailWidgetTests {
 
     // MARK: Families
 
-    @Test("the widget offers iPhone home screen and Lock Screen families")
+    /// The list the system reads to decide where this widget may be placed.
+    /// Every entry has to be reachable on the one device family the app ships
+    /// for, and every entry has to have something to draw.
+    @Test("the widget offers the iPhone Home Screen and Lock Screen sizes")
     func supportedFamiliesMatchTheiPhoneSurface() {
+        #expect(TrailWidget.systemFamilies == [.systemSmall, .systemMedium, .systemLarge])
         #expect(
-            TrailWidget.supportedFamilies == [
-                .systemSmall,
-                .systemMedium,
-                .systemLarge,
+            TrailWidget.accessoryFamilies == [
                 .accessoryCircular,
                 .accessoryRectangular,
                 .accessoryInline,
             ]
         )
+        #expect(
+            TrailWidget.supportedFamilies
+                == TrailWidget.systemFamilies + TrailWidget.accessoryFamilies
+        )
+        // iPad and the Mac only, and every target here is TARGETED_DEVICE_FAMILY = 1.
         #expect(!TrailWidget.supportedFamilies.contains(.systemExtraLarge))
+        #expect(Set(TrailWidget.supportedFamilies).count == TrailWidget.supportedFamilies.count)
     }
 
-    /// Every size the widget offers has to have a layout to draw with.
-    @Test("every supported family has a layout")
+    /// The two halves are drawn by different files and must not overlap — an
+    /// accessory family reaching `systemContent` would ask for a map layout
+    /// and a container background that a Lock Screen slot has no room for.
+    @Test("no family is both a Home Screen and a Lock Screen size")
+    func theTwoHalvesDoNotOverlap() {
+        #expect(Set(TrailWidget.systemFamilies).isDisjoint(with: TrailWidget.accessoryFamilies))
+    }
+
+    /// Every Home Screen size has to have a layout to draw its map with. The
+    /// accessory families are deliberately not asked: they draw no map and no
+    /// chips, so `TrailWidgetLayout` decides nothing for them.
+    @Test("every Home Screen family has a layout")
     func everyFamilyHasALayout() {
-        #expect(TrailWidget.supportedFamilies.contains(.systemSmall))
-        for family in TrailWidget.supportedFamilies {
+        #expect(TrailWidget.systemFamilies.contains(.systemSmall))
+        for family in TrailWidget.systemFamilies {
             let layout = TrailWidgetLayout(family: family)
             #expect(layout.routeLineWidth > 0, "\(family)")
             #expect(layout.padding > 0, "\(family)")
@@ -412,7 +429,7 @@ struct TrailWidgetTests {
     @Test("the small family is drawn more tightly than the larger ones")
     func smallFamilyIsTighter() {
         let small = TrailWidgetLayout(family: .systemSmall)
-        for family in TrailWidget.supportedFamilies where family != .systemSmall {
+        for family in TrailWidget.systemFamilies where family != .systemSmall {
             let larger = TrailWidgetLayout(family: family)
             #expect(small.routeLineWidth < larger.routeLineWidth, "\(family)")
             #expect(small.padding < larger.padding, "\(family)")
@@ -435,18 +452,18 @@ struct TrailWidgetTests {
         #expect(limits == limits.sorted())
         #expect(limits.first != limits.last, "otherwise the size makes no difference")
         #expect(
-            TrailWidgetLayout(family: .accessoryRectangular).metricLimit
-                == TrailWidgetLayout(family: .systemLarge).metricLimit,
+            TrailWidgetLayout(family: .systemLarge).metricLimit
+                == TrailWidgetLayout(family: .systemMedium).metricLimit,
             "there is nothing further to add past the pair"
         )
     }
 
     /// The chips are the widget's only elevation reporting; the map behind
     /// them draws a shape, not a height.
-    @Test("a trail with elevations draws elevation chips on every family")
+    @Test("a trail with elevations draws elevation chips on every Home Screen family")
     func elevationsAreDrawnOnEveryFamily() throws {
         let stored = Self.snapshot()
-        for family in TrailWidget.supportedFamilies {
+        for family in TrailWidget.systemFamilies {
             let limit = TrailWidgetLayout(family: family).metricLimit
             let metrics = stored.metrics(limit: limit)
             #expect(try #require(metrics.first).kind == .ascent, "\(family)")
@@ -457,7 +474,7 @@ struct TrailWidgetTests {
     /// The widget draws no title and no elapsed-time text; what it says in
     /// words is one status line and, at most, two chips. Nothing here can
     /// check pixels, so the cap the layout hands the builder is the pin.
-    @Test("no family asks for more than the two chips there are")
+    @Test("no Home Screen family asks for more than the two chips there are")
     func noFamilyAsksForMoreThanThePair() {
         let live = Self.snapshot(
             liveFix: .init(
@@ -468,7 +485,7 @@ struct TrailWidgetTests {
                 elevationMeters: 740
             )
         )
-        for family in TrailWidget.supportedFamilies {
+        for family in TrailWidget.systemFamilies {
             let limit = TrailWidgetLayout(family: family).metricLimit
             #expect(limit <= 2, "\(family)")
             #expect(live.metrics(limit: limit).count == limit, "\(family)")

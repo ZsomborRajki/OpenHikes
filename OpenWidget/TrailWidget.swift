@@ -416,14 +416,21 @@ struct TrailWidgetEntryView: View {
             .widgetURL(entry.deepLinkURL)
     }
 
+    /// The Lock Screen families are branched on first because they share none
+    /// of the Home Screen drawing — no map, no chips, no container background.
+    /// Each of them applies the same recording-outranks-trail precedence the
+    /// branches below do; see `TrailWidgetAccessorySubject`.
     @ViewBuilder private var content: some View {
-        if family == .accessoryCircular {
-            AccessoryCircularContent(entry: entry)
-        } else if family == .accessoryInline {
-            AccessoryInlineContent(entry: entry)
-        } else if family == .accessoryRectangular {
-            AccessoryRectangularContent(entry: entry)
-        } else if let recording = entry.recordingSnapshot {
+        switch family {
+        case .accessoryCircular: AccessoryCircularContent(entry: entry)
+        case .accessoryRectangular: AccessoryRectangularContent(entry: entry)
+        case .accessoryInline: AccessoryInlineContent(entry: entry)
+        default: systemContent
+        }
+    }
+
+    @ViewBuilder private var systemContent: some View {
+        if let recording = entry.recordingSnapshot {
             RecordingWidgetContent(snapshot: recording, family: family)
         } else if let snapshot = entry.snapshot {
             TrailWidgetContent(snapshot: snapshot, basemaps: entry.basemaps, family: family)
@@ -641,16 +648,27 @@ private struct TrailWidgetContent: View {
 }
 
 struct TrailWidget: Widget {
-    /// Every size this widget offers. Named rather than inlined so a test can
-    /// check that each one has a layout to draw with.
-    static let supportedFamilies: [WidgetFamily] = [
-        .systemSmall,
-        .systemMedium,
-        .systemLarge,
+    /// The Home Screen sizes: a map behind a status line and up to two stat
+    /// chips. Named rather than inlined so a test can check that each one has
+    /// a ``TrailWidgetLayout`` to draw with — which is a question only these
+    /// three are asked, because they are the only ones that draw a map.
+    ///
+    /// `.systemExtraLarge` is deliberately absent: it exists on iPad and the
+    /// Mac, and every target here declares `TARGETED_DEVICE_FAMILY = 1`, so
+    /// offering it advertised a size no walker could ever place.
+    static let systemFamilies: [WidgetFamily] = [.systemSmall, .systemMedium, .systemLarge]
+
+    /// The Lock Screen sizes, drawn by `TrailWidgetAccessories.swift`. They
+    /// share the entry and the deep link and none of the drawing: no map, no
+    /// chips, and therefore no `TrailWidgetLayout`.
+    static let accessoryFamilies: [WidgetFamily] = [
         .accessoryCircular,
         .accessoryRectangular,
         .accessoryInline,
     ]
+
+    /// Every size this widget offers.
+    static let supportedFamilies: [WidgetFamily] = systemFamilies + accessoryFamilies
 
     var body: some WidgetConfiguration {
         // `AppIntentConfiguration`, not `StaticConfiguration` — the kind is
@@ -692,4 +710,26 @@ struct TrailWidget: Widget {
     TrailWidget()
 } timeline: {
     TrailWidgetEntry(date: .now, snapshot: TrailWidgetProvider.followedPlaceholderSnapshot)
+}
+
+#Preview("Lock Screen, circular", as: .accessoryCircular) {
+    TrailWidget()
+} timeline: {
+    TrailWidgetEntry(date: .now, snapshot: TrailWidgetProvider.followedPlaceholderSnapshot)
+    TrailWidgetEntry(date: .now, snapshot: TrailWidgetProvider.placeholderSnapshot)
+    TrailWidgetEntry(date: .now, snapshot: nil)
+}
+
+#Preview("Lock Screen, rectangular", as: .accessoryRectangular) {
+    TrailWidget()
+} timeline: {
+    TrailWidgetEntry(date: .now, snapshot: TrailWidgetProvider.followedPlaceholderSnapshot)
+    TrailWidgetEntry(date: .now, snapshot: nil)
+}
+
+#Preview("Lock Screen, inline", as: .accessoryInline) {
+    TrailWidget()
+} timeline: {
+    TrailWidgetEntry(date: .now, snapshot: TrailWidgetProvider.followedPlaceholderSnapshot)
+    TrailWidgetEntry(date: .now, snapshot: nil)
 }
