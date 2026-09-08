@@ -253,12 +253,9 @@ extension WeatherBadgeState {
     var badgeAccessibilityLabel: String {
         guard let subject else { return "Current weather" }
         switch subject {
-        case .me:
-            return "Current weather"
-        case .place(_, let name):
-            return "Weather in \(name)"
-        case .trail:
-            return "Trail weather"
+        case .me: return "Current weather"
+        case .place(_, let name): return "Weather in \(name)"
+        case .trail: return "Trail weather"
         }
     }
 }
