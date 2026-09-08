@@ -85,16 +85,40 @@ nonisolated enum RetryAfterHeader {
         return min(delay, maximumDelay)
     }
 
-    /// Built per call rather than held in a static: `DateFormatter` is not
-    /// `Sendable`, this runs only when a server has already refused a request,
-    /// and a shared one would need a lock to buy back microseconds nobody is
-    /// waiting on.
+    /// The IMF-fixdate reader, configured once.
+    ///
+    /// This used to build a `DateFormatter` per call, on the stated grounds
+    /// that `DateFormatter` is not `Sendable` and so could not be held in a
+    /// `static let`. That was never true of this SDK — `NSDateFormatter.h`
+    /// declares `NS_SWIFT_SENDABLE`, "all mutable state protected by locks" —
+    /// and a `Date.ParseStrategy` is a value type, so the question does not
+    /// arise at all.
+    ///
+    /// Field for field the same grammar `"EEE, dd MMM yyyy HH:mm:ss zzz"`
+    /// expressed, with `.specificName(.short)` standing in for `zzz`: `GMT`
+    /// and `UTC` are read, a named zone that is not one of them is refused,
+    /// and `zzz`'s tolerance of `+0000` is kept. Not a `Date.FormatStyle`,
+    /// which is a localized rendering of a date for a person to read, where
+    /// this is a wire format that is the same in every locale.
+    private static let imfFixdate = Date.ParseStrategy(
+        format: """
+        \(weekday: .abbreviated), \(day: .twoDigits) \(month: .abbreviated) \
+        \(year: .padded(4)) \
+        \(hour: .twoDigits(clock: .twentyFourHour, hourCycle: .zeroBased)):\
+        \(minute: .twoDigits):\(second: .twoDigits) \
+        \(timeZone: .specificName(.short))
+        """,
+        locale: Locale(identifier: "en_US_POSIX"),
+        timeZone: .gmt,
+        isLenient: false
+    )
+
+    /// Matched whole rather than parsed from the front: `parse(_:)` stops as
+    /// soon as it has a date and would read `…07:28:00 GMT and change` as a
+    /// deadline, where the formatter this replaced refused it. The header's
+    /// value is the date or it is not advice.
     private static func httpDate(_ value: String) -> Date? {
-        let formatter = DateFormatter()
-        formatter.locale = Locale(identifier: "en_US_POSIX")
-        formatter.timeZone = TimeZone(identifier: "GMT")
-        formatter.dateFormat = "EEE, dd MMM yyyy HH:mm:ss zzz"
-        return formatter.date(from: value)
+        value.wholeMatch(of: imfFixdate)?.output
     }
 }
 

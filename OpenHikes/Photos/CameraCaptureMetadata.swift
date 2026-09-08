@@ -16,11 +16,14 @@
 //  accepted a minute after it was taken would sit a minute further along the
 //  route than the place it shows.
 //
-//  Parsed by hand rather than through a `DateFormatter`, for the reason
-//  ``PhotoMetadataStamp`` builds its timestamps by hand: a `DateFormatter` is
-//  not `Sendable`, so it could not be a `static let` here, and building one
-//  per photograph to read six fixed-width numbers is more machinery than the
-//  numbers are worth.
+//  Parsed by hand rather than through a date parser, and not for the reason
+//  a comment here used to give: it said `DateFormatter` is not `Sendable`,
+//  which the SDK contradicts — `NSDateFormatter.h` declares
+//  `NS_SWIFT_SENDABLE`. The real reason is the validation directly below.
+//  Every parser Foundation offers resolves EXIF's all-zero placeholder into a
+//  real date in the year zero, and a photograph two millennia before the walk
+//  is worse than one with no time at all; the field ranges here are what
+//  refuse it, and they need the six numbers rather than a `Date`.
 //
 
 import Foundation

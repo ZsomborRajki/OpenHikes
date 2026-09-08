@@ -66,6 +66,26 @@ struct TileRetryAfterTests {
         #expect(RetryAfterHeader.delay(from: formatted, now: now) == .seconds(120))
     }
 
+    /// The zone field is read as a *name*, not as the literal text `GMT`, and
+    /// `UTC` names the same offset. Pinned because the parser was moved off
+    /// `DateFormatter`'s `zzz` onto `Date.ParseStrategy`, and a verbatim
+    /// `GMT` would have quietly narrowed what the client accepts.
+    @Test("UTC names the same zone as GMT")
+    func utcSpellingIsRead() {
+        let value = Self.imfFixdate(now.addingTimeInterval(120))
+            .replacingOccurrences(of: "GMT", with: "UTC")
+        #expect(RetryAfterHeader.delay(from: value, now: now) == .seconds(120))
+    }
+
+    /// The value is the date or it is not advice. `Date.ParseStrategy.parse`
+    /// would stop as soon as it had read one and hand back a deadline from a
+    /// header it only half understood, so the match has to be a whole one.
+    @Test("a date with something after it is not a date")
+    func trailingTextIsRefused() {
+        let value = Self.imfFixdate(now.addingTimeInterval(120)) + " and change"
+        #expect(RetryAfterHeader.delay(from: value, now: now) == nil)
+    }
+
     /// Nothing usable is no advice at all, rather than a guess. Each of these
     /// would otherwise become a `.zero` floor, which is a floor in name only,
     /// or a nonsense one.
