@@ -114,6 +114,35 @@ struct HikePhotoTimelineTests {
         #expect(position.secondsFromFix == Self.stepSeconds / 2)
     }
 
+    /// The binary search behind this returns a *pair* index, so its two
+    /// interesting answers are the first interior segment and the last one —
+    /// off by one either way and the lookup either traps or interpolates
+    /// across the wrong neighbours. Sweeping every segment of a route long
+    /// enough to need more than one probe pins both ends at once.
+    @Test("every interior segment interpolates against its own neighbours")
+    func everySegmentIsFoundByItsOwnBounds() throws {
+        let steps = 9
+        let route = Self.route(steps: steps)
+        let timeline = try #require(HikePhotoTimeline(route: route))
+
+        for segment in 0..<(steps - 1) {
+            let fraction = Double(segment) + 0.25
+            let position = try #require(
+                timeline.position(at: Self.date(atStep: fraction))
+            )
+
+            let expected = CLLocationCoordinate2D(
+                latitude: Self.latitude + Self.latitudeStep * fraction,
+                longitude: Self.longitude
+            )
+            #expect(
+                Self.meters(from: position, to: expected)
+                    < Self.toleranceMeters
+            )
+            #expect(position.secondsFromFix == Self.stepSeconds * 0.25)
+        }
+    }
+
     @Test("a route point recorded out of order does not break the lookup")
     func unsortedRouteIsSortedFirst() throws {
         var route = Self.route(steps: 5)
