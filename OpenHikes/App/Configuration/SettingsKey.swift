@@ -77,6 +77,13 @@ nonisolated enum SettingsKey {
     /// a pause arms anything, which is what keeps a pause exactly as cheap as
     /// it was for a walker who does not want them.
     static let movementRemindersEnabled = "settings.movementRemindersEnabled"
+    /// Whether the screens a live hike is watched from may hold the display
+    /// awake. Read by ``ScreenWakePolicy`` through the modifier on those
+    /// screens rather than captured, so turning it off puts the idle timer
+    /// back without leaving the screen — and it is only ever *one* of the
+    /// three answers that have to agree, the others being a live subject and
+    /// a foreground app.
+    static let keepScreenAwake = "settings.keepScreenAwake"
 }
 
 /// Defaults for keys where "absent" and "false" are different answers, so the
@@ -108,4 +115,10 @@ nonisolated enum SettingsDefault {
     /// because the walker set off from lunch without tapping Resume, which no
     /// later screen can put right.
     static let movementRemindersEnabled = true
+    /// Off. The display is the largest single consumer on the device, and a
+    /// walk is measured in hours — so the walker who has not asked for this
+    /// keeps every bit of what the other energy policies buy them. The case
+    /// it exists for is narrow and real enough to be worth a switch, and
+    /// narrow enough not to be worth assuming: see ``ScreenWakePolicy``.
+    static let keepScreenAwake = false
 }
