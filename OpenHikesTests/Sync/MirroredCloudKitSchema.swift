@@ -29,7 +29,7 @@ enum MirroredCloudKitSchema {
     /// Everything the mirrored store declares today.
     ///
     /// Sorted, and exhaustive: the test compares this against the live
-    /// `Schema` built from ``OpenHikesSchemaV3/hikeModels`` field for field.
+    /// `Schema` built from ``OpenHikesSchema/hikeModels`` field for field.
     static let recordTypes: [RecordType] = [
         RecordType(
             entity: "Hike",

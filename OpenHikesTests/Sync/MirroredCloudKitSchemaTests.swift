@@ -14,11 +14,11 @@ import Testing
 @Suite("Mirrored CloudKit schema")
 struct MirroredCloudKitSchemaTests {
     private var mirrored: Schema {
-        Schema(OpenHikesSchemaV3.hikeModels, version: OpenHikesSchemaV3.versionIdentifier)
+        Schema(OpenHikesSchema.hikeModels, version: OpenHikesSchema.versionIdentifier)
     }
 
     private var sidecar: Schema {
-        Schema(OpenHikesSchemaV3.localStateModels, version: OpenHikesSchemaV3.versionIdentifier)
+        Schema(OpenHikesSchema.localStateModels, version: OpenHikesSchema.versionIdentifier)
     }
 
     private func described(_ entity: Schema.Entity) -> MirroredCloudKitSchema.RecordType {

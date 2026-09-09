@@ -105,7 +105,7 @@ extension ModelContainer {
         isStoredInMemoryOnly: Bool = false,
         syncsToCloud: Bool = true
     ) throws -> ModelContainer {
-        let version = OpenHikesSchemaV3.self
+        let version = OpenHikesSchema.self
         return try ModelContainer(
             for: Schema(versionedSchema: version),
             configurations: .openHikes(
@@ -122,7 +122,7 @@ extension ModelContainer {
 
     /// Both stores at chosen locations, for the reopen suites.
     static func openHikes(url: URL, localURL: URL) throws -> ModelContainer {
-        let version = OpenHikesSchemaV3.self
+        let version = OpenHikesSchema.self
         return try ModelContainer(
             for: Schema(versionedSchema: version),
             configurations: .openHikes(
