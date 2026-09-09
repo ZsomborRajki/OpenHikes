@@ -19,13 +19,7 @@ public enum TrailWidgetKind {
 public struct SharedTrailSnapshot: SharedPayload, Equatable {
     public static let currentSchemaVersion = 1
 
-    /// See ``SharedPayload/schemaVersion``: `nil` in bytes written before
-    /// versioning existed, which is every payload already in a container at
-    /// the moment this shipped. Readable but not settable from outside this
-    /// package — a version is a fact about the build that wrote the bytes, and
-    /// one a caller could choose would be a version nothing verifies.
-    /// ``SharedStore`` stamps it on write.
-    public internal(set) var schemaVersion: Int?
+    public let schemaVersion: Int
 
     public var hikeID: UUID
     public var title: String
@@ -45,9 +39,7 @@ public struct SharedTrailSnapshot: SharedPayload, Equatable {
     public var liveFix: LiveFix?
     /// The walk under way along this trail, if there is one — see ``Walk``.
     ///
-    /// Optional, and an optional *key*: a payload written before walks
-    /// existed decodes with `nil` here, so this needed no `schemaVersion`
-    /// bump. While it is present the percentage in ``statusText`` is
+    /// While it is present the percentage in ``statusText`` is
     /// coverage rather than position, and its caption says so.
     public var walk: Walk?
     public var updatedAt: Date

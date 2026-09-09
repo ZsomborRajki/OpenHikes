@@ -46,7 +46,7 @@ extension HikeRecorder {
     }
 
     /// This path is reached with a matching device-local journal, which is
-    /// the evidence a legacy draft needs before it can be claimed. Keep the
+    /// the evidence a draft needs before it can be claimed. Keep the
     /// claim durable even when the recovered session stays paused.
     private func claimRecoveredDraft(_ hike: Hike) throws(RecordingFailure) {
         do {

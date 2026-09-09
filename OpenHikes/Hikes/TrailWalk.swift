@@ -238,8 +238,7 @@ nonisolated struct TrailWalkRecord: Codable, Equatable, Sendable {
     /// move this, or the anchor a paused walk is measured against would
     /// follow the walker and never register that they had moved at all.
     ///
-    /// Optional because a record written before this existed decodes without
-    /// it, and because a walk can be paused before its first match.
+    /// Optional because a walk can be paused before its first match.
     /// ``TrailWalkCoverage/furthestDistanceMeters`` is the fallback and is
     /// *not* an equivalent: it is a maximum, so a walker who turned round and
     /// came back down before pausing would be measured against ground they

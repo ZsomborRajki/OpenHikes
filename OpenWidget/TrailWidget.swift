@@ -129,10 +129,7 @@ final class WidgetRecordingRequest {
 ///
 /// It exists because `AppIntentConfiguration` is what gives
 /// ``TrailWidgetProvider`` an `async` timeline and a `relevance()` the Smart
-/// Stack reads — see the provider. Migrating from `StaticConfiguration` keeps
-/// widgets already on a home screen exactly where they are, because
-/// ``TrailWidgetKind/id`` is unchanged; that identifier is the migration, so
-/// it must stay stable.
+/// Stack reads — see the provider.
 struct TrailWidgetConfiguration: WidgetConfigurationIntent {
     static let title: LocalizedStringResource = "Trail"
     // periphery:ignore - an optional `AppIntent` requirement, read through

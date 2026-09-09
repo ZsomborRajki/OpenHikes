@@ -43,9 +43,6 @@ nonisolated struct TrailGraphEdge: Codable, Equatable, Hashable, Sendable {
     let surface: String?
     /// OSM `tracktype` (`grade1`…`grade5`), the firmness scale tracks carry
     /// instead of a `surface` tag often enough to be worth keeping.
-    ///
-    /// Optional, so a graph cached before this property existed still decodes
-    /// (as `nil`) rather than failing and forcing a refetch.
     let tracktype: String?
 
     var displayName: String? {

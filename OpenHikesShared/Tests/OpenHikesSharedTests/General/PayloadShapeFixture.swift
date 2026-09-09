@@ -226,20 +226,7 @@ func expectShape(
     let removed = expected.filter { !actual.contains($0) }
     let added = actual.filter { !expected.contains($0) }
 
-    let remedy = if let versionConstant {
-        """
-        If the change is deliberate, bump \(versionConstant) in the same commit, so a \
-        build that predates it refuses the new payload out loud instead of half-reading \
-        it, and update the expected shape below.
-        """
-    } else {
-        """
-        \(typeName) carries no version field, so there is no way to make an older reader \
-        refuse the new shape politely — it will simply fail to decode. Change it only if \
-        you have accounted for what happens to the payload already sitting in the \
-        container, then update the expected shape below.
-        """
-    }
+    let versionNote = versionConstant.map { "Current format version: \($0)." } ?? "This payload has no version field."
 
     #expect(
         actual == expected,
@@ -249,17 +236,9 @@ func expectShape(
         removed: \(removed.isEmpty ? "(nothing)" : removed.joined(separator: "\n                 "))
         added:   \(added.isEmpty ? "(nothing)" : added.joined(separator: "\n                 "))
 
-        This payload crosses the App Group between OpenHikes and \
-        OpenWidgetExtension. It is decoded with `try?`, so a renamed, retyped or \
-        removed key is not backward compatible: the load returns nil, which is the \
-        same answer a container that was never written to gives, and the widget \
-        draws its placeholder.
-
-        \(remedy)
-
-        If the change is not deliberate, revert it. Adding an *optional* key is the \
-        one change to these payloads that is safe in both directions and needs no \
-        version bump at all.
+        \(versionNote)
+        For an intentional change, update this fixture and follow "Schema and \
+        migration policy" in .github/copilot-instructions.md.
         """),
         sourceLocation: sourceLocation
     )

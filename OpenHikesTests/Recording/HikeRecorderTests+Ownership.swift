@@ -9,7 +9,7 @@ import SwiftData
 import Testing
 
 extension HikeRecorderTests {
-    /// A synced draft is indistinguishable from a legacy draft without a
+    /// A synced draft is indistinguishable from an unowned draft without a
     /// journal. Browsing its map can create a sidecar on the receiving phone.
     private func foreignDraft(withLocalTiles: Bool) throws -> (UUID, HikePhoto) {
         let photo = HikePhoto(capturedAt: clock.now)
@@ -76,8 +76,8 @@ extension HikeRecorderTests {
         try expectForeignDraft(id, photo: photo)
     }
 
-    @Test("recovering a legacy journal claims only its draft", arguments: [false, true])
-    func localJournalClaimsLegacyDraft(withLocalTiles: Bool) async throws {
+    @Test("recovering a matching journal claims an unowned draft", arguments: [false, true])
+    func localJournalClaimsUnownedDraft(withLocalTiles: Bool) async throws {
         let (localID, photo) = try foreignDraft(withLocalTiles: withLocalTiles)
         let journal = TrackJournal(directory: directory, clock: clock.read)
         try await journal.start(sessionID: localID, startedAt: clock.now)
@@ -107,7 +107,7 @@ extension HikeRecorderTests {
         #expect(try ModelContext(container).fetch(FetchDescriptor<Hike>()).isEmpty)
     }
 
-    @Test("a refused legacy claim preserves the draft and its prior sidecar", arguments: [false, true])
+    @Test("a refused unowned claim preserves the draft and its prior sidecar", arguments: [false, true])
     func failedOwnershipClaimRollsBack(withLocalTiles: Bool) async throws {
         let (localID, photo) = try foreignDraft(withLocalTiles: withLocalTiles)
         let journal = TrackJournal(directory: directory, clock: clock.read)
