@@ -68,6 +68,15 @@ final class HikeLocalState {
     /// state, so the row costs nothing for a hike nobody is walking.
     var walkInProgress: TrailWalkRecord?
 
+    /// Positive evidence that this device created or recovered the recording
+    /// journal for this hike. Only the recorder sets it; browsing a synced
+    /// draft's map or adding a photo must never confer ownership.
+    ///
+    /// False also means unknown: legacy rows have no ownership evidence until
+    /// a matching local journal is recovered. Retained after saving, but only
+    /// consulted for `isRecording` rows by the abandoned-draft sweep.
+    var ownsRecordingDraft: Bool = false
+
     init(hikeID: UUID) {
         self.hikeID = hikeID
     }
@@ -76,7 +85,7 @@ final class HikeLocalState {
 // MARK: - Lookup
 
 extension HikeLocalState {
-    /// The row for `hikeID`, or `nil` when this device has never stored a tile
+    /// The row for `hikeID`, or `nil` when this device has no local state
     /// for it.
     ///
     /// Deliberately does not create one. A read is a read: materialising a row
@@ -108,8 +117,7 @@ extension HikeLocalState {
         return try context.fetch(descriptor).first
     }
 
-    /// The row for `hikeID`, created and inserted if this is the first time
-    /// anything claimed a tile for it.
+    /// The row for `hikeID`, created and inserted by the first local write.
     static func forHike(_ hikeID: UUID, in context: ModelContext) -> HikeLocalState {
         if let existing = existing(for: hikeID, in: context) { return existing }
         let created = HikeLocalState(hikeID: hikeID)

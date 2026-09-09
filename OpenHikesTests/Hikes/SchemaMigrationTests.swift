@@ -27,8 +27,8 @@ struct SchemaMigrationTests {
     private let directory = FileManager.default.temporaryDirectory
         .appendingPathComponent("schema-migration-\(UUID().uuidString)", isDirectory: true)
 
-    private var hikesURL: URL { directory.appendingPathComponent("Hikes.store") }
-    private var localURL: URL { directory.appendingPathComponent("HikeLocalState.store") }
+    var hikesURL: URL { directory.appendingPathComponent("Hikes.store") }
+    var localURL: URL { directory.appendingPathComponent("HikeLocalState.store") }
 
     /// `Fixture.ridgeRoute` in the shape V1 encodes. The frozen copy is a
     /// different Swift type by design — see ``OpenHikesSchemaV1``.
@@ -43,11 +43,11 @@ struct SchemaMigrationTests {
         }
     }
 
-    private func makeDirectory() throws {
+    func makeDirectory() throws {
         try FileManager.default.createDirectory(at: directory, withIntermediateDirectories: true)
     }
 
-    private func removeDirectory() {
+    func removeDirectory() {
         try? FileManager.default.removeItem(at: directory)
     }
 
@@ -103,7 +103,7 @@ struct SchemaMigrationTests {
         return (load.container, usedFallback)
     }
 
-    private func fetchHike(_ id: UUID, in context: ModelContext) throws -> Hike? {
+    func fetchHike(_ id: UUID, in context: ModelContext) throws -> Hike? {
         try context.fetch(FetchDescriptor<Hike>(predicate: #Predicate { $0.id == id })).first
     }
 

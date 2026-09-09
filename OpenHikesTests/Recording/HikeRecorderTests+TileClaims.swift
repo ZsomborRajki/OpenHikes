@@ -72,6 +72,7 @@ extension HikeRecorderTests {
             route: []
         ) { hike in
             hike.isRecording = true
+            hike.ownsRecordingDraft = true
             hike.autoSavedTileKeys = [Self.autoSavedTileKey]
         }
         let orphanID = orphan.id
@@ -84,11 +85,9 @@ extension HikeRecorderTests {
         let current = try #require(hikeRecorder.currentHike)
         #expect(current.id != orphanID, "the new session is a new draft, not the orphan resumed")
         #expect(try mainContext.fetch(FetchDescriptor<Hike>()).count == 1)
-        // The new draft has claimed nothing, so any surviving row is the
-        // orphan's.
-        #expect(
-            try mainContext.fetch(FetchDescriptor<HikeLocalState>()).isEmpty,
-            "the swept orphan's sidecar goes with it"
-        )
+        let remaining = try mainContext.fetch(FetchDescriptor<HikeLocalState>())
+        #expect(remaining.map(\.hikeID) == [current.id], "only the new draft's ownership claim remains")
+        #expect(remaining.first?.ownsRecordingDraft == true)
+        #expect(remaining.first?.autoSavedTileKeys.isEmpty == true)
     }
 }
