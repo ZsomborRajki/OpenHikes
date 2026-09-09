@@ -189,14 +189,13 @@ struct HikeActivityPayloadTests {
         #expect(state.distanceMeters == 6200)
     }
 
-    /// The keys a walk adds are optional, so the state a previous build wrote
-    /// — and the one a plain follow still writes — decodes to "no walk".
+    /// A plain follow has no walk state.
     @Test("a state written without walk keys decodes as a plain follow")
     func stateWithoutWalkKeysDecodes() throws {
-        let legacy = Data(
+        let data = Data(
             #"{"distanceMeters":6200,"runState":"running","elapsedSeconds":0,"updatedAt":0}"#.utf8
         )
-        let decoded = try JSONDecoder().decode(HikeActivityAttributes.ContentState.self, from: legacy)
+        let decoded = try JSONDecoder().decode(HikeActivityAttributes.ContentState.self, from: data)
         #expect(decoded.coveredFractionComplete == nil)
         #expect(decoded.runState == .running)
         #expect(decoded.distanceMeters == 6200)

@@ -58,9 +58,7 @@ final class WeatherReadingStore {
         var longitude: Double
         /// `nil` for a reading that was about the walker.
         var placeName: String?
-        /// Optional so readings written before subject kinds were persisted
-        /// still decode through the legacy branch in ``load()``.
-        var subjectKind: SubjectKind?
+        var subjectKind: SubjectKind
         var hikeID: UUID?
     }
 
@@ -86,21 +84,14 @@ final class WeatherReadingStore {
         )
         let subject: WeatherSubject
         switch payload.subjectKind {
-        case .some(.me):
+        case .me:
             subject = .me(coordinate)
-        case .some(.place):
+        case .place:
             guard let name = payload.placeName else { return nil }
             subject = .place(coordinate, name: name)
-        case .some(.trail):
+        case .trail:
             guard let name = payload.placeName, let hikeID = payload.hikeID else { return nil }
             subject = .trail(coordinate, hikeID: hikeID, name: name)
-        case .none:
-            // The old payload did not distinguish a searched place from a
-            // selected trail. Keep its established interpretation so an
-            // on-disk reading survives this schema addition.
-            subject = payload.placeName
-                .map { .place(coordinate, name: $0) }
-                ?? .me(coordinate)
         }
         return StoredWeatherReading(snapshot: snapshot, subject: subject)
     }

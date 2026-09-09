@@ -4,22 +4,8 @@
 //
 //  A golden record of what each App Group payload looks like on disk.
 //
-//  The version field these payloads now carry catches a *declared* schema
-//  break: a reader refuses a payload that announces a version it does not
-//  understand, and says so. Nothing caught an *undeclared* one, which is the
-//  likelier mistake. Rename `totalDistanceMeters`, and every other test in
-//  this package still passes — they build their payloads by hand, so they
-//  simply rename along with it. The break surfaces on a walker's phone, as a
-//  widget that draws its placeholder and never stops.
-//
-//  This suite is the second gate, and it only works because it stands behind
-//  a first one. Renaming a property changes the memberwise initialiser's
-//  argument label, so the fixtures below stop compiling — and the obvious way
-//  to make them compile again is to rename the call too. That is the moment
-//  this suite exists for: the expectation is still spelled the old way, the
-//  test goes red, and the message says what the on-disk contract just did and
-//  what the two acceptable answers are. Without it, updating the label turns
-//  everything green and the break ships.
+//  See "Schema and migration policy" in the repository instructions for
+//  deliberate format changes. The fixtures below hold the current wire shape.
 //
 //  Three things about the encoding were measured rather than assumed, and the
 //  fixtures depend on all three:

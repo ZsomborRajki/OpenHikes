@@ -39,69 +39,64 @@ struct SharedStoreVersionTests {
             SharedStore.save(SharedStoreSandbox.trailSnapshot())
             let loaded = try #require(SharedStore.load())
             #expect(loaded.schemaVersion == SharedTrailSnapshot.currentSchemaVersion)
-            #expect(loaded.effectiveSchemaVersion == 1)
         }
     }
 
-    // MARK: The payload already in the container
-
-    /// The update that introduces versioning finds an unversioned payload in
-    /// every existing user's container. Discarding it would blank a working
-    /// widget to guard against a change that has not happened, so an absent
-    /// version is version 0 and is accepted on the only evidence that matters:
-    /// it decoded, which means every key this build requires was there.
-    @Test("a payload written before versioning existed is still read")
-    func legacyPayloadIsAccepted() throws {
+    @Test("unversioned snapshots are refused", arguments: [false, true])
+    func unversionedPayloadIsRefused(recording: Bool) throws {
         try withSharedStoreSandbox { root in
-            var object = try SharedStoreSandbox.encodedObject(SharedStoreSandbox.trailSnapshot())
+            let file = recording ? SharedStoreSandbox.recordingFileName : SharedStoreSandbox.trailFileName
+            var object = try recording
+                ? SharedStoreSandbox.encodedObject(SharedStoreSandbox.recordingSnapshot())
+                : SharedStoreSandbox.encodedObject(SharedStoreSandbox.trailSnapshot())
             object.removeValue(forKey: "schemaVersion")
-            try SharedStoreSandbox.write(object, to: root.appendingPathComponent(SharedStoreSandbox.trailFileName))
+            try SharedStoreSandbox.write(object, to: root.appendingPathComponent(file))
 
-            let (loaded, diagnostics) = withSharedStoreDiagnostics { SharedStore.load() }
-            let snapshot = try #require(loaded)
-            #expect(snapshot.title == "Thumsee Loop")
-            #expect(snapshot.schemaVersion == nil)
-            #expect(snapshot.effectiveSchemaVersion == 0)
-            #expect(diagnostics.isEmpty, "a legacy payload is expected, not exceptional")
+            let (refused, diagnostics) = withSharedStoreDiagnostics {
+                recording ? SharedStore.loadRecording() == nil : SharedStore.load() == nil
+            }
+            #expect(refused)
+            #expect(diagnostics == [
+                .decodeFailed(file: file, detail: "missing key 'schemaVersion' at root"),
+            ])
         }
     }
 
-    @Test("an unversioned recording snapshot is still read")
-    func legacyRecordingPayloadIsAccepted() throws {
+    @Test("older snapshot versions are refused", arguments: [false, true])
+    func olderPayloadIsRefused(recording: Bool) throws {
         try withSharedStoreSandbox { root in
-            var object = try SharedStoreSandbox.encodedObject(SharedStoreSandbox.recordingSnapshot())
-            object.removeValue(forKey: "schemaVersion")
-            try SharedStoreSandbox.write(
-                object,
-                to: root.appendingPathComponent(SharedStoreSandbox.recordingFileName)
-            )
+            let file = recording ? SharedStoreSandbox.recordingFileName : SharedStoreSandbox.trailFileName
+            var object = try recording
+                ? SharedStoreSandbox.encodedObject(SharedStoreSandbox.recordingSnapshot())
+                : SharedStoreSandbox.encodedObject(SharedStoreSandbox.trailSnapshot())
+            object["schemaVersion"] = 0
+            try SharedStoreSandbox.write(object, to: root.appendingPathComponent(file))
 
-            let snapshot = try #require(SharedStore.loadRecording())
-            #expect(snapshot.effectiveSchemaVersion == 0)
-            #expect(snapshot.pointCount == 3)
+            let (refused, diagnostics) = withSharedStoreDiagnostics {
+                recording ? SharedStore.loadRecording() == nil : SharedStore.load() == nil
+            }
+            #expect(refused)
+            #expect(diagnostics == [
+                .unsupportedSchemaVersion(file: file, found: 0, supported: 1),
+            ])
         }
     }
 
-    /// The app can still append the widget's fixes against a legacy snapshot,
-    /// which is the part that would hurt to get wrong: a walker mid-recording
-    /// when the update installs would otherwise lose every fix the widget
-    /// captured until they stopped and started again.
-    @Test("a legacy recording snapshot still validates the widget's fixes")
-    func legacyRecordingPayloadStillAcceptsFixes() throws {
+    @Test("widget fixes require the current recording format", arguments: [0, 2])
+    func mismatchedRecordingCannotAcceptFixes(version: Int) throws {
         try withSharedStoreSandbox { root in
             let session = UUID()
             var object = try SharedStoreSandbox.encodedObject(
                 SharedStoreSandbox.recordingSnapshot(sessionID: session)
             )
-            object.removeValue(forKey: "schemaVersion")
+            object["schemaVersion"] = version
             try SharedStoreSandbox.write(
                 object,
                 to: root.appendingPathComponent(SharedStoreSandbox.recordingFileName)
             )
 
-            #expect(try SharedStore.appendPendingRecordingFix(.sample(sessionID: session)))
-            let pending = try SharedStore.loadPendingRecordingFixes()
-            #expect(pending.count == 1)
+            #expect(try !SharedStore.appendPendingRecordingFix(.sample(sessionID: session)))
+            #expect(try SharedStore.loadPendingRecordingFixes().isEmpty)
         }
     }
 
@@ -173,8 +168,8 @@ struct SharedStoreVersionTests {
     }
 
     /// Bytes announcing a version this build understands but whose shape it
-    /// does not get the version's benefit of the doubt — the gate is an upper
-    /// bound, not a substitute for decoding.
+    /// does not get the version's benefit of the doubt — the version check is
+    /// required, not a substitute for decoding.
     @Test("a payload at this version that does not decode is still refused, by decode")
     func currentVersionStillHasToDecode() throws {
         try withSharedStoreSandbox { root in
@@ -271,35 +266,8 @@ struct SharedStoreVersionTests {
             SharedStoreDiagnostic
                 .unsupportedSchemaVersion(file: "recording-snapshot.json", found: 4, supported: 1)
                 .summary == """
-                recording-snapshot.json was written by a newer build \
-                (schema v4; this build reads v1)
+                recording-snapshot.json uses unsupported schema v4; this build reads v1
                 """
         )
-    }
-}
-
-extension SharedStoreVersionTests {
-    /// The app's live-fix path loads the stored snapshot, moves the fix and
-    /// saves it back. If the version travelled with the value rather than
-    /// being stamped on write, a container that was unversioned before this
-    /// shipped would stay unversioned through every walk that followed, and
-    /// the legacy question would be re-decided forever instead of once.
-    @Test("re-saving a payload loaded from a legacy container upgrades it")
-    func resavingALegacyPayloadStampsTheCurrentVersion() throws {
-        try withSharedStoreSandbox { root in
-            let url = root.appendingPathComponent(SharedStoreSandbox.trailFileName)
-            var object = try SharedStoreSandbox.encodedObject(SharedStoreSandbox.trailSnapshot())
-            object.removeValue(forKey: "schemaVersion")
-            try SharedStoreSandbox.write(object, to: url)
-
-            var loaded = try #require(SharedStore.load())
-            try #require(loaded.schemaVersion == nil)
-            loaded.updatedAt = Date(timeIntervalSince1970: 1_700_009_999)
-            SharedStore.save(loaded)
-
-            let rewritten = try SharedStoreSandbox.readObject(at: url)
-            #expect(rewritten["schemaVersion"] as? Int == SharedTrailSnapshot.currentSchemaVersion)
-            #expect(SharedStore.load()?.schemaVersion == SharedTrailSnapshot.currentSchemaVersion)
-        }
     }
 }

@@ -34,7 +34,7 @@ public enum SharedStoreDiagnostic: Sendable, Equatable {
         case let .decodeFailed(file, detail):
             "\(file) could not be decoded: \(detail)"
         case let .unsupportedSchemaVersion(file, found, supported):
-            "\(file) was written by a newer build (schema v\(found); this build reads v\(supported))"
+            "\(file) uses unsupported schema v\(found); this build reads v\(supported)"
         }
     }
 }

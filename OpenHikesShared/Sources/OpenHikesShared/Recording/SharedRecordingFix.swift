@@ -236,6 +236,17 @@ struct PendingRecordingFixStore: Sendable {
         guard FileManager.default.fileExists(atPath: recordingURL.path) else { return nil }
         do {
             let data = try Data(contentsOf: recordingURL)
+            let version = try JSONDecoder().decode(SharedPayloadVersionPeek.self, from: data).schemaVersion
+            guard version == SharedRecordingSnapshot.currentSchemaVersion else {
+                SharedStoreDiagnostics.report(
+                    .unsupportedSchemaVersion(
+                        file: recordingURL.lastPathComponent,
+                        found: version,
+                        supported: SharedRecordingSnapshot.currentSchemaVersion
+                    )
+                )
+                return nil
+            }
             return try JSONDecoder().decode(
                 SharedRecordingSnapshot.self,
                 from: data

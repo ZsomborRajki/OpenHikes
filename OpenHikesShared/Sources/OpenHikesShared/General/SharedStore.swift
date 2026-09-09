@@ -101,18 +101,9 @@ public enum SharedStore {
 
     /// Writes the snapshot. No-ops rather than crashing if the App Group
     /// container can't be resolved.
-    ///
-    /// The version is stamped here rather than trusted from the value, because
-    /// it describes the bytes and this is what writes them. The app's live-fix
-    /// path loads the stored snapshot, moves the fix and saves it back, so
-    /// carrying the loaded version through would leave a container that was
-    /// unversioned before this shipped unversioned forever — re-deciding the
-    /// legacy question on every walk instead of once.
     public static func save(_ snapshot: SharedTrailSnapshot) {
         guard let fileURL else { return }
-        var stamped = snapshot
-        stamped.schemaVersion = SharedTrailSnapshot.currentSchemaVersion
-        guard let data = try? JSONEncoder().encode(stamped) else { return }
+        guard let data = try? JSONEncoder().encode(snapshot) else { return }
         try? data.write(to: fileURL, options: .atomic)
     }
 
@@ -139,10 +130,8 @@ public enum SharedStore {
     ) throws {
         guard let recordingFileURL, let pendingRecordingFixStore
         else { throw SharedRecordingStoreError.containerUnavailable }
-        var stamped = snapshot
-        stamped.schemaVersion = SharedRecordingSnapshot.currentSchemaVersion
         try pendingRecordingFixStore.saveRecording(
-            stamped,
+            snapshot,
             to: recordingFileURL
         )
     }
@@ -202,30 +191,14 @@ public enum SharedStore {
 
     // MARK: Decoding
 
-    /// Reads a versioned payload, refusing — audibly — anything this build
-    /// should not interpret.
-    ///
-    /// The version is peeked out of the raw bytes before the payload is
-    /// decoded, because the two failures need different answers. A payload
-    /// from a *newer* build may well still decode as this one, and that is the
-    /// dangerous case rather than the safe one: it would be accepted with
-    /// whatever meaning the fields used to have. Refuse on the announced
-    /// version, not on whether the decoder happened to cope.
-    ///
-    /// Everything at or below ``SharedPayload/currentSchemaVersion`` is
-    /// accepted if it decodes, and an absent version — every payload already
-    /// in a container the day this shipped — is version 0 and accepted the
-    /// same way. Discarding those instead would blank a working widget on the
-    /// update that introduced versioning, to protect against a change that had
-    /// not happened yet; a payload that decodes has, by construction, every
-    /// key this build requires.
+    /// Reads only the current format, reporting version and decoding failures.
     private static func decode<Payload: SharedPayload>(
         _ type: Payload.Type,
         from data: Data,
         named file: String
     ) -> Payload? {
         let announced = (try? JSONDecoder().decode(SharedPayloadVersionPeek.self, from: data))?.schemaVersion
-        if let announced, announced > Payload.currentSchemaVersion {
+        if let announced, announced != Payload.currentSchemaVersion {
             SharedStoreDiagnostics.report(
                 .unsupportedSchemaVersion(
                     file: file,

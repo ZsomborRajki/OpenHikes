@@ -35,10 +35,7 @@ final class HikeLocalState {
     /// would land on the main actor.
     #Index<HikeLocalState>([\.hikeID])
 
-    /// Defaulted for the same reason every column here is: this store is not
-    /// mirrored, but it is still opened by SwiftData's lightweight migration,
-    /// and a mandatory attribute with no default refuses to backfill.
-    var hikeID = UUID()
+    var hikeID: UUID
 
     /// Records of offline tile downloads for this hike, enough to recompute
     /// (and so measure and remove) exactly the tiles each one saved.
@@ -72,7 +69,7 @@ final class HikeLocalState {
     /// journal for this hike. Only the recorder sets it; browsing a synced
     /// draft's map or adding a photo must never confer ownership.
     ///
-    /// False also means unknown: legacy rows have no ownership evidence until
+    /// False also means unknown: a draft has no ownership evidence until
     /// a matching local journal is recovered. Retained after saving, but only
     /// consulted for `isRecording` rows by the abandoned-draft sweep.
     var ownsRecordingDraft: Bool = false

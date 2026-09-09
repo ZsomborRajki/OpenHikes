@@ -108,7 +108,6 @@ extension ModelContainer {
         let version = OpenHikesSchemaV3.self
         return try ModelContainer(
             for: Schema(versionedSchema: version),
-            migrationPlan: OpenHikesMigrationPlan.self,
             configurations: .openHikes(
                 schema: schema(version.hikeModels, version: version.versionIdentifier),
                 isStoredInMemoryOnly: isStoredInMemoryOnly,
@@ -123,46 +122,17 @@ extension ModelContainer {
 
     /// Both stores at chosen locations, for the reopen suites.
     static func openHikes(url: URL, localURL: URL) throws -> ModelContainer {
-        try openHikes(
-            schemaVersion: OpenHikesSchemaV3.self,
-            url: url,
-            localURL: localURL,
-            migrationPlan: OpenHikesMigrationPlan.self
-        )
-    }
-
-    /// A chosen schema version over the stores that version had. The migration
-    /// suite uses this to write a genuine previous-version fixture through the
-    /// same store configuration boundary as production.
-    ///
-    /// The sidecar configuration is opened only when the version actually has
-    /// one. A version predating the split — see ``OpenHikesSchemaV1`` — left no
-    /// second file behind, and writing a fixture that has one would be writing
-    /// a store no install ever had.
-    static func openHikes(
-        schemaVersion: any OpenHikesVersionedSchema.Type,
-        url: URL,
-        localURL: URL,
-        migrationPlan: (any SchemaMigrationPlan.Type)? = nil
-    ) throws -> ModelContainer {
-        var configurations: [ModelConfiguration] = [
-            .openHikes(
-                schema: schema(schemaVersion.hikeModels, version: schemaVersion.versionIdentifier),
+        let version = OpenHikesSchemaV3.self
+        return try ModelContainer(
+            for: Schema(versionedSchema: version),
+            configurations: .openHikes(
+                schema: schema(version.hikeModels, version: version.versionIdentifier),
                 url: url
             ),
-        ]
-        if !schemaVersion.localStateModels.isEmpty {
-            configurations.append(
-                .openHikesLocal(
-                    schema: schema(schemaVersion.localStateModels, version: schemaVersion.versionIdentifier),
-                    url: localURL
-                )
+            .openHikesLocal(
+                schema: schema(version.localStateModels, version: version.versionIdentifier),
+                url: localURL
             )
-        }
-        return try ModelContainer(
-            for: Schema(versionedSchema: schemaVersion),
-            migrationPlan: migrationPlan,
-            configurations: configurations
         )
     }
 }

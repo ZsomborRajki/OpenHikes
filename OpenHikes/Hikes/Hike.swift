@@ -57,9 +57,6 @@ final class Hike {
     /// How the map draws this route's line — see ``RouteLinePattern``. Stored
     /// as its stable string id (like ``tintHex``) rather than as an enum, so an
     /// unrecognised value degrades to the default instead of failing to decode.
-    ///
-    /// The inline default is required for SwiftData lightweight migration: a
-    /// store written before this column existed has to backfill it.
     var routeLinePatternID: String = RouteLinePattern.default.rawValue
     /// SF Symbol shown in the row's colored circle.
     var symbol: String = "figure.hiking"
@@ -74,9 +71,6 @@ final class Hike {
     var route: [RouteCoordinate] = []
     /// A user-chosen name that overrides the GPS/import-derived ``title``.
     /// `nil` means no override is set and the original title is displayed.
-    ///
-    /// Optional, so SwiftData's lightweight migration can backfill existing
-    /// stores with `nil` instead of failing on a mandatory attribute.
     var customName: String?
 
     /// The unmatched GPS trace when trail matching moved a recorded route.
@@ -115,9 +109,7 @@ final class Hike {
     /// repeated requests against a volunteer-run API.
     ///
     /// Empty means "never analyzed", which is what opening the hike triggers —
-    /// see ``HikeDetailView``'s `loadTrailBreakdowns()`. The inline `= [:]`
-    /// default is required for SwiftData lightweight migration, as for the
-    /// auto-save fields above.
+    /// see ``HikeDetailView``'s `loadTrailBreakdowns()`.
     var surfaceMetersByCategory: [String: Double] = [:]
 
     /// Metres of this route attributed to each ``TrailDifficulty``, keyed by
@@ -125,8 +117,7 @@ final class Hike {
     ///
     /// Persisted for the same reason as ``surfaceMetersByCategory``: producing
     /// it requires the OSM graph for every region the route crosses. Empty
-    /// means "never analyzed". The inline default is required for SwiftData
-    /// lightweight migration.
+    /// means "never analyzed".
     var difficultyMetersByGrade: [String: Double] = [:]
 
     /// Photos taken or imported while this hike was open, newest last once
@@ -335,13 +326,6 @@ extension Hike {
 extension Hike {
     /// Adds complete or partial bulk coverage without accumulating redundant
     /// records for repeated attempts at the same provider/depth.
-    ///
-    /// Deliberately does not compare ``OfflineDownloadRecord/scale``, which no
-    /// longer describes anything — see ``TileCacheKey``. A provider and a
-    /// depth is all a record is now, which is the same rule
-    /// ``LegacyTileKeyMigration`` folds stored records by: whichever of the
-    /// two runs first, a device ends up with one record per provider and
-    /// depth rather than one per scale it happened to download at.
     func mergeOfflineDownload(_ record: OfflineDownloadRecord) {
         let matches: (OfflineDownloadRecord) -> Bool = { existing in
             existing.providerID == record.providerID

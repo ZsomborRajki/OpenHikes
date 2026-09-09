@@ -49,7 +49,7 @@ struct OfflineTileEnumerationTests {
 
     @Test("a partial record claims only tiles verified on disk")
     func partialRecordUsesExactKeys() async throws {
-        let exact = ["test/10/1/1@2.0", "test/10/1/2@2.0"]
+        let exact = ["test/10/1/1", "test/10/1/2"]
         let record = OfflineDownloadRecord(
             providerID: "test",
             maxZoom: 19,
@@ -605,40 +605,22 @@ struct OfflineDownloadManifestTests {
             OfflineDownloadRecord(
                 providerID: "test",
                 maxZoom: 12,
-                savedTileKeys: ["test/12/1/1@2.0"]
+                savedTileKeys: ["test/12/1/1"]
             )
         )
         hike.mergeOfflineDownload(
             OfflineDownloadRecord(
                 providerID: "test",
                 maxZoom: 12,
-                savedTileKeys: ["test/12/1/2@2.0"]
+                savedTileKeys: ["test/12/1/2"]
             )
         )
 
         #expect(hike.offlineDownloads.count == 1)
         #expect(
             Set(hike.offlineDownloads[0].savedTileKeys)
-                == ["test/12/1/1@2.0", "test/12/1/2@2.0"]
+                == ["test/12/1/1", "test/12/1/2"]
         )
-    }
-
-    /// Records written before display scale left the cache key carry a `2.0`
-    /// or `3.0` here and re-derive keys for tiles that are no longer on disk.
-    /// Matching on provider and depth alone is what lets a re-download absorb
-    /// one instead of accumulating a second record beside it.
-    @Test("a record from before the key change is absorbed rather than kept")
-    func mergeIgnoresLegacyScale() {
-        let hike = Fixture.hike(in: context)
-        hike.mergeOfflineDownload(
-            OfflineDownloadRecord(providerID: "test", maxZoom: 12, scale: 3)
-        )
-        hike.mergeOfflineDownload(
-            OfflineDownloadRecord(providerID: "test", maxZoom: 12)
-        )
-
-        #expect(hike.offlineDownloads.count == 1)
-        #expect(hike.offlineDownloads[0].scale == 0)
     }
 
     @Test("a complete retry replaces partial coverage")
@@ -648,7 +630,7 @@ struct OfflineDownloadManifestTests {
             OfflineDownloadRecord(
                 providerID: "test",
                 maxZoom: 12,
-                savedTileKeys: ["test/12/1/1@2.0"]
+                savedTileKeys: ["test/12/1/1"]
             )
         )
         hike.mergeOfflineDownload(
@@ -661,7 +643,7 @@ struct OfflineDownloadManifestTests {
 
     @Test("a record without partial keys decodes as complete coverage")
     func completeRecordDecodes() throws {
-        let data = Data(#"{"providerID":"test","scale":2,"maxZoom":12,"savedTileKeys":[]}"#.utf8)
+        let data = Data(#"{"providerID":"test","maxZoom":12,"savedTileKeys":[]}"#.utf8)
         let record = try JSONDecoder().decode(OfflineDownloadRecord.self, from: data)
         #expect(record.savedTileKeys.isEmpty)
     }

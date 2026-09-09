@@ -8,11 +8,6 @@
 //  disk. This suite owns ordinary round trips and deletion durability, at the
 //  current schema version.
 //
-//  Opening an *older* store — and with it the inline-default contract that
-//  `Hike`'s comments describe, which only a store missing those columns can
-//  exercise — lives in `SchemaMigrationTests`.
-//
-
 import Foundation
 @testable import OpenHikes
 import SwiftData
@@ -86,10 +81,11 @@ struct HikePersistenceTests {
             // to reach it. A value that was never inserted has nowhere to put
             // them, which is why they are no longer initialiser arguments.
             hike.offlineDownloads = [
-                OfflineDownloadRecord(providerID: "osm", maxZoom: 14, savedTileKeys: ["osm/14/1/1@2.0"])
+                OfflineDownloadRecord(providerID: "osm", maxZoom: 14, savedTileKeys: ["osm/14/1/1"])
             ]
-            hike.autoSavedTileKeys = ["osm/16/9/9@2.0"]
+            hike.autoSavedTileKeys = ["osm/16/9/9"]
             hike.autoSaveTilesEnabled = false
+            hike.ownsRecordingDraft = true
             try context.save()
         }
 
@@ -110,15 +106,16 @@ struct HikePersistenceTests {
         #expect(reopened.symbol == "mountain.2")
         #expect(reopened.rawRoute == Array(Fixture.ridgeRoute.reversed()))
         #expect(reopened.isRecording)
+        #expect(reopened.ownsRecordingDraft)
         #expect(reopened.trackDescription == "A ridge")
         #expect(reopened.author == "Someone")
         #expect(reopened.keywords == "ridge, loop")
 
         // The two manifests are what free a hike's tiles; losing either strands
         // durable files nothing will ever reclaim.
-        #expect(reopened.autoSavedTileKeys == ["osm/16/9/9@2.0"])
+        #expect(reopened.autoSavedTileKeys == ["osm/16/9/9"])
         #expect(reopened.offlineDownloads.count == 1)
-        #expect(reopened.offlineDownloads.first?.savedTileKeys == ["osm/14/1/1@2.0"])
+        #expect(reopened.offlineDownloads.first?.savedTileKeys == ["osm/14/1/1"])
 
         // And the per-hike toggles, which are the user's and not the app's.
         #expect(reopened.autoSaveTilesEnabled == false)
@@ -291,8 +288,8 @@ struct HikePersistenceTests {
         #expect(walk.endReason == nil)
     }
 
-    @Test("route points written before motion metadata still decode")
-    func legacyRouteCoordinateDecodesWithoutMotion() throws {
+    @Test("route points may omit optional motion metadata")
+    func routeCoordinateDecodesWithoutMotion() throws {
         let data = Data(
             #"{"latitude":47.63,"longitude":12.86}"#.utf8
         )

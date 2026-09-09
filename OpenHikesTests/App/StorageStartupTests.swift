@@ -5,9 +5,7 @@
 //  The store-open failure path: what the app does when SwiftData will not open
 //  the store the user's hikes live in.
 //
-//  Worth a suite of its own because of the policy around it. Supported schema
-//  versions migrate before this path is reached; `SchemaMigrationTests` owns
-//  that contract. This suite starts with a genuinely unreadable store. That
+//  This suite starts with an unreadable store. That
 //  failing launch still has to be survivable: the app has to come up, say so,
 //  and leave what is on disk alone. A crash here turns "your saved hikes are
 //  unavailable this launch" into "the app is broken", and a silent fallback
@@ -49,8 +47,7 @@ nonisolated private final class StoreSandbox: Sendable {
     }
 
     /// Makes `url` something SwiftData cannot open, the way a truncated write
-    /// or a store from a schema this build no longer knows would: the file is
-    /// there, and it is not a store.
+    /// would: the file is there, and it is not a store.
     func corrupt(_ url: URL) throws {
         try Data("this is not a SQLite database".utf8).write(to: url)
     }

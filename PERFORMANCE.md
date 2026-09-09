@@ -415,7 +415,7 @@ for a passing grade.
   are instrumented and they are silent, which reads in a report exactly like
   work that is not happening. The concentrations: seventeen `Tile*` marks
   covering the whole durable-storage side of the cache (quota scan, enforce,
-  reclaim, trim, clear, legacy-key migration, keyed removal, `TileServedStale`,
+  reclaim, trim, clear, keyed removal, `TileServedStale`,
   `TileRetryAfterHonoured`); the four `OfflineDownload*`/`OfflineKey*` marks,
   which item 5 of *Validating on a device* asks about by name; `WeatherFetch`,
   `WeatherBadgeBody` and `WeatherDetailBody`, since no perf scenario passes

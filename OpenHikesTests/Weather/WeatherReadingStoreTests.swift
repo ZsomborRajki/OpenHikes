@@ -8,16 +8,6 @@ import Testing
 @MainActor
 @Suite("Weather reading store")
 struct WeatherReadingStoreTests {
-    private struct LegacyPayload: Encodable {
-        var symbolName: String
-        var celsius: Double
-        var conditionDescription: String
-        var capturedAt: Date
-        var latitude: Double
-        var longitude: Double
-        var placeName: String?
-    }
-
     private let budapest = CLLocationCoordinate2D(latitude: 47.4979, longitude: 19.0402)
     private let capturedAt = Date(timeIntervalSinceReferenceDate: 1_000_000)
 
@@ -68,25 +58,17 @@ struct WeatherReadingStoreTests {
         #expect(restored.subject == subject)
     }
 
-    @Test("readings written before subject kinds still restore")
-    func restoresLegacyPayload() throws {
+    @Test("a reading without a subject kind is discarded")
+    func missingSubjectKindIsRefused() throws {
         let defaults = try makeDefaults()
-        let payload = LegacyPayload(
-            symbolName: "cloud.rain.fill",
-            celsius: 4,
-            conditionDescription: "Rain",
-            capturedAt: capturedAt,
-            latitude: budapest.latitude,
-            longitude: budapest.longitude,
-            placeName: "Budapest"
-        )
-        defaults.set(
-            try JSONEncoder().encode(payload),
-            forKey: SettingsKey.lastWeatherReading
-        )
+        let store = WeatherReadingStore(defaults: defaults)
+        store.save(snapshot: snapshot(celsius: 4), subject: .place(budapest, name: "Budapest"))
+        let data = try #require(defaults.data(forKey: SettingsKey.lastWeatherReading))
+        var object = try #require(JSONSerialization.jsonObject(with: data) as? [String: Any])
+        object.removeValue(forKey: "subjectKind")
+        defaults.set(try JSONSerialization.data(withJSONObject: object), forKey: SettingsKey.lastWeatherReading)
 
-        let restored = try #require(WeatherReadingStore(defaults: defaults).load())
-        #expect(restored.subject == .place(budapest, name: "Budapest"))
+        #expect(store.load() == nil)
     }
 
     /// The age is what makes a restored reading honest — it is drawn dimmed by

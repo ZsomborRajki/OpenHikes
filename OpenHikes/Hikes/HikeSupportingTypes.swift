@@ -22,24 +22,11 @@ nonisolated struct OfflineDownloadRecord: Codable, Hashable, Sendable {
     /// Exact durable keys for a partial download. An empty array indicates
     /// that every tile in the deterministic grid was saved (complete download).
     var savedTileKeys: [String]
-    /// **Vestigial, and kept only because it is part of the persisted shape.**
-    ///
-    /// Display scale stopped being part of a tile's identity — see
-    /// ``TileCacheKey`` for why it never described one — so nothing reads this
-    /// any more and new records leave it at zero. Dropping it from an inline
-    /// `Codable` value type would change the persisted shape for a field no
-    /// code consults, so the live schema keeps it too.
-    /// A record written before the change decodes with its `2.0` or `3.0`
-    /// intact, and keeps it until ``LegacyTileKeyMigration`` rewrites that
-    /// record at the next launch — which puts this back to zero, so nothing
-    /// on the device is left saying it predates the change.
-    var scale: Double
 
-    init(providerID: String, maxZoom: Int, savedTileKeys: [String] = [], scale: Double = 0) {
+    init(providerID: String, maxZoom: Int, savedTileKeys: [String] = []) {
         self.providerID = providerID
         self.maxZoom = maxZoom
         self.savedTileKeys = savedTileKeys
-        self.scale = scale
     }
 }
 
@@ -93,10 +80,7 @@ nonisolated enum RouteMotion: String, Codable, Hashable, Sendable {
 /// the point itself — the segment property has to live on one of its two ends,
 /// and the end is the one that survives joining consecutive legs.
 ///
-/// `nil` means measured, which is the overwhelming majority of points and the
-/// only thing a route recorded before this existed can decode to. That is
-/// deliberate: absence is the safe reading, since a point that fails to admit
-/// it was inferred is a smaller error than one that wrongly claims to be.
+/// `nil` means measured.
 nonisolated enum RouteProvenance: String, Codable, Hashable, Sendable {
     case inferred = "inferred"
 }
@@ -116,10 +100,7 @@ nonisolated enum RouteProvenance: String, Codable, Hashable, Sendable {
 /// that carries it — the pause ended when this fix arrived — which is what
 /// lets a boundary survive the join between two matched legs.
 ///
-/// `nil` is the overwhelming majority of points, and the only thing a route
-/// saved before this existed can decode to. A hike recorded through a pause
-/// under an earlier build therefore reads as one continuous walk, which is
-/// what it has always claimed to be.
+/// `nil` means the point continues the preceding segment.
 nonisolated enum RouteBoundary: String, Codable, Hashable, Sendable {
     case paused = "paused"
 }
