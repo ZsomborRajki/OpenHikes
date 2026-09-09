@@ -26,10 +26,9 @@ nonisolated struct OfflineDownloadRecord: Codable, Hashable, Sendable {
     ///
     /// Display scale stopped being part of a tile's identity — see
     /// ``TileCacheKey`` for why it never described one — so nothing reads this
-    /// any more and new records leave it at zero. It stays declared because
-    /// `OpenHikesSchemaV2` is the live version: dropping a column from an
-    /// inline `Codable` value type is a change to a persisted shape, which
-    /// means freezing V2 and adding a V3 stage for a field no code consults.
+    /// any more and new records leave it at zero. Dropping it from an inline
+    /// `Codable` value type would change the persisted shape for a field no
+    /// code consults, so the live schema keeps it too.
     /// A record written before the change decodes with its `2.0` or `3.0`
     /// intact, and keeps it until ``LegacyTileKeyMigration`` rewrites that
     /// record at the next launch — which puts this back to zero, so nothing

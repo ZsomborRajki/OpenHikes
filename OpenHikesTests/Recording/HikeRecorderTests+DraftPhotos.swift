@@ -24,7 +24,8 @@ extension HikeRecorderTests {
     /// An abandoned draft with one picture attached, saved, exactly as the
     /// launch after a crash finds it.
     private func orphanedDraft(
-        in store: HikePhotoStore
+        in store: HikePhotoStore,
+        owned: Bool = true
     ) async throws -> UUID {
         let orphan = Hike(
             title: "Interrupted Hike",
@@ -32,6 +33,7 @@ extension HikeRecorderTests {
             isRecording: true
         )
         context.insert(orphan)
+        orphan.ownsRecordingDraft = owned
         try context.save()
         _ = await HikePhotoImport.add(
             Photos.sampleImageData(),
@@ -42,6 +44,25 @@ extension HikeRecorderTests {
         )
         try context.save()
         return orphan.id
+    }
+
+    @Test("sweeping a local orphan preserves a foreign draft's photo files")
+    func orphanSweepPreservesForeignPhotoFiles() async throws {
+        let sandbox = Photos.Sandbox()
+        let foreignID = try await orphanedDraft(in: sandbox.store, owned: false)
+        _ = try await orphanedDraft(in: sandbox.store)
+        #expect(Photos.fileCount(in: sandbox.store.directory) == 2)
+        let hikeRecorder = makeRecorder(photoStore: sandbox.store)
+
+        try hikeRecorder.deleteOrphanedRecordingHikes()
+
+        await settleDelegateHop(until: "only the foreign draft's photo file remains") {
+            Photos.fileCount(in: sandbox.store.directory) == 1
+        }
+        let remaining = try ModelContext(container).fetch(FetchDescriptor<Hike>())
+        #expect(remaining.map(\.id) == [foreignID])
+        let photo = try #require(remaining.first?.photos.first)
+        #expect(FileManager.default.fileExists(atPath: sandbox.store.url(for: photo).path))
     }
 
     @Test("an orphaned draft's deletion is on disk before its photos are erased")

@@ -216,8 +216,8 @@ final class Hike {
 // MARK: - Device-local state
 
 extension Hike {
-    /// This hike's device-local storage record, or `nil` if it has never
-    /// claimed a tile on this device.
+    /// This hike's device-local record, or `nil` if this device has never
+    /// stored tile claims, a walk in progress, or recording ownership for it.
     ///
     /// Resolved once and remembered, because ``StoredTileDeletionPlan`` asks
     /// every hike in the library for its claim and a fetch each would put the
@@ -230,8 +230,8 @@ extension Hike {
     ///
     /// The passthroughs below cannot make that distinction and should not try
     /// to — they answer twenty call sites that only ever wanted a list of tile
-    /// keys. It matters to exactly one caller, ``tileClaim()``, and it matters
-    /// there because the answer authorises a deletion.
+    /// keys. ``tileClaim()`` and recording ownership need the distinction
+    /// because their answers authorize deletion.
     ///
     /// Resolving through here also warms the cache the passthroughs read, so a
     /// claim set taken this way cannot be contradicted a line later by a
@@ -289,6 +289,13 @@ extension Hike {
     var walkInProgress: TrailWalkRecord? {
         get { localState?.walkInProgress }
         set { mutableLocalState?.walkInProgress = newValue }
+    }
+
+    /// Whether this device has positively claimed the recording through its
+    /// local journal. A sidecar's mere existence proves nothing about that.
+    var ownsRecordingDraft: Bool {
+        get { localState?.ownsRecordingDraft ?? false }
+        set { mutableLocalState?.ownsRecordingDraft = newValue }
     }
 
     /// Removes the sidecar, for a hike on its way out of the store.

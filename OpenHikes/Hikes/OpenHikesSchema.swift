@@ -104,31 +104,19 @@ nonisolated enum OpenHikesSchemaV1: OpenHikesVersionedSchema {
     }
 }
 
-/// The current shape, and the first to be versioned explicitly: the columns
-/// added since V1, and the device-local half split out into its own unmirrored
-/// store — see ``HikeLocalState`` for why that split is load-bearing.
-///
-/// This is the live version, so it points at the live model types rather than
-/// at nested copies. That is what makes "the app's schema" and "the newest
-/// version in the history" the same thing by construction instead of by
-/// diligence. Before changing the persisted shape again, freeze this version
-/// the way ``OpenHikesSchemaV1`` is frozen — nested model copies, nested
-/// copies of the value types they encode — then add V3 and its stage.
-///
-/// Walks were added to this version in place rather than as a V3: the
-/// `HikeWalk` entity and the sidecar's `walkInProgress` column are both
-/// additive, and at the time no install carried a V2 store worth migrating —
-/// the mirrored container was reset alongside. A store written before them
-/// still opens, through the lightweight migration SwiftData infers.
-nonisolated enum OpenHikesSchemaV2: OpenHikesVersionedSchema {
-    static var versionIdentifier: Schema.Version { Schema.Version(2, 0, 0) }
+/// Adds positive recording ownership to the unmirrored sidecar. Existing
+/// rows default to unowned; only a matching local journal can claim them.
+/// This live version points at the production types. Freeze them, including
+/// their encoded value types, before adding another version and stage.
+nonisolated enum OpenHikesSchemaV3: OpenHikesVersionedSchema {
+    static var versionIdentifier: Schema.Version { Schema.Version(3, 0, 0) }
     static var hikeModels: [any PersistentModel.Type] { [Hike.self, HikeWalk.self] }
     static var localStateModels: [any PersistentModel.Type] { [HikeLocalState.self] }
 }
 
 nonisolated enum OpenHikesMigrationPlan: SchemaMigrationPlan {
     static var schemas: [any VersionedSchema.Type] {
-        [OpenHikesSchemaV1.self, OpenHikesSchemaV2.self]
+        [OpenHikesSchemaV1.self, OpenHikesSchemaV2.self, OpenHikesSchemaV3.self]
     }
 
     /// Lightweight throughout. The columns V2 adds all carry inline
@@ -144,6 +132,10 @@ nonisolated enum OpenHikesMigrationPlan: SchemaMigrationPlan {
             .lightweight(
                 fromVersion: OpenHikesSchemaV1.self,
                 toVersion: OpenHikesSchemaV2.self
+            ),
+            .lightweight(
+                fromVersion: OpenHikesSchemaV2.self,
+                toVersion: OpenHikesSchemaV3.self
             ),
         ]
     }

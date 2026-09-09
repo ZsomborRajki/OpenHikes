@@ -108,6 +108,7 @@ extension HikeRecorderTests {
             isRecording: true
         )
         context.insert(orphan)
+        orphan.ownsRecordingDraft = true
         try context.save()
 
         let hikeRecorder = makeRecorder()
@@ -122,13 +123,13 @@ extension HikeRecorderTests {
 
     @Test("recovery removes a recording draft that has no journal")
     func recoveryRemovesOrphanedDraft() async throws {
-        context.insert(
-            Hike(
-                title: "Interrupted Hike",
-                distanceMeters: 0,
-                isRecording: true
-            )
+        let orphan = Hike(
+            title: "Interrupted Hike",
+            distanceMeters: 0,
+            isRecording: true
         )
+        context.insert(orphan)
+        orphan.ownsRecordingDraft = true
         try context.save()
 
         let hikeRecorder = makeRecorder()
