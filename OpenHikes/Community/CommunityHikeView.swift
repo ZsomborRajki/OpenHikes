@@ -23,6 +23,18 @@
 //  as they are being looked at, and no longer — unless the walker imports the
 //  hike, at which point ``CommunityImport`` makes copies that are theirs.
 //
+//  ## Why the report button is here and not on the row
+//
+//  This is the screen that shows the content, and reporting is about content.
+//  A row carries a title, a distance and a name; a walker reporting from one
+//  would be reporting a title they read rather than a photograph they saw, and
+//  a reviewer would open the listing to find nothing wrong with it. The button
+//  sits in the toolbar rather than under the fold because it must be reachable
+//  in every phase — a listing whose route never loads can still be one whose
+//  *title* is the problem, and a walker who cannot open a hike is exactly the
+//  one with nothing else to do about it. See ``CommunityReport`` for where a
+//  report goes.
+//
 
 import SwiftData
 import SwiftUI
@@ -57,6 +69,7 @@ struct CommunityHikeView: View {
     @State private var isImporting = false
     @State private var importFailure: CommunityFailure?
     @State private var existingHike: Hike?
+    @State private var isReporting = false
 
     /// Where this screen's downloads live. Per-listing so two pushes of
     /// different hikes cannot overwrite each other's photographs, and removed
@@ -85,9 +98,38 @@ struct CommunityHikeView: View {
         #if os(iOS)
         .navigationBarTitleDisplayMode(.inline)
         #endif
+        .toolbar { reportToolbarItem }
+        .sheet(isPresented: $isReporting) {
+            CommunityReportSheet(listing: listing)
+        }
         .task { await load() }
         .onAppear { existingHike = CommunityImport.existingImport(of: listing.id, in: context) }
         .onDisappear { discardDownloads() }
+    }
+}
+
+// MARK: - Reporting
+
+private extension CommunityHikeView {
+    /// The Guideline 1.2 affordance: somewhere on the screen showing the
+    /// content to say that something is wrong with it.
+    ///
+    /// A destructive-tinted button rather than a menu, because there is one
+    /// action behind it and a menu in front of a single destination is a tap
+    /// spent on nothing — the same call ``MapAttributionView`` makes about its
+    /// licence links.
+    @ToolbarContentBuilder var reportToolbarItem: some ToolbarContent {
+        ToolbarItem(placement: .primaryAction) {
+            Button {
+                isReporting = true
+            } label: {
+                Label("Report", systemImage: "exclamationmark.bubble")
+            }
+            .tint(.red)
+            .accessibilityLabel("Report this hike")
+            .accessibilityHint("Tells the reviewer something is wrong with it")
+            .accessibilityIdentifier("community-report-button")
+        }
     }
 }
 
