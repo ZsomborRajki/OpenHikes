@@ -12,10 +12,16 @@
 //  So the screen says what goes, says what happens next, and asks for the name
 //  in the same breath.
 //
-//  What it must not say is that the hike is now visible. It is not. A
-//  submission waits for a person to review it, and this app cannot find out
-//  whether one has — see ``Hike/communitySubmissionID``. The success state
-//  therefore says *sent*, which is the only thing that is true.
+//  What it must not say is that the hike is now visible. It is not: a
+//  submission waits for a person to review it, and at the moment the upload
+//  lands nothing has happened beyond that. The success state therefore says
+//  *sent*, which is the only thing true then.
+//
+//  Later is a different question, and the hike's own screen asks it rather
+//  than this one — ``CommunityPublicationCheck`` looks for a listing published
+//  from the submission and remembers a yes. That is the single thing the app
+//  can observe: a reviewer who has not looked and one who declined leave the
+//  same absence behind. See ``CommunityPublicationState``.
 //
 
 import SwiftUI
