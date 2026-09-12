@@ -23,17 +23,23 @@
 //  as they are being looked at, and no longer — unless the walker imports the
 //  hike, at which point ``CommunityImport`` makes copies that are theirs.
 //
-//  ## Why the report button is here and not on the row
+//  ## Why reporting and blocking are here and not on the row
 //
-//  This is the screen that shows the content, and reporting is about content.
-//  A row carries a title, a distance and a name; a walker reporting from one
-//  would be reporting a title they read rather than a photograph they saw, and
-//  a reviewer would open the listing to find nothing wrong with it. The button
-//  sits in the toolbar rather than under the fold because it must be reachable
-//  in every phase — a listing whose route never loads can still be one whose
-//  *title* is the problem, and a walker who cannot open a hike is exactly the
-//  one with nothing else to do about it. See ``CommunityReport`` for where a
-//  report goes.
+//  This is the screen that shows the content, and both gestures are about
+//  content. A row carries a title, a distance and a name; a walker reporting
+//  from one would be reporting a title they read rather than a photograph they
+//  saw, and a reviewer would open the listing to find nothing wrong with it.
+//  The menu sits in the toolbar rather than under the fold because it must be
+//  reachable in every phase — a listing whose route never loads can still be
+//  one whose *title* is the problem, and a walker who cannot open a hike is
+//  exactly the one with nothing else to do about it.
+//
+//  The two are together because they are one reach in most apps and are wanted
+//  at the same moment, and they are two items because they do different
+//  things: a report asks a person to look at the hike and can take it down for
+//  everybody, a block hides that author on this device and takes nothing down.
+//  See ``CommunityReport`` for where a report goes and ``CommunityBlockList``
+//  for where a block lives.
 //
 
 import SwiftData
@@ -59,9 +65,15 @@ struct CommunityHikeView: View {
 
     let listing: CommunityListing
     let transport: any CommunityTransporting
+    /// The walker's own block list. Written by this screen and read by the
+    /// lists behind it — see ``CommunityBlockList``.
+    let blockList: CommunityBlockList
     /// Called with the imported hike, so the caller can pop this screen and
     /// open the real one.
     let onImport: (Hike) -> Void
+    /// Called once this author has been blocked, so the caller can pop a
+    /// screen that is now showing hidden content.
+    let onBlock: () -> Void
 
     @Environment(\.modelContext)
     private var context
@@ -70,6 +82,7 @@ struct CommunityHikeView: View {
     @State private var importFailure: CommunityFailure?
     @State private var existingHike: Hike?
     @State private var isReporting = false
+    @State private var isConfirmingBlock = false
 
     /// Where this screen's downloads live. Per-listing so two pushes of
     /// different hikes cannot overwrite each other's photographs, and removed
@@ -98,9 +111,27 @@ struct CommunityHikeView: View {
         #if os(iOS)
         .navigationBarTitleDisplayMode(.inline)
         #endif
-        .toolbar { reportToolbarItem }
+        .toolbar { moderationToolbarItem }
         .sheet(isPresented: $isReporting) {
             CommunityReportSheet(listing: listing)
+        }
+        // Presented from this screen rather than from the menu's closure: a
+        // `.confirmationDialog` attached inside a `Menu` goes with the menu
+        // when it dismisses, which is the moment the item is tapped.
+        .confirmationDialog(
+            blockPrompt,
+            isPresented: $isConfirmingBlock,
+            titleVisibility: .visible
+        ) {
+            Button("Block", role: .destructive) { block() }
+                .accessibilityIdentifier("community-block-confirm")
+            // Dismisses, and nothing else has to happen.
+            Button("Cancel", role: .cancel) { /* intentionally empty */ }
+        } message: {
+            Text("""
+            Their hikes stop appearing on this device. You can undo this in \
+            Settings. Blocking doesn't report the hike or take it down.
+            """)
         }
         .task { await load() }
         .onAppear { existingHike = CommunityImport.existingImport(of: listing.id, in: context) }
@@ -108,28 +139,74 @@ struct CommunityHikeView: View {
     }
 }
 
-// MARK: - Reporting
+// MARK: - Reporting and blocking
 
 private extension CommunityHikeView {
-    /// The Guideline 1.2 affordance: somewhere on the screen showing the
-    /// content to say that something is wrong with it.
+    /// Both halves of the Guideline 1.2 affordance, in one place on the screen
+    /// showing the content.
     ///
-    /// A destructive-tinted button rather than a menu, because there is one
-    /// action behind it and a menu in front of a single destination is a tap
-    /// spent on nothing — the same call ``MapAttributionView`` makes about its
-    /// licence links.
-    @ToolbarContentBuilder var reportToolbarItem: some ToolbarContent {
+    /// A menu now that there are two destinations behind it. While reporting
+    /// was the only one this was a plain destructive button, because a menu in
+    /// front of a single destination is a tap spent on nothing — the same call
+    /// ``MapAttributionView`` makes about its licence links. Two actions that
+    /// a walker reaches for at the same moment and must not confuse are the
+    /// case a menu is for, and the alternative — two toolbar buttons — spends
+    /// the navigation bar of a screen whose title is a stranger's trail name.
+    @ToolbarContentBuilder var moderationToolbarItem: some ToolbarContent {
         ToolbarItem(placement: .primaryAction) {
-            Button {
-                isReporting = true
+            Menu {
+                Button {
+                    isReporting = true
+                } label: {
+                    Label("Report Hike", systemImage: "exclamationmark.bubble")
+                }
+                .accessibilityHint("Tells the reviewer something is wrong with it")
+                .accessibilityIdentifier("community-report-button")
+
+                Button(role: .destructive) {
+                    isConfirmingBlock = true
+                } label: {
+                    Label(blockActionTitle, systemImage: "hand.raised.slash")
+                }
+                .accessibilityHint("Hides their hikes on this device")
+                .accessibilityIdentifier("community-block-button")
             } label: {
-                Label("Report", systemImage: "exclamationmark.bubble")
+                Label("More", systemImage: "ellipsis.circle")
             }
-            .tint(.red)
-            .accessibilityLabel("Report this hike")
-            .accessibilityHint("Tells the reviewer something is wrong with it")
-            .accessibilityIdentifier("community-report-button")
+            .accessibilityLabel("Report or block")
+            .accessibilityIdentifier("community-moderation-menu")
         }
+    }
+
+    /// "Block Anna", or "Block This Walker" when they published without a
+    /// name.
+    ///
+    /// The name is a label and never the thing being blocked — see
+    /// ``CommunityBlockList`` — but it is what the walker recognises, and an
+    /// item reading "Block" alone on a screen with an import button under it
+    /// leaves them guessing what the object is.
+    var blockActionTitle: String {
+        listing.authorName.isEmpty
+            ? String(localized: "Block This Walker")
+            : String(localized: "Block \(listing.authorName)")
+    }
+
+    var blockPrompt: String {
+        listing.authorName.isEmpty
+            ? String(localized: "Block this walker?")
+            : String(localized: "Block \(listing.authorName)?")
+    }
+
+    /// Blocks the author and hands the screen back, because what is on it is
+    /// now hidden everywhere else.
+    ///
+    /// Leaving it up would be the one place in the app still showing content
+    /// the walker has just said they do not want to see, and backing out of it
+    /// into a list the hike has vanished from reads as a glitch rather than as
+    /// the thing they asked for.
+    func block() {
+        blockList.block(listing)
+        onBlock()
     }
 }
 

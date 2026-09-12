@@ -57,6 +57,9 @@ struct SettingsView: View {
     /// here reads the manifests — this screen both measures and deletes by them.
     let autoSave: AutoSaveController
     let backgroundTracker: BackgroundTrailTracker
+    /// The community authors this device has blocked. Drawn by
+    /// ``BlockedWalkersSection``, which is absent while the list is empty.
+    let blocks: CommunityBlockList
     let cloudSync: CloudSyncCoordinator
     let entitlement: MapEntitlementStore
 
@@ -119,6 +122,12 @@ struct SettingsView: View {
                 movementReminderSection
                 displaySection
                 offlineStorageSection
+                // Below the app's own switches and above the contact links,
+                // which is where somebody looks for it: it is not a setting
+                // they turn on, it is a list of decisions they already made,
+                // and it sits next to the other thing the community feature
+                // put in this screen's reach.
+                BlockedWalkersSection(blocks: blocks)
                 FieldMetricsSection()
                 contactSection
             }
@@ -699,6 +708,7 @@ private extension SettingsView {
     return SettingsView(
         autoSave: AutoSaveController(),
         backgroundTracker: BackgroundTrailTracker(container: container),
+        blocks: CommunityBlockList(),
         cloudSync: CloudSyncCoordinator(defaults: .standard, isSyncingThisLaunch: false),
         entitlement: MapEntitlementStore(currentEntitlements: { false })
     )

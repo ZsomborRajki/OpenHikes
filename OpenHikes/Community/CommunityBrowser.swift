@@ -28,6 +28,15 @@
 //  map has already left — the same hazard ``CloudSyncCoordinator`` chains its
 //  account checks to avoid.
 //
+//  ## Where blocked authors are taken out
+//
+//  Here, once, at the point both lists are read — see ``nearbyResults``. The
+//  two lists are deliberately separate and answer different questions, so the
+//  one thing they must not disagree about is who is hidden; filtering as the
+//  results land would have meant remembering to re-filter whichever list was
+//  standing when a block was made. ``CommunityBlockList`` holds the list and
+//  the reasoning for it being device-local.
+//
 
 import CoreLocation
 import Foundation
@@ -81,10 +90,27 @@ final class CommunityBrowser {
     /// said *Shared Hikes*, and clearing the field left the title matches
     /// standing wherever the zoom ceiling refused the replacement query. An
     /// answer now outlives the other question entirely.
-    private(set) var nearbyListings: [CommunityListing] = []
+    ///
+    /// Computed, with blocked authors taken out — see ``nearbyResults``.
+    var nearbyListings: [CommunityListing] { blockList.excludingBlocked(nearbyResults) }
     /// What the search results draw: published hikes whose title matches what
     /// the walker typed. Nothing the map does touches this.
-    private(set) var matchingListings: [CommunityListing] = []
+    var matchingListings: [CommunityListing] { blockList.excludingBlocked(matchingResults) }
+
+    /// The nearby answer as it came back, before anybody was blocked out of it.
+    ///
+    /// Filtered on the way *out* rather than on the way in, which is the whole
+    /// of why a block takes effect on results that are already on screen. The
+    /// two lists above are deliberately separate and would otherwise disagree
+    /// about what is blocked — a block made while a typed search is standing
+    /// would have had to remember to re-filter it too, and the one that was
+    /// forgotten would be the bug. One filter, one source of truth, applied at
+    /// the point of reading.
+    ///
+    /// It also means a walker who unblocks somebody gets their hikes back
+    /// without a request: the rows were never thrown away, only hidden.
+    private var nearbyResults: [CommunityListing] = []
+    private var matchingResults: [CommunityListing] = []
     /// How the *nearby* request is getting on.
     ///
     /// The nearby one only, because it is the only one with anywhere to say
@@ -106,6 +132,14 @@ final class CommunityBrowser {
     @ObservationIgnored private var latestRegion: MKCoordinateRegion?
     @ObservationIgnored private var policy = CommunityQueryPolicy()
     @ObservationIgnored private let transport: (any CommunityTransporting)?
+    /// The walker's own block list, which both result sets are read through.
+    ///
+    /// The *reference* is ignored by observation because it never changes;
+    /// what a body reading ``nearbyListings`` ends up tracking is the block
+    /// list's own state, which is how a block made on a pushed screen redraws
+    /// the list underneath it. Held rather than owned — ``OpenHikesModel``
+    /// builds it, because the Settings screen writes to the same one.
+    @ObservationIgnored let blockList: CommunityBlockList
     /// One in-flight task per question, for the same reason there is one list
     /// per question: a typed search cancelling the map's request, or the other
     /// way round, is how the two used to interfere.
@@ -116,8 +150,9 @@ final class CommunityBrowser {
     ///   — a hosted test bundle, or UI automation. Every entry point is then a
     ///   no-op, in the same shape ``HikeLiveActivityController`` is absent for
     ///   those launches rather than stubbed.
-    init(transport: (any CommunityTransporting)?) {
+    init(transport: (any CommunityTransporting)?, blockList: CommunityBlockList) {
         self.transport = transport
+        self.blockList = blockList
     }
 
     /// Requests that reached the transport. The policy above is what makes
@@ -191,7 +226,7 @@ final class CommunityBrowser {
         isBrowsing = false
         nearbyTask?.cancel()
         nearbyTask = nil
-        nearbyListings = []
+        nearbyResults = []
         state = .idle
     }
 
@@ -232,7 +267,7 @@ final class CommunityBrowser {
             // which is also why this no longer depends on the policy agreeing
             // to re-ask: above the zoom ceiling it would refuse, and the title
             // matches used to be left on screen as a result.
-            matchingListings = []
+            matchingResults = []
             return
         }
         perform(.title, describing: "a title search") { transport in
@@ -282,6 +317,9 @@ final class CommunityBrowser {
         guard let transport else { return }
         issuedRequests += 1
         if question == .nearby {
+            // Against what is *drawn* rather than what came back: a list whose
+            // every row is blocked out shows nothing, and replacing nothing
+            // with a spinner is the honest half of `.loading`.
             state = nearbyListings.isEmpty ? .loading : .refreshing
         }
         let previous = task(for: question)
@@ -316,10 +354,10 @@ final class CommunityBrowser {
     private func accept(_ results: [CommunityListing], answering question: Question) {
         switch question {
         case .nearby:
-            nearbyListings = results
+            nearbyResults = results
             state = .loaded
         case .title:
-            matchingListings = results
+            matchingResults = results
         }
     }
 

@@ -100,7 +100,16 @@ nonisolated struct CommunityListing: Identifiable, Hashable, Sendable {
     /// The submission record this was published from, fetched on open.
     var submissionID: String
     var title: String
+    /// What the walker typed when they shared it, which is a credit and not
+    /// an identity. See ``authorID`` for the difference and why both are here.
     var authorName: String
+    /// Who published it, as CloudKit knows them.
+    ///
+    /// Carried on every listing so a walker can block the person rather than
+    /// the name they happened to type — see ``CommunitySchema/Listing/authorID``
+    /// and ``CommunityBlockList``. Never shown: it is an opaque record name,
+    /// and the screen credits ``authorName``.
+    var authorID: String
     var hikeDate: Date
     var distanceMeters: Double
     var photoCount: Int

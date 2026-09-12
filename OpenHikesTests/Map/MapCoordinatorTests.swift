@@ -74,7 +74,7 @@ struct MapCoordinatorTests {
         tileSource: ActiveTileSource? = osm,
         sidePanelInset: CGFloat = 0,
         showsWeatherBadge: Bool = true,
-        community: CommunityBrowser = CommunityBrowser(transport: nil)
+        community: CommunityBrowser = CommunityBrowser(transport: nil, blockList: .scratch())
     ) -> MapView {
         MapView(
             locationManager: locationManager,

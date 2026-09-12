@@ -166,14 +166,30 @@ nonisolated struct CloudKitCommunityTransport: CommunityTransporting {
                 matching: query,
                 resultsLimit: limit
             )
-            return matches.compactMap { _, result in
+            return matches.compactMap { id, result in
                 switch result {
                 case .success(let record):
-                    return CommunityListing(record: record)
+                    guard let listing = CommunityListing(record: record) else {
+                        // A record that came back whole and still cannot be
+                        // drawn: a reviewer published it with a field missing.
+                        // Named rather than counted, because the only way to
+                        // fix it is to open that record in the Console — and
+                        // `authorID` is the likeliest one, since it is the
+                        // newest field and the only one that renders nothing.
+                        Self.logger.error(
+                            """
+                            Dropped listing \(id.recordName, privacy: .public) during \
+                            \(reason, privacy: .public): a required field is missing.
+                            """
+                        )
+                        return nil
+                    }
+                    return listing
                 case .failure(let error):
-                    // One unreadable row is not a failed query. A record a
-                    // reviewer published with a field missing should cost that
-                    // row and nothing else.
+                    // One unreadable row is not a failed query. A record the
+                    // server could not hand back should cost that row and
+                    // nothing else — the same bargain the guard above makes
+                    // for one it handed back incomplete.
                     Self.logger.error(
                         """
                         Skipped a listing during \(reason, privacy: .public): \
@@ -367,15 +383,27 @@ nonisolated private extension CommunityListing {
     /// listing with no cover photo is an ordinary listing, and one with no
     /// location is not — it could never have been found by the query that
     /// returned it, so it is a record somebody built by hand and got wrong.
+    ///
+    /// ``CommunitySchema/Listing/authorID`` is strict too, and it is the one
+    /// entry in that list which renders nothing. A listing without it is one
+    /// no walker can block, and App Store Guideline 1.2 has no exemption for a
+    /// record the reviewer filled in wrong — so the row is dropped, which
+    /// costs that listing and is logged by the caller with the reason. The
+    /// alternative is a block keyed on an empty string, which would silently
+    /// hide every *other* listing the reviewer forgot the field on.
     init?(record: CKRecord) {
         guard let reference = record[CommunitySchema.Listing.submission] as? CKRecord.Reference,
               let title = record[CommunitySchema.Listing.title] as? String,
-              let location = record[CommunitySchema.Listing.location] as? CLLocation
+              let location = record[CommunitySchema.Listing.location] as? CLLocation,
+              let authorID = (record[CommunitySchema.Listing.authorID] as? String)
+              .map({ $0.trimmingCharacters(in: .whitespacesAndNewlines) }),
+              !authorID.isEmpty
         else { return nil }
 
         id = record.recordID.recordName
         submissionID = reference.recordID.recordName
         self.title = title
+        self.authorID = authorID
         authorName = record[CommunitySchema.Listing.authorName] as? String ?? ""
         hikeDate = record[CommunitySchema.Listing.hikeDate] as? Date ?? .distantPast
         distanceMeters = record[CommunitySchema.Listing.distanceMeters] as? Double ?? 0
