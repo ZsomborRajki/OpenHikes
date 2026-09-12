@@ -129,13 +129,21 @@ final class Hike {
     /// That query needs ``CommunitySchema/Listing/submission`` to be QUERYABLE
     /// in the Console — the one index this field costs.
     ///
-    /// One-way on purpose. Once a listing has been seen, it is remembered and
-    /// never re-checked, so a hike that has gone live stays live on this
-    /// screen even offline. A takedown therefore leaves this stale, which is
-    /// the cheap direction to be wrong in: the alternative is a request per
-    /// detail-open forever, against a shared quota, to keep a badge honest
-    /// about something the hiker will find out about the moment they open the
-    /// hike itself.
+    /// One-way on purpose, *for a given submission*. Once a listing has been
+    /// seen, it is remembered and never re-checked, so a hike that has gone
+    /// live stays live on this screen even offline. A takedown therefore
+    /// leaves this stale, which is the cheap direction to be wrong in: the
+    /// alternative is a request per detail-open forever, against a shared
+    /// quota, to keep a badge honest about something the hiker will find out
+    /// about the moment they open the hike itself.
+    ///
+    /// The one thing that does clear it is a second share of the same hike,
+    /// which makes a second submission — see
+    /// ``CommunityPublisher/share(_:authorName:entitlement:transport:store:save:)``.
+    /// This column and ``communitySubmissionID`` are read together as one
+    /// answer about one submission, so a new submission arrives with no
+    /// listing known for it yet, and the two are written in the same commit so
+    /// they cannot be seen describing two different sends.
     ///
     /// Mirrored for the reason ``communitySubmissionID`` is: publication is an
     /// account-level fact, and a second device should not offer to share a

@@ -89,6 +89,86 @@ struct CommunityPublisherTests {
         #expect(hike.communitySubmissionID == "submission-42")
     }
 
+    /// A second share is a second submission, and the listing column answers a
+    /// question about the *first* one. Left behind, it would say published
+    /// about a copy nobody has reviewed — and, because
+    /// `CommunityPublicationCheck` skips a hike that already has a listing,
+    /// the new submission would never be asked about at all.
+    @Test("re-sharing a published hike forgets the old listing")
+    func resharingClearsThePreviousPublication() async throws {
+        let context = try Fixture.modelContext()
+        let hike = Fixture.hike(in: context)
+        hike.communitySubmissionID = "old-submission"
+        hike.communityListingID = "old-listing"
+        let transport = StubCommunityTransport()
+        transport.submissionResult = .success("new-submission")
+
+        _ = await CommunityPublisher.share(
+            hike,
+            authorName: "Anna",
+            entitlement: .entitled,
+            transport: transport
+        )
+
+        #expect(hike.communitySubmissionID == "new-submission")
+        #expect(hike.communityListingID == nil)
+        #expect(
+            CommunityPublicationState(
+                submissionID: hike.communitySubmissionID,
+                listingID: hike.communityListingID
+            ) == .awaitingReview,
+            "the new copy is waiting for a reviewer, whatever became of the old one"
+        )
+    }
+
+    /// The other half of the same contract: the check has to be able to ask
+    /// again, which is the symptom a hiker actually sees — a hike stuck on
+    /// *published* whose new submission is never looked up.
+    @Test("the next publication check asks about the new submission")
+    func checkAfterResharingAsksAboutTheNewSubmission() async throws {
+        let context = try Fixture.modelContext()
+        let hike = Fixture.hike(in: context)
+        hike.communitySubmissionID = "old-submission"
+        hike.communityListingID = "old-listing"
+        let transport = StubCommunityTransport()
+        transport.submissionResult = .success("new-submission")
+
+        _ = await CommunityPublisher.share(
+            hike,
+            authorName: "Anna",
+            entitlement: .entitled,
+            transport: transport
+        )
+        await CommunityPublicationCheck.refresh(hike, transport: transport)
+
+        #expect(transport.recording.publicationChecks == ["new-submission"])
+    }
+
+    /// The ordering from this file's header, on the re-share path: an upload
+    /// that failed must leave both columns as they were. Clearing the listing
+    /// on the way out would hide a hike that is still live from the screen
+    /// that says so.
+    @Test("a refused re-share leaves the previous submission and listing alone")
+    func failedResharingKeepsThePreviousPublication() async throws {
+        let context = try Fixture.modelContext()
+        let hike = Fixture.hike(in: context)
+        hike.communitySubmissionID = "old-submission"
+        hike.communityListingID = "old-listing"
+        let transport = StubCommunityTransport()
+        transport.submissionResult = .failure(.unreachable)
+
+        let outcome = await CommunityPublisher.share(
+            hike,
+            authorName: "Anna",
+            entitlement: .entitled,
+            transport: transport
+        )
+
+        #expect(outcome == .refused(.unreachable))
+        #expect(hike.communitySubmissionID == "old-submission")
+        #expect(hike.communityListingID == "old-listing")
+    }
+
     /// A hike with no route is refused before anything is encoded or uploaded,
     /// so a hiker never waits on a request that was never going to be taken.
     @Test("a hike with no route is refused without a request")

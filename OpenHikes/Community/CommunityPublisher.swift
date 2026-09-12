@@ -152,6 +152,20 @@ nonisolated enum CommunityPublisher {
         // stands and there is simply nothing here left to remember it.
         guard hike.isAttached else { return .submitted }
         hike.communitySubmissionID = submissionID
+        // Both columns, together, because they describe one submission between
+        // them: ``Hike/communityListingID`` caches an answer about whichever
+        // submission ``Hike/communitySubmissionID`` names, and the moment that
+        // name changes the cached answer is about a hike nobody is asking
+        // after any more. Leaving it would say *published* about a copy no
+        // reviewer has seen, and — worse, because it is silent —
+        // ``CommunityPublicationCheck`` skips a hike that already has a
+        // listing, so the new submission would never be asked about at all.
+        //
+        // The listing itself is untouched by this; a published hike stays
+        // published and stays findable. What is cleared is only this device's
+        // record of it, which is what the share form promises when it says the
+        // published copy stays as it is.
+        hike.communityListingID = nil
         if let context = hike.modelContext {
             do {
                 try save(context)
