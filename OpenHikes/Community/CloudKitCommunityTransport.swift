@@ -333,38 +333,60 @@ nonisolated struct CloudKitCommunityTransport: CommunityTransporting {
         else { throw CommunityFailure.noLongerAvailable }
 
         let pins = Self.decodePins(in: record)
-        let photoURLs = Self.copyPhotos(in: record, into: directory)
-
-        let detail = CommunityHikeDetail(
-            listing: listing,
-            route: document.route,
-            trackDescription: record[CommunitySchema.Submission.trackDescription] as? String,
-            photoPins: pins,
-            photoFileURLs: photoURLs
-        )
-        // A hike whose pins and photographs disagree is offered without any
-        // pins rather than with the wrong ones. See
-        // ``CommunityHikeDetail/isConsistent``: silently pinning a photograph
-        // to another photograph's coordinate is the one failure nothing
-        // downstream could ever notice.
-        guard detail.isConsistent else {
+        let assets = record[CommunitySchema.Submission.photos] as? [CKAsset] ?? []
+        let downloaded = Self.copyPhotos(assets, into: directory)
+        if downloaded.count != assets.count {
+            Self.logger.error(
+                """
+                Shared hike \(listing.id, privacy: .public) kept \
+                \(downloaded.count) of \(assets.count) photos.
+                """
+            )
+        }
+        if pins.count != assets.count {
             Self.logger.error(
                 """
                 Shared hike \(listing.id, privacy: .public) has \
-                \(pins.count) pins for \(photoURLs.count) photos; dropping the pins.
+                \(pins.count) pins for \(assets.count) photos; dropping the pins.
                 """
             )
-            return CommunityHikeDetail(
-                listing: listing,
-                route: document.route,
-                trackDescription: detail.trackDescription,
-                photoPins: photoURLs.map { _ in
-                    CommunityPhotoPin(capturedAt: listing.hikeDate, coordinate: nil)
-                },
-                photoFileURLs: photoURLs
-            )
         }
-        return detail
+
+        return CommunityHikeDetail(
+            listing: listing,
+            route: document.route,
+            trackDescription: record[CommunitySchema.Submission.trackDescription] as? String,
+            photoPins: Self.pins(pins, for: downloaded, of: assets.count, takenOn: listing.hikeDate),
+            photoFileURLs: downloaded.map(\.url)
+        )
+    }
+
+    /// The pins belonging to the photographs that actually arrived.
+    ///
+    /// The pins and the assets describe each other **by index**, and a
+    /// download that lost one does not change that: the survivors still know
+    /// which index they were, so each keeps its own coordinate and its own
+    /// capture time. One asset CloudKit could not hand back costs that
+    /// photograph's pin and no other.
+    ///
+    /// The all-or-nothing fallback is kept for the case it was written for —
+    /// a record whose pin list and asset list genuinely disagree in length,
+    /// which is a reviewer having edited one of the two by hand. There the
+    /// index means nothing, and pinning a photograph to another photograph's
+    /// coordinate is the one failure nothing downstream could ever notice, so
+    /// the lot is dropped. See ``CommunityHikeDetail/isConsistent``.
+    static func pins(
+        _ pins: [CommunityPhotoPin],
+        for downloaded: [(index: Int, url: URL)],
+        of assetCount: Int,
+        takenOn hikeDate: Date
+    ) -> [CommunityPhotoPin] {
+        guard pins.count == assetCount else {
+            return downloaded.map { _ in
+                CommunityPhotoPin(capturedAt: hikeDate, coordinate: nil)
+            }
+        }
+        return downloaded.map { pins[$0.index] }
     }
 
     private static func decodePins(in record: CKRecord) -> [CommunityPhotoPin] {
@@ -382,9 +404,16 @@ nonisolated struct CloudKitCommunityTransport: CommunityTransporting {
     /// file behind it whenever it likes, so reading from it later — which a
     /// gallery scrolled a minute afterwards certainly is — is reading from a
     /// path that may have gone. Copying is the documented way to keep one.
-    private static func copyPhotos(in record: CKRecord, into directory: URL) -> [URL] {
-        guard let assets = record[CommunitySchema.Submission.photos] as? [CKAsset] else { return [] }
-        return assets.enumerated().compactMap { index, asset in
+    ///
+    /// Returns each surviving file with the index of the asset it came from,
+    /// so a failure in the middle does not silently renumber the ones after
+    /// it — the index is what pairs a photograph with its pin. See
+    /// ``pins(_:for:of:takenOn:)``.
+    private static func copyPhotos(
+        _ assets: [CKAsset],
+        into directory: URL
+    ) -> [(index: Int, url: URL)] {
+        assets.enumerated().compactMap { index, asset in
             guard let source = asset.fileURL else { return nil }
             let destination = directory.appendingPathComponent(
                 "photo-\(index).jpeg",
@@ -393,7 +422,7 @@ nonisolated struct CloudKitCommunityTransport: CommunityTransporting {
             do {
                 try? FileManager.default.removeItem(at: destination)
                 try FileManager.default.copyItem(at: source, to: destination)
-                return destination
+                return (index, destination)
             } catch {
                 logger.error(
                     "Could not keep a downloaded photo: \(error.localizedDescription, privacy: .public)"
