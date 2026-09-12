@@ -31,7 +31,9 @@ import SwiftData
 enum CommunityShareOutcome: Equatable {
     case refused(CommunityFailure)
     /// Accepted. Not the same as published: a human still has to look at it,
-    /// and nothing in the app can say whether they have.
+    /// and at this point nothing has. Whether they later did is asked
+    /// afterwards and elsewhere — ``CommunityPublicationCheck`` looks for the
+    /// listing, which is the one observation this app can make.
     case submitted
 }
 
