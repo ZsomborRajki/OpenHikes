@@ -77,13 +77,60 @@ struct CommunityBlockListTests {
         #expect(blocks.authors.isEmpty)
     }
 
-    @Test("blocking the same author twice leaves one entry")
+    @Test("a repeated block keeps its original name, date and position")
     func blockingIsIdempotent() throws {
-        let blocks = CommunityBlockList(defaults: try Self.defaults())
-        blocks.block(.stub(id: "listing-1", authorID: "author-1"))
-        blocks.block(.stub(id: "listing-2", authorID: "author-1"))
+        let defaults = try Self.defaults()
+        let blocks = CommunityBlockList(defaults: defaults)
+        let earlier = Date(timeIntervalSince1970: 1_750_000_000)
+        blocks.block(.stub(authorName: "Anna", authorID: "author-1"), at: earlier)
+        blocks.block(.stub(authorName: "Bence", authorID: "author-2"), at: earlier.addingTimeInterval(60))
+        let original = blocks.authors
+        blocks.block(.stub(authorName: "Renamed", authorID: "author-1"), at: earlier.addingTimeInterval(120))
 
-        #expect(blocks.authors.count == 1)
+        #expect(blocks.authors == original)
+        #expect(CommunityBlockList(defaults: defaults).authors == original)
+    }
+
+    @Test("removing a middle block preserves order and reblocking puts it first")
+    func removalAndReblockingPreserveOrder() throws {
+        let defaults = try Self.defaults()
+        let blocks = CommunityBlockList(defaults: defaults)
+        for id in ["author-1", "author-2", "author-3"] {
+            blocks.block(.stub(authorID: id))
+        }
+        let snapshot = blocks.blockedIDs
+        blocks.unblock("author-2")
+        blocks.unblock("not-blocked")
+        #expect(blocks.authors.map(\.id) == ["author-3", "author-1"])
+        #expect(blocks.blockedIDs == ["author-1", "author-3"])
+        #expect(snapshot == ["author-1", "author-2", "author-3"])
+        #expect(CommunityBlockList(defaults: defaults).authors == blocks.authors)
+
+        blocks.block(.stub(authorID: "author-2"))
+        #expect(blocks.authors.map(\.id) == ["author-2", "author-3", "author-1"])
+        #expect(CommunityBlockList(defaults: defaults).authors == blocks.authors)
+        blocks.unblockAll()
+        #expect(blocks.blockedIDs.isEmpty)
+        #expect(CommunityBlockList(defaults: defaults).isEmpty)
+    }
+
+    @Test("storage stays an ordered array of blocked authors")
+    func storageKeepsItsArrayShape() throws {
+        let defaults = try Self.defaults()
+        let stored = [
+            CommunityBlockList.BlockedAuthor(id: "author-2", name: "Bence", blockedAt: .distantFuture),
+            CommunityBlockList.BlockedAuthor(id: "author-1", name: "Anna", blockedAt: .distantPast),
+        ]
+        defaults.set(try JSONEncoder().encode(stored), forKey: SettingsKey.communityBlockedAuthors)
+        let blocks = CommunityBlockList(defaults: defaults)
+        #expect(blocks.authors == stored)
+        #expect(blocks.blockedIDs == ["author-1", "author-2"])
+        blocks.block(.stub(authorID: "author-3"))
+
+        let data = try #require(defaults.data(forKey: SettingsKey.communityBlockedAuthors))
+        let decoded = try JSONDecoder().decode([CommunityBlockList.BlockedAuthor].self, from: data)
+        #expect(decoded == blocks.authors)
+        #expect(Array(decoded.dropFirst()) == stored)
     }
 
     /// Settings draws this list, and the entry a hiker just made is the one
