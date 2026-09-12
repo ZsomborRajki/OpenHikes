@@ -144,6 +144,7 @@ extension OpenHikesModel {
                 monitor: Self.dormantLocationSource()
             ),
             trailGraphProvider: graphProvider,
+            communityTransport: Self.makeCommunityTransport(),
             defaults: uiTestingDefaults
         )
     }
@@ -305,6 +306,9 @@ private extension OpenHikesModel {
     /// ``makeLiveActivityController(defaults:)`` is absent rather than stubbed
     /// for a hosted suite.
     static func makeCommunityTransport() -> (any CommunityTransporting)? {
+        #if DEBUG
+        if AppLaunchEnvironment.stubsCommunity { return CommunitySearchFixture() }
+        #endif
         guard !AppLaunchEnvironment.isRunningTests else { return nil }
         return CloudKitCommunityTransport()
     }

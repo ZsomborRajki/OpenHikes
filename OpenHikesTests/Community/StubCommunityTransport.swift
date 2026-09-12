@@ -34,6 +34,7 @@ final class StubCommunityTransport: CommunityTransporting, @unchecked Sendable {
         var submissions: [CommunitySubmissionDraft] = []
         var nearbyRequests: [(coordinate: CLLocationCoordinate2D, radiusMeters: Double)] = []
         var titleQueries: [String] = []
+        var titleAreas: [CommunitySearchArea?] = []
         var detailRequests: [String] = []
         /// The exclusion set each listing request carried, in order. What
         /// proves the browser spends its budget on rows the walker can see —
@@ -77,11 +78,13 @@ final class StubCommunityTransport: CommunityTransporting, @unchecked Sendable {
     @concurrent
     func listings(
         matching query: String,
+        area: CommunitySearchArea?,
         limit: Int,
         excluding: Set<String>
     ) async throws -> [CommunityListing] {
         state.withLock { recording in
             recording.titleQueries.append(query)
+            recording.titleAreas.append(area)
             recording.exclusions.append(excluding)
         }
         await beforeListingsReturn?()

@@ -126,10 +126,12 @@ nonisolated protocol CommunityTransporting: Sendable {
         excluding: Set<String>
     ) async throws -> [CommunityListing]
 
-    /// Published hikes whose title matches `query`, newest first.
+    /// Published hikes whose title matches `query`, optionally inside a committed
+    /// circle. Both predicates apply before the result budget, newest first.
     @concurrent
     func listings(
         matching query: String,
+        area: CommunitySearchArea?,
         limit: Int,
         excluding: Set<String>
     ) async throws -> [CommunityListing]

@@ -81,14 +81,8 @@ struct MapView: MapViewRepresentable, Equatable {
     /// annotations rather than this view — see ``PhotoMapPinController``.
     var photoPins: PhotoMapPinController
 
-    /// Told where the map came to rest, so community results can follow the
-    /// map without any SwiftUI body reading the region.
-    ///
-    /// Handed over rather than observed, and in this direction only: the
-    /// browser never tells the map anything. A region reaches it on every
-    /// settle and is dropped by ``CommunityQueryPolicy`` unless it is worth a
-    /// request — see ``CommunityBrowser/regionDidSettle(_:)``, which is a
-    /// stored property write and a comparison while browsing is off.
+    /// Receives settled regions directly from the coordinator. After entering
+    /// Community, a pan only offers Search this area; it never replaces results.
     var community: CommunityBrowser
 
     /// How far the landscape side panel reaches in from the leading edge, or

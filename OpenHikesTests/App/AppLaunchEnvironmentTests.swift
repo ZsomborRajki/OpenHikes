@@ -14,11 +14,13 @@ struct AppLaunchEnvironmentTests {
             arguments: [
                 "OpenHikes",
                 "--ui-test-expanded-sheet",
+                "--ui-test-community",
                 "--ui-test-import-gpx=ThumseeLoopFast",
             ]
         )
 
         #expect(!configuration.isUITesting)
+        #expect(!configuration.stubsCommunity)
         #expect(!configuration.startsWithExpandedSheet)
         #expect(configuration.usesLiveLocation)
         #expect(configuration.importedGPXFixtureName == nil)
@@ -31,12 +33,14 @@ struct AppLaunchEnvironmentTests {
                 "OpenHikes",
                 "--ui-testing",
                 "--ui-test-expanded-sheet",
+                "--ui-test-community",
                 "--ui-test-enable-location",
                 "--ui-test-import-gpx=ThumseeLoopFast",
             ]
         )
 
         #expect(configuration.isUITesting)
+        #expect(configuration.stubsCommunity)
         #expect(configuration.startsWithExpandedSheet)
         #expect(configuration.usesLiveLocation)
         #expect(

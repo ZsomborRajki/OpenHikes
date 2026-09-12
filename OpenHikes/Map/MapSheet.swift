@@ -59,6 +59,8 @@ struct MapSheet: View {
     @FocusState private var searchFocused: Bool
     @State private var showImporter = false
     @State private var showSettings = false
+    @State private var showAreaPicker = false
+    @State private var locationUnavailable = false
     @State private var completer = SearchCompleter()
     @State private var searchTask: Task<Void, Never>?
 
@@ -96,9 +98,12 @@ struct MapSheet: View {
                     .padding(.horizontal)
                     .padding(.top, Self.topPadding)
 
+                searchControls
+
                 MapSheetHikes(
                     searchText: searchText,
                     isSearchFocused: searchFocused,
+                    searchSession: appModel.searchSession,
                     isCompact: presentation.isCompact,
                     completer: completer,
                     recorder: hikeRecorder,
@@ -108,6 +113,8 @@ struct MapSheet: View {
                     onOpen: open,
                     onSelectResult: select,
                     onSelectCompletion: select,
+                    onFindCommunity: findCommunity,
+                    onFindCommunityQuery: findCommunityQuery,
                     onSelectListing: select,
                     onDelete: delete,
                     onRecord: openRecording,
@@ -149,6 +156,18 @@ struct MapSheet: View {
                 cloudSync: appModel.cloudSync,
                 entitlement: appModel.entitlement
             )
+        }
+        .sheet(isPresented: $showAreaPicker) {
+            CommunityPlacePicker { region, name in
+                showAreaPicker = false
+                commitCommunityPlace(region, name: name, clearQuery: false)
+            }
+        }
+        .alert("Location unavailable", isPresented: $locationUnavailable) {
+            Button("Choose a place") { showAreaPicker = true }
+            Button("Cancel", role: .cancel) { /* Keep the selected area. */ }
+        } message: {
+            Text("Your current location isn't available. Enable location access in Settings, or choose a place.")
         }
         // Focusing the search field expands the sheet to full height.
         .onChange(of: searchFocused) { _, focused in
@@ -193,26 +212,36 @@ struct MapSheet: View {
         }
     }
 
+    @ViewBuilder private var searchControls: some View {
+        if !presentation.isCompact {
+            MapSearchControls(
+                session: appModel.searchSession,
+                community: appModel.community,
+                onScopeChange: changeScope,
+                onAreaChoice: chooseArea,
+                onChoosePlace: { searchFocused = false; showAreaPicker = true }
+            )
+        }
+    }
+
     private var searchField: some View {
         HStack(spacing: 8) {
             Image(systemName: "magnifyingglass")
                 .foregroundStyle(.secondary)
                 .accessibilityHidden(true)
 
-            TextField("Search Maps", text: $searchText)
+            TextField("Search hikes and places", text: $searchText)
+                .minimumTapTarget()
                 .accessibilityIdentifier("map-search")
                 .focused($searchFocused)
                 .autocorrectionDisabled()
                 .submitLabel(.search)
                 .onSubmit(performSearch)
                 .onChange(of: searchText) { _, value in
-                    completer.update(query: value)
-                    // The same fragment, asked of the community. Gated by its
-                    // own trimming rather than the completer's policy: the two
-                    // answer different questions and a place suggestion the
-                    // walker has already committed to is still a trail name
-                    // worth looking up.
-                    appModel.community.search(matching: value)
+                    guard !appModel.searchSession.consumesProgrammaticChange(value) else { return }
+                    searchTask?.cancel()
+                    appModel.searchSession.showsResults = true
+                    updateSearch(value)
                 }
                 #if os(iOS)
                 .textInputAutocapitalization(.words)
@@ -227,6 +256,7 @@ struct MapSheet: View {
                     Image(systemName: "xmark.circle.fill")
                         .foregroundStyle(.secondary)
                         .accessibilityHidden(true)
+                        .minimumTapTarget()
                 }
                 .buttonStyle(.plain)
                 // The glyph above is the button's only content and is hidden,
@@ -235,7 +265,8 @@ struct MapSheet: View {
                 .accessibilityIdentifier("clear-search-button")
             }
         }
-        .padding(10)
+        .padding(.horizontal, 10)
+        .padding(.vertical, 4)
         // A capsule rather than a 12pt rounded rectangle: a search field is a
         // capsule everywhere in iOS 26, and it is what lets the circular
         // settings button beside it read as the same family of control.
@@ -405,40 +436,44 @@ private func delete(_ hike: Hike, among hikes: [Hike]) {
 private func select(_ hike: Hike) {
     searchTask?.cancel()
     searchTask = nil
-    searchText = ""
     searchFocused = false
-    completer.clear()
     open(hike)
 }
 
 /// Pushes a published hike's preview, so it can be looked at before it is
 /// imported.
 ///
-/// The search field is left alone, unlike a tapped hike or place: this push is
+/// The search field is left alone: this push is
 /// a detour rather than an answer, and a walker who backs out of a preview
 /// should find the query they typed still there.
 private func select(_ listing: CommunityListing) {
+    searchTask?.cancel()
+    searchTask = nil
     searchFocused = false
     presentation.path.append(.communityHike(listing))
 }
 
 /// Resolves a tapped suggestion to a place and zooms the map to it.
 private func select(_ completion: MKLocalSearchCompletion) {
-    searchText = completion.title
+    setSearchText(completion.title)
     searchFocused = false
     completer.commit(query: completion.title)
     startSearch(request: .init(completion: completion), fallbackName: completion.title)
 }
 
-/// Geocodes the raw search text (when the user hits Return without picking a
-/// suggestion) and zooms the map to the matching region.
+/// Submit keeps hike results visible. Only the Places scope resolves and moves the map.
 private func performSearch() {
     let query = searchText.trimmingCharacters(in: .whitespacesAndNewlines)
     guard !query.isEmpty else { return }
     searchFocused = false
-    let request = MKLocalSearch.Request()
-    request.naturalLanguageQuery = query
-    startSearch(request: request, fallbackName: query)
+    appModel.searchSession.showsResults = true
+    if appModel.searchSession.scope == .places {
+        let request = MKLocalSearch.Request()
+        request.naturalLanguageQuery = query
+        startSearch(request: request, fallbackName: query)
+    } else {
+        updateSearch(query)
+    }
 }
 
 /// Cancels and invalidates the previous request before starting another.
@@ -448,45 +483,92 @@ private func performSearch() {
 /// A failure is reported rather than swallowed. No network, a rate limit or a
 /// query MapKit cannot resolve all used to produce the same thing — nothing at
 /// all — which reads as a search field that has simply stopped working.
-private func startSearch(request: MKLocalSearch.Request, fallbackName: String) {
+private func startSearch(request: MKLocalSearch.Request, fallbackName: String, community: Bool = false) {
     searchTask?.cancel()
     searchTask = Task {
-        let response: MKLocalSearch.Response
         do {
-            response = try await MKLocalSearch(request: request).start()
+            let place = try await SearchPlace.resolve(request, fallbackName: fallbackName)
+            try Task.checkCancellation()
+            if community {
+                commitCommunityPlace(place.region, name: place.name, clearQuery: true)
+            } else {
+                appModel.searchSession.showsResults = false
+                showPlace(place.region, name: place.name)
+            }
         } catch {
             guard !Task.isCancelled else { return }
-            onSearchFailed(SearchFailure(underlying: error))
-            return
+            onSearchFailed(error as? SearchFailure ?? SearchFailure(underlying: error))
         }
-        guard !Task.isCancelled else { return }
-        // An empty response is a successful request with nothing in it, and
-        // its `boundingRegion` is not a place — zooming to it would move the
-        // map somewhere the user never asked for.
-        guard !response.mapItems.isEmpty else {
-            onSearchFailed(SearchFailure(reason: .noResults))
-            return
-        }
-        mapController.show(response.boundingRegion)
-        // The map moved, so the weather badge moves with it: a walker who has
-        // just zoomed to Budapest is asking about Budapest. Ignored while a
-        // recording holds the badge, which `WeatherFocus` decides rather than
-        // this call site.
-        //
-        // The region's centre rather than the first result's coordinate — the
-        // badge is about the place the map is now showing, and a search for a
-        // city resolves to a region whose centre is the city. MapKit's own
-        // name for the first result is preferred over what was typed, so
-        // "budapest" is drawn as "Budapest".
-        appModel.weatherFocus.focus(
-            on: .place(
-                response.boundingRegion.center,
-                name: response.mapItems.first?.name ?? fallbackName
-            )
-        )
-        // Drop to a partial detent so the zoomed map is visible.
-        withAnimation { presentation.detent = .medium }
     }
+}
+
+private func updateSearch(_ query: String) {
+    let scope = appModel.searchSession.scope
+    if scope == .yourHikes { completer.clear() } else { completer.update(query: query) }
+    appModel.community.search(
+        matching: scope.includesCommunity ? query : "",
+        inSelectedArea: scope == .community
+    )
+}
+
+private func changeScope(_ scope: MapSearchScope) {
+    searchTask?.cancel()
+    appModel.searchSession.scope = scope
+    appModel.searchSession.showsResults = true
+    updateSearch(searchText)
+    if scope == .community { appModel.community.startBrowsing() } else { appModel.community.stopBrowsing() }
+}
+
+private func chooseArea(_ choice: CommunityAreaChoice) {
+    searchTask?.cancel()
+    if choice == .nearMe {
+        // Read once in the action. The sheet body never observes live GPS.
+        guard let coordinate = appModel.locationManager.coordinate else {
+            locationUnavailable = true
+            return
+        }
+        let diameter = CommunityQueryPolicy.minimumRadiusMeters * 2
+        let region = MKCoordinateRegion(center: coordinate, latitudinalMeters: diameter, longitudinalMeters: diameter)
+        appModel.community.selectArea(.nearMe, region: region)
+        showPlace(region, name: String(localized: "Near me"))
+    } else {
+        appModel.community.selectArea(choice)
+    }
+}
+
+private func findCommunity(_ completion: MKLocalSearchCompletion) {
+    searchFocused = false
+    startSearch(request: .init(completion: completion), fallbackName: completion.title, community: true)
+}
+
+private func findCommunityQuery() {
+    searchFocused = false
+    let request = MKLocalSearch.Request()
+    request.naturalLanguageQuery = searchText
+    startSearch(request: request, fallbackName: searchText, community: true)
+}
+
+private func commitCommunityPlace(_ region: MKCoordinateRegion, name: String, clearQuery: Bool) {
+    if clearQuery { setSearchText(""); completer.clear() }
+    appModel.searchSession.scope = .community
+    appModel.searchSession.showsResults = true
+    appModel.community.selectArea(.place(name), region: region)
+    updateSearch(searchText)
+    appModel.community.startBrowsing()
+    showPlace(region, name: name)
+}
+
+private func setSearchText(_ value: String) {
+    if searchText != value {
+        appModel.searchSession.programmaticQuery = value
+        searchText = value
+    }
+}
+
+private func showPlace(_ region: MKCoordinateRegion, name: String) {
+    mapController.show(region)
+    appModel.weatherFocus.focus(on: .place(region.center, name: name))
+    withAnimation { presentation.detent = .medium }
 }
 
 /// GPX has no system-declared UTType; the app imports topografix's, which

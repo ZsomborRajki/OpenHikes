@@ -2,8 +2,8 @@
 //  CommunityQueryPolicy.swift
 //  OpenHikes
 //
-//  Decides whether the map having moved is worth a request, separately from
-//  making one.
+//  Decides whether the map having moved is worth offering Search this area,
+//  separately from the explicit action that commits it.
 //
 //  Its own type for the reason ``SearchQueryPolicy`` and ``TileNetworkPolicy``
 //  are theirs: the interesting behaviour is the requests that must *not* be
@@ -22,8 +22,8 @@
 //     meaning anything — every hike in Europe is within the radius, and the
 //     twenty that come back are twenty arbitrary ones. Above the ceiling the
 //     honest answer is to keep what is already on screen and say nothing.
-//  3. **Nobody asked.** Browsing is opt-in, and a walker who has never tapped
-//     the chip should never put a request on the radio — the same bargain the
+//  3. **Nobody asked.** Browsing is opt-in, and a walker who has never selected
+//     Community should never put a request on the radio — the same bargain the
 //     rest of the app's energy policies make.
 //
 
@@ -32,7 +32,7 @@ import Foundation
 import MapKit
 
 /// What the latest map region should do to the community list.
-enum CommunityQueryAction: Equatable {
+nonisolated enum CommunityQueryAction: Equatable {
     /// Leave what is on screen alone. Nothing moved far enough, the map is too
     /// far out to mean anything, or browsing is off.
     case ignore
@@ -56,7 +56,7 @@ enum CommunityQueryAction: Equatable {
 /// The little state machine behind ``CommunityBrowser``: one remembered
 /// query, and the two thresholds that decide whether the next region is the
 /// same question.
-struct CommunityQueryPolicy {
+nonisolated struct CommunityQueryPolicy {
     /// Smallest radius worth asking about. Under this the server's own
     /// resolution is coarser than the question, so a smaller number would
     /// narrow the wording and not the answer.

@@ -182,6 +182,7 @@ struct SheetQueryIsolationTests {
         let leaf = MapSheetHikes(
             searchText: "",
             isSearchFocused: false,
+            searchSession: MapSearchSession(),
             isCompact: false,
             completer: SearchCompleter(),
             recorder: HikeRecorder(container: container, automaticallyRecovers: false),
@@ -191,6 +192,8 @@ struct SheetQueryIsolationTests {
             onOpen: { _ in /* unused */ },
             onSelectResult: { _ in /* unused */ },
             onSelectCompletion: { _ in /* unused */ },
+            onFindCommunity: { _ in /* unused */ },
+            onFindCommunityQuery: { /* unused */ },
             onSelectListing: { _ in /* unused */ },
             onDelete: { _, _ in /* unused */ },
             onRecord: { /* unused */ },

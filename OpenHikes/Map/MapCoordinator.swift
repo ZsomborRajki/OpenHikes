@@ -697,13 +697,8 @@ extension MapView.Coordinator {
         // Zooming changes the on-screen distance between two fixed coordinates,
         // so the overlap fade needs to be re-checked, not just on move/relocate.
         updateHighlightOpacity(on: mapView)
-        // The community list follows the map, and this is the only place it
-        // learns the map moved. Deliberately the *settled* region rather than
-        // `mapViewDidChangeVisibleRegion`, which fires continuously through a
-        // pan: a walker dragging across a county would otherwise ask a
-        // question per frame. What arrives here is still filtered again by
-        // ``CommunityQueryPolicy`` before anything reaches the network, and
-        // costs a comparison while browsing is off.
+        // Report the settled region without a SwiftUI observation. Browsing
+        // only offers Search this area; the user commits the next query.
         community?.regionDidSettle(mapView.region)
     }
 

@@ -191,7 +191,7 @@ nonisolated final class OpenHikesUITests: XCTestCase {
         search.typeText(Self.searchTerm)
 
         XCTAssertTrue(
-            app.staticTexts["Your Hikes"]
+            element("saved-hike-search-heading", in: app)
                 .waitForExistence(timeout: UITestTimeout.existence),
             "a matching hike should be offered above any map suggestion"
         )
@@ -202,7 +202,7 @@ nonisolated final class OpenHikesUITests: XCTestCase {
         clear.tap()
 
         let cleared = NSPredicate(format: "exists == false")
-        expectation(for: cleared, evaluatedWith: app.staticTexts["Your Hikes"])
+        expectation(for: cleared, evaluatedWith: element("saved-hike-search-heading", in: app))
         waitForExpectations(timeout: UITestTimeout.existence)
         awaitHikeRow(titled: UITestFixture.importedHikeTitle, in: app)
     }

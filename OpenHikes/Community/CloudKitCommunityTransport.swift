@@ -143,6 +143,7 @@ nonisolated struct CloudKitCommunityTransport: CommunityTransporting {
     @concurrent
     func listings(
         matching query: String,
+        area: CommunitySearchArea?,
         limit: Int,
         excluding: Set<String>
     ) async throws -> [CommunityListing] {
@@ -153,7 +154,20 @@ nonisolated struct CloudKitCommunityTransport: CommunityTransporting {
         // and "ridge" would miss it too — while `self contains` matches
         // tokens case-insensitively against every SEARCHABLE field. It needs
         // the index to exist; see ``CommunitySchema``.
-        let predicate = NSPredicate(format: "self contains %@", trimmed)
+        let titlePredicate = NSPredicate(format: "self contains %@", trimmed)
+        let predicate: NSPredicate
+        if let area {
+            let origin = CLLocation(latitude: area.latitude, longitude: area.longitude)
+            let locationPredicate = NSPredicate(
+                format: "distanceToLocation:fromLocation:(%K, %@) < %f",
+                CommunitySchema.Listing.location,
+                origin,
+                area.radiusMeters
+            )
+            predicate = NSCompoundPredicate(andPredicateWithSubpredicates: [titlePredicate, locationPredicate])
+        } else {
+            predicate = titlePredicate
+        }
         let ckQuery = CKQuery(recordType: CommunitySchema.listingType, predicate: predicate)
         ckQuery.sortDescriptors = [
             NSSortDescriptor(key: CommunitySchema.Listing.publishedAt, ascending: false),

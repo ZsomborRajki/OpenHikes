@@ -32,6 +32,12 @@ final class SearchCompleter: NSObject, MKLocalSearchCompleterDelegate {
 
     /// Feeds the latest query to the completer, or clears results when empty.
     func update(query: String) {
+        #if DEBUG
+        if AppLaunchEnvironment.stubsCommunity {
+            suggestions = []
+            return
+        }
+        #endif
         switch policy.action(for: query) {
         case .cancel:
             // Cancelled rather than merely blanked: an answer already in

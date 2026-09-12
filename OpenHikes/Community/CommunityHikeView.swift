@@ -395,8 +395,8 @@ private extension CommunityHikeView {
     }
 
     var importButtonTitle: String {
-        if isImporting { return "Adding…" }
-        return existingHike == nil ? "Add to My Hikes" : "Open in My Hikes"
+        if isImporting { return "Saving…" }
+        return existingHike == nil ? "Save to Your Hikes" : "Open in Your Hikes"
     }
 }
 

@@ -34,6 +34,7 @@ struct MapSheetHikes: View, Equatable {
 
     let searchText: String
     let isSearchFocused: Bool
+    var searchSession: MapSearchSession
     /// True at the smallest detent, where only the search field shows.
     let isCompact: Bool
     var completer: SearchCompleter
@@ -45,16 +46,18 @@ struct MapSheetHikes: View, Equatable {
     var walkSession: TrailWalkSession
     /// Published hikes and whether the walker has asked for them. Only the
     /// coarse properties are read here — the two result lists, the state and
-    /// the chip's own on/off — so a pan that does not produce a request never
+    /// the selected area — so a pan that does not produce a request never
     /// reaches this body. The map's results and the typed query's are separate
     /// lists on purpose; see ``CommunityBrowser``.
     var community: CommunityBrowser
     let selectedHikeID: UUID?
     let onOpen: (Hike) -> Void
-    /// A hike tapped in the search results: the caller clears the field and
-    /// drops focus before opening it.
+    /// A hike tapped in the search results: the caller drops focus before opening
+    /// it, preserving the query and results for back navigation.
     let onSelectResult: (Hike) -> Void
     let onSelectCompletion: (MKLocalSearchCompletion) -> Void
+    let onFindCommunity: (MKLocalSearchCompletion) -> Void
+    let onFindCommunityQuery: () -> Void
     /// A published hike tapped in the results: the caller pushes its preview.
     let onSelectListing: (CommunityListing) -> Void
     /// The surviving hikes are handed over with the doomed one because freeing
@@ -89,65 +92,35 @@ struct MapSheetHikes: View, Equatable {
             && lhs.recorder === rhs.recorder
             && lhs.walkSession === rhs.walkSession
             && lhs.community === rhs.community
+            && lhs.searchSession === rhs.searchSession
     }
 
     var body: some View {
-        // The ranking below is the only real work here. Two things keep it off
-        // the sheet-drag path: the results can only be shown while the field is
-        // focused, so an unfocused pass doesn't rank at all — and a focused
-        // pass reuses the last ranking unless the query or the hikes
-        // themselves changed.
-        //
-        // This is where SwiftData's `@Query` lands, and a query has no
-        // per-property granularity: any write to any `Hike` re-runs it. The
-        // mark is how a recording that writes to its draft hike per fix would
-        // show up — as this body ticking at fix rate.
-        RenderSignpost.mark(
-            "MapSheetHikesBody",
-            "\(hikes.count) hikes searching=\(isSearchFocused)"
-        )
-        let matchingHikes = isSearchFocused ? hikeSearch.rankedHikes(matching: searchText, in: hikes) : []
-        // A focused field with nothing typed in it is not a search. The
-        // community half of that is ``CommunityBrowser/matchingListings``,
-        // which answers the typed query and nothing else — the map's own
-        // results live in their own list, so a pan can no longer put rows
-        // under a "Shared Hikes" heading.
+        RenderSignpost.mark("MapSheetHikesBody", "\(hikes.count) hikes searching=\(isSearchFocused)")
         let hasQuery = !searchText.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
-        let isSearching = isSearchFocused
-            && hasQuery
-            && (!completer.suggestions.isEmpty
-                || !matchingHikes.isEmpty
-                || !community.matchingListings.isEmpty)
+        let isSearching = hasQuery && searchSession.showsResults
+        let matchingHikes = isSearching && searchSession.scope.includesHikes
+            ? hikeSearch.rankedHikes(matching: searchText, in: hikes) : []
 
         return Group {
             if isCompact {
                 Spacer()
-            } else if isSearching {
-                VStack(spacing: 0) {
-                    nearbyChipRow
-                    suggestionsList(matchingHikes: matchingHikes)
-                }
-                .padding(.top, 12)
+            } else if isSearching || searchSession.scope == .community {
+                suggestionsList(matchingHikes: matchingHikes)
+            } else if searchSession.scope == .places {
+                ContentUnavailableView("Search for a place", systemImage: "magnifyingglass")
             } else {
-                VStack(spacing: 0) {
-                    nearbyChipRow
-                        .padding(.top, 12)
-                    if community.isBrowsing {
-                        nearbySection
-                    } else {
-                        hikesSection
-                            .padding(.top, 12)
-                    }
-                }
+                hikesSection.padding(.top, 12)
             }
         }
-        .onChange(of: isSearchFocused) { _, focused in
-            // Nothing ranks while the field is unfocused, so there is no
-            // cached ranking worth keeping — and holding one would keep every
-            // matched hike alive behind a search nobody is running.
-            if !focused { hikeSearch.clear() }
+        .onChange(of: hasQuery) { _, hasQuery in
+            if !hasQuery { hikeSearch.clear() }
+        }
+        .onChange(of: searchSession.scope) { _, scope in
+            if !scope.includesHikes { hikeSearch.clear() }
         }
     }
+
 }
 
 // MARK: - Hikes list
@@ -324,18 +297,34 @@ private extension MapSheetHikes {
     /// MapKit's place suggestions.
     func suggestionsList(matchingHikes: [Hike]) -> some View {
         List {
-            hikeSuggestionsSection(matchingHikes: matchingHikes)
-            communitySuggestionsSection(matchingHikes: matchingHikes)
-            mapSuggestionsSection(matchingHikes: matchingHikes)
+            if searchSession.scope.includesHikes {
+                hikeSuggestionsSection(matchingHikes: matchingHikes)
+                if matchingHikes.isEmpty {
+                    Section("Your Hikes") { Text("No saved hikes match this search.") }
+                }
+            }
+            if searchSession.scope.includesCommunity, community.hasTransport {
+                CommunitySearchResults(
+                    browser: community,
+                    query: searchText,
+                    usesArea: searchSession.scope == .community,
+                    importedIDs: importedListingIDs,
+                    onSelect: onSelectListing
+                )
+            }
+            if searchSession.scope.includesPlaces || searchSession.scope == .community {
+                mapSuggestionsSection(matchingHikes: matchingHikes)
+            }
         }
         .listStyle(.plain)
         .scrollContentBackground(.hidden)
+        .scrollDismissesKeyboard(.interactively)
     }
 
     @ViewBuilder
     func hikeSuggestionsSection(matchingHikes: [Hike]) -> some View {
         if !matchingHikes.isEmpty {
-            Section("Your Hikes") {
+            Section {
                 ForEach(matchingHikes) { hike in
                     Button { onSelectResult(hike) } label: {
                         HikeRow(
@@ -347,22 +336,43 @@ private extension MapSheetHikes {
                     }
                     .buttonStyle(.plain)
                 }
+            } header: {
+                Text("Your Hikes").accessibilityIdentifier("saved-hike-search-heading")
             }
         }
     }
 
     @ViewBuilder
     func mapSuggestionsSection(matchingHikes: [Hike]) -> some View {
-        if !completer.suggestions.isEmpty {
-            Section {
+        if !searchText.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
+            Section("Places") {
                 ForEach(completer.suggestions, id: \.self) { suggestion in
-                    Button { onSelectCompletion(suggestion) } label: {
-                        suggestionRow(for: suggestion)
+                    if searchSession.scope.includesPlaces {
+                        Button { onSelectCompletion(suggestion) } label: {
+                            suggestionRow(for: suggestion)
+                        }
+                        .buttonStyle(.plain)
                     }
-                    .buttonStyle(.plain)
+                    if community.hasTransport, searchSession.scope != .places {
+                        Button { onFindCommunity(suggestion) } label: {
+                            VStack(alignment: .leading, spacing: 2) {
+                                Label("Find community hikes around \(suggestion.title)", systemImage: "figure.hiking")
+                                if !suggestion.subtitle.isEmpty {
+                                    Text(suggestion.subtitle).font(.caption).foregroundStyle(.secondary)
+                                }
+                            }
+                        }
+                        .accessibilityIdentifier("community-around-place")
+                    }
                 }
-            } header: {
-                if !matchingHikes.isEmpty || !community.matchingListings.isEmpty { Text("Maps") }
+                if completer.suggestions.isEmpty {
+                    if searchSession.scope == .community || searchSession.scope == .all && community.hasTransport {
+                        Button("Find community hikes around \(searchText)", action: onFindCommunityQuery)
+                            .accessibilityIdentifier("community-around-query")
+                    } else {
+                        Text("No place suggestions. Press Search to look up this place.")
+                    }
+                }
             }
         }
     }
@@ -442,163 +452,4 @@ private extension MapSheetHikes {
         Set(hikes.compactMap(\.importedFromListingID))
     }
 
-    /// The one control that turns community browsing on.
-    ///
-    /// A chip rather than an always-on section, and that is an energy decision
-    /// as much as a layout one: until it is tapped nothing about this feature
-    /// reaches the network, so a walker who only ever opens their own hikes
-    /// pays exactly nothing for it. See ``CommunityQueryPolicy``'s third
-    /// reason to refuse.
-    ///
-    /// Hidden entirely when this launch has no transport — a hosted suite or
-    /// UI automation — rather than shown disabled, for the same reason the
-    /// share button is.
-    @ViewBuilder var nearbyChipRow: some View {
-        if community.hasTransport {
-            HStack(spacing: 8) {
-                Button {
-                    community.toggleBrowsing()
-                } label: {
-                    Label(
-                        "Nearby",
-                        systemImage: community.isBrowsing ? "location.fill" : "location"
-                    )
-                        .font(.subheadline.weight(.medium))
-                        .padding(.horizontal, 12)
-                        .padding(.vertical, 7)
-                        .glassSurface(
-                            community.isBrowsing
-                                ? .regular.tint(.accentColor).interactive()
-                                : .regular.interactive(),
-                            in: .capsule
-                        )
-                        .minimumTapTarget()
-                }
-                .buttonStyle(.plain)
-                .accessibilityLabel("Shared hikes near here")
-                // Carried as a trait as well as a tint, because being on is
-                // otherwise said only by a filled glyph and a colour.
-                .accessibilityAddTraits(community.isBrowsing ? [.isSelected] : [])
-                .accessibilityIdentifier("community-nearby-chip")
-                Spacer(minLength: 0)
-            }
-            .padding(.horizontal)
-        }
-    }
-
-    /// Community results, shown in place of the hikes list while browsing.
-    var nearbySection: some View {
-        VStack(alignment: .leading, spacing: 12) {
-            HStack(spacing: 12) {
-                Text("Nearby")
-                    .font(.title2.bold())
-                    .foregroundStyle(.primary)
-                    .accessibilityAddTraits(.isHeader)
-                if community.state == .loading || community.state == .refreshing {
-                    ProgressView()
-                        .accessibilityLabel("Loading shared hikes")
-                }
-                Spacer()
-            }
-            .padding(.horizontal)
-            .padding(.top, 12)
-
-            if community.nearbyListings.isEmpty {
-                nearbyEmptyState
-                    .padding(.horizontal)
-                Spacer()
-            } else {
-                nearbyList
-            }
-        }
-    }
-
-    var nearbyList: some View {
-        List {
-            ForEach(community.nearbyListings) { listing in
-                Button {
-                    onSelectListing(listing)
-                } label: {
-                    CommunityHikeRow(
-                        listing: listing,
-                        isImported: importedListingIDs.contains(listing.id)
-                    )
-                        .contentShape(.rect)
-                }
-                .buttonStyle(.plain)
-            }
-        }
-        .listStyle(.plain)
-        .scrollContentBackground(.hidden)
-    }
-
-    /// Says which of the three empty answers this is.
-    ///
-    /// A failure, a search that is still running and a region with nothing in
-    /// it all draw no rows, and telling them apart is the difference between
-    /// "there are none here" and "this did not work" — which is the one the
-    /// walker can do something about.
-    @ViewBuilder var nearbyEmptyState: some View {
-        VStack(spacing: 8) {
-            switch community.state {
-            case .failed(let failure):
-                Image(systemName: "exclamationmark.icloud")
-                    .font(.largeTitle)
-                    .foregroundStyle(.secondary)
-                    .accessibilityHidden(true)
-                Text(failure.localizedDescription)
-                    .font(.headline)
-                if let suggestion = failure.recoverySuggestion {
-                    Text(suggestion)
-                        .font(.subheadline)
-                        .foregroundStyle(.secondary)
-                }
-                Button("Try Again") { community.retry() }
-                    .buttonStyle(.bordered)
-                    .padding(.top, 4)
-            case .loading, .refreshing:
-                Text("Looking for shared hikes…")
-                    .font(.subheadline)
-                    .foregroundStyle(.secondary)
-            case .idle, .loaded:
-                Image(systemName: "map")
-                    .font(.largeTitle)
-                    .foregroundStyle(.secondary)
-                    .accessibilityHidden(true)
-                Text("No shared hikes here")
-                    .font(.headline)
-                Text("Move the map somewhere else to look there.")
-                    .font(.subheadline)
-                    .foregroundStyle(.secondary)
-            }
-        }
-        .multilineTextAlignment(.center)
-        .frame(maxWidth: .infinity)
-        .padding(.top, 8)
-        .accessibilityIdentifier("community-nearby-empty")
-    }
-
-    /// Community matches in the search results, between the walker's own hikes
-    /// and MapKit's places.
-    ///
-    /// Second of the three deliberately: a trail already in the library is the
-    /// one the walker means when they half-type its name, and a place is a
-    /// coarser answer than a hike.
-    @ViewBuilder
-    func communitySuggestionsSection(matchingHikes: [Hike]) -> some View {
-        if !community.matchingListings.isEmpty {
-            Section("Shared Hikes") {
-                ForEach(community.matchingListings) { listing in
-                    Button { onSelectListing(listing) } label: {
-                        CommunityHikeRow(
-                            listing: listing,
-                            isImported: importedListingIDs.contains(listing.id)
-                        )
-                            .contentShape(.rect)
-                    }
-                    .buttonStyle(.plain)
-                }
-            }
-        }
-    }
 }

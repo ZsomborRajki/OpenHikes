@@ -71,6 +71,8 @@ final class OpenHikesModel {
     /// sheet draws its results. A `@State` in either would be rebuilt by the
     /// other's navigation.
     let community: CommunityBrowser
+    /// Search choices outlive the portrait sheet and landscape panel.
+    let searchSession = MapSearchSession()
     /// The people this device has blocked, which both the browse lists and the
     /// Settings section read.
     ///

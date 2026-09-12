@@ -33,14 +33,12 @@ struct CommunityBrowserTests {
     /// there, and a suite that waited on it would assert about results that
     /// had not arrived.
     private func settle(_ browser: CommunityBrowser) async {
-        while browser.requestsInFlight > 0 {
-            await Task.yield()
-        }
+        await settleDelegateHop(until: "community requests finish") { browser.requestsInFlight == 0 }
     }
 
-    /// The whole bargain of the chip: a walker who never taps it never puts a
+    /// The whole bargain of the Community scope: a walker who never taps it never puts a
     /// request on the radio.
-    @Test("panning asks nothing until the chip is tapped")
+    @Test("panning asks nothing until the Community scope is tapped")
     func panningIsFreeUntilOptedIn() {
         let transport = StubCommunityTransport()
         let browser = CommunityBrowser(transport: transport, blockList: .scratch())
@@ -51,8 +49,8 @@ struct CommunityBrowserTests {
         #expect(browser.issuedRequests == 0)
     }
 
-    @Test("tapping the chip asks about where the map already is")
-    func chipAsksAboutTheCurrentRegion() async {
+    @Test("tapping the Community scope asks about where the map already is")
+    func scopeAsksAboutTheCurrentRegion() async {
         let transport = StubCommunityTransport()
         transport.listingsResult = .success([.stub()])
         let browser = CommunityBrowser(transport: transport, blockList: .scratch())
@@ -65,10 +63,9 @@ struct CommunityBrowserTests {
         #expect(browser.state == .loaded)
     }
 
-    /// The map-driven half: with the chip on, panning far enough re-queries
-    /// without the walker doing anything.
-    @Test("a pan past the threshold re-queries on its own")
-    func panningRequeriesWhileBrowsing() async {
+    /// Panning offers another area without spending a request or replacing results.
+    @Test("a pan offers a search without replacing the committed results")
+    func panningWaitsForAnExplicitSearch() async {
         let transport = StubCommunityTransport()
         let browser = CommunityBrowser(transport: transport, blockList: .scratch())
         browser.regionDidSettle(Self.region())
@@ -77,7 +74,12 @@ struct CommunityBrowserTests {
         browser.regionDidSettle(Self.region(latitude: 48.03))
         await settle(browser)
 
+        #expect(transport.recording.nearbyRequests.count == 1)
+        #expect(browser.canSearchThisArea)
+        browser.searchThisArea()
+        await settle(browser)
         #expect(transport.recording.nearbyRequests.count == 2)
+        #expect(!browser.canSearchThisArea)
     }
 
     /// Results that were true when they arrived are better than an error
@@ -93,7 +95,7 @@ struct CommunityBrowserTests {
         await settle(browser)
 
         transport.listingsResult = .failure(.unreachable)
-        browser.regionDidSettle(Self.region(latitude: 48.03))
+        browser.retry()
         await settle(browser)
 
         #expect(browser.nearbyListings.count == 1)
@@ -137,13 +139,14 @@ struct CommunityBrowserTests {
         // The second question, asked while the first is still held open.
         transport.listingsResult = .success([.stub(id: "new")])
         browser.regionDidSettle(Self.region(latitude: 48.03))
+        browser.searchThisArea()
         await gate.open()
         await settle(browser)
 
         #expect(browser.nearbyListings.map(\.id) == ["new"])
     }
 
-    @Test("switching the chip off clears the list")
+    @Test("switching the Community scope off clears the list")
     func stoppingClearsResults() async {
         let transport = StubCommunityTransport()
         transport.listingsResult = .success([.stub()])
@@ -160,8 +163,8 @@ struct CommunityBrowserTests {
 
     /// Typing a trail's name is asking for it by name, wherever the walker is
     /// and whether or not the map layer is on.
-    @Test("a typed query searches without the chip")
-    func titleSearchNeedsNoChip() async {
+    @Test("a typed query searches without the Community scope")
+    func titleSearchNeedsNoScope() async {
         let transport = StubCommunityTransport()
         transport.listingsResult = .success([.stub()])
         let browser = CommunityBrowser(transport: transport, blockList: .scratch())
@@ -212,7 +215,7 @@ struct CommunityBrowserTests {
         await settle(browser)
 
         #expect(browser.matchingListings.map(\.id) == ["typed"])
-        #expect(browser.nearbyListings.map(\.id) == ["panned"])
+        #expect(browser.nearbyListings.map(\.id) == ["nearby"])
     }
 
     /// Clearing the field drops the matches and nothing else — including
@@ -242,10 +245,10 @@ struct CommunityBrowserTests {
         #expect(browser.nearbyListings.map(\.id) == ["nearby"])
     }
 
-    /// A typed search belongs to the field rather than to the chip, so
+    /// A typed search belongs to the field rather than to the Community scope, so
     /// switching the map layer off takes the map's answer and leaves the
     /// walker's own question standing.
-    @Test("switching the chip off keeps the title matches")
+    @Test("switching the Community scope off keeps the title matches")
     func stoppingKeepsTitleMatches() async {
         let transport = StubCommunityTransport()
         transport.listingsResult = .success([.stub(id: "nearby")])
@@ -277,8 +280,7 @@ struct CommunityBrowserTests {
         #expect(browser.matchingListings.isEmpty)
     }
 
-    /// A failed title search has nowhere to report itself and must not
-    /// borrow the nearby list's place to do it.
+    /// Title failures have their own visible state and leave browse results alone.
     @Test("a failed title search leaves the nearby state alone")
     func failedTitleSearchKeepsNearbyState() async {
         let transport = StubCommunityTransport()
@@ -293,6 +295,7 @@ struct CommunityBrowserTests {
         await settle(browser)
 
         #expect(browser.state == .loaded)
+        #expect(browser.matchingState == .failed(.unreachable))
         #expect(browser.nearbyListings.map(\.id) == ["nearby"])
     }
 

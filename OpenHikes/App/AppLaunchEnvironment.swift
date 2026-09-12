@@ -34,6 +34,7 @@ nonisolated enum AppLaunchEnvironment {
         let seededMetricsReportCount: Int
         let failsFirstSave: Bool
         let losesImportSelection: Bool
+        let stubsCommunity: Bool
         let stubsWeather: Bool
         let grantsPaidMaps: Bool
         /// `nil` when the real photo library should be read — see
@@ -65,6 +66,7 @@ nonisolated enum AppLaunchEnvironment {
             seededMetricsReportCount = 0
             failsFirstSave = false
             losesImportSelection = false
+            stubsCommunity = false
             stubsWeather = false
             grantsPaidMaps = false
             stubbedLibraryPhotoCount = nil
@@ -154,6 +156,7 @@ nonisolated enum AppLaunchEnvironment {
                 && arguments.contains(Self.failFirstSaveArgument)
             losesImportSelection = isUITesting
                 && arguments.contains(Self.loseImportSelectionArgument)
+            stubsCommunity = isUITesting && arguments.contains("--ui-test-community")
             stubsWeather = isUITesting
                 && arguments.contains(Self.stubWeatherArgument)
             grantsPaidMaps = isUITesting
@@ -340,6 +343,7 @@ nonisolated enum AppLaunchEnvironment {
     /// and `CurrentWeather` cannot be constructed to stand in for them.
     /// ``WeatherSnapshot`` is what the badge actually draws, and this
     /// publishes one.
+    static let stubsCommunity = configuration.stubsCommunity
     static let stubsWeather = configuration.stubsWeather
 
     /// Whether this launch should behave as though it has no connection at

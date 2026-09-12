@@ -34,9 +34,7 @@ struct CommunityBrowserBlockingTests {
     /// rather than `state` — the latter reports the nearby request alone. Same
     /// reasoning as `CommunityBrowserTests`.
     private func settle(_ browser: CommunityBrowser) async {
-        while browser.requestsInFlight > 0 {
-            await Task.yield()
-        }
+        await settleDelegateHop(until: "community requests finish") { browser.requestsInFlight == 0 }
     }
 
     /// The two lists answer different questions and are kept apart on purpose,
