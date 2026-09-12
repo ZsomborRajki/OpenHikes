@@ -61,6 +61,44 @@ struct CommunityBrowserBlockingTests {
         #expect(browser.matchingListings.map(\.id) == ["somebody-else"])
     }
 
+    @Test("block changes invalidate Settings and both browser lists")
+    func blockChangesInvalidateAllReaders() async {
+        let transport = StubCommunityTransport()
+        let blocks = CommunityBlockList.scratch()
+        let listing = CommunityListing.stub(id: "theirs", authorID: "author-1")
+        transport.listingsResult = .success([listing])
+        let browser = CommunityBrowser(transport: transport, blockList: blocks)
+        browser.regionDidSettle(Self.region())
+        browser.startBrowsing()
+        browser.search(matching: "Pilis")
+        await settle(browser)
+        let requestsBefore = browser.issuedRequests
+        let settings = ObservationCounter { _ = blocks.authors }
+        let nearby = ObservationCounter { _ = browser.nearbyListings }
+        let matching = ObservationCounter { _ = browser.matchingListings }
+        let membership = ObservationCounter { _ = blocks.isBlocked(listing) }
+        let exclusions = ObservationCounter { _ = blocks.blockedIDs }
+        let empty = ObservationCounter { _ = blocks.isEmpty }
+        let counters = [settings, nearby, matching, membership, exclusions, empty]
+
+        for step in 1...4 {
+            switch step {
+            case 1, 3: blocks.block(listing)
+            case 2: blocks.unblock(listing.authorID)
+            default: blocks.unblockAll()
+            }
+            await settleDelegateHop(until: "all block-list readers observe the change") {
+                counters.allSatisfy { $0.count == step }
+            }
+            #expect(counters.allSatisfy({ $0.count == step }))
+            let isBlocked = step.isMultiple(of: 2) == false
+            #expect(blocks.authors.isEmpty == !isBlocked)
+            #expect(browser.nearbyListings.isEmpty == isBlocked)
+            #expect(browser.matchingListings.isEmpty == isBlocked)
+        }
+        #expect(browser.issuedRequests == requestsBefore)
+    }
+
     /// The filter is applied where the lists are read rather than where the
     /// results land, which is what makes a block reach rows already on screen
     /// — the case that matters, since blocking is reached from a hike opened

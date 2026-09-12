@@ -48,6 +48,7 @@
 
 import Foundation
 import Observation
+import OrderedCollections
 import os
 
 /// The blocked authors, and the one place a block is made or undone.
@@ -83,42 +84,43 @@ final class CommunityBlockList {
         category: "Community"
     )
 
-    /// The blocked authors, newest first. What the Settings section draws.
-    private(set) var authors: [BlockedAuthor] = []
+    /// One observed store drives both Settings rows and browser filtering, so
+    /// a block or unblock invalidates every reader of either projection.
+    private var authorsByID: OrderedDictionary<String, BlockedAuthor> = [:]
 
-    /// The same set, for the question that is actually asked — once per row of
-    /// every list, on every draw.
-    ///
-    /// Observed rather than `@ObservationIgnored`, and that is what makes a
-    /// block take effect on the list behind the screen it was made from:
-    /// ``CommunityBrowser`` filters through this, so a SwiftUI body that drew
-    /// the rows has read it and is invalidated when it changes.
-    private(set) var blockedIDs: Set<String> = []
+    /// The blocked authors, newest first. What the Settings section draws.
+    var authors: [BlockedAuthor] { authorsByID.values.elements }
+
+    /// A snapshot for transport requests. Per-row membership uses the keyed
+    /// store directly rather than rebuilding this set.
+    var blockedIDs: Set<String> { Set(authorsByID.keys) }
 
     @ObservationIgnored private let defaults: UserDefaults
 
     init(defaults: UserDefaults = .standard) {
         self.defaults = defaults
-        authors = Self.load(from: defaults)
-        blockedIDs = Set(authors.map(\.id))
+        authorsByID = OrderedDictionary(
+            Self.load(from: defaults).map { ($0.id, $0) },
+            uniquingKeysWith: { first, _ in first }
+        )
     }
 
-    var isEmpty: Bool { authors.isEmpty }
+    var isEmpty: Bool { authorsByID.isEmpty }
 
     // MARK: - Asking
 
     func isBlocked(_ listing: CommunityListing) -> Bool {
-        blockedIDs.contains(listing.authorID)
+        authorsByID.keys.contains(listing.authorID)
     }
 
     /// `listings` without anything from a blocked author.
     ///
     /// The early return is not a micro-optimisation but the ordinary case: a
-    /// hiker who has never blocked anybody pays a `Set.isEmpty` per request
+    /// hiker who has never blocked anybody pays an emptiness check per request
     /// rather than a pass over every row of every draw.
     func excludingBlocked(_ listings: [CommunityListing]) -> [CommunityListing] {
-        guard !blockedIDs.isEmpty else { return listings }
-        return listings.filter { !blockedIDs.contains($0.authorID) }
+        guard !authorsByID.isEmpty else { return listings }
+        return listings.filter { !authorsByID.keys.contains($0.authorID) }
     }
 
     // MARK: - Changing
@@ -140,26 +142,24 @@ final class CommunityBlockList {
             )
             return
         }
-        guard !blockedIDs.contains(listing.authorID) else { return }
-        authors.insert(
+        guard !authorsByID.keys.contains(listing.authorID) else { return }
+        authorsByID.updateValue(
             BlockedAuthor(id: listing.authorID, name: listing.authorName, blockedAt: date),
-            at: 0
+            forKey: listing.authorID,
+            insertingAt: 0
         )
-        blockedIDs.insert(listing.authorID)
         save()
     }
 
     func unblock(_ id: String) {
-        guard blockedIDs.contains(id) else { return }
-        authors.removeAll { $0.id == id }
-        blockedIDs.remove(id)
+        guard authorsByID.keys.contains(id) else { return }
+        authorsByID.removeValue(forKey: id)
         save()
     }
 
     func unblockAll() {
-        guard !authors.isEmpty else { return }
-        authors = []
-        blockedIDs = []
+        guard !authorsByID.isEmpty else { return }
+        authorsByID.removeAll()
         save()
     }
 
