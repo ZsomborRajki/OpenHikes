@@ -238,6 +238,16 @@ nonisolated extension GPXExport {
     /// Well inside every file system's limit, and long enough that a trimmed
     /// name is still recognisable in a Files folder.
     private static let maximumFileStemLength = 64
+    /// What the file system rations the last path component in, and so the
+    /// bound that actually decides whether the write succeeds.
+    ///
+    /// A `Character` count bounds nothing here: a grapheme cluster is a base
+    /// scalar plus however many combining marks follow it, so 64 of them can
+    /// weigh hundreds of bytes. ``HikeTitle`` accepts such a name on purpose —
+    /// see ``HikeTitle/maximumUTF8Bytes`` — which leaves this the place the
+    /// weight has to be answered for. 255 is `NAME_MAX` on APFS, HFS+ and
+    /// every Unix file system the share sheet can reach.
+    private static let maximumFileNameUTF8Bytes = 255
     /// Path separators and the characters Windows and iCloud Drive reject,
     /// plus anything unprintable.
     private static let reservedFileNameCharacters = CharacterSet(charactersIn: #"/\:?%*|"<>"#)
@@ -250,21 +260,45 @@ nonisolated extension GPXExport {
     /// export to the same file, and whichever app receives them silently
     /// overwrites or suffixes.
     static func fileName(for track: Track) -> String {
-        "\(fileStem(for: track.name))-\(fileDateStyle.format(track.date)).gpx"
+        // The suffix is budgeted with the stem rather than after it: the date
+        // and extension are what make the name useful, so they are the part
+        // that gets its bytes first.
+        let suffix = "-\(fileDateStyle.format(track.date)).gpx"
+        let stem = fileStem(
+            for: track.name,
+            availableUTF8Bytes: maximumFileNameUTF8Bytes - suffix.utf8.count
+        )
+        return stem + suffix
     }
 
     /// Reserved characters become hyphens rather than disappearing, so two
     /// hikes whose names differ only in punctuation still export to different
     /// files. A leading dot is dropped along with the trimming: it would hide
     /// the file on every Unix-derived system the share reaches.
-    private static func fileStem(for name: String) -> String {
+    ///
+    /// Cut on grapheme boundaries in both units, which is why the byte bound
+    /// is a loop and not a `utf8` prefix: the prefix is the version of this
+    /// that names the file with half an emoji in it.
+    private static func fileStem(for name: String, availableUTF8Bytes: Int) -> String {
         let replaced = name.unicodeScalars.map { scalar in
             reservedFileNameCharacters.contains(scalar) ? "-" : Character(scalar)
         }
         let trimmed = String(replaced)
             .trimmingCharacters(in: .whitespacesAndNewlines.union(CharacterSet(charactersIn: ".")))
-        guard !trimmed.isEmpty else { return fallbackFileStem }
-        return String(trimmed.prefix(maximumFileStemLength))
+        var stem = String(trimmed.prefix(maximumFileStemLength))
+        // At most `maximumFileStemLength` iterations, each dropping a whole
+        // grapheme cluster, whatever it weighs.
+        while stem.utf8.count > availableUTF8Bytes {
+            stem.removeLast()
+        }
+        // Trimmed again because a cut can expose trailing whitespace that was
+        // interior a moment ago. A name whose first grapheme alone outweighs
+        // the budget ends up empty here, and takes the fallback with the rest.
+        let bounded = stem
+            .trimmingCharacters(in: .whitespacesAndNewlines.union(CharacterSet(charactersIn: ".")))
+        // The fallback is ASCII and four bytes, so it fits any budget a date
+        // and an extension leave behind.
+        return bounded.isEmpty ? fallbackFileStem : bounded
     }
 }
 
