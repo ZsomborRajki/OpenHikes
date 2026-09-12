@@ -145,6 +145,7 @@ struct MapSheet: View {
             SettingsView(
                 autoSave: appModel.autoSaveController,
                 backgroundTracker: appModel.backgroundTracker,
+                blocks: appModel.communityBlocks,
                 cloudSync: appModel.cloudSync,
                 entitlement: appModel.entitlement
             )
@@ -290,12 +291,17 @@ struct MapSheet: View {
                 CommunityHikeView(
                     listing: listing,
                     transport: transport,
+                    blockList: appModel.communityBlocks,
                     // `open` assigns the whole path rather than appending to
                     // it, so the preview is replaced rather than left
                     // underneath — which is what should happen: backing out of
                     // a hike that is now in the library, into a screen
                     // offering to add it, describes a decision already made.
-                    onImport: open
+                    onImport: open,
+                    // Back to the list, which the block has already taken this
+                    // hike out of — ``CommunityBrowser`` filters on read, so
+                    // the row is gone by the time the pop lands.
+                    onBlock: { presentation.path.removeAll() }
                 )
             }
         case .recording:

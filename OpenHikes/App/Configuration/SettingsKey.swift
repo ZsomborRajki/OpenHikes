@@ -96,6 +96,17 @@ nonisolated enum SettingsKey {
     /// submission itself, and a value that mirrored as well would be a second
     /// copy of the same fact that could disagree with what was published.
     static let communityAuthorName = "community.authorName"
+    /// The people this device has blocked, JSON-encoded — see
+    /// ``CommunityBlockList``, which owns the shape and the reasoning.
+    ///
+    /// Deliberately not synced through ``SyncedSettings``, for the reason
+    /// browsing needs no account in the first place: a block has to work on a
+    /// signed-out phone, and a value that only travelled for walkers with
+    /// iCloud on would be a feature that quietly exists for some of them. The
+    /// cost is that the list does not follow the walker to a new phone, which
+    /// is the smaller half — they can block again, and the alternative is a
+    /// block that does not work at all where there is nothing to sync with.
+    static let communityBlockedAuthors = "community.blockedAuthors"
 }
 
 /// Defaults for keys where "absent" and "false" are different answers, so the

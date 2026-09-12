@@ -71,6 +71,15 @@ final class OpenHikesModel {
     /// sheet draws its results. A `@State` in either would be rebuilt by the
     /// other's navigation.
     let community: CommunityBrowser
+    /// The people this device has blocked, which both the browse lists and the
+    /// Settings section read.
+    ///
+    /// Owned here rather than by either, for the same reason ``community`` is:
+    /// ``CommunityBrowser`` filters through it and ``SettingsView`` undoes
+    /// entries in it, and neither of those screens owns the other. Built off
+    /// ``defaults`` so a UI-testing launch blocks into its own scratch domain
+    /// rather than the walker's.
+    let communityBlocks: CommunityBlockList
     /// How a hike is shared and how a shared one is opened, or `nil` for a
     /// launch that must not reach CloudKit — see
     /// ``makeCommunityTransport()``. Held so the share sheet and the preview
@@ -129,7 +138,8 @@ final class OpenHikesModel {
             activeRecordingHikeID: { [weak hikeRecorder] in hikeRecorder?.currentHike?.id }
         )
         self.communityTransport = communityTransport
-        community = CommunityBrowser(transport: communityTransport)
+        communityBlocks = CommunityBlockList(defaults: defaults)
+        community = CommunityBrowser(transport: communityTransport, blockList: communityBlocks)
         self.locationManager = locationManager
         self.weatherManager = weatherManager
         self.significantLocations = significantLocations

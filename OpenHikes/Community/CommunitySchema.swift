@@ -81,6 +81,12 @@
 //  - `publishedAt` — SORTABLE, the fallback order when there is no location.
 //  - `___recordID` — QUERYABLE, which the Console adds by default.
 //
+//  `authorID` deliberately gets none. A block is applied on the device that
+//  made it — see ``CommunityBlockList`` — so the field is read off rows that
+//  have already arrived and is never a predicate. Indexing it would let
+//  anybody enumerate one person's published hikes, which is a thing this
+//  schema has no reason to offer.
+//
 //  On ``submissionType``, **no index at all**, and that absence is a security
 //  control rather than an omission. A fetch by record ID is not a query and
 //  needs no index, which is the only way this type is ever read; without a
@@ -157,5 +163,33 @@ nonisolated enum CommunitySchema {
         /// QUERYABLE and SORTABLE — see this file's header.
         static let location = "location"
         static let publishedAt = "publishedAt"
+        /// The submission's creator, copied across at publication: the record
+        /// name of the `CKUserIdentity` CloudKit stamped the upload with.
+        ///
+        /// Here rather than read through ``submission`` for the reason every
+        /// other field on this type is denormalised — the browse query returns
+        /// listings and nothing else, so an author that lived only on the
+        /// submission would cost a fetch per row to filter on. ``Listing``
+        /// exists to avoid exactly that.
+        ///
+        /// It is what a block is keyed on, and the reason a block is keyed on
+        /// something other than ``authorName``: that name is free text the
+        /// walker types, so two people may choose the same one and one person
+        /// may choose a different one on every submission. A list keyed on it
+        /// would block a string rather than a person, and would fail open for
+        /// anybody deliberately evading it. This is the identity CloudKit
+        /// assigns, which the walker cannot choose and a takedown already
+        /// relies on.
+        ///
+        /// A `String` rather than a reference, because the walker's own
+        /// blocked list is stored on the device and a `CKRecord.Reference`
+        /// does not belong in `UserDefaults` — see ``CommunityBlockList``.
+        ///
+        /// **The reviewer copies this in the Console alongside everything
+        /// else**, from the submission's *Created By* field. A listing without
+        /// it is dropped rather than shown; see
+        /// ``CommunityListing/init(record:)`` for why an unblockable listing
+        /// is worse than a missing one.
+        static let authorID = "authorID"
     }
 }

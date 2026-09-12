@@ -43,7 +43,7 @@ struct CommunityBrowserTests {
     @Test("panning asks nothing until the chip is tapped")
     func panningIsFreeUntilOptedIn() {
         let transport = StubCommunityTransport()
-        let browser = CommunityBrowser(transport: transport)
+        let browser = CommunityBrowser(transport: transport, blockList: .scratch())
         for latitude in [47.6, 48.0, 48.4, 48.8] {
             browser.regionDidSettle(Self.region(latitude: latitude))
         }
@@ -55,7 +55,7 @@ struct CommunityBrowserTests {
     func chipAsksAboutTheCurrentRegion() async {
         let transport = StubCommunityTransport()
         transport.listingsResult = .success([.stub()])
-        let browser = CommunityBrowser(transport: transport)
+        let browser = CommunityBrowser(transport: transport, blockList: .scratch())
         browser.regionDidSettle(Self.region())
         browser.startBrowsing()
         await settle(browser)
@@ -70,7 +70,7 @@ struct CommunityBrowserTests {
     @Test("a pan past the threshold re-queries on its own")
     func panningRequeriesWhileBrowsing() async {
         let transport = StubCommunityTransport()
-        let browser = CommunityBrowser(transport: transport)
+        let browser = CommunityBrowser(transport: transport, blockList: .scratch())
         browser.regionDidSettle(Self.region())
         browser.startBrowsing()
         await settle(browser)
@@ -87,7 +87,7 @@ struct CommunityBrowserTests {
     func failureKeepsResults() async {
         let transport = StubCommunityTransport()
         transport.listingsResult = .success([.stub()])
-        let browser = CommunityBrowser(transport: transport)
+        let browser = CommunityBrowser(transport: transport, blockList: .scratch())
         browser.regionDidSettle(Self.region())
         browser.startBrowsing()
         await settle(browser)
@@ -106,7 +106,7 @@ struct CommunityBrowserTests {
     func retryReopensTheRegion() async {
         let transport = StubCommunityTransport()
         transport.listingsResult = .failure(.unreachable)
-        let browser = CommunityBrowser(transport: transport)
+        let browser = CommunityBrowser(transport: transport, blockList: .scratch())
         browser.regionDidSettle(Self.region())
         browser.startBrowsing()
         await settle(browser)
@@ -130,7 +130,7 @@ struct CommunityBrowserTests {
         transport.listingsResult = .success([.stub(id: "old")])
         transport.beforeListingsReturn = { await gate.wait() }
 
-        let browser = CommunityBrowser(transport: transport)
+        let browser = CommunityBrowser(transport: transport, blockList: .scratch())
         browser.regionDidSettle(Self.region())
         browser.startBrowsing()
 
@@ -147,7 +147,7 @@ struct CommunityBrowserTests {
     func stoppingClearsResults() async {
         let transport = StubCommunityTransport()
         transport.listingsResult = .success([.stub()])
-        let browser = CommunityBrowser(transport: transport)
+        let browser = CommunityBrowser(transport: transport, blockList: .scratch())
         browser.regionDidSettle(Self.region())
         browser.startBrowsing()
         await settle(browser)
@@ -164,7 +164,7 @@ struct CommunityBrowserTests {
     func titleSearchNeedsNoChip() async {
         let transport = StubCommunityTransport()
         transport.listingsResult = .success([.stub()])
-        let browser = CommunityBrowser(transport: transport)
+        let browser = CommunityBrowser(transport: transport, blockList: .scratch())
         browser.search(matching: "  Pilis  ")
         await settle(browser)
 
@@ -178,7 +178,7 @@ struct CommunityBrowserTests {
     func titleSearchKeepsNearbyResults() async {
         let transport = StubCommunityTransport()
         transport.listingsResult = .success([.stub(id: "nearby")])
-        let browser = CommunityBrowser(transport: transport)
+        let browser = CommunityBrowser(transport: transport, blockList: .scratch())
         browser.regionDidSettle(Self.region())
         browser.startBrowsing()
         await settle(browser)
@@ -198,7 +198,7 @@ struct CommunityBrowserTests {
     func panningKeepsTitleMatches() async {
         let transport = StubCommunityTransport()
         transport.listingsResult = .success([.stub(id: "nearby")])
-        let browser = CommunityBrowser(transport: transport)
+        let browser = CommunityBrowser(transport: transport, blockList: .scratch())
         browser.regionDidSettle(Self.region())
         browser.startBrowsing()
         await settle(browser)
@@ -223,7 +223,7 @@ struct CommunityBrowserTests {
     func clearingQueryAboveTheCeilingDropsMatches() async {
         let transport = StubCommunityTransport()
         transport.listingsResult = .success([.stub(id: "nearby")])
-        let browser = CommunityBrowser(transport: transport)
+        let browser = CommunityBrowser(transport: transport, blockList: .scratch())
         browser.regionDidSettle(Self.region())
         browser.startBrowsing()
         await settle(browser)
@@ -249,7 +249,7 @@ struct CommunityBrowserTests {
     func stoppingKeepsTitleMatches() async {
         let transport = StubCommunityTransport()
         transport.listingsResult = .success([.stub(id: "nearby")])
-        let browser = CommunityBrowser(transport: transport)
+        let browser = CommunityBrowser(transport: transport, blockList: .scratch())
         browser.regionDidSettle(Self.region())
         browser.startBrowsing()
         await settle(browser)
@@ -268,7 +268,7 @@ struct CommunityBrowserTests {
     func clearingQueryEmptiesMatches() async {
         let transport = StubCommunityTransport()
         transport.listingsResult = .success([.stub()])
-        let browser = CommunityBrowser(transport: transport)
+        let browser = CommunityBrowser(transport: transport, blockList: .scratch())
         browser.search(matching: "Pilis")
         await settle(browser)
         #expect(!browser.matchingListings.isEmpty)
@@ -283,7 +283,7 @@ struct CommunityBrowserTests {
     func failedTitleSearchKeepsNearbyState() async {
         let transport = StubCommunityTransport()
         transport.listingsResult = .success([.stub(id: "nearby")])
-        let browser = CommunityBrowser(transport: transport)
+        let browser = CommunityBrowser(transport: transport, blockList: .scratch())
         browser.regionDidSettle(Self.region())
         browser.startBrowsing()
         await settle(browser)
@@ -296,9 +296,92 @@ struct CommunityBrowserTests {
         #expect(browser.nearbyListings.map(\.id) == ["nearby"])
     }
 
+    // MARK: - Blocking
+
+    /// The two lists answer different questions and are kept apart on purpose,
+    /// so the one thing they must not disagree about is who is hidden.
+    @Test("a blocked author is gone from both result sets")
+    func blockingFiltersBothQuestions() async {
+        let transport = StubCommunityTransport()
+        let blocks = CommunityBlockList.scratch()
+        transport.listingsResult = .success([
+            .stub(id: "theirs", authorID: "author-1"),
+            .stub(id: "somebody-else", authorID: "author-2"),
+        ])
+        let browser = CommunityBrowser(transport: transport, blockList: blocks)
+        browser.regionDidSettle(Self.region())
+        browser.startBrowsing()
+        browser.search(matching: "Pilis")
+        await settle(browser)
+
+        blocks.block(.stub(authorID: "author-1"))
+
+        #expect(browser.nearbyListings.map(\.id) == ["somebody-else"])
+        #expect(browser.matchingListings.map(\.id) == ["somebody-else"])
+    }
+
+    /// The filter is applied where the lists are read rather than where the
+    /// results land, which is what makes a block reach rows already on screen
+    /// — the case that matters, since blocking is reached from a hike opened
+    /// out of one of these lists.
+    @Test("a block reaches results that are already on screen")
+    func blockingHidesRowsWithoutAnotherRequest() async {
+        let transport = StubCommunityTransport()
+        let blocks = CommunityBlockList.scratch()
+        transport.listingsResult = .success([.stub(id: "theirs", authorID: "author-1")])
+        let browser = CommunityBrowser(transport: transport, blockList: blocks)
+        browser.regionDidSettle(Self.region())
+        browser.startBrowsing()
+        await settle(browser)
+        let requestsBefore = browser.issuedRequests
+
+        blocks.block(.stub(authorID: "author-1"))
+
+        #expect(browser.nearbyListings.isEmpty)
+        #expect(browser.issuedRequests == requestsBefore)
+    }
+
+    /// The other half of filtering on read: the rows were hidden rather than
+    /// thrown away, so undoing a block does not cost a round trip either.
+    @Test("unblocking gives the rows back without asking again")
+    func unblockingRestoresRows() async {
+        let transport = StubCommunityTransport()
+        let blocks = CommunityBlockList.scratch()
+        transport.listingsResult = .success([.stub(id: "theirs", authorID: "author-1")])
+        let browser = CommunityBrowser(transport: transport, blockList: blocks)
+        browser.regionDidSettle(Self.region())
+        browser.startBrowsing()
+        await settle(browser)
+        blocks.block(.stub(authorID: "author-1"))
+        let requestsBefore = browser.issuedRequests
+
+        blocks.unblock("author-1")
+
+        #expect(browser.nearbyListings.map(\.id) == ["theirs"])
+        #expect(browser.issuedRequests == requestsBefore)
+    }
+
+    /// A region whose every row is blocked out draws the same empty state as a
+    /// region with nothing in it, which is the honest answer: there is nothing
+    /// here for this walker to see.
+    @Test("a region of nothing but blocked hikes still reports loaded")
+    func blockingEverythingIsNotAFailure() async {
+        let transport = StubCommunityTransport()
+        let blocks = CommunityBlockList.scratch()
+        blocks.block(.stub(authorID: "author-1"))
+        transport.listingsResult = .success([.stub(id: "theirs", authorID: "author-1")])
+        let browser = CommunityBrowser(transport: transport, blockList: blocks)
+        browser.regionDidSettle(Self.region())
+        browser.startBrowsing()
+        await settle(browser)
+
+        #expect(browser.nearbyListings.isEmpty)
+        #expect(browser.state == .loaded)
+    }
+
     @Test("a launch with no transport does nothing at all")
     func absentTransportIsInert() {
-        let browser = CommunityBrowser(transport: nil)
+        let browser = CommunityBrowser(transport: nil, blockList: .scratch())
         #expect(!browser.hasTransport)
         browser.regionDidSettle(Self.region())
         browser.startBrowsing()

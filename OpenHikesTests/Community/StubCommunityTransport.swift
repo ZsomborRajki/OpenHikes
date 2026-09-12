@@ -106,6 +106,7 @@ extension CommunityListing {
         submissionID: String = "submission-1",
         title: String = "Pilis Ridge",
         authorName: String = "Anna",
+        authorID: String = "author-1",
         distanceMeters: Double = 8000,
         photoCount: Int = 2,
         latitude: Double = 47.63,
@@ -116,6 +117,7 @@ extension CommunityListing {
             submissionID: submissionID,
             title: title,
             authorName: authorName,
+            authorID: authorID,
             hikeDate: StubDate.walked,
             distanceMeters: distanceMeters,
             photoCount: photoCount,
@@ -123,5 +125,19 @@ extension CommunityListing {
             longitude: longitude,
             publishedAt: StubDate.published
         )
+    }
+}
+
+/// A block list backed by its own defaults domain.
+///
+/// Never `.standard`: a suite that blocked somebody there would hide hikes
+/// from the developer's own simulator and from every suite after it, and a
+/// block list is the one thing whose whole job is to persist.
+extension CommunityBlockList {
+    static func scratch() -> CommunityBlockList {
+        guard let defaults = UserDefaults(suiteName: "community-blocks-\(UUID().uuidString)") else {
+            preconditionFailure("Could not open a scratch defaults domain")
+        }
+        return CommunityBlockList(defaults: defaults)
     }
 }
