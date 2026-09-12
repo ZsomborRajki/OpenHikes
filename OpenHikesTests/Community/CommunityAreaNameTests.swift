@@ -58,8 +58,16 @@ struct CommunityAreaNameTests {
     }
 
     /// The name has to describe the rows. A geocode that has not come back is
-    /// no name at all rather than the previous area's.
-    @Test("searching somewhere else drops the old name immediately")
+    /// no name at all rather than the previous area's — but *which* rows is
+    /// the part this gets right and an earlier version did not.
+    ///
+    /// The old name is dropped when the new results **land**, not when the
+    /// request starts. Dropping it at the start looks equivalent and is not:
+    /// the rows on screen are still the old area's until a reply replaces
+    /// them, and a request that fails never replaces them at all. See
+    /// `failedSearchKeepsTheAnsweredAreaName`, which is the case that
+    /// distinguishes the two.
+    @Test("searching somewhere else drops the old name when the new rows land")
     func aNewAreaDropsTheOldName() async {
         let names = StubAreaNames(answer: "Esztergom")
         let browser = CommunityBrowser(
@@ -75,7 +83,10 @@ struct CommunityAreaNameTests {
         names.answer = nil
         browser.regionDidSettle(Self.region(latitude: 48.03))
         browser.searchVisibleArea()
-        #expect(browser.areaName == nil)
+        #expect(
+            browser.areaName == "Esztergom",
+            "in flight, the header still describes the rows that are still up"
+        )
         await settle(browser)
 
         #expect(browser.areaName == nil)
@@ -135,5 +146,98 @@ struct CommunityAreaNameTests {
         await settle(browser)
 
         #expect(browser.areaName == nil)
+    }
+
+    // MARK: A name may only ever describe the rows that arrived
+
+    /// The header used to be renamed by the geocode alone, whatever became of
+    /// the request beside it. Load area A, pan to B, accept *Search this
+    /// area*: MapKit names B, the CloudKit request fails, the rows are
+    /// deliberately kept — and the section sat there showing A's hikes under
+    /// "Community Hikes · near Area B".
+    @Test("a failed search leaves the header describing the rows still on screen")
+    func failedSearchKeepsTheAnsweredAreaName() async {
+        let transport = StubCommunityTransport()
+        let names = StubAreaNames(answer: "Area A")
+        transport.listingsResult = .success([.stub(id: "area-a")])
+        let browser = CommunityBrowser(
+            transport: transport,
+            blockList: .scratch(),
+            areaNames: names
+        )
+        browser.regionDidSettle(Self.region())
+        browser.startBrowsing()
+        await settle(browser)
+        #expect(browser.areaName == "Area A", "precondition")
+
+        names.answer = "Area B"
+        transport.listingsResult = .failure(.unreachable)
+        browser.regionDidSettle(Self.region(latitude: 48.03))
+        browser.searchVisibleArea()
+        await settle(browser)
+
+        #expect(browser.state == .failed(.unreachable))
+        #expect(
+            browser.nearbyListings.map(\.id) == ["area-a"],
+            "the rows that were true when they arrived are kept"
+        )
+        #expect(
+            browser.areaName == "Area A",
+            "and the header goes on describing them, not the area that failed"
+        )
+    }
+
+    /// The other direction, and the reason the name is not simply left alone:
+    /// results that land before their geocode must not inherit the previous
+    /// area's name either. Nothing is better than wrong until MapKit answers.
+    @Test("results that arrive before their name are headed with no name")
+    func resultsWithoutANameYetDropTheOldOne() async {
+        let transport = StubCommunityTransport()
+        let names = StubAreaNames(answer: "Area A")
+        transport.listingsResult = .success([.stub(id: "area-a")])
+        let browser = CommunityBrowser(
+            transport: transport,
+            blockList: .scratch(),
+            areaNames: names
+        )
+        browser.regionDidSettle(Self.region())
+        browser.startBrowsing()
+        await settle(browser)
+        #expect(browser.areaName == "Area A", "precondition")
+
+        names.answer = nil
+        transport.listingsResult = .success([.stub(id: "area-b")])
+        browser.regionDidSettle(Self.region(latitude: 48.03))
+        browser.searchVisibleArea()
+        await settle(browser)
+
+        #expect(browser.nearbyListings.map(\.id) == ["area-b"])
+        #expect(browser.areaName == nil, "a name that cannot be resolved is no name")
+    }
+
+    /// A successful search does still rename the header — the fix above must
+    /// not have made the name sticky.
+    @Test("a successful search renames the header")
+    func successfulSearchRenamesTheHeader() async {
+        let transport = StubCommunityTransport()
+        let names = StubAreaNames(answer: "Area A")
+        transport.listingsResult = .success([.stub(id: "area-a")])
+        let browser = CommunityBrowser(
+            transport: transport,
+            blockList: .scratch(),
+            areaNames: names
+        )
+        browser.regionDidSettle(Self.region())
+        browser.startBrowsing()
+        await settle(browser)
+
+        names.answer = "Area B"
+        transport.listingsResult = .success([.stub(id: "area-b")])
+        browser.regionDidSettle(Self.region(latitude: 48.03))
+        browser.searchVisibleArea()
+        await settle(browser)
+
+        #expect(browser.nearbyListings.map(\.id) == ["area-b"])
+        #expect(browser.areaName == "Area B")
     }
 }

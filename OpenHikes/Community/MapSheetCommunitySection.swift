@@ -71,6 +71,15 @@ extension MapSheetHikes {
         } else if community.nearbyListings.isEmpty {
             communityEmptyRow
         } else {
+            // A failure over rows that are still on screen. The empty state
+            // below is the only place a failure used to be reported, so a
+            // refresh that failed on top of a good list said nothing at all —
+            // and since the rows are deliberately kept, the section looked
+            // like it had simply answered. It has not: these are the previous
+            // area's hikes, and the header says so.
+            if case .failed(let failure) = community.state {
+                communityRefreshFailureRow(failure)
+            }
             ForEach(community.nearbyListings) { listing in
                 Button {
                     onSelectListing(listing)
@@ -170,6 +179,35 @@ extension MapSheetHikes {
             .accessibilityIdentifier("community-find-nearby")
         }
         .buttonStyle(.plain)
+    }
+
+    /// What a failed refresh says when there are still rows underneath it.
+    ///
+    /// Deliberately not the empty state's wording. Nothing here is missing —
+    /// the hikes below are real and were true when they arrived — so this
+    /// says what did not happen rather than what is not there, and the rows
+    /// keep their meaning by being described rather than disowned.
+    @ViewBuilder
+    func communityRefreshFailureRow(_ failure: CommunityFailure) -> some View {
+        VStack(alignment: .leading, spacing: 6) {
+            Label {
+                Text(failure.localizedDescription)
+                    .font(.subheadline.weight(.medium))
+            } icon: {
+                Image(systemName: "exclamationmark.triangle")
+                    .foregroundStyle(.orange)
+            }
+            Text("These are the hikes from the last search that worked.")
+                .font(.subheadline)
+                .foregroundStyle(.secondary)
+            Button("Try Again") { community.retry() }
+                .buttonStyle(.bordered)
+                .padding(.top, 2)
+        }
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .listRowSeparator(.hidden)
+        .accessibilityElement(children: .combine)
+        .accessibilityIdentifier("community-refresh-failure")
     }
 
     /// Says which of the three empty answers this is.
