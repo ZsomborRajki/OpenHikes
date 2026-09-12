@@ -70,9 +70,28 @@ final class CommunityBrowser {
     /// drops the cursor.
     private static let resultLimit = 25
 
-    /// What the section draws. Read by the sheet, and the reason this type is
-    /// observable at all.
-    private(set) var listings: [CommunityListing] = []
+    /// What the *Nearby* section draws: the map's own answer.
+    ///
+    /// Kept apart from ``matchingListings`` rather than sharing one array with
+    /// it, and the separation is the whole of a fix. Two different questions
+    /// are being asked — *what is near this region* and *what is called this*
+    /// — they are drawn in two different places, and while one array held both
+    /// answers each could overwrite the other: a pan past the policy's
+    /// threshold replaced a typed search's results under a heading that still
+    /// said *Shared Hikes*, and clearing the field left the title matches
+    /// standing wherever the zoom ceiling refused the replacement query. An
+    /// answer now outlives the other question entirely.
+    private(set) var nearbyListings: [CommunityListing] = []
+    /// What the search results draw: published hikes whose title matches what
+    /// the walker typed. Nothing the map does touches this.
+    private(set) var matchingListings: [CommunityListing] = []
+    /// How the *nearby* request is getting on.
+    ///
+    /// The nearby one only, because it is the only one with anywhere to say
+    /// so — see ``MapSheetHikes``'s empty state, which distinguishes a failure
+    /// from a region with nothing in it. A title search that fails draws no
+    /// rows and is logged; it must not put an error over a nearby list that
+    /// is perfectly good.
     private(set) var state: CommunityBrowseState = .idle
     /// Whether the walker has turned the community layer on. Drawn as the
     /// chip's selected state, so it is observed on purpose.
@@ -87,7 +106,11 @@ final class CommunityBrowser {
     @ObservationIgnored private var latestRegion: MKCoordinateRegion?
     @ObservationIgnored private var policy = CommunityQueryPolicy()
     @ObservationIgnored private let transport: (any CommunityTransporting)?
-    @ObservationIgnored private var requestTask: Task<Void, Never>?
+    /// One in-flight task per question, for the same reason there is one list
+    /// per question: a typed search cancelling the map's request, or the other
+    /// way round, is how the two used to interfere.
+    @ObservationIgnored private var nearbyTask: Task<Void, Never>?
+    @ObservationIgnored private var matchTask: Task<Void, Never>?
 
     /// - Parameter transport: `nil` for a launch that must not reach CloudKit
     ///   — a hosted test bundle, or UI automation. Every entry point is then a
@@ -100,6 +123,16 @@ final class CommunityBrowser {
     /// Requests that reached the transport. The policy above is what makes
     /// this smaller than the number of pans, and this is what proves it.
     @ObservationIgnored private(set) var issuedRequests = 0
+
+    /// Requests that have not landed yet, of either question.
+    ///
+    /// Kept for the same reason ``issuedRequests`` is, and needed for a
+    /// sharper one: ``state`` describes the nearby request alone, so a suite
+    /// that waited on it would be waiting on the map while asserting about a
+    /// title search that had not come back. Waiting on the effect rather than
+    /// on a duration is the house rule; for a question with nothing to draw,
+    /// this is the effect.
+    @ObservationIgnored private(set) var requestsInFlight = 0
 
     /// Whether this launch can reach the community at all.
     ///
@@ -148,12 +181,17 @@ final class CommunityBrowser {
         search(near: coordinate, radiusMeters: radius)
     }
 
+    /// Turns the community layer off.
+    ///
+    /// Takes the nearby answer with it and leaves the typed one alone: the
+    /// chip is the map's switch, and somebody who searched for a trail by name
+    /// asked for it by name — see ``search(matching:)``.
     func stopBrowsing() {
         policy.stopBrowsing()
         isBrowsing = false
-        requestTask?.cancel()
-        requestTask = nil
-        listings = []
+        nearbyTask?.cancel()
+        nearbyTask = nil
+        nearbyListings = []
         state = .idle
     }
 
@@ -187,30 +225,35 @@ final class CommunityBrowser {
     func search(matching query: String) {
         let trimmed = query.trimmingCharacters(in: .whitespacesAndNewlines)
         guard !trimmed.isEmpty else {
-            requestTask?.cancel()
-            requestTask = nil
-            // The two searches write to one list, so clearing the field cannot
-            // just stop: the title matches would still be there, now drawn
-            // under the *Nearby* heading and describing a query nobody is
-            // running. While browsing, the map's own question is asked again;
-            // otherwise there is nothing left to show.
-            guard isBrowsing, let latestRegion else {
-                listings = []
-                return
-            }
-            policy.forgetLastQuery()
-            regionDidSettle(latestRegion)
+            matchTask?.cancel()
+            matchTask = nil
+            // Dropping the matches is the whole of it. The map's answer was
+            // never replaced by them and so has nothing to be restored from —
+            // which is also why this no longer depends on the policy agreeing
+            // to re-ask: above the zoom ceiling it would refuse, and the title
+            // matches used to be left on screen as a result.
+            matchingListings = []
             return
         }
-        perform(describing: "a title search") { transport in
+        perform(.title, describing: "a title search") { transport in
             try await transport.listings(matching: trimmed, limit: Self.resultLimit)
         }
     }
 
     // MARK: - Requests
 
+    /// Which of the two questions a request is answering.
+    ///
+    /// Named rather than implied because everything that follows is kept in
+    /// two: two lists, two tasks, and — for the nearby one alone — a state
+    /// somebody can see. See ``nearbyListings``.
+    private enum Question {
+        case nearby
+        case title
+    }
+
     private func search(near coordinate: CLLocationCoordinate2D, radiusMeters: Double) {
-        perform(describing: "a nearby search") { transport in
+        perform(.nearby, describing: "a nearby search") { transport in
             try await transport.listings(
                 near: coordinate,
                 radiusMeters: radiusMeters,
@@ -219,29 +262,42 @@ final class CommunityBrowser {
         }
     }
 
-    /// Runs one request, superseding whatever was in flight.
+    /// Runs one request, superseding whatever the *same question* had in
+    /// flight.
     ///
     /// The new task awaits the old one before doing anything, which is what
     /// makes "supersede" true rather than merely likely: cancelling a task
     /// asks it to stop and does not stop it, so two results could otherwise
     /// still land in either order and the stale one could land last.
+    ///
+    /// Per question rather than per browser, which is the part that had to
+    /// change: a pan superseding a typed search is not a newer answer to the
+    /// same question, it is an answer to a different one — and it used to
+    /// arrive in the same array.
     private func perform(
+        _ question: Question,
         describing reason: String,
         _ work: @escaping @Sendable (any CommunityTransporting) async throws -> [CommunityListing]
     ) {
         guard let transport else { return }
         issuedRequests += 1
-        state = listings.isEmpty ? .loading : .refreshing
-        let previous = requestTask
+        if question == .nearby {
+            state = nearbyListings.isEmpty ? .loading : .refreshing
+        }
+        let previous = task(for: question)
         previous?.cancel()
-        requestTask = Task { [weak self] in
+        requestsInFlight += 1
+        let task = Task { [weak self] in
+            // Runs on every exit, superseded and cancelled ones included —
+            // the closure inherits this actor, so the decrement lands here
+            // rather than hopping.
+            defer { self?.requestsInFlight -= 1 }
             await previous?.value
             guard !Task.isCancelled else { return }
             do {
                 let results = try await work(transport)
                 guard !Task.isCancelled else { return }
-                self?.listings = results
-                self?.state = .loaded
+                self?.accept(results, answering: question)
             } catch is CancellationError {
                 return
             } catch {
@@ -251,15 +307,55 @@ final class CommunityBrowser {
                 Self.logger.error(
                     "Community \(reason, privacy: .public) failed: \(failure.localizedDescription, privacy: .public)"
                 )
-                // The rows already on screen are kept. They were true when they
-                // arrived, and replacing a usable list with an error because a
-                // pan happened to fail is worse than showing it alongside one.
-                self?.state = .failed(failure)
-                // And the region that failed is forgotten, so panning back to
-                // it asks again rather than being refused as "the same
-                // question".
-                self?.policy.forgetLastQuery()
+                self?.fail(with: failure, answering: question)
             }
+        }
+        setTask(task, for: question)
+    }
+
+    private func accept(_ results: [CommunityListing], answering question: Question) {
+        switch question {
+        case .nearby:
+            nearbyListings = results
+            state = .loaded
+        case .title:
+            matchingListings = results
+        }
+    }
+
+    /// What a failed request leaves behind.
+    ///
+    /// The rows already on screen are kept either way. They were true when
+    /// they arrived, and replacing a usable list with an error because a pan
+    /// happened to fail is worse than showing it alongside one.
+    private func fail(with failure: CommunityFailure, answering question: Question) {
+        switch question {
+        case .nearby:
+            state = .failed(failure)
+            // The region that failed is forgotten, so panning back to it asks
+            // again rather than being refused as "the same question".
+            policy.forgetLastQuery()
+        case .title:
+            // Logged and no more. There is nowhere on screen that reports a
+            // failed title search, and the two things this could touch instead
+            // both belong to the map: ``state`` draws the nearby list's empty
+            // state, and the remembered query is the nearby one. A typed word
+            // that could not be looked up must not cost either.
+            break
+        }
+    }
+
+    private func task(for question: Question) -> Task<Void, Never>? {
+        switch question {
+        case .nearby: nearbyTask
+        case .title: matchTask
+        }
+    }
+
+    private func setTask(_ task: Task<Void, Never>?, for question: Question) {
+        switch question {
+        case .nearby: nearbyTask = task
+        case .title: matchTask = task
         }
     }
 }

@@ -13,15 +13,19 @@
 //
 //  ## Why every test here carries a time limit
 //
-//  These are the only tests in the bundle that reach StoreKit for real. With no
-//  configuration attached to the simulator, `Product.products(for:)` is a live
-//  round-trip to the Sandbox server, and a call with no product and no store
-//  behind it is the shape that hangs rather than returning — which would take
-//  the whole host down, and every other suite in this one shared process with
-//  it, instead of failing one test. The limit converts that into a normal
-//  failure. It is the same reason `GPXFuzzTests` carries one, and the budget is
-//  deliberately enormous compared to the ~0.6 s the call actually takes: it is
-//  a backstop against a hang, not an assertion about latency.
+//  These are the only tests in the bundle that touch StoreKit at all: `start()`
+//  opens `Transaction.updates` and `Product.SubscriptionInfo.Status.updates`,
+//  which are real framework sequences however thoroughly the rest is stubbed.
+//  A StoreKit call with no store behind it is the shape that hangs rather than
+//  returning, and a hang would take the whole host down — every other suite in
+//  this one shared process with it — instead of failing one test. The limit
+//  converts that into a normal failure. It is the same reason `GPXFuzzTests`
+//  carries one, and the budget is deliberately enormous compared to what these
+//  actually take: it is a backstop against a hang, not an assertion about
+//  latency.
+//
+//  The product lookup itself is no longer among them, and that is the point of
+//  the `loadProducts` seam — see below.
 //
 //  This suite was once reported as having crashed the host. It had not: the
 //  same bundle was measured restarting just as often with this file deleted
@@ -67,7 +71,15 @@ struct MapEntitlementStoreLaunchTests {
     func startResolvesAndPublishes() async throws {
         defer { Self.restoreProcessEntitlement() }
         let defaults = try Self.defaults()
-        let store = MapEntitlementStore(defaults: defaults) { true }
+        let store = MapEntitlementStore(
+            defaults: defaults,
+            currentEntitlements: { true },
+            // `start()` fires an unawaited `loadProduct()`. Stubbed so this
+            // test's subject is the resolve and nothing else — and so what it
+            // leaves running behind it, which this file's header records, is
+            // not also a product query.
+            loadProducts: { _ in [] }
+        )
         #expect(store.state == .unknown)
 
         store.start()
@@ -93,10 +105,14 @@ struct MapEntitlementStoreLaunchTests {
     func startIsIdempotent() async throws {
         defer { Self.restoreProcessEntitlement() }
         let resolves = Mutex(0)
-        let store = MapEntitlementStore(defaults: try Self.defaults()) {
-            resolves.withLock { $0 += 1 }
-            return true
-        }
+        let store = MapEntitlementStore(
+            defaults: try Self.defaults(),
+            currentEntitlements: {
+                resolves.withLock { $0 += 1 }
+                return true
+            },
+            loadProducts: { _ in [] }
+        )
 
         store.start()
         store.start()
@@ -112,9 +128,13 @@ struct MapEntitlementStoreLaunchTests {
     /// unlock without a price, rather than inventing one or showing an error
     /// for a screen the user may only be browsing.
     ///
-    /// This is the ordinary offline case, and it is also what every test in
-    /// this bundle sees: no StoreKit configuration is synced to the simulator,
-    /// so `Product.products(for:)` returns an empty array here by construction.
+    /// The empty answer is *injected* rather than arranged for, and it has to
+    /// be. This test used to rely on the simulator having no StoreKit
+    /// configuration synced to it, which is true of a fresh CI runner and false
+    /// of every machine the app has been launched on once — the scheme attaches
+    /// `OpenHikes.storekit` to its launch action and the simulator keeps it. So
+    /// it passed in CI, failed on a developer's machine with a real $19.99
+    /// product loaded, and asserted the environment rather than the behaviour.
     ///
     /// The swallowed failure is asserted through the two properties the
     /// paywall's buttons are actually bound to, rather than through `isWorking`
@@ -124,7 +144,11 @@ struct MapEntitlementStoreLaunchTests {
     @Test("a product the App Store cannot serve leaves the paywall with nothing to buy")
     func loadProductWithNoStoreLeavesTermsUnset() async throws {
         defer { Self.restoreProcessEntitlement() }
-        let store = MapEntitlementStore(defaults: try Self.defaults()) { false }
+        let store = MapEntitlementStore(
+            defaults: try Self.defaults(),
+            currentEntitlements: { false },
+            loadProducts: { _ in [] }
+        )
         await store.refresh()
 
         await store.loadProduct()
@@ -133,6 +157,31 @@ struct MapEntitlementStoreLaunchTests {
         #expect(store.terms == nil)
         #expect(store.state == .notEntitled)
         #expect(!store.isWorking)
+        #expect(!store.canPurchase)
+        #expect(store.canRestore)
+    }
+
+    /// The other way the lookup fails, which the environment could never
+    /// produce on demand: a thrown error is logged and goes no further.
+    ///
+    /// Same end state as the empty answer on purpose — the paywall has one
+    /// behaviour for "no price to show", not two — and it is worth pinning
+    /// separately because it is the branch that `catch` swallows.
+    @Test("a product lookup that throws is swallowed, not surfaced")
+    func loadProductThatThrowsLeavesThePaywallUsable() async throws {
+        defer { Self.restoreProcessEntitlement() }
+        let store = MapEntitlementStore(
+            defaults: try Self.defaults(),
+            currentEntitlements: { false },
+            loadProducts: { _ in throw CocoaError(.fileNoSuchFile) }
+        )
+        await store.refresh()
+
+        await store.loadProduct()
+
+        #expect(store.product == nil)
+        #expect(store.terms == nil)
+        #expect(store.state == .notEntitled)
         #expect(!store.canPurchase)
         #expect(store.canRestore)
     }

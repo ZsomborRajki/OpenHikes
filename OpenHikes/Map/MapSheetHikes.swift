@@ -44,9 +44,10 @@ struct MapSheetHikes: View, Equatable {
     /// extends coverage never reaches this body.
     var walkSession: TrailWalkSession
     /// Published hikes and whether the walker has asked for them. Only the
-    /// coarse properties are read here — the results, the state and the
-    /// chip's own on/off — so a pan that does not produce a request never
-    /// reaches this body. See ``CommunityBrowser``.
+    /// coarse properties are read here — the two result lists, the state and
+    /// the chip's own on/off — so a pan that does not produce a request never
+    /// reaches this body. The map's results and the typed query's are separate
+    /// lists on purpose; see ``CommunityBrowser``.
     var community: CommunityBrowser
     let selectedHikeID: UUID?
     let onOpen: (Hike) -> Void
@@ -106,17 +107,17 @@ struct MapSheetHikes: View, Equatable {
             "\(hikes.count) hikes searching=\(isSearchFocused)"
         )
         let matchingHikes = isSearchFocused ? hikeSearch.rankedHikes(matching: searchText, in: hikes) : []
-        // A focused field with nothing typed in it is not a search, and the
-        // check matters because the community list is shared with the nearby
-        // browse: without it, focusing the field while browsing would draw
-        // this morning's nearby results under a "Shared Hikes" heading as
-        // though they answered a query.
+        // A focused field with nothing typed in it is not a search. The
+        // community half of that is ``CommunityBrowser/matchingListings``,
+        // which answers the typed query and nothing else — the map's own
+        // results live in their own list, so a pan can no longer put rows
+        // under a "Shared Hikes" heading.
         let hasQuery = !searchText.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
         let isSearching = isSearchFocused
             && hasQuery
             && (!completer.suggestions.isEmpty
                 || !matchingHikes.isEmpty
-                || !community.listings.isEmpty)
+                || !community.matchingListings.isEmpty)
 
         return Group {
             if isCompact {
@@ -361,7 +362,7 @@ private extension MapSheetHikes {
                     .buttonStyle(.plain)
                 }
             } header: {
-                if !matchingHikes.isEmpty || !community.listings.isEmpty { Text("Maps") }
+                if !matchingHikes.isEmpty || !community.matchingListings.isEmpty { Text("Maps") }
             }
         }
     }
@@ -502,7 +503,7 @@ private extension MapSheetHikes {
             .padding(.horizontal)
             .padding(.top, 12)
 
-            if community.listings.isEmpty {
+            if community.nearbyListings.isEmpty {
                 nearbyEmptyState
                     .padding(.horizontal)
                 Spacer()
@@ -514,7 +515,7 @@ private extension MapSheetHikes {
 
     var nearbyList: some View {
         List {
-            ForEach(community.listings) { listing in
+            ForEach(community.nearbyListings) { listing in
                 Button {
                     onSelectListing(listing)
                 } label: {
@@ -585,9 +586,9 @@ private extension MapSheetHikes {
     /// coarser answer than a hike.
     @ViewBuilder
     func communitySuggestionsSection(matchingHikes: [Hike]) -> some View {
-        if !community.listings.isEmpty {
+        if !community.matchingListings.isEmpty {
             Section("Shared Hikes") {
-                ForEach(community.listings) { listing in
+                ForEach(community.matchingListings) { listing in
                     Button { onSelectListing(listing) } label: {
                         CommunityHikeRow(
                             listing: listing,

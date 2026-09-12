@@ -17,26 +17,56 @@
 //
 //  Every submission is reviewed by hand before anybody else can see it, and
 //  the gate has to survive a modified client. CloudKit's permissions are
-//  granted per *record type*, never per field or per record, and `create`
-//  implies `read` — so a single type with a `moderationState` field could not
-//  express this: whoever may create a submission may also read every other
-//  pending one, and may write whatever they like into their own state field.
+//  granted per *record type*, never per field or per record — so a single type
+//  with a `moderationState` field could not express this: whoever may write a
+//  submission may write whatever they like into their own state field.
 //
 //  So the submission and the publication are different types with different
 //  permissions:
 //
-//  - ``submissionType`` — `_world` nothing, `_icloud` create, `_creator`
-//    read/write. A walker can submit, and can read back and withdraw their
-//    own submission. Nobody browses these, including the app.
-//  - ``listingType`` — `_world` read, and create granted to a custom admin
-//    role and to nobody else. This is the only type the browse path queries,
-//    so a hike is visible exactly when a human has published one of these for
-//    it, and no client can forge one.
+//  - ``submissionType`` — `_world` read, `_icloud` create, `_creator` read.
+//    Anybody may *make* one and nobody but the reviewer may *change* one.
+//  - ``listingType`` — `_world` read, and create and write granted to a custom
+//    admin role and to nobody else. This is the only type the browse path
+//    queries, so a hike is discoverable exactly when a human has published one
+//    of these for it, and no client can forge one.
 //
 //  Publishing is therefore creating a ``listingType`` record that points at a
 //  submission. It is deliberately small enough to be done by hand in the
 //  CloudKit Console, which is what lets review ship before any review tooling
 //  does.
+//
+//  ## Why nobody may write a submission, including its author
+//
+//  Two things follow from ``CloudKitCommunityTransport/detail(for:)`` fetching
+//  the submission a listing names, and both are why `_creator` has read and
+//  not write.
+//
+//  **A submission is write-once.** If its author kept write access, approval
+//  would mean nothing: a modified client could replace the route, the
+//  description or the photo assets of an already-approved submission, and the
+//  listing — which points at the record rather than at a copy of its contents
+//  — would go on serving the replacement to everybody who opened it, without a
+//  second review. Protecting the listing only protects what a hike is *called*
+//  unless the thing it names can no longer change. So there is no write
+//  permission on this type outside the admin role, which also means a walker
+//  cannot withdraw or edit a submission from the app; sharing an amended hike
+//  makes a new submission, and taking one down is a reviewer's delete.
+//
+//  **`_world` reads it.** Browsing needs no account — public reads never do —
+//  and a signed-out walker who can find a listing has to be able to open it.
+//  A reference being readable does not make its target readable, so without
+//  this the preview would fail at the fetch for exactly the walkers the
+//  account-free flow is for.
+//
+//  What that costs is worth stating plainly: a submission nobody has reviewed
+//  is readable by anybody who has its record name. It is not *discoverable* —
+//  see the indexes below, which is the part that matters — but the gate on a
+//  pending upload is an unguessable name rather than a permission. The
+//  alternative was copying every approved route and photograph into a record
+//  only the admin role can create, which cannot be done by hand in the Console
+//  for a dozen assets and so would make review wait on tooling this does not
+//  have yet.
 //
 //  ## Indexes this schema needs
 //
@@ -49,8 +79,15 @@
 //    and the results are sorted by distance from the same point.
 //  - `title` — SEARCHABLE, for the token match the typed query uses.
 //  - `publishedAt` — SORTABLE, the fallback order when there is no location.
-//  - `___recordID` — QUERYABLE, which the Console adds by default and which a
-//    reference lookup needs.
+//  - `___recordID` — QUERYABLE, which the Console adds by default.
+//
+//  On ``submissionType``, **no index at all**, and that absence is a security
+//  control rather than an omission. A fetch by record ID is not a query and
+//  needs no index, which is the only way this type is ever read; without a
+//  queryable field nobody can enumerate submissions, so a pending one cannot
+//  be listed, searched or walked through even though `_world` may read one it
+//  can name. Adding an index here — `___recordID` QUERYABLE included, which
+//  the Console offers by default — would publish every unreviewed upload.
 //
 //  Nothing here contacts CloudKit, and nothing here is verified against a
 //  live container. See *Schema and migration policy* for the standing rule
@@ -68,7 +105,10 @@ import Foundation
 /// rename here is a migration rather than a refactor. A promoted production
 /// field cannot be deleted, renamed or retyped at all.
 nonisolated enum CommunitySchema {
-    /// What a walker uploads. Never queried by the app.
+    /// What a walker uploads: written once, then read by record name only.
+    ///
+    /// Never *queried* — by this app or by anything else, because the type
+    /// carries no queryable index. See this file's header.
     static let submissionType = "CommunityHikeSubmission"
     /// What a reviewer publishes. The only type the browse path reads.
     static let listingType = "CommunityHike"

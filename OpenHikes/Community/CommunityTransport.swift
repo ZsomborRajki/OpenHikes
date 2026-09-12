@@ -114,6 +114,10 @@ nonisolated protocol CommunityTransporting: Sendable {
     /// The route and photographs behind a listing, downloaded into
     /// `directory`.
     ///
+    /// Needs no account, like every other read here: a walker who never signs
+    /// in can open a published hike as well as find one — see
+    /// ``CommunityFailure/notSignedIn``.
+    ///
     /// The caller owns `directory` and is what eventually deletes it: these
     /// are somebody else's photographs held only for as long as the screen
     /// showing them, unless the walker imports the hike and makes copies of
