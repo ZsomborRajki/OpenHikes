@@ -28,7 +28,6 @@ enum HikeActivityLayout {
     /// bottom region sits under two other regions rather than beside them.
     static let expandedMetricLimit = 2
 
-    static let cornerRadius: Double = 14
     static let progressBarPadding: Double = 2
     /// How far a figure may shrink before it truncates instead. A distance
     /// grows a digit at 10 km and again at 100 km, and the banner is narrow

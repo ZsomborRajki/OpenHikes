@@ -274,8 +274,6 @@ final class BackgroundDeliveryTests {
     private let context: ModelContext
     private let defaults: UserDefaults
     private let monitor = StubLocationMonitor()
-    // periphery:ignore - assigned and never read on purpose; it is the strong
-    // reference that keeps the tracker alive.
     /// Held for the length of the test: the monitor references its delegate
     /// weakly, exactly as CoreLocation does.
     private var retainedTracker: BackgroundTrailTracker?

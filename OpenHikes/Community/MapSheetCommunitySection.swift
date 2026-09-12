@@ -292,7 +292,7 @@ extension MapSheetHikes {
     /// one the hiker means when they half-type its name, and a place is a
     /// coarser answer than a hike.
     @ViewBuilder
-    func communitySuggestionsSection(matchingHikes: [Hike]) -> some View {
+    func communitySuggestionsSection() -> some View {
         if !community.matchingListings.isEmpty {
             Section("Community Hikes") {
                 ForEach(community.matchingListings) { listing in

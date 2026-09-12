@@ -3,8 +3,10 @@
 //  OpenHikesTests
 //
 //  The fixtures the reminder suites share: a notifier that records what it was
-//  told instead of talking to `UserNotifications`, a clock the test moves by
-//  hand, and a controller wired to both.
+//  told instead of talking to `UserNotifications`, a fixed instant the suites
+//  hand to the controller's own `at:` and `on:` parameters, and a controller
+//  wired to the first of those. The controller reads no clock of its own -
+//  every moment it is asked about arrives as an argument.
 //
 //  Its own type rather than static members on one suite, for the reason
 //  ``LiveActivityHarness`` is: the suites are split by subject — the policy,

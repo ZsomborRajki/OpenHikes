@@ -64,7 +64,6 @@ nonisolated extension TrailMatcher {
             return MatchLeg(
                 transition: nil,
                 isConfident: false,
-                isSparse: false,
                 isGap: gap
             )
         }
@@ -81,7 +80,6 @@ nonisolated extension TrailMatcher {
             return MatchLeg(
                 transition: nil,
                 isConfident: false,
-                isSparse: parameters.isSparse,
                 isGap: gap
             )
         }
@@ -102,7 +100,6 @@ nonisolated extension TrailMatcher {
         return MatchLeg(
             transition: transition,
             isConfident: confident,
-            isSparse: parameters.isSparse,
             isGap: gap
         )
     }

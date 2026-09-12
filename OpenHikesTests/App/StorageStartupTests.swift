@@ -286,6 +286,8 @@ struct StorageStartupAlertTests {
 @MainActor
 private final class StartupModelProbe {
     let model: OpenHikesModel
+    // periphery:ignore - assigned and never read on purpose; TileSandbox deletes
+    // its directory on deinit, and the model above is still using it.
     private let sandbox: TileSandbox
 
     init(startupIssue: StorageStartupIssue?) throws {

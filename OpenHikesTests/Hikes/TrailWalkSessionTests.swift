@@ -18,7 +18,6 @@ struct TrailWalkSessionTests {
     private let container: ModelContainer
     let context: ModelContext
     let clock = TestClock()
-    private var recordingHikeID: UUID?
 
     init() throws {
         container = try Fixture.modelContainer()

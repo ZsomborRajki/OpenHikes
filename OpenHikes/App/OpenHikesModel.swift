@@ -85,11 +85,6 @@ final class OpenHikesModel {
     /// ``makeCommunityTransport()``. Held so the share sheet and the preview
     /// screen use the same one the browser does.
     let communityTransport: (any CommunityTransporting)?
-    /// The one reminder controller the app has, or `nil` when it must not have
-    /// one — see ``makeMovementReminderController(defaults:)``. Shared with
-    /// ``hikeRecorder`` and ``walkSession``, which is what makes the
-    /// precedence between a recording and a followed trail expressible.
-    let movementReminders: MovementReminderController?
     /// What the buttons on a reminder do. Held because
     /// `UNUserNotificationCenter.delegate` is a weak reference and this is the
     /// object it points at; built only when there are reminders to act on.
@@ -128,7 +123,6 @@ final class OpenHikesModel {
         self.backgroundTracker = backgroundTracker
         self.autoSaveController = autoSaveController
         self.hikeRecorder = hikeRecorder
-        self.movementReminders = movementReminders
         // The recorder stays the single authority on which hike is a draft;
         // the session only asks.
         self.walkSession = walkSession ?? TrailWalkSession(

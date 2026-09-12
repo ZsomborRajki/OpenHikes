@@ -42,14 +42,6 @@ struct TileDurableQuotaTests {
         cache.durableProviderBytes.withLock { $0[providerID] }
     }
 
-    /// What a fresh walk of the durable directory says the provider holds.
-    private static func measuredBytes(_ cache: TileCache, _ providerID: String = stadia) async -> Int64? {
-        await offMain {
-            cache.invalidateDurableMeasurements()
-            return cache.durableSpace(forProviderID: providerID)?.used
-        }
-    }
-
     // MARK: Ownership of a tile file
 
     /// The whole quota rests on being able to tell whose tile a file is from

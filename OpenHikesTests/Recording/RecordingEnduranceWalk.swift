@@ -86,7 +86,6 @@ struct EnduranceStep {
     let altitude: Double
     let course: CLLocationDirection
     let speed: CLLocationSpeed
-    let isMoving: Bool
 
     var coordinate: CLLocationCoordinate2D {
         CLLocationCoordinate2D(latitude: latitude, longitude: longitude)
@@ -235,8 +234,7 @@ struct EnduranceWalk {
                     course: bearing.truncatingRemainder(
                         dividingBy: Endurance.degreesPerTurn
                     ),
-                    speed: speed,
-                    isMoving: isMoving
+                    speed: speed
                 )
             )
         }
