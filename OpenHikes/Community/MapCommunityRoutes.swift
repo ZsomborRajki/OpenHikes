@@ -23,8 +23,15 @@
 //  on the hiker's map, and the map already belongs to something — a selected
 //  route, drawn in a colour they chose, possibly with a walk highlighted along
 //  it. A shared hike must be legible without ever competing with that, so it
-//  is drawn at half strength and at ``MKOverlayLevel/aboveRoads``, below the
-//  level the hiker's own route is added at. Where the two cross, theirs wins.
+//  is drawn at half strength and underneath the hiker's own route. Where the
+//  two cross, theirs wins.
+//
+//  *Underneath* is a position within one level rather than a level of its
+//  own: everything this app draws is at ``MKOverlayLevel/aboveLabels``, and a
+//  shared line put below that is buried rather than faint. The order there is
+//  the ground, then these, then the hiker's route — see
+//  ``applyCommunityRoutes(_:on:)``, which explains what the opaque tile
+//  overlay does to anything drawn beneath it.
 //
 //  The previewed line is the one exception and only to the fade: it is at full
 //  strength because the screen showing it no longer draws a route of its own,
