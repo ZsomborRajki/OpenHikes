@@ -10,13 +10,26 @@
 //  about whether a route goes where the hiker wants, and the photographs are
 //  half of why they would want it.
 //
-//  The route is drawn as a plain shape rather than on a map, which is a
-//  deliberate limit rather than a missing feature. A map here would mean tiles
-//  — a provider, the entitlement check, the cache, a download over whatever
-//  connection the hiker is on — for a screen they may back out of in two
-//  seconds. The shape answers the question this screen is for, which is *does
-//  this route go where I think it does*; the moment the hike is imported it
-//  becomes an ordinary ``Hike`` and gets the real map like every other.
+//  ## The route is on the map, and the numbers are here
+//
+//  This screen used to draw the route itself, as an unscaled outline with no
+//  ground under it. That was the right answer while a shared hike had no line
+//  anywhere — it answered *does this route go where I think it does* without
+//  costing a map — but it answered it in the abstract, on a screen presented
+//  over a real map that was drawing the same trail as a single pin.
+//
+//  Both halves of that have moved. The map draws every shared hike in the
+//  answer, and draws *this* one properly, from the full route loaded here —
+//  see ``MapCommunityRoutes`` and ``CommunityBrowser/previewLoaded(_:of:)``.
+//  So the sketch is gone, and what replaces it is the thing the sketch could
+//  never show: the same statistics a hike in the library carries, built by the
+//  same ``HikeDetailPreparation`` off the same route. Track points, elevation
+//  loss, moving speed, when the walk started and ended.
+//
+//  It is still not a map of its own, and for the reason it never was: tiles
+//  mean a provider, the entitlement check, the cache and a download, for a
+//  screen a hiker may back out of in two seconds. There is already a map
+//  behind this one.
 //
 //  Everything downloaded lands in one directory owned by this screen and
 //  deleted when it goes — or when an import that is still reading out of it
@@ -48,9 +61,7 @@ import SwiftData
 import SwiftUI
 
 struct CommunityHikeView: View {
-    private static let routeShapeHeight: CGFloat = 180
     private static let photoTileSize: CGFloat = 96
-    private static let routeLineWidth: CGFloat = 2.5
 
     /// What the screen is doing, as one value.
     ///
@@ -70,6 +81,15 @@ struct CommunityHikeView: View {
     /// The hiker's own block list. Written by this screen and read by the
     /// lists behind it — see ``CommunityBlockList``.
     let blockList: CommunityBlockList
+    /// The browser behind the map, told when this preview opens, what its
+    /// route turned out to be, and when it goes.
+    ///
+    /// **Written and never read.** Nothing in this body touches a property of
+    /// it, which is what keeps a screen presented over the map out of the
+    /// map's own redraw path — the three calls are one-way, and what they
+    /// produce is a line on the map behind this sheet rather than anything
+    /// here. See ``CommunityBrowser/previewOpened(_:)``.
+    let browser: CommunityBrowser
     /// Called with the imported hike, so the caller can pop this screen and
     /// open the real one.
     let onImport: (Hike) -> Void
@@ -80,6 +100,13 @@ struct CommunityHikeView: View {
     @Environment(\.modelContext)
     private var context
     @State private var phase: Phase = .loading
+    /// The same tiles a hike in the library shows, from the same builder.
+    ///
+    /// Held apart from ``phase`` because they arrive after it: the route is
+    /// what the screen is waiting for and the statistics are a walk of that
+    /// route, so folding them together would hold the photographs and the Add
+    /// button back on a computation nothing is blocked by.
+    @State private var stats: [Stat] = []
     @State private var isImporting = false
     @State private var importFailure: CommunityFailure?
     @State private var existingHike: Hike?
@@ -149,8 +176,17 @@ struct CommunityHikeView: View {
             """)
         }
         .task { await load() }
-        .onAppear { existingHike = CommunityImport.existingImport(of: listing.id, in: context) }
-        .onDisappear { discardDownloads() }
+        .onAppear {
+            existingHike = CommunityImport.existingImport(of: listing.id, in: context)
+            // Before the route exists, deliberately: this only says which hike
+            // the map is now about, so that a fetch landing after the hiker
+            // backed out is ignored rather than drawn.
+            browser.previewOpened(listing)
+        }
+        .onDisappear {
+            browser.previewClosed(listing)
+            discardDownloads()
+        }
     }
 }
 
@@ -286,14 +322,7 @@ private extension CommunityHikeView {
 
     @ViewBuilder
     func loadedState(_ detail: CommunityHikeDetail) -> some View {
-        CommunityRouteShape(coordinates: detail.route.map(\.clCoordinate))
-            .stroke(.tint, style: StrokeStyle(lineWidth: Self.routeLineWidth, lineJoin: .round))
-            .frame(height: Self.routeShapeHeight)
-            .frame(maxWidth: .infinity)
-            .padding(.vertical, 8)
-            .accessibilityHidden(true)
-
-        statsGrid(detail)
+        statsGrid
 
         if let description = detail.trackDescription, !description.isEmpty {
             Text(description)
@@ -308,41 +337,29 @@ private extension CommunityHikeView {
         importButton(detail)
     }
 
-    func statsGrid(_ detail: CommunityHikeDetail) -> some View {
-        let profile = RouteProfile(route: detail.route)
-        return HStack(spacing: 24) {
-            stat(
-                "Distance",
-                value: HikeFormat.length(
-                    Measurement(
-                        value: CommunityImport.routeLength(of: detail.route),
-                        unit: UnitLength.meters
-                    )
-                )
-            )
-            if let gain = profile.elevation.gainMeters {
-                stat(
-                    "Ascent",
-                    value: HikeFormat.length(Measurement(value: gain, unit: UnitLength.meters))
-                )
+    /// The hike's numbers, in the same grid and the same tiles the hiker's own
+    /// hikes use.
+    ///
+    /// Literally the same: ``StatGrid`` and ``StatTile`` rather than a pair
+    /// built for this screen, so the two columns, the single column at an
+    /// accessibility text size and the one-label-one-value reading all come
+    /// along without being decided a second time. What is compared when
+    /// somebody is deciding whether to keep a stranger's trail is *their* hike
+    /// against *this* one, and two layouts would make that comparison work.
+    ///
+    /// Empty until the walk of the route finishes, which is a beat after the
+    /// route lands — see ``preparedStats(for:)``. Nothing is drawn in the
+    /// meantime rather than a row of placeholders: the photographs and the Add
+    /// button are already up, and a grid of dashes that fills itself in is a
+    /// worse thing to look at than a grid that appears.
+    @ViewBuilder var statsGrid: some View {
+        if !stats.isEmpty {
+            StatGrid {
+                ForEach(stats) { stat in
+                    StatTile(label: stat.label, value: stat.value)
+                }
             }
-            stat("Photos", value: "\(detail.photoFileURLs.count)")
         }
-    }
-
-    func stat(_ title: String, value: String) -> some View {
-        VStack(alignment: .leading, spacing: 2) {
-            Text(title)
-                .font(.caption)
-                .foregroundStyle(.secondary)
-            Text(value)
-                .font(.headline)
-        }
-        // One element with one label and one value, the same contract every
-        // other composite row in the app keeps.
-        .accessibilityElement(children: .ignore)
-        .accessibilityLabel(title)
-        .accessibilityValue(value)
     }
 
     func photoStrip(_ detail: CommunityHikeDetail) -> some View {
@@ -411,11 +428,39 @@ private extension CommunityHikeView {
                 downloadingInto: downloadDirectory
             )
             phase = .loaded(detail)
+            // The route this screen no longer draws, handed to the map that
+            // does — see this file's header. Before the statistics, because it
+            // is what the hiker is waiting to see and it costs nothing to
+            // compute.
+            browser.previewLoaded(detail.route, of: listing)
+            stats = await Self.preparedStats(for: detail)
         } catch {
             phase = .failed(
                 error as? CommunityFailure ?? .unavailable(error.localizedDescription)
             )
         }
+    }
+
+    /// One walk of the route, off the main actor, producing the same tiles a
+    /// hike in the library shows.
+    ///
+    /// The distance is the route's own length rather than
+    /// ``CommunityListing/distanceMeters``, and that is the same call
+    /// ``CommunityImport`` makes for the same reason: the listing's figure is
+    /// typed by a person in the CloudKit Console, the route is what was
+    /// uploaded, and a preview whose stated length disagreed with the hike it
+    /// is about to become would be wrong in the one place the hiker can see
+    /// both.
+    ///
+    /// A cancelled preparation — the hiker backing out mid-walk — leaves no
+    /// tiles and says nothing. There is nothing to report: the screen it would
+    /// have drawn on has gone.
+    static func preparedStats(for detail: CommunityHikeDetail) async -> [Stat] {
+        let prepared = try? await HikeDetailPreparation.prepare(
+            route: detail.route,
+            distanceMeters: CommunityImport.routeLength(of: detail.route)
+        )
+        return prepared?.stats ?? []
     }
 
     /// Adds the hike, and holds the task that does it.

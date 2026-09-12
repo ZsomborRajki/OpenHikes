@@ -109,6 +109,13 @@
 //  can name. Adding an index here — `___recordID` QUERYABLE included, which
 //  the Console offers by default — would publish every unreviewed upload.
 //
+//  ``Submission/routeOutline`` does not change that. It is read the same way
+//  everything on this type is read, by a fetch of record IDs taken off
+//  published listings — the batch in
+//  ``CommunityTransporting/outlines(for:)`` is one such fetch with several
+//  IDs rather than a different kind of read — so it needs no index and must
+//  not be given one.
+//
 //  Nothing here contacts CloudKit, and nothing here is verified against a
 //  live container. See *Schema and migration policy* for the standing rule
 //  that a deployment fact is recorded in the instructions file rather than in
@@ -146,6 +153,27 @@ nonisolated enum CommunitySchema {
         /// add up to under a megabyte and a day's recording is several — the
         /// same reason ``Hike/route`` is `@Attribute(.externalStorage)`.
         static let route = "route"
+        /// The same line thinned to about a kilobyte of text, so the map can
+        /// draw it before anybody opens the hike. See
+        /// ``CommunityRouteOutline``.
+        ///
+        /// A *field* where ``route`` is an asset, and that is the whole reason
+        /// it earns its place: a field can be asked for on its own.
+        /// ``CommunityTransporting/outlines(for:)`` fetches this and nothing
+        /// else for a whole page of listings in one request, which the asset
+        /// cannot do — an asset is fetched as a file, and a page of them is
+        /// the tens of megabytes ``CommunityListing`` exists to avoid.
+        ///
+        /// It needs **no index**, like everything else on this type and for
+        /// the same reason: it is read by a fetch of record IDs that came off
+        /// listings a reviewer published, never by a query. Nothing about it
+        /// makes a submission enumerable.
+        ///
+        /// Absent on every hike shared before it existed, and on any whose
+        /// route was too short to draw. A listing whose submission has no
+        /// outline keeps its pin and draws no line; see
+        /// ``CommunityBrowser/routeLines``.
+        static let routeOutline = "routeOutline"
         /// The photographs, in the order ``photoPins`` describes them.
         static let photos = "photos"
         /// Per-photo capture time and trail coordinate, JSON-encoded, in the

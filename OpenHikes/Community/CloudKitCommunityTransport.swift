@@ -84,6 +84,14 @@ nonisolated struct CloudKitCommunityTransport: CommunityTransporting {
             in: workingDirectory
         )
         record[CommunitySchema.Submission.route] = CKAsset(fileURL: routeURL)
+        // Derived here rather than carried on the draft, and that is not a
+        // detail: the disclosure the share sheet makes is held against
+        // ``CommunitySubmissionDraft``'s fields, and this is not a new thing
+        // being collected — it is a thinned copy of the route the hiker has
+        // already been told goes with the hike, with the elevation and the
+        // timestamps taken *out*. A draft field would put a second name on the
+        // same fact and make the promise read as though it had grown.
+        record[CommunitySchema.Submission.routeOutline] = CommunityRouteOutline.encoded(draft.route)
 
         if !draft.photoFileURLs.isEmpty {
             let pinsURL = try Self.writeJSON(
@@ -404,57 +412,6 @@ nonisolated struct CloudKitCommunityTransport: CommunityTransporting {
             }
         }
     }
-
-    // MARK: - Plumbing
-
-    private static func writeJSON(
-        _ value: some Encodable,
-        named name: String,
-        in directory: URL
-    ) throws -> URL {
-        try FileManager.default.createDirectory(
-            at: directory,
-            withIntermediateDirectories: true
-        )
-        let url = directory.appendingPathComponent(name, isDirectory: false)
-        try JSONEncoder().encode(value).write(to: url, options: .atomic)
-        return url
-    }
-
-    /// Turns whatever CloudKit threw into one of the five things the app is
-    /// allowed to say, keeping the real diagnostic in the log.
-    ///
-    /// The retryable conditions are folded into one `unreachable` on purpose.
-    /// A rate limit, a busy service and a phone in a tunnel are the same
-    /// sentence to a hiker — *try again* — and telling them apart would only
-    /// let the UI offer three wordings of it.
-    private static func failure(from error: any Error, while reason: String) -> CommunityFailure {
-        if let failure = error as? CommunityFailure { return failure }
-        logger.error(
-            """
-            Community request failed while \(reason, privacy: .public): \
-            \(error.localizedDescription, privacy: .public)
-            """
-        )
-        guard let ckError = error as? CKError else { return .unavailable(error.localizedDescription) }
-        // A set rather than a multi-case pattern so the list reads as what it
-        // is: the conditions that mean *try again later*, folded into one
-        // sentence on purpose. See this function's summary for why a rate
-        // limit and a tunnel are not told apart.
-        let retryable: Set<CKError.Code> = [
-            .networkFailure,
-            .networkUnavailable,
-            .requestRateLimited,
-            .serviceUnavailable,
-            .zoneBusy,
-        ]
-        if retryable.contains(ckError.code) { return .unreachable }
-        return switch ckError.code {
-        case .notAuthenticated, .managedAccountRestricted: .notSignedIn
-        case .unknownItem: .noLongerAvailable
-        default: .unavailable(ckError.localizedDescription)
-        }
-    }
 }
 
 // MARK: - Reading a listing
@@ -500,5 +457,126 @@ nonisolated private extension CommunityListing {
         publishedAt = record[CommunitySchema.Listing.publishedAt] as? Date
             ?? record.creationDate
             ?? .distantPast
+    }
+}
+
+// MARK: - Plumbing
+
+// Neither of these reads or writes a record: one turns a value into the file a
+// `CKAsset` has to be, the other turns a `CKError` into one of the handful of
+// sentences this app is allowed to say. An extension rather than more of the
+// type, because they are not part of the conversation with the database and
+// reading them in the middle of it was what made the middle of it hard to
+// follow.
+//
+// `nonisolated` for the reason the listing initializer above is: an
+// unannotated extension is main-actor isolated here, and every caller is
+// `@concurrent`.
+nonisolated private extension CloudKitCommunityTransport {
+    static func writeJSON(
+        _ value: some Encodable,
+        named name: String,
+        in directory: URL
+    ) throws -> URL {
+        try FileManager.default.createDirectory(
+            at: directory,
+            withIntermediateDirectories: true
+        )
+        let url = directory.appendingPathComponent(name, isDirectory: false)
+        try JSONEncoder().encode(value).write(to: url, options: .atomic)
+        return url
+    }
+
+    /// Turns whatever CloudKit threw into one of the five things the app is
+    /// allowed to say, keeping the real diagnostic in the log.
+    ///
+    /// The retryable conditions are folded into one `unreachable` on purpose.
+    /// A rate limit, a busy service and a phone in a tunnel are the same
+    /// sentence to a hiker — *try again* — and telling them apart would only
+    /// let the UI offer three wordings of it.
+    static func failure(from error: any Error, while reason: String) -> CommunityFailure {
+        if let failure = error as? CommunityFailure { return failure }
+        logger.error(
+            """
+            Community request failed while \(reason, privacy: .public): \
+            \(error.localizedDescription, privacy: .public)
+            """
+        )
+        guard let ckError = error as? CKError else { return .unavailable(error.localizedDescription) }
+        // A set rather than a multi-case pattern so the list reads as what it
+        // is: the conditions that mean *try again later*, folded into one
+        // sentence on purpose. See this function's summary for why a rate
+        // limit and a tunnel are not told apart.
+        let retryable: Set<CKError.Code> = [
+            .networkFailure,
+            .networkUnavailable,
+            .requestRateLimited,
+            .serviceUnavailable,
+            .zoneBusy,
+        ]
+        if retryable.contains(ckError.code) { return .unreachable }
+        return switch ckError.code {
+        case .notAuthenticated, .managedAccountRestricted: .notSignedIn
+        case .unknownItem: .noLongerAvailable
+        default: .unavailable(ckError.localizedDescription)
+        }
+    }
+}
+
+// MARK: - The shapes behind a page of listings
+
+// Also an extension, and in the same file because it is the same conversation
+// with the same database. What the split buys is the thing a length limit is
+// for: this is a second, self-contained read — a different request, a
+// different failure mode, a different thing to say about a missing answer —
+// and reading it beside `submit` obscured both.
+nonisolated extension CloudKitCommunityTransport {
+    /// One fetch for a whole page's worth of route outlines.
+    ///
+    /// A fetch of record IDs and never a query, exactly like ``detail(for:)``:
+    /// the IDs come off listings a reviewer published, and
+    /// ``CommunitySchema/submissionType`` carries no index precisely so that
+    /// nothing can be enumerated. `desiredKeys` is what makes this affordable
+    /// — without it this would download every asset on every submission on
+    /// screen, which is the transfer ``CommunityListing`` exists to avoid.
+    ///
+    /// Several listings can name one submission — a reviewer who published the
+    /// same upload twice — so the answer is spread back across every listing
+    /// that asked, rather than keyed on the submission and looked up once.
+    ///
+    /// Per-record failures are dropped rather than raised. A submission a
+    /// reviewer has since deleted, or an upload made before the field existed,
+    /// is a listing with a pin and no line; the hike still opens, and there is
+    /// nothing here the hiker could do about it if they were told.
+    @concurrent
+    func outlines(
+        for listings: [CommunityListing]
+    ) async throws -> [String: [RouteCoordinate]] {
+        let listingsBySubmission = Dictionary(grouping: listings, by: \.submissionID)
+        guard !listingsBySubmission.isEmpty else { return [:] }
+        let ids = listingsBySubmission.keys.map(CKRecord.ID.init(recordName:))
+
+        let fetched: [CKRecord.ID: Result<CKRecord, any Error>]
+        do {
+            fetched = try await database.records(
+                for: ids,
+                desiredKeys: [CommunitySchema.Submission.routeOutline]
+            )
+        } catch {
+            throw Self.failure(from: error, while: "fetching the shape of published hikes")
+        }
+
+        var outlines: [String: [RouteCoordinate]] = [:]
+        for (id, result) in fetched {
+            guard let record = try? result.get(),
+                  let encoded = record[CommunitySchema.Submission.routeOutline] as? String
+            else { continue }
+            let route = CommunityRouteOutline.decodedRoute(encoded)
+            guard route.count >= 2 else { continue }
+            for listing in listingsBySubmission[id.recordName] ?? [] {
+                outlines[listing.id] = route
+            }
+        }
+        return outlines
     }
 }

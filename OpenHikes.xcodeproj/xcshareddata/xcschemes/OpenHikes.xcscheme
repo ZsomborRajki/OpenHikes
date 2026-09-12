@@ -91,7 +91,7 @@
       <EnvironmentVariables>
          <EnvironmentVariable
             key = "RENDER_SIGNPOST_LOG"
-            value = "1"
+            value = "0"
             isEnabled = "YES">
          </EnvironmentVariable>
       </EnvironmentVariables>

@@ -199,11 +199,28 @@ extension MapView {
         weak var community: CommunityBrowser?
 
         var communityAnnotations: [CommunityMapAnnotation] = []
+        /// The shared hikes' own lines, drawn faded beneath the hiker's route
+        /// — see `MapCommunityRoutes.swift`, which owns everything that reads
+        /// this.
+        var communityRoutes: [CommunityRouteDrawing] = []
         /// Guards `observeCommunityPins` the way the photo flags guard theirs —
         /// a second registration can never be cancelled.
         var isObservingCommunityPins = false
+        /// The same, for the lines.
+        var isObservingCommunityRoutes = false
         /// The same, for the *Search this area* pill's visibility.
         var isObservingAreaPrompt = false
+        /// The last preview the camera was moved for, so opening one hike
+        /// fits its route once rather than on every later rebuild.
+        var fittedPreviewListingID: String?
+
+        #if canImport(UIKit)
+        /// The recognizer that answers a tap on a shared hike's line, held so
+        /// installing it twice cannot open one preview twice. MapKit hit-tests
+        /// annotations and never overlays, so this is the whole of how a line
+        /// is tappable at all.
+        var communityRouteTap: UITapGestureRecognizer?
+        #endif
 
         #if canImport(UIKit)
         weak var areaSearchControl: MapAreaSearchView?
@@ -260,25 +277,6 @@ extension MapView {
 
         /// Width occupied beyond the safe leading edge by the landscape panel.
         var sidePanelInset: CGFloat = 0
-
-        /// Fits the currently drawn route into view. Shared by the initial draw and
-        /// the detail view's Zoom button.
-        func fitToCurrentRoute(_ mapView: MKMapView, animated: Bool) {
-            guard let polyline = routeOverlay else { return }
-            var insets = Self.routeInsets
-            #if canImport(UIKit)
-            if sidePanelInset > 0 {
-                // MapKit padding uses physical edges; the panel uses leading.
-                // Include the safe area the panel itself is positioned inside.
-                if mapView.effectiveUserInterfaceLayoutDirection == .rightToLeft {
-                    insets.right += sidePanelInset + mapView.safeAreaInsets.right
-                } else {
-                    insets.left += sidePanelInset + mapView.safeAreaInsets.left
-                }
-            }
-            #endif
-            mapView.setVisibleMapRect(polyline.boundingMapRect, edgePadding: insets, animated: animated)
-        }
 
         /// Observes the detail view / search commands and applies them imperatively.
         /// Each command re-registers only its own tracking (bumping one must not
@@ -749,6 +747,12 @@ extension MapView.Coordinator {
         }
         if let polyline = overlay as? MKPolyline {
             if let renderer = walkHighlightRenderer(for: polyline) {
+                return renderer
+            }
+            // Before every style below, which all describe the hiker's own
+            // route: a shared hike's line is not it and must not be drawn in
+            // the colour and width they chose for theirs.
+            if let renderer = communityRouteRenderer(for: polyline) {
                 return renderer
             }
             if recordingReviewOverlay === polyline {
