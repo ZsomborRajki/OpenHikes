@@ -78,6 +78,31 @@ struct CommunityTitleSearchTests {
         #expect(transport.recording.titleQueries == ["Pilis"])
     }
 
+    /// The deduplication that makes Return cheap must not also make a failed
+    /// search unrepeatable: nothing on screen reports the failure, so pressing
+    /// Return again is the whole of the retry a hiker has.
+    @Test("a failed title search can be submitted again")
+    func retryAfterFailure() async {
+        transport.listingsResult = .failure(.unreachable)
+        let browser = CommunityBrowser(transport: transport, blockList: .scratch())
+        browser.search(matching: "Pilis")
+        await settle(browser)
+        #expect(transport.recording.titleQueries == ["Pilis"])
+        #expect(browser.matchingListings.isEmpty)
+
+        transport.listingsResult = .success([.stub(id: "pilis")])
+        browser.search(matching: "Pilis")
+        await settle(browser)
+        #expect(transport.recording.titleQueries == ["Pilis", "Pilis"])
+        #expect(browser.matchingListings.map(\.id) == ["pilis"])
+
+        // And the answer that arrived is reused, so the retry has not simply
+        // turned the guard off.
+        browser.search(matching: "  PILIS ")
+        await settle(browser)
+        #expect(transport.recording.titleQueries == ["Pilis", "Pilis"])
+    }
+
     @Test("a disappearing field cancels its wait without a request")
     func disappearance() async {
         let browser = CommunityBrowser(transport: transport, blockList: .scratch())
