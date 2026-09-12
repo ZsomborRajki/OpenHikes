@@ -193,6 +193,38 @@ nonisolated enum CommunityPublisher {
         return .submitted
     }
 
+    /// How many of `hike`'s photographs this device could actually send.
+    ///
+    /// The number the share form quotes, asked of the disk rather than of the
+    /// rows. Photo *rows* mirror between a hiker's devices and photo *files*
+    /// do not — see ``HikePhotoStore/hasImage(for:)`` and *Settled decisions*
+    /// in the repository instructions — so a walk recorded on a phone has a
+    /// full strip of pictures on the iPad and nothing behind any of them.
+    /// ``prepare(_:photos:in:store:)`` drops exactly those, silently and
+    /// correctly, which is why the form has to ask the same question rather
+    /// than count the rows.
+    ///
+    /// Counted over ``selectedPhotos(of:)`` so the cap and the ordering are
+    /// the upload's, not a second opinion about them.
+    @MainActor
+    static func sendablePhotoCount(
+        of hike: Hike,
+        store: HikePhotoStore = .shared
+    ) async -> Int {
+        await reachablePhotoCount(of: selectedPhotos(of: hike), store: store)
+    }
+
+    /// `@concurrent` for the reason ``prepare(_:photos:in:store:)`` is, and
+    /// for one more: ``HikePhotoStore/hasImage(for:)`` asserts it is off the
+    /// main thread, because it touches the file system once per photograph.
+    @concurrent
+    private static func reachablePhotoCount(
+        of photos: [HikePhoto],
+        store: HikePhotoStore
+    ) async -> Int {
+        photos.filter { store.hasImage(for: $0) }.count
+    }
+
     /// Which of a hike's photographs go, and in what order.
     ///
     /// Anchored ones first, because a photograph with no place on the route is
