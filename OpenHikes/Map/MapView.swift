@@ -96,7 +96,7 @@ struct MapView: MapViewRepresentable, Equatable {
     /// instead.
     ///
     /// Spent on the layout guide the map's own controls hang off — see
-    /// ``applySidePanelInset(to:_:)`` — so the credit line and the camera pill
+    /// ``applySidePanelInset(_:)`` — so the credit line and the camera pill
     /// sit beside ``MapSidePanel`` rather than behind it, while the map itself
     /// stays full-bleed underneath. It is a guide rather than an inset on the
     /// map because `additionalSafeAreaInsets` belongs to `UIViewController`
@@ -576,7 +576,7 @@ struct MapView: MapViewRepresentable, Equatable {
     ///
     /// Directional anchors already mirror the inset in a right-to-left layout.
     /// Written only when it changes, since a constraint write requests layout.
-    private func applySidePanelInset(to mapView: MKMapView, _ coordinator: Coordinator) {
+    private func applySidePanelInset(_ coordinator: Coordinator) {
         #if canImport(UIKit)
         coordinator.sidePanelInset = sidePanelInset
         // These anchors are already directional: positive leading moves into
@@ -593,7 +593,7 @@ struct MapView: MapViewRepresentable, Equatable {
         // "Rebuilt"/"Centered"/"Restyled" marks to see how much of that is
         // real work vs. free no-ops.
         RenderSignpost.mark("MapUpdateCalled")
-        applySidePanelInset(to: mapView, coordinator)
+        applySidePanelInset(coordinator)
         applyTileSource(to: mapView, coordinator)
         updateRoute(mapView, coordinator)
         // Restyling the line is deliberately absent: `observeRouteStyle` applies

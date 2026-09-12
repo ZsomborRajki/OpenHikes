@@ -343,7 +343,7 @@ private extension MapSheetHikes {
     func suggestionsList(matchingHikes: [Hike]) -> some View {
         List {
             hikeSuggestionsSection(matchingHikes: matchingHikes)
-            communitySuggestionsSection(matchingHikes: matchingHikes)
+            communitySuggestionsSection()
             mapSuggestionsSection(matchingHikes: matchingHikes)
             mapSearchFallback(matchingHikes: matchingHikes)
             nearbySuggestionsSection

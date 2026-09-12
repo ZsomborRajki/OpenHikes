@@ -202,7 +202,6 @@ nonisolated extension TrailMatcher {
     struct MatchLeg {
         let transition: Transition?
         let isConfident: Bool
-        let isSparse: Bool
         /// Whether the ground this leg spans went unobserved — see
         /// ``TrailMatcher/isGap(from:to:)``. Independent of confidence: a gap
         /// the matcher bridged along a mapped trail is still a gap, and what

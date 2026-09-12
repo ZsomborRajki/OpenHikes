@@ -43,7 +43,7 @@ extension HikeRecorderTests {
 
         var delivered = 0
         for segment in enduranceSegments(of: walk.steps[...]) {
-            deliver(segment, to: hikeRecorder)
+            deliver(segment)
             delivered += segment.count
             // A real barrier rather than a settle: `drain()` submits an
             // operation behind everything already queued, so returning from it
@@ -86,7 +86,7 @@ extension HikeRecorderTests {
         let journal = try #require(hikeRecorder.journal)
         await hikeRecorder.start()
 
-        deliver(walk.steps[...], to: hikeRecorder)
+        deliver(walk.steps[...])
         let accepted = hikeRecorder.stats.pointCount
         #expect(
             accepted == walk.steps.count,
@@ -124,7 +124,7 @@ extension HikeRecorderTests {
         #expect(source.currentProfile == .precise)
 
         let firstStop = try #require(walk.stopRanges.first)
-        deliver(walk.steps[0..<firstStop.upperBound], to: hikeRecorder)
+        deliver(walk.steps[0..<firstStop.upperBound])
         #expect(
             source.currentProfile?.distanceFilter
                 == RecordingEnergyPolicy.stationaryDistanceFilter,
@@ -139,8 +139,7 @@ extension HikeRecorderTests {
         // reason for the wrong profile.
         let secondStop = try #require(walk.stopRanges.dropFirst().first)
         deliver(
-            walk.steps[firstStop.upperBound..<secondStop.lowerBound],
-            to: hikeRecorder
+            walk.steps[firstStop.upperBound..<secondStop.lowerBound]
         )
         #expect(
             source.currentProfile == .precise,
@@ -165,7 +164,7 @@ extension HikeRecorderTests {
         let thirds = enduranceSegments(of: walk.steps[...], count: 3)
         power.withLock { state in state = PowerState(isLowPowerModeEnabled: true) }
         monitor.refresh()
-        deliver(thirds[0], to: hikeRecorder)
+        deliver(thirds[0])
         await settleDelegateHop(until: "the conserving profile to be applied") {
             self.source.currentProfile?.desiredAccuracy
                 == RecordingEnergyPolicy.conservingAccuracy
@@ -175,11 +174,11 @@ extension HikeRecorderTests {
             state = PowerState(isLowPowerModeEnabled: true, thermalState: .serious)
         }
         monitor.refresh()
-        deliver(thirds[1], to: hikeRecorder)
+        deliver(thirds[1])
 
         power.withLock { state in state = PowerState() }
         monitor.refresh()
-        deliver(thirds[2], to: hikeRecorder)
+        deliver(thirds[2])
         await settleDelegateHop(until: "the precise profile to be restored") {
             self.source.currentProfile?.desiredAccuracy == kCLLocationAccuracyBest
         }
@@ -210,10 +209,7 @@ extension HikeRecorderTests {
     /// Delivers synchronously and without awaiting anything: `deliver` runs the
     /// delegate inline through `onMainActor`, so the recorder has finished with
     /// each fix before the next one is built.
-    private func deliver(
-        _ steps: ArraySlice<EnduranceStep>,
-        to hikeRecorder: HikeRecorder
-    ) {
+    private func deliver(_ steps: ArraySlice<EnduranceStep>) {
         for step in steps {
             clock.advance(by: step.interval)
             source.deliver(step.location(at: clock.now))

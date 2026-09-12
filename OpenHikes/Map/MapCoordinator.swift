@@ -123,7 +123,7 @@ extension MapView {
         // — `additionalSafeAreaInsets` belongs to `UIViewController`, and this
         // map is a `UIView` — so the two constants below are how the panel's
         // width reaches the tracking button, the camera pill and the credit
-        // line. See `MapView.applySidePanelInset(to:_:)`.
+        // line. See `MapView.applySidePanelInset(_:)`.
 
         var controlsLeadingConstraint: NSLayoutConstraint?
 
@@ -153,6 +153,8 @@ extension MapView {
         var showsWeatherBadge = false
 
         #if os(iOS)
+        // periphery:ignore - assigned and never read on purpose; dropping the
+        // token is what unregisters the callback.
         /// Retains the Dynamic Type registration for the offset above; a
         /// dropped token unregisters it.
         var attributionTraitRegistration: (any UITraitChangeRegistration)?

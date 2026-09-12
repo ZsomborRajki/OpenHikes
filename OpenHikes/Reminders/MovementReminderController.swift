@@ -81,7 +81,6 @@ final class MovementReminderController {
 
     private let notifier: any MovementReminderNotifying
     private let defaults: UserDefaults
-    private let clock: @Sendable () -> Date
 
     /// Where `UIApplication.DidBecomeActiveMessage` is observed. A seam and
     /// nothing more: the app never passes anything but `.default`, and it
@@ -150,12 +149,10 @@ final class MovementReminderController {
     init(
         notifier: any MovementReminderNotifying,
         defaults: UserDefaults = .standard,
-        clock: @escaping @Sendable () -> Date = { Date() },
         lifecycleCenter: NotificationCenter = .default
     ) {
         self.notifier = notifier
         self.defaults = defaults
-        self.clock = clock
         self.lifecycleCenter = lifecycleCenter
         observePreferences()
     }

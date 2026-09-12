@@ -46,6 +46,11 @@ import Synchronization
 import Testing
 import UIKit
 
+// periphery:ignore:parameters renderer - unused by design, and the declaration
+// itself is referenced: `renderer` is the `isolated` parameter that puts this
+// function on the renderer's executor, which is the whole measurement. A plain
+// `periphery:ignore` here is reported as superfluous, since it ignores the
+// function rather than the parameter.
 /// Runs on `renderer`'s own executor rather than the caller's, which is what
 /// makes it a measurement of the renderer's isolation instead of a
 /// restatement of its declaration.
