@@ -63,6 +63,10 @@ final class StubCommunityTransport: CommunityTransporting, @unchecked Sendable {
     /// Held open so a suite can watch two requests overlap — see
     /// `CommunityBrowserTests`.
     var beforeListingsReturn: (@Sendable () async -> Void)?
+    /// The same for a submission, and handed the draft: the staging directory
+    /// exists only while the upload is in flight, so a suite that wants to see
+    /// what an upload puts on disk has to look from in here.
+    var beforeSubmissionReturns: (@Sendable (CommunitySubmissionDraft) async -> Void)?
     /// The same, for the outline request — which lands *after* the rows it
     /// belongs to and so is the one a suite has to be able to hold.
     var beforeOutlinesReturn: (@Sendable () async -> Void)?
@@ -74,6 +78,7 @@ final class StubCommunityTransport: CommunityTransporting, @unchecked Sendable {
     @concurrent
     func submit(_ draft: CommunitySubmissionDraft) async throws -> String {
         state.withLock { $0.submissions.append(draft) }
+        await beforeSubmissionReturns?(draft)
         return try submissionResult.get()
     }
 
@@ -231,5 +236,29 @@ final class StubAreaNames: CommunityAreaNaming {
         await Task.yield()
         asked.append(area)
         return answer
+    }
+}
+
+/// A one-shot barrier a stub can block on, so a suite can hold one request
+/// open while it starts another.
+///
+/// An actor rather than a semaphore because the thing being held is an `await`
+/// inside a `Task`, and blocking a thread there would deadlock the executor
+/// rather than delay the call.
+actor AsyncGate {
+    private var isOpen = false
+    private var waiters: [CheckedContinuation<Void, Never>] = []
+
+    func wait() async {
+        guard !isOpen else { return }
+        await withCheckedContinuation { continuation in
+            waiters.append(continuation)
+        }
+    }
+
+    func open() {
+        isOpen = true
+        for waiter in waiters { waiter.resume() }
+        waiters.removeAll()
     }
 }

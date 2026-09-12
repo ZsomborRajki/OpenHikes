@@ -10,9 +10,10 @@
 //  fails. An upload is the longest piece of work in this app that a hiker
 //  waits on — a route, a dozen re-encoded photographs, and a round trip — and
 //  it can fail in the middle of any of it. So the temporary directory holding
-//  the re-encoded copies is created here, owned here, and deleted here on
-//  every exit, and the only durable trace a submission leaves on the device is
-//  written *after* CloudKit has accepted it.
+//  everything the attempt writes to disk — the re-encoded copies and the JSON
+//  the transport hands CloudKit as assets — is created here, owned here, and
+//  deleted here on every exit, and the only durable trace a submission leaves
+//  on the device is written *after* CloudKit has accepted it.
 //
 //  That ordering is the whole of the contract. ``Hike/communitySubmissionID``
 //  is what the share button reads to say a hike has already been sent, and
@@ -121,9 +122,16 @@ nonisolated enum CommunityPublisher {
         )
         let photos = selectedPhotos(of: hike)
 
+        // One directory per *attempt*, not per hike. Two shares can be in
+        // flight at once — a re-share started while the first upload is still
+        // running, which the form deliberately allows — and a name that only
+        // carried the hike would stage both into one directory, under the same
+        // file names. The second writer would then decide what the first one
+        // uploaded, since an atomic write makes a file whole rather than
+        // private.
         let workingDirectory = FileManager.default.temporaryDirectory
             .appendingPathComponent(
-                "CommunityShare-\(details.hikeID.uuidString)",
+                "CommunityShare-\(details.hikeID.uuidString)-\(UUID().uuidString)",
                 isDirectory: true
             )
         defer { discard(workingDirectory) }
@@ -250,11 +258,12 @@ nonisolated enum CommunityPublisher {
             distanceMeters: details.distanceMeters,
             route: details.route,
             photoPins: pins,
-            photoFileURLs: urls
+            photoFileURLs: urls,
+            stagingDirectory: directory
         )
     }
 
-    /// Removes the re-encoded copies, whatever happened.
+    /// Removes everything the attempt staged, whatever happened.
     ///
     /// Fire-and-forget and off the main actor, in the shape the photo and tile
     /// deletions already use: what is left behind on a kill is wasted space in

@@ -63,10 +63,24 @@ nonisolated struct CommunitySubmissionDraft: Sendable {
     var distanceMeters: Double
     var route: [RouteCoordinate]
     var photoPins: [CommunityPhotoPin]
-    /// Re-encoded copies, in ``photoPins`` order. Owned by the caller, which
-    /// deletes the directory holding them once the upload has finished or
-    /// failed — see ``CommunityPublisher``.
+    /// Re-encoded copies, in ``photoPins`` order, inside ``stagingDirectory``.
     var photoFileURLs: [URL]
+    /// Where this attempt's asset files go: the re-encoded photographs above,
+    /// and whatever else the transport has to put on disk to hand over.
+    ///
+    /// Named on the draft rather than inferred from ``photoFileURLs``, which
+    /// is what it used to be. A hike with no photographs — or one whose
+    /// pictures all failed to encode — left nothing to infer from, so the
+    /// route JSON was written to the process-wide temporary directory
+    /// instead: a full copy of the walk outside the directory its owner
+    /// deletes, kept on the device after every success and every failure, and
+    /// written to one fixed path that two submissions in flight at once both
+    /// pointed at. An atomic write makes each of those two files whole; it
+    /// does not make them different files.
+    ///
+    /// Owned by the caller, which creates it, gives every attempt its own,
+    /// and deletes it on every exit — see ``CommunityPublisher``.
+    var stagingDirectory: URL
 
     /// Where the route begins, which is what the listing is found by.
     ///
