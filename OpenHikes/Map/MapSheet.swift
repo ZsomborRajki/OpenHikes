@@ -103,10 +103,12 @@ struct MapSheet: View {
                     completer: completer,
                     recorder: hikeRecorder,
                     walkSession: appModel.walkSession,
+                    community: appModel.community,
                     selectedHikeID: selectedHike?.id,
                     onOpen: open,
                     onSelectResult: select,
                     onSelectCompletion: select,
+                    onSelectListing: select,
                     onDelete: delete,
                     onRecord: openRecording,
                     onImport: presentImporter
@@ -202,7 +204,15 @@ struct MapSheet: View {
                 .autocorrectionDisabled()
                 .submitLabel(.search)
                 .onSubmit(performSearch)
-                .onChange(of: searchText) { _, value in completer.update(query: value) }
+                .onChange(of: searchText) { _, value in
+                    completer.update(query: value)
+                    // The same fragment, asked of the community. Gated by its
+                    // own trimming rather than the completer's policy: the two
+                    // answer different questions and a place suggestion the
+                    // walker has already committed to is still a trail name
+                    // worth looking up.
+                    appModel.community.search(matching: value)
+                }
                 #if os(iOS)
                 .textInputAutocapitalization(.words)
                 #endif
@@ -269,11 +279,25 @@ struct MapSheet: View {
                 walkSession: appModel.walkSession,
                 photoCapture: photoCapture,
                 photoPins: photoPins,
+                communityTransport: appModel.communityTransport,
                 onOpenPhoto: { photo in presentation.path.append(.photo(hike, photo.id)) },
                 onOpenWalk: { walk in presentation.path.append(.walk(walk)) },
                 onZoomToRoute: { withAnimation { presentation.detent = .medium } },
                 interaction: presentation.hikeInteraction(for: hike)
             )
+        case let .communityHike(listing):
+            if let transport = appModel.communityTransport {
+                CommunityHikeView(
+                    listing: listing,
+                    transport: transport,
+                    // `open` assigns the whole path rather than appending to
+                    // it, so the preview is replaced rather than left
+                    // underneath — which is what should happen: backing out of
+                    // a hike that is now in the library, into a screen
+                    // offering to add it, describes a decision already made.
+                    onImport: open
+                )
+            }
         case .recording:
             RecordingView(
                 recorder: appModel.hikeRecorder,
@@ -364,6 +388,17 @@ private func select(_ hike: Hike) {
     searchFocused = false
     completer.clear()
     open(hike)
+}
+
+/// Pushes a published hike's preview, so it can be looked at before it is
+/// imported.
+///
+/// The search field is left alone, unlike a tapped hike or place: this push is
+/// a detour rather than an answer, and a walker who backs out of a preview
+/// should find the query they typed still there.
+private func select(_ listing: CommunityListing) {
+    searchFocused = false
+    presentation.path.append(.communityHike(listing))
 }
 
 /// Resolves a tapped suggestion to a place and zooms the map to it.

@@ -7,6 +7,12 @@ import Foundation
 import SwiftData
 
 enum SheetRoute: Hashable {
+    /// A published hike, before it is imported. Carries the listing rather
+    /// than a `Hike` because there is no `Hike` yet — that is the whole
+    /// question the screen is asking — and the listing is a `Sendable` value
+    /// with no model context behind it, so nothing here can be invalidated by
+    /// a store the way a pushed `Hike` can.
+    case communityHike(CommunityListing)
     case hike(Hike)
     /// A hike's gallery, opened at one photo. Carries the hike rather than the
     /// photo so the viewer can page through the rest of them, and so a photo
@@ -40,7 +46,10 @@ enum SheetRoute: Hashable {
         case let .hike(hike): hike.id == hikeID
         case let .photo(hike, _): hike.id == hikeID
         case let .walk(walk): walk.hikeID == hikeID
-        case .recording: false
+        // Neither shows a `Hike`, so neither is popped by one being deleted.
+        // A community preview is about a hike that is not in the library at
+        // all, which is exactly the state a deletion puts one back into.
+        case .communityHike, .recording: false
         }
     }
 
@@ -88,6 +97,7 @@ enum SheetRoute: Hashable {
         case let (.photo(left, leftPhoto), .photo(right, rightPhoto)): left == right && leftPhoto == rightPhoto
         case (.recording, .recording): true
         case let (.walk(left), .walk(right)): left.persistentModelID == right.persistentModelID
+        case let (.communityHike(left), .communityHike(right)): left.id == right.id
         default: false
         }
     }
@@ -106,6 +116,12 @@ enum SheetRoute: Hashable {
         case let .walk(walk):
             hasher.combine(3)
             hasher.combine(walk.persistentModelID)
+        case let .communityHike(listing):
+            hasher.combine(4)
+            // The listing's record name alone, matching `==` above: the rest
+            // of a listing is a snapshot of a record a reviewer can edit, and
+            // two pushes of the same hike a minute apart are the same screen.
+            hasher.combine(listing.id)
         }
     }
 }

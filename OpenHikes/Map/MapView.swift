@@ -81,6 +81,16 @@ struct MapView: MapViewRepresentable, Equatable {
     /// annotations rather than this view — see ``PhotoMapPinController``.
     var photoPins: PhotoMapPinController
 
+    /// Told where the map came to rest, so community results can follow the
+    /// map without any SwiftUI body reading the region.
+    ///
+    /// Handed over rather than observed, and in this direction only: the
+    /// browser never tells the map anything. A region reaches it on every
+    /// settle and is dropped by ``CommunityQueryPolicy`` unless it is worth a
+    /// request — see ``CommunityBrowser/regionDidSettle(_:)``, which is a
+    /// stored property write and a comparison while browsing is off.
+    var community: CommunityBrowser
+
     /// How far the landscape side panel reaches in from the leading edge, or
     /// zero in portrait where there is no panel and the sheet is over the map
     /// instead.
@@ -132,6 +142,7 @@ struct MapView: MapViewRepresentable, Equatable {
             && lhs.locationManager === rhs.locationManager
             && lhs.photoCapture === rhs.photoCapture
             && lhs.photoPins === rhs.photoPins
+            && lhs.community === rhs.community
             && lhs.showsWeatherBadge == rhs.showsWeatherBadge
             && lhs.sidePanelInset == rhs.sidePanelInset
     }
@@ -164,6 +175,7 @@ struct MapView: MapViewRepresentable, Equatable {
         coordinator.observeMapController(mapController, on: mapView)
         coordinator.observeRouteStyle(routeStyle, on: mapView)
         coordinator.observePhotoPins(photoPins, on: mapView)
+        coordinator.community = community
 
         // Raster tiles from the selected provider, replacing Apple's base map.
         applyTileSource(to: mapView, coordinator)

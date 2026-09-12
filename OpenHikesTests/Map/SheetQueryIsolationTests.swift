@@ -186,10 +186,12 @@ struct SheetQueryIsolationTests {
             completer: SearchCompleter(),
             recorder: HikeRecorder(container: container, automaticallyRecovers: false),
             walkSession: TrailWalkSession(context: ModelContext(container)),
+            community: CommunityBrowser(transport: nil),
             selectedHikeID: nil,
             onOpen: { _ in /* unused */ },
             onSelectResult: { _ in /* unused */ },
             onSelectCompletion: { _ in /* unused */ },
+            onSelectListing: { _ in /* unused */ },
             onDelete: { _, _ in /* unused */ },
             onRecord: { /* unused */ },
             onImport: { /* unused */ }

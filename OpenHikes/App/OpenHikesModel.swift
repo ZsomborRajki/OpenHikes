@@ -63,6 +63,19 @@ final class OpenHikesModel {
     /// outlive Settings: ``MapEntitlement`` is read on every provider
     /// resolution, including from off-main auto-save.
     let entitlement: MapEntitlementStore
+    /// The published hikes the sheet is showing, and the thresholds that
+    /// decide when to ask for more — see ``CommunityBrowser``.
+    ///
+    /// Owned here rather than by the sheet because two screens feed it and
+    /// neither owns the other: the map reports a settled region to it, and the
+    /// sheet draws its results. A `@State` in either would be rebuilt by the
+    /// other's navigation.
+    let community: CommunityBrowser
+    /// How a hike is shared and how a shared one is opened, or `nil` for a
+    /// launch that must not reach CloudKit — see
+    /// ``makeCommunityTransport()``. Held so the share sheet and the preview
+    /// screen use the same one the browser does.
+    let communityTransport: (any CommunityTransporting)?
     /// The one reminder controller the app has, or `nil` when it must not have
     /// one — see ``makeMovementReminderController(defaults:)``. Shared with
     /// ``hikeRecorder`` and ``walkSession``, which is what makes the
@@ -97,6 +110,7 @@ final class OpenHikesModel {
         trailGraphProvider: (any TrailGraphProviding)? = nil,
         movementReminders: MovementReminderController? = nil,
         walkSession: TrailWalkSession? = nil,
+        communityTransport: (any CommunityTransporting)? = nil,
         defaults: UserDefaults = .standard,
         startupIssue: StorageStartupIssue? = nil,
         isSyncingThisLaunch: Bool = false
@@ -114,6 +128,8 @@ final class OpenHikesModel {
             reminders: movementReminders,
             activeRecordingHikeID: { [weak hikeRecorder] in hikeRecorder?.currentHike?.id }
         )
+        self.communityTransport = communityTransport
+        community = CommunityBrowser(transport: communityTransport)
         self.locationManager = locationManager
         self.weatherManager = weatherManager
         self.significantLocations = significantLocations

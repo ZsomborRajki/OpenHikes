@@ -290,6 +290,7 @@ struct OpenHikesView: View {
             mapController: mapController,
             photoCapture: photoCapture,
             photoPins: photoPins,
+            community: appModel.community,
             // Keeps the credit line and the camera pill beside the landscape
             // panel instead of behind it.
             sidePanelInset: usesSidePanel ? MapSidePanelLayout.mapInset : 0,
@@ -787,6 +788,15 @@ struct ImportSelectionGate {
         case root
         case recording
         case hike(UUID)
+        /// A published hike's preview, keyed by its listing.
+        ///
+        /// Its own case rather than folded into ``root``, because an import
+        /// that finishes while one is open must not take the map: the walker
+        /// is looking at somebody else's trail and deciding whether to keep
+        /// it, and a GPX arriving from Files is a different hike entirely.
+        /// Folding it into `.root` would make the gate say the screen never
+        /// changed.
+        case communityHike(String)
     }
 
     private(set) var revision: UInt64 = 0
@@ -834,6 +844,7 @@ struct ImportSelectionGate {
         // A walk's summary is its hike's screen two pushes in, on the same
         // terms as the photo viewer.
         case .some(.walk(let walk)): .hike(walk.hikeID)
+        case .some(.communityHike(let listing)): .communityHike(listing.id)
         }
     }
 }
