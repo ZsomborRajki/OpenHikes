@@ -39,7 +39,7 @@
 //  list is headed with a place rather than with the word *Nearby*.
 //
 //  The one request the hiker does not have to confirm is the first: tapping
-//  *Find shared hikes near here* is itself the confirmation, and asking twice
+//  *Find community hikes near here* is itself the confirmation, and asking twice
 //  for one intention would be a worse bargain than the automatic re-query
 //  ever was.
 //
@@ -111,7 +111,7 @@ final class CommunityBrowser {
     /// drops the cursor.
     private static let resultLimit = 25
 
-    /// What the *Shared Hikes* section draws: the map's own answer.
+    /// What the *Community Hikes* section draws: the map's own answer.
     ///
     /// Kept apart from ``matchingListings`` rather than sharing one array with
     /// it, and the separation is the whole of a fix. Two different questions
@@ -119,7 +119,7 @@ final class CommunityBrowser {
     /// they are drawn in two different places, and while one array held both
     /// answers each could overwrite the other: a pan past the policy's
     /// threshold replaced a typed search's results under a heading that still
-    /// said *Shared Hikes*, and clearing the field left the title matches
+    /// said *Community Hikes*, and clearing the field left the title matches
     /// standing wherever the zoom ceiling refused the replacement query. An
     /// answer now outlives the other question entirely.
     ///
@@ -360,7 +360,7 @@ final class CommunityBrowser {
     ///
     /// The read-time filter hides a blocked author's rows without asking
     /// anything, which is what should happen — but a page that was *all* that
-    /// author leaves the hiker looking at *No shared hikes here* for an area
+    /// author leaves the hiker looking at *No community hikes here* for an area
     /// that may have plenty. Blocking one person must not empty the map.
     ///
     /// Deliberately narrow. It asks again only when the block took the last

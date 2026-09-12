@@ -71,7 +71,7 @@ nonisolated enum CommunityFailure: LocalizedError, Equatable, Sendable {
     var recoverySuggestion: String? {
         switch self {
         case .notSignedIn:
-            "Sign in to iCloud in Settings, then try again. Browsing shared hikes works without one."
+            "Sign in to iCloud in Settings, then try again. Browsing community hikes works without one."
         case .unreachable:
             "Check your connection and try again."
         case .nothingToShare:

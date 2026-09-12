@@ -281,7 +281,7 @@ nonisolated struct CloudKitCommunityTransport: CommunityTransporting {
                 for: CKRecord.ID(recordName: listing.submissionID)
             )
         } catch {
-            throw Self.failure(from: error, while: "opening a shared hike")
+            throw Self.failure(from: error, while: "opening a community hike")
         }
 
         try FileManager.default.createDirectory(
