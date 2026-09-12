@@ -77,16 +77,33 @@ nonisolated enum CommunityPublisher {
     ///
     /// - Parameter authorName: What to publish it under. The hiker's own
     ///   words — see ``SettingsKey/communityAuthorName``.
+    /// - Parameter entitlement: Whether this device may publish at all.
+    ///   Checked here rather than only at the button because this is the one
+    ///   funnel every publish goes through, and a gate that lives in a view is
+    ///   a gate the next caller does not know about. Passed in rather than read
+    ///   from ``MapEntitlement/current`` so a suite decides it outright, the
+    ///   way every other `entitlement:` parameter in this app is.
     /// - Parameter save: The commit seam, the same shape ``HikeImport`` and
     ///   ``HikePhotoImport`` take theirs in, so a suite can refuse it.
+    ///
+    /// What this check is and is not worth saying plainly: it is a client-side
+    /// gate, so it holds for the app and not against a modified copy of it.
+    /// The thing that actually keeps an unreviewed route off other people's
+    /// screens is the schema — see ``CommunitySchema`` — and no payment state
+    /// changes that.
     @MainActor
     static func share(
         _ hike: Hike,
         authorName: String,
+        entitlement: MapEntitlementState,
         transport: any CommunityTransporting,
         store: HikePhotoStore = .shared,
         save: (ModelContext) throws -> Void = { try $0.save() }
     ) async -> CommunityShareOutcome {
+        // Strictly `.entitled`: the unresolved window is not a yes. See
+        // ``MapEntitlementState/publishTap`` for why this one is stricter than
+        // the gate on drawing a paid map.
+        guard entitlement == .entitled else { return .refused(.requiresSubscription) }
         guard hike.pointCount >= 2 else { return .refused(.nothingToShare) }
 
         // Everything read off the `@Model` happens here, on the main actor and

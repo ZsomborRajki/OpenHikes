@@ -32,7 +32,12 @@ struct CommunityShareDisclosureTests {
         let context = try Fixture.modelContext()
         let hike = Fixture.hike(in: context) { $0.trackDescription = description }
         let transport = StubCommunityTransport()
-        _ = await CommunityPublisher.share(hike, authorName: "Anna", transport: transport)
+        _ = await CommunityPublisher.share(
+            hike,
+            authorName: "Anna",
+            entitlement: .entitled,
+            transport: transport
+        )
         return try #require(transport.recording.submissions.first)
     }
 

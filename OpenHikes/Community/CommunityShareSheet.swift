@@ -31,6 +31,12 @@ struct CommunityShareSheet: View {
 
     let hike: Hike
     let transport: any CommunityTransporting
+    /// The Pro unlock, observed rather than snapshotted, so a subscription
+    /// that lapses while this form is open is refused by the Share button
+    /// rather than by the upload. ``HikeDetailView`` holds it for the same
+    /// reason — a snapshot that cannot invalidate a body is a snapshot that
+    /// lets a lapsed subscription start work against a paid resource.
+    let entitlement: MapEntitlementStore
 
     @Environment(\.dismiss)
     private var dismiss
@@ -210,7 +216,12 @@ private extension CommunityShareSheet {
             } else if phase != .sent {
                 Button("Share") { share() }
                     .accessibilityIdentifier("community-share-confirm")
-                    .disabled(hike.pointCount < 2)
+                    // The second half is the lapse case. This form is only
+                    // reachable while the subscription is current, but it can
+                    // outlive one — a renewal that fails while it is open — and
+                    // a live button would send the hiker through an upload that
+                    // ``CommunityPublisher/share`` is going to refuse anyway.
+                    .disabled(hike.pointCount < 2 || entitlement.state.publishTap != .allow)
             }
         }
     }
@@ -225,6 +236,7 @@ private extension CommunityShareSheet {
             let outcome = await CommunityPublisher.share(
                 hike,
                 authorName: trimmedAuthorName,
+                entitlement: entitlement.state,
                 transport: transport
             )
             switch outcome {

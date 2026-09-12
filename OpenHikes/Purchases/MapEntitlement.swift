@@ -55,14 +55,35 @@ nonisolated enum MapEntitlementState: Sendable, Equatable {
     /// arrives leaves a paid id on every device of a user who may never have
     /// been entitled to it.
     ///
-    /// Three answers rather than a `Bool` because "not selectable" covers two
+    /// Three answers rather than a `Bool` because "not allowed" covers two
     /// different rows: one that has not been bought, where the tap has
     /// somewhere useful to go, and one whose entitlement has not resolved,
     /// where it has not.
-    func tapAction(for provider: TileProvider) -> MapProviderTap {
-        guard provider.requiresPaidAccess else { return .select }
+    func tapAction(for provider: TileProvider) -> PaidFeatureTap {
+        guard provider.requiresPaidAccess else { return .allow }
+        return paidTap
+    }
+
+    /// What a tap on the community share button should do.
+    ///
+    /// The same three answers as a paid provider row, from the same property,
+    /// because it is the same rule and not a second one that happens to agree:
+    /// a lapsed subscriber and a subscriber StoreKit has not answered for yet
+    /// are different people to a screen that has to decide what a tap does.
+    ///
+    /// It takes the **strict** reading of ``unknown`` for a reason of its own,
+    /// and a heavier one than the provider row's. Selecting a map writes an id
+    /// that can be written again; publishing hands a route, a set of
+    /// photographs and a name to a public database that this app has no method
+    /// to delete from — see ``CommunityTransporting``, which deliberately has
+    /// no way to withdraw a submission. An action that cannot be taken back
+    /// must not be taken on an entitlement nobody has confirmed.
+    var publishTap: PaidFeatureTap { paidTap }
+
+    /// The three-way answer for anything behind the Pro unlock, written once.
+    private var paidTap: PaidFeatureTap {
         switch self {
-        case .entitled: return .select
+        case .entitled: return .allow
         case .notEntitled: return .unlock
         case .unknown: return .wait
         }
@@ -74,18 +95,25 @@ nonisolated enum MapEntitlementState: Sendable, Equatable {
     var isResolved: Bool { self != .unknown }
 }
 
-/// What tapping a provider's row in Settings should do.
+/// What tapping something behind the Pro unlock should do.
 ///
-/// Switched over exhaustively in ``MapEntitlementState/tapAction(for:)``, so a
-/// fourth entitlement state cannot be added without deciding what a tap on a
-/// paid row does while the app is in it.
-nonisolated enum MapProviderTap: Equatable {
-    /// Persist the tapped provider as the selection.
-    case select
-    /// Open the paywall: the source is real and available, just not bought.
+/// Switched over exhaustively in ``MapEntitlementState/tapAction(for:)`` and
+/// ``MapEntitlementState/publishTap``, so a fourth entitlement state cannot be
+/// added without deciding what a tap on a paid control does while the app is
+/// in it.
+///
+/// Not named for the map, though the map was its first caller: two features
+/// are behind this subscription now — the commercial tile sources and
+/// publishing a hike to the community — and one enum with one mapping is what
+/// stops the second quietly disagreeing with the first about what the
+/// unresolved window means.
+nonisolated enum PaidFeatureTap: Equatable {
+    /// Do the thing: persist the tapped provider, or open the share form.
+    case allow
+    /// Open the paywall: the feature is real and available, just not bought.
     case unlock
-    /// Nothing, yet. StoreKit has not answered, so the row is disabled until it
-    /// does rather than swallowing the tap and looking broken.
+    /// Nothing, yet. StoreKit has not answered, so the control is disabled
+    /// until it does rather than swallowing the tap and looking broken.
     case wait
 }
 

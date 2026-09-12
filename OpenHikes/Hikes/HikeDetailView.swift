@@ -88,6 +88,11 @@ struct HikeDetailView: View {
     /// repository instructions on why a `.sheet` beside that presentation is
     /// never presented at all.
     @State var isSharingToCommunity = false
+    /// Whether the paywall is up over this screen, raised by the share button
+    /// for a hiker whose subscription has lapsed or never started. Presented
+    /// here rather than routed to Settings for the same reason the form above
+    /// is: the modal has to live inside the presentation the tap came from.
+    @State var isShowingCommunityPaywall = false
     // swiftlint:enable private_swiftui_state
     /// Owned by the navigation session so changing presentation hosts keeps
     /// the selected section and an unfinished rename. Read only by this screen.
