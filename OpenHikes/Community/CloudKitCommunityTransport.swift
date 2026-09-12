@@ -73,17 +73,12 @@ nonisolated struct CloudKitCommunityTransport: CommunityTransporting {
 
         // The two JSON payloads are written to disk before they are attached,
         // because a `CKAsset` is a file and nothing else. They go beside the
-        // re-encoded photographs, in the directory the caller already owns and
-        // already deletes — so a failed upload leaves nothing behind here
+        // re-encoded photographs, in the staging directory the draft names —
+        // which the caller created for this attempt alone and deletes however
+        // the attempt ends — so a failed upload leaves nothing behind here
         // either.
-        let workingDirectory = draft.photoFileURLs.first?.deletingLastPathComponent()
-            ?? FileManager.default.temporaryDirectory
-        let routeURL = try Self.writeJSON(
-            CommunityRouteDocument(route: draft.route),
-            named: "route.json",
-            in: workingDirectory
-        )
-        record[CommunitySchema.Submission.route] = CKAsset(fileURL: routeURL)
+        let assets = try Self.stage(draft)
+        record[CommunitySchema.Submission.route] = CKAsset(fileURL: assets.route)
         // Derived here rather than carried on the draft, and that is not a
         // detail: the disclosure the share sheet makes is held against
         // ``CommunitySubmissionDraft``'s fields, and this is not a new thing
@@ -93,13 +88,8 @@ nonisolated struct CloudKitCommunityTransport: CommunityTransporting {
         // same fact and make the promise read as though it had grown.
         record[CommunitySchema.Submission.routeOutline] = CommunityRouteOutline.encoded(draft.route)
 
-        if !draft.photoFileURLs.isEmpty {
-            let pinsURL = try Self.writeJSON(
-                draft.photoPins,
-                named: "photoPins.json",
-                in: workingDirectory
-            )
-            record[CommunitySchema.Submission.photoPins] = CKAsset(fileURL: pinsURL)
+        if let photoPins = assets.photoPins {
+            record[CommunitySchema.Submission.photoPins] = CKAsset(fileURL: photoPins)
             record[CommunitySchema.Submission.photos] = draft.photoFileURLs.map(CKAsset.init(fileURL:))
         }
 
@@ -457,6 +447,46 @@ nonisolated private extension CommunityListing {
         publishedAt = record[CommunitySchema.Listing.publishedAt] as? Date
             ?? record.creationDate
             ?? .distantPast
+    }
+}
+
+// MARK: - Staging
+
+/// Where a submission's assets are written, and what they are.
+///
+/// Internal rather than private, and a function rather than four lines inside
+/// ``CloudKitCommunityTransport/submit(_:)``, because it is the half of an
+/// upload a suite can hold to account: `submit` needs an Apple Account and the
+/// public database, and there is no sandbox for the second — see *A suite must
+/// never reach the real transport* in the instructions. `CommunityStagingTests`
+/// asserts against this that every file a submission puts on disk lands inside
+/// the directory the draft names, which is the directory the publisher deletes.
+nonisolated extension CloudKitCommunityTransport {
+    /// A submission's JSON assets, on disk and ready to attach.
+    struct StagedAssets: Sendable {
+        /// The full route, with its elevations and timestamps.
+        var route: URL
+        /// The pins — absent when no photograph is going, because the pins and
+        /// the images describe each other by index and an empty list beside no
+        /// assets says nothing the absent field does not.
+        var photoPins: URL?
+    }
+
+    /// Writes `draft`'s JSON payloads into the staging directory it names,
+    /// creating that directory if the caller has not already.
+    static func stage(_ draft: CommunitySubmissionDraft) throws -> StagedAssets {
+        let route = try writeJSON(
+            CommunityRouteDocument(route: draft.route),
+            named: "route.json",
+            in: draft.stagingDirectory
+        )
+        guard !draft.photoFileURLs.isEmpty else { return StagedAssets(route: route) }
+        let photoPins = try writeJSON(
+            draft.photoPins,
+            named: "photoPins.json",
+            in: draft.stagingDirectory
+        )
+        return StagedAssets(route: route, photoPins: photoPins)
     }
 }
 
