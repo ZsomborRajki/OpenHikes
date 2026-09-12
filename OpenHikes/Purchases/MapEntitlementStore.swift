@@ -39,11 +39,11 @@ final class MapEntitlementStore {
     /// same string appears in `OpenHikes.storekit` and in App Store Connect,
     /// and all three have to agree.
     ///
-    /// The `.yearly` suffix is deliberate even though there is only one plan.
-    /// Adding a monthly option later means a second product in the same
+    /// The `.monthly` suffix is deliberate even though there is only one plan.
+    /// Adding a yearly option later means a second product in the same
     /// subscription group, and a bare `.maps` would by then be the wrong name
     /// for one of them — while being the one string that cannot be renamed.
-    static let productID = "tappium.com.OpenHikes.pro.maps.yearly"
+    static let productID = "tappium.com.OpenHikes.pro.maps.monthly"
 
     enum PurchaseOutcome: Equatable {
         case purchased

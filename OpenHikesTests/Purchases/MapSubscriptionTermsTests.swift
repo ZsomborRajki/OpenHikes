@@ -12,15 +12,15 @@ import Testing
 
 @Suite("Pro subscription")
 struct MapSubscriptionTermsTests {
-    private static let yearlyWithTrial = MapSubscriptionTerms(
-        price: "$19.99",
-        period: "year",
+    private static let monthlyWithTrial = MapSubscriptionTerms(
+        price: "$4.99",
+        period: "month",
         freeTrial: "1 week"
     )
 
-    private static let yearlyWithoutTrial = MapSubscriptionTerms(
-        price: "$19.99",
-        period: "year",
+    private static let monthlyWithoutTrial = MapSubscriptionTerms(
+        price: "$4.99",
+        period: "month",
         freeTrial: nil
     )
 
@@ -29,23 +29,23 @@ struct MapSubscriptionTermsTests {
     /// A trial the button doesn't mention is a trial nobody starts.
     @Test("an eligible account is offered the trial, not the price")
     func callToActionLeadsWithTheTrial() {
-        #expect(Self.yearlyWithTrial.callToAction == "Start 1 week Free")
-        #expect(Self.yearlyWithoutTrial.callToAction == "Subscribe for $19.99/year")
+        #expect(Self.monthlyWithTrial.callToAction == "Start 1 week Free")
+        #expect(Self.monthlyWithoutTrial.callToAction == "Subscribe for $4.99/month")
     }
 
     /// App Review 3.1.2(a) wants the price, the period and the renewal on the
     /// screen itself. A trial additionally has to say what it turns into —
-    /// "free" without "then $19.99" is the phrasing that gets rejected.
+    /// "free" without "then $4.99" is the phrasing that gets rejected.
     @Test("the disclosure states price, period, renewal and what the trial becomes")
     func disclosureIsComplete() {
-        let withTrial = Self.yearlyWithTrial.disclosure
+        let withTrial = Self.monthlyWithTrial.disclosure
         #expect(withTrial.contains("Free for 1 week"))
-        #expect(withTrial.contains("then $19.99 per year"))
+        #expect(withTrial.contains("then $4.99 per month"))
         #expect(withTrial.contains("Renews automatically"))
         #expect(withTrial.contains("Cancel any time"))
 
-        let withoutTrial = Self.yearlyWithoutTrial.disclosure
-        #expect(withoutTrial.contains("Renews automatically at $19.99 per year"))
+        let withoutTrial = Self.monthlyWithoutTrial.disclosure
+        #expect(withoutTrial.contains("Renews automatically at $4.99 per month"))
         #expect(!withoutTrial.contains("Free for"))
     }
 
@@ -92,7 +92,7 @@ struct MapSubscriptionTermsTests {
 
         #expect(subscription["productID"] as? String == MapEntitlementStore.productID)
         #expect(subscription["type"] as? String == "RecurringSubscription")
-        #expect(subscription["recurringSubscriptionPeriod"] as? String == "P1Y")
+        #expect(subscription["recurringSubscriptionPeriod"] as? String == "P1M")
 
         let offer = try #require(subscription["introductoryOffer"] as? [String: Any])
         #expect(offer["paymentMode"] as? String == "free")
