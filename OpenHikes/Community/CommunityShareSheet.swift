@@ -49,6 +49,19 @@ struct CommunityShareSheet: View {
         authorName.trimmingCharacters(in: .whitespacesAndNewlines)
     }
 
+    /// The hike's description, if it has one worth showing.
+    ///
+    /// Shown rather than merely mentioned, because this is the field a walker
+    /// is least likely to remember the contents of: a hike imported from a GPX
+    /// file carries whatever its author wrote in it, which can be personal
+    /// notes nothing in this app has displayed since the import. It goes to
+    /// the public database either way — see ``CommunityPublisher/share``, which
+    /// copies `trackDescription` into the draft — so the only question is
+    /// whether the walker sees it before or after it is published.
+    private var sharedDescription: String? {
+        CommunityShareDisclosure.notes(from: hike.trackDescription)
+    }
+
     var body: some View {
         NavigationStack {
             Form {
@@ -81,6 +94,17 @@ private extension CommunityShareSheet {
         Section {
             LabeledContent("Hike", value: hike.displayTitle)
             LabeledContent("Route", value: hike.subtitle)
+            if let sharedDescription {
+                // Multi-line and not truncated to a line: the point of showing
+                // it is that the walker can read what is about to be published
+                // under their name, and half of a sentence would not serve
+                // that.
+                LabeledContent("Notes") {
+                    Text(sharedDescription)
+                        .multilineTextAlignment(.trailing)
+                }
+                .accessibilityIdentifier("community-share-notes")
+            }
             LabeledContent(
                 "Photos",
                 value: photoCount == 0 ? "None" : "\(photoCount)"
@@ -92,15 +116,18 @@ private extension CommunityShareSheet {
             // walker who has not thought about it assumes a shared trail is a
             // line on a map, and the photographs are the part they would want
             // to have been asked about.
+            //
+            // It has to be *complete* as well as plain, which is the harder
+            // half. A submission carries the description and the date shown
+            // above, and the route it carries is the recorded one — every
+            // point with the time it was reached, so the pace of the walk goes
+            // with the line. Saying "nothing else from this hike" while
+            // sending those was a promise the upload did not keep.
             Text(
-                photoCount == 0
-                    ? "Your route and its name. Nothing else from this hike."
-                    : """
-                    Your route, its name, and \(photoCount == 1 ? "1 photo" : "\(photoCount) photos") \
-                    with the spot on the trail each was taken at. \
-                    Photos are resized before they're sent, and their camera details and original \
-                    location data are removed.
-                    """
+                CommunityShareDisclosure.text(
+                    hasNotes: sharedDescription != nil,
+                    photoCount: photoCount
+                )
             )
         }
     }
@@ -207,5 +234,67 @@ private extension CommunityShareSheet {
                 phase = .failed(failure)
             }
         }
+    }
+}
+
+// MARK: - What the footer promises
+
+/// The sentence under *What gets shared*, worked out apart from the view that
+/// draws it.
+///
+/// Its own type so a suite can hold it against what ``CommunityPublisher``
+/// actually uploads. That is the only way this stays true: the promise and the
+/// payload are written in two different files, and the first version of this
+/// screen said "nothing else from this hike" while the upload carried the
+/// description, the date and a timestamp on every point of the route. A
+/// wording that cannot be tested is a wording that drifts the next time a
+/// field is added to ``CommunitySubmissionDraft``.
+nonisolated enum CommunityShareDisclosure {
+    /// The description a share would publish, or `nil` for a hike whose
+    /// description is absent or blank.
+    ///
+    /// Here rather than in the view so that the row showing it and the
+    /// sentence promising it cannot disagree about what counts as having one
+    /// — and so a suite can ask the same question of a draft.
+    static func notes(from trackDescription: String?) -> String? {
+        guard let notes = trackDescription?.trimmingCharacters(in: .whitespacesAndNewlines),
+              !notes.isEmpty
+        else { return nil }
+        return notes
+    }
+
+    /// - Parameters:
+    ///   - hasNotes: Whether the hike has a description, which is uploaded and
+    ///     shown publicly — see ``CommunityShareSheet``'s `sharedDescription`.
+    ///   - photoCount: How many photographs this share would carry, already
+    ///     capped at ``CommunityPublisher/maximumPhotos``.
+    static func text(hasNotes: Bool, photoCount: Int) -> String {
+        // Assembled rather than written out four times: notes and photographs
+        // are each present or not, and four separate spellings is how one of
+        // them ends up describing an upload that has moved on.
+        var sentences = [
+            """
+            Your route — each point on it with the time you reached it — \
+            its name, its length and the date you walked it.
+            """,
+        ]
+        if hasNotes {
+            sentences.append("The notes above go with it.")
+        }
+        if photoCount > 0 {
+            // Number-neutral after the count, so one photograph reads as
+            // written English rather than as a template with a 1 in it.
+            let photos = photoCount == 1
+                ? "One photo goes with it, with the spot on the trail it was taken at"
+                : "\(photoCount) photos go with it, each with the spot on the trail it was taken at"
+            sentences.append(
+                """
+                \(photos) — resized before sending, with camera details and original \
+                location data removed.
+                """
+            )
+        }
+        sentences.append("Nothing else from this hike.")
+        return sentences.joined(separator: " ")
     }
 }

@@ -145,6 +145,18 @@ final class MapEntitlementStore {
     /// Store: the throw is a thrown error, and the entitlement the sync would
     /// have revealed is whatever `currentEntitlements` is set to answer next.
     private let syncPurchases: @Sendable () async throws -> Void
+    /// The third seam, for the same reason and one of its own.
+    ///
+    /// `Product.products(for:)` answers differently on different machines, and
+    /// not for any reason a test controls: the scheme attaches
+    /// `OpenHikes.storekit` to its *launch* action, and running the app once
+    /// leaves that configuration synced to that simulator for good — so the
+    /// product resolves there and comes back empty on a simulator nothing has
+    /// ever been launched on, such as a fresh CI runner. A suite asserting what
+    /// the paywall does when the App Store offers nothing was therefore
+    /// asserting which machine it was running on. Behind this closure it asks
+    /// the question it means: an empty answer, or a throw.
+    private let loadProducts: @Sendable ([String]) async throws -> [Product]
     /// Where the last resolved answer is remembered across launches.
     private let defaults: UserDefaults
 
@@ -177,11 +189,15 @@ final class MapEntitlementStore {
         },
         syncPurchases: @escaping @Sendable () async throws -> Void = {
             try await AppStore.sync()
+        },
+        loadProducts: @escaping @Sendable ([String]) async throws -> [Product] = { identifiers in
+            try await Product.products(for: identifiers)
         }
     ) {
         self.defaults = defaults
         self.currentEntitlements = currentEntitlements
         self.syncPurchases = syncPurchases
+        self.loadProducts = loadProducts
         if defaults.object(forKey: SettingsKey.lastKnownMapEntitlement) != nil,
            !defaults.bool(forKey: SettingsKey.lastKnownMapEntitlement) {
             publish(.notEntitled)
@@ -232,7 +248,7 @@ final class MapEntitlementStore {
 
     func loadProduct() async {
         do {
-            let loaded = try await Product.products(for: [Self.productID]).first
+            let loaded = try await loadProducts([Self.productID]).first
             product = loaded
             terms = await Self.terms(for: loaded)
         } catch {

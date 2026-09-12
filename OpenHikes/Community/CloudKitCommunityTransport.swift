@@ -197,6 +197,19 @@ nonisolated struct CloudKitCommunityTransport: CommunityTransporting {
     ) async throws -> CommunityHikeDetail {
         let record: CKRecord
         do {
+            // A fetch by record name, and never a query: ``CommunitySchema``
+            // keeps ``CommunitySchema/submissionType`` unindexed so that
+            // submissions cannot be enumerated, and an unindexed type can
+            // still be fetched by an ID. The name comes from the listing a
+            // reviewer published, which is the only place it is ever
+            // advertised.
+            //
+            // What comes back is what was approved. The type grants no write
+            // permission outside the admin role, so the record cannot have
+            // changed since a person looked at it — see *Why nobody may write
+            // a submission* in ``CommunitySchema``. And `_world` may read it,
+            // which is what makes this work on the signed-out phone the
+            // account-free browse flow promises.
             record = try await database.record(
                 for: CKRecord.ID(recordName: listing.submissionID)
             )
