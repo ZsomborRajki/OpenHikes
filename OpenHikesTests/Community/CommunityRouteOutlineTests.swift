@@ -213,7 +213,56 @@ struct CommunityRouteOutlineTests {
         #expect(CommunityRouteOutline.decoded("").isEmpty)
     }
 
-    /// The worst of the three, because it is the one that would draw
+    /// The budget is a maximum on the way in as well as on the way out.
+    ///
+    /// The three below are one assertion in three sizes: a line at the budget
+    /// is drawn, a line one point past it is not, and an enormous one is not
+    /// either — the same answer, because the point count is what the map's
+    /// tap hit-test is sized against and a tap projects every accepted point
+    /// of every line on the main actor.
+    ///
+    /// `"?"` is the encoding's zero, so a pair of them is a point that has not
+    /// moved. It is the shortest thing that is a valid outline of exactly N
+    /// points, which is what makes it the right fixture for a count.
+    @Test("an outline at the point budget is drawn")
+    func anOutlineAtTheBudgetIsAccepted() {
+        let atBudget = String(repeating: "??", count: CommunityRouteOutline.maximumPoints)
+
+        #expect(CommunityRouteOutline.decoded(atBudget).count == CommunityRouteOutline.maximumPoints)
+    }
+
+    @Test("one point past the budget draws nothing")
+    func anOutlineOverTheBudgetIsRefused() {
+        let overBudget = String(repeating: "??", count: CommunityRouteOutline.maximumPoints + 1)
+
+        #expect(
+            CommunityRouteOutline.decoded(overBudget).isEmpty,
+            "refused whole, not truncated: half a stranger's walk is a worse answer than none"
+        )
+    }
+
+    /// A field somebody pasted a recorded route into, rather than an outline
+    /// of one. Nothing is drawn, and nothing is decoded past the budget
+    /// either — the refusal happens where the line stops being affordable.
+    @Test("an enormous outline draws nothing")
+    func anEnormousOutlineIsRefused() {
+        let enormous = String(repeating: "??", count: 20_000)
+
+        #expect(CommunityRouteOutline.decoded(enormous).isEmpty)
+    }
+
+    /// And the ordinary case still comes back, at exactly the size the
+    /// uploader is allowed to produce.
+    @Test("a full-length outline this app wrote is drawn")
+    func aFullLengthOutlineFromTheEncoderIsAccepted() throws {
+        let encoded = try #require(
+            CommunityRouteOutline.encoded(Self.route(CommunityRouteOutline.maximumPoints))
+        )
+
+        #expect(CommunityRouteOutline.decoded(encoded).count == CommunityRouteOutline.maximumPoints)
+    }
+
+    /// The worst of the four, because it is the one that would draw
     /// something. A single corrupt delta walks every later point off the
     /// world, and a partial line through the Atlantic is a worse answer than
     /// no line.

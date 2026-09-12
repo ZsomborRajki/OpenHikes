@@ -142,11 +142,21 @@ nonisolated enum CommunityRouteOutline {
     /// same right answer: draw no line, leave the pin standing, let them open
     /// the hike and get the real route.
     ///
-    /// The three ways it refuses are the three ways the format can lie — a
-    /// digit run that never terminates, a pair that is missing its second
-    /// half, and a coordinate outside the world. The last one matters most: a
-    /// single corrupt delta would otherwise walk every point after it off the
-    /// map, and a route drawn across the ocean is a worse answer than none.
+    /// The four ways it refuses are the four ways the format can lie — a digit
+    /// run that never terminates, a pair that is missing its second half, a
+    /// coordinate outside the world, and more points than an outline may have.
+    /// The third matters most: a single corrupt delta would otherwise walk
+    /// every point after it off the map, and a route drawn across the ocean is
+    /// a worse answer than none.
+    ///
+    /// ``maximumPoints`` is a **maximum** here and not a hint. What is on the
+    /// wire is a field this app wrote on upload, but what comes back is a
+    /// public record, and the budget it is held to on the way out is the one
+    /// the map and the tap hit-test are sized against on the way in — a tap
+    /// projects every accepted point of every drawn line, on the main actor.
+    /// So an overlong line is refused outright rather than cut down to size:
+    /// truncating would draw a trail that stops in the middle of nowhere and
+    /// claim it is somebody's walk.
     static func decoded(_ encoded: String) -> [CLLocationCoordinate2D] {
         var scalars = Array(encoded.unicodeScalars)[...]
         var latitude = 0
@@ -155,6 +165,9 @@ nonisolated enum CommunityRouteOutline {
         coordinates.reserveCapacity(maximumPoints)
 
         while !scalars.isEmpty {
+            // Checked before the pair is read rather than after it is
+            // appended, so a string of any length costs the budget and stops.
+            guard coordinates.count < maximumPoints else { return [] }
             guard let latitudeDelta = nextValue(&scalars),
                   let longitudeDelta = nextValue(&scalars)
             else { return [] }
