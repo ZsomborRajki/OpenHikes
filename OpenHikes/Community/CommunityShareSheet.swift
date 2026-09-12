@@ -151,7 +151,7 @@ private extension CommunityShareSheet {
     var reviewSection: some View {
         Section {
             Label {
-                Text("Every shared hike is checked by a person before anyone else can see it.")
+                Text("Every community hike is checked by a person before anyone else can see it.")
             } icon: {
                 Image(systemName: "checkmark.shield")
                     .foregroundStyle(.tint)

@@ -149,7 +149,7 @@ extension MapView.Coordinator {
 
     /// What the marker says, as distinct from the callout that opens from it.
     private static func markerLabel(for listing: CommunityListing) -> String {
-        String(localized: "Shared hike, \(listing.title)")
+        String(localized: "Community hike, \(listing.title)")
     }
 
     #if os(iOS)
@@ -161,7 +161,7 @@ extension MapView.Coordinator {
     /// it lands.
     private static func calloutDisclosure() -> UIButton {
         let button = UIButton(type: .detailDisclosure)
-        button.accessibilityLabel = String(localized: "Open this shared hike")
+        button.accessibilityLabel = String(localized: "Open this community hike")
         button.accessibilityIdentifier = "community-pin-open"
         return button
     }

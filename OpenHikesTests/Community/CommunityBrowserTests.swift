@@ -285,7 +285,7 @@ struct CommunityBrowserTests {
 
     /// The reported bug, from the other side: with a title in the field,
     /// panning far enough used to replace what was typed with unrelated
-    /// nearby hikes, under a heading that still said *Shared Hikes*.
+    /// nearby hikes, under a heading that still said *Community Hikes*.
     @Test("a pan during a title search cannot overwrite the matches")
     func panningKeepsTitleMatches() async {
         let transport = StubCommunityTransport()

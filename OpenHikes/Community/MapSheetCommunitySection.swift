@@ -100,7 +100,7 @@ extension MapSheetHikes {
                 .accessibilityAddTraits(.isHeader)
             if community.state == .loading || community.state == .refreshing {
                 ProgressView()
-                    .accessibilityLabel("Loading shared hikes")
+                    .accessibilityLabel("Loading community hikes")
             }
             Spacer(minLength: 0)
             if community.isBrowsing {
@@ -116,23 +116,23 @@ extension MapSheetHikes {
                     // measure every control the same way, whatever it is made
                     // of — see ``minimumTapTarget()``.
                     .minimumTapTarget()
-                    .accessibilityLabel("Hide shared hikes")
+                    .accessibilityLabel("Hide community hikes")
                     .accessibilityIdentifier("community-hide-button")
             }
         }
         .textCase(nil)
     }
 
-    /// "Shared Hikes", or "Shared Hikes · near Esztergom" once something has
+    /// "Community Hikes", or "Community Hikes · near Esztergom" once something has
     /// answered and MapKit has a name for where.
     ///
     /// One string rather than two `Text`s so it is one spoken phrase: a
     /// heading read as two elements is read as two headings.
     var headerTitle: String {
         guard community.isBrowsing, let areaName = community.areaName else {
-            return String(localized: "Shared Hikes")
+            return String(localized: "Community Hikes")
         }
-        return String(localized: "Shared Hikes · near \(areaName)")
+        return String(localized: "Community Hikes · near \(areaName)")
     }
 
     /// The one thing the section says before it has ever been asked anything.
@@ -156,7 +156,7 @@ extension MapSheetHikes {
                     .background(.tint, in: Circle())
                     .accessibilityHidden(true)
                 VStack(alignment: .leading, spacing: 2) {
-                    Text("Find shared hikes near here")
+                    Text("Find community hikes near here")
                         .font(.body.weight(.medium))
                         .foregroundStyle(.primary)
                     Text("Trails other hikers have published")
@@ -181,7 +181,7 @@ extension MapSheetHikes {
     @ViewBuilder var communityEmptyRow: some View {
         VStack(alignment: .leading, spacing: 6) {
             // Before the state, deliberately. Zoomed out past the ceiling
-            // nothing was asked, so *No shared hikes here* would be a claim
+            // nothing was asked, so *No community hikes here* would be a claim
             // about an area nobody looked at — and a spinner, for a hiker who
             // opted in while looking at a country, would be a promise of an
             // answer that is never coming.
@@ -216,11 +216,11 @@ extension MapSheetHikes {
                     .buttonStyle(.bordered)
                     .padding(.top, 2)
             case .loading, .refreshing:
-                Text("Looking for shared hikes…")
+                Text("Looking for community hikes…")
                     .font(.subheadline)
                     .foregroundStyle(.secondary)
             case .idle, .loaded:
-                Text("No shared hikes here")
+                Text("No community hikes here")
                     .font(.subheadline.weight(.medium))
                 Text("Move the map and tap Search This Area to look somewhere else.")
                     .font(.subheadline)
@@ -256,7 +256,7 @@ extension MapSheetHikes {
     @ViewBuilder
     func communitySuggestionsSection(matchingHikes: [Hike]) -> some View {
         if !community.matchingListings.isEmpty {
-            Section("Shared Hikes") {
+            Section("Community Hikes") {
                 ForEach(community.matchingListings) { listing in
                     Button { onSelectListing(listing) } label: {
                         CommunityHikeRow(

@@ -36,7 +36,7 @@ struct CommunityPageBudgetTests {
     }
 
     /// The failure this type exists for. Twenty-five hikes by somebody the
-    /// hiker blocked used to draw *No shared hikes here* over an ordinary
+    /// hiker blocked used to draw *No community hikes here* over an ordinary
     /// hike sitting at position twenty-six, and asking again returned the same
     /// hidden page forever.
     @Test("a page eaten by blocked rows buys another")

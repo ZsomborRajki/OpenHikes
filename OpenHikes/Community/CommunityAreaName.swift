@@ -20,7 +20,7 @@
 //  somebody's rate limit, and get a different answer depending on where the
 //  machine is. ``OpenHikesModel`` hands the browser `nil` for exactly the
 //  launches it hands it a `nil` transport, and a browser without one heads
-//  its list with the plain *Shared Hikes* it had before.
+//  its list with the plain *Community Hikes* it had before.
 //
 //  ## Why it is main-actor rather than `@concurrent`
 //
@@ -77,7 +77,7 @@ final class GeocodedAreaNames: CommunityAreaNaming {
             }
         } catch {
             // Logged and no more, exactly as a failed title search is. A
-            // header that says *Shared Hikes* instead of *Shared Hikes near
+            // header that says *Community Hikes* instead of *Community Hikes near
             // Esztergom* is not something the hiker can act on, and there is
             // nowhere on screen that a geocode belongs.
             Self.logger.debug(
