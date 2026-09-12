@@ -179,6 +179,41 @@ nonisolated final class SettingsUITests: XCTestCase {
         waitForExpectations(timeout: UITestTimeout.existence)
     }
 
+    /// The privacy policy, reached from Settings alone.
+    ///
+    /// App Review 5.1.1(i) fails a binary whose policy is not linked inside the
+    /// app, and the link used to live only in the paywall's purchase
+    /// disclosure. Asserted from both ends that could not reach it: a free
+    /// launch, where the paid rows that open the paywall are disabled in a
+    /// build without their API keys, and an entitled one, where the paywall
+    /// dismisses itself the moment the store answers. Neither may need it.
+    ///
+    /// The link is not tapped. A `Link` hands the URL to Safari, which takes
+    /// the test out of the app for an assertion about a web page; that the URL
+    /// is absolute and reachable is what `MapSubscriptionTermsTests` pins, and
+    /// the row spends the same constant the paywall does.
+    @MainActor
+    func testPrivacyPolicyIsReachableWithoutThePaywall() {
+        for arguments in [[], ["--ui-test-entitled"]] {
+            let app = launchApp(arguments: arguments)
+
+            element("settings-button", in: app).tap()
+            XCTAssertTrue(
+                element("settings-screen", in: app)
+                    .waitForExistence(timeout: UITestTimeout.navigation)
+            )
+
+            XCTAssertTrue(
+                scrollIntoView(element("privacy-policy-link", in: app), in: app),
+                "Settings should link the privacy policy on a \(arguments) launch"
+            )
+            XCTAssertFalse(
+                element("map-paywall", in: app).exists,
+                "reaching the policy must not have opened the paywall"
+            )
+        }
+    }
+
     /// Writing the diagnostics archive is off-main and unhurried.
     private static let exportTimeout: TimeInterval = 25
 
