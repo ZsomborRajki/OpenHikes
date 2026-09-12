@@ -37,12 +37,19 @@ struct CommunityShareSheet: View {
     /// reason — a snapshot that cannot invalidate a body is a snapshot that
     /// lets a lapsed subscription start work against a paid resource.
     let entitlement: MapEntitlementStore
+    /// Where the photo files are, so the form can ask which of this hike's
+    /// pictures this device actually holds. Injected rather than reached for,
+    /// like every other store this app hands a view.
+    var store: HikePhotoStore = .shared
 
     @Environment(\.dismiss)
     private var dismiss
     @AppStorage(SettingsKey.communityAuthorName)
     private var authorName = ""
     @State private var phase: Phase = .editing
+    /// How many photographs this device can send, once the disk has been
+    /// asked. `nil` until then — see ``photoCount``.
+    @State private var sendablePhotoCount: Int?
 
     /// Where this hike already is on the way to being published, which decides
     /// whether the form warns about making a second copy of it.
@@ -56,8 +63,43 @@ struct CommunityShareSheet: View {
     /// The photographs this share would actually carry, worked out once here
     /// rather than described twice — the cap is ``CommunityPublisher``'s, and
     /// a screen that quoted its own number would eventually quote a stale one.
+    ///
+    /// Rows are not files. A photo row mirrors between a hiker's devices and
+    /// its pixels never do, so the iPad shows a full strip for a walk recorded
+    /// on the phone and can send none of it — and the upload drops exactly
+    /// those, silently. Until the disk has answered, the capped row count is
+    /// the best guess available; after that this is the number that will
+    /// really go.
     private var photoCount: Int {
-        min(hike.photos.count, CommunityPublisher.maximumPhotos)
+        sendablePhotoCount ?? min(hike.photos.count, CommunityPublisher.maximumPhotos)
+    }
+
+    /// How many of this hike's pictures are on another device, and so are not
+    /// going anywhere from here.
+    private var unsendablePhotoCount: Int {
+        guard let sendablePhotoCount else { return 0 }
+        return min(hike.photos.count, CommunityPublisher.maximumPhotos) - sendablePhotoCount
+    }
+
+    /// What to say about the pictures that are staying behind.
+    ///
+    /// Number-neutral after the count, like the disclosure sentence: one
+    /// photograph reads as written English rather than as a template with a 1
+    /// in it.
+    private var photosOnAnotherDevice: String {
+        unsendablePhotoCount == 1
+            ? String(
+                localized: """
+                One of this hike's photos is on the device it was added on, \
+                so it can't be shared from here.
+                """
+            )
+            : String(
+                localized: """
+                \(unsendablePhotoCount) of this hike's photos are on the device \
+                they were added on, so they can't be shared from here.
+                """
+            )
     }
 
     private var trimmedAuthorName: String {
@@ -99,6 +141,15 @@ struct CommunityShareSheet: View {
             #endif
             .toolbar { toolbarContent }
             .interactiveDismissDisabled(phase == .sending)
+            // Asked once, when the form opens: the answer is about files on
+            // this device, and nothing can add one to this hike while this
+            // sheet is the screen on top.
+            .task {
+                sendablePhotoCount = await CommunityPublisher.sendablePhotoCount(
+                    of: hike,
+                    store: store
+                )
+            }
         }
     }
 }
@@ -125,6 +176,26 @@ private extension CommunityShareSheet {
                 "Photos",
                 value: photoCount == 0 ? "None" : "\(photoCount)"
             )
+            if unsendablePhotoCount > 0 {
+                // Said here rather than left to the footer, because it is
+                // about the row directly above it: the number there is
+                // smaller than the strip on the hike screen, and a hiker who
+                // is not told why will read it as the app having lost their
+                // pictures.
+                //
+                // Same shape as everywhere else a photo's pixels are missing
+                // — see ``PhotoUnavailability/notOnThisDevice``, which the
+                // gallery, the map callout and the viewer all speak through.
+                Label {
+                    Text(photosOnAnotherDevice)
+                } icon: {
+                    Image(systemName: "icloud.slash")
+                        .foregroundStyle(.secondary)
+                }
+                .font(.footnote)
+                .accessibilityElement(children: .combine)
+                .accessibilityIdentifier("community-share-photos-elsewhere")
+            }
         } header: {
             Text("What gets shared")
         } footer: {
