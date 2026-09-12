@@ -35,6 +35,10 @@ final class StubCommunityTransport: CommunityTransporting, @unchecked Sendable {
         var nearbyRequests: [(coordinate: CLLocationCoordinate2D, radiusMeters: Double)] = []
         var titleQueries: [String] = []
         var detailRequests: [String] = []
+        /// The exclusion set each listing request carried, in order. What
+        /// proves the browser spends its budget on rows the walker can see —
+        /// see `CommunityTransporting`'s note on why the set is a parameter.
+        var exclusions: [Set<String>] = []
     }
 
     /// What each call should do. Set before the call, read inside it.
@@ -59,20 +63,39 @@ final class StubCommunityTransport: CommunityTransporting, @unchecked Sendable {
     func listings(
         near coordinate: CLLocationCoordinate2D,
         radiusMeters: Double,
-        limit: Int
+        limit: Int,
+        excluding: Set<String>
     ) async throws -> [CommunityListing] {
         state.withLock { recording in
             recording.nearbyRequests.append((coordinate: coordinate, radiusMeters: radiusMeters))
+            recording.exclusions.append(excluding)
         }
         await beforeListingsReturn?()
-        return try listingsResult.get()
+        return try answer(excluding: excluding)
     }
 
     @concurrent
-    func listings(matching query: String, limit: Int) async throws -> [CommunityListing] {
-        state.withLock { $0.titleQueries.append(query) }
+    func listings(
+        matching query: String,
+        limit: Int,
+        excluding: Set<String>
+    ) async throws -> [CommunityListing] {
+        state.withLock { recording in
+            recording.titleQueries.append(query)
+            recording.exclusions.append(excluding)
+        }
         await beforeListingsReturn?()
-        return try listingsResult.get()
+        return try answer(excluding: excluding)
+    }
+
+    /// Honours the exclusion set rather than merely recording it, because the
+    /// real transport does — it is what `limit` is spent on, not a courtesy —
+    /// and a suite asserting on a list the stub had not filtered would be
+    /// asserting about a transport nobody ships.
+    private func answer(excluding: Set<String>) throws -> [CommunityListing] {
+        let listings = try listingsResult.get()
+        guard !excluding.isEmpty else { return listings }
+        return listings.filter { !excluding.contains($0.authorID) }
     }
 
     @concurrent

@@ -89,6 +89,24 @@ nonisolated enum CommunityFailure: LocalizedError, Equatable, Sendable {
 /// Note what is absent: there is no way to publish. Submitting and publishing
 /// are different record types with different permissions precisely so that no
 /// build of this app can do the second one — see ``CommunitySchema``.
+///
+/// ## Why the two queries take an exclusion set
+///
+/// Because `limit` is a budget, and a budget spent on rows the walker will
+/// never be shown is a budget wasted. Blocked authors are filtered on the way
+/// out of ``CommunityBrowser`` as well — a block made after results land has
+/// to reach rows already on screen — but doing it *only* there would mean a
+/// page of twenty-five hikes by one blocked author drew an empty list with an
+/// eligible twenty-sixth sitting behind a cursor nobody follows. The
+/// conformance is what owns the cursor, so it is the only place that can spend
+/// another page; see ``CommunityPageBudget`` for how many it may spend.
+///
+/// A `Set<String>` of ``CommunityListing/authorID`` rather than the block list
+/// itself: this protocol is `Sendable` and every requirement is `@concurrent`,
+/// while ``CommunityBlockList`` is a main-actor `@Observable` reference. A
+/// snapshot taken at the moment the request is made is also the right value —
+/// a block made while one is in flight is applied by the read-time filter, not
+/// by rewinding the query.
 nonisolated protocol CommunityTransporting: Sendable {
     /// Uploads `draft` and returns the submission's record name.
     ///
@@ -104,12 +122,17 @@ nonisolated protocol CommunityTransporting: Sendable {
     func listings(
         near coordinate: CLLocationCoordinate2D,
         radiusMeters: Double,
-        limit: Int
+        limit: Int,
+        excluding: Set<String>
     ) async throws -> [CommunityListing]
 
     /// Published hikes whose title matches `query`, newest first.
     @concurrent
-    func listings(matching query: String, limit: Int) async throws -> [CommunityListing]
+    func listings(
+        matching query: String,
+        limit: Int,
+        excluding: Set<String>
+    ) async throws -> [CommunityListing]
 
     /// The route and photographs behind a listing, downloaded into
     /// `directory`.

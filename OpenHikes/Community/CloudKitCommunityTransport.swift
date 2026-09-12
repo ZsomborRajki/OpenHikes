@@ -109,7 +109,8 @@ nonisolated struct CloudKitCommunityTransport: CommunityTransporting {
     func listings(
         near coordinate: CLLocationCoordinate2D,
         radiusMeters: Double,
-        limit: Int
+        limit: Int,
+        excluding: Set<String>
     ) async throws -> [CommunityListing] {
         let origin = CLLocation(latitude: coordinate.latitude, longitude: coordinate.longitude)
         // CloudKit's own distance operator, which is the only one it has: a
@@ -131,11 +132,20 @@ nonisolated struct CloudKitCommunityTransport: CommunityTransporting {
                 relativeLocation: origin
             ),
         ]
-        return try await run(query, limit: limit, reason: "a nearby search")
+        return try await run(
+            query,
+            limit: limit,
+            excluding: excluding,
+            reason: "a nearby search"
+        )
     }
 
     @concurrent
-    func listings(matching query: String, limit: Int) async throws -> [CommunityListing] {
+    func listings(
+        matching query: String,
+        limit: Int,
+        excluding: Set<String>
+    ) async throws -> [CommunityListing] {
         let trimmed = query.trimmingCharacters(in: .whitespacesAndNewlines)
         guard !trimmed.isEmpty else { return [] }
         // Full-text rather than `BEGINSWITH`. CloudKit's `BEGINSWITH` is
@@ -148,25 +158,65 @@ nonisolated struct CloudKitCommunityTransport: CommunityTransporting {
         ckQuery.sortDescriptors = [
             NSSortDescriptor(key: CommunitySchema.Listing.publishedAt, ascending: false),
         ]
-        return try await run(ckQuery, limit: limit, reason: "a title search")
+        return try await run(
+            ckQuery,
+            limit: limit,
+            excluding: excluding,
+            reason: "a title search"
+        )
     }
 
-    /// Runs one page of a query. Deliberately one page: the cursor is dropped
-    /// rather than followed, because every caller here is a list the walker
-    /// skims and `limit` is already more rows than fit on a phone. Paging
-    /// would spend requests against a shared quota to fill a list nobody
-    /// reaches the bottom of.
+    /// Runs a query, following the cursor only as far as blocked rows make
+    /// necessary.
+    ///
+    /// One page when the walker has blocked nobody, which is the ordinary
+    /// case and the behaviour this had before: `limit` is already more rows
+    /// than fit on a phone, and paging to fill a list nobody scrolls to the
+    /// bottom of would spend requests against a shared quota for nothing.
+    ///
+    /// What changed is that rows are now removed *after* the server has
+    /// counted them towards `limit`. A page that comes back entirely from
+    /// blocked authors would otherwise draw an empty list with an eligible
+    /// hike sitting behind a cursor nobody followed — and asking the same
+    /// question again would return the same blocked page. So the exclusion is
+    /// applied here, where the cursor still exists, and a page eaten by
+    /// blocked rows buys another. ``CommunityPageBudget`` owns how many.
     private func run(
         _ query: CKQuery,
         limit: Int,
+        excluding: Set<String>,
         reason: String
     ) async throws -> [CommunityListing] {
-        do {
-            let (matches, _) = try await database.records(
-                matching: query,
-                resultsLimit: limit
+        var budget = CommunityPageBudget(limit: limit, excluding: excluding)
+        var cursor: CKQueryOperation.Cursor?
+        var wantsMore = true
+        while wantsMore {
+            let fetched = try await page(
+                of: query,
+                continuing: cursor,
+                limit: limit,
+                reason: reason
             )
-            return matches.compactMap { id, result in
+            cursor = fetched.cursor
+            wantsMore = budget.accept(fetched.listings, hasMore: fetched.cursor != nil)
+        }
+        return budget.results
+    }
+
+    /// One round trip: the first page of `query`, or the page after `cursor`.
+    private func page(
+        of query: CKQuery,
+        continuing cursor: CKQueryOperation.Cursor?,
+        limit: Int,
+        reason: String
+    ) async throws -> (listings: [CommunityListing], cursor: CKQueryOperation.Cursor?) {
+        do {
+            let (matches, next) = if let cursor {
+                try await database.records(continuingMatchFrom: cursor, resultsLimit: limit)
+            } else {
+                try await database.records(matching: query, resultsLimit: limit)
+            }
+            let listings = matches.compactMap { id, result -> CommunityListing? in
                 switch result {
                 case .success(let record):
                     guard let listing = CommunityListing(record: record) else {
@@ -199,6 +249,7 @@ nonisolated struct CloudKitCommunityTransport: CommunityTransporting {
                     return nil
                 }
             }
+            return (listings, next)
         } catch {
             throw Self.failure(from: error, while: reason)
         }

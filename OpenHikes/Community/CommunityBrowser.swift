@@ -250,6 +250,27 @@ final class CommunityBrowser {
         regionDidSettle(latestRegion)
     }
 
+    /// Refills the nearby list when a block has just emptied it.
+    ///
+    /// The read-time filter hides a blocked author's rows without asking
+    /// anything, which is what should happen — but a page that was *all* that
+    /// author leaves the walker looking at *No shared hikes here* for a region
+    /// that may have plenty. Blocking one person must not empty the map.
+    ///
+    /// Deliberately narrow. It asks again only when the block took the last
+    /// visible row and there were rows to take, so the ordinary block — a few
+    /// rows out of twenty-five — costs nothing. The new request carries the
+    /// author in its exclusion set, so it pages past them rather than coming
+    /// back with the same hidden page; see ``CommunityPageBudget``.
+    ///
+    /// Nothing equivalent for the typed search, and that is not an oversight:
+    /// it has no remembered question to re-ask, and the field the walker typed
+    /// into is still in front of them.
+    func refreshAfterBlock() {
+        guard isBrowsing, !nearbyResults.isEmpty, nearbyListings.isEmpty else { return }
+        retry()
+    }
+
     // MARK: - The search field
 
     /// Published hikes whose title matches a typed query.
@@ -270,8 +291,17 @@ final class CommunityBrowser {
             matchingResults = []
             return
         }
+        // Snapshotted here rather than read inside the request: the closure is
+        // `@Sendable` and runs off this actor, and a set taken at the moment
+        // the question is asked is the right one — a block made while it is in
+        // flight is applied by the read-time filter above.
+        let excluded = blockList.blockedIDs
         perform(.title, describing: "a title search") { transport in
-            try await transport.listings(matching: trimmed, limit: Self.resultLimit)
+            try await transport.listings(
+                matching: trimmed,
+                limit: Self.resultLimit,
+                excluding: excluded
+            )
         }
     }
 
@@ -288,11 +318,13 @@ final class CommunityBrowser {
     }
 
     private func search(near coordinate: CLLocationCoordinate2D, radiusMeters: Double) {
+        let excluded = blockList.blockedIDs
         perform(.nearby, describing: "a nearby search") { transport in
             try await transport.listings(
                 near: coordinate,
                 radiusMeters: radiusMeters,
-                limit: Self.resultLimit
+                limit: Self.resultLimit,
+                excluding: excluded
             )
         }
     }

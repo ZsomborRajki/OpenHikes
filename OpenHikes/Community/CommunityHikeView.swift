@@ -19,9 +19,11 @@
 //  becomes an ordinary ``Hike`` and gets the real map like every other.
 //
 //  Everything downloaded lands in one directory owned by this screen and
-//  deleted when it goes. These are a stranger's photographs held for as long
-//  as they are being looked at, and no longer — unless the walker imports the
-//  hike, at which point ``CommunityImport`` makes copies that are theirs.
+//  deleted when it goes — or when an import that is still reading out of it
+//  finishes, whichever is later. These are a stranger's photographs held for
+//  as long as they are being looked at, and no longer, unless the walker
+//  imports the hike, at which point ``CommunityImport`` makes copies that are
+//  theirs.
 //
 //  ## Why reporting and blocking are here and not on the row
 //
@@ -83,6 +85,19 @@ struct CommunityHikeView: View {
     @State private var existingHike: Hike?
     @State private var isReporting = false
     @State private var isConfirmingBlock = false
+    /// The import, held rather than fired and forgotten.
+    ///
+    /// It outlives this screen — an unstructured `Task` is not tied to a view
+    /// — and two things have to wait for it: the download directory, which it
+    /// is still reading photographs out of, and nothing else may delete
+    /// underneath it. See ``discardDownloads()``.
+    @State private var importTask: Task<Void, Never>?
+    /// Whether this author was blocked while the screen was up.
+    ///
+    /// Read by the import when it finishes, so a hike the walker asked for a
+    /// moment before blocking does not re-open itself over the list — see
+    /// ``performImport(_:)``.
+    @State private var wasAuthorBlocked = false
 
     /// Where this screen's downloads live. Per-listing so two pushes of
     /// different hikes cannot overwrite each other's photographs, and removed
@@ -206,6 +221,9 @@ private extension CommunityHikeView {
     /// the thing they asked for.
     func block() {
         blockList.block(listing)
+        // Before the pop, so an import still in flight finds it set when it
+        // lands — see ``performImport(_:)`` for what it stops.
+        wasAuthorBlocked = true
         onBlock()
     }
 }
@@ -346,7 +364,7 @@ private extension CommunityHikeView {
     func importButton(_ detail: CommunityHikeDetail) -> some View {
         VStack(alignment: .leading, spacing: 8) {
             Button {
-                Task { await performImport(detail) }
+                performImport(detail)
             } label: {
                 HStack {
                     if isImporting {
@@ -400,7 +418,13 @@ private extension CommunityHikeView {
         }
     }
 
-    func performImport(_ detail: CommunityHikeDetail) async {
+    /// Adds the hike, and holds the task that does it.
+    ///
+    /// Held because the walker can leave — by backing out, or by blocking this
+    /// author — while the photographs are still being copied, and an
+    /// unstructured task keeps running when the screen goes. What that costs
+    /// is covered in ``discardDownloads()`` and just below.
+    func performImport(_ detail: CommunityHikeDetail) {
         // Already in the library: this is the "Open" case, and re-importing
         // would make a second copy of the same trail.
         if let existingHike {
@@ -409,23 +433,46 @@ private extension CommunityHikeView {
         }
         isImporting = true
         importFailure = nil
-        let outcome = await CommunityImport.importHike(detail, into: context)
-        isImporting = false
-        switch outcome {
-        case .imported(let hike), .alreadyImported(let hike):
-            existingHike = hike
-            onImport(hike)
-        case .refused(let failure):
-            importFailure = failure
+        // Inherits the main actor from here, which is what every assignment
+        // inside it needs and what ``CommunityImport/importHike(_:into:)``
+        // requires anyway.
+        importTask = Task {
+            let outcome = await CommunityImport.importHike(detail, into: context)
+            isImporting = false
+            switch outcome {
+            case .imported(let hike), .alreadyImported(let hike):
+                existingHike = hike
+                // Blocked while this was running, which is the later of the
+                // two things the walker said. The hike stays in the library —
+                // it committed before the photographs began copying, and
+                // blocking is a control over what the *community* shows rather
+                // than a retraction of a save — but nothing re-opens it. The
+                // alternative is the screen they just hid reappearing on top
+                // of the list they were sent back to.
+                guard !wasAuthorBlocked else { return }
+                onImport(hike)
+            case .refused(let failure):
+                importFailure = failure
+            }
         }
     }
 
-    /// Fire-and-forget, off the main actor, in the shape the photo and tile
-    /// deletions already use. What a kill leaves behind is a directory the
-    /// system reclaims on its own.
+    /// Off the main actor, in the shape the photo and tile deletions already
+    /// use. What a kill leaves behind is a directory the system reclaims on
+    /// its own.
+    ///
+    /// It waits for the import first, and that is not tidiness. These files
+    /// are what ``CommunityImport`` copies a stranger's photographs out of,
+    /// this runs from `onDisappear`, and the screen can be left — backed out
+    /// of, or blocked away from — while the copy is still going. Deleting
+    /// underneath it would cost the walker the pictures of a hike they asked
+    /// for, silently and for no reason they could ever connect to what they
+    /// did.
     func discardDownloads() {
         let directory = downloadDirectory
+        let pendingImport = importTask
         Task.detached(priority: .utility) {
+            await pendingImport?.value
             try? FileManager.default.removeItem(at: directory)
         }
     }

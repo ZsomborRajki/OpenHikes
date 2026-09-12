@@ -264,6 +264,37 @@ struct MapSheet: View {
         .accessibilityIdentifier("settings-button")
     }
 
+    /// Somebody else's hike, or nothing at all on a launch that must not reach
+    /// CloudKit — see ``OpenHikesModel/makeCommunityTransport()``.
+    ///
+    /// Its own method rather than a case body: it is the only destination that
+    /// takes two closures, and folding them into the switch pushed the
+    /// surrounding function past what the linter allows.
+    @ViewBuilder
+    private func communityHikeDestination(_ listing: CommunityListing) -> some View {
+        if let transport = appModel.communityTransport {
+            CommunityHikeView(
+                listing: listing,
+                transport: transport,
+                blockList: appModel.communityBlocks,
+                // `open` assigns the whole path rather than appending to it, so
+                // the preview is replaced rather than left underneath — which
+                // is what should happen: backing out of a hike that is now in
+                // the library, into a screen offering to add it, describes a
+                // decision already made.
+                onImport: open,
+                // Back to the list, which the block has already taken this hike
+                // out of — ``CommunityBrowser`` filters on read, so the row is
+                // gone by the time the pop lands. The refresh is for the case
+                // where it took *every* row with it.
+                onBlock: {
+                    appModel.community.refreshAfterBlock()
+                    presentation.path.removeAll()
+                }
+            )
+        }
+    }
+
     @ViewBuilder
     private func navigationDestinationView(for route: SheetRoute) -> some View {
         switch route {
@@ -287,23 +318,7 @@ struct MapSheet: View {
                 interaction: presentation.hikeInteraction(for: hike)
             )
         case let .communityHike(listing):
-            if let transport = appModel.communityTransport {
-                CommunityHikeView(
-                    listing: listing,
-                    transport: transport,
-                    blockList: appModel.communityBlocks,
-                    // `open` assigns the whole path rather than appending to
-                    // it, so the preview is replaced rather than left
-                    // underneath — which is what should happen: backing out of
-                    // a hike that is now in the library, into a screen
-                    // offering to add it, describes a decision already made.
-                    onImport: open,
-                    // Back to the list, which the block has already taken this
-                    // hike out of — ``CommunityBrowser`` filters on read, so
-                    // the row is gone by the time the pop lands.
-                    onBlock: { presentation.path.removeAll() }
-                )
-            }
+            communityHikeDestination(listing)
         case .recording:
             RecordingView(
                 recorder: appModel.hikeRecorder,
