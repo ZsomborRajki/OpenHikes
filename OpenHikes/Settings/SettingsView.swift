@@ -208,7 +208,7 @@ struct SettingsView: View {
         Button {
             showManageSubscription = true
         } label: {
-            LabeledContent("Pro Maps", value: "Subscribed")
+            LabeledContent("OpenHikes Pro", value: "Subscribed")
         }
         .accessibilityIdentifier("manage-subscription-row")
         .accessibilityHint("Opens the App Store subscription settings.")
@@ -396,7 +396,7 @@ struct SettingsView: View {
         let isSelected = provider.id == selectedProvider.id
         return Button {
             switch tap {
-            case .select: tileProviderID = provider.id
+            case .allow: tileProviderID = provider.id
             case .unlock: showPaywall = true
             // Unreachable while the row is disabled below, and kept so the
             // rule survives that `.disabled` ever being loosened.
@@ -447,9 +447,9 @@ struct SettingsView: View {
     /// Spoken after the row, because the badge is a `Text` inside a composite
     /// element and the disabled state of a waiting row explains itself to
     /// nobody.
-    private static func providerRowHint(_ tap: MapProviderTap) -> String {
+    private static func providerRowHint(_ tap: PaidFeatureTap) -> String {
         switch tap {
-        case .select: ""
+        case .allow: ""
         case .unlock: "Requires OpenHikes Pro. Opens the unlock screen."
         case .wait: "Checking your subscription."
         }

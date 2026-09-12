@@ -48,6 +48,16 @@ nonisolated enum CommunityFailure: LocalizedError, Equatable, Sendable {
     /// account at all, which is why browsing works on a signed-out phone and
     /// sharing does not.
     case notSignedIn
+    /// The Pro subscription is not current on this device.
+    ///
+    /// Raised by ``CommunityPublisher/share(_:authorName:entitlement:transport:store:save:)``
+    /// and by nothing else, because publishing is the only paid thing the
+    /// community feature does: browsing, opening and saving somebody else's
+    /// hike are free and stay free, which is what keeps the list worth reading
+    /// for everybody. Ordinarily unreachable from the UI — the share button
+    /// opens the paywall instead of the form — so what raises it in practice
+    /// is a subscription that lapsed while the form was open.
+    case requiresSubscription
     /// Everything else, with the diagnostic kept for the log.
     case unavailable(String)
     /// The request could not reach iCloud. Retrying later is the answer.
@@ -57,6 +67,8 @@ nonisolated enum CommunityFailure: LocalizedError, Equatable, Sendable {
         switch self {
         case .notSignedIn:
             "Sharing a hike needs an Apple Account."
+        case .requiresSubscription:
+            "Sharing a hike needs OpenHikes Pro."
         case .unreachable:
             "Couldn't reach iCloud."
         case .nothingToShare:
@@ -72,6 +84,8 @@ nonisolated enum CommunityFailure: LocalizedError, Equatable, Sendable {
         switch self {
         case .notSignedIn:
             "Sign in to iCloud in Settings, then try again. Browsing community hikes works without one."
+        case .requiresSubscription:
+            "Subscribe in Settings, then try again. Browsing and saving other people's hikes stays free."
         case .unreachable:
             "Check your connection and try again."
         case .nothingToShare:

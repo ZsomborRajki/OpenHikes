@@ -98,7 +98,7 @@ final class Hike {
     /// has never been shared from this account.
     ///
     /// Written only once CloudKit has accepted the upload — see
-    /// ``CommunityPublisher/share(_:authorName:transport:store:save:)``, where
+    /// ``CommunityPublisher/share(_:authorName:entitlement:transport:store:save:)``, where
     /// the ordering is the contract rather than an implementation detail.
     ///
     /// It says *sent*, and deliberately not *published*. A submission waits

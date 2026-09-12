@@ -43,6 +43,13 @@ final class MapEntitlementStore {
     /// Adding a yearly option later means a second product in the same
     /// subscription group, and a bare `.maps` would by then be the wrong name
     /// for one of them — while being the one string that cannot be renamed.
+    ///
+    /// The `.maps` in the middle is now narrower than what the subscription
+    /// unlocks, since publishing a hike moved behind it too. It stays anyway,
+    /// for the reason this whole comment exists: the identifier is recorded
+    /// against every past purchase and is the one string here that can never be
+    /// corrected. What a customer *reads* is not this — see
+    /// ``MapPaywallView``'s title, which is free to say "OpenHikes Pro".
     static let productID = "tappium.com.OpenHikes.pro.maps.monthly"
 
     enum PurchaseOutcome: Equatable {
