@@ -122,14 +122,14 @@ struct SettingsView: View {
                 movementReminderSection
                 displaySection
                 offlineStorageSection
-                // Below the app's own switches and above the contact links,
+                // Below the app's own switches and above the about links,
                 // which is where somebody looks for it: it is not a setting
                 // they turn on, it is a list of decisions they already made,
                 // and it sits next to the other thing the community feature
                 // put in this screen's reach.
                 BlockedHikersSection(blocks: blocks)
                 FieldMetricsSection()
-                contactSection
+                AboutSection()
             }
             .navigationTitle("Settings")
             #if os(iOS)
@@ -338,21 +338,6 @@ struct SettingsView: View {
     /// rather than a `Bool`, so the footer can name the one it means.
     private static var cappedProviders: [TileProvider] {
         TileProvider.all.filter { $0.durableByteLimit != nil }
-    }
-
-    // MARK: Contact
-
-    private var contactSection: some View {
-        Section {
-            Link(destination: URL(string: "https://github.com/ZsomborRajki/OpenHikes")!) {
-                Label("Project on GitHub", systemImage: "chevron.left.forwardslash.chevron.right")
-            }
-            .accessibilityIdentifier("project-github-link")
-        } header: {
-            Text("Contact & Feedback")
-        } footer: {
-            Text("Share feedback, suggestions, or report an issue on GitHub.")
-        }
     }
 
     private func usageRow(_ title: String, systemImage: String, bytes: Int64?) -> some View {
