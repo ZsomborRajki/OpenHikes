@@ -130,6 +130,26 @@ nonisolated protocol CommunityTransporting: Sendable {
     @concurrent
     func submit(_ draft: CommunitySubmissionDraft) async throws -> String
 
+    /// The listing published from `submissionID`, or `nil` if there is not one.
+    ///
+    /// The only question this app can ask about its own submission, and it is
+    /// deliberately the narrow one: *is there a listing pointing at this?*
+    /// A `nil` is not "rejected" — it is "no listing exists yet", which covers
+    /// a reviewer who has not looked and a reviewer who declined equally. See
+    /// ``Hike/communityListingID``, which is careful about the same thing.
+    ///
+    /// It reads the listing type, not the submission type, and that is what
+    /// makes it safe: a listing is `_world` read and already discoverable by
+    /// location and title, so being able to reach one by the submission it
+    /// names adds nothing an author could not already find by searching for
+    /// their own hike. Asking the submission whether it had been approved
+    /// would need a field on a record only the admin role may write, which is
+    /// exactly the shape ``CommunitySchema`` exists to avoid.
+    ///
+    /// Needs ``CommunitySchema/Listing/submission`` QUERYABLE in the Console.
+    @concurrent
+    func publication(of submissionID: String) async throws -> CommunityListing?
+
     /// Published hikes whose start point is within `radiusMeters` of
     /// `coordinate`, nearest first.
     @concurrent

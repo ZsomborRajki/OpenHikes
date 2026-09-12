@@ -102,18 +102,45 @@ final class Hike {
     /// the ordering is the contract rather than an implementation detail.
     ///
     /// It says *sent*, and deliberately not *published*. A submission waits
-    /// for a human to review it, and this app has no way to ask whether one
-    /// has: the record it would have to read belongs to a type no client may
-    /// read, which is the whole point of ``CommunitySchema``'s two types. So
-    /// the share button says "Shared" rather than anything about visibility,
-    /// and nothing else in the app may read this as a claim that the hike is
-    /// live.
+    /// for a human to review it, and this alone can never say whether one
+    /// has — see ``communityListingID``, which is the field that can, and
+    /// only once a reviewer has published something. Nothing may read *this*
+    /// one as a claim that the hike is live.
     ///
     /// Mirrored along with the rest of the row, which is the right side to err
     /// on: sharing is an account-level act, so a second device should know the
     /// hiker already sent this trail rather than offering to send it again.
     /// Optional, as every mirrored column that can be absent must be.
     var communitySubmissionID: String?
+
+    /// The published listing this hike's submission became, or `nil` while it
+    /// is still waiting — or was never shared, or was refused.
+    ///
+    /// **Those three are not distinguishable here, and the UI must not pretend
+    /// otherwise.** A `nil` beside a non-`nil` ``communitySubmissionID`` means
+    /// only "no listing has been seen for this submission yet": a reviewer who
+    /// has not looked, and a reviewer who looked and declined, leave exactly
+    /// the same absence. So the screen says *waiting for review* and never
+    /// *rejected*, because the second would be a claim about a decision this
+    /// app has no way to observe.
+    ///
+    /// Written by ``CommunityPublicationCheck``, which asks the one question
+    /// the schema can answer: is there a listing pointing at this submission?
+    /// That query needs ``CommunitySchema/Listing/submission`` to be QUERYABLE
+    /// in the Console — the one index this field costs.
+    ///
+    /// One-way on purpose. Once a listing has been seen, it is remembered and
+    /// never re-checked, so a hike that has gone live stays live on this
+    /// screen even offline. A takedown therefore leaves this stale, which is
+    /// the cheap direction to be wrong in: the alternative is a request per
+    /// detail-open forever, against a shared quota, to keep a badge honest
+    /// about something the hiker will find out about the moment they open the
+    /// hike itself.
+    ///
+    /// Mirrored for the reason ``communitySubmissionID`` is: publication is an
+    /// account-level fact, and a second device should not offer to share a
+    /// trail that is already live.
+    var communityListingID: String?
 
     /// The published listing this hike was imported from, or `nil` for a hike
     /// this hiker recorded or imported from a file.

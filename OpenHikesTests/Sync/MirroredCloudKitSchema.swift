@@ -36,6 +36,7 @@ enum MirroredCloudKitSchema {
             attributes: [
                 "author",
                 "autoFollowEnabled",
+                "communityListingID",
                 "communitySubmissionID",
                 "customName",
                 "date",
