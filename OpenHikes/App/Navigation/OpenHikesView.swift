@@ -315,6 +315,13 @@ struct OpenHikesView: View {
             .ignoresSafeArea()
             .onAppear {
                 restoreLastSelectedHike()
+                // Points the map's shared-hike pins at the sheet's navigation
+                // stack, for the reason ``PhotoMapPinController`` takes its
+                // `onOpen` from the screen that claims the pins: MapKit draws
+                // them and the destination is a push into a stack the map
+                // cannot see. This view owns that stack, and is never taken
+                // down, so this is set once.
+                appModel.community.onOpenListing { [sheet] in sheet.showCommunityHike($0) }
                 if AppLaunchEnvironment.usesLiveLocation {
                     appModel.locationManager.start()
                 }

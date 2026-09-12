@@ -184,15 +184,30 @@ extension MapView {
         var photoControlsSheetAlpha: CGFloat = 1
 
         // MARK: Community
+        // Stored state for `MapCommunityAnnotations.swift` and
+        // `MapCommunitySearchControl.swift`, which own everything that reads
+        // it: the markers standing where the shared hikes in the list are, and
+        // the button that offers to look somewhere else.
 
-        /// Told where the map settled, in `regionDidChangeAnimated`.
+        /// Told where the map settled, in `regionDidChangeAnimated`, and read
+        /// back for what the map is currently offering to do about it.
         ///
         /// `weak` like every other controller the coordinator points at: it is
         /// owned by ``OpenHikesModel`` and outlives this map, and a strong
         /// reference here would be the map keeping a model alive rather than
-        /// the other way round. Not observed — nothing about it is read — so
-        /// unlike the controllers above it needs no registration flag.
+        /// the other way round.
         weak var community: CommunityBrowser?
+
+        var communityAnnotations: [CommunityMapAnnotation] = []
+        /// Guards `observeCommunityPins` the way the photo flags guard theirs —
+        /// a second registration can never be cancelled.
+        var isObservingCommunityPins = false
+        /// The same, for the *Search this area* pill's visibility.
+        var isObservingAreaPrompt = false
+
+        #if canImport(UIKit)
+        weak var areaSearchControl: MapAreaSearchView?
+        #endif
 
         /// Screen-point radius within which the selection dot and the "my location"
         /// puck are considered overlapping (roughly the size of either dot).
@@ -647,6 +662,9 @@ extension MapView.Coordinator {
         if let photoAnnotation = annotation as? PhotoMapAnnotation {
             return photoAnnotationView(for: photoAnnotation, on: mapView)
         }
+        if let communityAnnotation = annotation as? CommunityMapAnnotation {
+            return communityAnnotationView(for: communityAnnotation, on: mapView)
+        }
 
         let identifier = "routeHighlight"
         let view = mapView.dequeueReusableAnnotationView(withIdentifier: identifier)
@@ -692,6 +710,24 @@ extension MapView.Coordinator {
         guard view.annotation is MKUserLocation else { return }
         mapView.deselectAnnotation(view.annotation, animated: false)
     }
+
+    #if canImport(UIKit)
+    /// The way in from a shared hike's callout — see
+    /// ``communityAnnotationView(for:on:)``.
+    ///
+    /// The callout is closed before the preview opens, for the reason a photo
+    /// pin's is: it belongs to a map the sheet is about to cover, and one left
+    /// standing is what the walker comes back to when they pop the screen.
+    func mapView(
+        _ mapView: MKMapView,
+        annotationView view: MKAnnotationView,
+        calloutAccessoryControlTapped control: UIControl
+    ) {
+        guard let annotation = view.annotation as? CommunityMapAnnotation else { return }
+        mapView.deselectAnnotation(annotation, animated: true)
+        community?.open(annotation.listing)
+    }
+    #endif
 
     func mapView(_ mapView: MKMapView, regionDidChangeAnimated animated: Bool) {
         // Zooming changes the on-screen distance between two fixed coordinates,

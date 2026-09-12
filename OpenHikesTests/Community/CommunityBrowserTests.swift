@@ -38,9 +38,9 @@ struct CommunityBrowserTests {
         }
     }
 
-    /// The whole bargain of the chip: a walker who never taps it never puts a
-    /// request on the radio.
-    @Test("panning asks nothing until the chip is tapped")
+    /// The whole bargain of the section: a walker who never asks for it never
+    /// puts a request on the radio, and nothing offers to.
+    @Test("panning asks nothing until the walker opts in")
     func panningIsFreeUntilOptedIn() {
         let transport = StubCommunityTransport()
         let browser = CommunityBrowser(transport: transport, blockList: .scratch())
@@ -49,10 +49,13 @@ struct CommunityBrowserTests {
         }
         #expect(transport.recording.nearbyRequests.isEmpty)
         #expect(browser.issuedRequests == 0)
+        #expect(browser.areaPrompt == .settled)
     }
 
-    @Test("tapping the chip asks about where the map already is")
-    func chipAsksAboutTheCurrentRegion() async {
+    /// The one request nobody confirms twice: the tap that opts in is itself
+    /// the confirmation.
+    @Test("opting in asks about where the map already is")
+    func optingInAsksAboutTheCurrentRegion() async {
         let transport = StubCommunityTransport()
         transport.listingsResult = .success([.stub()])
         let browser = CommunityBrowser(transport: transport, blockList: .scratch())
@@ -65,10 +68,45 @@ struct CommunityBrowserTests {
         #expect(browser.state == .loaded)
     }
 
-    /// The map-driven half: with the chip on, panning far enough re-queries
-    /// without the walker doing anything.
-    @Test("a pan past the threshold re-queries on its own")
-    func panningRequeriesWhileBrowsing() async {
+    /// A sheet can be opened before the map has ever reported a region, and
+    /// the tap that opts in is still the confirmation — so the first region to
+    /// arrive is asked about rather than offered, or the walker is left with a
+    /// spinner beside a button asking them to opt in again.
+    @Test("opting in before the map has settled asks about the first region")
+    func optingInBeforeTheFirstRegionAsks() async {
+        let transport = StubCommunityTransport()
+        let browser = CommunityBrowser(transport: transport, blockList: .scratch())
+        browser.startBrowsing()
+        #expect(browser.state == .loading)
+
+        browser.regionDidSettle(Self.region())
+        await settle(browser)
+
+        #expect(transport.recording.nearbyRequests.count == 1)
+        #expect(browser.areaPrompt == .settled)
+        #expect(browser.state == .loaded)
+    }
+
+    /// And only the first: once it has been asked, the map is back to offering.
+    @Test("the region after that one is offered, not asked")
+    func onlyTheFirstRegionIsAsked() async {
+        let transport = StubCommunityTransport()
+        let browser = CommunityBrowser(transport: transport, blockList: .scratch())
+        browser.startBrowsing()
+        browser.regionDidSettle(Self.region())
+        await settle(browser)
+
+        browser.regionDidSettle(Self.region(latitude: 48.03))
+        await settle(browser)
+
+        #expect(transport.recording.nearbyRequests.count == 1)
+        #expect(browser.areaPrompt == .search)
+    }
+
+    /// The change this whole design turns on: panning offers, and only the
+    /// walker's tap spends anything. A pan nobody confirms is free.
+    @Test("a pan past the threshold offers rather than asks")
+    func panningOffersWhileBrowsing() async {
         let transport = StubCommunityTransport()
         let browser = CommunityBrowser(transport: transport, blockList: .scratch())
         browser.regionDidSettle(Self.region())
@@ -77,7 +115,57 @@ struct CommunityBrowserTests {
         browser.regionDidSettle(Self.region(latitude: 48.03))
         await settle(browser)
 
+        #expect(transport.recording.nearbyRequests.count == 1)
+        #expect(browser.areaPrompt == .search)
+    }
+
+    @Test("taking the offer asks about the area that raised it")
+    func searchingTheVisibleAreaAsks() async {
+        let transport = StubCommunityTransport()
+        let browser = CommunityBrowser(transport: transport, blockList: .scratch())
+        browser.regionDidSettle(Self.region())
+        browser.startBrowsing()
+        await settle(browser)
+        browser.regionDidSettle(Self.region(latitude: 48.03))
+        browser.searchVisibleArea()
+        await settle(browser)
+
         #expect(transport.recording.nearbyRequests.count == 2)
+        #expect(transport.recording.nearbyRequests.last?.coordinate.latitude == 48.03)
+        // Taken, so there is nothing left to offer.
+        #expect(browser.areaPrompt == .settled)
+    }
+
+    /// Nothing to take is nothing to spend: the button is not on screen in
+    /// this state, and a stray call must not invent a question.
+    @Test("searching the visible area does nothing without an offer")
+    func searchingWithoutAnOfferIsInert() async {
+        let transport = StubCommunityTransport()
+        let browser = CommunityBrowser(transport: transport, blockList: .scratch())
+        browser.regionDidSettle(Self.region())
+        browser.startBrowsing()
+        await settle(browser)
+
+        browser.searchVisibleArea()
+        await settle(browser)
+        #expect(transport.recording.nearbyRequests.count == 1)
+    }
+
+    /// Above the ceiling a nearby result means "somewhere on this continent",
+    /// so there is nothing to offer and something to say.
+    @Test("zoomed out past the ceiling, the map asks the walker to zoom in")
+    func continentalZoomPromptsAZoom() async {
+        let transport = StubCommunityTransport()
+        let browser = CommunityBrowser(transport: transport, blockList: .scratch())
+        browser.regionDidSettle(Self.region())
+        browser.startBrowsing()
+        await settle(browser)
+
+        browser.regionDidSettle(Self.region(spanMeters: 2_000_000))
+        #expect(browser.areaPrompt == .zoomIn)
+        browser.searchVisibleArea()
+        await settle(browser)
+        #expect(transport.recording.nearbyRequests.count == 1)
     }
 
     /// Results that were true when they arrived are better than an error
@@ -94,6 +182,7 @@ struct CommunityBrowserTests {
 
         transport.listingsResult = .failure(.unreachable)
         browser.regionDidSettle(Self.region(latitude: 48.03))
+        browser.searchVisibleArea()
         await settle(browser)
 
         #expect(browser.nearbyListings.count == 1)
@@ -137,13 +226,14 @@ struct CommunityBrowserTests {
         // The second question, asked while the first is still held open.
         transport.listingsResult = .success([.stub(id: "new")])
         browser.regionDidSettle(Self.region(latitude: 48.03))
+        browser.searchVisibleArea()
         await gate.open()
         await settle(browser)
 
         #expect(browser.nearbyListings.map(\.id) == ["new"])
     }
 
-    @Test("switching the chip off clears the list")
+    @Test("hiding the section clears the list")
     func stoppingClearsResults() async {
         let transport = StubCommunityTransport()
         transport.listingsResult = .success([.stub()])
@@ -156,12 +246,14 @@ struct CommunityBrowserTests {
         #expect(browser.nearbyListings.isEmpty)
         #expect(browser.state == .idle)
         #expect(!browser.isBrowsing)
+        #expect(browser.areaPrompt == .settled)
+        #expect(browser.areaName == nil)
     }
 
     /// Typing a trail's name is asking for it by name, wherever the walker is
     /// and whether or not the map layer is on.
-    @Test("a typed query searches without the chip")
-    func titleSearchNeedsNoChip() async {
+    @Test("a typed query searches without opting in")
+    func titleSearchNeedsNoOptIn() async {
         let transport = StubCommunityTransport()
         transport.listingsResult = .success([.stub()])
         let browser = CommunityBrowser(transport: transport, blockList: .scratch())
@@ -209,6 +301,7 @@ struct CommunityBrowserTests {
 
         transport.listingsResult = .success([.stub(id: "panned")])
         browser.regionDidSettle(Self.region(latitude: 48.03))
+        browser.searchVisibleArea()
         await settle(browser)
 
         #expect(browser.matchingListings.map(\.id) == ["typed"])
@@ -242,10 +335,10 @@ struct CommunityBrowserTests {
         #expect(browser.nearbyListings.map(\.id) == ["nearby"])
     }
 
-    /// A typed search belongs to the field rather than to the chip, so
-    /// switching the map layer off takes the map's answer and leaves the
-    /// walker's own question standing.
-    @Test("switching the chip off keeps the title matches")
+    /// A typed search belongs to the field rather than to the section, so
+    /// hiding the section takes the map's answer and leaves the walker's own
+    /// question standing.
+    @Test("hiding the section keeps the title matches")
     func stoppingKeepsTitleMatches() async {
         let transport = StubCommunityTransport()
         transport.listingsResult = .success([.stub(id: "nearby")])

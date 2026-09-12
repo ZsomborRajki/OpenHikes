@@ -150,6 +150,25 @@ final class SheetPresentation {
         return interaction
     }
 
+    /// Pushes a published hike's preview, from somewhere outside the sheet.
+    ///
+    /// Here rather than at the call site because the two rules it keeps belong
+    /// to the sheet rather than to whatever asked. The map's shared-hike pins
+    /// are the only caller today — see ``OpenHikesView``'s
+    /// `attachCommunityPins()` — and a pin can be tapped again while its own
+    /// preview is still on top.
+    func showCommunityHike(_ listing: CommunityListing) {
+        let route = SheetRoute.communityHike(listing)
+        guard path.last != route else { return }
+        // The compact detent is only tall enough for the search field, so a
+        // screen pushed into it would arrive with nowhere to draw — the same
+        // reason opening a recording moves the sheet.
+        if isCompact {
+            withAnimation { detent = .medium }
+        }
+        path.append(route)
+    }
+
     func photoSelection(for route: SheetRoute) -> PhotoViewerSelection {
         if let existing = photoSelections[route] { return existing }
         let selection = PhotoViewerSelection()

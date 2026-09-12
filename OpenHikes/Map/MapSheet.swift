@@ -108,6 +108,7 @@ struct MapSheet: View {
                     onOpen: open,
                     onSelectResult: select,
                     onSelectCompletion: select,
+                    onSubmitQuery: performSearch,
                     onSelectListing: select,
                     onDelete: delete,
                     onRecord: openRecording,

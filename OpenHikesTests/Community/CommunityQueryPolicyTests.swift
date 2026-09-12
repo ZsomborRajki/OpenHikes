@@ -8,7 +8,7 @@ import MapKit
 @testable import OpenHikes
 import Testing
 
-/// The requests a moving map is allowed to make.
+/// The requests a moving map is allowed to offer to make.
 ///
 /// Every test here is about one that must *not* happen, which is the whole
 /// reason the policy is a type rather than an `if` inside the browser: a
@@ -29,83 +29,130 @@ struct CommunityQueryPolicyTests {
         )
     }
 
-    @Test("nothing is requested until the walker asks")
+    /// Takes the offer a region raises, the way ``CommunityBrowser`` does.
+    @discardableResult private static func commit(
+        _ region: MKCoordinateRegion,
+        to policy: inout CommunityQueryPolicy
+    ) -> CommunitySearchArea? {
+        guard case .offer(let area) = policy.action(for: region) else {
+            Issue.record("expected this region to be offered")
+            return nil
+        }
+        policy.commit(area)
+        return area
+    }
+
+    @Test("nothing is offered until the walker asks")
     func browsingIsOptIn() {
-        var policy = CommunityQueryPolicy()
+        // `let`, because the decision is now side-effect free: a region that
+        // nobody has opted in to changes nothing at all.
+        let policy = CommunityQueryPolicy()
         #expect(policy.action(for: Self.region()) == .ignore)
         #expect(policy.issuedQueries == 0)
     }
 
-    @Test("turning browsing on asks about wherever the map is")
-    func firstRegionIsRequested() {
+    @Test("opting in makes wherever the map is a question")
+    func firstRegionIsOffered() {
         var policy = CommunityQueryPolicy()
         policy.startBrowsing()
-        guard case .search = policy.action(for: Self.region()) else {
-            Issue.record("the first region after opting in should be requested")
+        guard case .offer = policy.action(for: Self.region()) else {
+            Issue.record("the first region after opting in should be offered")
             return
         }
+    }
+
+    /// The half that separates deciding from asking: a walker who ignores the
+    /// offer keeps it, and one who takes it spends the request.
+    @Test("an offer costs nothing until it is committed")
+    func offersAreFree() {
+        var policy = CommunityQueryPolicy()
+        policy.startBrowsing()
+        _ = policy.action(for: Self.region())
+        _ = policy.action(for: Self.region())
+        #expect(policy.issuedQueries == 0)
+        Self.commit(Self.region(), to: &policy)
         #expect(policy.issuedQueries == 1)
+    }
+
+    /// The reason ``CommunityQueryPolicy/action(for:)`` has no side effects. A
+    /// pan is a run of settles, and the second one must not withdraw the offer
+    /// the first one raised.
+    @Test("a repeated settle keeps offering the same region")
+    func repeatedSettlesKeepTheOffer() {
+        var policy = CommunityQueryPolicy()
+        policy.startBrowsing()
+        Self.commit(Self.region(), to: &policy)
+        let moved = Self.region(latitude: 48.03)
+        guard case .offer(let first) = policy.action(for: moved),
+              case .offer(let second) = policy.action(for: moved) else {
+            Issue.record("an untaken offer should survive the next settle")
+            return
+        }
+        #expect(first == second)
     }
 
     /// The one that keeps the feature inside its quota: CloudKit resolves
     /// distance at around ten kilometres, so a small pan asks the same
-    /// question and would get the same rows back.
-    @Test("a pan smaller than a quarter of the radius asks nothing")
+    /// question and would get the same rows back — a button offering to re-ask
+    /// it would change nothing.
+    @Test("a pan smaller than a quarter of the radius offers nothing")
     func smallPanIsRefused() {
         var policy = CommunityQueryPolicy()
         policy.startBrowsing()
-        _ = policy.action(for: Self.region())
+        Self.commit(Self.region(), to: &policy)
         // 20 km across is a 10 km radius, so the threshold is 2.5 km. This is
         // roughly 1.1 km north.
-        let nudged = Self.region(latitude: 47.64)
-        #expect(policy.action(for: nudged) == .ignore)
-        #expect(policy.issuedQueries == 1)
+        #expect(policy.action(for: Self.region(latitude: 47.64)) == .ignore)
     }
 
     @Test("a pan past the threshold is a new question")
-    func largePanIsRequested() {
+    func largePanIsOffered() {
         var policy = CommunityQueryPolicy()
         policy.startBrowsing()
-        _ = policy.action(for: Self.region())
+        Self.commit(Self.region(), to: &policy)
         // Roughly 44 km north, comfortably past a 2.5 km threshold.
-        guard case .search = policy.action(for: Self.region(latitude: 48.03)) else {
+        guard case .offer = policy.action(for: Self.region(latitude: 48.03)) else {
             Issue.record("a pan of tens of kilometres is a different question")
             return
         }
-        #expect(policy.issuedQueries == 2)
     }
 
     /// Zooming without moving changes what the walker is asking about even
     /// though the centre is identical, so the centre threshold alone would
     /// refuse it forever.
     @Test("zooming in far enough is a new question without moving")
-    func zoomIsRequested() {
+    func zoomIsOffered() {
         var policy = CommunityQueryPolicy()
         policy.startBrowsing()
-        _ = policy.action(for: Self.region(spanMeters: 100_000))
-        guard case .search = policy.action(for: Self.region(spanMeters: 20_000)) else {
+        Self.commit(Self.region(spanMeters: 100_000), to: &policy)
+        guard case .offer = policy.action(for: Self.region(spanMeters: 20_000)) else {
             Issue.record("a fivefold zoom is a different question")
             return
         }
     }
 
-    @Test("zoomed out past the ceiling, nothing is asked")
+    /// Past the ceiling there is nothing worth asking and something worth
+    /// saying, which is why this is its own answer rather than `.ignore` —
+    /// the sheet says it, since a button that cannot answer well is worse
+    /// than no button.
+    @Test("zoomed out past the ceiling, the answer is to zoom in")
     func continentalZoomIsRefused() {
         var policy = CommunityQueryPolicy()
         policy.startBrowsing()
-        #expect(policy.action(for: Self.region(spanMeters: 2_000_000)) == .ignore)
+        #expect(policy.action(for: Self.region(spanMeters: 2_000_000)) == .tooFarOut)
         #expect(policy.issuedQueries == 0)
     }
 
     /// Zooming out to the whole country and back must leave the valley's
     /// results standing, so the refusal above must not also forget the last
-    /// query — otherwise coming back would re-fetch what is already on screen.
+    /// query — otherwise coming back would offer to re-fetch what is already
+    /// on screen.
     @Test("a refused zoom-out does not forget where the map was")
     func ceilingDoesNotForget() {
         var policy = CommunityQueryPolicy()
         policy.startBrowsing()
-        _ = policy.action(for: Self.region())
-        _ = policy.action(for: Self.region(spanMeters: 2_000_000))
+        Self.commit(Self.region(), to: &policy)
+        #expect(policy.action(for: Self.region(spanMeters: 2_000_000)) == .tooFarOut)
         #expect(policy.action(for: Self.region()) == .ignore)
         #expect(policy.issuedQueries == 1)
     }
@@ -116,26 +163,26 @@ struct CommunityQueryPolicyTests {
     func forgettingReopensTheRegion() {
         var policy = CommunityQueryPolicy()
         policy.startBrowsing()
-        _ = policy.action(for: Self.region())
+        Self.commit(Self.region(), to: &policy)
         #expect(policy.action(for: Self.region()) == .ignore)
         policy.forgetLastQuery()
-        guard case .search = policy.action(for: Self.region()) else {
+        guard case .offer = policy.action(for: Self.region()) else {
             Issue.record("a forgotten query should make the region askable again")
             return
         }
     }
 
-    /// Turning the chip off and on again must not show a list from wherever
-    /// the map used to be.
+    /// Hiding the section and asking for it again must not show a list from
+    /// wherever the map used to be.
     @Test("switching browsing off forgets the last query")
     func stoppingForgets() {
         var policy = CommunityQueryPolicy()
         policy.startBrowsing()
-        _ = policy.action(for: Self.region())
+        Self.commit(Self.region(), to: &policy)
         policy.stopBrowsing()
         #expect(!policy.isBrowsing)
         policy.startBrowsing()
-        guard case .search = policy.action(for: Self.region()) else {
+        guard case .offer = policy.action(for: Self.region()) else {
             Issue.record("re-opting in should ask again")
             return
         }
@@ -147,10 +194,10 @@ struct CommunityQueryPolicyTests {
     func radiusHasAFloor() {
         var policy = CommunityQueryPolicy()
         policy.startBrowsing()
-        guard case .search(_, let radius) = policy.action(for: Self.region(spanMeters: 200)) else {
+        guard case .offer(let area) = policy.action(for: Self.region(spanMeters: 200)) else {
             Issue.record("a close-in region is still a question")
             return
         }
-        #expect(radius == CommunityQueryPolicy.minimumRadiusMeters)
+        #expect(area.radiusMeters == CommunityQueryPolicy.minimumRadiusMeters)
     }
 }
