@@ -119,11 +119,20 @@ extension MapView.Coordinator {
     func observeAreaPrompt(_ browser: CommunityBrowser) {
         guard !isObservingAreaPrompt else { return }
         isObservingAreaPrompt = true
-        trackAreaPrompt(browser)
+        trackAreaPrompt(browser, animated: false)
     }
 
-    private func trackAreaPrompt(_ browser: CommunityBrowser) {
-        applyAreaSearchVisibility(animated: false)
+    /// Applies the pill's visibility exactly once per change and then
+    /// re-registers, the shape ``trackCommunityRoutes(_:on:)`` uses.
+    ///
+    /// The `animated` flag is what the two callers disagree about, and the
+    /// only thing they disagree about: the first registration is arranging a
+    /// control nobody has seen yet, so it takes its state outright, while
+    /// every re-registration is answering a change the hiker is looking at.
+    /// Applying in both places instead would run the unanimated branch second
+    /// and hide the view before its fade had anything left to fade.
+    private func trackAreaPrompt(_ browser: CommunityBrowser, animated: Bool) {
+        applyAreaSearchVisibility(animated: animated)
         withObservationTracking {
             _ = browser.areaPrompt
         } onChange: { [weak self, weak browser] in
@@ -131,8 +140,7 @@ extension MapView.Coordinator {
             let model = browser
             Task { @MainActor in
                 guard let coordinator, let model else { return }
-                coordinator.applyAreaSearchVisibility(animated: true)
-                coordinator.trackAreaPrompt(model)
+                coordinator.trackAreaPrompt(model, animated: true)
             }
         }
     }
