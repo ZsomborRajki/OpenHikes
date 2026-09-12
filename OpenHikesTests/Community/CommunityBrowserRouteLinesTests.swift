@@ -239,6 +239,110 @@ struct CommunityBrowserRouteLinesTests {
         #expect(browser.routeLines.map(\.id) == ["summit"])
     }
 
+    /// The other half of that: the replacement takes the trail the map was
+    /// emphasising with it, at the moment it is no longer the hike on screen
+    /// rather than whenever the one behind it gets around to loading.
+    @Test("opening a second preview retires the first hike's route at once")
+    func openingASecondPreviewRetiresTheFirst() async {
+        let first = CommunityListing.stub(id: "ridge")
+        let second = CommunityListing.stub(id: "summit", submissionID: "submission-2")
+        let (browser, _) = await loaded(
+            [first, second],
+            outlines: ["ridge": Self.outline(), "summit": Self.outline(offset: 0.1)]
+        )
+        browser.previewOpened(first)
+        browser.previewLoaded(Self.outline(offset: 2), of: first)
+        #expect(browser.routeLines.first(where: { $0.id == "ridge" })?.isPreviewed == true)
+
+        browser.previewOpened(second)
+
+        #expect(
+            browser.routeLines.allSatisfy { !$0.isPreviewed },
+            "nothing is the open preview until the open preview loads"
+        )
+        #expect(
+            browser.routeLines.map(\.id) == ["ridge", "summit"],
+            "both are ordinary nearby outlines again, which is what the map should fall back to"
+        )
+    }
+
+    /// The case the ordering makes reachable: SwiftUI's close for the screen
+    /// underneath arrives after the new one appeared, so it is rejected — and
+    /// if that rejection were the only thing retiring the old trail, a
+    /// preview that never loads would leave it emphasised for good.
+    @Test("a preview that fails to load leaves no trail from the last one")
+    func afailedReplacementLeavesNothingEmphasised() async {
+        let first = CommunityListing.stub(id: "ridge")
+        let second = CommunityListing.stub(id: "summit", submissionID: "submission-2")
+        let (browser, _) = await loaded([], outlines: [:])
+
+        browser.previewOpened(first)
+        browser.previewLoaded(Self.outline(), of: first)
+        browser.previewOpened(second)
+        browser.previewClosed(first)
+        // Nothing lands for `second`: its fetch failed.
+
+        #expect(browser.routeLines.isEmpty)
+    }
+
+    /// And when the replacement does load, it is the only thing drawn at full
+    /// strength — never both hikes at once.
+    @Test("the replacement's own route is the only one emphasised")
+    func areplacementThatLoadsIsTheOnlyPreview() async {
+        let first = CommunityListing.stub(id: "ridge")
+        let second = CommunityListing.stub(id: "summit", submissionID: "submission-2")
+        let (browser, _) = await loaded(
+            [first, second],
+            outlines: ["ridge": Self.outline(), "summit": Self.outline(offset: 0.1)]
+        )
+
+        browser.previewOpened(first)
+        browser.previewLoaded(Self.outline(offset: 2), of: first)
+        browser.previewOpened(second)
+        browser.previewClosed(first)
+        browser.previewLoaded(Self.outline(offset: 3), of: second)
+
+        #expect(browser.routeLines.map(\.id) == ["ridge", "summit"])
+        #expect(browser.routeLines.filter(\.isPreviewed).map(\.id) == ["summit"])
+    }
+
+    /// The other ordering — the hiker backs out of A and opens B from the
+    /// list, so the close lands first and matches. It cleared both before and
+    /// still does; nothing about retiring the route on open may change it.
+    @Test("closing before the next preview opens still clears everything")
+    func closingBeforeTheNextOpenStillClears() async {
+        let first = CommunityListing.stub(id: "ridge")
+        let second = CommunityListing.stub(id: "summit", submissionID: "submission-2")
+        let (browser, _) = await loaded([], outlines: [:])
+
+        browser.previewOpened(first)
+        browser.previewLoaded(Self.outline(), of: first)
+        browser.previewClosed(first)
+        browser.previewOpened(second)
+
+        #expect(browser.routeLines.isEmpty)
+
+        browser.previewLoaded(Self.outline(offset: 3), of: second)
+
+        #expect(browser.routeLines.map(\.id) == ["summit"])
+    }
+
+    /// Re-announcing the preview already open must not throw away what it
+    /// loaded: SwiftUI can run an appearance again for the same screen, and a
+    /// line that blinked off and back would read as a glitch.
+    @Test("re-opening the same preview keeps its route")
+    func reopeningTheSamePreviewKeepsItsRoute() async {
+        let listing = CommunityListing.stub(id: "ridge")
+        let (browser, _) = await loaded([], outlines: [:])
+
+        browser.previewOpened(listing)
+        browser.previewLoaded(Self.outline(), of: listing)
+        browser.previewOpened(listing)
+
+        #expect(browser.routeLines.map(\.id) == ["ridge"])
+        #expect(browser.routeLines.first?.isPreviewed == true)
+    }
+
     /// A fetch that lands after the hiker backed out has nowhere to go, and
     /// must not put a line on a map with no screen behind it.
     @Test("a route arriving after the preview closes is ignored")

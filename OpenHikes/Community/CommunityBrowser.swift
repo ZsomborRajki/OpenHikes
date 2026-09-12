@@ -848,11 +848,23 @@ extension CommunityBrowser {
 
     /// A published hike's preview is on screen. Called from the screen itself.
     ///
-    /// It only records *which* hike: there is nothing to draw until the
-    /// preview's own fetch lands, and until then the map goes on showing the
-    /// faded outline it already had.
+    /// It records *which* hike, and retires whatever the last preview had
+    /// loaded. There is nothing to draw for this one until its own fetch
+    /// lands, and until then the map goes on showing the faded outline it
+    /// already had — which is the right thing to fall back to, and is not
+    /// what the previous hike's full-strength line would be.
+    ///
+    /// Retiring it here rather than leaving it to the close is the difference
+    /// between the two orderings mattering and not. A map pin can push a
+    /// second preview over an open one, and SwiftUI then tears the first
+    /// screen down *after* the second appears — so the close that would have
+    /// cleared it arrives matched against the new hike and is rejected, as it
+    /// must be. Without this line the old trail stays emphasised until the
+    /// new one loads, and stays emphasised for good if the new one fails.
     func previewOpened(_ listing: CommunityListing) {
+        guard previewedListingID != listing.id else { return }
         previewedListingID = listing.id
+        previewedRoute = nil
     }
 
     /// The open preview has its route. The map draws this one properly.
