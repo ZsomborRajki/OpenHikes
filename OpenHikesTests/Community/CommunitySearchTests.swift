@@ -131,4 +131,17 @@ struct CommunitySearchTests {
         #expect(browser.nearbyListings.count == 1)
         #expect(browser.matchingListings.isEmpty)
     }
+
+    /// The UI fixture stands in for ``CloudKitCommunityTransport``, so it has
+    /// to spend its budget the same way: on rows that satisfy *both*
+    /// predicates. Truncating the area first would hide a matching title
+    /// behind non-matching rows and make the scenarios above agree with a
+    /// transport that had stopped combining them.
+    @Test("the UI fixture applies both predicates before the result budget")
+    func fixtureCombinesBeforeTheLimit() async throws {
+        let fixture = CommunitySearchFixture()
+        let area = try #require(CommunitySearchArea(region: CommunitySearchFixture.region))
+        let matches = try await fixture.listings(matching: "Valley", area: area, limit: 1, excluding: [])
+        #expect(matches.map(\.title) == ["Valley Walk"])
+    }
 }

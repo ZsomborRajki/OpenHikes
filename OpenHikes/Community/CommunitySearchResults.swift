@@ -9,12 +9,18 @@ struct CommunitySearchResults: View {
     let onSelect: (CommunityListing) -> Void
 
     private var hasQuery: Bool { !query.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty }
+    /// Whether the search actually carries a geographic constraint, which is
+    /// not the same question as being in the Community scope: Anywhere is one
+    /// of the areas that scope offers, and choosing it removes the constraint.
+    /// Keying the header to the scope announced "Anywhere" in the one place it
+    /// had not been asked for and stayed silent in the one place it had.
+    private var isAreaConstrained: Bool { usesArea && browser.areaChoice != .anywhere }
     private var listings: [CommunityListing] { hasQuery ? browser.matchingListings : browser.nearbyListings }
     private var state: CommunityBrowseState { hasQuery ? browser.matchingState : browser.state }
 
     var body: some View {
         RenderSignpost.mark("CommunitySearchResultsBody")
-        return Section(usesArea ? "Community" : "Community · Anywhere") {
+        return Section(isAreaConstrained ? "Community" : "Community · Anywhere") {
             if usesArea, browser.needsZoom {
                 Text("Zoom in or choose a place to search for community hikes.")
                     .accessibilityIdentifier("community-zoom-message")

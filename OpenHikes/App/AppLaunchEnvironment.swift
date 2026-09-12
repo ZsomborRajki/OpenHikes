@@ -35,6 +35,7 @@ nonisolated enum AppLaunchEnvironment {
         let failsFirstSave: Bool
         let losesImportSelection: Bool
         let stubsCommunity: Bool
+        let suppressesPlaceSuggestions: Bool
         let stubsWeather: Bool
         let grantsPaidMaps: Bool
         /// `nil` when the real photo library should be read — see
@@ -67,6 +68,7 @@ nonisolated enum AppLaunchEnvironment {
             failsFirstSave = false
             losesImportSelection = false
             stubsCommunity = false
+            suppressesPlaceSuggestions = false
             stubsWeather = false
             grantsPaidMaps = false
             stubbedLibraryPhotoCount = nil
@@ -86,6 +88,9 @@ nonisolated enum AppLaunchEnvironment {
         private static let failFirstSaveArgument = "--ui-test-fail-first-save"
         private static let loseImportSelectionArgument =
             "--ui-test-lose-import-selection"
+        private static let stubCommunityArgument = "--ui-test-community"
+        private static let noPlaceSuggestionsArgument =
+            "--ui-test-no-place-suggestions"
         private static let stubWeatherArgument = "--ui-test-weather"
         private static let entitledArgument = "--ui-test-entitled"
         private static let photoLibraryPrefix = "--ui-test-photo-library="
@@ -156,7 +161,8 @@ nonisolated enum AppLaunchEnvironment {
                 && arguments.contains(Self.failFirstSaveArgument)
             losesImportSelection = isUITesting
                 && arguments.contains(Self.loseImportSelectionArgument)
-            stubsCommunity = isUITesting && arguments.contains("--ui-test-community")
+            stubsCommunity = isUITesting && arguments.contains(Self.stubCommunityArgument)
+            suppressesPlaceSuggestions = isUITesting && arguments.contains(Self.noPlaceSuggestionsArgument)
             stubsWeather = isUITesting
                 && arguments.contains(Self.stubWeatherArgument)
             grantsPaidMaps = isUITesting
@@ -343,8 +349,28 @@ nonisolated enum AppLaunchEnvironment {
     /// and `CurrentWeather` cannot be constructed to stand in for them.
     /// ``WeatherSnapshot`` is what the badge actually draws, and this
     /// publishes one.
-    static let stubsCommunity = configuration.stubsCommunity
     static let stubsWeather = configuration.stubsWeather
+
+    /// Whether published hikes should be read from a fixed local set rather
+    /// than CloudKit.
+    ///
+    /// There is no sandbox for a public database: a record a test run writes
+    /// is a record every user can see, and the rows it reads are whatever the
+    /// world published that morning. ``CommunitySearchFixture`` is what the
+    /// browser actually reads, and this selects it — it cannot construct
+    /// CloudKit at all, let alone write to it.
+    static let stubsCommunity = configuration.stubsCommunity
+
+    /// Whether MapKit's place autocomplete should return nothing.
+    ///
+    /// Its own flag rather than a consequence of ``stubsCommunity``, because
+    /// the two are separate questions. A scenario driving the rows drawn
+    /// *underneath* the suggestions — "Find community hikes around…", "No
+    /// place suggestions" — needs the list reliably empty, which live
+    /// autocomplete cannot promise for any fragment. A scenario driving a
+    /// suggestion itself needs the completer left alone. Tying the second to
+    /// the community fixture would make it unwritable.
+    static let suppressesPlaceSuggestions = configuration.suppressesPlaceSuggestions
 
     /// Whether this launch should behave as though it has no connection at
     /// all, regardless of what the simulator's network is doing.

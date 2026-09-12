@@ -33,7 +33,19 @@ final class SearchCompleter: NSObject, MKLocalSearchCompleterDelegate {
     /// Feeds the latest query to the completer, or clears results when empty.
     func update(query: String) {
         #if DEBUG
-        if AppLaunchEnvironment.stubsCommunity {
+        // A launch that asked for no place suggestions gets none, so the rows
+        // drawn *underneath* them stay reachable without depending on what
+        // MapKit happens to answer for a fragment on the day the suite runs.
+        // Cancelled as well as blanked, for the reason the `.cancel` case
+        // below is: a request already in flight would otherwise refill the
+        // list through the delegate.
+        //
+        // The policy is left un-driven rather than stepped through a request
+        // that was never made. Nothing downstream reads it, and a state
+        // machine holding a fragment it never asked about is worse than one
+        // that plainly never ran.
+        if AppLaunchEnvironment.suppressesPlaceSuggestions {
+            completer.cancel()
             suggestions = []
             return
         }

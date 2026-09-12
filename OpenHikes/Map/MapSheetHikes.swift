@@ -369,8 +369,13 @@ private extension MapSheetHikes {
                     if searchSession.scope == .community || searchSession.scope == .all && community.hasTransport {
                         Button("Find community hikes around \(searchText)", action: onFindCommunityQuery)
                             .accessibilityIdentifier("community-around-query")
-                    } else {
+                    } else if searchSession.scope == .places {
                         Text("No place suggestions. Press Search to look up this place.")
+                    } else {
+                        // Return no longer geocodes outside Places — see
+                        // `performSearch` — so the only scope that can honour
+                        // "press Search" is the only one told to.
+                        Text("No place suggestions. Switch to Places to look this up on the map.")
                     }
                 }
             }

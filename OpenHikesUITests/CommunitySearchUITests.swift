@@ -1,9 +1,18 @@
 import XCTest
 
 nonisolated final class CommunitySearchUITests: XCTestCase {
+    /// Deterministic community rows, and no place autocomplete under them, so
+    /// the fallback rows these scenarios drive are reachable without depending
+    /// on what MapKit answers for a fragment on the day the suite runs.
+    private static let launchArguments = [
+        "--ui-test-expanded-sheet",
+        "--ui-test-community",
+        "--ui-test-no-place-suggestions",
+    ]
+
     @MainActor
     func testPlaceDiscoveryPreviewAndSaving() {
-        let app = launchApp(arguments: ["--ui-test-expanded-sheet", "--ui-test-community"])
+        let app = launchApp(arguments: Self.launchArguments)
         let search = element("map-search", in: app)
         search.tap()
         search.typeText("Dobogókő")
@@ -34,7 +43,7 @@ nonisolated final class CommunitySearchUITests: XCTestCase {
 
     @MainActor
     func testScopesEmptyResultsAndFailureRemainVisibleAfterSubmit() {
-        let app = launchApp(arguments: ["--ui-test-expanded-sheet", "--ui-test-community"])
+        let app = launchApp(arguments: Self.launchArguments)
         element("search-scope-community", in: app).tap()
         element("community-search-area", in: app).tap()
         app.buttons["Anywhere"].tap()
@@ -54,7 +63,7 @@ nonisolated final class CommunitySearchUITests: XCTestCase {
 
     @MainActor
     func testChooseAreaPreservesTheHikeQuery() throws {
-        let app = launchApp(arguments: ["--ui-test-expanded-sheet", "--ui-test-community"])
+        let app = launchApp(arguments: Self.launchArguments)
         element("search-scope-community", in: app).tap()
         element("community-search-area", in: app).tap()
         app.buttons["Anywhere"].tap()
@@ -84,7 +93,7 @@ nonisolated final class CommunitySearchUITests: XCTestCase {
 
     @MainActor
     func testPanningKeepsResultsUntilSearchThisArea() {
-        let app = launchApp(arguments: ["--ui-test-expanded-sheet", "--ui-test-community"])
+        let app = launchApp(arguments: Self.launchArguments)
         let search = element("map-search", in: app)
         search.tap()
         search.typeText("Pilis")
@@ -108,7 +117,7 @@ nonisolated final class CommunitySearchUITests: XCTestCase {
 
     @MainActor
     func testNearMeWithoutLocationOffersThePlacePicker() {
-        let app = launchApp(arguments: ["--ui-test-expanded-sheet", "--ui-test-community"])
+        let app = launchApp(arguments: Self.launchArguments)
         element("search-scope-community", in: app).tap()
         element("community-search-area", in: app).tap()
         app.buttons["Near me"].tap()
@@ -116,6 +125,20 @@ nonisolated final class CommunitySearchUITests: XCTestCase {
         XCTAssertTrue(alert.waitForExistence(timeout: UITestTimeout.existence))
         alert.buttons["Choose a place"].tap()
         XCTAssertTrue(element("community-place-search", in: app).waitForExistence(timeout: UITestTimeout.existence))
+    }
+
+    /// Without a transport the Community scope is absent, so All cannot offer
+    /// the community fallback either — and Return does not geocode outside
+    /// Places. What is left under an empty suggestion list has to say so.
+    @MainActor
+    func testAllScopeWithoutCommunityPointsAtThePlacesScope() {
+        let app = launchApp(arguments: ["--ui-test-expanded-sheet", "--ui-test-no-place-suggestions"])
+        XCTAssertFalse(element("search-scope-community", in: app).exists)
+        let search = element("map-search", in: app)
+        search.tap()
+        search.typeText("Dobogoko")
+        let hint = app.staticTexts["No place suggestions. Switch to Places to look this up on the map."]
+        XCTAssertTrue(hint.waitForExistence(timeout: UITestTimeout.existence))
     }
 
 }

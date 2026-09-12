@@ -60,12 +60,18 @@ nonisolated struct CommunitySearchFixture: CommunityTransporting {
         excluding: Set<String>
     ) async throws -> [CommunityListing] {
         if query == "Offline" { throw CommunityFailure.unreachable }
+        // Both predicates before the budget, as ``CommunityTransporting``
+        // specifies and ``CloudKitCommunityTransport`` implements with a
+        // compound predicate. Spending `limit` on the area first would let a
+        // matching title drop out because non-matching rows ahead of it used
+        // the budget up — a fixture that models the transport wrongly is a
+        // test that agrees with the regression.
         let candidates: [CommunityListing]
         if let area {
             candidates = await listings(
                 near: area.coordinate,
                 radiusMeters: area.radiusMeters,
-                limit: limit,
+                limit: Self.rows.count,
                 excluding: excluding
             )
         } else {
