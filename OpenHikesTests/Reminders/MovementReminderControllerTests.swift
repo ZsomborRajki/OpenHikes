@@ -42,7 +42,7 @@ struct MovementReminderControllerTests {
         #expect(watches)
         #expect(
             harness.notifier.authorizationRequests == 1,
-            "the prompt belongs to the pause the walker just tapped"
+            "the prompt belongs to the pause the hiker just tapped"
         )
     }
 
@@ -129,7 +129,7 @@ struct MovementReminderControllerTests {
 
     /// Core Location's first significant-change event is commonly a cached
     /// one, and a cached fix from before the pause is a statement about where
-    /// the walker set off from — not about anything they have done since.
+    /// the hiker set off from — not about anything they have done since.
     @Test("a fix taken before the pause is not evidence of leaving it")
     func cachedFixesFromBeforeThePauseAreDropped() async {
         let harness = MovementReminderHarness.harness()
@@ -148,7 +148,7 @@ struct MovementReminderControllerTests {
     }
 
     /// Significant-change delivery batches. Two fixes twenty minutes apart on
-    /// the ground, handed over in the same breath, are not a walker moving at
+    /// the ground, handed over in the same breath, are not a hiker moving at
     /// cycling pace — and the pace rule is the one that would say so if the
     /// watch were stamped with the delivery instead of the fix.
     @Test("a batch of delayed fixes is not a burst of speed")
@@ -198,7 +198,7 @@ struct MovementReminderControllerTests {
         #expect(harness.notifier.posted.isEmpty)
     }
 
-    /// The walker has just said they do not want this. Everything armed goes,
+    /// The hiker has just said they do not want this. Everything armed goes,
     /// including whatever the recorder is spending to feed it.
     @Test("turning the switch off mid-pause disarms the watch and the banners")
     func disablingMidPauseDisarmsEverything() async {

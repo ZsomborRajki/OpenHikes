@@ -34,7 +34,7 @@ nonisolated extension TileCache {
     /// duplicate left behind by an older build is the exception, and it becomes
     /// visible only once the durable side is past the TTL: "durable wins" then
     /// deletes the one fresh tile on the device and keeps the week-old one, and
-    /// the walker is shown old ground until a refresh they may have no signal
+    /// the hiker is shown old ground until a refresh they may have no signal
     /// to make. Newer wins there.
     ///
     /// Returns whether the browsing copy was adopted. `false` — including when
@@ -91,7 +91,7 @@ nonisolated extension TileCache {
     /// Where both copies are stale — an install carrying a duplicate from a
     /// build whose write paths made them, opened before the launch sweep has
     /// run — that deletes the newer of the two and leaves the older to be
-    /// drawn as the walker's coverage. A stale durable tile is the only case
+    /// drawn as the hiker's coverage. A stale durable tile is the only case
     /// where that can happen, which is why the caller asks only then; a fresh
     /// durable copy is the one that answers the lookup anyway.
     ///

@@ -90,7 +90,7 @@ struct ElevationChartWorkloadTests {
     /// The x-scale runs `0...samples.last.distanceMeters`, while the tracker
     /// and the live position are placed using `profile.distances`, which
     /// always covers the whole route. If the last plotted sample stops short,
-    /// the walker's own position falls outside the chart near the finish.
+    /// the hiker's own position falls outside the chart near the finish.
     @Test("the last plotted sample reaches the end of the route")
     func lastSampleReachesTheEnd() throws {
         let profile = RouteProfile(route: Self.longRoute)

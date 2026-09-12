@@ -58,20 +58,20 @@ protocol RecordingLocationSource: AnyObject {
     func requestTemporaryFullAccuracy() async
     func startRecordingUpdates(profile: RecordingEnergyProfile)
     /// Re-configures an already-running session. Separate from starting one
-    /// because the energy profile changes *during* a hike — a walker stops, a
+    /// because the energy profile changes *during* a hike — a hiker stops, a
     /// battery drops into Low Power Mode — and tearing down and restarting
     /// location updates to say so would drop the background activity session
     /// with them.
     func apply(_ profile: RecordingEnergyProfile)
     func stopRecordingUpdates()
     /// Swaps a running recording's delivery for the cheapest one that can
-    /// still notice the walker has set off again, and back.
+    /// still notice the hiker has set off again, and back.
     ///
     /// Separate from the energy profile above because it is not a
     /// configuration of the same feed: with Always authorization it is
     /// significant-location-change monitoring, which needs neither the
     /// background mode nor the activity session and so takes the status
-    /// indicator off the walker's screen for the length of the pause. Only
+    /// indicator off the hiker's screen for the length of the pause. Only
     /// without it does the watch stay a — deliberately coarse — continuous
     /// feed, because a when-in-use app that stops updating location is
     /// suspended and would notice nothing at all.
@@ -227,7 +227,7 @@ final class SystemRecordingLocationSource: RecordingLocationSource {
     }
 
     /// The two ways a paused recording can be watched, and which one this
-    /// walker's authorization allows.
+    /// hiker's authorization allows.
     ///
     /// Always: significant location changes. They cost nothing — the system is
     /// already computing them for other apps — they wake or relaunch this
@@ -235,7 +235,7 @@ final class SystemRecordingLocationSource: RecordingLocationSource {
     /// the same figure ``MovementReminderPolicy/awayMeters`` is written
     /// against. The continuous feed, the background mode and the activity
     /// session all go for the length of the pause, and the status indicator
-    /// goes with them: a paused hike stops showing the walker a pill that says
+    /// goes with them: a paused hike stops showing the hiker a pill that says
     /// their location is being used.
     ///
     /// When in use: the feed has to keep running, because an app that stops
@@ -267,7 +267,7 @@ final class SystemRecordingLocationSource: RecordingLocationSource {
     ///
     /// Significant-change monitoring outlives the process that armed it — that
     /// is what makes it able to relaunch an app — so a launch that died during
-    /// a pause leaves a walker's phone waking this app every five hundred
+    /// a pause leaves a hiker's phone waking this app every five hundred
     /// metres for a watch no object in the new process is holding. A flag
     /// saying "this process started one" would be false in exactly that
     /// launch, which is the one that has to clear it. The cost of being wrong
@@ -288,7 +288,7 @@ final class SystemRecordingLocationSource: RecordingLocationSource {
     /// rather than opening a second (the same property
     /// ``startBackgroundActivitySession()`` relies on), so invalidating that
     /// fresh handle ends the real thing and takes the status indicator with
-    /// it. Without this the walker is left with a tappable location pill for
+    /// it. Without this the hiker is left with a tappable location pill for
     /// a recording the app has already decided not to continue.
     func releaseOrphanedBackgroundActivity() {
         #if os(iOS)
@@ -334,7 +334,7 @@ final class SystemRecordingLocationSource: RecordingLocationSource {
     /// in direct use, so the When-In-Use authorization this source asks for
     /// keeps applying once the screen locks, instead of the recording becoming
     /// eligible for the `insufficientlyInUse` suspension CoreLocation reports
-    /// below. It also makes the status indicator *tappable*: the walker who
+    /// below. It also makes the status indicator *tappable*: the hiker who
     /// notices the blue pill can get back to the recording from it, rather
     /// than only being told the recording exists.
     ///
@@ -359,7 +359,7 @@ final class SystemRecordingLocationSource: RecordingLocationSource {
     ///
     /// Nothing reads these but Console, and that is the point: "my hike
     /// stopped recording" otherwise has no answer at all, and by the time it
-    /// is asked the walker is off the mountain and the state that would have
+    /// is asked the hiker is off the mountain and the state that would have
     /// explained it is gone. Deliberately not `#if DEBUG` — a debug build is
     /// exactly where this never happens.
     private static func logDiagnostics(of session: CLBackgroundActivitySession) async {

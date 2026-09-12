@@ -8,7 +8,7 @@
 //  not in ``HikePhotoStore`` and must not be: they belong to somebody else's
 //  hike and exist only for as long as the screen previewing it. Routing them
 //  through the store to get its thumbnail cache would mean writing files into
-//  the walker's own photo directory for a hike they have not imported — which
+//  the hiker's own photo directory for a hike they have not imported — which
 //  is exactly the state ``HikePhotoStore/reclaimOrphans(claimedBy:)`` sweeps
 //  away at the next launch, so the cache would be both wrong and temporary.
 //

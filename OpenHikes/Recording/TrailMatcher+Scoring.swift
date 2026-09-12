@@ -20,10 +20,10 @@ nonisolated extension TrailMatcher {
         )
     }
 
-    /// What to say about the trail the walker is on at the end of the window.
+    /// What to say about the trail the hiker is on at the end of the window.
     ///
     /// Gated on the *last* leg being confidently matched, which is the same
-    /// bar the trail name has always been held to: a walker who has stepped
+    /// bar the trail name has always been held to: a hiker who has stepped
     /// off the path should be told nothing rather than told about the path
     /// they left. The tags are read from the way under the final fix rather
     /// than from the leg, for the reason ``RecordingTrailContext`` gives.

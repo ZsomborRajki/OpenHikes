@@ -11,7 +11,7 @@
 //  app, and a new one is not an exception.
 //
 //  What it says that a local row does not is who walked it and whether it is
-//  already in the library — the two things that decide whether the walker
+//  already in the library — the two things that decide whether the hiker
 //  taps it.
 //
 
@@ -23,7 +23,7 @@ struct CommunityHikeRow: View {
 
     let listing: CommunityListing
     /// True when this hike has already been imported. Drawn rather than
-    /// hidden: a walker who imported a trail last week and meets it again in
+    /// hidden: a hiker who imported a trail last week and meets it again in
     /// a search is better served by "Saved" than by an import that silently
     /// does nothing.
     var isImported: Bool

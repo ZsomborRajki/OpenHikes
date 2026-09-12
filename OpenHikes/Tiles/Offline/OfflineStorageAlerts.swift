@@ -60,7 +60,7 @@ private struct OfflineStorageAlerts: ViewModifier {
     }
 
     /// Says which half of the deletion refused, because the two leave the
-    /// walker in different places: a claim that could not be read is a
+    /// hiker in different places: a claim that could not be read is a
     /// deletion that was never attempted, a commit the store refused is one
     /// that was taken back. Both end with every tile still on the device,
     /// which is the sentence they share and the one that matters.

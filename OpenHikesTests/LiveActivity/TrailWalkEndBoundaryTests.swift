@@ -6,9 +6,9 @@
 //
 //  `TrailWalkActivityTests` asserts that ending a walk leaves its closing
 //  figures up for `finishedDismissAfter`. This asserts the other half of that
-//  promise: for as long as the boundary stands, nothing the walker's own
+//  promise: for as long as the boundary stands, nothing the hiker's own
 //  receiver keeps producing may put a second panel beside that result or
-//  replace it. The fixes do not stop when the walk does — a walker who taps
+//  replace it. The fixes do not stop when the walk does — a hiker who taps
 //  End is still standing on the route, and a background match may already have
 //  been in flight when the terminal write landed — and every one of them
 //  carries no walk, which is exactly what an ordinary plain follow looks like.
@@ -146,7 +146,7 @@ final class TrailWalkEndBoundaryTests {
         await controller.settle()
     }
 
-    /// End is not the last fix. The walker who taps it is still standing on
+    /// End is not the last fix. The hiker who taps it is still standing on
     /// the trail, and the next accepted fix along it carries no walk — so
     /// without the boundary it reads as a plain follow and ActivityKit is
     /// asked for a second panel while the finished one is still deliberately
@@ -173,7 +173,7 @@ final class TrailWalkEndBoundaryTests {
     }
 
     /// The same boundary, reached the other way. A walk that completes at the
-    /// route's end has no End tap behind it, and the walker stands at the
+    /// route's end has no End tap behind it, and the hiker stands at the
     /// finish for as long as it takes to read the result — which is a run of
     /// on-route fixes, not one.
     @Test("the fixes after a completed walk start no second activity")
@@ -223,7 +223,7 @@ final class TrailWalkEndBoundaryTests {
         #expect(SharedStore.load()?.liveFix != nil, "precondition: the fix was matched and published")
     }
 
-    /// And the boundary lets go. Leaving the route is the walker saying they
+    /// And the boundary lets go. Leaving the route is the hiker saying they
     /// are done with this trail, so coming back to it is a walk of its own —
     /// with an activity of its own, which is the whole point of not suppressing
     /// these for good.

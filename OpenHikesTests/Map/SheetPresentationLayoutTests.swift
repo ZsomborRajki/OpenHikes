@@ -11,7 +11,7 @@
 //  answers it must stop giving. A panel is never compact (the hikes list has
 //  the height for itself whatever detent the sheet last rested at), always full
 //  height, and at no detent at all — but the stored detent survives the visit,
-//  because rotating back has to put the sheet where the walker left it. The
+//  because rotating back has to put the sheet where the hiker left it. The
 //  bug all of this exists for is in `OrientationUITests`; these are the rules
 //  underneath it.
 //

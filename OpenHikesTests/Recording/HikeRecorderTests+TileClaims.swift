@@ -16,7 +16,7 @@
 //
 //  `HikeLocalStateTests` pins the sidecar's own behaviour and the user-facing
 //  delete in `MapSheet`. What is pinned here is that the recorder's two delete
-//  paths — the walker's discard and the orphan sweep at the start of the next
+//  paths — the hiker's discard and the orphan sweep at the start of the next
 //  session — agree with it.
 //
 
@@ -30,7 +30,7 @@ extension HikeRecorderTests {
     /// claim rather than as a string.
     private static let autoSavedTileKey = "osm/16/34567/22345@2.0"
 
-    /// The walker records with the map on screen, then discards. The draft
+    /// The hiker records with the map on screen, then discards. The draft
     /// goes; so must the row that was accumulating tiles against it.
     ///
     /// Everything here reads through `container.mainContext` — the recorder's

@@ -175,7 +175,7 @@ extension OpenHikesModel {
     /// fetches a sidecar except by the id of a hike that still exists — see
     /// ``Hike/deleteLocalState()``, the *only* thing that removes one, which
     /// only a deletion made on this device reaches. A hike deleted on the
-    /// walker's other device arrives as a mirrored row deletion that cannot
+    /// hiker's other device arrives as a mirrored row deletion that cannot
     /// touch this store at all, and leaves a row behind that is unreachable
     /// and, until this sweep, unsweepable — carrying a `walkInProgress` that
     /// ``openWalkAtLaunch(now:fetchingLocalStates:)`` goes on choosing over
@@ -243,7 +243,7 @@ extension OpenHikesModel {
         /// claim fetch trims no tile: a walk that cannot be seen is not a
         /// walk that is over.
         case unreadable
-        /// A walk recent enough to still be the walker's, to adopt.
+        /// A walk recent enough to still be the hiker's, to adopt.
         case resume(HikeLocalState, TrailWalkRecord)
         /// A walk older than ``TrailWalkPolicy/staleAtLaunchAfter``, to close
         /// as abandoned — kept if it covered enough, with no lingering panel.

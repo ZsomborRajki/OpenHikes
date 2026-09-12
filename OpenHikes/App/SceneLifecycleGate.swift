@@ -54,7 +54,7 @@ nonisolated struct SceneLifecycleGate: Sendable {
             // `.inactive` and anything a future SDK adds between the two:
             // treated as resigning rather than ignored, because guessing wrong
             // in that direction costs a redundant idempotent save, and
-            // guessing wrong in the other costs a walker their recording.
+            // guessing wrong in the other costs a hiker their recording.
             return hasReachedBackground ? .redundant : .willResignActive
         }
     }

@@ -70,7 +70,7 @@ final class SystemHikeActivityPresenter: HikeActivityPresenting {
                 pushType: nil
             )
         } catch {
-            // Refused for a reason the walker owns — the Settings switch, or
+            // Refused for a reason the hiker owns — the Settings switch, or
             // the system's per-app limit. Logged, not surfaced: there is
             // nothing to do about it mid-hike, and the recording itself is
             // entirely unaffected.
@@ -175,7 +175,7 @@ final class SystemHikeActivityPresenter: HikeActivityPresenting {
     /// is showing a distance that is simply wrong. Handing the system a stale
     /// date lets it dim the activity and say so, which is the honest outcome —
     /// the alternative is a Lock Screen confidently reporting a figure from
-    /// before the walker went into the woods.
+    /// before the hiker went into the woods.
     private static func content(
         _ state: HikeActivityAttributes.ContentState,
         staleAfter: TimeInterval?

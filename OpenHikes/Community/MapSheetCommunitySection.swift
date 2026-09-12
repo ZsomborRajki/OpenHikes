@@ -2,7 +2,7 @@
 //  MapSheetCommunitySection.swift
 //  OpenHikes
 //
-//  The shared hikes, where the walker's own list already is.
+//  The shared hikes, where the hiker's own list already is.
 //
 //  Split out of `MapSheetHikes.swift` rather than living beside the rest of
 //  the sheet, for the reason `OpenHikesView+Photos.swift` is split out of its
@@ -18,7 +18,7 @@
 //  and the same records appeared under two different headings depending on how
 //  they had been found. This is a section of the same list instead, offered by
 //  a single row until somebody asks for it, so nothing about the feature
-//  reaches the network for a walker who never does.
+//  reaches the network for a hiker who never does.
 //
 
 import SwiftUI
@@ -31,7 +31,7 @@ private enum CommunityRowMetrics {
 }
 
 extension MapSheetHikes {
-    /// Listing ids this walker has already imported.
+    /// Listing ids this hiker has already imported.
     ///
     /// Derived from the query that is already loaded rather than fetched: the
     /// hikes are in memory either way, and a second `@Query` filtered on the
@@ -40,13 +40,13 @@ extension MapSheetHikes {
         Set(hikes.compactMap(\.importedFromListingID))
     }
 
-    /// Published hikes, as a section of the walker's own list.
+    /// Published hikes, as a section of the hiker's own list.
     ///
     /// A section rather than the mode this used to be. The *Nearby* chip
     /// replaced the hikes list wholesale, which made one question — where
-    /// shall I walk? — into two screens the walker had to choose between, and
+    /// shall I walk? — into two screens the hiker had to choose between, and
     /// put the same records under two different headings depending on how
-    /// they were found. Here the shared hikes sit under the walker's own,
+    /// they were found. Here the shared hikes sit under the hiker's own,
     /// where a scroll reaches them.
     ///
     /// Absent entirely when this launch has no transport — a hosted suite or
@@ -89,7 +89,7 @@ extension MapSheetHikes {
     /// The heading, and the place it is about.
     ///
     /// Naming the area is the other half of taking the chip away. *Nearby*
-    /// named the query and never the answer, so a walker who had panned — or
+    /// named the query and never the answer, so a hiker who had panned — or
     /// who opened the app somewhere they were not yesterday — had no way to
     /// tell which "here" the rows were from. See ``CommunityAreaNaming``.
     var communitySectionHeader: some View {
@@ -105,7 +105,7 @@ extension MapSheetHikes {
             Spacer(minLength: 0)
             if community.isBrowsing {
                 // The off switch the chip used to be. Kept because turning
-                // something on is only half a decision, and a walker who has
+                // something on is only half a decision, and a hiker who has
                 // seen what is here should be able to put the section away —
                 // it takes the map's pins with it.
                 Button("Hide") { community.stopBrowsing() }
@@ -159,7 +159,7 @@ extension MapSheetHikes {
                     Text("Find shared hikes near here")
                         .font(.body.weight(.medium))
                         .foregroundStyle(.primary)
-                    Text("Trails other walkers have published")
+                    Text("Trails other hikers have published")
                         .font(.subheadline)
                         .foregroundStyle(.secondary)
                 }
@@ -177,12 +177,12 @@ extension MapSheetHikes {
     /// A failure, a search that is still running and an area with nothing in
     /// it all draw no rows, and telling them apart is the difference between
     /// "there are none here" and "this did not work" — which is the one the
-    /// walker can do something about.
+    /// hiker can do something about.
     @ViewBuilder var communityEmptyRow: some View {
         VStack(alignment: .leading, spacing: 6) {
             // Before the state, deliberately. Zoomed out past the ceiling
             // nothing was asked, so *No shared hikes here* would be a claim
-            // about an area nobody looked at — and a spinner, for a walker who
+            // about an area nobody looked at — and a spinner, for a hiker who
             // opted in while looking at a country, would be a promise of an
             // answer that is never coming.
             if community.areaPrompt == .zoomIn {
@@ -247,11 +247,11 @@ extension MapSheetHikes {
         }
     }
 
-    /// Community matches in the search results, between the walker's own hikes
+    /// Community matches in the search results, between the hiker's own hikes
     /// and MapKit's places.
     ///
     /// Second of the three deliberately: a trail already in the library is the
-    /// one the walker means when they half-type its name, and a place is a
+    /// one the hiker means when they half-type its name, and a place is a
     /// coarser answer than a hike.
     @ViewBuilder
     func communitySuggestionsSection(matchingHikes: [Hike]) -> some View {
@@ -271,13 +271,13 @@ extension MapSheetHikes {
         }
     }
 
-    /// What the map found, kept visible underneath what the walker typed.
+    /// What the map found, kept visible underneath what the hiker typed.
     ///
     /// Last, because it answers a different question from the one in the
     /// field and must never look like an answer to it. Shown at all because
     /// the alternative was worse: while the section above was a mode, typing
     /// hid the map's results outright, so a query that matched nothing left
-    /// the walker looking at an empty list with eleven shared hikes on the
+    /// the hiker looking at an empty list with eleven shared hikes on the
     /// map behind it.
     @ViewBuilder var nearbySuggestionsSection: some View {
         if community.isBrowsing, !community.nearbyListings.isEmpty {

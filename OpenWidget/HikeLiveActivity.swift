@@ -3,7 +3,7 @@
 //  OpenWidget
 //
 //  The Live Activity itself: one `ActivityConfiguration` covering both things
-//  a walker can have running, because ``HikeActivityAttributes`` covers both.
+//  a hiker can have running, because ``HikeActivityAttributes`` covers both.
 //
 //  The app decides when one starts, updates and ends — see
 //  `HikeLiveActivityController` in the app target. Everything drawn here comes
@@ -91,7 +91,7 @@ struct HikeLiveActivity: Widget {
     }
 
     /// The clock for a recording, the distance left for a follow, and nothing
-    /// at all for a walker who has lost the trail — an empty region collapses,
+    /// at all for a hiker who has lost the trail — an empty region collapses,
     /// which is the right answer rather than a dash.
     @ViewBuilder
     private func expandedTrailing(

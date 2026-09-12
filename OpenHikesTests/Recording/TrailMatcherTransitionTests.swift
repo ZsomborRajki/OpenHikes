@@ -3,7 +3,7 @@
 //  OpenHikesTests
 //
 //  Direct tests of ``TrailMatcherGraphIndex/transition(from:to:parameters:)`` —
-//  the function that decides, given where a walker was and where they now are,
+//  the function that decides, given where a hiker was and where they now are,
 //  which stretch of trail they covered in between.
 //
 //  Everything else in the matcher is reached through it, and until now it was
@@ -72,7 +72,7 @@ struct TrailMatcherTransitionTests {
         return TrailGraph(nodes: graphNodes, edges: edges)
     }
 
-    /// Stem 1→2, two arms 2→4, tail 4→5. The walker is at junction 2 and then
+    /// Stem 1→2, two arms 2→4, tail 4→5. The hiker is at junction 2 and then
     /// at junction 4; only the arm between them is in question.
     private func lensGraph() -> TrailGraph {
         graph(
@@ -118,7 +118,7 @@ struct TrailMatcherTransitionTests {
     ///
     /// The two arms are 149.88 m and 250.04 m, so their errors are equal at an
     /// expected distance of 199.96 m. Each row sits at least 10 m clear of that
-    /// crossover in one direction or the other, and names the arm the walker
+    /// crossover in one direction or the other, and names the arm the hiker
     /// must have taken to have covered the distance the clock and the GPS
     /// displacement imply. Nothing sits beyond 250 m, because past that the
     /// best answer stops being an arm at all — walking back down the stem and
@@ -154,7 +154,7 @@ struct TrailMatcherTransitionTests {
         #expect(transition.trailNames.contains("Tail"))
     }
 
-    /// The arm the walker did not take is offered as the alternative, so the
+    /// The arm the hiker did not take is offered as the alternative, so the
     /// review screen has something to offer when the margin is thin.
     @Test("a sparse transition keeps the runner-up as an alternative")
     func sparseTransitionOffersRunnerUp() throws {
@@ -364,7 +364,7 @@ struct TrailMatcherTransitionTests {
 
     // MARK: - Same edge
 
-    /// A walker who stayed on one edge gets the along-edge distance, not a trip
+    /// A hiker who stayed on one edge gets the along-edge distance, not a trip
     /// round the graph, and no alternative is offered because there is nothing
     /// to be uncertain about.
     @Test("staying on one edge scores the offset difference")

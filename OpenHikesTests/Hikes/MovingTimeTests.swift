@@ -6,7 +6,7 @@
 //
 //  The elapsed average divides a walk's distance by the whole clock, lunch
 //  included, which is why a leisurely day out reports a pace nobody walked.
-//  The moving average divides it by the part of that clock the walker was
+//  The moving average divides it by the part of that clock the hiker was
 //  actually going somewhere. Everything here is about where the boundary
 //  between the two sits, so the fixtures are built in metres per second and
 //  seconds rather than out of a recorded file.
@@ -125,7 +125,7 @@ struct MovingTimeTests {
     /// The span is long *and* the displacement is large, which is precisely
     /// what walking looks like from here — so without the boundary the drive
     /// is booked as an hour of moving time.
-    @Test("a pause is not moving time, however far the walker went during it")
+    @Test("a pause is not moving time, however far the hiker went during it")
     func aPauseIsNotMovingTime() throws {
         let walkedOut = Self.walk([Leg(seconds: 600, metersPerSecond: Self.walkingSpeed)])
         let lastPoint = try #require(walkedOut.last)
@@ -223,7 +223,7 @@ struct MovingTimeTests {
     }
 
     /// Slow is not the same as stopped, and a rule that confused the two would
-    /// inflate exactly the number a walker is most likely to quote. One metre
+    /// inflate exactly the number a hiker is most likely to quote. One metre
     /// per second is a plod, and it has to survive.
     @Test("a slow but steady walk is still walking")
     func aPlodCountsAsMovement() {
@@ -347,7 +347,7 @@ struct MovingTimeTests {
         #expect((stats.movingDuration ?? 0) <= duration)
     }
 
-    /// A hike the walker brought with them carries timestamps and coordinates
+    /// A hike the hiker brought with them carries timestamps and coordinates
     /// and nothing else — no Core Motion verdict, no recorder flags. The rule
     /// is built from what both kinds of route have, so the same geometry has
     /// to answer identically whether or not the extra field is set.

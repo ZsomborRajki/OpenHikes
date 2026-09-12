@@ -28,12 +28,12 @@
 //
 //  There is deliberately no setting behind any of this. The app is meant to
 //  be used hands-free — pocket, glance, walk on — and every question it asks
-//  in Settings about Wi-Fi versus cellular is a question the walker has to
+//  in Settings about Wi-Fi versus cellular is a question the hiker has to
 //  answer correctly *before* the walk to get the right behaviour during it.
-//  So the policy assumes a connection is available wherever the walker is and
+//  So the policy assumes a connection is available wherever the hiker is and
 //  spends as little of it as it can: everything nobody is waiting for is
 //  given up the moment the connection becomes metered, throttled or
-//  constrained, and everything the walker is actually looking at still loads.
+//  constrained, and everything the hiker is actually looking at still loads.
 //
 //  Split by purpose rather than by caller: what the policy weighs is whether
 //  anyone is waiting for the tile. ``TileCache/loadTile(forKey:url:purpose:)``
@@ -45,7 +45,7 @@
 import Foundation
 
 nonisolated enum TileFetchPurpose: String, Sendable {
-    /// The map is trying to draw this tile now. Refusing shows the walker a
+    /// The map is trying to draw this tile now. Refusing shows the hiker a
     /// blank square, so only an unambiguous instruction — offline, or Low Data
     /// Mode — is allowed to.
     case interactive = "interactive"
@@ -96,7 +96,7 @@ nonisolated enum TileNetworkPolicy {
         guard purpose == .speculative else { return .allowed }
         if power.isLowPowerModeEnabled { return .denied("low-power-mode") }
         if RecordingEnergyPolicy.conserves(power.thermalState) { return .denied("thermal") }
-        // Cellular costs the same radio as Wi-Fi for a tile the walker is
+        // Cellular costs the same radio as Wi-Fi for a tile the hiker is
         // waiting on, and buys nothing for one they are not. Reading ahead is
         // therefore the whole of what a metered connection gives up: the map
         // in front of them still fills in, and the app stops spending their

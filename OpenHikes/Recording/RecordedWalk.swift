@@ -12,7 +12,7 @@
 //  `Hike`, out of what the recorder prepared from the journalled points.
 //
 //  Coverage is the whole of the route by construction, which is not a claim
-//  about the walker so much as a statement of what the route is: the line was
+//  about the hiker so much as a statement of what the route is: the line was
 //  drawn by walking it. What the row is *for* is the History segment, where a
 //  recorded hike used to have nothing to show and now leads with the walk that
 //  made it, above whatever follows were made along it afterwards.
@@ -39,7 +39,7 @@ extension HikeWalk {
     ///
     /// Deliberately not held to ``TrailWalkPolicy/minimumCoverageMeters``,
     /// which every followed walk is. That rule exists so opening a trail at
-    /// the trailhead for a look leaves no row behind; a recording the walker
+    /// the trailhead for a look leaves no row behind; a recording the hiker
     /// stopped and saved is never that glance, and a hike whose History
     /// disowned it would be the one hike in the list unable to say where it
     /// came from.

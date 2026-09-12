@@ -38,9 +38,9 @@ struct CommunityBrowserTests {
         }
     }
 
-    /// The whole bargain of the section: a walker who never asks for it never
+    /// The whole bargain of the section: a hiker who never asks for it never
     /// puts a request on the radio, and nothing offers to.
-    @Test("panning asks nothing until the walker opts in")
+    @Test("panning asks nothing until the hiker opts in")
     func panningIsFreeUntilOptedIn() {
         let transport = StubCommunityTransport()
         let browser = CommunityBrowser(transport: transport, blockList: .scratch())
@@ -70,7 +70,7 @@ struct CommunityBrowserTests {
 
     /// A sheet can be opened before the map has ever reported a region, and
     /// the tap that opts in is still the confirmation — so the first region to
-    /// arrive is asked about rather than offered, or the walker is left with a
+    /// arrive is asked about rather than offered, or the hiker is left with a
     /// spinner beside a button asking them to opt in again.
     @Test("opting in before the map has settled asks about the first region")
     func optingInBeforeTheFirstRegionAsks() async {
@@ -104,7 +104,7 @@ struct CommunityBrowserTests {
     }
 
     /// The change this whole design turns on: panning offers, and only the
-    /// walker's tap spends anything. A pan nobody confirms is free.
+    /// hiker's tap spends anything. A pan nobody confirms is free.
     @Test("a pan past the threshold offers rather than asks")
     func panningOffersWhileBrowsing() async {
         let transport = StubCommunityTransport()
@@ -153,7 +153,7 @@ struct CommunityBrowserTests {
 
     /// Above the ceiling a nearby result means "somewhere on this continent",
     /// so there is nothing to offer and something to say.
-    @Test("zoomed out past the ceiling, the map asks the walker to zoom in")
+    @Test("zoomed out past the ceiling, the map asks the hiker to zoom in")
     func continentalZoomPromptsAZoom() async {
         let transport = StubCommunityTransport()
         let browser = CommunityBrowser(transport: transport, blockList: .scratch())
@@ -189,7 +189,7 @@ struct CommunityBrowserTests {
         #expect(browser.state == .failed(.unreachable))
     }
 
-    /// A region that failed must stay askable, or the walker's only recourse
+    /// A region that failed must stay askable, or the hiker's only recourse
     /// is to pan away and back.
     @Test("retrying asks about the failed region again")
     func retryReopensTheRegion() async {
@@ -250,7 +250,7 @@ struct CommunityBrowserTests {
         #expect(browser.areaName == nil)
     }
 
-    /// Typing a trail's name is asking for it by name, wherever the walker is
+    /// Typing a trail's name is asking for it by name, wherever the hiker is
     /// and whether or not the map layer is on.
     @Test("a typed query searches without opting in")
     func titleSearchNeedsNoOptIn() async {
@@ -336,7 +336,7 @@ struct CommunityBrowserTests {
     }
 
     /// A typed search belongs to the field rather than to the section, so
-    /// hiding the section takes the map's answer and leaves the walker's own
+    /// hiding the section takes the map's answer and leaves the hiker's own
     /// question standing.
     @Test("hiding the section keeps the title matches")
     func stoppingKeepsTitleMatches() async {

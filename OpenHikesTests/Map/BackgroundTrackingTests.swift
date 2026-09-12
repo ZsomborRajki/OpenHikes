@@ -373,7 +373,7 @@ final class BackgroundDeliveryTests {
     }
 
     /// Abandonment used to be checked only inside the matched branch. Once
-    /// the walker left the trail every significant change was unmatched, so
+    /// the hiker left the trail every significant change was unmatched, so
     /// nothing reached the session and the six-hour rule never fired while
     /// the app stayed backgrounded — the widget and the Lock Screen kept an
     /// off-trail walk indefinitely, until the app came back to the foreground.
@@ -436,13 +436,13 @@ final class BackgroundDeliveryTests {
         await deliver(fix(at: CLLocationCoordinate2D(latitude: 37.3340, longitude: -122.0400)))
 
         let snapshot = try #require(SharedStore.load())
-        #expect(snapshot.liveFix == nil, "a walker who left the trail has no progress along it")
+        #expect(snapshot.liveFix == nil, "a hiker who left the trail has no progress along it")
         #expect(snapshot.hikeID == hike.id, "but the trail itself is still what's shown")
     }
 
     /// Significant-change delivery hands over cached fixes on relaunch, and a
     /// fix older than ``LocationFixPolicy/backgroundMaximumAge`` is a position
-    /// the walker has left.
+    /// the hiker has left.
     @Test("a stale fix is refused")
     func staleFixIsRefused() async {
         let hike = selectedHike()
@@ -504,7 +504,7 @@ final class BackgroundDeliveryTests {
     func matchingResumesFromPersistedDistance() async throws {
         // An out-and-back: at the trailhead the outbound and return legs are
         // less than a metre apart, so the fix alone cannot say which of them
-        // the walker is on. Only the persisted distance can.
+        // the hiker is on. Only the persisted distance can.
         let hike = selectedHike(route: Fixture.outAndBackRoute)
         let profile = RouteProfile(route: hike.route)
         let total = try #require(profile.distances.last)
@@ -515,7 +515,7 @@ final class BackgroundDeliveryTests {
         let cold = try #require(SharedStore.load()?.liveFix)
         #expect(cold.distanceAlongRouteMeters < total / 2, "with nothing to go on, a fix here is the start")
 
-        // Now the app is relaunched knowing the walker was nearly home. The
+        // Now the app is relaunched knowing the hiker was nearly home. The
         // wait above is what makes this safe to write here: matching reads the
         // reference off the main actor now, so seeding it while the previous
         // fix was still in flight would decide nothing.
@@ -525,7 +525,7 @@ final class BackgroundDeliveryTests {
         let resumed = try #require(SharedStore.load()?.liveFix)
         #expect(
             resumed.distanceAlongRouteMeters > total / 2,
-            "a walker finishing an out-and-back must not be reported as just starting it"
+            "a hiker finishing an out-and-back must not be reported as just starting it"
         )
     }
 
@@ -554,8 +554,8 @@ final class BackgroundDeliveryTests {
     }
 
     /// The reported bug. Ending a walk holds the trail closed until the
-    /// walker leaves its route, and leaving used to be reported only by the
-    /// detail view's own matcher — so a walker who tapped End, locked the
+    /// hiker leaves its route, and leaving used to be reported only by the
+    /// detail view's own matcher — so a hiker who tapped End, locked the
     /// phone, walked away and came back found the leave had happened where
     /// nothing was looking. The first foreground match on their return was
     /// still refused, and no second walk could start until another foreground
@@ -582,7 +582,7 @@ final class BackgroundDeliveryTests {
 
     /// …but only for a fix that actually reached the route. A stale or
     /// imprecise one is refused before matching and says nothing about where
-    /// the walker is relative to the trail — including whether they left it —
+    /// the hiker is relative to the trail — including whether they left it —
     /// so it must not spend the boundary an End is holding.
     @Test("a rejected background fix leaves the boundary standing")
     func rejectedBackgroundFixDoesNotRearm() async {

@@ -2,7 +2,7 @@
 //  ScreenWakeTests.swift
 //  OpenHikesTests
 //
-//  The display is the largest thing this app could spend a walker's battery
+//  The display is the largest thing this app could spend a hiker's battery
 //  on, and it is now the only one a switch can turn on. Two things are pinned
 //  here, both of which fail silently in the field: a hold that is taken when
 //  one of the three answers was no, and a hold that is *left behind* when the
@@ -12,7 +12,7 @@
 //  A navigation transition presents the incoming screen before the outgoing
 //  one disappears, so the release from the screen that is leaving arrives
 //  after the claim from the screen that arrived — and a flag would be cleared
-//  by it, leaving the walker's recording screen with the idle timer back on
+//  by it, leaving the hiker's recording screen with the idle timer back on
 //  and nothing on screen to say so.
 //
 
@@ -128,7 +128,7 @@ struct ScreenWakeTests {
         #expect(writes.values == [true, false])
     }
 
-    /// Off, and the walker who never finds the switch gets exactly the
+    /// Off, and the hiker who never finds the switch gets exactly the
     /// behaviour the app has always had.
     @Test("The switch is off until it is asked for")
     func defaultIsOff() {

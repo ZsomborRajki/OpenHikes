@@ -4,7 +4,7 @@
 //
 //  The `AppIntent`s themselves, performed.
 //
-//  What is not covered here is what the walker *hears*: `perform()` returns an
+//  What is not covered here is what the hiker *hears*: `perform()` returns an
 //  opaque `some IntentResult & ProvidesDialog`, so the dialog it carries
 //  cannot be read back from a caller. The wording is asserted where it is
 //  built instead — see `HikeIntentPhrasingTests`. What these pin is the half
@@ -104,7 +104,7 @@ final class HikeIntentPerformTests {
     /// Reduced accuracy is the *second* prompt location can put up, and the
     /// recorder meets it inside `start()`. Reporting it as a grant is what
     /// turned "start a hike" into "turn on Precise Location in Settings" for a
-    /// walker with the phone in their pocket.
+    /// hiker with the phone in their pocket.
     @Test("starting at reduced accuracy defers to the foreground too")
     func startIntentDefersWhenAccuracyIsReduced() async throws {
         source.hasFullAccuracy = false

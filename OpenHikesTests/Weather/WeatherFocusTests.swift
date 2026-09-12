@@ -41,24 +41,24 @@ struct WeatherFocusTests {
         #expect(focus.subject == .place(budapest, name: "Budapest"))
     }
 
-    /// The precedence rule, stated directly. A walker mid-hike who searches
+    /// The precedence rule, stated directly. A hiker mid-hike who searches
     /// for a city is asking the *map* to go there; the badge is the one thing
     /// on screen still answering "what am I standing in".
     @Test("a recording owns the badge, and a search cannot take it")
     func recordingOutranksSearch() {
         let focus = WeatherFocus()
-        focus.pinToWalker(at: budapest)
+        focus.pinToHiker(at: budapest)
 
         focus.focus(on: .place(vienna, name: "Vienna"))
 
         #expect(focus.subject == .me(budapest))
-        #expect(focus.isPinnedToWalker)
+        #expect(focus.isPinnedToHiker)
     }
 
     @Test("a recording outranks a hike selection too")
     func recordingOutranksSelection() {
         let focus = WeatherFocus()
-        focus.pinToWalker(at: budapest)
+        focus.pinToHiker(at: budapest)
 
         focus.focus(on: trail(at: vienna))
 
@@ -66,37 +66,37 @@ struct WeatherFocusTests {
     }
 
     /// Releasing the pin must not blank the badge, and must not hand it back
-    /// to a search the walker made before they set off. "Here" is still the
+    /// to a search the hiker made before they set off. "Here" is still the
     /// right answer the moment a recording ends.
     @Test("ending a recording keeps the subject where it is")
     func unpinningKeepsTheSubject() {
         let focus = WeatherFocus()
         focus.focus(on: .place(vienna, name: "Vienna"))
-        focus.pinToWalker(at: budapest)
+        focus.pinToHiker(at: budapest)
 
-        focus.unpinFromWalker()
+        focus.unpinFromHiker()
 
         #expect(focus.subject == .me(budapest))
-        #expect(!focus.isPinnedToWalker)
+        #expect(!focus.isPinnedToHiker)
     }
 
     @Test("once the recording ends a search wins again")
     func searchWinsAfterUnpinning() {
         let focus = WeatherFocus()
-        focus.pinToWalker(at: budapest)
-        focus.unpinFromWalker()
+        focus.pinToHiker(at: budapest)
+        focus.unpinFromHiker()
 
         focus.focus(on: .place(vienna, name: "Vienna"))
 
         #expect(focus.subject == .place(vienna, name: "Vienna"))
     }
 
-    @Test("the walker moving moves a `me` subject with them")
-    func movementMovesTheWalker() {
+    @Test("the hiker moving moves a `me` subject with them")
+    func movementMovesTheHiker() {
         let focus = WeatherFocus()
-        focus.pinToWalker(at: budapest)
+        focus.pinToHiker(at: budapest)
 
-        focus.walkerMoved(to: vienna)
+        focus.hikerMoved(to: vienna)
 
         #expect(focus.subject == .me(vienna))
     }
@@ -104,13 +104,13 @@ struct WeatherFocusTests {
     @Test("a recording claims ownership before its first fix")
     func recordingWithoutLocationOwnsTheNextFix() {
         let focus = WeatherFocus(subject: .place(vienna, name: "Vienna"))
-        focus.pinToWalker(at: nil)
+        focus.pinToHiker(at: nil)
         focus.focus(on: .place(budapest, name: "Budapest"))
         focus.focus(on: trail(at: budapest))
 
-        #expect(focus.isPinnedToWalker)
+        #expect(focus.isPinnedToHiker)
         #expect(focus.subject == nil)
-        #expect(focus.walkerMoved(to: vienna))
+        #expect(focus.hikerMoved(to: vienna))
         #expect(focus.subject == .me(vienna))
     }
 
@@ -120,29 +120,29 @@ struct WeatherFocusTests {
         let selected = trail(at: budapest)
         for subject in [place, selected, .me(vienna)] {
             let focus = WeatherFocus(subject: subject)
-            #expect(!focus.walkerMoved(to: vienna))
+            #expect(!focus.hikerMoved(to: vienna))
             #expect(focus.subject == subject)
         }
 
         let nearbyTrail = WeatherFocus(subject: selected)
-        #expect(nearbyTrail.walkerMoved(to: nearBudapest))
-        let walker = WeatherFocus(subject: .me(budapest))
-        #expect(walker.walkerMoved(to: vienna))
+        #expect(nearbyTrail.hikerMoved(to: nearBudapest))
+        let hiker = WeatherFocus(subject: .me(budapest))
+        #expect(hiker.hikerMoved(to: vienna))
         let empty = WeatherFocus()
-        #expect(empty.walkerMoved(to: vienna))
+        #expect(empty.hikerMoved(to: vienna))
         #expect(empty.subject == .me(vienna))
     }
 
-    /// The second half of "I start hiking on that imported trail": a walker
+    /// The second half of "I start hiking on that imported trail": a hiker
     /// who is out on the route they selected should get the weather where they
     /// are, not where the file's midpoint happens to be.
-    @Test("a selected trail follows the walker once they are on it")
-    func trailFollowsAWalkerNearby() {
+    @Test("a selected trail follows the hiker once they are on it")
+    func trailFollowsAHikerNearby() {
         let focus = WeatherFocus()
         let selected = trail(at: budapest)
         focus.focus(on: selected)
 
-        focus.walkerMoved(to: nearBudapest)
+        focus.hikerMoved(to: nearBudapest)
 
         #expect(focus.subject?.coordinate.latitude == nearBudapest.latitude)
         #expect(focus.subject?.placeName == "Pilis Loop", "still the same trail, and still named")
@@ -151,25 +151,25 @@ struct WeatherFocusTests {
     /// And the first half: browsing a trail in another country is not walking
     /// it, and the badge must not quietly become a reading for wherever the
     /// reader is sitting.
-    @Test("a selected trail stays put for a walker nowhere near it")
-    func trailStaysPutForADistantWalker() {
+    @Test("a selected trail stays put for a hiker nowhere near it")
+    func trailStaysPutForADistantHiker() {
         let focus = WeatherFocus()
         focus.focus(on: trail(at: budapest))
 
         // Well outside the follow radius.
-        focus.walkerMoved(to: vienna)
+        focus.hikerMoved(to: vienna)
 
         #expect(focus.subject?.coordinate.latitude == budapest.latitude)
     }
 
     /// A searched place never follows anyone. Someone reading Budapest's
     /// forecast from Vienna asked about Budapest.
-    @Test("a searched place never follows the walker")
+    @Test("a searched place never follows the hiker")
     func placeNeverFollows() {
         let focus = WeatherFocus()
         focus.focus(on: .place(budapest, name: "Budapest"))
 
-        focus.walkerMoved(to: vienna)
+        focus.hikerMoved(to: vienna)
 
         #expect(focus.subject == .place(budapest, name: "Budapest"))
     }
@@ -177,10 +177,10 @@ struct WeatherFocusTests {
     /// With nothing selected, nothing recording and nothing searched, the
     /// badge is about here — otherwise a launch that restores no selection has
     /// no subject at all and the badge would never refresh.
-    @Test("with nothing else focused the walker becomes the subject")
-    func defaultsToTheWalker() {
+    @Test("with nothing else focused the hiker becomes the subject")
+    func defaultsToTheHiker() {
         let focus = WeatherFocus()
-        focus.defaultToWalker(at: budapest)
+        focus.defaultToHiker(at: budapest)
         #expect(focus.subject == .me(budapest))
     }
 
@@ -189,7 +189,7 @@ struct WeatherFocusTests {
         let focus = WeatherFocus()
         focus.focus(on: .place(vienna, name: "Vienna"))
 
-        focus.defaultToWalker(at: budapest)
+        focus.defaultToHiker(at: budapest)
 
         #expect(focus.subject == .place(vienna, name: "Vienna"))
     }
@@ -209,10 +209,10 @@ struct WeatherFocusTests {
 
     /// `me` is one subject whose coordinate changes, not a new subject per
     /// step — which is what lets ``WeatherRequestState`` keep one freshness
-    /// window for the walker instead of one per kilometre, the way the grid it
+    /// window for the hiker instead of one per kilometre, the way the grid it
     /// replaced did.
-    @Test("the walker keeps one identity however far they walk")
-    func walkerKeepsOneIdentity() {
+    @Test("the hiker keeps one identity however far they walk")
+    func hikerKeepsOneIdentity() {
         #expect(WeatherSubject.me(budapest).key == WeatherSubject.me(vienna).key)
     }
 

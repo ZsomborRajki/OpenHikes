@@ -61,7 +61,7 @@ nonisolated extension TileCache {
         // what saves the radio; this makes sure that a path that somehow
         // reaches here still cannot spend a Low Data Mode allowance on a map
         // tile. There is no matching `allowsExpensiveNetworkAccess = false`
-        // because cellular is not a blanket refusal: a tile the walker is
+        // because cellular is not a blanket refusal: a tile the hiker is
         // looking at still loads over it, and only the reading-ahead the
         // policy classes as speculative does not.
         config.allowsConstrainedNetworkAccess = false

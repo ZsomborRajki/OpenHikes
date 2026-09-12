@@ -717,7 +717,7 @@ extension MapView.Coordinator {
     ///
     /// The callout is closed before the preview opens, for the reason a photo
     /// pin's is: it belongs to a map the sheet is about to cover, and one left
-    /// standing is what the walker comes back to when they pop the screen.
+    /// standing is what the hiker comes back to when they pop the screen.
     func mapView(
         _ mapView: MKMapView,
         annotationView view: MKAnnotationView,
@@ -736,7 +736,7 @@ extension MapView.Coordinator {
         // The community list follows the map, and this is the only place it
         // learns the map moved. Deliberately the *settled* region rather than
         // `mapViewDidChangeVisibleRegion`, which fires continuously through a
-        // pan: a walker dragging across a county would otherwise ask a
+        // pan: a hiker dragging across a county would otherwise ask a
         // question per frame. What arrives here is still filtered again by
         // ``CommunityQueryPolicy`` before anything reaches the network, and
         // costs a comparison while browsing is off.

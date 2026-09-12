@@ -5,7 +5,7 @@
 //  What a field report is allowed to say, and what it must never say instead.
 //
 //  `FieldMetricsFormat` is the last thing standing between a MetricKit
-//  payload and the walker reading it, and its header names the two rules it
+//  payload and the hiker reading it, and its header names the two rules it
 //  exists to enforce. Both are claims about a *string*, and both are the kind
 //  a refactor breaks without failing anything:
 //

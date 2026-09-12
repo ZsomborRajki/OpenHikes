@@ -156,7 +156,7 @@ struct AppLaunchEnvironmentTests {
         #expect(filled.stubbedLibraryPhotoCount == 4)
         #expect(absurd.stubbedLibraryPhotoCount == 24)
         // Without `--ui-testing` the stub is not reachable at all, so a stray
-        // argument on a shipping launch still reads the walker's own library.
+        // argument on a shipping launch still reads the hiker's own library.
         #expect(unrequested.stubbedLibraryPhotoCount == nil)
     }
 
@@ -186,7 +186,7 @@ struct AppLaunchEnvironmentTests {
     }
 
     /// Every test-only option is inert without `--ui-testing`, which is what
-    /// stops a stray argument on a shipping launch from seeding a walker's
+    /// stops a stray argument on a shipping launch from seeding a hiker's
     /// diagnostics screen or faking their weather.
     @Test("test-only seams stay off on a normal launch")
     func seamsIgnoredWithoutUITesting() {

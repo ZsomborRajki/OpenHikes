@@ -145,7 +145,7 @@ struct HikeDetailView: View {
         #endif
         // On the container rather than on the Details face, so flipping to
         // History neither restarts the profile build nor stops the follow
-        // loop: a walk keeps accruing while its walker reads its history.
+        // loop: a walk keeps accruing while its hiker reads its history.
         .task(id: hike.id) {
             let route = hike.route
             let distanceMeters = hike.distanceMeters
@@ -179,7 +179,7 @@ struct HikeDetailView: View {
         // Toggling off should clear the live dot immediately, not wait for the
         // next fix. Toggling on should hand the map pin back to auto-follow
         // right away, rather than leaving a stale manual pin up until the
-        // walker's next step publishes one.
+        // hiker's next step publishes one.
         .onChange(of: hike.autoFollowEnabled) { _, enabled in
             walkSession.autoFollowDidChange(hikeID: hike.id, enabled: enabled)
             if !enabled {
@@ -215,7 +215,7 @@ struct HikeDetailView: View {
         }
         // A download records and commits its own coverage now — see
         // ``OfflineDownloadClaim`` — because this screen is gone the moment
-        // the walker taps back and the run carries on writing tiles either
+        // the hiker taps back and the run carries on writing tiles either
         // way. What is left here is redrawing the storage row for a screen
         // that is still up, against a manifest already on disk.
         .onChange(of: downloader.phase) { _, phase in
@@ -650,7 +650,7 @@ private extension HikeDetailView {
     /// Driven by ``LocationManager/fixes`` rather than by a 1 Hz timer: the
     /// source already throttles to one publish a second and already drops a
     /// repeat of the last coordinate, so this now stops entirely while the
-    /// walker is standing still instead of re-deriving the same match once a
+    /// hiker is standing still instead of re-deriving the same match once a
     /// second through every rest stop. The two moments that used to depend on
     /// the next tick — a scrub ending, and auto-follow being switched on —
     /// are handled by the `onChange` handlers in `body`.
@@ -687,7 +687,7 @@ private extension HikeDetailView {
     private func updateLiveFollow(profile: RouteProfile) {
         // Split from the match below so only a fix that actually reached the
         // matcher feeds the search policy: a fix too inaccurate to match says
-        // nothing about where the walker is relative to the route, and must
+        // nothing about where the hiker is relative to the route, and must
         // neither re-arm the whole-route search nor spend one of the fixes
         // that delays it.
         // Before the match, so a walk left unmatched for six hours is closed
@@ -712,7 +712,7 @@ private extension HikeDetailView {
         offRouteSearch.record(matched: onRoute, scope: searchScope)
         guard onRoute, let match else {
             // Leaving the route is what rearms auto-start after an End: the
-            // walker is off this trail, so coming back to it is a new walk.
+            // hiker is off this trail, so coming back to it is a new walk.
             walkSession.recordOffRoute(hikeID: hike.id)
             clearLiveFollow(profile: profile, reason: "off-route")
             return

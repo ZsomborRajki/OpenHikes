@@ -34,7 +34,7 @@ extension OpenHikesView {
     ///
     /// The subject is read here rather than captured when the camera opened:
     /// the walk continues while the viewfinder is up, and on the recording
-    /// screen the coordinate this resolves to is the one the walker is
+    /// screen the coordinate this resolves to is the one the hiker is
     /// standing on when the shutter fires.
     func attachCapturedPhoto(_ frame: CapturedFrame) {
         guard let subject = photoCapture.currentSubject() else { return }

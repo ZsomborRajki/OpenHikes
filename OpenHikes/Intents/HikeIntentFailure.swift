@@ -8,7 +8,7 @@
 //  answer different questions. A `RecordingFailure` says why the *recorder*
 //  stopped; this says why the *request* could not be honoured, and half of its
 //  cases — no recording running, nothing recorded yet — are not failures of
-//  anything, merely answers the walker has to hear.
+//  anything, merely answers the hiker has to hear.
 //
 
 import AppIntents
@@ -18,7 +18,7 @@ nonisolated enum HikeIntentFailure: LocalizedError, Equatable, Sendable {
     /// Asked to start a recording while one is already running.
     case alreadyRecording
     /// The recording stopped and saved, but trail matching found more than one
-    /// route it could have been and is waiting for the walker to choose. There
+    /// route it could have been and is waiting for the hiker to choose. There
     /// is no way to answer that by voice, so the app has to be opened.
     case awaitingRouteReview
     /// The last recording is still being written, or an interrupted one is
@@ -40,7 +40,7 @@ nonisolated enum HikeIntentFailure: LocalizedError, Equatable, Sendable {
     /// The store could not be read. Carries nothing for the same reason
     /// ``couldNotSave`` does not.
     case storage
-    /// The walker's calendar could not name the day being asked about. Not a
+    /// The hiker's calendar could not name the day being asked about. Not a
     /// store failure — nothing was read — and so not ``storage``, whose
     /// sentence would say otherwise.
     case unknownDay

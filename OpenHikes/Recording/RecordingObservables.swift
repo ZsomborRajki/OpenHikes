@@ -16,7 +16,7 @@ final class RecordingStats {
     var distanceMeters = 0.0
     var pointCount = 0
     var horizontalAccuracy: Double?
-    /// The trail under the walker now, as the live matcher last saw it.
+    /// The trail under the hiker now, as the live matcher last saw it.
     ///
     /// Split from ``dominantTrailName`` because the two were one property
     /// holding two facts: the live matcher wrote the *current* trail into it
@@ -32,7 +32,7 @@ final class RecordingStats {
     /// walk with any density of fixes the "is this still current" answer is
     /// routinely no — and blanking the trail on it made the name flicker off
     /// and on for the whole hike. A trail a minute old is still the trail the
-    /// walker is on; what is honest is to keep saying so quietly.
+    /// hiker is on; what is honest is to keep saying so quietly.
     var isCurrentTrailStale = false
     /// The trail the finished walk mostly followed, written once when the
     /// recording is persisted. `nil` for a walk still in progress.
@@ -44,7 +44,7 @@ final class RecordingStats {
     /// Seconds spent walking rather than standing still, by the same rule a
     /// saved hike's moving time is measured with.
     var movingSeconds: TimeInterval = 0
-    /// Whether the walker is currently being treated as stationary, which is
+    /// Whether the hiker is currently being treated as stationary, which is
     /// also what stops distance accumulating.
     var isStationary = false
     /// Metres climbed so far, `nil` until the recording has two trusted

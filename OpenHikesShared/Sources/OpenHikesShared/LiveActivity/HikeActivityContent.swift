@@ -73,7 +73,7 @@ public extension HikeActivityAttributes {
     ///
     /// Compares the subject alone. A trail renamed or re-tinted mid-walk is
     /// still the same walk, and ending a Live Activity to restart it would
-    /// cost the walker their place on the Lock Screen for a cosmetic change
+    /// cost the hiker their place on the Lock Screen for a cosmetic change
     /// ActivityKit cannot deliver any other way.
     func describesSameWalk(as other: Self) -> Bool {
         subject == other.subject
@@ -111,7 +111,7 @@ public extension HikeActivityAttributes.ContentState {
     /// A followed trail's live figures.
     ///
     /// A snapshot with no ``SharedTrailSnapshot/liveFix`` is not an error and
-    /// not a reason to end the activity — it is a walker who has stepped off
+    /// not a reason to end the activity — it is a hiker who has stepped off
     /// the trail or lost signal, and the right thing to show is the trail's
     /// own numbers with the position withheld. That is exactly what leaving
     /// `offRouteMeters` and `currentElevationMeters` `nil` says.

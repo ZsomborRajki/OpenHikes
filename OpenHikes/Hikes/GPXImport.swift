@@ -53,7 +53,7 @@ nonisolated enum GPXImport {
         /// worse of the two errors.
         ///
         /// Its length still counts towards ``distanceMeters``, for the same
-        /// reason a recording's own pauses do: the walker covered that ground
+        /// reason a recording's own pauses do: the hiker covered that ground
         /// somehow, and a total that silently omitted it would be shorter than
         /// the walk.
         init(
@@ -125,7 +125,7 @@ nonisolated enum GPXImport {
         var maximumFileSizeBytes: Int
         var maximumPointCount: Int
 
-        /// Sized against the largest file a walker could plausibly own, not
+        /// Sized against the largest file a hiker could plausibly own, not
         /// against the smallest one that would still work.
         ///
         /// A day out recorded at 1 Hz is roughly 20,000 track points and a
@@ -141,7 +141,7 @@ nonisolated enum GPXImport {
         ///
         /// Both are deliberately loose. A cap that refuses a real hike is a
         /// worse failure than one that lets an absurd file through, because
-        /// the walker with the real hike has no way to get it in.
+        /// the hiker with the real hike has no way to get it in.
         static let standard = Self(
             maximumFileSizeBytes: standardFileSizeBytes,
             maximumPointCount: standardPointCount
@@ -202,7 +202,7 @@ nonisolated enum GPXImport {
         var recoverySuggestion: String? {
             switch self {
             // Says what the app would otherwise have had to invent, because
-            // that is the part the walker can't see for themselves: the file
+            // that is the part the hiker can't see for themselves: the file
             // opens fine everywhere else, and the damage would only show up
             // later as a straight line across the map and a length nobody
             // walked.
@@ -212,7 +212,7 @@ nonisolated enum GPXImport {
             // own note for why that lands here.
             case .noUsablePoints: "It may not be a GPX file, or its points are missing coordinates or out of range."
             // No number in the copy: the message has to be true of both bounds,
-            // and the walker can act on it without knowing which one was hit.
+            // and the hiker can act on it without knowing which one was hit.
             case .tooLarge: "A single walk is a few megabytes at most. A file this size usually holds many tracks, "
                 + "and splitting it lets them import one at a time."
             case .tooShort: "A hike needs at least two points to have a route."
@@ -656,7 +656,7 @@ nonisolated private extension GPXImport {
         /// and both are wrong by the same offset when the guess is wrong; what
         /// decides it is that an exporter omitting the designator is writing
         /// wall-clock time, so reading it locally is the one that shows the
-        /// walker the hour their own file says. Last of the three because the
+        /// hiker the hour their own file says. Last of the three because the
         /// lenient grammar also accepts a string that *does* carry a
         /// designator and would quietly ignore it.
         private func date(from value: String) -> Date? {

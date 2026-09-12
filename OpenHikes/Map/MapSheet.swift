@@ -211,7 +211,7 @@ struct MapSheet: View {
                     // The same fragment, asked of the community. Gated by its
                     // own trimming rather than the completer's policy: the two
                     // answer different questions and a place suggestion the
-                    // walker has already committed to is still a trail name
+                    // hiker has already committed to is still a trail name
                     // worth looking up.
                     appModel.community.search(matching: value)
                 }
@@ -416,7 +416,7 @@ private func select(_ hike: Hike) {
 /// imported.
 ///
 /// The search field is left alone, unlike a tapped hike or place: this push is
-/// a detour rather than an answer, and a walker who backs out of a preview
+/// a detour rather than an answer, and a hiker who backs out of a preview
 /// should find the query they typed still there.
 private func select(_ listing: CommunityListing) {
     searchFocused = false
@@ -469,7 +469,7 @@ private func startSearch(request: MKLocalSearch.Request, fallbackName: String) {
             return
         }
         mapController.show(response.boundingRegion)
-        // The map moved, so the weather badge moves with it: a walker who has
+        // The map moved, so the weather badge moves with it: a hiker who has
         // just zoomed to Budapest is asking about Budapest. Ignored while a
         // recording holds the badge, which `WeatherFocus` decides rather than
         // this call site.

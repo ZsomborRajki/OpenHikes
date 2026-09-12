@@ -17,11 +17,11 @@ import CoreLocation
 import Foundation
 
 extension HikeRecorder {
-    /// Everything off *except* whatever can still notice the walker setting
+    /// Everything off *except* whatever can still notice the hiker setting
     /// off again, for a recording that is paused.
     ///
     /// Called from the journal queue once the pause is durably written, so the
-    /// walker cannot lose a pause boundary to a crash between the two — which
+    /// hiker cannot lose a pause boundary to a crash between the two — which
     /// is what this shares with ``stopLocationSensors()`` and the whole of
     /// what it shares.
     ///
@@ -33,7 +33,7 @@ extension HikeRecorder {
     ///
     /// The controller is asked here rather than handed its answer by the
     /// caller, because the caller's answer is by then as old as the journal
-    /// write: a walker refusing the notification prompt does it in exactly
+    /// write: a hiker refusing the notification prompt does it in exactly
     /// those seconds, and the refusal reaches
     /// ``MovementReminderController/isWatchingPausedRecording`` before it can
     /// reach this. A recorder with no controller keeps the behaviour a pause
@@ -49,7 +49,7 @@ extension HikeRecorder {
         source.startMovementWatch()
     }
 
-    /// This pause has stopped being watched — the walker turned reminders
+    /// This pause has stopped being watched — the hiker turned reminders
     /// off, or iOS said their reminders cannot be delivered at all.
     ///
     /// Called by ``MovementReminderController/reconcileWithPreferences()``
@@ -72,7 +72,7 @@ extension HikeRecorder {
     /// in the journal.
     ///
     /// Both halves matter. A recording recovered into a pause is the very case
-    /// this feature exists for: the walker's phone died in their pocket at
+    /// this feature exists for: the hiker's phone died in their pocket at
     /// lunch and the walk carried on without it, so the anchor is worth having
     /// again. And a launch that decides *not* to watch has to say so out loud,
     /// because significant-change monitoring outlives the process that armed

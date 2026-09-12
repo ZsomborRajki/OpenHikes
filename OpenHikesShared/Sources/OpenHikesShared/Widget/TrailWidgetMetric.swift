@@ -213,7 +213,7 @@ public extension SharedTrailSnapshot {
     /// ascent, and a summit height is a number to read in the app rather than
     /// to glance at on a home screen.
     ///
-    /// The walker's own elevation joins it only while there is a live fix to
+    /// The hiker's own elevation joins it only while there is a live fix to
     /// read it from — on the trail, "where am I" is worth the second slot; off
     /// it, there is nothing to put there.
     ///

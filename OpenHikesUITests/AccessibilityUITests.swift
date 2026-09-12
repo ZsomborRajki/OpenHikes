@@ -219,7 +219,7 @@ nonisolated final class AccessibilityUITests: XCTestCase {
     /// A cell has no text in it, so its label is the whole of what separates
     /// one photograph from the next — and it has to say more than "photo": when
     /// it was taken and on what evidence it was placed, because that is what a
-    /// walker is deciding on when they tick it. The audit is run over the grid
+    /// hiker is deciding on when they tick it. The audit is run over the grid
     /// rather than only over the button that opens it, since a screen reached
     /// through a modal is a screen a sweep otherwise never sees.
     @MainActor

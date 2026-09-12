@@ -2,13 +2,13 @@
 //  CommunityReport.swift
 //  OpenHikes
 //
-//  What a walker says about somebody else's published hike, and the message
+//  What a hiker says about somebody else's published hike, and the message
 //  it turns into.
 //
 //  ## Why this is an email and not a record type
 //
 //  The obvious shape is a third public record type — a `CommunityReport` a
-//  walker creates the way they create a submission. It was not built, for two
+//  hiker creates the way they create a submission. It was not built, for two
 //  reasons that both come from decisions already made elsewhere.
 //
 //  **Browsing is account-free, and reporting has to be too.** Public reads
@@ -16,8 +16,8 @@
 //  open it — see ``CommunityFailure/notSignedIn``, which is raised by writes
 //  alone. Writes are the other half of that same rule: the public database
 //  accepts one only from an authenticated account, so no permission on any
-//  record type can let a signed-out walker file a report. A record-backed
-//  report would therefore be missing for exactly the walkers the account-free
+//  record type can let a signed-out hiker file a report. A record-backed
+//  report would therefore be missing for exactly the hikers the account-free
 //  flow exists for, and the App Store guideline it answers does not have an
 //  exemption for them. An email composed on the device needs no account, no
 //  permission and no schema.
@@ -45,21 +45,21 @@
 
 import Foundation
 
-/// Why a walker is reporting a published hike.
+/// Why a hiker is reporting a published hike.
 ///
-/// Short, and written as things a walker can recognise on the screen in front
+/// Short, and written as things a hiker can recognise on the screen in front
 /// of them rather than as moderation categories. Each is a genuinely different
 /// thing for a reviewer to look at: two of them are about the *pictures*, one
 /// is about the route being wrong, and one is about it being somebody's home.
 ///
-/// ``other`` is not a failure of the list. A report the walker had to file
+/// ``other`` is not a failure of the list. A report the hiker had to file
 /// under the nearest wrong heading is a report a reviewer reads wrongly, and
 /// the note beneath is where the actual complaint goes.
 nonisolated enum CommunityReportReason: String, CaseIterable, Identifiable, Sendable {
     /// A route that would put somebody in danger, or one that is not the trail
     /// it says it is.
     case misleading = "misleading"
-    /// Somebody else's route or photographs, published as this walker's own.
+    /// Somebody else's route or photographs, published as this hiker's own.
     case notTheirs = "notTheirs"
     /// The pictures, the title or the description.
     case objectionable = "objectionable"
@@ -76,7 +76,7 @@ nonisolated enum CommunityReportReason: String, CaseIterable, Identifiable, Send
     /// Declaration order is alphabetical because SwiftLint's
     /// `sorted_enum_cases` requires it, and alphabetical is the wrong reading
     /// order for a list somebody scans under stress: the commonest complaint
-    /// belongs at the top and ``other`` belongs at the bottom, since a walker
+    /// belongs at the top and ``other`` belongs at the bottom, since a hiker
     /// who reaches it has already rejected every heading above. So the two
     /// orders are separated rather than one of them being bent to the other.
     static let pickerOrder: [Self] = [.objectionable, .privacy, .notTheirs, .misleading, .other]
@@ -109,7 +109,7 @@ nonisolated enum CommunityReportReason: String, CaseIterable, Identifiable, Send
     }
 }
 
-/// One walker's report of one published hike, and the mail it composes.
+/// One hiker's report of one published hike, and the mail it composes.
 ///
 /// A value rather than a view model, and the whole of what
 /// ``CommunityReportSheet`` has to say — so what a reviewer receives can be
@@ -122,7 +122,7 @@ nonisolated struct CommunityReport: Equatable, Sendable {
 
     var listing: CommunityListing
     var reason: CommunityReportReason
-    /// What the walker typed, or empty. Trimmed on the way in by
+    /// What the hiker typed, or empty. Trimmed on the way in by
     /// ``init(listing:reason:note:)``.
     var note: String
 
@@ -144,7 +144,7 @@ nonisolated struct CommunityReport: Equatable, Sendable {
     /// Not localized, and that is deliberate rather than an oversight: one
     /// person reads these, in one language, and a report arriving in a
     /// language they cannot read is a report they cannot act on within 24
-    /// hours. What the *walker* reads — the picker, the footer, the
+    /// hours. What the *hiker* reads — the picker, the footer, the
     /// confirmation — is localized; what the reviewer reads is not.
     var body: String {
         var lines = [
@@ -187,13 +187,13 @@ nonisolated struct CommunityReport: Equatable, Sendable {
         return URL(string: "mailto:\(Self.recipient)?subject=\(escapedSubject)&body=\(escapedBody)")
     }
 
-    /// The whole message as one block, for the walker to copy when there is no
+    /// The whole message as one block, for the hiker to copy when there is no
     /// mail app to hand it to. See ``CommunityReportSheet``'s fallback.
     var plainText: String {
         "To: \(Self.recipient)\nSubject: \(subject)\n\n\(body)"
     }
 
-    /// Fixed rather than the walker's locale, for the same reason ``body`` is
+    /// Fixed rather than the hiker's locale, for the same reason ``body`` is
     /// not localized: this is read by one person, and two reports whose dates
     /// are formatted differently are two reports that cannot be compared.
     private static let reviewerDate: DateFormatter = {

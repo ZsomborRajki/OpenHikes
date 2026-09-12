@@ -5,7 +5,7 @@
 //  Taking down a Live Activity this process did not start.
 //
 //  A Live Activity outlives the process that requested it, so after the app is
-//  killed mid-hike the walker's next launch begins with a panel on the Lock
+//  killed mid-hike the hiker's next launch begins with a panel on the Lock
 //  Screen that no object in the app holds a handle to. `end(subject:)` and
 //  `endAll()` both open by consulting `current`, which is `nil` in a fresh
 //  process, so every takedown path was a no-op against exactly the panel that
@@ -14,7 +14,7 @@
 //
 //  What is pinned here is `endUnowned(_:)` and its three guards. The sweep has
 //  to fire when there is an orphan of the right kind, and must not fire when
-//  there is nothing running, when the orphan is a *follow* the walker is still
+//  there is nothing running, when the orphan is a *follow* the hiker is still
 //  on, or when this process owns the panel and can end it properly instead.
 //
 
@@ -69,7 +69,7 @@ struct OrphanedActivityTests {
     }
 
     /// Precedence, read from the takedown end. A followed trail from the
-    /// previous launch is still a walk the walker is on — the tracker adopts
+    /// previous launch is still a walk the hiker is on — the tracker adopts
     /// it back on the next matched fix — so a *recording* turning out not to
     /// exist must not remove it.
     ///
@@ -118,7 +118,7 @@ struct OrphanedActivityTests {
     /// leave a finished walk's totals on screen for five minutes, and this one
     /// cannot. Without the guard, `endRecordingActivity(.finished)` — which
     /// reaches the sweep on any path where the subject reads as unowned —
-    /// could remove the panel the walker was meant to read.
+    /// could remove the panel the hiker was meant to read.
     ///
     /// Goes red if `guard !kind.matches(current?.attributes.subject) else { return }`
     /// is deleted from `HikeLiveActivityController.endUnowned(_:)`.
@@ -139,9 +139,9 @@ struct OrphanedActivityTests {
         )
     }
 
-    /// The walker's switch decides whether the app may *put* a panel on the
+    /// The hiker's switch decides whether the app may *put* a panel on the
     /// Lock Screen. It has nothing to say about removing one that is already
-    /// there — and a walker who turned the feature off mid-hike is the person
+    /// there — and a hiker who turned the feature off mid-hike is the person
     /// most entitled to have the leftover removed.
     ///
     /// Goes red if `guard isEnabled else { return }` is inserted at the top of
@@ -149,7 +149,7 @@ struct OrphanedActivityTests {
     /// rather than a deletion because what it pins is a guard deliberately
     /// *not* written; the doc comment on `endUnowned` argues the same point,
     /// and this is what stops the two drifting apart.
-    @Test("the sweep ignores the walker's switch")
+    @Test("the sweep ignores the hiker's switch")
     func sweepIgnoresTheSwitch() async {
         let harness = LiveActivityHarness.harness(liveActivities: false)
         harness.presenter.simulatePreviousLaunch(
@@ -204,7 +204,7 @@ struct OrphanedActivityTests {
 
     /// The precedence rule stated as a prohibition: a sweep must never take
     /// down a panel that a *different*, still-valid subject legitimately owns.
-    /// Here the walker is following a trail and something concludes there is
+    /// Here the hiker is following a trail and something concludes there is
     /// no recording — which is what `fail(_:endLocationUpdates:)` does on
     /// every storage failure, whether or not a recording ever existed.
     ///
@@ -264,7 +264,7 @@ struct OrphanedActivityTests {
 /// `SettingsKey.liveActivitiesEnabled` at all. Reading the switch on the next
 /// call is enough while a walk is running, because a walk produces fixes. An
 /// orphaned panel produces nothing, so `update(_:)` was never called and the
-/// switch was unreachable: a walker relaunching to a stale panel and going
+/// switch was unreachable: a hiker relaunching to a stale panel and going
 /// straight to Settings to turn Live Activities off was ignored until the
 /// panel's own ten-minute stale date expired.
 @Suite("Hike Live Activity preference reconciliation")
@@ -296,7 +296,7 @@ struct LiveActivityPreferenceTests {
     /// discard sweep in `HikeRecorder.endRecordingActivity(_:)`. That one is
     /// `.recording`-only, because a followed trail left by a previous launch
     /// is still a walk the tracker adopts back. This one is unconditional in
-    /// kind, because the walker has said they want none of it.
+    /// kind, because the hiker has said they want none of it.
     ///
     /// Goes red if `endAll(dismissAfter:)` sweeps `.recording` only — the
     /// "make the two consistent" change a future reader is most likely to
@@ -355,7 +355,7 @@ struct LiveActivityPreferenceTests {
     }
 
     /// The guard that makes the notification safe to subscribe to. It fires
-    /// for *every* key in the suite, so without this a walker changing their
+    /// for *every* key in the suite, so without this a hiker changing their
     /// units mid-hike would lose the Lock Screen panel.
     ///
     /// Goes red if `guard !isEnabled else { return }` is deleted from
@@ -402,7 +402,7 @@ struct LiveActivityPreferenceTests {
     /// registration itself. `observePreferences` asks for
     /// `UIApplication.DidBecomeActiveMessage`, and a wrong message type, a
     /// dropped token or a legacy post that no longer bridges into a typed
-    /// observer would all leave every test above green while the walker's
+    /// observer would all leave every test above green while the hiker's
     /// stale panel stayed on their Lock Screen forever.
     ///
     /// Posted on the controller's own centre rather than the process-wide one,

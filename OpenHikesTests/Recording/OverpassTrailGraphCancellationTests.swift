@@ -135,7 +135,7 @@ struct OverpassTrailGraphCancellationTests {
         #expect(await transport.completedCount == 0)
         #expect(await provider.waiterCount(for: region) == 0)
         // The write and the cache trim behind it are what used to run after
-        // the walker stopped recording; nothing reached the disk at all.
+        // the hiker stopped recording; nothing reached the disk at all.
         #expect(!FileManager.default.fileExists(atPath: directory.path))
         #expect(await provider.hasCompleteCachedGraph(covering: [coordinate]) == false)
     }

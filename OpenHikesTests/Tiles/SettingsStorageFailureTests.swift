@@ -56,7 +56,7 @@ struct SettingsStorageFailureTests {
     private static let emptyClaimSetComment: Comment = """
         The failed claim fetch cleared the cache with an empty claim set. In the app this deletes \
         every tile every hike downloaded for offline use, from a button whose own footer says \
-        clearing costs the walker nothing offline.
+        clearing costs the hiker nothing offline.
         """
 
     /// One hike claiming exactly one of the two tiles on disk.

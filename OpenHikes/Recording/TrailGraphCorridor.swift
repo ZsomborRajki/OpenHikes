@@ -39,7 +39,7 @@ nonisolated enum TrailGraphCorridor {
     /// Highest number of regions one recording will download to close its
     /// gaps. Deliberately below ``TrailGraphProviding/maximumPrefetchRegions``,
     /// because unlike a hike being opened for analysis this runs while the
-    /// walker waits for Stop to finish.
+    /// hiker waits for Stop to finish.
     static let maximumGapRegions = 8
 
     /// Points along the stretches `points` lost its fixes across, and nothing

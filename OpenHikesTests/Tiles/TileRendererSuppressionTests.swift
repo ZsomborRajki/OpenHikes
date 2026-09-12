@@ -9,7 +9,7 @@
 //  It did not survive. Under Low Data Mode every interactive fetch was denied,
 //  the denial arrived at the renderer as an ordinary miss, and each visible
 //  tile escalated through the retry ladder to its five-minute ceiling — so
-//  turning Low Data Mode off left the map holed for minutes while the walker
+//  turning Low Data Mode off left the map holed for minutes while the hiker
 //  waited out a backoff recorded against the app's own policy.
 //
 //  Both halves are pinned here: a refused load stays out of the failure log,

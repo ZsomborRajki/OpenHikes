@@ -262,7 +262,7 @@ struct GPXFuzzTests {
     /// Deliberately walks the same two consumers the app puts a freshly
     /// imported track through — the elevation chart's y-domain and the stats
     /// grid — because "the parser returned" and "the app can draw it" are
-    /// different claims and only the second one matters to a walker.
+    /// different claims and only the second one matters to a hiker.
     private static func complaint(about track: GPXImport.Track) -> String? {
         guard track.distanceMeters.isFinite, track.distanceMeters >= 0 else {
             return "distance is \(track.distanceMeters)"

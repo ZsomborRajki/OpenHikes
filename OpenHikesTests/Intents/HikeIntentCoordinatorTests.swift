@@ -8,7 +8,7 @@
 //  A real recorder rather than a fake coordinator on purpose: what these
 //  intents can get wrong is not arithmetic, it is believing a recording
 //  started when the recorder went to `.failed` instead, or reporting a hike
-//  saved when trail matching is still waiting for the walker. Only the
+//  saved when trail matching is still waiting for the hiker. Only the
 //  recorder can produce those states, and it produces them here with no
 //  ActivityKit, no App Group and no Core Location — its `liveActivityController`
 //  and `sharedStateStore` are left `nil` and its `source` is a stub.
@@ -80,13 +80,13 @@ final class HikeIntentCoordinatorTests {
 
         // The recorder answers a refusal by moving to `.failed` rather than by
         // throwing, so an intent that only awaited `start()` would tell the
-        // walker their hike was being recorded.
+        // hiker their hike was being recorded.
         await #expect(throws: HikeIntentFailure.recording(.locationDenied)) {
             try await coordinator.startRecording()
         }
     }
 
-    @Test("a refusal the walker has since fixed starts on the second ask")
+    @Test("a refusal the hiker has since fixed starts on the second ask")
     func startingAgainAfterARefusalWorks() async throws {
         source.authorization = .denied
         let coordinator = makeCoordinator()
@@ -130,7 +130,7 @@ final class HikeIntentCoordinatorTests {
     /// instant the recorder is built, whether or not there is anything to
     /// recover — and the launch these intents exist for is the one the system
     /// makes to perform one. Reading the phase without waiting answers about
-    /// the launch: "still finishing your last recording" to a walker with
+    /// the launch: "still finishing your last recording" to a hiker with
     /// nothing to finish.
     @Test("a recovering launch is waited out rather than reported as busy")
     func aRecoveringLaunchIsWaitedOut() async throws {
@@ -276,7 +276,7 @@ final class HikeIntentCoordinatorTests {
     ///
     /// The prompt itself is what is asserted rather than a started session:
     /// the stub answers `.notDetermined` and never changes its mind, which is
-    /// the same shape a real walker who has not tapped Allow yet presents.
+    /// the same shape a real hiker who has not tapped Allow yet presents.
     @Test("a foregrounded control action asks rather than deferring again")
     func controlStartsOnceForegrounded() async throws {
         source.authorization = .notDetermined
@@ -322,7 +322,7 @@ final class HikeIntentCoordinatorTests {
         let coordinator = makeCoordinator()
         _ = try await coordinator.startRecording()
 
-        // The walker started it and the GPS is on. "Nothing is being recorded"
+        // The hiker started it and the GPS is on. "Nothing is being recorded"
         // would be a lie told during exactly the seconds they are most likely
         // to ask.
         let report = try await coordinator.currentRecording()

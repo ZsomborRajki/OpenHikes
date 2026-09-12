@@ -6,7 +6,7 @@
 //
 //  Split out of `BackgroundTrailTracker.swift` because that file is already at
 //  its length limit, and because these two methods answer a different question
-//  from the rest of it: the tracker decides *where the walker is*, and this
+//  from the rest of it: the tracker decides *where the hiker is*, and this
 //  decides *whether that is worth putting in front of them*. The policy behind
 //  both — precedence against a recording, the update throttle, the stale date —
 //  lives in `HikeLiveActivityController`; nothing here talks to ActivityKit.
@@ -22,7 +22,7 @@ extension BackgroundTrailTracker {
     ///
     /// Hooked here rather than in ``publishLiveFix(hike:profile:match:)``
     /// deliberately: this is the one funnel both feeds pass through, so a
-    /// walker who locks the phone and keeps walking on significant-change
+    /// hiker who locks the phone and keeps walking on significant-change
     /// updates alone keeps an activity that is still telling the truth.
     ///
     /// It also inherits the widget's 45-second throttle by construction, which
@@ -31,13 +31,13 @@ extension BackgroundTrailTracker {
     ///
     /// A snapshot with no live fix updates a running activity but never starts
     /// one. The difference matters: "off the trail" is worth saying to a
-    /// walker who is following it, and is not a reason to put an activity in
+    /// hiker who is following it, and is not a reason to put an activity in
     /// front of someone who merely opened a trail to look at it.
     ///
     /// Neither does a fix along a trail whose walk has just been ended. That
     /// end left its closing figures on the Lock Screen for
     /// ``HikeLiveActivityController/finishedDismissAfter``, and every fix
-    /// after it — the walker still standing on the route, or a background
+    /// after it — the hiker still standing on the route, or a background
     /// match that was already in flight when End landed — carries no walk and
     /// so reads as an ordinary follow. Starting one would put a second panel
     /// beside a result that was deliberately left up, or replace it outright.
@@ -62,7 +62,7 @@ extension BackgroundTrailTracker {
     /// Takes a followed trail off the Lock Screen.
     ///
     /// No final panel and no lingering by default: a follow that merely
-    /// stopped has no result to leave behind, and a walker who has switched
+    /// stopped has no result to leave behind, and a hiker who has switched
     /// trails or turned following off has already said what they want to
     /// see. A walk that *ended* is the exception, and passes its closing
     /// figures with a dismiss delay, the way a finished recording does; an

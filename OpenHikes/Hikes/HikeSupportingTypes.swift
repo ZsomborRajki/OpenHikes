@@ -87,11 +87,11 @@ nonisolated enum RouteProvenance: String, Codable, Hashable, Sendable {
 
 /// Why a track point does not continue the stretch before it.
 ///
-/// A pause is the walker's own decision to stop recording, so the ground
+/// A pause is the hiker's own decision to stop recording, so the ground
 /// between the last fix before it and the first fix after it is not a lost
 /// signal — nothing was *meant* to be observed there. That is why it is not
 /// ``RouteProvenance/inferred``: the app has not reasoned about where the
-/// walker went, it has been told not to ask. ``TrailMatcher/isGap(from:to:)``
+/// hiker went, it has been told not to ask. ``TrailMatcher/isGap(from:to:)``
 /// has always drawn that distinction live, refusing to bridge across a
 /// resume; this is the same fact surviving into the saved route, where the
 /// map, the elevation profile and the GPX export can each say it.

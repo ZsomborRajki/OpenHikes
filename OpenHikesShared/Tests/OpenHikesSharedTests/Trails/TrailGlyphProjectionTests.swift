@@ -3,7 +3,7 @@
 //  OpenHikesSharedTests
 //
 //  `TrailGlyphView.project` is the whole of the widget's fallback drawing:
-//  when no basemap has rendered yet, the shape a walker recognises as their
+//  when no basemap has rendered yet, the shape a hiker recognises as their
 //  trail comes from this function and nothing else. It divides by three
 //  separately-floored quantities — a bounding box width, a height, and a
 //  cosine — and a `Canvas` cannot be asked afterwards where it put the line,
@@ -79,7 +79,7 @@ struct TrailGlyphProjectionTests {
         #expect(liveFixPoint.x.isFinite && liveFixPoint.y.isFinite)
     }
 
-    /// A walker standing still publishes a snapshot whose every fix is the
+    /// A hiker standing still publishes a snapshot whose every fix is the
     /// same coordinate. There is no extent to fit, so the only sensible answer
     /// is the middle of the glyph — the corner it used to land in read as a
     /// route that had gone off the edge of the frame.
@@ -280,7 +280,7 @@ struct TrailGlyphProjectionTests {
     /// The dot and the line come from one transform, so a fix that repeats a
     /// route coordinate has to land exactly on it. A second transform, or the
     /// same one recomputed from a bounding box that included the fix, would
-    /// put the walker a few points off their own trail.
+    /// put the hiker a few points off their own trail.
     @Test("a live fix on the route lands on the route")
     func liveFixSharesTheRouteTransform() throws {
         let route = [
@@ -299,7 +299,7 @@ struct TrailGlyphProjectionTests {
     /// The fit is computed from the route alone, so a fix off the end of it
     /// projects outside the frame rather than rescaling the trail to include
     /// it. That is the intended behaviour — the trail's shape must not change
-    /// because a walker wandered — and it is only safe because `Canvas` clips.
+    /// because a hiker wandered — and it is only safe because `Canvas` clips.
     @Test("a live fix beyond the route projects outside the frame")
     func liveFixOutsideTheRouteIsNotFittedIn() throws {
         let route = [
@@ -339,7 +339,7 @@ struct TrailGlyphProjectionTests {
         let projected = try #require(project(route))
 
         #expect(projected.points.count == route.count)
-        // Monotonic in both axes, because the route is: the order the walker
+        // Monotonic in both axes, because the route is: the order the hiker
         // walked it is the order the line is drawn in.
         #expect(zip(projected.points, projected.points.dropFirst()).allSatisfy { $0.x < $1.x })
         #expect(zip(projected.points, projected.points.dropFirst()).allSatisfy { $0.y > $1.y })

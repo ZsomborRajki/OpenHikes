@@ -193,7 +193,7 @@ struct OverpassTrailGraphExpiryTests {
     // MARK: What a failure is allowed to cost
 
     /// A failed refresh must not take the old graph with it, and this is the
-    /// intended behaviour rather than a tolerated one: a walker halfway up a
+    /// intended behaviour rather than a tolerated one: a hiker halfway up a
     /// hill with no signal is exactly who is holding a month-old graph, and
     /// month-old trail tagging is very nearly as good as today's. Deleting it
     /// on a failed refresh would turn a stale map into no map at the moment it

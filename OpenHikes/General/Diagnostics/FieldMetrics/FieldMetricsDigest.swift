@@ -139,7 +139,7 @@ nonisolated struct LocationAccuracyBreakdown: Codable, Sendable, Equatable {
     ///
     /// Anything coarser than ten metres is included even though the policy
     /// never selects it: the system may downgrade an app's request on its own
-    /// under duress, and duty spent there is still duty the walker paid for.
+    /// under duress, and duty spent there is still duty the hiker paid for.
     var conservingShare: Double? {
         let total = totalSeconds
         guard total > 0 else { return nil }
@@ -160,7 +160,7 @@ nonisolated struct LocationAccuracyBreakdown: Codable, Sendable, Equatable {
 /// hike.
 /// ``backgroundMemoryLimitExits`` and ``backgroundMemoryPressureExits`` settle
 /// it with the only evidence that counts — how often it happened to a real
-/// walker mid-hike.
+/// hiker mid-hike.
 nonisolated struct ExitBreakdown: Codable, Sendable, Equatable {
     var backgroundMemoryLimitExits: Int
     var backgroundMemoryPressureExits: Int
@@ -200,7 +200,7 @@ nonisolated struct ExitBreakdown: Codable, Sendable, Equatable {
         self.foregroundNormalExits = foregroundNormalExits
     }
 
-    /// Every exit that lost a walker something — a hike being recorded, or a
+    /// Every exit that lost a hiker something — a hike being recorded, or a
     /// screen they were looking at. Normal exits are excluded on purpose:
     /// being killed in the app switcher is not a defect.
     var unexpectedTotal: Int {
@@ -251,7 +251,7 @@ nonisolated struct SignpostDigest: Codable, Sendable, Equatable, Identifiable {
     }
 
     /// CPU seconds per occurrence — the comparable figure across periods, since
-    /// a walker who recorded twice as much will burn twice the cumulative CPU
+    /// a hiker who recorded twice as much will burn twice the cumulative CPU
     /// without anything having regressed.
     var cpuSecondsPerOccurrence: Double? {
         guard let cpuSeconds, count > 0 else { return nil }
@@ -367,7 +367,7 @@ nonisolated struct FieldMetricsDigest: Codable, Sendable, Equatable {
     }
 
     /// CPU seconds per hour of the app being alive at all — the only figure in
-    /// here that is comparable between a walker who hiked for six hours and
+    /// here that is comparable between a hiker who hiked for six hours and
     /// one who checked the map twice.
     var cpuSecondsPerActiveHour: Double? {
         guard let cpuSeconds else { return nil }

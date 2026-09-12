@@ -74,12 +74,12 @@ public struct SharedTrailSnapshot: SharedPayload, Equatable {
     }
 
     /// What the app has recorded about the walk in progress along the trail:
-    /// how much of it has been covered, whether the walker has paused, and
+    /// how much of it has been covered, whether the hiker has paused, and
     /// how long they have been moving.
     ///
     /// Coverage rather than position, deliberately. ``fractionComplete``
-    /// reads where the walker *is*; this reads how much of the route their
-    /// consecutive matches have actually spanned, so a walker who opened the
+    /// reads where the hiker *is*; this reads how much of the route their
+    /// consecutive matches have actually spanned, so a hiker who opened the
     /// app on the return leg of an out-and-back reads 50% here where the
     /// position would say 100%. The app computes it — the widget and the
     /// Live Activity only ever draw it.
@@ -121,7 +121,7 @@ public struct SharedTrailSnapshot: SharedPayload, Equatable {
         public var coordinate: CodableCoordinate
         public var distanceAlongRouteMeters: Double
         public var offRouteMeters: Double
-        /// The *trail's* elevation where the walker was matched, not the
+        /// The *trail's* elevation where the hiker was matched, not the
         /// altitude their receiver reported. Read off the same profile the
         /// match came from, so the number agrees with the elevation chart in
         /// the app rather than with GPS vertical noise.

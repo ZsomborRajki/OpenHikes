@@ -107,7 +107,7 @@ struct TrailMatcherReviewLoadTests {
         // and the assertion below would hold for the wrong reason.
         let legCount = points.count - 1
         #expect(result.matchedLegCount < legCount)
-        // What those non-confident legs must not do is reach the walker. The
+        // What those non-confident legs must not do is reach the hiker. The
         // trail each of them declined is no longer than the line it drew
         // instead, so there is no lost distance to report and nothing to ask
         // about.
@@ -121,7 +121,7 @@ struct TrailMatcherReviewLoadTests {
     ///
     /// They were once computed independently, and a dense leg the matcher was
     /// unsure about incremented neither — it was invisible to both.
-    @Test("the ambiguous count is exactly what the walker is shown")
+    @Test("the ambiguous count is exactly what the hiker is shown")
     func ambiguousCountMatchesTheOffers() throws {
         let result = TrailMatcher.match(
             points: try walk(noise: 5),

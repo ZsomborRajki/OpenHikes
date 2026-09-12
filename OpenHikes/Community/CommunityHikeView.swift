@@ -7,13 +7,13 @@
 //  Pushed from a community search result, and the one screen between seeing a
 //  trail's name and having it in the library. It exists because importing
 //  blind is not a decision anyone can make: a name and a distance say nothing
-//  about whether a route goes where the walker wants, and the photographs are
+//  about whether a route goes where the hiker wants, and the photographs are
 //  half of why they would want it.
 //
 //  The route is drawn as a plain shape rather than on a map, which is a
 //  deliberate limit rather than a missing feature. A map here would mean tiles
 //  — a provider, the entitlement check, the cache, a download over whatever
-//  connection the walker is on — for a screen they may back out of in two
+//  connection the hiker is on — for a screen they may back out of in two
 //  seconds. The shape answers the question this screen is for, which is *does
 //  this route go where I think it does*; the moment the hike is imported it
 //  becomes an ordinary ``Hike`` and gets the real map like every other.
@@ -21,19 +21,19 @@
 //  Everything downloaded lands in one directory owned by this screen and
 //  deleted when it goes — or when an import that is still reading out of it
 //  finishes, whichever is later. These are a stranger's photographs held for
-//  as long as they are being looked at, and no longer, unless the walker
+//  as long as they are being looked at, and no longer, unless the hiker
 //  imports the hike, at which point ``CommunityImport`` makes copies that are
 //  theirs.
 //
 //  ## Why reporting and blocking are here and not on the row
 //
 //  This is the screen that shows the content, and both gestures are about
-//  content. A row carries a title, a distance and a name; a walker reporting
+//  content. A row carries a title, a distance and a name; a hiker reporting
 //  from one would be reporting a title they read rather than a photograph they
 //  saw, and a reviewer would open the listing to find nothing wrong with it.
 //  The menu sits in the toolbar rather than under the fold because it must be
 //  reachable in every phase — a listing whose route never loads can still be
-//  one whose *title* is the problem, and a walker who cannot open a hike is
+//  one whose *title* is the problem, and a hiker who cannot open a hike is
 //  exactly the one with nothing else to do about it.
 //
 //  The two are together because they are one reach in most apps and are wanted
@@ -67,7 +67,7 @@ struct CommunityHikeView: View {
 
     let listing: CommunityListing
     let transport: any CommunityTransporting
-    /// The walker's own block list. Written by this screen and read by the
+    /// The hiker's own block list. Written by this screen and read by the
     /// lists behind it — see ``CommunityBlockList``.
     let blockList: CommunityBlockList
     /// Called with the imported hike, so the caller can pop this screen and
@@ -94,7 +94,7 @@ struct CommunityHikeView: View {
     @State private var importTask: Task<Void, Never>?
     /// Whether this author was blocked while the screen was up.
     ///
-    /// Read by the import when it finishes, so a hike the walker asked for a
+    /// Read by the import when it finishes, so a hike the hiker asked for a
     /// moment before blocking does not re-open itself over the list — see
     /// ``performImport(_:)``.
     @State private var wasAuthorBlocked = false
@@ -164,7 +164,7 @@ private extension CommunityHikeView {
     /// was the only one this was a plain destructive button, because a menu in
     /// front of a single destination is a tap spent on nothing — the same call
     /// ``MapAttributionView`` makes about its licence links. Two actions that
-    /// a walker reaches for at the same moment and must not confuse are the
+    /// a hiker reaches for at the same moment and must not confuse are the
     /// case a menu is for, and the alternative — two toolbar buttons — spends
     /// the navigation bar of a screen whose title is a stranger's trail name.
     @ToolbarContentBuilder var moderationToolbarItem: some ToolbarContent {
@@ -193,22 +193,22 @@ private extension CommunityHikeView {
         }
     }
 
-    /// "Block Anna", or "Block This Walker" when they published without a
+    /// "Block Anna", or "Block This Hiker" when they published without a
     /// name.
     ///
     /// The name is a label and never the thing being blocked — see
-    /// ``CommunityBlockList`` — but it is what the walker recognises, and an
+    /// ``CommunityBlockList`` — but it is what the hiker recognises, and an
     /// item reading "Block" alone on a screen with an import button under it
     /// leaves them guessing what the object is.
     var blockActionTitle: String {
         listing.authorName.isEmpty
-            ? String(localized: "Block This Walker")
+            ? String(localized: "Block This Hiker")
             : String(localized: "Block \(listing.authorName)")
     }
 
     var blockPrompt: String {
         listing.authorName.isEmpty
-            ? String(localized: "Block this walker?")
+            ? String(localized: "Block this hiker?")
             : String(localized: "Block \(listing.authorName)?")
     }
 
@@ -216,7 +216,7 @@ private extension CommunityHikeView {
     /// now hidden everywhere else.
     ///
     /// Leaving it up would be the one place in the app still showing content
-    /// the walker has just said they do not want to see, and backing out of it
+    /// the hiker has just said they do not want to see, and backing out of it
     /// into a list the hike has vanished from reads as a glitch rather than as
     /// the thing they asked for.
     func block() {
@@ -420,7 +420,7 @@ private extension CommunityHikeView {
 
     /// Adds the hike, and holds the task that does it.
     ///
-    /// Held because the walker can leave — by backing out, or by blocking this
+    /// Held because the hiker can leave — by backing out, or by blocking this
     /// author — while the photographs are still being copied, and an
     /// unstructured task keeps running when the screen goes. What that costs
     /// is covered in ``discardDownloads()`` and just below.
@@ -443,7 +443,7 @@ private extension CommunityHikeView {
             case .imported(let hike), .alreadyImported(let hike):
                 existingHike = hike
                 // Blocked while this was running, which is the later of the
-                // two things the walker said. The hike stays in the library —
+                // two things the hiker said. The hike stays in the library —
                 // it committed before the photographs began copying, and
                 // blocking is a control over what the *community* shows rather
                 // than a retraction of a save — but nothing re-opens it. The
@@ -465,7 +465,7 @@ private extension CommunityHikeView {
     /// are what ``CommunityImport`` copies a stranger's photographs out of,
     /// this runs from `onDisappear`, and the screen can be left — backed out
     /// of, or blocked away from — while the copy is still going. Deleting
-    /// underneath it would cost the walker the pictures of a hike they asked
+    /// underneath it would cost the hiker the pictures of a hike they asked
     /// for, silently and for no reason they could ever connect to what they
     /// did.
     func discardDownloads() {

@@ -189,7 +189,7 @@ extension HikeRecorder {
         // a fix from that watch arrives. Handed on before the phase guard
         // rather than inside it, because everything below is about a fix that
         // becomes part of the track and none of it applies to one that is
-        // only evidence the walker has moved.
+        // only evidence the hiker has moved.
         if phase == .paused {
             movementReminders?.recordingObserved(location, at: clock())
             return
@@ -256,7 +256,7 @@ extension HikeRecorder {
             phase = .recording
         }
         RenderSignpost.mark("LiveFixAccepted")
-        // After the accumulator has seen this point, so a walker who has just
+        // After the accumulator has seen this point, so a hiker who has just
         // stopped moving gets the wider distance filter on the strength of the
         // fix that proved it rather than one fix later.
         updateEnergyProfile()
@@ -406,12 +406,12 @@ extension HikeRecorder {
     }
 
     /// Downloads the regions around the one that just landed, so the graph is
-    /// on disk before the walker reaches them — or before the connection that
+    /// on disk before the hiker reaches them — or before the connection that
     /// would have fetched them is gone.
     ///
     /// Serial, and deliberately so: these are guesses, and Overpass is a
     /// shared service that rate-limits. Eight parallel queries for regions the
-    /// walker may never enter is exactly the burst that earns a 429 for the
+    /// hiker may never enter is exactly the burst that earns a 429 for the
     /// region they are standing in. Speculative under
     /// ``TileNetworkPolicy`` for the same reason it exists there — nobody is
     /// waiting for these, so they are the first thing to give up on cellular,

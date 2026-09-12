@@ -12,7 +12,7 @@
 //  launch-time quota sweep — used to bump the global epoch per file, which
 //  invalidated every unrelated in-flight fetch once per deleted tile. Trimming
 //  five hundred tiles did that five hundred times, and each one is a correct
-//  response discarded and asked for again, on whatever radio the walker is
+//  response discarded and asked for again, on whatever radio the hiker is
 //  paying for.
 //
 //  They invalidate the deleted tile's own row now, keyed by the file name that

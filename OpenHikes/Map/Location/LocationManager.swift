@@ -15,7 +15,7 @@ import CoreLocation
 import Foundation
 import Observation
 
-/// A fix accepted for route matching: where the walker is, and — when they're
+/// A fix accepted for route matching: where the hiker is, and — when they're
 /// moving fast enough for it to mean anything — which way they're going.
 nonisolated struct RouteFix {
     let coordinate: CLLocationCoordinate2D
@@ -26,7 +26,7 @@ nonisolated struct RouteFix {
     /// When the receiver took the fix, which is up to
     /// ``LocationFixPolicy/foregroundMaximumAge`` before it is read here.
     /// Carried so anything ordering this feed's evidence against the
-    /// background one's orders it by when the walker was somewhere rather
+    /// background one's orders it by when the hiker was somewhere rather
     /// than by when the app got round to asking.
     let timestamp: Date
 }
@@ -177,7 +177,7 @@ final class LocationManager: NSObject {
         let next = location.coordinate
         // `CLLocationCoordinate2D` isn't `Equatable`, so Observation can't tell
         // a repeat fix from a new one and treats the same place as news. A
-        // walker standing still at a viewpoint would otherwise wake every
+        // hiker standing still at a viewpoint would otherwise wake every
         // observer once a second for as long as the app is open. Nothing
         // downstream wants that heartbeat: auto-follow and the weather poll
         // are driven by ``fixes``, which carries only what survives this
@@ -201,7 +201,7 @@ final class LocationManager: NSObject {
     ///
     /// Position and course come from one `CLLocation` rather than from two
     /// accessors, so a caller can't match a coordinate against the direction
-    /// the walker was going at some other moment.
+    /// the hiker was going at some other moment.
     func routeFix(maximumHorizontalAccuracy: CLLocationAccuracy) -> RouteFix? {
         guard let latestLocation,
               LocationFixPolicy.accepts(
@@ -221,7 +221,7 @@ final class LocationManager: NSObject {
     ///
     /// What matters here is what it *doesn't* emit. `publish(_:)` above
     /// already throttles to one update a second and already drops a fix that
-    /// repeats the last coordinate, so a walker standing at a viewpoint — or a
+    /// repeats the last coordinate, so a hiker standing at a viewpoint — or a
     /// phone in a pocket with the screen off — produces no elements at all.
     /// The weather poll and the hike detail's auto-follow each used to run
     /// their own 1 Hz `Task.sleep` loop to discover that for themselves, and

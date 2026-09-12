@@ -10,7 +10,7 @@ import Testing
 
 /// The row a saved recording leaves in its own History, and the two figures it
 /// is measured by — both taken from the prepared points rather than from the
-/// clock the walker's phone happened to be holding.
+/// clock the hiker's phone happened to be holding.
 @Suite("Recorded walk")
 struct RecordedWalkTests {
     private let start = Date(timeIntervalSince1970: 1_750_000_000)
@@ -51,7 +51,7 @@ struct RecordedWalkTests {
     }
 
     /// A straight climb with a ninety-second stop in the middle, where the
-    /// walker stands still and lets GPS wander: the one shape where the
+    /// hiker stands still and lets GPS wander: the one shape where the
     /// distance the hike reports and the length of the line it saved are
     /// different numbers.
     private func wanderingFixture() -> [RecordingPoint] {
@@ -165,7 +165,7 @@ struct RecordedWalkTests {
     /// refuses to draw the stretches it covered.
     ///
     /// Which is why the walk is not written against `distanceMeters`: that is
-    /// the figure the walker watched tick, with the stationary windows
+    /// the figure the hiker watched tick, with the stationary windows
     /// retracted, and this fixture is built so the two genuinely differ.
     @Test("a recorded walk is measured on the saved route's own length")
     func recordedWalkMatchesTheSavedRoutesProfile() throws {

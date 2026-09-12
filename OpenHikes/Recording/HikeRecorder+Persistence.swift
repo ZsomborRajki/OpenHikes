@@ -411,7 +411,7 @@ extension HikeRecorder {
         //
         // `.abandoned` rather than `.finished` even where `canRetrySave` is
         // true: no `Hike` stands behind those figures yet, and a lingering
-        // final panel claims one that was saved. A walker who retries and
+        // final panel claims one that was saved. A hiker who retries and
         // succeeds is looking at the app, not at the Lock Screen. Harmless
         // where no recording panel is up — `endRecordingActivity(_:)` checks —
         // so a followed trail's activity is left where it is.
@@ -523,7 +523,7 @@ extension HikeRecorder {
         publishSharedRecordingSnapshot(force: true)
     }
 
-    /// The name the walker typed into the Stop alert, as it should be stored.
+    /// The name the hiker typed into the Stop alert, as it should be stored.
     ///
     /// Its own name rather than a bare ``HikeTitle/bounded(_:)`` call because
     /// this is the recorder's vocabulary and `RecordingView` reasons about it

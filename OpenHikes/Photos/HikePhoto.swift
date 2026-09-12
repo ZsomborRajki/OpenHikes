@@ -26,7 +26,7 @@ import Foundation
 /// asset carried was used to place it.
 ///
 /// Stored so the gallery can be honest about the difference. A pin the app
-/// watched the walker stand on and a pin worked out from a clock four minutes
+/// watched the hiker stand on and a pin worked out from a clock four minutes
 /// off the nearest fix are not the same claim, and a screen that draws them
 /// identically is making the weaker one silently.
 nonisolated enum PhotoMatchEvidence: String, Codable, Hashable, Sendable {

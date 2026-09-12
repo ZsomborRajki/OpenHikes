@@ -3,7 +3,7 @@
 //  OpenHikesTests
 //
 //  What a walk's completion figure means. Coverage rather than position: the
-//  union of along-route intervals consecutive matches spanned, so a walker
+//  union of along-route intervals consecutive matches spanned, so a hiker
 //  who opens the app halfway round an out-and-back and walks to the end reads
 //  50%, walking a section twice adds nothing, and a lost signal does not
 //  paint the valley in between as walked.
@@ -20,7 +20,7 @@ import Testing
 struct TrailWalkCoverageTests {
     private static let routeLength: Double = 2000
 
-    /// Matches every `step` metres from `start` to `end`, the way a walker
+    /// Matches every `step` metres from `start` to `end`, the way a hiker
     /// produces them.
     private func walk(from start: Double, to end: Double, into coverage: inout TrailWalkCoverage, step: Double = 20) {
         var distance = start
@@ -32,7 +32,7 @@ struct TrailWalkCoverageTests {
         coverage.record(distance: end)
     }
 
-    /// The case the whole figure exists for. A walker who opens the app at the
+    /// The case the whole figure exists for. A hiker who opens the app at the
     /// turn of an out-and-back and walks home reads half, where position along
     /// the route would read all of it.
     @Test("a walk from the turn of an out-and-back covers half of it")
@@ -69,7 +69,7 @@ struct TrailWalkCoverageTests {
         walk(from: 0, to: 200, into: &coverage)
         coverage.record(distance: 800)
         #expect(coverage.coveredMeters == 200, "the 600 m between 200 and 800 was never seen")
-        #expect(coverage.furthestDistanceMeters == 800, "but the walker did get there")
+        #expect(coverage.furthestDistanceMeters == 800, "but the hiker did get there")
         // The next match continues from where they landed, not from before
         // the gap.
         coverage.record(distance: 820)
@@ -91,8 +91,8 @@ struct TrailWalkCoverageTests {
     }
 
     /// What a pause needs from the union. The gap bound is the right rule for
-    /// a lost signal — the walker probably did walk the stretch in between —
-    /// and it is exactly wrong across a pause, which is the walker saying
+    /// a lost signal — the hiker probably did walk the stretch in between —
+    /// and it is exactly wrong across a pause, which is the hiker saying
     /// they did not walk what comes next.
     @Test("a broken continuity reference starts a fresh interval")
     func brokenContinuityIsNotBridged() {
@@ -104,7 +104,7 @@ struct TrailWalkCoverageTests {
         coverage.record(distance: 600)
 
         #expect(coverage.coveredMeters == covered, "the 300 m in between is inside the gap bound and still not bridged")
-        #expect(coverage.furthestDistanceMeters == 600, "but the walker did get there")
+        #expect(coverage.furthestDistanceMeters == 600, "but the hiker did get there")
     }
 
     /// Two stretches walked apart merge the moment a third joins them.
@@ -148,7 +148,7 @@ struct TrailWalkCoverageTests {
         #expect(TrailWalkPolicy.hasReachedEnd(coveredFraction: 1, distanceToNearestEndMeters: 0))
     }
 
-    /// The same rule over a real record: a walker who reaches the far end of
+    /// The same rule over a real record: a hiker who reaches the far end of
     /// the out-and-back — half the route — has not reached the end, and one
     /// who walks the whole thing has.
     @Test("a record reaches the end only once it has covered the route")
@@ -174,7 +174,7 @@ struct TrailWalkCoverageTests {
     }
 
     /// The same route walked the other way. The direction a GPX stores its
-    /// points in is the importer's, not the walker's, and the coverage union
+    /// points in is the importer's, not the hiker's, and the coverage union
     /// never cared: a walk from the stored end to the stored start covers the
     /// whole route, so the trailhead it finishes at is an end it reached.
     @Test("a record walked in the route's reverse direction reaches the end too")

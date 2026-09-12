@@ -2,7 +2,7 @@
 //  CommunityImport.swift
 //  OpenHikes
 //
-//  Turning somebody else's published hike into one of this walker's own.
+//  Turning somebody else's published hike into one of this hiker's own.
 //
 //  Deliberately the same shape as ``HikeImport``, because it makes the same
 //  promise: everything downstream of a successful import acts on the claim
@@ -13,8 +13,8 @@
 //  What is different is that the photographs are somebody else's, and two
 //  decisions follow from that and are not negotiable at the call site.
 //
-//  The imported copies never reach the walker's photo library. The library
-//  mirror is an opt-in for photographs the walker *took*
+//  The imported copies never reach the hiker's photo library. The library
+//  mirror is an opt-in for photographs the hiker *took*
 //  (``SettingsKey/savePhotosToLibrary``), and honouring it here would quietly
 //  file a stranger's pictures into a library somebody curates by hand — a
 //  thing they did not ask for and would have to undo one at a time. So the
@@ -25,7 +25,7 @@
 //  Console, so its numbers are typed; the route is what was actually uploaded.
 //  Where the two disagree the route is the one that drew the line on the map,
 //  and a hike whose stated length disagreed with its own polyline would be
-//  wrong in the one place the walker could see it.
+//  wrong in the one place the hiker could see it.
 //
 
 import CoreLocation
@@ -101,7 +101,7 @@ nonisolated enum CommunityImport {
 
     /// Whether this listing is already in the library.
     ///
-    /// By listing rather than by title: two different walkers can publish the
+    /// By listing rather than by title: two different hikers can publish the
     /// same ridge under the same name, and they are two hikes.
     @MainActor
     static func existingImport(of listingID: String, in context: ModelContext) -> Hike? {
@@ -112,7 +112,7 @@ nonisolated enum CommunityImport {
         return try? context.fetch(descriptor).first
     }
 
-    /// Copies the downloaded photographs into this walker's own store.
+    /// Copies the downloaded photographs into this hiker's own store.
     ///
     /// One at a time, and a failure costs its own picture rather than the
     /// import: the hike is already committed and already useful, and a single
@@ -135,7 +135,7 @@ nonisolated enum CommunityImport {
                 data,
                 to: hike,
                 coordinate: pin.coordinate,
-                // Never the walker's setting — see this file's header.
+                // Never the hiker's setting — see this file's header.
                 savesToPhotoLibrary: false,
                 capturedAt: pin.capturedAt,
                 store: store,

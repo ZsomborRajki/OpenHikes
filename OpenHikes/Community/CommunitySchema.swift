@@ -7,7 +7,7 @@
 //  This is a hand-written CloudKit schema and has nothing to do with the
 //  mirrored one. `Hike` and `HikeWalk` reach CloudKit because SwiftData
 //  mirrors them into the *private* database, where the storage is the
-//  walker's own iCloud quota; these two types live in the **public** database
+//  hiker's own iCloud quota; these two types live in the **public** database
 //  of the same container, where the storage is the developer's. That
 //  distinction is the whole reason this feature can carry photographs at all
 //  — see *Settled decisions* in the repository instructions for why the
@@ -49,14 +49,14 @@
 //  — would go on serving the replacement to everybody who opened it, without a
 //  second review. Protecting the listing only protects what a hike is *called*
 //  unless the thing it names can no longer change. So there is no write
-//  permission on this type outside the admin role, which also means a walker
+//  permission on this type outside the admin role, which also means a hiker
 //  cannot withdraw or edit a submission from the app; sharing an amended hike
 //  makes a new submission, and taking one down is a reviewer's delete.
 //
 //  **`_world` reads it.** Browsing needs no account — public reads never do —
-//  and a signed-out walker who can find a listing has to be able to open it.
+//  and a signed-out hiker who can find a listing has to be able to open it.
 //  A reference being readable does not make its target readable, so without
-//  this the preview would fail at the fetch for exactly the walkers the
+//  this the preview would fail at the fetch for exactly the hikers the
 //  account-free flow is for.
 //
 //  What that costs is worth stating plainly: a submission nobody has reviewed
@@ -111,7 +111,7 @@ import Foundation
 /// rename here is a migration rather than a refactor. A promoted production
 /// field cannot be deleted, renamed or retyped at all.
 nonisolated enum CommunitySchema {
-    /// What a walker uploads: written once, then read by record name only.
+    /// What a hiker uploads: written once, then read by record name only.
     ///
     /// Never *queried* — by this app or by anything else, because the type
     /// carries no queryable index. See this file's header.
@@ -174,14 +174,14 @@ nonisolated enum CommunitySchema {
         ///
         /// It is what a block is keyed on, and the reason a block is keyed on
         /// something other than ``authorName``: that name is free text the
-        /// walker types, so two people may choose the same one and one person
+        /// hiker types, so two people may choose the same one and one person
         /// may choose a different one on every submission. A list keyed on it
         /// would block a string rather than a person, and would fail open for
         /// anybody deliberately evading it. This is the identity CloudKit
-        /// assigns, which the walker cannot choose and a takedown already
+        /// assigns, which the hiker cannot choose and a takedown already
         /// relies on.
         ///
-        /// A `String` rather than a reference, because the walker's own
+        /// A `String` rather than a reference, because the hiker's own
         /// blocked list is stored on the device and a `CKRecord.Reference`
         /// does not belong in `UserDefaults` — see ``CommunityBlockList``.
         ///

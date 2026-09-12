@@ -10,7 +10,7 @@
 //  and presents the sheet full-screen — and because `OpenHikesView` keeps that
 //  sheet up permanently and puts it back whenever it is dismissed, full-screen
 //  there does not mean "a taller sheet" but "no map, and no way back to one".
-//  A phone taken out of a pocket at a junction rotates on its own; a walker who
+//  A phone taken out of a pocket at a junction rotates on its own; a hiker who
 //  cannot see the map is the whole cost of that.
 //
 //  So landscape gets a panel rather than a sheet. It is a plain overlay, not a

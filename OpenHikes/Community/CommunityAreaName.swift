@@ -5,7 +5,7 @@
 //  What to call the circle of map a nearby answer came from.
 //
 //  The list used to be headed *Nearby*, which names the query rather than the
-//  place: a walker who panned to the next valley, or who opened the app
+//  place: a hiker who panned to the next valley, or who opened the app
 //  somewhere they were not yesterday, had no way to tell from the list which
 //  "here" it meant. A place name is the one thing that says so in the two
 //  words the header has room for — *near Esztergom* — and it is also what
@@ -54,7 +54,7 @@ final class GeocodedAreaNames: CommunityAreaNaming {
 
     /// The last request, cancelled when another is made.
     ///
-    /// One at a time because there is only ever one header: a walker who
+    /// One at a time because there is only ever one header: a hiker who
     /// takes two offers in quick succession wants the second name, and the
     /// first request's answer would otherwise be free to land after it.
     private var request: MKReverseGeocodingRequest?
@@ -78,7 +78,7 @@ final class GeocodedAreaNames: CommunityAreaNaming {
         } catch {
             // Logged and no more, exactly as a failed title search is. A
             // header that says *Shared Hikes* instead of *Shared Hikes near
-            // Esztergom* is not something the walker can act on, and there is
+            // Esztergom* is not something the hiker can act on, and there is
             // nowhere on screen that a geocode belongs.
             Self.logger.debug(
                 "Naming a searched area failed: \(error.localizedDescription, privacy: .public)"

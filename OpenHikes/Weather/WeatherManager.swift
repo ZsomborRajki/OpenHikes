@@ -11,13 +11,13 @@
 //  `WeatherSnapshot?`, set only on success, which made every way of having no
 //  forecast look identical from the outside — and identical, on screen, to a
 //  launch that had simply not asked yet. A missing WeatherKit entitlement, a
-//  token fetch that failed, a rate limit and a walker out of signal all
+//  token fetch that failed, a rate limit and a hiker out of signal all
 //  produced one log line and a badge that was never drawn at all, which is
 //  indistinguishable from a feature that does not exist. ``WeatherBadgeState``
 //  makes the difference visible: once there is a subject there is a badge,
 //  spinning, reading, or plainly unavailable.
 //
-//  And readings are cached per subject. A walker who looks at a trail, then
+//  And readings are cached per subject. A hiker who looks at a trail, then
 //  searches a city, then goes back to the trail should see the trail's
 //  forecast again immediately rather than watch it be fetched twice — and
 //  ``WeatherRequestState`` is already deciding that the second fetch is
@@ -177,7 +177,7 @@ final class WeatherManager {
         let coordinate = subject.coordinate
         let location = CLLocation(latitude: coordinate.latitude, longitude: coordinate.longitude)
         // Instrumented because WeatherKit is a network call this app makes on
-        // a walker's behalf without being asked, and the freshness window that
+        // a hiker's behalf without being asked, and the freshness window that
         // keeps it rare is a constant nobody would notice regressing. The
         // count per hike is the check.
         let interval = RenderSignpost.beginInterval("WeatherFetch")
@@ -194,7 +194,7 @@ final class WeatherManager {
             // WeatherKit's failure modes are the opaque ones — a missing
             // entitlement, a token fetch that failed, a rate limit, an
             // unsupported region — and they are indistinguishable from a
-            // walker simply being out of signal, which is the one the backoff
+            // hiker simply being out of signal, which is the one the backoff
             // is designed for. The log is still the only place the difference
             // can be read, but the *fact* of it now reaches the screen.
             Self.logger.error(

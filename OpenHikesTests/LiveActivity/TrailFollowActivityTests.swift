@@ -8,7 +8,7 @@
 //  the policy is `HikeLiveActivityControllerTests`, and what is asserted here
 //  is that ``BackgroundTrailTracker`` is wired to it correctly — including the
 //  two rules that are specific to a follow rather than a recording. An
-//  activity must not appear merely because a walker opened a trail to look at
+//  activity must not appear merely because a hiker opened a trail to look at
 //  it, and it must come down when they stop following, because nothing else
 //  would ever take it down.
 //
@@ -62,7 +62,7 @@ final class TrailFollowActivityTests {
 
     /// Selecting a trail publishes its whole shape to the widget. It must not
     /// put anything on the Lock Screen: browsing is not following, and an
-    /// activity for every trail a walker taps would be the app talking over
+    /// activity for every trail a hiker taps would be the app talking over
     /// them.
     @Test("selecting a trail alone starts no activity")
     func selectionAloneStartsNothing() async {
@@ -153,7 +153,7 @@ final class TrailFollowActivityTests {
     }
 
     /// Turning auto-follow off stops the foreground feed, so an activity left
-    /// running would report the walker's last known position for as long as
+    /// running would report the hiker's last known position for as long as
     /// the app lived. `HikeDetailView` calls this; the assertion is that the
     /// tracker honours it.
     @Test("ending the follow explicitly takes the activity down")

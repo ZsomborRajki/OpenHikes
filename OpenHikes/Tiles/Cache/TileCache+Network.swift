@@ -7,7 +7,7 @@
 //  Split out of ``TileCache`` because it is the one part of the cache that
 //  answers to the *device* rather than to the map: reachability, whether the
 //  connection is metered or in Low Data Mode, and whether the system has
-//  asked the app to spend less. A tile the walker is looking at and a tile
+//  asked the app to spend less. A tile the hiker is looking at and a tile
 //  the app guessed they would want next are the same fetch to everything
 //  else in the pipeline, and very different fetches here.
 //
@@ -112,7 +112,7 @@ nonisolated extension TileCache {
         // synchronously, before any listener is told. What a listener does with
         // this is redraw, and a redraw reads that tier first: entries admitted
         // while there was no way to refresh them would answer it, and the map
-        // the walker just regained signal for would go on showing the ground it
+        // the hiker just regained signal for would go on showing the ground it
         // was showing offline until they panned it.
         staleCoverageInvalidatedAt.withLock { $0 = Date() }
         // MKOverlayRenderer.setNeedsDisplay must run on the main thread and the

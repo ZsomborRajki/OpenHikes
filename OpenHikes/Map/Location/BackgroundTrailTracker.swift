@@ -86,7 +86,7 @@ final class BackgroundTrailTracker: NSObject {
     /// ``walkDidStart(hikeID:)``.
     private(set) var trackedHikeID: UUID?
     /// The hike being walked, which outranks the selection for as long as
-    /// the walk lives: a walker who locks the phone, or who opens another
+    /// the walk lives: a hiker who locks the phone, or who opens another
     /// trail to compare it, keeps accruing coverage on significant-change
     /// updates against the trail they are actually on.
     private(set) var walkedHikeID: UUID?
@@ -109,7 +109,7 @@ final class BackgroundTrailTracker: NSObject {
     /// One handle rather than one per fix, because each publication awaits the
     /// one it replaced: matching reads ``lastMatchedDistance`` and writes it
     /// back, so two fixes matched concurrently would each continue from where
-    /// the walker was *before* the other one — which on a loop or an
+    /// the hiker was *before* the other one — which on a loop or an
     /// out-and-back is the exact ambiguity that reference exists to resolve.
     private var backgroundMatchTask: Task<Void, Never>?
     private var backgroundMatchSequence: UInt64 = 0
@@ -150,7 +150,7 @@ final class BackgroundTrailTracker: NSObject {
     /// The bypass exists so that genuinely losing the trail reaches the widget
     /// at once rather than up to 45 s later, and that's worth keeping — but
     /// unbounded it is a hole straight through the throttle it bypasses. A
-    /// walker flipping on and off with ordinary GPS noise took it on every fix,
+    /// hiker flipping on and off with ordinary GPS noise took it on every fix,
     /// each time costing a `SharedStore.load`, a re-encode, an atomic App Group
     /// write and a `WidgetCenter.reloadTimelines`. WidgetKit throttles a widget
     /// that overruns its daily reload budget, so the unbounded bypass degrades
@@ -480,7 +480,7 @@ final class BackgroundTrailTracker: NSObject {
     /// O(route points) twice over, and this is the feed that pays it in full:
     /// a relaunched process has no profile in memory, so a hike imported from
     /// a five-hour GPX rebuilds all twenty thousand points before it can say
-    /// where the walker is.
+    /// where the hiker is.
     private func handleBackgroundFix(_ location: CLLocation) {
         // Significant-location-change delivery can include stale cached fixes
         // on relaunch. Matching also requires uncertainty no wider than the
@@ -492,7 +492,7 @@ final class BackgroundTrailTracker: NSObject {
         ) else { return }
         // Before the match rather than inside it, and before the tracked hike
         // is even read. Matching is the only thing that used to reach the
-        // session here, so a walker who left the trail produced nothing but
+        // session here, so a hiker who left the trail produced nothing but
         // unmatched significant changes and the six-hour rule never fired
         // while the app stayed backgrounded — the widget and the Lock Screen
         // kept an off-trail walk indefinitely. The foreground path checks on
@@ -540,7 +540,7 @@ final class BackgroundTrailTracker: NSObject {
             }
             guard let matched, selectionRevision == revision, trackedHikeID == hikeID else { return }
             // An unmatched fix leaves the reference alone: it says nothing
-            // about where along the route the walker is.
+            // about where along the route the hiker is.
             if let distance = matched.matchedDistance {
                 lastMatchedDistance = distance
                 // Coverage accrues from here too — this is the feed that
@@ -558,7 +558,7 @@ final class BackgroundTrailTracker: NSObject {
                 // Off the trail, and the session has to hear it: leaving the
                 // route is the boundary an End waits for, and until this the
                 // only thing that ever reported one was the detail view's own
-                // matcher. A walker who tapped End, pocketed the phone, left
+                // matcher. A hiker who tapped End, pocketed the phone, left
                 // and came back found the first foreground match still
                 // refused — the leave had happened where nothing was looking.
                 // A rejected fix never gets here, so "off route" still means
@@ -650,7 +650,7 @@ final class BackgroundTrailTracker: NSObject {
     ///
     /// Dropped rather than applied when the revision has moved on: a newer
     /// selection arrived after the walk released the pin and has already been
-    /// applied, and re-applying the remembered one would take the walker back
+    /// applied, and re-applying the remembered one would take the hiker back
     /// to a trail they left.
     private func applyDeferredSelection(ifRevisionIs revision: UInt64) {
         guard let deferred = deferredSelection else { return }
@@ -659,7 +659,7 @@ final class BackgroundTrailTracker: NSObject {
         hikeSelectionChanged(to: deferred.hike)
     }
 
-    /// Puts a pause or a resume in front of the walker at once.
+    /// Puts a pause or a resume in front of the hiker at once.
     func walkStateDidChange(_ walk: SharedTrailSnapshot.Walk, hikeID: UUID) {
         updateStoredWalk(walk, hikeID: hikeID) { [weak self] snapshot in
             guard let snapshot else { return }
@@ -690,7 +690,7 @@ extension BackgroundTrailTracker {
     /// ``SnapshotWriter`` alone would not be enough — an actor grants mutual
     /// exclusion but says nothing about the order suspended callers resume in,
     /// so two fixes could commit backwards and leave the widget showing the
-    /// older one for as long as the walker kept to the same on/off-route
+    /// older one for as long as the hiker kept to the same on/off-route
     /// status.
     private func updateStoredLiveFix(
         _ fix: SharedTrailSnapshot.LiveFix?,

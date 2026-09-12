@@ -337,10 +337,10 @@ nonisolated final class HikePhotoStore: @unchecked Sendable {
     /// what ``imageData(for:)`` is for, and the reason is that the original is
     /// wrong for publication in two ways. It is several megabytes, and the
     /// public database's asset storage is a shared quota this app pays for
-    /// rather than the walker's own — a dozen originals per hike is the
+    /// rather than the hiker's own — a dozen originals per hike is the
     /// difference between a feature that fits in the free tier and one that
     /// does not. And it carries the whole EXIF block, which for a photograph
-    /// taken on a walk includes the camera's own GPS fix: a walker sharing a
+    /// taken on a walk includes the camera's own GPS fix: a hiker sharing a
     /// trail has agreed to publish where the *trail* is, and
     /// ``CommunityPhotoPin`` already says that, deliberately and visibly.
     /// Publishing the original would additionally hand over the device model,

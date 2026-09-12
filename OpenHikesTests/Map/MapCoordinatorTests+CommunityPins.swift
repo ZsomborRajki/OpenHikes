@@ -57,7 +57,7 @@ extension MapCoordinatorTests {
         return (browser, transport)
     }
 
-    @Test("a walker who has not opted in gets no pins")
+    @Test("a hiker who has not opted in gets no pins")
     func nothingIsDrawnBeforeOptingIn() {
         let coordinator = MapView.Coordinator()
         let map = makeMap(mapView(), coordinator)
@@ -87,7 +87,7 @@ extension MapCoordinatorTests {
         #expect(map.annotations.compactMap { $0 as? CommunityMapAnnotation }.count == 2)
     }
 
-    /// Hiding the section takes the pins with it. Rows the walker has put away
+    /// Hiding the section takes the pins with it. Rows the hiker has put away
     /// must not be left standing on the map they were about.
     @Test("hiding the section takes the pins off the map")
     func hidingRemovesTheAnnotations() async {
@@ -107,7 +107,7 @@ extension MapCoordinatorTests {
     }
 
     /// Rebuilding drops and re-drops every marker, which is a visible
-    /// animation on a map the walker is looking at — and closes a callout they
+    /// animation on a map the hiker is looking at — and closes a callout they
     /// had open. A republish of the same listings has to be free.
     @Test("republishing the same listings leaves the annotations alone")
     func anUnchangedCommunityRepublishKeepsTheAnnotations() async throws {
@@ -127,7 +127,7 @@ extension MapCoordinatorTests {
     }
 
     /// Built out of MapKit's pieces on purpose — see the file header — and
-    /// deliberately *not* in the route's tint, which belongs to the walker's
+    /// deliberately *not* in the route's tint, which belongs to the hiker's
     /// own selected hike and may well be drawn on the same screen.
     @Test("a shared hike is a marker with a callout that opens it")
     func aCommunityPinUsesMapKitsMarkerAndCallout() async throws {
@@ -146,7 +146,7 @@ extension MapCoordinatorTests {
         )
         #expect(view.canShowCallout)
         #expect(view.glyphImage != nil)
-        // One of a page of results rather than a place the walker asked to be
+        // One of a page of results rather than a place the hiker asked to be
         // shown, so MapKit may hide it behind a neighbour.
         #expect(view.displayPriority == .defaultHigh)
         #expect(view.rightCalloutAccessoryView != nil)

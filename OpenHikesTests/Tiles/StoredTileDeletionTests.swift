@@ -13,14 +13,14 @@
 //  already gone. Nothing detects that state: a claim with no file behind it
 //  looks exactly like a claim that is satisfied, so every sweep reads it as
 //  intentional, the storage row goes on counting bytes that are not there,
-//  and nothing re-downloads the map. The walker finds out where there is no
+//  and nothing re-downloads the map. The hiker finds out where there is no
 //  signal.
 //
 //  So these ask two things of ``StoredTileDeletion``. What is true at the
 //  moment the commit lands — the manifests already empty, every planned tile
 //  still on disk — and what is true when the store says no: the manifests,
 //  the tiles, the auto-save arming and a download still in flight all exactly
-//  as the walker left them.
+//  as the hiker left them.
 //
 //  `HikeDeletionFailureTests` owns the other refusal on this path, the one
 //  where a *claim* cannot be read; `OfflineStorageAccountingTests` owns which
@@ -136,7 +136,7 @@ struct StoredTileDeletionTests {
 
     // MARK: A store that says no
 
-    /// The refusal, from the walker's side: they tapped Delete, the store
+    /// The refusal, from the hiker's side: they tapped Delete, the store
     /// would not take it, and what they are left with is the hike exactly as
     /// it was — every byte of it still counted, still claimed, still on disk.
     @Test("a refused save deletes nothing and leaves the manifest claiming what is there")
@@ -169,7 +169,7 @@ struct StoredTileDeletionTests {
     /// on the next pan — and that move folds the last drain window's tiles out
     /// of the store's pending set and into the manifest, which the refusal
     /// then restores to what it was before them. Left unfinished, a transient
-    /// save failure would cost the walker those tiles at the next launch trim
+    /// save failure would cost the hiker those tiles at the next launch trim
     /// and silently stop auto-saving a hike still on screen.
     @Test("a refused save gives the hike back its auto-save and the tiles it had just folded in")
     func refusedSaveRestoresAutoSave() async throws {
@@ -211,15 +211,15 @@ struct StoredTileDeletionTests {
             hike.autoSavedTileKeys == [Self.corridorKey],
             """
             The fold has to land on top of the restored manifest. Without it the tile is durable, claimed \
-            by nobody, and deleted at the next launch trim — for a hike the walker still has.
+            by nobody, and deleted at the next launch trim — for a hike the hiker still has.
             """
         )
-        #expect(hike.autoSaveTilesEnabled, "and the switch the walker never touched is back on")
+        #expect(hike.autoSaveTilesEnabled, "and the switch the hiker never touched is back on")
         #expect(controller.currentHike?.id == hike.id, "nothing else re-arms it: the selection never changed")
         #expect(sandbox.isSaved(Self.corridorKey))
     }
 
-    // MARK: A download the walker overtook
+    // MARK: A download the hiker overtook
 
     /// The run this button has to stand down is not the one on screen.
     ///
@@ -228,7 +228,7 @@ struct StoredTileDeletionTests {
     /// the hike again leaves `HikeDetailView` holding a *fresh, idle*
     /// downloader while the real run is still writing tiles. A stand-down
     /// aimed at the screen's own downloader would cancel nothing, the run
-    /// would finish, and its claim would put back the coverage the walker
+    /// would finish, and its claim would put back the coverage the hiker
     /// just deleted — pointing, in part, at files this plan had already
     /// freed. So the deletion stands down the registry, which is where a run
     /// says it is in flight regardless of what is on screen.
@@ -236,7 +236,7 @@ struct StoredTileDeletionTests {
     func committedDeletionStandsDownTheRunItCannotSee() async throws {
         let (deleting, survivor) = try sandboxWithSharedTile()
         let held = HeldSaves()
-        // Started from the screen the walker has since left; the deletion is
+        // Started from the screen the hiker has since left; the deletion is
         // handed no reference to it, which is the whole point.
         let abandonedRun = OfflineTileDownloader(
             isOnline: { true },
@@ -280,14 +280,14 @@ struct StoredTileDeletionTests {
         await abandonedRun.waitForCurrentRun()
         #expect(
             deleting.offlineDownloads.isEmpty,
-            "a deletion the walker asked for must not be undone by the run it interrupted"
+            "a deletion the hiker asked for must not be undone by the run it interrupted"
         )
         #expect(deleting.autoSavedTileKeys.isEmpty)
     }
 
     /// The other side of it: a *refused* deletion must leave those runs alone.
     /// Nothing was deleted, so there is nothing for them to resurrect, and
-    /// cancelling one would cost the walker a download they never cancelled.
+    /// cancelling one would cost the hiker a download they never cancelled.
     @Test("a refused deletion leaves a download in flight alone")
     func refusedSaveLeavesTheDownloadRunning() async throws {
         let (deleting, survivor) = try sandboxWithSharedTile()
@@ -329,7 +329,7 @@ struct StoredTileDeletionTests {
     /// rather than for what it frees. A survivor missing from the claim set is
     /// a hike whose downloaded map would be deleted while its manifest went on
     /// listing it, so the deletion is refused — and because every read that
-    /// can refuse happens before the first write, the refusal costs the walker
+    /// can refuse happens before the first write, the refusal costs the hiker
     /// nothing at all: not the manifest, not auto-save, not a tile.
     @Test("a library that cannot be read refuses before anything is written")
     func unreadableLibraryWritesNothing() async throws {

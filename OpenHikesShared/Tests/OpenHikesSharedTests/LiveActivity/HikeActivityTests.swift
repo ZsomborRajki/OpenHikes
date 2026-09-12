@@ -156,7 +156,7 @@ struct HikeActivityPayloadTests {
         #expect(state.elevationGainMeters == 540)
     }
 
-    /// A walker who has stepped off the trail is not an error state and not a
+    /// A hiker who has stepped off the trail is not an error state and not a
     /// reason to end the activity — the trail's own numbers stay, and only the
     /// position is withheld.
     @Test("no live fix withholds the position rather than reporting zero")
@@ -167,7 +167,7 @@ struct HikeActivityPayloadTests {
         #expect(state.offRouteMeters == nil)
         #expect(state.currentElevationMeters == nil)
         // Still the trail's ascent: that fact doesn't depend on where the
-        // walker is.
+        // hiker is.
         #expect(state.elevationGainMeters == 540)
     }
 
@@ -283,7 +283,7 @@ struct HikeActivityPayloadTests {
     ///
     /// The three spare kilobytes are also what covers the title's missing
     /// bound below: they absorb a name several times longer than the one this
-    /// test defends, so a walker who types an unusually long one does not
+    /// test defends, so a hiker who types an unusually long one does not
     /// depend on anybody having re-run these numbers.
     private static let worstCaseCeilingBytes = activityBudgetBytes * 9 / 32
 
@@ -579,7 +579,7 @@ struct HikeActivityPresentationTests {
     }
 
     /// `finished()` marks, it does not recompute — the figures on the final
-    /// card are the ones the walker was looking at when they hit Stop.
+    /// card are the ones the hiker was looking at when they hit Stop.
     @Test("finishing keeps every figure it was handed")
     func finishingChangesNothingElse() {
         let finished = Self.runningRecording.finished()
@@ -641,7 +641,7 @@ struct HikeActivityPresentationTests {
         #expect(presentation.accessibilityValue.contains("62 percent complete"))
     }
 
-    /// Claiming 0% for a walker who has merely lost the trail would be a
+    /// Claiming 0% for a hiker who has merely lost the trail would be a
     /// confident wrong answer; the trail's own length is the honest one.
     @Test("losing the trail falls back to its length rather than claiming zero")
     func losingTheTrailFallsBackToItsLength() {
@@ -661,7 +661,7 @@ struct HikeActivityPresentationTests {
     }
 
     /// A follow has no clock of its own: the trail may have been open for
-    /// hours before the walker set off.
+    /// hours before the hiker set off.
     @Test("a followed trail never runs a clock")
     func followingNeverRunsAClock() {
         let presentation = Self.followingAttributes.presentation(

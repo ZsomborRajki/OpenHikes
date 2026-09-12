@@ -27,17 +27,17 @@ import UIKit
 /// nothing here is about.
 ///
 /// ``authorize()`` is the exception, because for it the delay *is* the
-/// subject: the walker can leave a permission prompt on screen for as long as
+/// subject: the hiker can leave a permission prompt on screen for as long as
 /// they like, and what the app does with an answer that arrives after they
 /// resumed is the whole of what ``holdsThePrompt`` exists to test.
 @MainActor
 final class StubMovementReminderNotifier: MovementReminderNotifying {
-    /// What the walker said to the permission prompt. Settable because
+    /// What the hiker said to the permission prompt. Settable because
     /// "reminders are on but permission was refused" is a real state and the
     /// controller has to keep quiet in it.
     var isAuthorized = true
     /// Leaves the next prompt on screen until ``answerPrompt(allowing:)``,
-    /// modelling the walker who reads it slowly. One prompt only: a second
+    /// modelling the hiker who reads it slowly. One prompt only: a second
     /// one is answered from ``isAuthorized`` as usual, which is what lets a
     /// test hold *the first* answer and still pause again behind it.
     var holdsThePrompt = false
@@ -70,7 +70,7 @@ final class StubMovementReminderNotifier: MovementReminderNotifying {
     /// that answered straight after `recordingDidPause` would be answering a
     /// prompt that had not been put up yet — and ``answerPrompt(allowing:)``
     /// drops an answer no continuation is waiting for, so the `settle()` that
-    /// follows would then wait for the walker's reply for as long as the suite
+    /// follows would then wait for the hiker's reply for as long as the suite
     /// is willing to run.
     ///
     /// Waits for the effect rather than for a number of scheduler turns, for
@@ -91,7 +91,7 @@ final class StubMovementReminderNotifier: MovementReminderNotifying {
     }
 
     /// The same answer with no prompt, counted separately so a suite can tell
-    /// a foreground re-check apart from a question put to the walker.
+    /// a foreground re-check apart from a question put to the hiker.
     func canPost() -> Bool {
         silentChecks += 1
         return isAuthorized
@@ -156,7 +156,7 @@ enum MovementReminderHarness {
         let controller: MovementReminderController
         let notifier: StubMovementReminderNotifier
         /// The controller's own defaults suite, so a test can flip the
-        /// walker's switch the way `SettingsView`'s `@AppStorage` does.
+        /// hiker's switch the way `SettingsView`'s `@AppStorage` does.
         let defaults: UserDefaults
         /// The controller's own notification centre, so a test can drive the
         /// app-becoming-active registration itself. `.default` would work and

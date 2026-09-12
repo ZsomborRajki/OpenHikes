@@ -15,30 +15,30 @@
 //
 //  ## Why the map drives this at all
 //
-//  Because a hike is a place before it is a name. A walker looking for
+//  Because a hike is a place before it is a name. A hiker looking for
 //  somewhere to go on Saturday pans to the hills they can drive to, and
 //  typing the name of a trail they have never heard of is not something they
 //  can do. The map is the query.
 //
-//  ## The map asks, and the walker answers
+//  ## The map asks, and the hiker answers
 //
 //  What that must not become is a request per pan, and for a while the
 //  thresholds in ``CommunityQueryPolicy`` were the whole of the defence: a
 //  pan past them re-queried on its own. That was cheap and illegible. The
-//  list replaced itself under the walker's thumb for reasons nothing on
+//  list replaced itself under the hiker's thumb for reasons nothing on
 //  screen gave, and the pans the thresholds refused left it describing
 //  somewhere the map had already left — equally silently.
 //
 //  So the policy's answer is now an *offer*. A region that clears the
 //  thresholds raises ``areaPrompt``, which the map draws as *Search this
-//  area*; ``searchVisibleArea()`` is what the walker's tap runs, and the only
+//  area*; ``searchVisibleArea()`` is what the hiker's tap runs, and the only
 //  thing that spends a request. The thresholds are unchanged and still
 //  load-bearing — they decide when the offer is worth making — and this is
 //  strictly cheaper than what it replaced, because a pan nobody confirms
 //  costs nothing at all. ``areaName`` then says which area answered, so the
 //  list is headed with a place rather than with the word *Nearby*.
 //
-//  The one request the walker does not have to confirm is the first: tapping
+//  The one request the hiker does not have to confirm is the first: tapping
 //  *Find shared hikes near here* is itself the confirmation, and asking twice
 //  for one intention would be a worse bargain than the automatic re-query
 //  ever was.
@@ -62,7 +62,7 @@ import os
 /// What the community section is currently able to say.
 enum CommunityBrowseState: Equatable {
     case failed(CommunityFailure)
-    /// Nothing has been asked for. The walker has not opted in, or has just
+    /// Nothing has been asked for. The hiker has not opted in, or has just
     /// hidden the section again.
     case idle
     /// The last request finished. An empty list here means "nowhere near
@@ -126,7 +126,7 @@ final class CommunityBrowser {
     /// Computed, with blocked authors taken out — see ``nearbyResults``.
     var nearbyListings: [CommunityListing] { blockList.excludingBlocked(nearbyResults) }
     /// What the search results draw: published hikes whose title matches what
-    /// the walker typed. Nothing the map does touches this.
+    /// the hiker typed. Nothing the map does touches this.
     var matchingListings: [CommunityListing] { blockList.excludingBlocked(matchingResults) }
 
     /// The nearby answer as it came back, before anybody was blocked out of it.
@@ -139,7 +139,7 @@ final class CommunityBrowser {
     /// forgotten would be the bug. One filter, one source of truth, applied at
     /// the point of reading.
     ///
-    /// It also means a walker who unblocks somebody gets their hikes back
+    /// It also means a hiker who unblocks somebody gets their hikes back
     /// without a request: the rows were never thrown away, only hidden.
     private var nearbyResults: [CommunityListing] = []
     private var matchingResults: [CommunityListing] = []
@@ -151,7 +151,7 @@ final class CommunityBrowser {
     /// rows and is logged; it must not put an error over a nearby list that
     /// is perfectly good.
     private(set) var state: CommunityBrowseState = .idle
-    /// Whether the walker has asked for shared hikes at all. Drawn as the
+    /// Whether the hiker has asked for shared hikes at all. Drawn as the
     /// difference between the section's opt-in row and its results, so it is
     /// observed on purpose.
     private(set) var isBrowsing = false
@@ -175,7 +175,7 @@ final class CommunityBrowser {
     /// is, without the opt-in row's call site knowing about the map.
     @ObservationIgnored private var latestRegion: MKCoordinateRegion?
     /// The area behind an ``CommunityAreaPrompt/search`` offer, kept so the
-    /// walker's tap asks about the region that raised it rather than
+    /// hiker's tap asks about the region that raised it rather than
     /// re-deriving one from a map that may have drifted since.
     @ObservationIgnored private var offeredArea: CommunitySearchArea?
     /// Whether an opt-in is still waiting for a region to be about. See
@@ -186,7 +186,7 @@ final class CommunityBrowser {
     /// `nil` for a launch that must not reach the network, and for one that
     /// has nowhere to show a name — see ``CommunityAreaNaming``.
     @ObservationIgnored private let areaNames: (any CommunityAreaNaming)?
-    /// The walker's own block list, which both result sets are read through.
+    /// The hiker's own block list, which both result sets are read through.
     ///
     /// The *reference* is ignored by observation because it never changes;
     /// what a body reading ``nearbyListings`` ends up tracking is the block
@@ -250,7 +250,7 @@ final class CommunityBrowser {
     ///
     /// Cheap by contract: while browsing is off this stores a value and
     /// returns, which is what lets it sit on `regionDidChangeAnimated`
-    /// alongside the highlight update without costing a walker who has never
+    /// alongside the highlight update without costing a hiker who has never
     /// used this feature anything at all. While browsing is *on* it still
     /// reaches no network — the most it does is raise an offer.
     func regionDidSettle(_ region: MKCoordinateRegion) {
@@ -278,7 +278,7 @@ final class CommunityBrowser {
     ///
     /// Takes the offered area rather than re-reading the map, so the question
     /// asked is the one the offer was made about — a settle landing between
-    /// the walker seeing the button and hitting it would otherwise change it
+    /// the hiker seeing the button and hitting it would otherwise change it
     /// underneath them.
     func searchVisibleArea() {
         guard isBrowsing, let offeredArea else { return }
@@ -299,7 +299,7 @@ final class CommunityBrowser {
             // The map has not reported a region yet — a sheet opened before
             // the first `regionDidChangeAnimated`. Nothing to ask about, so
             // the first one that arrives is asked rather than offered: the tap
-            // that got here is still the confirmation, and a walker who opted
+            // that got here is still the confirmation, and a hiker who opted
             // in a moment too early should not be left looking at a spinner
             // beside a button asking them to opt in again.
             wantsFirstRegion = true
@@ -347,7 +347,7 @@ final class CommunityBrowser {
     ///
     /// What a failed request needs: the policy remembers a query that produced
     /// nothing, so without forgetting it first the same region would be
-    /// refused as "the same question" and the walker's only recourse would be
+    /// refused as "the same question" and the hiker's only recourse would be
     /// to pan away and back.
     func retry() {
         guard isBrowsing, let latestRegion else { return }
@@ -360,7 +360,7 @@ final class CommunityBrowser {
     ///
     /// The read-time filter hides a blocked author's rows without asking
     /// anything, which is what should happen — but a page that was *all* that
-    /// author leaves the walker looking at *No shared hikes here* for an area
+    /// author leaves the hiker looking at *No shared hikes here* for an area
     /// that may have plenty. Blocking one person must not empty the map.
     ///
     /// Deliberately narrow. It asks again only when the block took the last
@@ -370,7 +370,7 @@ final class CommunityBrowser {
     /// back with the same hidden page; see ``CommunityPageBudget``.
     ///
     /// Nothing equivalent for the typed search, and that is not an oversight:
-    /// it has no remembered question to re-ask, and the field the walker typed
+    /// it has no remembered question to re-ask, and the field the hiker typed
     /// into is still in front of them.
     func refreshAfterBlock() {
         guard isBrowsing, !nearbyResults.isEmpty, nearbyListings.isEmpty else { return }

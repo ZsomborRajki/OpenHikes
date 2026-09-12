@@ -277,7 +277,7 @@ struct GPXExportTests {
 
     // MARK: Sharing
 
-    /// The Share button reads the name the walker sees, so renaming a hike
+    /// The Share button reads the name the hiker sees, so renaming a hike
     /// renames the file it shares.
     @MainActor
     @Test("the payload takes the hike's display title, not its imported one")

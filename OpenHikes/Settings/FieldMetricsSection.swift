@@ -3,13 +3,13 @@
 //  OpenHikes
 //
 //  The Settings section that shows what MetricKit reported, and lets the
-//  walker do the only two things worth doing with it: read it, or hand it to
+//  hiker do the only two things worth doing with it: read it, or hand it to
 //  somebody.
 //
 //  This screen exists because of where the data is. Nothing uploads a report,
 //  so unless it can be read on the phone that produced it, it may as well not
 //  be collected — and the phones that produce the interesting numbers are
-//  exactly the ones nobody has a debugger attached to: a walker's, six hours
+//  exactly the ones nobody has a debugger attached to: a hiker's, six hours
 //  into a hike, in a valley, on 4% battery.
 //
 //  Presentation rules it follows, both from this repository's conventions:

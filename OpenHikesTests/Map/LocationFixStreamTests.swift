@@ -13,7 +13,7 @@
 //    `followLocation` matched immediately and then slept, not the other way
 //    round;
 //  * one element per accepted publish; and
-//  * nothing at all while the walker stands still, which is the entire point
+//  * nothing at all while the hiker stands still, which is the entire point
 //    of the change and the one property a timer can't have.
 //
 //  Both consumers iterate it at once, so the fan-out is pinned here too.
@@ -103,7 +103,7 @@ struct LocationFixStreamTests {
     /// `followLocation` used to call `updateLiveFollow` before its first
     /// sleep, so a hike opened while standing on the trail showed the live
     /// marker straight away. Waiting for the *next* fix instead would leave
-    /// the chart blank for as long as the walker stayed put.
+    /// the chart blank for as long as the hiker stayed put.
     @Test("iterating starts from the fix that is already current")
     func currentFixArrivesFirst() async {
         publish(latitude: 47.63)
@@ -130,7 +130,7 @@ struct LocationFixStreamTests {
         #expect(consumer.log.latitudes == [nil, 47.63])
     }
 
-    /// The property the timers couldn't have. A walker at a viewpoint keeps
+    /// The property the timers couldn't have. A hiker at a viewpoint keeps
     /// producing fixes, and `LocationManager.publish` drops the ones that
     /// repeat the last coordinate — so nothing downstream wakes at all.
     @Test("standing still wakes nobody")

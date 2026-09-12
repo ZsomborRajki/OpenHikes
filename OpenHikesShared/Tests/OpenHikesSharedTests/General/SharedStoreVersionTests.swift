@@ -106,7 +106,7 @@ struct SharedStoreVersionTests {
     /// out of the raw bytes rather than read off the decoded payload: these
     /// bytes decode perfectly well as v1. Accepting them would read v2's
     /// fields with v1's meaning — a snapshot that is wrong rather than
-    /// missing, which is the failure a walker cannot see.
+    /// missing, which is the failure a hiker cannot see.
     @Test("a payload from a newer build is refused even though it would decode")
     func newerPayloadIsRefused() throws {
         try withSharedStoreSandbox { root in
@@ -150,7 +150,7 @@ struct SharedStoreVersionTests {
 
     /// A refusal on version has to be a refusal, not a deferral: the bytes
     /// stay exactly as the newer build left them. Rewriting or deleting them
-    /// would destroy the newer build's state on a downgrade that the walker
+    /// would destroy the newer build's state on a downgrade that the hiker
     /// may well undo an hour later.
     @Test("refusing a newer payload leaves it untouched")
     func refusingLeavesTheBytesAlone() throws {

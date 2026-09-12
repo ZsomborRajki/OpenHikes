@@ -125,7 +125,7 @@ extension TrailBasemapRendererTests {
 
     /// A manifest written before the resample existed records the device's own
     /// scale. The short-circuit has to treat that as work still to do, or a
-    /// walker who keeps one trail selected keeps the oversized images for as
+    /// hiker who keeps one trail selected keeps the oversized images for as
     /// long as they keep it selected.
     @Test("a manifest recorded at the device's scale is not accepted as done")
     func anOversizedManifestIsNotAtIntendedScale() throws {

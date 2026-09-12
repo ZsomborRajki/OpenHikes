@@ -84,10 +84,10 @@ Two shapes in this harness are routinely misread.
 
 `RecordingTailRebuilt` and `MapRecordingTraceApplied` are **2.0 per fix by
 design**, not by tolerance. `accept(_:)` appends the raw coordinate so the line
-keeps up with the walker, then the asynchronous trail match returns and replaces
+keeps up with the hiker, then the asynchronous trail match returns and replaces
 the provisional tail with snapped geometry. The two land 11–72 ms apart, so the
 raw tail really is on screen for a frame or three before it snaps — which is the
-feature rather than waste, since the alternative is a line that lags the walker
+feature rather than waste, since the alternative is a line that lags the hiker
 by the matcher's latency. Each rebuild costs 0.02–0.03 ms. The budget is 2.5
 rather than 1.5 because a test that fails permanently is a test everyone learns
 to ignore; what is worth defending is that it stays two and does not grow.
@@ -224,7 +224,7 @@ have already drawn. The timeline inside it bisects as:
 The sheet body runs six to eight times and the hike list four to nine before
 the app settles at t≈0.54–0.62 s. The framework bootstrap is not ours; the rest
 of the first render largely is. **This is also the largest single energy item in
-a short session**: a walker who opens the app to check where they are, and
+a short session**: a hiker who opens the app to check where they are, and
 closes it, pays this and almost nothing else.
 
 **Some of the worst is the first launch, not the scenario named.** The suite
@@ -392,7 +392,7 @@ for a passing grade.
   frame-level hitch data cannot be produced here at all. A device is also the
   only place thermal state ever leaves `.nominal`, so the conserving GPS profile
   has never been exercised outside unit tests, and the only place background
-  suspension behaves as it will for a walker.
+  suspension behaves as it will for a hiker.
 - **Any MetricKit payload.** The integration is in and tested, but nothing has
   been read on a device: the Simulator emits `NO_METRICS` and delivery is daily.
   Check first that `RecordingSession` appears at all — an interval that outlives

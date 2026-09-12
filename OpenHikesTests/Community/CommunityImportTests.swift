@@ -12,7 +12,7 @@ import Testing
 import UIKit
 #endif
 
-/// Turning somebody else's published hike into one of this walker's own.
+/// Turning somebody else's published hike into one of this hiker's own.
 @MainActor
 @Suite("Community import")
 struct CommunityImportTests {
@@ -69,7 +69,7 @@ struct CommunityImportTests {
     /// The listing's figures are typed by a reviewer in the CloudKit Console;
     /// the route is what was actually uploaded and is what draws the line on
     /// the map. A hike whose stated length disagreed with its own polyline
-    /// would be wrong in the one place the walker can see it.
+    /// would be wrong in the one place the hiker can see it.
     @Test("the distance is recomputed from the route, not copied")
     func distanceComesFromTheRoute() async throws {
         let context = try Fixture.modelContext()
@@ -87,7 +87,7 @@ struct CommunityImportTests {
         )
     }
 
-    /// Two walkers can publish the same ridge under the same name, so identity
+    /// Two hikers can publish the same ridge under the same name, so identity
     /// is the listing rather than the title.
     @Test("importing the same listing twice returns the first hike")
     func importIsIdempotent() async throws {
@@ -132,7 +132,7 @@ struct CommunityImportTests {
         #expect(try context.fetch(FetchDescriptor<Hike>()).isEmpty)
     }
 
-    /// The photographs arrive as files and become the walker's own copies,
+    /// The photographs arrive as files and become the hiker's own copies,
     /// pinned where the publisher pinned them.
     @Test("downloaded photos are attached at the coordinates they were pinned to")
     func photosAreAttachedWithTheirPins() async throws {
@@ -162,9 +162,9 @@ struct CommunityImportTests {
         #expect(photo.coordinate?.longitude == pinned.longitude)
     }
 
-    /// Somebody else's photographs must never be filed into the walker's own
+    /// Somebody else's photographs must never be filed into the hiker's own
     /// photo library — the opt-in is for pictures they took.
-    @Test("imported photos never reach the walker's photo library")
+    @Test("imported photos never reach the hiker's photo library")
     func importedPhotosSkipTheLibrary() async throws {
         let context = try Fixture.modelContext()
         let directory = FileManager.default.temporaryDirectory

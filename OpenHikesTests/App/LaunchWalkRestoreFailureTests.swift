@@ -66,7 +66,7 @@ struct LaunchWalkRestoreFailureTests {
 
         let decision = OpenHikesModel.openWalkAtLaunch(now: Self.fixedNow) { [state] }
         guard case let .resume(found, record) = decision else {
-            Issue.record("an hour-old walk is still the walker's, got \(decision)")
+            Issue.record("an hour-old walk is still the hiker's, got \(decision)")
             return
         }
         #expect(found === state)

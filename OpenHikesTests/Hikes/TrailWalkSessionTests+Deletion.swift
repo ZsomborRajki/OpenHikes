@@ -8,7 +8,7 @@
 //  reason: that suite had reached its length, and these ask a question of
 //  their own. A walk hangs off a hike, and there are exactly two ways the
 //  hike can stop being there — the swipe in `MapSheet`, which says so, and
-//  every other way, which does not. A deletion mirrored from the walker's
+//  every other way, which does not. A deletion mirrored from the hiker's
 //  other device removes the row and calls nothing; the recorder's own
 //  deletions go through `HikeDeletion` and call nothing either. So the walk
 //  has to notice on its own, in the session while it is running and at the
@@ -37,7 +37,7 @@ extension TrailWalkSessionTests {
     }
 
     /// The swipe in `MapSheet` is the one deletion that says so. A hike
-    /// deleted on the walker's other device arrives as a mirrored row
+    /// deleted on the hiker's other device arrives as a mirrored row
     /// deletion and calls nothing, so the walk is noticed on the next fix —
     /// without which no trail can start one, on any screen, until the app is
     /// relaunched.

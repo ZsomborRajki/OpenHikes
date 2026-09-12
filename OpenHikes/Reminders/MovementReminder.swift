@@ -10,7 +10,7 @@
 //  test can read a struct where it cannot read a banner.
 //
 //  Every identifier here is a *storage* contract in the same sense a widget
-//  kind is. A delivered notification carries its category, and the walker's
+//  kind is. A delivered notification carries its category, and the hiker's
 //  phone may hold one for hours before they take it out of a pocket — so a
 //  category renamed in a later build arrives at a delegate that no longer
 //  knows the buttons it is drawing, and the Resume button quietly does
@@ -19,16 +19,16 @@
 
 import Foundation
 
-/// Which of the three disagreements between the walk and the walker this is.
+/// Which of the three disagreements between the walk and the hiker this is.
 ///
 /// One identifier per kind, and that identifier is also the notification's
 /// own: posting a second reminder of a kind *replaces* the banner already on
 /// the Lock Screen rather than stacking a third one under it. That is the
 /// whole reason the identifier is derived rather than made unique per post.
 nonisolated enum MovementReminderKind: String, CaseIterable, Sendable {
-    /// The recording is running and the walker has not moved in a while.
+    /// The recording is running and the hiker has not moved in a while.
     case pauseRecording = "pauseRecording"
-    /// The recording is paused and the walker is plainly walking.
+    /// The recording is paused and the hiker is plainly walking.
     case resumeRecording = "resumeRecording"
     /// The walk along a followed trail is paused and the trail is being
     /// covered anyway.
@@ -37,7 +37,7 @@ nonisolated enum MovementReminderKind: String, CaseIterable, Sendable {
     var notificationIdentifier: String { "openhikes.reminder.\(rawValue)" }
     var categoryIdentifier: String { "openhikes.category.\(rawValue)" }
 
-    /// The button the banner offers, which is the reason the walker does not
+    /// The button the banner offers, which is the reason the hiker does not
     /// have to unlock the phone at all.
     var action: MovementReminderAction {
         switch self {
@@ -50,7 +50,7 @@ nonisolated enum MovementReminderKind: String, CaseIterable, Sendable {
 /// What a button on a reminder does when it is tapped.
 ///
 /// Both are *background* actions: they run in this app's process without
-/// bringing it to the front, which is the point — the walker's hands are busy
+/// bringing it to the front, which is the point — the hiker's hands are busy
 /// and the phone is in a pocket, the same case
 /// ``RecordingIntents`` declares `IntentModes.background` for.
 nonisolated enum MovementReminderAction: String, CaseIterable, Sendable {
@@ -78,11 +78,11 @@ nonisolated struct MovementReminder: Equatable, Sendable {
 /// The words themselves.
 ///
 /// Two rules run through all three. Each says *what the app noticed* before it
-/// says what to do about it, because a walker who did mean to pause has to be
+/// says what to do about it, because a hiker who did mean to pause has to be
 /// able to dismiss the banner without wondering what the app is confused
 /// about. And none of them claims anything the app has not measured: the
 /// distance is the displacement the watch actually saw, not an estimate of how
-/// far the walker has hiked.
+/// far the hiker has hiked.
 nonisolated enum MovementReminderWording {
     /// Metres, rendered the way every other distance in this app is — in the
     /// reader's own units, at road precision.
@@ -102,7 +102,7 @@ nonisolated enum MovementReminderWording {
         )
     }
 
-    /// Named, when there is a name to use. A walker with one trail open knows
+    /// Named, when there is a name to use. A hiker with one trail open knows
     /// which walk this is; one who has been comparing three does not, and the
     /// title is the only thing on the banner that could tell them.
     static func resumeWalk(trailTitle: String, movedMeters: Double) -> MovementReminder {

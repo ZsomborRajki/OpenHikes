@@ -11,7 +11,7 @@
 //  app that opens a connection to report on how
 //  carefully it avoids opening connections would be a joke at its own expense,
 //  so nothing here uploads anything. A report is written to Application
-//  Support, shown in Settings, and leaves the device only if the walker picks
+//  Support, shown in Settings, and leaves the device only if the hiker picks
 //  it up and shares it deliberately.
 //
 //  Two properties the design has to hold:
@@ -107,7 +107,7 @@ nonisolated struct FieldMetricsReport: Codable, Sendable, Equatable, Identifiabl
 /// serialization an actor gives is exactly what stops a delivery and a delete
 /// from interleaving on the same file.
 actor FieldMetricsStore {
-    /// Roughly a fortnight of daily payloads. Long enough that a walker can
+    /// Roughly a fortnight of daily payloads. Long enough that a hiker can
     /// hike at the weekend and still find the report on the following one;
     /// short enough that the directory has a ceiling anyone can reason about.
     static let retentionLimit = 16
@@ -190,7 +190,7 @@ actor FieldMetricsStore {
 
     /// Removes every file this store owns, decodable or not. Going by
     /// decodability instead would leave the undecodable ones behind, which is
-    /// the one case a walker clearing their diagnostics most needs gone.
+    /// the one case a hiker clearing their diagnostics most needs gone.
     func deleteAll() {
         for entry in stored() {
             try? FileManager.default.removeItem(at: entry.url)

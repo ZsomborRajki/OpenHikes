@@ -2,7 +2,7 @@
 //  OpenHikesShortcuts.swift
 //  OpenHikes
 //
-//  What Siri and Spotlight offer without the walker building a shortcut first.
+//  What Siri and Spotlight offer without the hiker building a shortcut first.
 //
 //  Every phrase has to carry `\(.applicationName)` — the system will not
 //  register one that doesn't, and it fails by simply never matching rather

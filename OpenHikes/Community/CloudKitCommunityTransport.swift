@@ -51,7 +51,7 @@ nonisolated struct CloudKitCommunityTransport: CommunityTransporting {
         // Asked before anything is encoded or uploaded. A signed-out phone can
         // browse perfectly well — public reads need no account — so this is
         // the one place the distinction has to be made, and making it up front
-        // is what stops a walker watching a progress spinner for a megabyte of
+        // is what stops a hiker watching a progress spinner for a megabyte of
         // photographs that were never going to be accepted.
         let container = CKContainer(identifier: containerIdentifier)
         guard try await container.accountStatus() == .available else {
@@ -169,7 +169,7 @@ nonisolated struct CloudKitCommunityTransport: CommunityTransporting {
     /// Runs a query, following the cursor only as far as blocked rows make
     /// necessary.
     ///
-    /// One page when the walker has blocked nobody, which is the ordinary
+    /// One page when the hiker has blocked nobody, which is the ordinary
     /// case and the behaviour this had before: `limit` is already more rows
     /// than fit on a phone, and paging to fill a list nobody scrolls to the
     /// bottom of would spend requests against a shared quota for nothing.
@@ -390,7 +390,7 @@ nonisolated struct CloudKitCommunityTransport: CommunityTransporting {
     ///
     /// The retryable conditions are folded into one `unreachable` on purpose.
     /// A rate limit, a busy service and a phone in a tunnel are the same
-    /// sentence to a walker — *try again* — and telling them apart would only
+    /// sentence to a hiker — *try again* — and telling them apart would only
     /// let the UI offer three wordings of it.
     private static func failure(from error: any Error, while reason: String) -> CommunityFailure {
         if let failure = error as? CommunityFailure { return failure }
@@ -437,7 +437,7 @@ nonisolated private extension CommunityListing {
     ///
     /// ``CommunitySchema/Listing/authorID`` is strict too, and it is the one
     /// entry in that list which renders nothing. A listing without it is one
-    /// no walker can block, and App Store Guideline 1.2 has no exemption for a
+    /// no hiker can block, and App Store Guideline 1.2 has no exemption for a
     /// record the reviewer filled in wrong — so the row is dropped, which
     /// costs that listing and is logged by the caller with the reason. The
     /// alternative is a block keyed on an empty string, which would silently

@@ -33,7 +33,7 @@ enum Endurance {
     /// the entire hike before anything drains.
     static let segments = 6
 
-    /// CoreLocation's cadence while the walker is moving.
+    /// CoreLocation's cadence while the hiker is moving.
     static let movingInterval: TimeInterval = 5
     /// ...and while they are standing still, where the wider distance filter
     /// means the only fixes arriving are the ones the timer produces. At or
@@ -49,7 +49,7 @@ enum Endurance {
 
     /// GPS noise while standing still. Small enough that the *first* moving
     /// fix after a stop still clears the 5 m gate measured from wherever the
-    /// noise left the walker, which is why it is under a metre rather than the
+    /// noise left the hiker, which is why it is under a metre rather than the
     /// several metres a real phone wanders.
     static let wanderMeters = 0.8
 
@@ -116,7 +116,7 @@ struct EnduranceWalk {
     /// reference for what the accumulator should arrive at rather than a
     /// restatement of the generator's own arithmetic.
     let plannedDistanceMeters: Double
-    /// Where in ``steps`` the walker was standing still, so a test that needs
+    /// Where in ``steps`` the hiker was standing still, so a test that needs
     /// a stationary window can deliver up to the end of one rather than
     /// guessing at an index.
     let stopRanges: [Range<Int>]

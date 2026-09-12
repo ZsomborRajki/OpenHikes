@@ -163,7 +163,7 @@ final class TrailWalkActivityTests {
     /// write rather than after it. It bumped the revision that write was
     /// gated on, so the write was rejected, the completion carrying the
     /// closing figures never ran, and the panel came down with nothing — the
-    /// abandoned walk's ending, for a walk the walker had just finished.
+    /// abandoned walk's ending, for a walk the hiker had just finished.
     @Test("a walk that ends with another trail waiting still lingers with its result")
     func endLingersWithASelectionWaiting() async throws {
         let clock = TestClock()
@@ -197,7 +197,7 @@ final class TrailWalkActivityTests {
         #expect(tracker.trackedHikeID == other.id, "and the deferred selection still lands")
     }
 
-    /// An abandoned walk has no result the walker was waiting for: the panel
+    /// An abandoned walk has no result the hiker was waiting for: the panel
     /// comes down with nothing on it.
     @Test("an abandoned walk ends with nothing")
     func abandonedEndsWithNothing() async throws {

@@ -18,11 +18,11 @@ nonisolated struct RouteProfile: Sendable {
     /// foreground/background widget feeds) so they all agree on the same trail.
     static let followMatchThresholdMeters: Double = 75
 
-    /// How far a segment's direction may differ from the walker's own course
+    /// How far a segment's direction may differ from the hiker's own course
     /// and still count as the way they are going.
     ///
     /// Less a tolerance than the question itself: does this leg of the trail
-    /// run *with* the walker, or against them? The two legs of an out-and-back
+    /// run *with* the hiker, or against them? The two legs of an out-and-back
     /// are 180° apart, so at 90° the answer survives a great deal of noise in
     /// either the reported course or the individual segment — which is the
     /// point, since a trail's own bearing wanders segment to segment while the
@@ -35,7 +35,7 @@ nonisolated struct RouteProfile: Sendable {
     /// different trail is not a contender.
     static let tieBreakToleranceMeters = 20.0
     /// How far along the route, either side of the last match, a fix is
-    /// searched before the whole route is considered. A walker covers a couple
+    /// searched before the whole route is considered. A hiker covers a couple
     /// of metres between fixes, so this is orders of magnitude more slack than
     /// continuous walking needs; it is sized to absorb a run of rejected fixes
     /// or a backgrounded app, not ordinary movement.
@@ -44,7 +44,7 @@ nonisolated struct RouteProfile: Sendable {
     /// How much of the route a fix may be searched against when the continuity
     /// window holds nothing on-route.
     enum SearchScope: Sendable {
-        /// Fall back to the rest of the route. The walker may have reopened
+        /// Fall back to the rest of the route. The hiker may have reopened
         /// the app somewhere else entirely.
         case wholeRoute
         /// Stay inside the window around the last match. Live follow latches
@@ -73,7 +73,7 @@ nonisolated struct RouteProfile: Sendable {
     ///
     /// Kept as distances rather than as indices because that is the axis the
     /// elevation chart is drawn against, and bounded by the number of times
-    /// the walker reached for the pause button rather than by the length of
+    /// the hiker reached for the pause button rather than by the length of
     /// the walk. See ``RouteBoundary``.
     let pauseDistances: [Double]
     /// What the route's *undownsampled* elevations add up to.
@@ -188,7 +188,7 @@ nonisolated struct RouteProfile: Sendable {
     /// summit shrinks `elevationRange` and the drawn line runs off the top of
     /// its own y-scale, and dropping the final sample shortens the x-scale
     /// while the live tracker is still placed from `distances`, putting the
-    /// walker's own position past the end of the graph near the finish.
+    /// hiker's own position past the end of the graph near the finish.
     ///
     /// So instead: keep the first and last samples outright, split the rest
     /// into equal buckets, and emit each bucket's lowest and highest point in
@@ -347,22 +347,22 @@ nonisolated extension RouteProfile {
     /// every point has a twin that projects just as well, so the raw closest
     /// segment is decided by nothing more than which of two overlapping legs
     /// the GPX happened to sample a fraction of a metre nearer. That coin
-    /// flip put a walker who had just set off at the *finish* of the trail
+    /// flip put a hiker who had just set off at the *finish* of the trail
     /// about half the time — and because the match then becomes the continuity
     /// reference for every later fix, it stayed there for the whole hike.
     /// Preferring the earliest of the tied candidates starts them at the
     /// trailhead, and continuity carries them forward from there.
     ///
-    /// `heading` — the walker's course over ground, when the fix carries one
+    /// `heading` — the hiker's course over ground, when the fix carries one
     /// worth trusting (see ``LocationFixPolicy/course(of:)``) — settles that
     /// question outright, and outranks the assumption about the start. The two
-    /// legs of an out-and-back run in opposite directions, so a walker already
+    /// legs of an out-and-back run in opposite directions, so a hiker already
     /// on the way back is going the *wrong* way for the outbound leg and the
     /// right way for the return one. It is consulted only when there is no
     /// `referenceDistance`: once a match exists, continuity is the better
     /// evidence, and letting a noisy course overrule it would reintroduce
-    /// exactly the jumping this parameter set out to stop — a walker pausing
-    /// to look back down the trail is not a walker who has turned around.
+    /// exactly the jumping this parameter set out to stop — a hiker pausing
+    /// to look back down the trail is not a hiker who has turned around.
     ///
     /// A loop's junction stays ambiguous under this test, correctly: both
     /// passes run the same way, so the start assumption still decides it.
@@ -399,7 +399,7 @@ nonisolated extension RouteProfile {
         // window, so fall back to the rest of the route once.
         //
         // `scope` is how the caller stops paying for that fallback on every
-        // fix: a walker who has simply stepped off the trail produces an
+        // fix: a hiker who has simply stepped off the trail produces an
         // unmatched fix a second, and each one would otherwise re-scan the
         // whole route.
         if scope == .wholeRoute,
@@ -428,20 +428,20 @@ nonisolated extension RouteProfile {
         let anchor = referenceDistance ?? 0
         let course = referenceDistance == nil ? heading : nil
 
-        func runsWithTheWalker(_ candidate: NearestCandidate) -> Bool {
+        func runsWithTheHiker(_ candidate: NearestCandidate) -> Bool {
             guard let course else { return false }
             return Self.bearingDifference(course, candidate.bearingDegrees) < Self.courseAgreementDegrees
         }
 
         // Among every segment projection within `tieBreakToleranceMeters` of
-        // the closest one, prefer whichever the walker is actually heading
+        // the closest one, prefer whichever the hiker is actually heading
         // along; failing that (or between two that both qualify), whichever
         // is nearest the anchor.
         return breakTie(
             among: candidates,
             best: best,
             anchor: anchor,
-            runsWithTheWalker: runsWithTheWalker
+            runsWithTheHiker: runsWithTheHiker
         )
     }
 
@@ -520,15 +520,15 @@ nonisolated extension RouteProfile {
         among candidates: [NearestCandidate],
         best: NearestCandidate,
         anchor: Double,
-        runsWithTheWalker: (NearestCandidate) -> Bool
+        runsWithTheHiker: (NearestCandidate) -> Bool
     ) -> (distanceAlongRoute: Double, offRouteMeters: Double) {
         var tied = best
-        var tiedRunsWith = runsWithTheWalker(best)
+        var tiedRunsWith = runsWithTheHiker(best)
         var bestContinuity = abs(best.distanceAlongRoute - anchor)
         for contender in candidates {
             guard contender.offRouteMeters
                 <= best.offRouteMeters + Self.tieBreakToleranceMeters else { continue }
-            let contenderRunsWith = runsWithTheWalker(contender)
+            let contenderRunsWith = runsWithTheHiker(contender)
             if contenderRunsWith != tiedRunsWith {
                 guard contenderRunsWith else { continue }
                 tied = contender

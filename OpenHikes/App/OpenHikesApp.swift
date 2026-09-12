@@ -22,7 +22,7 @@ struct OpenHikesApp: App {
         // the first scene connecting, and `init()` runs at
         // `didFinishLaunching` time. Paired with `LaunchMeasurement.finish()`
         // where the map is built — see `FieldSignpost.swift` for why the map
-        // rather than the first frame is the boundary a walker experiences.
+        // rather than the first frame is the boundary a hiker experiences.
         if !AppLaunchEnvironment.isRunningTests {
             LaunchMeasurement.begin()
         }

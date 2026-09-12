@@ -485,7 +485,7 @@ struct ElevationDeadbandTests {
         #expect(accumulator.lossMeters == 10)
     }
 
-    /// A recording reads this while the walker is still climbing. Withholding
+    /// A recording reads this while the hiker is still climbing. Withholding
     /// the run in progress until it reverses would show a total that freezes
     /// on the way up and jumps at the top.
     @Test("a climb in progress counts before it reverses")

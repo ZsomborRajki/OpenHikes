@@ -6,7 +6,7 @@
 //  only once the recording has been saved.
 //
 //  The anchoring half of this was already settled — ``PhotoTrailAnchor``
-//  writes the walker's last accepted fix onto every photo taken from the
+//  writes the hiker's last accepted fix onto every photo taken from the
 //  recording screen — but nothing drew them. Only ``HikePhotoSection``, on a
 //  saved hike's detail screen, ever claimed the map's pins, so a picture taken
 //  during the walk carried a perfectly good coordinate that nothing pointed
@@ -58,7 +58,7 @@ struct RecordingPhotoPinTests {
     }
 
     /// The bug this file exists for. A picture taken twenty minutes into a
-    /// walk is pinned twenty minutes along, and the walker should be able to
+    /// walk is pinned twenty minutes along, and the hiker should be able to
     /// see that without stopping the recording first.
     @Test("a photo taken during the walk appears on the map at once")
     func aPhotoTakenMidWalkIsPinnedImmediately() async throws {
@@ -83,7 +83,7 @@ struct RecordingPhotoPinTests {
     }
 
     /// "The same way it does with finished recordings" includes the way back:
-    /// a pin is how the walker gets to the picture.
+    /// a pin is how the hiker gets to the picture.
     @Test("a tapped pin opens the gallery for the draft being recorded")
     func aTappedPinOpensTheDraftsGallery() async throws {
         let scene = try Scene()

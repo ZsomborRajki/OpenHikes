@@ -27,7 +27,7 @@
 //    ``RecordingFixPolicy`` evaluation that was only ever going to reject them.
 //
 //  Accuracy is deliberately *not* downgraded merely for standing still. A
-//  stationary walker is one step away from a moving one, and the first fix
+//  stationary hiker is one step away from a moving one, and the first fix
 //  after they set off again is the one that anchors the next leg of the track;
 //  buying a little energy by making that fix coarse is a bad trade for a route
 //  the hiker keeps. Raising the filter costs nothing in that case, because a
@@ -61,9 +61,9 @@ nonisolated struct RecordingEnergyProfile: Equatable, Sendable {
     ///
     /// Nothing about this configuration is meant to draw a line: no fix taken
     /// under it is written to the journal, and the only question asked of it
-    /// is whether the walker is half a kilometre from where they stopped —
+    /// is whether the hiker is half a kilometre from where they stopped —
     /// see ``MovementReminderPolicy``. So it is the cheapest configuration
-    /// that can still answer that, and it is the *second* choice: a walker who
+    /// that can still answer that, and it is the *second* choice: a hiker who
     /// granted Always authorization is watched by significant location changes
     /// instead, which cost nothing at all.
     ///
@@ -79,11 +79,11 @@ nonisolated struct RecordingEnergyProfile: Equatable, Sendable {
 }
 
 nonisolated enum RecordingEnergyPolicy {
-    /// The filter a moving walker is tracked with. Fine enough that the drawn
+    /// The filter a moving hiker is tracked with. Fine enough that the drawn
     /// line follows a switchback and coarse enough that GPS jitter alone
     /// rarely clears it.
     static let walkingDistanceFilter: CLLocationDistance = 10
-    /// Applied once ``RecordingDistanceAccumulator`` reports the walker has
+    /// Applied once ``RecordingDistanceAccumulator`` reports the hiker has
     /// stopped. Sized above the horizontal accuracy a good fix reports, so
     /// noise around a stationary position no longer wakes the app, while a
     /// genuine departure does immediately.
@@ -96,7 +96,7 @@ nonisolated enum RecordingEnergyPolicy {
     /// The filter that pairs with the above: no point asking for ten-metre
     /// accuracy and then waking for every ten metres.
     static let conservingDistanceFilter: CLLocationDistance = 20
-    /// What a paused recording asks for while it watches for the walker
+    /// What a paused recording asks for while it watches for the hiker
     /// setting off again — see ``RecordingEnergyProfile/pausedWatch``. Coarse
     /// on both axes deliberately: the question is a five-hundred-metre one,
     /// and a hundred-metre filter is roughly one wakeup per two minutes of

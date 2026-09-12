@@ -3,7 +3,7 @@
 //  OpenHikes
 //
 //  Decides when a Live Activity starts, when it is worth an update, and when
-//  it ends — for both things a walker can have running.
+//  it ends — for both things a hiker can have running.
 //
 //  Every one of those is a *policy* question rather than an ActivityKit one,
 //  which is why they are here and not in `SystemHikeActivityPresenter`. The
@@ -14,7 +14,7 @@
 //  Three rules, each of which has a counterpart elsewhere in this project:
 //
 //  - **A recording outranks a followed trail.** They can genuinely overlap —
-//    a walker records their own track along an imported route — and the system
+//    a hiker records their own track along an imported route — and the system
 //    shows one activity. The recording wins because it is the thing that would
 //    be *lost*: a follow can be re-derived from the trail and a fix, and a
 //    recording cannot. This is the same precedence `TrailWidgetEntry` already
@@ -26,23 +26,23 @@
 //    reason: a per-fix update would spend the system's budget on distance
 //    changes too small to see, while pausing or losing the trail changes what
 //    the activity *says* and has to arrive at once. The bypass has a floor of
-//    its own, because a walker flapping on and off the route with ordinary GPS
+//    its own, because a hiker flapping on and off the route with ordinary GPS
 //    noise would otherwise take it on every fix.
 //
 //  - **The two kinds of status change are floored separately, and a change
 //    nothing will re-offer is not floored at all.** They used to share one
-//    clock, which let a walker stepping off the route consume the flip and a
+//    clock, which let a hiker stepping off the route consume the flip and a
 //    pause seconds later be refused by it — and a refused pause is refused for
 //    good, because `HikeRecorder.pause()` stops the location sensors, so no
 //    later fix arrives to carry the correction. The panel went on reading
-//    "Recording", with its self-ticking clock still running, until the walker
+//    "Recording", with its self-ticking clock still running, until the hiker
 //    resumed or stopped. Two clocks fix the interference; ``stopsTheFixStream``
 //    fixes the permanence. See ``updateReason(to:from:now:)``.
 //
 //  - **The elapsed clock is never a reason to update.** It ticks by itself —
 //    see `HikeActivityAttributes.ContentState.timerStart`.
 //
-//  Both of the walker's switches are *watched* rather than merely read, which
+//  Both of the hiker's switches are *watched* rather than merely read, which
 //  is the one thing here that is not a policy question. Reading them on the
 //  next call is enough while a walk is running, because a walk produces fixes;
 //  it is not enough for a panel left behind by a killed launch, which produces
@@ -71,10 +71,10 @@ struct HikeActivityRequest {
 final class HikeLiveActivityController {
     /// The floor under an ordinary update.
     ///
-    /// A walker at a normal pace covers the 25 m distance threshold in about
+    /// A hiker at a normal pace covers the 25 m distance threshold in about
     /// twenty seconds, so in practice the two agree rather than one dominating
     /// — which is the point. Shorter and the app spends the system's budget on
-    /// a Lock Screen nobody is looking at; longer and a walker who *does* look
+    /// a Lock Screen nobody is looking at; longer and a hiker who *does* look
     /// sees a figure from the last village.
     static let minimumUpdateInterval: TimeInterval = 20
 
@@ -89,7 +89,7 @@ final class HikeLiveActivityController {
     /// second number nothing else in the app knows about.
     static let minimumFlipInterval: TimeInterval = 10
 
-    /// When the system should start telling the walker this is old news.
+    /// When the system should start telling the hiker this is old news.
     ///
     /// Shorter for a recording: it updates once a fix, so ten minutes of
     /// silence means the fixes have stopped. A follow is throttled to
@@ -152,7 +152,7 @@ final class HikeLiveActivityController {
     /// `NotificationCenter.ObservationToken` ends its observation when it goes
     /// out of scope, so releasing this array is what takes the observer off
     /// the centre; dropping the token at the end of `observePreferences`
-    /// would instead take the registration down before the walker ever left
+    /// would instead take the registration down before the hiker ever left
     /// the app. `LifecycleObservationTokenTests` pins both halves.
     @ObservationIgnored private var lifecycleObservers: [NotificationCenter.ObservationToken] = []
 
@@ -182,8 +182,8 @@ final class HikeLiveActivityController {
         observePreferences()
     }
 
-    /// Whether the walker wants these at all. Two switches, and both have to
-    /// say yes: the app's own, and the system's per-app one, which the walker
+    /// Whether the hiker wants these at all. Two switches, and both have to
+    /// say yes: the app's own, and the system's per-app one, which the hiker
     /// owns and the app can only read.
     var isEnabled: Bool {
         preferenceEnabled && presenter.areActivitiesEnabled
@@ -274,13 +274,13 @@ final class HikeLiveActivityController {
 
     /// Ends whatever is running, whatever it is — including a panel this
     /// process never started. For leaving the feature entirely: a switch
-    /// turned off, or a store that can no longer say what the walker is doing.
+    /// turned off, or a store that can no longer say what the hiker is doing.
     ///
     /// **Unconditional in kind, and deliberately unlike ``endUnowned(_:)``'s
     /// caller in `HikeRecorder.endRecordingActivity(_:)`.** That one sweeps
     /// `.recording` only, because a followed trail left by a previous launch
-    /// is still a walk the walker is on and the tracker adopts it back on the
-    /// next matched fix. Here the walker has said they want none of this on
+    /// is still a walk the hiker is on and the tracker adopts it back on the
+    /// next matched fix. Here the hiker has said they want none of this on
     /// their Lock Screen, so there is nothing left for either kind to be
     /// *right about*. The two are not an inconsistency to be reconciled: one
     /// answers "this recording is gone" and the other answers "take all of it
@@ -305,7 +305,7 @@ final class HikeLiveActivityController {
     /// The escape hatch for a relaunch. ``current`` is what *this* process
     /// believes, and after a cold start it believes nothing — so `end` and
     /// `endAll`, which both open by consulting it, do nothing at all against a
-    /// panel the walker can plainly see. Two paths reach exactly that: a
+    /// panel the hiker can plainly see. Two paths reach exactly that: a
     /// recording whose journal is gone by the time `recoverOpenSession` looks
     /// for it, and a `fail(_:endLocationUpdates:)` that lands before a session
     /// exists at all.
@@ -326,7 +326,7 @@ final class HikeLiveActivityController {
     ///   yet: evaluating it early would refuse a follow that a recording is
     ///   still shadowing, and would re-sweep something already taken down.
     /// - **Targeted, never unconditional.** A follow started by the previous
-    ///   launch is still a walk the walker is on, and the tracker will adopt
+    ///   launch is still a walk the hiker is on, and the tracker will adopt
     ///   it back on the next matched fix; sweeping it because a *recording*
     ///   turned out not to exist would take down something valid and then
     ///   flicker it back. This is the same precedence rule `accepts` applies,
@@ -334,9 +334,9 @@ final class HikeLiveActivityController {
     ///   exception and argues itself there.
     ///
     /// Deliberately *not* gated on ``isEnabled``. Those two switches decide
-    /// whether the app may put something on the walker's Lock Screen; nothing
+    /// whether the app may put something on the hiker's Lock Screen; nothing
     /// about them makes it right to leave a stale panel there once it is. A
-    /// walker who turned the feature off mid-hike is the one person most
+    /// hiker who turned the feature off mid-hike is the one person most
     /// entitled to have it removed — and since ``reconcileWithPreferences()``
     /// runs precisely when `isEnabled` has gone false, that is now
     /// load-bearing rather than merely defensible.
@@ -349,7 +349,7 @@ final class HikeLiveActivityController {
         }
     }
 
-    /// Re-asks both of the walker's switches and takes everything down if
+    /// Re-asks both of the hiker's switches and takes everything down if
     /// either has gone to no.
     ///
     /// The trigger this feature was missing. ``preferenceEnabled`` is read on
@@ -358,7 +358,7 @@ final class HikeLiveActivityController {
     /// ``update(_:)``. A panel left behind by a killed launch produces
     /// nothing: no recorder is running, no trail is being followed, so nothing
     /// ever calls ``update(_:)`` and the switch may as well not exist. A
-    /// walker who relaunches, sees the stale panel, and goes to Settings to
+    /// hiker who relaunches, sees the stale panel, and goes to Settings to
     /// turn Live Activities off is doing the most explicit thing a person can
     /// do to ask for it to go away, and before this the app ignored them until
     /// the panel's own ten-minute stale date expired.

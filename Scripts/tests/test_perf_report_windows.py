@@ -1,7 +1,7 @@
 """When the phone was in a pocket, and what ran while it was.
 
 A request is not equally expensive wherever it lands: a tile fetched while the
-walker is looking at the map is the app doing its job, and the same fetch with
+hiker is looking at the map is the app doing its job, and the same fetch with
 the screen dark is a radio woken for output nobody can see. Both edges of that
 window have already been wrong once — the window closed too late, and the
 events inside it were matched by the wrong timestamp — and each mistake
@@ -72,7 +72,7 @@ class WindowTests(unittest.TestCase):
         self.assertEqual(report.count_within([(1.9, 3.0)], [fetch(2.0, 120.0)]), 1)
 
     def test_a_fetch_begun_in_the_pocket_and_answered_after_it_counts(self):
-        # Began at 2.9, answered at 3.5, and the walker looked again at 3.0.
+        # Began at 2.9, answered at 3.5, and the hiker looked again at 3.0.
         self.assertEqual(report.count_within([(1.9, 3.0)], [fetch(3.5, 600.0)]), 1)
 
     # The returning-scene case: began at 2.08, landed at 2.2, and the window

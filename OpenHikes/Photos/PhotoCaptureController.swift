@@ -171,7 +171,7 @@ final class PhotoCaptureController {
     /// The hike a photo taken now belongs to, and where to pin it.
     ///
     /// Resolved together so the two can't come from different moments — the
-    /// walker moves between the tap and the shutter, and a coordinate taken
+    /// hiker moves between the tap and the shutter, and a coordinate taken
     /// after the subject changed would pin a photo to a trail it isn't of.
     func currentSubject() -> (hike: Hike, coordinate: CLLocationCoordinate2D?)? {
         guard let subject else { return nil }

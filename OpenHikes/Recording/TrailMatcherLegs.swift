@@ -44,7 +44,7 @@ nonisolated extension TrailMatcher {
     ///
     /// Both abstain paths deliberately leave the counts alone. A leg with no
     /// usable pair of candidates, or one the router could not connect, is not
-    /// an ambiguity the walker can be asked about — there is nothing to choose
+    /// an ambiguity the hiker can be asked about — there is nothing to choose
     /// between — so it is neither matched nor ambiguous, only reported.
     private static func matchLeg(
         points: [RecordingPoint],
@@ -264,7 +264,7 @@ nonisolated extension TrailMatcher {
             }
     }
 
-    /// What a non-confident leg can offer the walker to choose between.
+    /// What a non-confident leg can offer the hiker to choose between.
     ///
     /// A sparse leg was routed several ways and keeps its ranked runner-up.
     /// A dense one was routed once, so the only choice it can put is the trail

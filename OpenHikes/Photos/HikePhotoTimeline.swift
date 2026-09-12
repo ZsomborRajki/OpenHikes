@@ -2,7 +2,7 @@
 //  HikePhotoTimeline.swift
 //  OpenHikes
 //
-//  Where the walker was at a given moment.
+//  Where the hiker was at a given moment.
 //
 //  Every other way this app pins a photo to the trail asks the *app* where it
 //  is: the elevation graph's selection, or the recording's last accepted fix.
@@ -57,7 +57,7 @@ nonisolated struct HikePhotoTimeline: Sendable {
         }
     }
 
-    /// Where the walker was at a moment, and how much of that is inference.
+    /// Where the hiker was at a moment, and how much of that is inference.
     struct Position: Equatable, Sendable {
         let latitude: Double
         let longitude: Double
@@ -118,7 +118,7 @@ nonisolated struct HikePhotoTimeline: Sendable {
         fixes = ordered
     }
 
-    /// Where the walker was at `date`, or `nil` when the walk cannot say.
+    /// Where the hiker was at `date`, or `nil` when the walk cannot say.
     func position(at date: Date) -> Position? {
         if date <= start {
             return endPosition(fixes[0], offsetTo: date)
@@ -136,7 +136,7 @@ nonisolated struct HikePhotoTimeline: Sendable {
         // A gap the walk produced no fix across is a stretch whose route is
         // unknown, however straight the line drawn over it looks. Placing a
         // photo at the nearer end of it is only defensible while that end is
-        // close enough to be where the walker still was.
+        // close enough to be where the hiker still was.
         guard secondsFromFix <= Self.graceInterval else { return nil }
         let coordinate = RouteGeometry.interpolate(
             from: earlier.coordinate,

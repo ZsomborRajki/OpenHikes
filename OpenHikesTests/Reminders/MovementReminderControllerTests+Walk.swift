@@ -9,7 +9,7 @@
 //
 //  A walk is watched by feeds it does not own, so its fixes arrive out of
 //  order and some of them predate the Pause they are offered against. Neither
-//  is a walker who has set off again.
+//  is a hiker who has set off again.
 //
 
 import Foundation
@@ -33,7 +33,7 @@ extension MovementReminderControllerTests {
         #expect(harness.notifier.posted.first?.body.contains("Ridge Loop") == true)
     }
 
-    /// The same precedence the widget and the Lock Screen apply. A walker
+    /// The same precedence the widget and the Lock Screen apply. A hiker
     /// recording their own track along an imported route has one walk, and
     /// the recording is the half that would be lost.
     @Test("a recording suppresses the walk's reminder")
@@ -48,7 +48,7 @@ extension MovementReminderControllerTests {
         #expect(harness.notifier.posted.isEmpty)
     }
 
-    /// Backwards along the route is movement too — a walker who turned round
+    /// Backwards along the route is movement too — a hiker who turned round
     /// at the summit with the walk paused is covering ground either way.
     @Test("the walk's displacement is measured in both directions")
     func walkingBackDownAlsoReminds() async {
@@ -87,7 +87,7 @@ extension MovementReminderControllerTests {
             on: start.addingTimeInterval(600)
         )
 
-        // A kilometre away, and taken while the walker was still walking it.
+        // A kilometre away, and taken while the hiker was still walking it.
         harness.controller.walkObserved(distanceAlongRoute: 200, at: start)
         await harness.controller.settle()
 
@@ -96,7 +96,7 @@ extension MovementReminderControllerTests {
 
     /// Fixes reach a paused walk from two feeds, and the background one
     /// matches behind an await — so they arrive out of order. An older
-    /// reading says where the walker was, and the watch has already been told
+    /// reading says where the hiker was, and the watch has already been told
     /// where they were later than that.
     @Test("a walk reading older than one already taken is dropped")
     func outOfOrderWalkFixIsDropped() async {
@@ -116,7 +116,7 @@ extension MovementReminderControllerTests {
         #expect(harness.notifier.posted.isEmpty)
     }
 
-    /// And the guards above are a boundary, not a mute: a walker who really
+    /// And the guards above are a boundary, not a mute: a hiker who really
     /// does set off again after pausing still hears about it.
     @Test("movement after the pause still reminds")
     func postPauseWalkFixStillReminds() async {

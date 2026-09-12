@@ -4,11 +4,11 @@
 //
 //  Start, pause, resume and stop, without taking the phone out.
 //
-//  All four run in the background: the walker's hands are busy and the phone
+//  All four run in the background: the hiker's hands are busy and the phone
 //  is in a pocket, so an intent that insisted on bringing the app to the front
 //  would be answering a different request than the one asked. The exception is
 //  a prompt only the foreground can show — Core Location never asked, or asked
-//  and answered at reduced accuracy — where start and resume hand the walker
+//  and answered at reduced accuracy — where start and resume hand the hiker
 //  to the app *and carry on there* rather than quietly failing to record.
 //
 
@@ -109,7 +109,7 @@ struct StopHikeRecordingIntent: AppIntent, HikeCoordinatingIntent {
         return .result(dialog: IntentDialog("\(Self.confirmation(for: hike))"))
     }
 
-    /// Named "Saved" rather than "Stopped": stopping is what the walker asked
+    /// Named "Saved" rather than "Stopped": stopping is what the hiker asked
     /// for, and what they want confirmed is that it survived.
     nonisolated private static func confirmation(for hike: FinishedHikeReport) -> String {
         "Saved \(hike.spokenSummary)"

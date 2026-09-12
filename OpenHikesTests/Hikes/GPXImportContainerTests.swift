@@ -170,7 +170,7 @@ struct GPXImportContainerTests {
     /// A second `<trk>` that carries nothing importable is not a second walk.
     /// Exporters emit named-but-empty tracks and tracks whose points are all
     /// out of range; refusing an otherwise ordinary file over one would cost
-    /// the walker the hike they actually have.
+    /// the hiker the hike they actually have.
     @Test("a track with no usable points doesn't make a file multi-track", arguments: [
         "<trk><name>Empty</name></trk>",
         "<trk><trkseg></trkseg></trk>",

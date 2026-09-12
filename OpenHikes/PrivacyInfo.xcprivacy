@@ -8,7 +8,7 @@
 
 	  That one is genuine collection in Apple's sense and is declared below.
 	  Everything else still is not — tile and Overpass requests carry no
-	  identity, and iCloud mirroring puts the walker's data in the walker's own
+	  identity, and iCloud mirroring puts the hiker's data in the hiker's own
 	  private database, which Apple's own guidance does not count as collection
 	  by the developer. The community feature is the opposite on both counts:
 	  the destination is the *public* database, which the developer owns, and
@@ -17,7 +17,7 @@
 
 	  All three entries set `NSPrivacyCollectedDataTypeLinked` to true,
 	  which is the honest answer rather than the flattering one. The submission
-	  carries a name the walker typed and CloudKit stamps every record with its
+	  carries a name the hiker typed and CloudKit stamps every record with its
 	  creator's user record ID, so the developer can tell whose submission is
 	  whose — which is precisely what makes reviewing and taking down a
 	  submission possible, and therefore not something to claim otherwise
@@ -36,7 +36,7 @@
 			<!--
 			  The shared route itself. Precise rather than coarse: a GPS track
 			  is the most precise location data this app holds, and publishing
-			  a trailhead publishes somewhere the walker stood.
+			  a trailhead publishes somewhere the hiker stood.
 			-->
 			<key>NSPrivacyCollectedDataType</key>
 			<string>NSPrivacyCollectedDataTypePreciseLocation</string>
@@ -69,7 +69,7 @@
 		</dict>
 		<dict>
 			<!--
-			  The name the walker chose to be credited under, and the hike's
+			  The name the hiker chose to be credited under, and the hike's
 			  title and description. `OtherUserContent` rather than `Name`:
 			  this is a display name typed into this app for this purpose, not
 			  the account holder's real name, and it travels with the text they

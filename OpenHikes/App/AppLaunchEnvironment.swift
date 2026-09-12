@@ -314,7 +314,7 @@ nonisolated enum AppLaunchEnvironment {
     /// Whether the first attempt to save a recording should fail.
     ///
     /// The retry path is the one branch of the recording screen that a test
-    /// cannot reach by doing anything a walker does: it needs SwiftData to
+    /// cannot reach by doing anything a hiker does: it needs SwiftData to
     /// refuse a write. The recorder already takes its save as a closure — the
     /// seam exists for the unit suites — so this is that closure, failing
     /// once, and everything downstream of it is the shipping state machine.

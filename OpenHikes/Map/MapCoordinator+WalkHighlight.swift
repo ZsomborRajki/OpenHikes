@@ -83,7 +83,7 @@ extension MapView.Coordinator {
         if walkHighlightOverlays.contains(where: { $0 === polyline }) {
             let renderer = MKPolylineRenderer(polyline: polyline)
             // The route's own tint, at full strength whatever alpha the
-            // walker gave the line: this is the part of it they walked.
+            // hiker gave the line: this is the part of it they walked.
             #if os(macOS)
             renderer.strokeColor = NSColor(routeTint).withAlphaComponent(1)
             #else

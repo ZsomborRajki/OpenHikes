@@ -127,7 +127,7 @@ extension TrailWalkSessionTests {
     }
 
     /// The retry has to reach a *paused* walk too. Fixes keep arriving while
-    /// the walker stands still, and until this they returned before any
+    /// the hiker stands still, and until this they returned before any
     /// persistence at all — which is what made "written again at the next
     /// milestone" untrue for the one phase with no next milestone of its own.
     @Test("a fix arriving while paused still reaches the sidecar")

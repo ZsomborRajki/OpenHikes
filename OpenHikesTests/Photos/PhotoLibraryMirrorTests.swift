@@ -14,7 +14,7 @@
 //  "this photo, in my library"; a copy that arrives with no date and no place
 //  sorts into Recents under the moment it was filed and appears nowhere in
 //  Places, on a picture the app could say both of. The app knows when the
-//  shutter fired and which point of the trail the walker was standing on —
+//  shutter fired and which point of the trail the hiker was standing on —
 //  both of those have to leave with the bytes.
 //
 

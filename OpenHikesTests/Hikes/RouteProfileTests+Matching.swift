@@ -101,7 +101,7 @@ extension RouteProfileTests {
     /// the start and the finish are the same place, so a fix near the junction
     /// is genuinely ambiguous. Without continuity, ordinary GPS jitter can
     /// throw the tracker a full lap; with it, the match stays where the
-    /// walker actually is.
+    /// hiker actually is.
     @Test("continuity keeps a loop's start and finish from swapping places")
     func loopContinuity() throws {
         let profile = RouteProfile(route: Fixture.loopRoute)
@@ -128,7 +128,7 @@ extension RouteProfileTests {
     /// and on a trail that returns along its outbound leg every point has a
     /// twin that projects onto the route just as well. Left to the raw
     /// closest segment, which of the two won came down to which leg the GPX
-    /// sampled a fraction of a metre nearer — so a walker who had just set
+    /// sampled a fraction of a metre nearer — so a hiker who had just set
     /// off was placed at the finish about half the time, and the continuity
     /// reference then held them there for the rest of the hike.
     @Test("an unanchored fix at the trailhead starts the hike, not finishes it")
@@ -157,9 +157,9 @@ extension RouteProfileTests {
     }
 
     /// Preferring the start is only an assumption, and it's the wrong one for
-    /// a walker who opens the app already on the way back. Their course is
+    /// a hiker who opens the app already on the way back. Their course is
     /// the evidence that settles it: the outbound leg runs north here and the
-    /// return leg runs south, so a walker heading south is on the return leg
+    /// return leg runs south, so a hiker heading south is on the return leg
     /// however well the outbound one also fits their position.
     @Test("a heading decides which leg of an out-and-back a fix is on")
     func headingPicksTheLeg() throws {
@@ -205,7 +205,7 @@ extension RouteProfileTests {
         )
     }
 
-    /// The percentage the walker actually sees, end to end: the same fix that
+    /// The percentage the hiker actually sees, end to end: the same fix that
     /// reads as a fifth of the way along the trail while walking out reads as
     /// four fifths while walking home.
     @Test("progress follows the leg the heading picked")
@@ -222,7 +222,7 @@ extension RouteProfileTests {
         #expect(returning > 0.5 && outbound < 0.5)
     }
 
-    /// A course perpendicular to the trail — a walker crossing it, or a
+    /// A course perpendicular to the trail — a hiker crossing it, or a
     /// receiver reporting nonsense — matches neither leg. Rejecting every
     /// candidate would leave nothing to return, so the start assumption takes
     /// over rather than the match failing.
@@ -238,7 +238,7 @@ extension RouteProfileTests {
     }
 
     /// Direction of travel seeds the match; it does not get to overrule an
-    /// established one. A walker who stops at the turning point and steps a
+    /// established one. A hiker who stops at the turning point and steps a
     /// few metres back down the trail to look at something has not started
     /// the return leg, and their tracker shouldn't say they have.
     @Test("a heading doesn't overrule continuity once there's a match")

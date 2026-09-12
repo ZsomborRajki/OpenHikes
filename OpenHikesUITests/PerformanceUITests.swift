@@ -181,7 +181,7 @@ nonisolated final class PerformanceUITests: XCTestCase {
         assertNoMoreThan(4, of: "MapSheetBody", in: browsing, phase: "browsing")
         // The hike list, added after a run showed it rebuilding four times for
         // a gesture that changes no hike. Panning is the one interaction a
-        // walker performs constantly, so a list rebuild here is not a rounding
+        // hiker performs constantly, so a list rebuild here is not a rounding
         // error — it is the cost of navigating, multiplied by the whole hike.
         assertNoMoreThan(4, of: "MapSheetHikesBody", in: browsing, phase: "browsing")
         assertNoMoreThan(0, of: "MapRouteRebuilt", in: browsing, phase: "browsing")
@@ -197,7 +197,7 @@ nonisolated final class PerformanceUITests: XCTestCase {
     /// Trying is the expensive failure. A tile load that reaches `URLSession`
     /// and fails wakes the radio, and a map draw pass asks for every visible
     /// tile — so an app that merely fails gracefully offline still burns a
-    /// walker's battery scanning for a network on every pan. What this asserts
+    /// hiker's battery scanning for a network on every pan. What this asserts
     /// is that `TileNetworkPolicy` refuses first, in-process.
     ///
     /// `--ui-test-offline` also gives this launch an empty tile root. Without
@@ -264,7 +264,7 @@ nonisolated final class PerformanceUITests: XCTestCase {
     /// screen off.
     ///
     /// Foreground per-fix cost is what `testLiveRecordingCostPerFix` bounds,
-    /// and it is the wrong number for a hike — a walker looks at the screen
+    /// and it is the wrong number for a hike — a hiker looks at the screen
     /// for seconds at a time and walks for hours. Backgrounded, every SwiftUI
     /// body evaluation is pure waste: nothing it produces is on screen. The
     /// budget here is therefore not "small", it is "none", with enough slack
@@ -474,7 +474,7 @@ nonisolated final class PerformanceUITests: XCTestCase {
 
         // Two trace publications per fix, not one, and that is correct rather
         // than tolerated: the raw coordinate is drawn the moment the fix lands
-        // so the line keeps up with the walker, and the asynchronous trail
+        // so the line keeps up with the hiker, and the asynchronous trail
         // match replaces it with snapped geometry when it returns. A budget of
         // 1 would fail permanently and teach everyone to ignore this test; the
         // number worth defending is that it stays *two* and does not grow.
@@ -816,7 +816,7 @@ extension PerformanceUITests {
 // MARK: - Location
 
 private extension PerformanceUITests {
-    /// Steps the simulator through the measured trace. The generic walker in
+    /// Steps the simulator through the measured trace. The generic hiker in
     /// `UITestSupport.swift` does the waiting; this only names the trace.
     @MainActor
     func walkRecordedTrace(points: XCUIElement) {

@@ -2,7 +2,7 @@
 //  MovementReminderControllerTests+Authorization.swift
 //  OpenHikesTests
 //
-//  The switch the walker never sees in this app: iOS's own permission.
+//  The switch the hiker never sees in this app: iOS's own permission.
 //
 //  ``MovementReminderControllerTests`` covers what the controller decides when
 //  a reminder *can* be delivered. These cover what it gives back when one
@@ -11,7 +11,7 @@
 //  activity session and the location indicator, for a banner the system will
 //  never show.
 //
-//  The awkward half is time. The answer comes from a prompt the walker reads
+//  The awkward half is time. The answer comes from a prompt the hiker reads
 //  at their own pace, so it can land after they have tapped Resume, or after
 //  they have resumed, walked on and paused again — and a refusal applied to
 //  the wrong one of those would park the sensors of a running recording. Every
@@ -25,7 +25,7 @@ import UIKit
 
 extension MovementReminderControllerTests {
     /// The switch is not the only thing that can silence a reminder, and the
-    /// other one costs the walker battery until it is heard: a paused
+    /// other one costs the hiker battery until it is heard: a paused
     /// recording is watched by a location feed the recorder keeps alive, and
     /// under a refusal there is nothing for that feed to produce.
     @Test("a refused permission gives the recording's watch back")
@@ -45,7 +45,7 @@ extension MovementReminderControllerTests {
         )
     }
 
-    /// The walker left the prompt on screen and tapped Resume before reading
+    /// The hiker left the prompt on screen and tapped Resume before reading
     /// it. Acting on the answer now would park the sensors of a recording
     /// that is running — the walk would stop being recorded because of a
     /// question about a pause that is over.
@@ -65,7 +65,7 @@ extension MovementReminderControllerTests {
         #expect(endedWatches == 0)
     }
 
-    /// The same late answer, arriving at a walker who resumed, walked on and
+    /// The same late answer, arriving at a hiker who resumed, walked on and
     /// paused again. "Is a recording paused" is not the question — *this*
     /// pause is — and the second one was never refused.
     @Test("a refusal does not take the next pause's watch")
@@ -90,7 +90,7 @@ extension MovementReminderControllerTests {
     }
 
     /// Permission is not a default and taking it away means leaving for iOS
-    /// Settings, so a pause that was watched when the walker left can be
+    /// Settings, so a pause that was watched when the hiker left can be
     /// unwatchable by the time they come back. Driven through the reconcile
     /// call, which is the policy; ``theAppBecomingActiveRechecksPermission()``
     /// is the registration that reaches it.
@@ -110,7 +110,7 @@ extension MovementReminderControllerTests {
         #expect(endedWatches == 1)
         #expect(
             harness.notifier.authorizationRequests == 1,
-            "coming back to the app is not a moment to ask the walker anything"
+            "coming back to the app is not a moment to ask the hiker anything"
         )
         #expect(harness.notifier.silentChecks == 1)
     }
@@ -146,7 +146,7 @@ extension MovementReminderControllerTests {
         #expect(!harness.controller.isWatchingPausedRecording)
         #expect(
             harness.notifier.authorizationRequests == 1,
-            "coming back to the app is not a moment to ask the walker anything"
+            "coming back to the app is not a moment to ask the hiker anything"
         )
     }
 

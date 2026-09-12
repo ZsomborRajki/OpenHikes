@@ -10,7 +10,7 @@
 //  no GPS. Filed into the photo library as-is it lands in Recents under the
 //  moment it was *saved* and appears nowhere in Places, even though the app
 //  knew both the moment the shutter fired and the point on the trail the
-//  walker was standing on.
+//  hiker was standing on.
 //
 //  Both halves of the fix are applied, and they are not redundant.
 //  ``PHAssetChangeRequest/creationDate`` and `.location` are what the Photos
@@ -25,7 +25,7 @@
 //  dictionary — reads as a copy and is not one: measured on a 24-pixel JPEG it
 //  rewrote the scan from 252 bytes to 211 and moved decoded pixels by up to 6
 //  levels, which is a second generation of lossy compression applied to every
-//  photograph a walker chose to keep. `CGImageDestinationCopyImageSource` is
+//  photograph a hiker chose to keep. `CGImageDestinationCopyImageSource` is
 //  the API that genuinely copies, and it takes its metadata as a
 //  `CGImageMetadata` rather than as image properties. That is the whole reason
 //  this file is built out of `CGImageMetadataSetValueMatchingImageProperty`
@@ -223,7 +223,7 @@ nonisolated enum PhotoMetadataStamp {
     /// form Foundation offers for exactly this, a fixed non-localized format.
     ///
     /// Verbatim rather than `Date.FormatStyle`, and POSIX rather than the
-    /// walker's locale, because this string is read by other software: a
+    /// hiker's locale, because this string is read by other software: a
     /// localized rendering would write Arabic-Indic digits into
     /// `DateTimeOriginal` on an Arabic device, which no reader of EXIF
     /// expects.

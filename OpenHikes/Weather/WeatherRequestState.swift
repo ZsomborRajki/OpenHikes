@@ -5,16 +5,16 @@
 //  When the app may spend a WeatherKit request, and on what.
 //
 //  This replaced ``WeatherPollState``, which keyed everything on a ~1.1 km
-//  lat/lon grid derived from the walker's position. The grid was only ever a
+//  lat/lon grid derived from the hiker's position. The grid was only ever a
 //  proxy for "has the subject changed", and a bad one: its keys flipped back
-//  and forth underneath a walker standing on a boundary, which needed an
+//  and forth underneath a hiker standing on a boundary, which needed an
 //  eight-bucket LRU to absorb, and it could not express the three things the
 //  badge is now about — a recording, a selected trail, a searched city — at
 //  all. Keying on ``WeatherSubject/key`` says the same thing directly, and the
 //  boundary case stops existing rather than being worked around.
 //
 //  The other change is that *why* a request is being considered now matters.
-//  A walker who has just searched for a city is owed an answer immediately; a
+//  A hiker who has just searched for a city is owed an answer immediately; a
 //  significant-change event is worth a request but not an unlimited number of
 //  them; a reading that has simply expired can wait for its deadline. One
 //  floor per reason, in ``minimumInterval(for:policy:)``, is the whole of it.
@@ -59,7 +59,7 @@ nonisolated enum WeatherRequestReason: Sendable {
     /// recording started. The user asked, so the bar is the freshness of what
     /// is already held for *that* subject and nothing else.
     case focus
-    /// Significant-change delivery moved the walker, and the subject follows
+    /// Significant-change delivery moved the hiker, and the subject follows
     /// them.
     case movement
 }
@@ -70,7 +70,7 @@ nonisolated enum WeatherRequestReason: Sendable {
 /// detour finds its reading still fresh, and a subject never asked about
 /// before is requested immediately.
 nonisolated struct WeatherRequestState: Sendable {
-    /// How many subjects to remember. A walker can only have looked at so many
+    /// How many subjects to remember. A hiker can only have looked at so many
     /// places recently, and this is a freshness memory rather than a cache of
     /// the world — ``WeatherManager`` keeps the readings themselves under the
     /// same limit so the two cannot disagree about what is remembered.
@@ -146,7 +146,7 @@ nonisolated struct WeatherRequestState: Sendable {
     ///
     /// The poll wakes on a new subject and on significant-change delivery;
     /// this is what tells it when to wake *without* either, so a reading that
-    /// expires — or a failure whose backoff runs out — while the walker stands
+    /// expires — or a failure whose backoff runs out — while the hiker stands
     /// still is still refreshed on time.
     ///
     /// Deliberately non-mutating: asking when a subject comes due is not the

@@ -104,7 +104,7 @@ struct CommunityBrowserBlockingTests {
 
     /// A region whose every row is blocked out draws the same empty state as a
     /// region with nothing in it, which is the honest answer: there is nothing
-    /// here for this walker to see.
+    /// here for this hiker to see.
     @Test("a region of nothing but blocked hikes still reports loaded")
     func blockingEverythingIsNotAFailure() async {
         let transport = StubCommunityTransport()
@@ -121,7 +121,7 @@ struct CommunityBrowserBlockingTests {
     }
 
     /// The budget half of blocking: a request must not spend its twenty-five
-    /// rows on hikes the walker will never be shown. See
+    /// rows on hikes the hiker will never be shown. See
     /// `CommunityPageBudgetTests` for what the transport does with the set.
     @Test("every request carries the blocked authors with it")
     func requestsCarryTheExclusionSet() async {
@@ -139,7 +139,7 @@ struct CommunityBrowserBlockingTests {
     }
 
     /// Blocking one person must not empty the map. A page that was entirely
-    /// theirs leaves nothing on screen, and the walker has no reason to think
+    /// theirs leaves nothing on screen, and the hiker has no reason to think
     /// panning away and back would help.
     @Test("a block that empties the list asks again")
     func emptyingTheListRefills() async {

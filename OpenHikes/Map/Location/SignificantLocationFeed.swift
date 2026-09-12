@@ -3,7 +3,7 @@
 //  OpenHikes
 //
 //  Significant-location-change delivery, for consumers that want to know the
-//  walker has *moved* rather than where they are this second.
+//  hiker has *moved* rather than where they are this second.
 //
 //  A third location feed, and the reason there are three is that they answer
 //  three different questions. ``LocationManager`` answers "where are they
@@ -34,7 +34,7 @@ import CoreLocation
 import Foundation
 import Observation
 
-/// The walker's position, as of the last time they moved appreciably.
+/// The hiker's position, as of the last time they moved appreciably.
 ///
 /// `coordinate` is `nil` until the first delivery. Significant-change
 /// monitoring reports once as soon as it is started — the same behaviour

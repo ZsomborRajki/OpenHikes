@@ -21,7 +21,7 @@ extension TrailWalkSessionTests {
     /// End has to be an end. Without a boundary the next accepted on-route
     /// fix finds no record and simply starts another walk — most visibly for
     /// a walk under the minimum, where End keeps nothing, the detail is still
-    /// on screen, and the controls come back on the walker's next step.
+    /// on screen, and the controls come back on the hiker's next step.
     @Test("End does not auto-start another walk on the next fix")
     func endIsAStableBoundary() {
         let session = session()
@@ -95,7 +95,7 @@ extension TrailWalkSessionTests {
     }
 
     /// An end at the other end. The direction a GPX stores its points in is
-    /// the importer's, not the walker's, so a walker who covers the route
+    /// the importer's, not the hiker's, so a hiker who covers the route
     /// from its stored end to its stored start has walked the trail — and
     /// what that has to leave behind is everything a forward walk leaves: a
     /// row that reads Completed rather than Left open, and a

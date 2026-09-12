@@ -2,14 +2,14 @@
 //  MovementReminderController.swift
 //  OpenHikes
 //
-//  The one place that decides a reminder is owed, for both things a walker
+//  The one place that decides a reminder is owed, for both things a hiker
 //  can have running.
 //
 //  One instance handed to the recorder and to the walk session rather than one
 //  each, for the reason ``HikeLiveActivityController`` is one instance: the
 //  precedence between them is only expressible by something that can see both.
 //  **A recording outranks a followed trail** here exactly as it does on the
-//  widget and the Lock Screen — a walker recording their own track along an
+//  widget and the Lock Screen — a hiker recording their own track along an
 //  imported route is one walk to them, and two banners about it, one asking
 //  them to resume the recording and one asking them to resume the walk, would
 //  be the app arguing with itself in a pocket.
@@ -25,7 +25,7 @@
 //    about the walk that led to it and not about the pause.
 //  * **The watches**, which hold the thresholds, the repeat allowance and the
 //    quiet period. See ``MovementReminderPolicy``.
-//  * **The walker's switch**, read on every decision rather than captured, so
+//  * **The hiker's switch**, read on every decision rather than captured, so
 //    turning reminders off mid-hike stops the next one instead of the one
 //    after the next launch.
 //
@@ -33,12 +33,12 @@
 //  recording is watched only if the recorder keeps a feed alive for it, which
 //  is what ``recordingDidPause(at:on:)`` answers, and a paused walk is watched
 //  only for as long as fixes keep arriving from somewhere else. Both are
-//  best-effort by construction: a reminder that never arrives is a walker who
+//  best-effort by construction: a reminder that never arrives is a hiker who
 //  is no worse off than before this existed, which is the only failure mode
 //  this feature is allowed to have.
 //
 //  The one thing it does own in that direction is giving a watch *back*. A
-//  walker who has refused notification permission cannot be sent anything, so
+//  hiker who has refused notification permission cannot be sent anything, so
 //  a recording paused under that refusal is spending a location feed on a
 //  question with no audience — see
 //  ``reconcileWithAuthorization(prompting:)``.
@@ -55,7 +55,7 @@ final class MovementReminderController {
     /// A paused recording, and how far it has moved since.
     private struct PausedRecording {
         /// Tells this pause apart from any later one. The answer to a
-        /// permission prompt arrives whenever the walker gets round to
+        /// permission prompt arrives whenever the hiker gets round to
         /// reading it, and by then this may not be the pause that asked —
         /// see ``reconcileWithAuthorization(prompting:)``.
         let id = UUID()
@@ -65,7 +65,7 @@ final class MovementReminderController {
     }
 
     /// A paused walk. The anchor is a distance along the trail rather than a
-    /// coordinate: the walk's own feeds speak in those, and a walker who
+    /// coordinate: the walk's own feeds speak in those, and a hiker who
     /// covers half a kilometre of the route with the walk paused is the case
     /// this exists for whether they went up it or back down it — which is why
     /// the displacement below is taken as an absolute value.
@@ -110,7 +110,7 @@ final class MovementReminderController {
     private var stillness = StillnessWatch()
 
     /// What to do when a pause stops being watched for a reason the recorder
-    /// has not heard about — today, the walker turning the switch off with a
+    /// has not heard about — today, the hiker turning the switch off with a
     /// pause already under way.
     ///
     /// Assigned by the recorder that holds this controller, for the reason
@@ -130,7 +130,7 @@ final class MovementReminderController {
     /// `ObservationToken` ends its observation when it goes out of scope, so
     /// releasing this array is what takes the observer off the centre, and
     /// dropping the token at the end of `observePreferences` would take the
-    /// registration down before the walker ever left the app.
+    /// registration down before the hiker ever left the app.
     /// `LifecycleObservationTokenTests` pins both halves.
     private var lifecycleObservers: [NotificationCenter.ObservationToken] = []
 
@@ -160,7 +160,7 @@ final class MovementReminderController {
         observePreferences()
     }
 
-    /// The walker's own switch, read fresh every time.
+    /// The hiker's own switch, read fresh every time.
     var isEnabled: Bool {
         defaults.object(forKey: SettingsKey.movementRemindersEnabled) as? Bool
             ?? SettingsDefault.movementRemindersEnabled
@@ -172,7 +172,7 @@ final class MovementReminderController {
     /// ``recordingDidPause(at:on:)`` answers the same question earlier, and
     /// the recorder cannot act on that answer until the pause is durably
     /// written on its journal queue. Everything that can overtake it happens
-    /// in those milliseconds — a walker refusing the permission prompt, most
+    /// in those milliseconds — a hiker refusing the permission prompt, most
     /// of all — so the answer that decides the sensors is taken here instead
     /// of carried across the wait.
     var isWatchingPausedRecording: Bool { pausedRecording != nil }
@@ -183,7 +183,7 @@ final class MovementReminderController {
 extension MovementReminderController {
     /// Arms the resume reminder for a recording that has just been paused.
     ///
-    /// - Parameter coordinate: where the walker was when they paused, which is
+    /// - Parameter coordinate: where the hiker was when they paused, which is
     ///   the recorder's last accepted point. `nil` when the recording had not
     ///   accepted one yet — a pause taken while still waiting for a first fix
     ///   — and there is nothing to measure a departure from.
@@ -203,7 +203,7 @@ extension MovementReminderController {
             return false
         }
         pausedRecording = PausedRecording(anchor: coordinate, pausedAt: date)
-        // Asked here rather than at launch: the walker is holding the phone,
+        // Asked here rather than at launch: the hiker is holding the phone,
         // they have just tapped Pause, and the prompt is about that. `true`
         // is the answer for a pause nobody has refused *yet* — a refusal
         // arrives after this returns, and takes the watch back down itself.
@@ -238,19 +238,19 @@ extension MovementReminderController {
         )
     }
 
-    /// The running recording's own answer to whether the walker is moving.
+    /// The running recording's own answer to whether the hiker is moving.
     func recordingObserved(isStationary: Bool, at date: Date) {
         guard isEnabled else { return }
         guard stillness.observe(isStationary: isStationary, at: date) else {
             // Moving again takes the suggestion back down: it asked a question
-            // the walker has now answered with their feet.
+            // the hiker has now answered with their feet.
             if !isStationary { withdraw(.pauseRecording) }
             return
         }
         post(MovementReminderWording.pauseRecording(stillFor: MovementReminderPolicy.stillFor))
     }
 
-    /// The recording is running again — by the walker's hand, by the button on
+    /// The recording is running again — by the hiker's hand, by the button on
     /// the reminder, or by an intent. Either way the question is answered.
     func recordingDidResume() {
         pausedRecording = nil
@@ -271,15 +271,15 @@ extension MovementReminderController {
     ///
     /// A significant-location-change delivery can be hundreds of metres wide,
     /// and a displacement computed between two of those says nothing about
-    /// whether the walker moved. Dropped rather than softened: the next fix
+    /// whether the hiker moved. Dropped rather than softened: the next fix
     /// costs nothing to wait for, and the walk is not harmed by a reminder
     /// arriving one delivery later.
     ///
     /// And a fix taken *before* the pause began is not evidence of anything
-    /// the walker did since. Core Location says as much about
+    /// the hiker did since. Core Location says as much about
     /// `startMonitoringSignificantLocationChanges()`: the first event is
     /// commonly a cached one, and its timestamp is the only thing that says
-    /// so. Without this a walker who paused at a hut they had walked to
+    /// so. Without this a hiker who paused at a hut they had walked to
     /// half an hour earlier was told, one second later, that they had moved
     /// eight hundred metres — the cached fix from where they set off.
     private static func isMeasurable(_ location: CLLocation, since pausedAt: Date) -> Bool {
@@ -299,14 +299,14 @@ extension MovementReminderController {
     /// caller to turn on. A paused walk is watched by the feeds that were
     /// already running — the detail screen's follow loop in the foreground and
     /// ``BackgroundTrailTracker``'s significant-change deliveries behind it —
-    /// so this costs no sensor and no battery, and it is silent for a walker
+    /// so this costs no sensor and no battery, and it is silent for a hiker
     /// whose phone is in a pocket with background tracking off. That is the
     /// honest trade: the alternative is a second location feed for a walk that
     /// is deliberately the cheap half of this app.
     ///
     /// - Parameter date: when the walk was paused, taken from the record
     ///   rather than from the clock so a pause restored at launch is measured
-    ///   from the moment the walker tapped it.
+    ///   from the moment the hiker tapped it.
     func walkDidPause(trailTitle: String, atDistance distance: Double, on date: Date) {
         guard isEnabled, distance.isFinite else {
             pausedWalk = nil
@@ -331,13 +331,13 @@ extension MovementReminderController {
     func walkObserved(distanceAlongRoute distance: Double, at date: Date) {
         guard isEnabled, distance.isFinite, var paused = pausedWalk else { return }
         // The recording's rule, in the units a walk is watched in. Ground
-        // covered before the walker stopped is the walk that ended at the
+        // covered before the hiker stopped is the walk that ended at the
         // pause, and offering it back to them as a reason to resume is the
         // app telling them they are moving while they stand at the hut.
         guard date >= paused.pausedAt else { return }
         // The recording wins outright. It is the walk that would be *lost* —
         // a follow is re-derived from the trail and the next fix — and it is
-        // the one whose reminder the walker can act on.
+        // the one whose reminder the hiker can act on.
         guard !hasActiveRecording() else { return }
         let moved = abs(distance - paused.anchorDistance)
         let shouldRemind = paused.watch.observe(awayMeters: moved, at: date)
@@ -370,7 +370,7 @@ extension MovementReminderController {
     /// continuous one holding a background activity session and the location
     /// indicator. Left running it would spend the rest of the pause producing
     /// fixes that no longer decide anything — the worst version of this
-    /// feature, since the walker has just said they do not want it.
+    /// feature, since the hiker has just said they do not want it.
     ///
     /// Idempotent and cheap on purpose, exactly as
     /// `HikeLiveActivityController.reconcileWithPreferences()` is:
@@ -381,7 +381,7 @@ extension MovementReminderController {
     /// The reverse is deliberately not symmetric. Turning reminders back on
     /// mid-pause does not start a watch: there is no anchor — the pause it
     /// would be measured from happened while the app was not looking — and a
-    /// watch armed at the walker's *current* position would quietly measure
+    /// watch armed at the hiker's *current* position would quietly measure
     /// the wrong thing. The next pause is watched normally.
     func reconcileWithPreferences() {
         guard !isEnabled else { return }
@@ -394,7 +394,7 @@ extension MovementReminderController {
     }
 
     /// Watches both things that can silence a reminder, each by the only
-    /// means that reports it: the walker's switch through the defaults
+    /// means that reports it: the hiker's switch through the defaults
     /// notification — scoped to this controller's own suite rather than the
     /// process-wide one, which is how `SettingsView`'s `@AppStorage` write
     /// arrives here — and iOS's permission on the way back into the
@@ -444,23 +444,23 @@ extension MovementReminderController {
     /// Asks iOS whether a reminder can be delivered at all, and gives the
     /// watch back if it cannot.
     ///
-    /// This is the half the walker's switch cannot see. ``isEnabled`` is read
+    /// This is the half the hiker's switch cannot see. ``isEnabled`` is read
     /// on every decision, but iOS's own answer is not a default and cannot be
-    /// read without asking: a walker who refuses the prompt — or who refused
+    /// read without asking: a hiker who refuses the prompt — or who refused
     /// it months ago, so no prompt even appears — leaves a pause armed for a
     /// banner that can never arrive. For the recording that is not merely
     /// pointless, it is expensive: with When In Use authorization the feed a
     /// pause keeps alive holds a background activity session and the location
-    /// indicator for as long as the pause lasts. A refusal is the walker
+    /// indicator for as long as the pause lasts. A refusal is the hiker
     /// saying no as plainly as the switch does, and it has to cost them the
     /// same nothing.
     ///
     /// Only the recording's watch is given back. A paused walk spends no
     /// sensor of its own — it reads fixes the app was producing anyway — so
     /// there is nothing to reclaim, and dropping its anchor would only lose a
-    /// reminder the walker could still enable permission for from Settings.
+    /// reminder the hiker could still enable permission for from Settings.
     ///
-    /// - Parameter prompting: whether the walker may be asked. True at a
+    /// - Parameter prompting: whether the hiker may be asked. True at a
     ///   pause, which is a question about something they are doing right now;
     ///   false on the way back into the foreground, where the only new
     ///   information is a permission revoked in iOS Settings and a prompt
@@ -477,7 +477,7 @@ extension MovementReminderController {
     /// parks its sensors rather than waiting on this.
     ///
     /// Which is why the pause's identity is captured and checked again on the
-    /// other side. The notification centre takes as long as the walker does
+    /// other side. The notification centre takes as long as the hiker does
     /// to read a prompt, and a denial that lands after they have resumed —
     /// or resumed, walked on and paused again — would otherwise park the
     /// sensors of a recording that is running, or take a watch from a pause

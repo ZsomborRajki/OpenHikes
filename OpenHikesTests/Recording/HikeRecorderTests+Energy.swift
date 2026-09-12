@@ -34,7 +34,7 @@ extension HikeRecorderTests {
         #expect(hikeRecorder.energyProfile == applied)
         #expect(
             hikeRecorder.energyProfile.reason != nil,
-            "the recording screen has nothing to show the walker otherwise"
+            "the recording screen has nothing to show the hiker otherwise"
         )
     }
 
@@ -48,11 +48,11 @@ extension HikeRecorderTests {
         #expect(hikeRecorder.energyProfile == .precise)
     }
 
-    /// The transition that has no fix to prompt it. A walker who stops for
+    /// The transition that has no fix to prompt it. A hiker who stops for
     /// lunch and whose battery drops into Low Power Mode while they eat
     /// produces no location updates at all, so a recorder that only
     /// re-evaluated on an accepted fix would keep the GPS at full accuracy for
-    /// exactly as long as the walker was doing nothing to interrupt it.
+    /// exactly as long as the hiker was doing nothing to interrupt it.
     @Test("Low Power Mode arriving mid-hike reconfigures without a fix")
     func powerStateChangeAppliesWithoutAFix() async {
         let reading = Mutex(PowerState())

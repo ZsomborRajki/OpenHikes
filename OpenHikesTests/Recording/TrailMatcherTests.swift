@@ -502,7 +502,7 @@ extension TrailMatcherTests {
     func nearestOfManyParallelTrailsWins() {
         // The shortlist keeps only the closest few candidates, so an edge
         // offered twice would evict a genuine one. Eleven parallel trails
-        // around the walker is more than that shortlist holds.
+        // around the hiker is more than that shortlist holds.
         var nodes: [(Int64, Double, Double)] = []
         var ways: [(Int64, [Int64], String?)] = []
         for offset in -5...5 {

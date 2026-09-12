@@ -119,7 +119,7 @@ extension HikeRecorder {
     /// Publishes what a finished match found about the trail underfoot.
     ///
     /// `isCurrent` is false when fixes arrived while the match was running, so
-    /// its verdict describes ground the walker has already left. That used to
+    /// its verdict describes ground the hiker has already left. That used to
     /// blank the trail outright, which is why the name flickered: matching a
     /// window takes long enough that on any densely-sampled walk a fix lands
     /// mid-match routinely, so the readout spent much of the hike alternating
@@ -239,7 +239,7 @@ extension HikeRecorder {
     ///
     /// `distanceEvidenceSource` is an actor wrapping `CMPedometer`, and a query
     /// is a real round-trip to the motion daemon. Asked one leg at a time this
-    /// was n serial suspensions on the Stop path, with the walker watching a
+    /// was n serial suspensions on the Stop path, with the hiker watching a
     /// spinner for the sum of them; a task group makes it the slowest one. The
     /// results are keyed by index, so the group's arbitrary completion order
     /// does not matter.
@@ -284,7 +284,7 @@ extension HikeRecorder {
     /// Also where the reminders end, and every caller means it. A *pause* is
     /// no longer one of them — see ``parkLocationSensors()`` — so what is left
     /// here is a recording with no state left to remind anybody about, and a
-    /// banner asking a walker to resume a hike they have already saved is the
+    /// banner asking a hiker to resume a hike they have already saved is the
     /// app disagreeing with its own store.
     func stopLocationSensors() {
         source.stopRecordingUpdates()
@@ -582,7 +582,7 @@ extension HikeRecorder {
     ///
     /// - Parameter outcome: what to leave behind. `.finished` shows the walk's
     ///   totals for a few minutes; `.abandoned` removes the activity at once,
-    ///   which is the only honest answer for a recording the walker discarded
+    ///   which is the only honest answer for a recording the hiker discarded
     ///   or one whose session turned out not to exist. An unowned panel is
     ///   always removed outright whichever is passed — see below.
     func endRecordingActivity(_ outcome: RecordingActivityOutcome) {
@@ -603,7 +603,7 @@ extension HikeRecorder {
             // tapped and the ordinary branch below takes it.)
             //
             // `.recording` rather than everything: a followed trail from the
-            // previous launch is still a walk the walker is on, and the
+            // previous launch is still a walk the hiker is on, and the
             // tracker adopts it back on the next matched fix. The controller
             // refuses the sweep when there is nothing of that kind up, so this
             // is a cheap no-op on the ordinary paths that reach it — including
@@ -635,7 +635,7 @@ extension HikeRecorder {
     /// The final panel's figures, read from the recorder rather than from the
     /// last state the activity happened to receive — which is up to a throttle
     /// interval old, and would round a finished walk down by a few dozen
-    /// metres in front of the walker who just watched it happen.
+    /// metres in front of the hiker who just watched it happen.
     private func finishedRecordingState() -> HikeActivityAttributes.ContentState {
         HikeActivityAttributes.ContentState(
             distanceMeters: stats.distanceMeters,

@@ -46,7 +46,7 @@ nonisolated final class SerialAsyncQueue: Sendable {
 
     deinit {
         // Finish rather than cancel: anything already queued is a durable
-        // write the walker is owed, and the consumer exits once it has
+        // write the hiker is owed, and the consumer exits once it has
         // drained.
         continuation.finish()
     }

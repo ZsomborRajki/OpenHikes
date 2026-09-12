@@ -6,7 +6,7 @@
 //  refuse. Drawn through the real ``TileCache`` rather than through
 //  ``TileNetworkPolicy`` alone, because the policy being right and the cache
 //  actually consulting it are two different claims and only the second one
-//  saves a walker any battery.
+//  saves a hiker any battery.
 //
 //  An extension of `TileTransportTests` for the reason given in
 //  `TileTransportTests+Deletion.swift`: `StubTileProtocol` is process-wide and
@@ -21,7 +21,7 @@ import Testing
 extension TileTransportTests {
 
     /// The asymmetry the whole policy exists for, and the reason there is no
-    /// setting in front of it. A walker on cellular is looking at the map
+    /// setting in front of it. A hiker on cellular is looking at the map
     /// *now*, so the tile under their thumb still loads; what stops is the
     /// bulk download that would have pulled a region they have not asked for
     /// over a metered radio.
@@ -138,7 +138,7 @@ extension TileTransportTests {
     }
 
     /// Low Power Mode is a battery signal, not a data one, so it stops the
-    /// prefetch and leaves the map the walker is reading alone.
+    /// prefetch and leaves the map the hiker is reading alone.
     @Test("in Low Power Mode the map still draws and the prefetch stops")
     func lowPowerModeStopsPrefetchOnly() async {
         let stub = StubbedTileCache(power: PowerState(isLowPowerModeEnabled: true))

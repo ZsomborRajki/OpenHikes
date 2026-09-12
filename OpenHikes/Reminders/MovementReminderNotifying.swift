@@ -6,7 +6,7 @@
 //
 //  It exists for the reason ``HikeActivityPresenting`` does, and the case is
 //  the same one: the framework half cannot be exercised by a hosted unit test
-//  — the test host is not a walker's phone, authorization is whatever the
+//  — the test host is not a hiker's phone, authorization is whatever the
 //  developer's simulator happens to have been told once, and a posted banner
 //  has nothing a suite can read — while the interesting half is entirely
 //  policy. When a pause stops looking like a pause, which of two subjects the
@@ -30,27 +30,27 @@ protocol MovementReminderNotifying: AnyObject {
     ///
     /// Asked at the moment a pause begins rather than at launch, which is the
     /// same argument the photo-library permission is granted by: a prompt that
-    /// arrives while the walker is holding the phone, having just tapped
+    /// arrives while the hiker is holding the phone, having just tapped
     /// Pause, is a question about something they are doing. One at launch is a
     /// question about something they may never do.
     func authorize() async -> Bool
 
-    /// Whether ``post(_:)`` would reach the walker at all, asked of the
+    /// Whether ``post(_:)`` would reach the hiker at all, asked of the
     /// system rather than of them.
     ///
     /// ``authorize()`` answers the same question, but prompts when it has
-    /// never been asked — which is right at the pause the walker just tapped
+    /// never been asked — which is right at the pause the hiker just tapped
     /// and wrong on every later return to the foreground, where the app would
     /// be asking again about something they did half an hour ago. This is the
     /// question without the prompt, and the only new thing it can report is a
     /// permission taken away in iOS Settings while a pause was running.
     ///
-    /// An unanswered prompt reads as allowed: a walker who has not said no
+    /// An unanswered prompt reads as allowed: a hiker who has not said no
     /// has not refused, and what this answer is used to take away is a watch
     /// the system has actually silenced.
     func canPost() async -> Bool
 
-    /// Puts one reminder on the walker's screen, replacing any earlier one of
+    /// Puts one reminder on the hiker's screen, replacing any earlier one of
     /// the same kind. Silent on failure, for the reason a Live Activity
     /// refusal is silent: it is the system's answer about a banner, and there
     /// is nothing to be done about it in the middle of a hike.
@@ -58,7 +58,7 @@ protocol MovementReminderNotifying: AnyObject {
 
     /// Takes a reminder back down — pending and already delivered.
     ///
-    /// The delivered half is what matters. A walker who resumed the recording
+    /// The delivered half is what matters. A hiker who resumed the recording
     /// from the recording screen has answered the question, and a banner still
     /// sitting in Notification Centre asking them to resume is the app
     /// disagreeing with itself about a walk it can see the state of.

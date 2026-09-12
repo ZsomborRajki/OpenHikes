@@ -12,7 +12,7 @@
 //  Both halves of that need pinning, and they are easy to confuse. "Nothing
 //  was drawn" is trivially satisfiable by a coordinator that stopped observing
 //  the trace altogether — which would also mean the map never woke up again,
-//  and the walker would come back to a line that ends where they backgrounded
+//  and the hiker would come back to a line that ends where they backgrounded
 //  the app. So the tests below separate the two: a second coordinator, created
 //  after the notification and therefore still in the foreground, watches the
 //  same trace and draws every fix, which is both the proof that the revisions

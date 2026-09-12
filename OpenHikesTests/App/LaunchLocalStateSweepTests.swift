@@ -8,7 +8,7 @@
 //  this one collects a row, and it exists because a sidecar is the one thing
 //  in the app nothing else can reach. The stores cannot be related, so nothing
 //  cascades, and `Hike.deleteLocalState()` — the only thing that removes one —
-//  runs on the local deletion path alone. A hike deleted on the walker's other
+//  runs on the local deletion path alone. A hike deleted on the hiker's other
 //  device arrives as a mirrored row deletion that cannot touch this store, and
 //  what it leaves behind carries a `walkInProgress` that `openWalkAtLaunch` then
 //  prefers over every real one, launch after launch.

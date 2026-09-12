@@ -6,8 +6,8 @@
 //
 //  The badge used to be about wherever the phone was, derived from the fix
 //  stream and nothing else, which made it a reading nobody had asked for: a
-//  walker who searched Budapest and zoomed the map there still saw the
-//  temperature outside their own window, and a walker who opened an imported
+//  hiker who searched Budapest and zoomed the map there still saw the
+//  temperature outside their own window, and a hiker who opened an imported
 //  trail saw the same. The forecast a person wants is the forecast for the
 //  place they are looking at, and "the place they are looking at" is a thing
 //  the app already knows at three specific moments — it just never wrote it
@@ -35,21 +35,21 @@ import Foundation
 /// identify a forecast for somewhere other than here. The compact badge names
 /// searched places only; selected hike titles stay in the detail sheet.
 nonisolated enum WeatherSubject: Equatable, Sendable {
-    /// Wherever the walker is. Owned by the recorder while a recording is
+    /// Wherever the hiker is. Owned by the recorder while a recording is
     /// active, and left in place afterwards so stopping a recording doesn't
     /// blank the badge.
     case me(CLLocationCoordinate2D)
     /// A resolved search result.
     case place(CLLocationCoordinate2D, name: String)
     /// A selected hike's route. The coordinate starts at the route's anchor
-    /// and follows the walker once they are actually in its area — see
-    /// ``WeatherFocus/walkerMoved(to:)``.
+    /// and follows the hiker once they are actually in its area — see
+    /// ``WeatherFocus/hikerMoved(to:)``.
     case trail(CLLocationCoordinate2D, hikeID: UUID, name: String)
 
     /// The subject a selected route implies, or `nil` for a hike with no
     /// geometry to be about.
     ///
-    /// The anchor is the route's midpoint rather than its start: a walker who
+    /// The anchor is the route's midpoint rather than its start: a hiker who
     /// has opened a trail is asking about the trail, and on a long one the
     /// trailhead can be a different valley from the middle of it.
     static func trail(
@@ -82,10 +82,10 @@ nonisolated enum WeatherSubject: Equatable, Sendable {
     /// The identity ``WeatherRequestState`` keys its freshness and backoff on.
     ///
     /// Independent of the coordinate for moving subjects: `me` is one subject whose
-    /// position changes, not a new subject every time the walker moves, and a
+    /// position changes, not a new subject every time the hiker moves, and a
     /// trail re-selected after a detour is the same trail. This is what
     /// replaced the old ~1.1 km lat/lon grid, whose keys changed underneath a
-    /// stationary walker often enough to need an eight-bucket LRU to absorb
+    /// stationary hiker often enough to need an eight-bucket LRU to absorb
     /// the oscillation. A searched place is fixed, so its coordinate distinguishes
     /// cities or business branches that share a display name.
     var key: String {
@@ -96,7 +96,7 @@ nonisolated enum WeatherSubject: Equatable, Sendable {
         }
     }
 
-    /// The subject moved to `coordinate`. Walker and trail identities stay stable.
+    /// The subject moved to `coordinate`. Hiker and trail identities stay stable.
     func moved(to coordinate: CLLocationCoordinate2D) -> Self {
         switch self {
         case .me: .me(coordinate)
@@ -127,12 +127,12 @@ nonisolated enum WeatherSubject: Equatable, Sendable {
 ///
 /// The precedence is one rule: **an active recording owns the subject.** While
 /// it does, a search or a hike selection changes the map and leaves the badge
-/// alone, because a walker glancing at a badge mid-hike is asking about the
+/// alone, because a hiker glancing at a badge mid-hike is asking about the
 /// weather they are standing in and nothing else should be able to answer that
 /// question for them. Everywhere else, the most recent explicit focus wins.
 ///
 /// Stopping a recording releases the pin but keeps the subject. Clearing it
-/// would blank the badge at the exact moment a walker is most likely to look
+/// would blank the badge at the exact moment a hiker is most likely to look
 /// at it, and "here" remains a perfectly good answer once the recording has
 /// ended.
 @Observable
@@ -141,11 +141,11 @@ final class WeatherFocus {
     /// we're on the main actor — see ``LocationManager``'s deinit for why.
     nonisolated deinit { /* intentionally empty */ }
 
-    /// How near a trail's anchor a walker has to be for the subject to follow
+    /// How near a trail's anchor a hiker has to be for the subject to follow
     /// them along it rather than stay pinned to where the route starts.
     ///
     /// A region test, not a route match: this asks "are they out on this
-    /// trail's hillside", and a walker anywhere inside this radius shares the
+    /// trail's hillside", and a hiker anywhere inside this radius shares the
     /// trail's weather closely enough that either coordinate would give the
     /// same forecast — moving to theirs is simply the more honest of two
     /// equivalent answers. Getting it wrong in the other direction is what
@@ -162,24 +162,24 @@ final class WeatherFocus {
 
     /// True while a recording owns ``subject``. Search and selection are
     /// no-ops until it clears.
-    private(set) var isPinnedToWalker = false
+    private(set) var isPinnedToHiker = false
 
     init(subject: WeatherSubject? = nil) {
         self.subject = subject
     }
 
-    /// A recording became active: the badge is about the walker from here
+    /// A recording became active: the badge is about the hiker from here
     /// until it ends.
-    func pinToWalker(at coordinate: CLLocationCoordinate2D?) {
-        isPinnedToWalker = true
+    func pinToHiker(at coordinate: CLLocationCoordinate2D?) {
+        isPinnedToHiker = true
         // Ownership cannot wait for a fix. Drop a previous place's subject
-        // until significant-change delivery can supply the walker's position.
+        // until significant-change delivery can supply the hiker's position.
         subject = coordinate.map { .me($0) }
     }
 
     /// The recording ended. The pin lifts; the subject stays where it is.
-    func unpinFromWalker() {
-        isPinnedToWalker = false
+    func unpinFromHiker() {
+        isPinnedToHiker = false
     }
 
     /// An explicit focus from search or hike selection.
@@ -187,11 +187,11 @@ final class WeatherFocus {
     /// Ignored outright while a recording holds the pin — see the type's own
     /// note on precedence.
     func focus(on subject: WeatherSubject) {
-        guard !isPinnedToWalker else { return }
+        guard !isPinnedToHiker else { return }
         setSubject(subject)
     }
 
-    /// Makes the walker the subject when nothing else has claimed it.
+    /// Makes the hiker the subject when nothing else has claimed it.
     ///
     /// The honest default: with no recording running, no trail selected and no
     /// search resolved, the place the badge is about is here. Without this a
@@ -199,14 +199,14 @@ final class WeatherFocus {
     /// would sit on whatever was persisted from the last session — getting
     /// older — until the user happened to do one of the three things that sets
     /// a subject explicitly.
-    func defaultToWalker(at coordinate: CLLocationCoordinate2D) {
+    func defaultToHiker(at coordinate: CLLocationCoordinate2D) {
         guard subject == nil else { return }
         setSubject(.me(coordinate))
     }
 
-    /// A new position for the walker, from significant-change delivery.
+    /// A new position for the hiker, from significant-change delivery.
     ///
-    /// Moves the subject only when the subject is about the walker: `me`
+    /// Moves the subject only when the subject is about the hiker: `me`
     /// always, a `trail` when they are inside ``trailFollowRadius`` of it, and
     /// a searched `place` never — someone reading Budapest's forecast from
     /// Vienna does not want it to become Vienna's because they walked to the
@@ -214,9 +214,9 @@ final class WeatherFocus {
     ///
     /// Returns whether the subject changed, so irrelevant movement cannot
     /// receive the poll loop's shorter request floor.
-    @discardableResult func walkerMoved(to coordinate: CLLocationCoordinate2D) -> Bool {
+    @discardableResult func hikerMoved(to coordinate: CLLocationCoordinate2D) -> Bool {
         let previous = subject
-        if isPinnedToWalker || subject == nil {
+        if isPinnedToHiker || subject == nil {
             setSubject(.me(coordinate))
             return subject != previous
         }

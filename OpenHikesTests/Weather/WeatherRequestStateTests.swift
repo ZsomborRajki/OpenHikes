@@ -5,7 +5,7 @@
 //  What the weather poll is allowed to spend, and when.
 //
 //  These used to be about a lat/lon grid, because the poll used to be: the
-//  walker's position was rounded to ~1.1 km and that rounding decided whether
+//  hiker's position was rounded to ~1.1 km and that rounding decided whether
 //  a request was new ground. Half the suite existed to pin down what happened
 //  on a grid boundary, which is a problem the grid invented — see
 //  ``WeatherRequestState``. Keying on ``WeatherSubject/key`` deletes the
@@ -75,7 +75,7 @@ struct WeatherRequestStateTests {
         #expect(shouldRequest)
     }
 
-    /// The one thing a backoff must not have: an escape hatch. A walker who
+    /// The one thing a backoff must not have: an escape hatch. A hiker who
     /// searches the same city four times while WeatherKit is refusing is
     /// exactly the case the ladder is for, and `.focus` bypassing it would
     /// turn the search field into a way to hammer a service that has already
@@ -111,7 +111,7 @@ struct WeatherRequestStateTests {
     }
 
     /// Movement is the reason with the short floor, and that is the whole
-    /// point of carrying a reason at all: a walker who has crossed a cell
+    /// point of carrying a reason at all: a hiker who has crossed a cell
     /// boundary has plausibly walked into different weather, and making them
     /// wait out the full freshness interval for it is what the old
     /// position-driven poll effectively did.
@@ -166,10 +166,10 @@ struct WeatherRequestStateTests {
         )
     }
 
-    /// A walker moving does not make them a new subject. `me` is one subject
+    /// A hiker moving does not make them a new subject. `me` is one subject
     /// whose coordinate changes, and the state must not treat a step as new
     /// ground the way the old grid key did every kilometre.
-    @Test("the walker moving is not a new subject")
+    @Test("the hiker moving is not a new subject")
     func movementDoesNotResetTheSubject() {
         var state = WeatherRequestState()
         state.recordSuccess(key: WeatherSubject.me(.init(latitude: 47.5, longitude: 19.0)).key, at: start)
@@ -181,7 +181,7 @@ struct WeatherRequestStateTests {
         #expect(!shouldRequest, "still the same subject, and its reading is still fresh")
     }
 
-    /// The memory is bounded, and bounded by *recency* — a walker who searches
+    /// The memory is bounded, and bounded by *recency* — a hiker who searches
     /// their way across a map must not accumulate an entry per query, and the
     /// subject they are looking at must not be the one evicted.
     @Test("only the most recent subjects are remembered")
@@ -213,7 +213,7 @@ struct WeatherRequestStateTests {
 
     /// The poll does not tick, so it has to be told when to come back: it
     /// wakes on a new subject and on significant-change delivery, and
-    /// otherwise on this deadline. A walker standing still with an expiring
+    /// otherwise on this deadline. A hiker standing still with an expiring
     /// reading depends entirely on it — without it, "refresh every fifteen
     /// minutes" quietly becomes "refresh whenever they next move".
     @Test("a fresh reading comes due when its freshness runs out")

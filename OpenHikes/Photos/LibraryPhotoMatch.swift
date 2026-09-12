@@ -15,7 +15,7 @@
 //  An asset's own recorded position is used for two things, and deliberately
 //  not for a third.
 //
-//  It corroborates. When it agrees with where the walk says the walker was, the
+//  It corroborates. When it agrees with where the walk says the hiker was, the
 //  match is as strong as this app can make one, and the gallery says so.
 //
 //  It disqualifies. Someone can take a photograph indoors, of a receipt, in

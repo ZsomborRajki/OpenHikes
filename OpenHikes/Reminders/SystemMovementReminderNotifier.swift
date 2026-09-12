@@ -12,7 +12,7 @@
 //
 //  Two things about the framework are worth knowing before changing it. The
 //  categories have to be registered before a notification carrying one is
-//  posted, or it is delivered with no buttons on it and the walker has to
+//  posted, or it is delivered with no buttons on it and the hiker has to
 //  unlock the phone to do the thing the banner just offered — so registration
 //  is folded into ``authorize()``, which every path runs first. And the
 //  interruption level is deliberately left at its default: `.timeSensitive`
@@ -87,7 +87,7 @@ final class SystemMovementReminderNotifier: MovementReminderNotifying {
         content.categoryIdentifier = reminder.categoryIdentifier
         content.sound = .default
         // `nil`, not a one-second time interval: the reminder is about what
-        // the walker is doing right now, and a trigger would let it arrive
+        // the hiker is doing right now, and a trigger would let it arrive
         // after they have already resumed.
         let request = UNNotificationRequest(
             identifier: reminder.notificationIdentifier,
@@ -127,7 +127,7 @@ final class SystemMovementReminderNotifier: MovementReminderNotifying {
                         title: kind.action.title,
                         // No `.foreground`, deliberately. The system runs the
                         // action in this process without bringing the app to
-                        // the front, which is the difference between a walker
+                        // the front, which is the difference between a hiker
                         // tapping Resume with gloves on and one unlocking a
                         // phone to find the recording screen.
                         options: []

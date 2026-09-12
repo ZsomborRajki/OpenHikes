@@ -8,10 +8,10 @@
 //  question gets asked. Three moments, and no timer:
 //
 //  * every accepted fix, because that is when ``RecordingDistanceAccumulator``
-//    learns the walker has stopped or set off again, and it costs a struct
+//    learns the hiker has stopped or set off again, and it costs a struct
 //    comparison against the profile already applied;
 //  * a power-state change, because Low Power Mode and thermal pressure arrive
-//    as notifications and can land during the half hour a walker spends at a
+//    as notifications and can land during the half hour a hiker spends at a
 //    summit, when no fix is going to come along and prompt a re-evaluation;
 //  * the start of a session, so a hike begun in Low Power Mode never spends a
 //    single minute at full accuracy before noticing.
@@ -34,7 +34,7 @@ extension HikeRecorder {
                 thermalState: power.thermalState,
                 // Only while fixes are actually being taken. A paused session
                 // has a stale accumulator, and resuming from one should not
-                // start out believing the walker is still standing where they
+                // start out believing the hiker is still standing where they
                 // stopped an hour ago.
                 isStationary: isCapturingFixes && accumulator.isStationary
             )
@@ -96,7 +96,7 @@ extension HikeRecorder {
     /// because a paused recording still holds the app alive in the background
     /// and that is exactly the cost the span exists to attribute. What it
     /// deliberately excludes is everything after the GPS stops: saving,
-    /// reviewing a matched route, and a walker taking ten minutes to name
+    /// reviewing a matched route, and a hiker taking ten minutes to name
     /// their hike are not GPS duty, and charging them to the recording would
     /// make an attentive user look like an expensive one.
     func beginFieldRecordingSpan() {

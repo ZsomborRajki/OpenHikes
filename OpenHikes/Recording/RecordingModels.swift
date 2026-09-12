@@ -154,7 +154,7 @@ nonisolated enum RecordingFixPolicy {
         // its claimed accuracy alone, and a cold start can claim a figure
         // inside the 50 m filter while sitting materially further out than
         // that. Every accurate fix afterwards is then measured against a place
-        // the walker has never stood and implies a speed no walk supports;
+        // the hiker has never stood and implies a speed no walk supports;
         // their real speed cannot rescue it either, since 1.4 m/s does not
         // corroborate an implied 16. Without the term the lockout runs until
         // the anchor's error divided by `maximumSpeed` has elapsed — around

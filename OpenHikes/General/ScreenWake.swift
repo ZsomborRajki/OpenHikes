@@ -9,16 +9,16 @@
 //  in this app, which is right for a six-hour walk with the phone in a pocket:
 //  holding a display on for that long would undo most of what the other four
 //  policies buy, and the display is the largest single consumer on the device.
-//  But it is wrong for the case the walker actually complains about — standing
+//  But it is wrong for the case the hiker actually complains about — standing
 //  at a junction with wet gloves on, comparing the map to the ground, while
 //  the screen dims every thirty seconds. Each of those wakes pays a full
-//  display ramp and a render, and the walker pays it repeatedly, so the
+//  display ramp and a render, and the hiker pays it repeatedly, so the
 //  default *costs* battery in exactly the situation it was meant to save it.
 //
 //  Both halves being true is why this is a switch rather than a constant. Three
 //  things about it are load-bearing:
 //
-//  * **Off by default.** A walker who has not asked for this gets precisely
+//  * **Off by default.** A hiker who has not asked for this gets precisely
 //    the behaviour the app has always had. Nothing about the hold is inferred
 //    from conditions the way the GPS profile is, because unlike a distance
 //    filter there is no reading of the situation that distinguishes "reading
@@ -53,7 +53,7 @@ import UIKit
 /// table is testable without a view, a scene or an application object.
 nonisolated enum ScreenWakePolicy {
     /// - Parameters:
-    ///   - enabled: the walker's switch — ``SettingsKey/keepScreenAwake``.
+    ///   - enabled: the hiker's switch — ``SettingsKey/keepScreenAwake``.
     ///   - subjectIsLive: whether the thing this screen is about is actually
     ///     happening: a recording session that exists, or a walk under way.
     ///     A screen with nothing live on it never holds the display, however
@@ -128,7 +128,7 @@ final class ScreenWakeCoordinator {
     }
 }
 
-/// Holds the display awake while a screen's subject is live, the walker has
+/// Holds the display awake while a screen's subject is live, the hiker has
 /// asked for it, and the app is in front.
 ///
 /// A `ViewModifier` rather than anything in the screen itself, and that is a
@@ -174,7 +174,7 @@ private struct KeepScreenAwake: ViewModifier {
 
 extension View {
     /// Keeps the display from dimming while `isLive` holds — subject to the
-    /// walker's switch and to the app being in front. See ``ScreenWakePolicy``.
+    /// hiker's switch and to the app being in front. See ``ScreenWakePolicy``.
     ///
     /// - Parameters:
     ///   - coordinator: whose idle timer. The app's by default; a suite passes

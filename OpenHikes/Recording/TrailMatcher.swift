@@ -27,7 +27,7 @@ nonisolated enum TrailMatcher {
     static let minimumTransitionDistanceMeters = 75.0
     static let evidenceDistanceMarginFactor = 1.2
     /// How much longer the trail a dense leg *declined* has to be than the
-    /// line it drew instead before the walker is asked about it.
+    /// line it drew instead before the hiker is asked about it.
     ///
     /// A dense leg is routed exactly one way — `optionLimit` is 1 off the
     /// sparse path — so when the matcher is unsure about one it has no second
@@ -38,7 +38,7 @@ nonisolated enum TrailMatcher {
     /// 74–130 sections after every walk against 4–8 today.
     ///
     /// What separates the ones worth asking about is whether abstaining
-    /// actually cost the walker any distance. For an ordinary noisy leg it
+    /// actually cost the hiker any distance. For an ordinary noisy leg it
     /// costs nothing — the declined trail is a median 0.4–1.5 m *shorter* than
     /// the zig-zag the noise drew, and the 90th percentile is under 5 m at
     /// 8 m accuracy. A cut switchback corner is a different quantity
@@ -69,7 +69,7 @@ nonisolated enum TrailMatcher {
     /// Without it the bound is `interval * sparseMaximumSpeedMPS`, which is
     /// reasonable for a minute and absurd for an afternoon: a phone that spent
     /// two hours in a pack asks for an 18 km Dijkstra radius with Yen's
-    /// k-shortest paths layered on top, inside a save the walker is waiting
+    /// k-shortest paths layered on top, inside a save the hiker is waiting
     /// on. Past this distance a shortest path is not weak evidence, it is
     /// none — there are far too many ways to walk that far — so the matcher
     /// abstains and the leg is reported as the gap it is.
@@ -100,7 +100,7 @@ nonisolated enum TrailMatcher {
 
     /// Whether the ground between two consecutive fixes went unobserved.
     ///
-    /// A deliberate pause is not a gap: the walker chose to stop recording, so
+    /// A deliberate pause is not a gap: the hiker chose to stop recording, so
     /// nothing is missing and nothing should be inferred across it. That is
     /// the same `.resumed` guard ``needsDistanceEvidence(from:to:)`` uses, and
     /// for the same reason.

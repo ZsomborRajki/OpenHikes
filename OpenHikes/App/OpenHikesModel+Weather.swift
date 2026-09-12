@@ -9,14 +9,14 @@
 //  ``WeatherRequestState`` and ``WeatherPollingPolicy``, both of which are
 //  pure and asserted directly, and this is only what drives them.
 //
-//  The loop used to be about the walker's position, waking on every accepted
+//  The loop used to be about the hiker's position, waking on every accepted
 //  fix and rounding it onto a grid to decide whether that position was news.
 //  It is now about ``WeatherFocus/subject`` — see ``WeatherSubject`` for why —
 //  and wakes on three things:
 //
 //  - the subject changed, because a recording started, a hike was selected or
 //    a search resolved;
-//  - the walker moved appreciably, via significant-change delivery, and the
+//  - the hiker moved appreciably, via significant-change delivery, and the
 //    subject is one that follows them;
 //  - the reading for the current subject came due, which is one sleep to an
 //    exact deadline re-armed after each pass rather than a tick.
@@ -32,7 +32,7 @@ import CoreLocation
 import Foundation
 
 /// Why the loop woke. Mapped onto ``WeatherRequestReason`` below; kept
-/// separate because "the walker moved" also has to be *applied* to the focus
+/// separate because "the hiker moved" also has to be *applied* to the focus
 /// before anything is asked about it.
 private enum WeatherWake: Sendable {
     case expiry
@@ -60,12 +60,12 @@ extension OpenHikesModel {
 
         for await wake in wakes {
             // Applied before the subject is read, so a movement wake asks
-            // about where the walker is now rather than where they were.
+            // about where the hiker is now rather than where they were.
             // Ignore movements that leave a searched place or distant trail
             // unchanged; those readings still wait for their freshness deadline.
             if wake == .movement {
                 guard let coordinate = significantLocations.coordinate,
-                      weatherFocus.walkerMoved(to: coordinate) else { continue }
+                      weatherFocus.hikerMoved(to: coordinate) else { continue }
             }
 
             guard let subject = weatherFocus.subject else {

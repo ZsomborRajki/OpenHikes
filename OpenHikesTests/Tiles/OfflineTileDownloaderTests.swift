@@ -340,7 +340,7 @@ struct OfflineDownloadStateTests {
         #expect(!downloader.isFailed)
     }
 
-    /// The button goes back to "Offline" once the walker has dealt with a
+    /// The button goes back to "Offline" once the hiker has dealt with a
     /// failure — by deleting the hike's tiles, which is the one path that
     /// clears a finished or failed run. It used to have a `reset()` of its
     /// own, which declined while a download was running and so could not be

@@ -2,12 +2,12 @@
 //  CommunityPublisher.swift
 //  OpenHikes
 //
-//  Turning a hike the walker owns into a submission somebody may one day
+//  Turning a hike the hiker owns into a submission somebody may one day
 //  review.
 //
 //  The shape is ``HikeImport``'s, run backwards, and for the same reason: the
 //  interesting part is not the happy path but what is left behind when it
-//  fails. An upload is the longest piece of work in this app that a walker
+//  fails. An upload is the longest piece of work in this app that a hiker
 //  waits on — a route, a dozen re-encoded photographs, and a round trip — and
 //  it can fail in the middle of any of it. So the temporary directory holding
 //  the re-encoded copies is created here, owned here, and deleted here on
@@ -67,7 +67,7 @@ nonisolated enum CommunityPublisher {
     /// How many photographs one shared hike may carry.
     ///
     /// A cap rather than all of them, because the two costs it bounds are both
-    /// paid by somebody other than the walker choosing: the public database's
+    /// paid by somebody other than the hiker choosing: the public database's
     /// asset quota, which this app pays for, and the download of anyone who
     /// opens the hike. A dozen pictures is a generous account of a walk;
     /// ninety is an album, and nobody browsing scrolls one.
@@ -75,7 +75,7 @@ nonisolated enum CommunityPublisher {
 
     /// Shares `hike`, waiting for CloudKit to accept it.
     ///
-    /// - Parameter authorName: What to publish it under. The walker's own
+    /// - Parameter authorName: What to publish it under. The hiker's own
     ///   words — see ``SettingsKey/communityAuthorName``.
     /// - Parameter save: The commit seam, the same shape ``HikeImport`` and
     ///   ``HikePhotoImport`` take theirs in, so a suite can refuse it.
@@ -141,7 +141,7 @@ nonisolated enum CommunityPublisher {
             } catch {
                 // The submission is real either way, so this is not a failed
                 // share. What is lost is only the device's memory of it, which
-                // costs the walker a share button that offers to send a hike
+                // costs the hiker a share button that offers to send a hike
                 // that is already sent.
                 logger.error(
                     """

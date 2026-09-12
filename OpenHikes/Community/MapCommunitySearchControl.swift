@@ -7,7 +7,7 @@
 //
 //  It exists because the alternative was invisible. The nearby list used to
 //  re-query itself whenever ``CommunityQueryPolicy``'s thresholds were
-//  crossed, so the rows under the walker's thumb changed for reasons nothing
+//  crossed, so the rows under the hiker's thumb changed for reasons nothing
 //  on screen gave — and the pans the thresholds refused left the list
 //  describing somewhere else, equally silently. One button says both things
 //  at once: while it is absent the list is about what you are looking at, and
@@ -146,7 +146,7 @@ extension MapView.Coordinator {
         let visible = community?.areaPrompt == .search
         // Hidden as well as transparent, for the reason the camera pill is:
         // an invisible view still answers hit tests, and this one sits over
-        // the map the walker is panning. Interaction goes at once rather than
+        // the map the hiker is panning. Interaction goes at once rather than
         // when the fade lands.
         areaSearchControl.isUserInteractionEnabled = visible
         if visible { areaSearchControl.isHidden = false }

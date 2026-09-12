@@ -11,7 +11,7 @@ import Testing
 ///
 /// ``WeatherManager/update(for:)`` keeps the last successful snapshot when
 /// WeatherKit fails, which is deliberate — an empty badge is worse than a
-/// twenty-minute-old temperature — and used to leave a walker who had lost
+/// twenty-minute-old temperature — and used to leave a hiker who had lost
 /// signal reading an hours-old number with nothing saying so.
 @Suite("Weather freshness")
 struct WeatherFreshnessTests {
@@ -38,7 +38,7 @@ struct WeatherFreshnessTests {
 
         #expect(!snapshot.isStale(asOf: dueForRefresh, policy: policy))
         // A second before the window closes it is still presented as current;
-        // the boundary is what a walker standing in patchy signal sits on.
+        // the boundary is what a hiker standing in patchy signal sits on.
         #expect(!snapshot.isStale(
             asOf: capturedAt.addingTimeInterval(policy.stalenessInterval - 1),
             policy: policy

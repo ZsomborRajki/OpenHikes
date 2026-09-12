@@ -113,7 +113,7 @@ extension HikeRecorderTests {
         try await journal.close()
 
         // Ten minutes dead, then an hour on the recovery screen: too old to
-        // resume automatically, so the walker is asked.
+        // resume automatically, so the hiker is asked.
         clock.advance(by: 600)
         let recorder = makeRecorder()
         await recorder.recoverOpenSession()

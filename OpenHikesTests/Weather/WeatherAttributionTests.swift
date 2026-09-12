@@ -54,7 +54,7 @@ struct WeatherAttributionTests {
     }
 
     /// The floor the sheet draws when the attribution call fails, which is the
-    /// likeliest case for the walker most likely to open it — no signal is
+    /// likeliest case for the hiker most likely to open it — no signal is
     /// both why the reading went stale and why the marks cannot be fetched.
     @Test("the fallback credits satisfy the terms on their own")
     func fallbackCreditsAreComplete() {
