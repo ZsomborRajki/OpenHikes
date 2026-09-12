@@ -8,12 +8,19 @@
 //  detail view is the largest screen in the app and the linter holds it to a
 //  file length, so a subject that can stand on its own does.
 //
-//  The subject here is one button, the sentence it is allowed to say, and the
-//  one question it has to answer before it opens anything: whether this
-//  device's subscription is current. See ``Hike/communitySubmissionID`` for why
-//  that sentence is "shared" and never "published", and
-//  ``MapEntitlementState/publishTap`` for why an unresolved entitlement
-//  disables the button rather than letting the tap through.
+//  The subject here is one button and the three things it has to answer
+//  before it opens anything: where this hike is on the trip from private to
+//  published (``CommunityPublicationState``), whether this device's
+//  subscription is current (``MapEntitlementState/publishTap``), and whether
+//  there is a transport at all.
+//
+//  The button is not a single control with a badge on it. Its three states do
+//  three different things, and the middle one does nothing at all — a hike
+//  waiting for review has no action available, because this app cannot
+//  withdraw a submission, amend one, or hurry anybody along. A disabled
+//  button is the honest shape for that, and the alternative — leaving it live
+//  so the tap opens a form that would send a *second* copy — is the duplicate
+//  this state exists to prevent.
 //
 
 import SwiftUI
@@ -42,7 +49,12 @@ extension HikeDetailView {
     /// database. A disabled button would be a promise the launch cannot keep.
     @ViewBuilder var communityShareButton: some View {
         if let transport = communityTransport {
+            let publication = CommunityPublicationState(
+                submissionID: hike.communitySubmissionID,
+                listingID: hike.communityListingID
+            )
             let tap = entitlement.state.publishTap
+            let isWaiting = publication == .awaitingReview
             Button {
                 switch tap {
                 case .allow: isSharingToCommunity = true
@@ -54,30 +66,27 @@ extension HikeDetailView {
                 case .wait: break
                 }
             } label: {
-                Image(systemName: hike.communitySubmissionID == nil
-                    ? "person.2"
-                    : "person.2.fill")
+                Image(systemName: Self.shareButtonSymbol(publication))
                     .font(.subheadline)
                     .foregroundStyle(.secondary)
                     .minimumTapTarget()
             }
             .buttonStyle(.plain)
-            // Says *shared*, never *published*: a submission waits for review
-            // and this app cannot find out whether it passed. See
-            // ``Hike/communitySubmissionID``.
-            .accessibilityLabel(
-                hike.communitySubmissionID == nil
-                    ? "Share with the community"
-                    : "Already shared with the community"
-            )
-            // The lock is invisible in a toolbar glyph, so the hint is the
-            // only warning a tap opens a purchase screen rather than the
-            // form — the same sentence the locked rows in Settings say, for
-            // the same reason.
-            .accessibilityHint(Self.shareButtonHint(tap))
+            .accessibilityLabel(Self.shareButtonLabel(publication))
+            // The lock and the wait are both invisible in a toolbar glyph, so
+            // the hint is the only place either can be explained — the same
+            // sentence the locked rows in Settings say, for the same reason.
+            .accessibilityHint(Self.shareButtonHint(publication, tap))
             .accessibilityIdentifier("community-share-button")
-            .opacity(tap == .wait ? Self.unresolvedEntitlementOpacity : 1)
-            .disabled(hike.pointCount < 2 || tap == .wait)
+            .opacity(tap == .wait || isWaiting ? Self.inactiveOpacity : 1)
+            .disabled(hike.pointCount < 2 || tap == .wait || isWaiting)
+            // Asks once per appearance, and only for a hike that has been sent
+            // and not yet seen live — see ``CommunityPublicationCheck``. Here
+            // rather than on the detail view's body because this button is the
+            // only thing that reads the answer.
+            .task(id: hike.id) {
+                await CommunityPublicationCheck.refresh(hike, transport: transport)
+            }
             .sheet(isPresented: $isSharingToCommunity) {
                 CommunityShareSheet(
                     hike: hike,
@@ -91,17 +100,52 @@ extension HikeDetailView {
         }
     }
 
+    /// Three glyphs for three states, because a badge on one glyph would be
+    /// unreadable at the size a toolbar draws this.
+    private static func shareButtonSymbol(_ publication: CommunityPublicationState) -> String {
+        switch publication {
+        case .notShared: "person.2"
+        case .awaitingReview: "hourglass"
+        case .published: "person.2.fill"
+        }
+    }
+
+    /// Says *waiting for review* and never *rejected*: the absence of a
+    /// listing covers a reviewer who has not looked and one who declined, and
+    /// this app cannot tell those apart. See ``Hike/communityListingID``.
+    private static func shareButtonLabel(_ publication: CommunityPublicationState) -> String {
+        switch publication {
+        case .notShared: "Share with the community"
+        case .awaitingReview: "Waiting for review"
+        case .published: "Published to the community"
+        }
+    }
+
     /// Spoken after the button, because a toolbar glyph has nowhere to carry
     /// the *Pro* badge the provider rows in Settings show.
-    private static func shareButtonHint(_ tap: PaidFeatureTap) -> String {
+    ///
+    /// The wait outranks the lock. A hike already sent cannot be sent again
+    /// whatever the subscription says, so offering the paywall to somebody
+    /// who has nothing to buy their way into would be the wrong sentence.
+    private static func shareButtonHint(
+        _ publication: CommunityPublicationState,
+        _ tap: PaidFeatureTap
+    ) -> String {
+        if publication == .awaitingReview {
+            return "Sent. It appears for other hikers once a person has checked it."
+        }
         switch tap {
-        case .allow: ""
-        case .unlock: "Requires OpenHikes Pro. Opens the unlock screen."
-        case .wait: "Checking your subscription."
+        case .allow:
+            return publication == .published
+                ? "Sharing again adds a second copy. The published one stays as it is."
+                : ""
+        case .unlock: return "Requires OpenHikes Pro. Opens the unlock screen."
+        case .wait: return "Checking your subscription."
         }
     }
 
     /// Matches the dimming Settings gives a paid row while StoreKit is still
-    /// answering.
-    private static let unresolvedEntitlementOpacity: Double = 0.55
+    /// answering, and reused for a hike waiting on a reviewer: both are a
+    /// control that is real but has nothing to do yet.
+    private static let inactiveOpacity: Double = 0.55
 }

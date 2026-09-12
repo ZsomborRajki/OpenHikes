@@ -166,6 +166,42 @@ nonisolated struct CloudKitCommunityTransport: CommunityTransporting {
         )
     }
 
+    /// Whether a submission of this hiker's has been published yet.
+    ///
+    /// One record, no cursor and no exclusion set, because none of the three
+    /// applies: a submission is published at most once, the answer is about
+    /// the asker's own hike, and a hiker who has blocked themselves still
+    /// wants to know whether their trail is live.
+    ///
+    /// A reference predicate rather than a string comparison — CloudKit
+    /// matches a `CKRecord.Reference` field against a reference, and the
+    /// reference is built with `.none` because deleting a listing must not
+    /// cascade into the submission behind it. The action stored on the
+    /// *listing* is the reviewer's business; this one is only for matching.
+    @concurrent
+    func publication(of submissionID: String) async throws -> CommunityListing? {
+        let reference = CKRecord.Reference(
+            recordID: CKRecord.ID(recordName: submissionID),
+            action: .none
+        )
+        let predicate = NSPredicate(
+            format: "%K == %@",
+            CommunitySchema.Listing.submission,
+            reference
+        )
+        let query = CKQuery(recordType: CommunitySchema.listingType, predicate: predicate)
+        do {
+            let (matches, _) = try await database.records(
+                matching: query,
+                resultsLimit: 1
+            )
+            guard let record = try matches.first?.1.get() else { return nil }
+            return CommunityListing(record: record)
+        } catch {
+            throw Self.failure(from: error, while: "checking whether a hike is published")
+        }
+    }
+
     /// Runs a query, following the cursor only as far as blocked rows make
     /// necessary.
     ///

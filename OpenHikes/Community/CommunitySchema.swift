@@ -79,7 +79,21 @@
 //    and the results are sorted by distance from the same point.
 //  - `title` — SEARCHABLE, for the token match the typed query uses.
 //  - `publishedAt` — SORTABLE, the fallback order when there is no location.
+//  - `submission` — QUERYABLE, so an author can ask whether their own
+//    submission has been published yet. See
+//    ``CommunityTransporting/publication(of:)``.
 //  - `___recordID` — QUERYABLE, which the Console adds by default.
+//
+//  `submission` is the one index here that is not needed for browsing, and is
+//  worth a sentence on why it is safe. Querying it requires already knowing a
+//  submission's record name, which only its author has — nothing enumerates
+//  submissions, by the rule below — and what it returns is a listing, which is
+//  `_world` read and already discoverable by location and by title. So it lets
+//  an author find their own hike by a name they stored locally, and lets
+//  nobody find anything they could not have found by searching for it. The
+//  alternative, a status field on the submission for a reviewer to set, would
+//  put a writable field on the record type whose unwritability is the whole
+//  point of this schema.
 //
 //  `authorID` deliberately gets none. A block is applied on the device that
 //  made it — see ``CommunityBlockList`` — so the field is read off rows that
@@ -154,6 +168,11 @@ nonisolated enum CommunitySchema {
     /// location that lived only on the submission could not be used to find
     /// anything.
     enum Listing {
+        /// The submission this was published from.
+        ///
+        /// QUERYABLE — see this file's header. It is what makes publication
+        /// observable to the author without making a reviewer's decision
+        /// writable by anybody.
         static let submission = "submission"
         static let title = "title"
         static let authorName = "authorName"

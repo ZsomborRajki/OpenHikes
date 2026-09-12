@@ -44,6 +44,15 @@ struct CommunityShareSheet: View {
     private var authorName = ""
     @State private var phase: Phase = .editing
 
+    /// Where this hike already is on the way to being published, which decides
+    /// whether the form warns about making a second copy of it.
+    private var publication: CommunityPublicationState {
+        CommunityPublicationState(
+            submissionID: hike.communitySubmissionID,
+            listingID: hike.communityListingID
+        )
+    }
+
     /// The photographs this share would actually carry, worked out once here
     /// rather than described twice — the cap is ``CommunityPublisher``'s, and
     /// a screen that quoted its own number would eventually quote a stale one.
@@ -75,6 +84,7 @@ struct CommunityShareSheet: View {
                 case .sent:
                     sentSection
                 default:
+                    duplicateSection
                     contentsSection
                     nameSection
                     reviewSection
@@ -163,6 +173,41 @@ private extension CommunityShareSheet {
                     .foregroundStyle(.tint)
             }
             .font(.footnote)
+        }
+    }
+
+    /// Shown only for a hike that has already been sent, which the share
+    /// button normally keeps out of here — it is disabled while a submission
+    /// is waiting. What reaches this is the published case, where sharing
+    /// again is a legitimate thing to want (it is the only way to publish an
+    /// amended route) and also the one way to end up with two of the same walk
+    /// in the list.
+    ///
+    /// A warning rather than a refusal, because the app cannot tell an
+    /// accidental second tap from a deliberate re-share of a corrected
+    /// route — and it cannot offer the thing that would make the choice
+    /// unnecessary, since ``CommunityTransporting`` has no method to replace
+    /// or withdraw a submission. So it says exactly what will happen and lets
+    /// the hiker decide.
+    @ViewBuilder var duplicateSection: some View {
+        if publication.wouldDuplicate {
+            Section {
+                Label {
+                    Text(
+                        """
+                        You've already shared this hike. Sending it again adds a \
+                        second copy for other hikers — it doesn't replace or update \
+                        the first, and this app can't take that one down. Ask for it \
+                        to be removed by reporting it from its own screen.
+                        """
+                    )
+                } icon: {
+                    Image(systemName: "exclamationmark.triangle")
+                        .foregroundStyle(.orange)
+                }
+                .font(.footnote)
+                .accessibilityIdentifier("community-share-duplicate")
+            }
         }
     }
 

@@ -35,6 +35,9 @@ final class StubCommunityTransport: CommunityTransporting, @unchecked Sendable {
         var nearbyRequests: [(coordinate: CLLocationCoordinate2D, radiusMeters: Double)] = []
         var titleQueries: [String] = []
         var detailRequests: [String] = []
+        /// The submission ids a publication check asked about, in order. What
+        /// proves the check is asked once and not once per body.
+        var publicationChecks: [String] = []
         /// The exclusion set each listing request carried, in order. What
         /// proves the browser spends its budget on rows the hiker can see —
         /// see `CommunityTransporting`'s note on why the set is a parameter.
@@ -45,6 +48,10 @@ final class StubCommunityTransport: CommunityTransporting, @unchecked Sendable {
     var submissionResult: Result<String, CommunityFailure> = .success("submission-1")
     var listingsResult: Result<[CommunityListing], CommunityFailure> = .success([])
     var detailResult: Result<CommunityHikeDetail, CommunityFailure>?
+    /// What a publication check answers. `nil` — the default — is "no listing
+    /// for this submission yet", which is the state a hike spends its whole
+    /// time in until a reviewer publishes it.
+    var publicationResult: Result<CommunityListing?, CommunityFailure> = .success(nil)
     /// Held open so a suite can watch two requests overlap — see
     /// `CommunityBrowserTests`.
     var beforeListingsReturn: (@Sendable () async -> Void)?
@@ -57,6 +64,12 @@ final class StubCommunityTransport: CommunityTransporting, @unchecked Sendable {
     func submit(_ draft: CommunitySubmissionDraft) async throws -> String {
         state.withLock { $0.submissions.append(draft) }
         return try submissionResult.get()
+    }
+
+    @concurrent
+    func publication(of submissionID: String) async throws -> CommunityListing? {
+        state.withLock { $0.publicationChecks.append(submissionID) }
+        return try publicationResult.get()
     }
 
     @concurrent
