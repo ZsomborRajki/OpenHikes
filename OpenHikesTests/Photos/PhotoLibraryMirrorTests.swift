@@ -196,6 +196,50 @@ struct PhotoLibraryMirrorTests {
             "the resource is named for the format the bytes really are"
         )
     }
+
+    /// Where the mirror *runs*, which is the one thing about it that was a
+    /// crash rather than a hitch.
+    ///
+    /// ``HikePhotoImport/add`` is `@MainActor`, and under approachable
+    /// concurrency a bare `nonisolated async` callee runs on its caller's
+    /// executor — so a `save` that does not say otherwise is a main-thread
+    /// function wearing an `await`. That cost the real writer two things at
+    /// once: PhotoKit's first-touch daemon handshake on the main thread, which
+    /// ``MainThreadWatchdog`` reported as a half-second stall, and a
+    /// `performChanges` block that inherited main-actor isolation from the
+    /// body it was written in. PhotoKit runs that block on
+    /// `com.apple.PHPhotoLibrary.changes`, so the isolation check Swift emits
+    /// at the top of it trapped — `dispatch_assert_queue`, `EXC_BREAKPOINT`,
+    /// on every mirrored save there has ever been.
+    ///
+    /// Read through the stub rather than the real writer because a suite has
+    /// no photo library to write into, and the stub deliberately does not
+    /// declare `@concurrent` of its own: what this asserts is that the
+    /// *protocol* moves the call off the main actor, which is the half a
+    /// conformance cannot put back.
+    @Test("mirroring runs off the main actor")
+    func mirroringStaysOffTheMainActor() async throws {
+        let sandbox = PhotoStoreSandbox()
+        let writer = StubPhotoLibraryWriter()
+        let context = try Fixture.modelContext()
+        let hike = Fixture.hike(in: context)
+
+        _ = await HikePhotoImport.add(
+            PhotoDiscoveryFixture.sampleImageData(),
+            to: hike,
+            coordinate: nil,
+            savesToPhotoLibrary: true,
+            capturedAt: Self.capturedAt,
+            store: sandbox.store,
+            libraryWriter: writer
+        )
+
+        let saved = try #require(writer.saves.last)
+        #expect(
+            !saved.onMainThread,
+            "PhotoKit on the main thread is a stall and a trapped change block"
+        )
+    }
 }
 
 /// A photo library that records what it was asked to file, and files nothing.
@@ -213,6 +257,10 @@ nonisolated final class StubPhotoLibraryWriter: PhotoLibraryWriting {
         /// When the library was actually asked — which is what a copy carrying
         /// no creation date ends up dated by.
         let filedAt: Date
+        /// Which thread the writer's own body landed on. Recorded rather than
+        /// asserted here so the failure names the executor instead of trapping
+        /// inside a stub — see `mirroringStaysOffTheMainActor`.
+        let onMainThread: Bool
     }
 
     /// Exposed as a plain array rather than as the `Mutex` itself: the testing
@@ -226,6 +274,14 @@ nonisolated final class StubPhotoLibraryWriter: PhotoLibraryWriting {
     // Async because the protocol is, not because this body suspends: the real
     // writer awaits an authorization prompt and a change request, this one
     // appends to an array.
+    //
+    // Deliberately *without* `@concurrent`, unlike the requirement it
+    // witnesses. A witness that carried it would hop off the main actor under
+    // its own power and report a clean executor no matter what the protocol
+    // said — which is exactly the reading `mirroringStaysOffTheMainActor` has
+    // to be unable to get. Left plain, this body runs wherever the call
+    // boundary puts it, so what it records is the protocol's promise rather
+    // than the stub's.
     // swiftlint:disable async_without_await
     @discardableResult func save(
         _ data: Data,
@@ -234,6 +290,25 @@ nonisolated final class StubPhotoLibraryWriter: PhotoLibraryWriting {
         coordinate: CLLocationCoordinate2D?
     ) async -> Bool {
         // swiftlint:enable async_without_await
+        record(
+            fileExtension: fileExtension,
+            capturedAt: capturedAt,
+            coordinate: coordinate,
+            byteCount: data.count
+        )
+        return true
+    }
+
+    /// Split out of `save` only so `Thread.isMainThread` can be read at all:
+    /// Foundation marks it unavailable from an asynchronous context, and this
+    /// is the one stub whose whole job includes saying which thread it woke up
+    /// on.
+    private func record(
+        fileExtension: String,
+        capturedAt: Date,
+        coordinate: CLLocationCoordinate2D?,
+        byteCount: Int
+    ) {
         recorded.withLock { saves in
             saves.append(
                 Save(
@@ -241,11 +316,11 @@ nonisolated final class StubPhotoLibraryWriter: PhotoLibraryWriting {
                     capturedAt: capturedAt,
                     latitude: coordinate?.latitude,
                     longitude: coordinate?.longitude,
-                    byteCount: data.count,
-                    filedAt: .now
+                    byteCount: byteCount,
+                    filedAt: .now,
+                    onMainThread: Thread.isMainThread
                 )
             )
         }
-        return true
     }
 }
