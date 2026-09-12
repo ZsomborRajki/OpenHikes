@@ -139,7 +139,7 @@ final class OpenHikesModel {
         )
         self.communityTransport = communityTransport
         communityBlocks = CommunityBlockList(defaults: defaults)
-        community = CommunityBrowser(transport: communityTransport, blockList: communityBlocks)
+        community = Self.makeCommunityBrowser(transport: communityTransport, blocks: communityBlocks)
         self.locationManager = locationManager
         self.weatherManager = weatherManager
         self.significantLocations = significantLocations

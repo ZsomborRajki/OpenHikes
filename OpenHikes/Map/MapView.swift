@@ -176,6 +176,11 @@ struct MapView: MapViewRepresentable, Equatable {
         coordinator.observeRouteStyle(routeStyle, on: mapView)
         coordinator.observePhotoPins(photoPins, on: mapView)
         coordinator.community = community
+        // The map asks the community question and now draws its answer too —
+        // see ``MapCommunityAnnotations``. Observed here rather than handed
+        // down, so a nearby result landing moves MapKit's annotations and no
+        // SwiftUI view.
+        coordinator.observeCommunityPins(community, on: mapView)
 
         // Raster tiles from the selected provider, replacing Apple's base map.
         applyTileSource(to: mapView, coordinator)
@@ -187,6 +192,10 @@ struct MapView: MapViewRepresentable, Equatable {
         // when the map is built (a restored selection, a widget deep link)
         // leaves it hidden until the *next* availability change.
         coordinator.observePhotoControls(photoCapture)
+        // The same, for the same reason: a map rebuilt while an offer is
+        // standing has to draw it on this first pass rather than waiting for
+        // the next settle.
+        coordinator.observeAreaPrompt(community)
 
         return mapView
     }
@@ -272,6 +281,7 @@ struct MapView: MapViewRepresentable, Equatable {
         ])
 
         addPhotoControls(to: mapView, coordinator, alignedTo: guide)
+        addAreaSearchControl(to: mapView, coordinator, alignedTo: guide)
         addAttribution(to: mapView, coordinator, alignedTo: guide)
         // Replaces the placeholders above with real positions as soon as the
         // map has a height to measure against.

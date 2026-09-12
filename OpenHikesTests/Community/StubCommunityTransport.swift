@@ -164,3 +164,32 @@ extension CommunityBlockList {
         return CommunityBlockList(defaults: defaults)
     }
 }
+
+/// What the browser asks the name of a searched area, instead of MapKit.
+///
+/// A seam for the same reason the transport above is one, and a sharper one
+/// than it looks: `MKReverseGeocodingRequest` reaches the network, so a suite
+/// using the real thing would geocode on somebody's rate limit and get a
+/// different answer depending on where the machine running it is.
+@MainActor
+final class StubAreaNames: CommunityAreaNaming {
+    /// What to answer. `nil` is the ordinary failure — no network, no result —
+    /// which the header treats as "no name" rather than as an error.
+    var answer: String?
+    /// The areas asked about, in order. What proves the browser names the area
+    /// it committed to rather than wherever the map has drifted to since.
+    private(set) var asked: [CommunitySearchArea] = []
+
+    init(answer: String? = nil) {
+        self.answer = answer
+    }
+
+    // `async` because the protocol is, and the stub answers at once: what the
+    // browser has to get right is that the name it publishes belongs to the
+    // area it committed to, which does not need a suspension to exercise.
+    func name(for area: CommunitySearchArea) async -> String? {
+        await Task.yield()
+        asked.append(area)
+        return answer
+    }
+}

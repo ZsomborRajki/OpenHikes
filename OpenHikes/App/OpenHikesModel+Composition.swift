@@ -147,6 +147,24 @@ extension OpenHikesModel {
             defaults: uiTestingDefaults
         )
     }
+
+    /// The browser, with a geocoder only for the launches that have a
+    /// transport.
+    ///
+    /// Tied to the transport rather than built unconditionally, and for the
+    /// same reason: the launches that must not reach CloudKit must not reach
+    /// MapKit's geocoder either, and a browser that will never ask anything
+    /// has no area to name. See ``CommunityAreaNaming``.
+    static func makeCommunityBrowser(
+        transport: (any CommunityTransporting)?,
+        blocks: CommunityBlockList
+    ) -> CommunityBrowser {
+        CommunityBrowser(
+            transport: transport,
+            blockList: blocks,
+            areaNames: transport == nil ? nil : GeocodedAreaNames()
+        )
+    }
 }
 
 // MARK: - Opening the store
