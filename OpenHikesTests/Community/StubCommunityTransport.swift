@@ -42,6 +42,10 @@ final class StubCommunityTransport: CommunityTransporting, @unchecked Sendable {
         /// proves the browser spends its budget on rows the hiker can see —
         /// see `CommunityTransporting`'s note on why the set is a parameter.
         var exclusions: [Set<String>] = []
+        /// The listings each outline request covered, in order. What proves
+        /// the map's lines cost one request per answer rather than one per
+        /// row.
+        var outlineRequests: [[String]] = []
     }
 
     /// What each call should do. Set before the call, read inside it.
@@ -52,9 +56,16 @@ final class StubCommunityTransport: CommunityTransporting, @unchecked Sendable {
     /// for this submission yet", which is the state a hike spends its whole
     /// time in until a reviewer publishes it.
     var publicationResult: Result<CommunityListing?, CommunityFailure> = .success(nil)
+    /// What the map's lines come back as, keyed by listing. Empty by default,
+    /// which is the honest state of a database whose hikes were all published
+    /// before outlines existed.
+    var outlinesResult: Result<[String: [RouteCoordinate]], CommunityFailure> = .success([:])
     /// Held open so a suite can watch two requests overlap — see
     /// `CommunityBrowserTests`.
     var beforeListingsReturn: (@Sendable () async -> Void)?
+    /// The same, for the outline request — which lands *after* the rows it
+    /// belongs to and so is the one a suite has to be able to hold.
+    var beforeOutlinesReturn: (@Sendable () async -> Void)?
 
     private let state = Mutex(Recording())
 
@@ -109,6 +120,22 @@ final class StubCommunityTransport: CommunityTransporting, @unchecked Sendable {
         let listings = try listingsResult.get()
         guard !excluding.isEmpty else { return listings }
         return listings.filter { !excluding.contains($0.authorID) }
+    }
+
+    /// Answers from ``outlinesResult`` and records which page was asked
+    /// about.
+    ///
+    /// The real transport answers partially — a listing whose submission has
+    /// no outline is simply absent — so the script is a dictionary rather than
+    /// a per-listing result, and a suite proves the partial case by leaving
+    /// one out.
+    @concurrent
+    func outlines(
+        for listings: [CommunityListing]
+    ) async throws -> [String: [RouteCoordinate]] {
+        state.withLock { $0.outlineRequests.append(listings.map(\.id)) }
+        await beforeOutlinesReturn?()
+        return try outlinesResult.get()
     }
 
     @concurrent

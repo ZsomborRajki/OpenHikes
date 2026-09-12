@@ -168,6 +168,30 @@ nonisolated protocol CommunityTransporting: Sendable {
         excluding: Set<String>
     ) async throws -> [CommunityListing]
 
+    /// The coarse shape of each listing's route, keyed by
+    /// ``CommunityListing/id``, so the map can draw the answer it asked for.
+    ///
+    /// One request for the whole page rather than one per row, which is the
+    /// only reason a browse can afford geometry at all: the outlines are a
+    /// *field* on the submission and a field can be asked for by itself, so
+    /// this is a fetch of record IDs asking for about a kilobyte each. See
+    /// ``CommunityRouteOutline`` for what is in one and
+    /// ``CommunitySchema/Submission/routeOutline`` for why it needs no index.
+    ///
+    /// **Partial by contract.** A listing is absent from the answer whenever
+    /// its submission carries no outline — every hike published before the
+    /// field existed, and any route too short to draw — and whenever that one
+    /// record could not be read. Missing geometry is not a failure: the pin
+    /// still stands and the hike still opens, so a caller draws what it got
+    /// and says nothing about the rest. Only a failure of the whole request
+    /// throws.
+    ///
+    /// Needs no account, like every other read here.
+    @concurrent
+    func outlines(
+        for listings: [CommunityListing]
+    ) async throws -> [String: [RouteCoordinate]]
+
     /// The route and photographs behind a listing, downloaded into
     /// `directory`.
     ///

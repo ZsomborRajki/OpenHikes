@@ -278,6 +278,10 @@ struct MapSheet: View {
                 listing: listing,
                 transport: transport,
                 blockList: appModel.communityBlocks,
+                // Written by the screen, never read by it: it is what puts
+                // this hike's real route on the map behind the sheet — see
+                // ``CommunityHikeView``'s `browser`.
+                browser: appModel.community,
                 // `open` assigns the whole path rather than appending to it, so
                 // the preview is replaced rather than left underneath — which
                 // is what should happen: backing out of a hike that is now in

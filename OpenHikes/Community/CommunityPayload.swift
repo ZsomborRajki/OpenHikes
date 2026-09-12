@@ -122,6 +122,32 @@ nonisolated struct CommunityListing: Identifiable, Hashable, Sendable {
     }
 }
 
+/// A published hike's line on the map, and which of the two kinds of line it
+/// is.
+///
+/// The map draws shared hikes at two fidelities and they are deliberately one
+/// type rather than two. Every hike in the nearby answer is drawn from its
+/// ``CommunityRouteOutline`` — a kilobyte, faded, there to be seen and tapped.
+/// The one whose preview is open is drawn from the route the preview itself
+/// downloaded: every point of it, at full strength, because that screen no
+/// longer draws the route anywhere else and this *is* where the hiker sees
+/// what they are deciding about.
+///
+/// One type because the map's job is identical either way — build a polyline,
+/// style it, let a tap find it — and the only thing that differs is two
+/// numbers in a renderer. Two types would mean two overlay arrays, two
+/// rebuild guards and two hit-tests, so that a tap on the emphasised line
+/// could open the screen it is already showing.
+nonisolated struct CommunityRouteLine: Identifiable, Hashable, Sendable {
+    /// The hike this line is, so a tap has somewhere to go.
+    var listing: CommunityListing
+    var coordinates: [RouteCoordinate]
+    /// Whether this is the hike whose preview is open.
+    var isPreviewed: Bool
+
+    var id: String { listing.id }
+}
+
 /// A published hike's full contents, fetched when one is opened.
 nonisolated struct CommunityHikeDetail: Sendable {
     var listing: CommunityListing

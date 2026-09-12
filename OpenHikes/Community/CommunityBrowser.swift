@@ -143,6 +143,37 @@ final class CommunityBrowser {
     /// without a request: the rows were never thrown away, only hidden.
     private var nearbyResults: [CommunityListing] = []
     private var matchingResults: [CommunityListing] = []
+
+    /// Each nearby listing's thinned route, keyed by listing.
+    ///
+    /// Deliberately not merged into ``nearbyResults``: a listing is a snapshot
+    /// of a record and these arrive in a second request that can fail on its
+    /// own, so folding them together would mean either withholding rows until
+    /// the geometry landed or inventing an empty route for a hike that has
+    /// one. Kept beside the rows, read through them.
+    private var nearbyOutlines: [String: [RouteCoordinate]] = [:]
+
+    /// The hike whose preview is open, once its route has loaded.
+    ///
+    /// The preview used to draw a little unscaled sketch of the route instead,
+    /// which answered the one question it had to — *does this go where I think
+    /// it does* — and answered it in the abstract, beside a map that could
+    /// have answered it properly. Now the screen carries the hike's numbers
+    /// and the map carries its line.
+    ///
+    /// `nil` until the preview's own fetch lands, which is why the outline
+    /// under it is left drawn in the meantime: a line that vanished on the way
+    /// in and came back a second later would read as a glitch.
+    private var previewedRoute: CommunityRouteLine?
+    /// Which preview is open, whether or not its route has arrived.
+    ///
+    /// Separate from ``previewedRoute`` because the two are set at different
+    /// moments — the screen appears, and some time later it has something to
+    /// draw — and because it is what the later two calls are matched against:
+    /// a screen being replaced by another push tears down *after* the new one
+    /// appears, so an unmatched close would clear a preview that had just
+    /// started.
+    @ObservationIgnored private var previewedListingID: String?
     /// How the *nearby* request is getting on.
     ///
     /// The nearby one only, because it is the only one with anywhere to say
@@ -223,6 +254,13 @@ final class CommunityBrowser {
     @ObservationIgnored private var nearbyTask: Task<Void, Never>?
     @ObservationIgnored private var matchTask: Task<Void, Never>?
     @ObservationIgnored private var nameTask: Task<Void, Never>?
+    /// The outline fetch for whatever the nearby list currently holds.
+    ///
+    /// Its own task rather than part of the nearby one, because it is a
+    /// second request that must not delay the first: the rows and the pins go
+    /// up as soon as they land, and the lines arrive under them. A failure
+    /// here costs the lines and nothing else.
+    @ObservationIgnored private var outlineTask: Task<Void, Never>?
     /// Where a tapped map pin goes. Set once by ``OpenHikesView``, which owns
     /// the sheet's navigation path; see ``open(_:)``.
     @ObservationIgnored private var openListing: ((CommunityListing) -> Void)?
@@ -247,7 +285,8 @@ final class CommunityBrowser {
     /// this smaller than the number of pans, and this is what proves it.
     @ObservationIgnored private(set) var issuedRequests = 0
 
-    /// Requests that have not landed yet, of either question.
+    /// Requests that have not landed yet: either question, and the outline
+    /// fetch that follows a nearby answer.
     ///
     /// Kept for the same reason ``issuedRequests`` is, and needed for a
     /// sharper one: ``state`` describes the nearby request alone, so a suite
@@ -255,6 +294,11 @@ final class CommunityBrowser {
     /// title search that had not come back. Waiting on the effect rather than
     /// on a duration is the house rule; for a question with nothing to draw,
     /// this is the effect.
+    ///
+    /// The outlines are counted here and deliberately **not** in
+    /// ``issuedRequests``, which counts questions asked *about an area* — the
+    /// number the policy exists to keep below the number of pans. One answer
+    /// is one question however many requests carrying it back.
     @ObservationIgnored private(set) var requestsInFlight = 0
 
     /// Whether this launch can reach the community at all.
@@ -358,7 +402,13 @@ final class CommunityBrowser {
         nearbyTask = nil
         nameTask?.cancel()
         nameTask = nil
+        outlineTask?.cancel()
+        outlineTask = nil
         nearbyResults = []
+        // The lines go with the pins. The open preview's own line does not —
+        // it belongs to a screen that is still up, and hiding the section
+        // from underneath it must not blank the trail it is showing.
+        nearbyOutlines = [:]
         offeredArea = nil
         resultsArea = nil
         pendingArea = nil
@@ -428,7 +478,8 @@ final class CommunityBrowser {
         openListing = open
     }
 
-    /// Opens a published hike's preview. Called from the map's own pins.
+    /// Opens a published hike's preview. Called from the map's own pins and
+    /// from a tap on its line.
     func open(_ listing: CommunityListing) {
         openListing?(listing)
     }
@@ -511,6 +562,52 @@ final class CommunityBrowser {
                 limit: Self.resultLimit,
                 excluding: excluded
             )
+        }
+    }
+
+    /// Asks what the shapes of `listings` are, so the map can draw them.
+    ///
+    /// The second half of a nearby answer and deliberately a separate request.
+    /// The rows and the pins are already up by the time this is issued, and
+    /// what it adds — the lines — is the difference between knowing eleven
+    /// hikes start near here and seeing where they go. It runs once per
+    /// accepted page, not once per row: one fetch carries the lot, which is
+    /// what ``CommunitySchema/Submission/routeOutline`` exists to allow.
+    ///
+    /// The outlines already held are dropped first rather than merged into.
+    /// They describe the *previous* answer, and a pan to the next valley that
+    /// kept them would leave the map drawing trails that are no longer in the
+    /// list beside it.
+    ///
+    /// Failing is silent, like the publication check and for the same reason:
+    /// nobody asked for this, there is nothing on screen that reports it, and
+    /// what a hiker is left with is the pins and rows they already had.
+    private func requestOutlines(for listings: [CommunityListing]) {
+        outlineTask?.cancel()
+        nearbyOutlines = [:]
+        guard let transport, !listings.isEmpty else { return }
+        requestsInFlight += 1
+        outlineTask = Task { [weak self] in
+            defer { self?.requestsInFlight -= 1 }
+            do {
+                let outlines = try await transport.outlines(for: listings)
+                guard !Task.isCancelled, let self else { return }
+                // Only for rows still on screen: a block or a newer answer
+                // can land between the request and its reply, and an outline
+                // keyed on a listing nobody holds draws nothing but is a line
+                // of state nothing will ever clear.
+                let wanted = Set(nearbyResults.map(\.id))
+                nearbyOutlines = outlines.filter { wanted.contains($0.key) }
+            } catch is CancellationError {
+                return
+            } catch {
+                Self.logger.error(
+                    """
+                    Community outlines failed: \
+                    \(error.localizedDescription, privacy: .public)
+                    """
+                )
+            }
         }
     }
 
@@ -616,6 +713,7 @@ final class CommunityBrowser {
         case .nearby:
             nearbyResults = results
             resultsArea = area
+            requestOutlines(for: results)
             // The header describes these rows from here on. If MapKit has
             // already said what this area is called, say it; if it has not,
             // say nothing rather than keep the last area's name — the geocode
@@ -663,5 +761,84 @@ final class CommunityBrowser {
         case .nearby: nearbyTask = task
         case .title: matchTask = task
         }
+    }
+}
+
+// MARK: - What the map draws
+
+// An extension rather than more of the class, and it is the same split the
+// file already makes in prose: above this line is when to ask and what came
+// back, and below it is the one derived thing the map reads. Everything here
+// is computed from state declared above, so there is still exactly one source
+// for each fact.
+extension CommunityBrowser {
+    /// The lines the map draws for the shared hikes it found, and for the one
+    /// whose preview is open.
+    ///
+    /// Computed from the three things that can move independently — the rows,
+    /// the block list, and whatever the preview has loaded — for the reason
+    /// ``nearbyListings`` is computed: there is one source for each fact and
+    /// no fourth array that can fall behind them. A block reaches the map's
+    /// lines the moment it reaches its rows, because it is the same filter.
+    ///
+    /// The previewed hike is drawn from its *real* route and replaces its own
+    /// outline rather than being drawn over it, so the map never carries two
+    /// versions of one trail. It is appended last so it draws on top, and it
+    /// is included even when it is nowhere in the nearby answer — a hike found
+    /// by typing its name is still a hike the hiker is looking at, and its
+    /// preview no longer draws a route of its own.
+    var routeLines: [CommunityRouteLine] {
+        var lines = nearbyListings.compactMap { listing -> CommunityRouteLine? in
+            guard listing.id != previewedRoute?.id,
+                  let outline = nearbyOutlines[listing.id],
+                  outline.count >= 2
+            else { return nil }
+            return CommunityRouteLine(
+                listing: listing,
+                coordinates: outline,
+                isPreviewed: false
+            )
+        }
+        if let previewedRoute {
+            lines.append(previewedRoute)
+        }
+        return lines
+    }
+
+    // MARK: - The open preview
+
+    /// A published hike's preview is on screen. Called from the screen itself.
+    ///
+    /// It only records *which* hike: there is nothing to draw until the
+    /// preview's own fetch lands, and until then the map goes on showing the
+    /// faded outline it already had.
+    func previewOpened(_ listing: CommunityListing) {
+        previewedListingID = listing.id
+    }
+
+    /// The open preview has its route. The map draws this one properly.
+    ///
+    /// Ignored for anything but the preview currently open, which is what
+    /// stops a fetch that landed after the hiker backed out from putting a
+    /// line on a map with no screen behind it.
+    func previewLoaded(_ route: [RouteCoordinate], of listing: CommunityListing) {
+        guard previewedListingID == listing.id, route.count >= 2 else { return }
+        previewedRoute = CommunityRouteLine(
+            listing: listing,
+            coordinates: route,
+            isPreviewed: true
+        )
+    }
+
+    /// The preview is gone. Called when the screen disappears.
+    ///
+    /// Matched on the listing rather than clearing unconditionally: SwiftUI
+    /// tears a replaced screen down after its replacement appears, so an
+    /// unmatched close would take the new preview's line off the map on the
+    /// way into it.
+    func previewClosed(_ listing: CommunityListing) {
+        guard previewedListingID == listing.id else { return }
+        previewedListingID = nil
+        previewedRoute = nil
     }
 }

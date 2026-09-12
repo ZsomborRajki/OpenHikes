@@ -181,6 +181,14 @@ struct MapView: MapViewRepresentable, Equatable {
         // down, so a nearby result landing moves MapKit's annotations and no
         // SwiftUI view.
         coordinator.observeCommunityPins(community, on: mapView)
+        // And where they go, which is the half a pin cannot say — see
+        // ``MapCommunityRoutes``. The recognizer goes on with them: MapKit
+        // hit-tests annotations and never overlays, so without it the lines
+        // would be scenery.
+        coordinator.observeCommunityRoutes(community, on: mapView)
+        #if canImport(UIKit)
+        coordinator.installCommunityRouteTap(on: mapView)
+        #endif
 
         // Raster tiles from the selected provider, replacing Apple's base map.
         applyTileSource(to: mapView, coordinator)
@@ -485,7 +493,13 @@ struct MapView: MapViewRepresentable, Equatable {
         let polyline = MKPolyline(coordinates: route.coordinates, count: route.coordinates.count)
         coordinator.routeOverlay = polyline
         if let tileOverlay = coordinator.tileOverlay {
-            mapView.insertOverlay(polyline, above: tileOverlay)
+            // Above the shared hikes' lines when any are drawn, rather than
+            // above the tiles they are anchored on: both sit in this level,
+            // and naming the tile overlay here would slide this line
+            // underneath theirs. See `MapCommunityRoutes.swift`, which keeps
+            // the topmost of them last.
+            let base: any MKOverlay = coordinator.communityRoutes.last?.polyline ?? tileOverlay
+            mapView.insertOverlay(polyline, above: base)
         } else {
             mapView.addOverlay(polyline, level: .aboveLabels)
         }
