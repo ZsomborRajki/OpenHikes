@@ -22,12 +22,11 @@ struct GPXExportTests {
 
     private static let date = Date(timeIntervalSince1970: 1_780_000_000)
     private static let gpxIdentifier = "com.topografix.gpx"
-    private static let maximumFileStemLength = 64
 
     /// ``date`` as the file name spells it, taken from the calendar rather
     /// than from ``GPXExport``'s own style — which would agree with the
     /// exporter about a wrong day just as readily as about a right one.
-    private static func expectedFileDate() throws -> String {
+    static func expectedFileDate() throws -> String {
         let day = Calendar.current.dateComponents([.year, .month, .day], from: date)
         return String(
             format: "%04d-%02d-%02d",
@@ -37,7 +36,7 @@ struct GPXExportTests {
         )
     }
 
-    private func track(
+    func track(
         name: String = "Thumsee Loop",
         trackDescription: String? = "A lakeside loop.",
         author: String? = "Ada Lovelace",
@@ -230,49 +229,6 @@ struct GPXExportTests {
         let name = "Ridge\u{0}Loop\u{7}"
 
         #expect(try reimported(track(name: name)).name == "RidgeLoop")
-    }
-
-    // MARK: File name
-
-    /// The date has to be the *hike's*, and a pattern that matches any date
-    /// cannot tell that from the day the share sheet happened to open — so
-    /// the expected day is derived from the fixture's own date through the
-    /// calendar, rather than through the exporter's format style.
-    @Test("the suggested file name is the hike's name, its date and .gpx")
-    func buildsFileName() throws {
-        let fileName = GPXExport.fileName(for: track(name: "Thumsee Loop"))
-
-        #expect(fileName == "Thumsee Loop-\(try Self.expectedFileDate()).gpx")
-    }
-
-    /// Hyphens rather than deletions, so two hikes whose names differ only in
-    /// punctuation still export to different files.
-    @Test("characters a file system won't take become hyphens")
-    func sanitizesFileName() {
-        let fileName = GPXExport.fileName(for: track(name: #"Ridge/Loop: 2\3"#))
-
-        #expect(fileName.hasPrefix("Ridge-Loop- 2-3-"))
-    }
-
-    /// A leading dot would hide the exported file on every Unix-derived system
-    /// the share sheet can reach.
-    @Test("a leading dot is trimmed rather than exported as a hidden file")
-    func trimsLeadingDot() {
-        #expect(GPXExport.fileName(for: track(name: ".hidden")).hasPrefix("hidden-"))
-    }
-
-    @Test("a name with nothing usable left in it falls back")
-    func fallsBackWhenNameIsUnusable() {
-        #expect(GPXExport.fileName(for: track(name: "")).hasPrefix("Hike-"))
-        #expect(GPXExport.fileName(for: track(name: "   ")).hasPrefix("Hike-"))
-    }
-
-    @Test("a very long name is truncated to a length every file system takes")
-    func truncatesLongFileName() {
-        let long = String(repeating: "a", count: Self.maximumFileStemLength * 3)
-        let fileName = GPXExport.fileName(for: track(name: long))
-
-        #expect(fileName.prefix { $0 == "a" }.count == Self.maximumFileStemLength)
     }
 
     // MARK: Sharing
@@ -479,11 +435,6 @@ private extension GPXExportTests {
         }
     }
 
-    /// A staged export and the directory it was given to itself.
-    static func discardStagedExport(at url: URL) {
-        try? FileManager.default.removeItem(at: url.deletingLastPathComponent())
-    }
-
     /// A staged export as the purge sees one: a directory holding a file,
     /// dated after it's filled so the write doesn't reset the date.
     static func stageDirectory(
@@ -505,5 +456,13 @@ private extension GPXExportTests {
             ofItemAtPath: directory.path
         )
         return directory
+    }
+}
+
+/// Shared with ``GPXExportTests+FileName``, which stages files of its own.
+extension GPXExportTests {
+    /// A staged export and the directory it was given to itself.
+    static func discardStagedExport(at url: URL) {
+        try? FileManager.default.removeItem(at: url.deletingLastPathComponent())
     }
 }
