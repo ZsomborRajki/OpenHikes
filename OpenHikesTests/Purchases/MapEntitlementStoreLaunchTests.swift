@@ -133,7 +133,7 @@ struct MapEntitlementStoreLaunchTests {
     /// configuration synced to it, which is true of a fresh CI runner and false
     /// of every machine the app has been launched on once — the scheme attaches
     /// `OpenHikes.storekit` to its launch action and the simulator keeps it. So
-    /// it passed in CI, failed on a developer's machine with a real $19.99
+    /// it passed in CI, failed on a developer's machine with a real $4.99
     /// product loaded, and asserted the environment rather than the behaviour.
     ///
     /// The swallowed failure is asserted through the two properties the

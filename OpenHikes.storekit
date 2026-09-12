@@ -36,7 +36,7 @@
       "localizations" : [
 
       ],
-      "name" : "Pro Maps",
+      "name" : "OpenHikes Pro",
       "subscriptions" : [
         {
           "adHocOffers" : [
@@ -45,8 +45,8 @@
           "billingPlans" : [
             {
               "billingPlanType" : "BILLED_UPFRONT",
-              "commitmentDisplayPrice" : "19.99",
-              "displayPrice" : "19.99",
+              "commitmentDisplayPrice" : "4.99",
+              "displayPrice" : "4.99",
               "internalID" : "9525B511",
               "isEnabled" : true
             }
@@ -54,8 +54,8 @@
           "codeOffers" : [
 
           ],
-          "displayPrice" : "19.99",
-          "familyShareable" : false,
+          "displayPrice" : "4.99",
+          "familyShareable" : true,
           "groupNumber" : 1,
           "internalID" : "7B93D0A5",
           "introductoryOffer" : {
@@ -76,14 +76,14 @@
           ],
           "localizations" : [
             {
-              "description" : "Unlock the Stadia Outdoors and Thunderforest Outdoors map styles, with contour lines, marked trails and hillshading.",
-              "displayName" : "Pro Maps",
+              "description" : "Unlock the Stadia Outdoors and Thunderforest Outdoors map styles, offline maps, and publishing your own hikes to the community.",
+              "displayName" : "OpenHikes Pro",
               "locale" : "en_US"
             }
           ],
-          "productID" : "tappium.com.OpenHikes.pro.maps.yearly",
-          "recurringSubscriptionPeriod" : "P1Y",
-          "referenceName" : "Pro Maps (Yearly)",
+          "productID" : "tappium.com.OpenHikes.pro.maps.monthly",
+          "recurringSubscriptionPeriod" : "P1M",
+          "referenceName" : "OpenHikes Pro (Monthly)",
           "subscriptionGroupID" : "21005E64",
           "type" : "RecurringSubscription",
           "winbackOffers" : [
