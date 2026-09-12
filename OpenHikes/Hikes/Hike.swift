@@ -94,6 +94,44 @@ final class Hike {
     /// own phase when this changes. The persisted column name stays stable.
     var autoFollowEnabled: Bool = true
 
+    /// The public-database submission this hike was shared as, or `nil` if it
+    /// has never been shared from this account.
+    ///
+    /// Written only once CloudKit has accepted the upload — see
+    /// ``CommunityPublisher/share(_:authorName:transport:store:save:)``, where
+    /// the ordering is the contract rather than an implementation detail.
+    ///
+    /// It says *sent*, and deliberately not *published*. A submission waits
+    /// for a human to review it, and this app has no way to ask whether one
+    /// has: the record it would have to read belongs to a type no client may
+    /// read, which is the whole point of ``CommunitySchema``'s two types. So
+    /// the share button says "Shared" rather than anything about visibility,
+    /// and nothing else in the app may read this as a claim that the hike is
+    /// live.
+    ///
+    /// Mirrored along with the rest of the row, which is the right side to err
+    /// on: sharing is an account-level act, so a second device should know the
+    /// walker already sent this trail rather than offering to send it again.
+    /// Optional, as every mirrored column that can be absent must be.
+    var communitySubmissionID: String?
+
+    /// The published listing this hike was imported from, or `nil` for a hike
+    /// this walker recorded or imported from a file.
+    ///
+    /// Kept so the same shared hike is not imported twice — the community list
+    /// shows what is already in the library rather than offering it again —
+    /// and so the detail screen can credit whoever walked it first. Mirrored
+    /// for the same reason ``communitySubmissionID`` is.
+    var importedFromListingID: String?
+
+    /// Who walked this originally, for a hike imported from the community.
+    ///
+    /// Separate from ``author``, which is whatever a GPX file's `<author>`
+    /// element said and is therefore not this app's claim about anybody. This
+    /// one is a name a person typed into this app in order to be credited by
+    /// it.
+    var importedAuthorName: String?
+
     // Optional metadata pulled from the GPX file.
     var trackDescription: String?
     var author: String?

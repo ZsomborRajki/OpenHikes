@@ -95,6 +95,7 @@ extension OpenHikesModel {
             ),
             trailGraphProvider: graphProvider,
             movementReminders: reminders,
+            communityTransport: Self.makeCommunityTransport(),
             defaults: launchDefaults,
             startupIssue: load.startupIssue,
             isSyncingThisLaunch: syncsToCloud
@@ -286,6 +287,26 @@ private extension OpenHikesModel {
             presenter: SystemHikeActivityPresenter(),
             defaults: defaults
         )
+    }
+
+    /// The public-database transport, or `nil` for a launch that must not
+    /// reach CloudKit at all.
+    ///
+    /// `isRunningTests` rather than `isHostingTests`, which is the stricter of
+    /// the two and is the right one here: UI automation keeps its Live
+    /// Activity because an activity is part of what it tests, but nothing a UI
+    /// test does should put a record in a real shared database that every
+    /// other user of this app can then see. There is no sandbox for the public
+    /// database the way `StoreKitTest` is meant to be one for purchases — a
+    /// submission made from a test is a submission.
+    ///
+    /// A `nil` transport is not a stub: ``CommunityBrowser`` and the share
+    /// button are simply absent for that launch, the same shape
+    /// ``makeLiveActivityController(defaults:)`` is absent rather than stubbed
+    /// for a hosted suite.
+    static func makeCommunityTransport() -> (any CommunityTransporting)? {
+        guard !AppLaunchEnvironment.isRunningTests else { return nil }
+        return CloudKitCommunityTransport()
     }
 
     /// The location stack for a launch that must not have one, or `nil` when

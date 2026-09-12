@@ -45,6 +45,12 @@ struct HikeDetailView: View {
     /// Draws this hike's anchored photos on the map while this screen is up.
     /// See ``PhotoMapPinController``.
     var photoPins: PhotoMapPinController?
+    /// How this hike is offered to the community, or `nil` for a launch that
+    /// must not reach CloudKit — see
+    /// ``OpenHikesModel/makeCommunityTransport()``. Taken as a dependency
+    /// rather than read from the environment, like everything else this screen
+    /// needs, so a preview or a suite decides it outright.
+    var communityTransport: (any CommunityTransporting)?
     /// Pushes the full-space viewer for a tapped thumbnail.
     var onOpenPhoto: (HikePhoto) -> Void = { _ in /* no-op default */ }
     /// Pushes a finished walk's summary — from the History segment's rows,
@@ -57,7 +63,8 @@ struct HikeDetailView: View {
     /// same provider (and API key) the map is currently drawing.
     @AppStorage(SettingsKey.tileProviderID)
     private var tileProviderID = TileProvider.default.id
-    // Shared with offline-storage helpers in the companion extension file.
+    // Shared with the offline-storage and community helpers in the
+    // companion extension files.
     // swiftlint:disable private_swiftui_state
     @Environment(\.modelContext)
     var modelContext
@@ -76,6 +83,11 @@ struct HikeDetailView: View {
     /// Why the last attempt to delete this hike's offline tiles did not
     /// happen, and so which alert is raised — see ``StoredTileDeletion``.
     @State var storageDeletionFailure: StoredTileDeletion.Failure?
+    /// Whether the community share form is up. Presented from inside this
+    /// screen, which is inside the persistent sheet's *contents* — see the
+    /// repository instructions on why a `.sheet` beside that presentation is
+    /// never presented at all.
+    @State var isSharingToCommunity = false
     // swiftlint:enable private_swiftui_state
     /// Owned by the navigation session so changing presentation hosts keeps
     /// the selected section and an unfinished rename. Read only by this screen.
@@ -436,6 +448,7 @@ private extension HikeDetailView {
                             .font(.title2.bold())
                             .accessibilityAddTraits(.isHeader)
                         shareButton
+                        communityShareButton
                         renameButton
                     }
                 }

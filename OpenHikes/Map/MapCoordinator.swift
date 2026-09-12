@@ -183,6 +183,17 @@ extension MapView {
         /// full opacity.
         var photoControlsSheetAlpha: CGFloat = 1
 
+        // MARK: Community
+
+        /// Told where the map settled, in `regionDidChangeAnimated`.
+        ///
+        /// `weak` like every other controller the coordinator points at: it is
+        /// owned by ``OpenHikesModel`` and outlives this map, and a strong
+        /// reference here would be the map keeping a model alive rather than
+        /// the other way round. Not observed — nothing about it is read — so
+        /// unlike the controllers above it needs no registration flag.
+        weak var community: CommunityBrowser?
+
         /// Screen-point radius within which the selection dot and the "my location"
         /// puck are considered overlapping (roughly the size of either dot).
         static let overlapThresholdPoints: CGFloat = 20
@@ -686,6 +697,14 @@ extension MapView.Coordinator {
         // Zooming changes the on-screen distance between two fixed coordinates,
         // so the overlap fade needs to be re-checked, not just on move/relocate.
         updateHighlightOpacity(on: mapView)
+        // The community list follows the map, and this is the only place it
+        // learns the map moved. Deliberately the *settled* region rather than
+        // `mapViewDidChangeVisibleRegion`, which fires continuously through a
+        // pan: a walker dragging across a county would otherwise ask a
+        // question per frame. What arrives here is still filtered again by
+        // ``CommunityQueryPolicy`` before anything reaches the network, and
+        // costs a comparison while browsing is off.
+        community?.regionDidSettle(mapView.region)
     }
 
     func mapView(_ mapView: MKMapView, rendererFor overlay: MKOverlay) -> MKOverlayRenderer {

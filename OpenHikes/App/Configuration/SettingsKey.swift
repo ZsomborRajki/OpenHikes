@@ -84,6 +84,18 @@ nonisolated enum SettingsKey {
     /// three answers that have to agree, the others being a live subject and
     /// a foreground app.
     static let keepScreenAwake = "settings.keepScreenAwake"
+    /// The name a walker's shared hikes are published under, as they last
+    /// typed it.
+    ///
+    /// Remembered rather than asked for every time, and asked for rather than
+    /// derived: the alternative is `CKUserIdentity`, which needs a
+    /// discoverability prompt about the walker's Apple Account and hands back
+    /// a name they never chose to attach to a trail. This is the one they did.
+    ///
+    /// Deliberately not synced through ``SyncedSettings``. It travels on the
+    /// submission itself, and a value that mirrored as well would be a second
+    /// copy of the same fact that could disagree with what was published.
+    static let communityAuthorName = "community.authorName"
 }
 
 /// Defaults for keys where "absent" and "false" are different answers, so the

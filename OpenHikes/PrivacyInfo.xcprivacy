@@ -3,18 +3,90 @@
 <plist version="1.0">
 <dict>
 	<!--
-	  The app keeps everything on device. Nothing here is collected, nothing
-	  leaves the phone except the tile and Overpass requests the map needs and
-	  the user's own iCloud mirroring, so `NSPrivacyCollectedDataTypes` is
-	  deliberately empty rather than absent: an empty array is the positive
-	  statement that the question was asked and the answer is none.
+	  The app keeps everything on device except one thing the user asks for by
+	  name: sharing a hike with the community.
+
+	  That one is genuine collection in Apple's sense and is declared below.
+	  Everything else still is not — tile and Overpass requests carry no
+	  identity, and iCloud mirroring puts the walker's data in the walker's own
+	  private database, which Apple's own guidance does not count as collection
+	  by the developer. The community feature is the opposite on both counts:
+	  the destination is the *public* database, which the developer owns, and
+	  what lands there is a route, photographs and a name, readable by
+	  everybody.
+
+	  All three entries set `NSPrivacyCollectedDataTypeLinked` to true,
+	  which is the honest answer rather than the flattering one. The submission
+	  carries a name the walker typed and CloudKit stamps every record with its
+	  creator's user record ID, so the developer can tell whose submission is
+	  whose — which is precisely what makes reviewing and taking down a
+	  submission possible, and therefore not something to claim otherwise
+	  about.
+
+	  Not used for tracking: nothing here is joined with data from other
+	  companies' apps or sites, and `NSPrivacyTracking` stays false.
 	-->
 	<key>NSPrivacyTracking</key>
 	<false/>
 	<key>NSPrivacyTrackingDomains</key>
 	<array/>
 	<key>NSPrivacyCollectedDataTypes</key>
-	<array/>
+	<array>
+		<dict>
+			<!--
+			  The shared route itself. Precise rather than coarse: a GPS track
+			  is the most precise location data this app holds, and publishing
+			  a trailhead publishes somewhere the walker stood.
+			-->
+			<key>NSPrivacyCollectedDataType</key>
+			<string>NSPrivacyCollectedDataTypePreciseLocation</string>
+			<key>NSPrivacyCollectedDataTypeLinked</key>
+			<true/>
+			<key>NSPrivacyCollectedDataTypeTracking</key>
+			<false/>
+			<key>NSPrivacyCollectedDataTypePurposes</key>
+			<array>
+				<string>NSPrivacyCollectedDataTypePurposeAppFunctionality</string>
+			</array>
+		</dict>
+		<dict>
+			<!--
+			  The photographs attached to a shared hike. Re-encoded and
+			  stripped of their EXIF before they go — see
+			  `HikePhotoStore.exportCopy` — but a photograph is a photograph
+			  and is declared as one.
+			-->
+			<key>NSPrivacyCollectedDataType</key>
+			<string>NSPrivacyCollectedDataTypePhotosorVideos</string>
+			<key>NSPrivacyCollectedDataTypeLinked</key>
+			<true/>
+			<key>NSPrivacyCollectedDataTypeTracking</key>
+			<false/>
+			<key>NSPrivacyCollectedDataTypePurposes</key>
+			<array>
+				<string>NSPrivacyCollectedDataTypePurposeAppFunctionality</string>
+			</array>
+		</dict>
+		<dict>
+			<!--
+			  The name the walker chose to be credited under, and the hike's
+			  title and description. `OtherUserContent` rather than `Name`:
+			  this is a display name typed into this app for this purpose, not
+			  the account holder's real name, and it travels with the text they
+			  wrote about the walk.
+			-->
+			<key>NSPrivacyCollectedDataType</key>
+			<string>NSPrivacyCollectedDataTypeOtherUserContent</string>
+			<key>NSPrivacyCollectedDataTypeLinked</key>
+			<true/>
+			<key>NSPrivacyCollectedDataTypeTracking</key>
+			<false/>
+			<key>NSPrivacyCollectedDataTypePurposes</key>
+			<array>
+				<string>NSPrivacyCollectedDataTypePurposeAppFunctionality</string>
+			</array>
+		</dict>
+	</array>
 	<key>NSPrivacyAccessedAPITypes</key>
 	<array>
 		<dict>

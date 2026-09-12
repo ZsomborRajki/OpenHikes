@@ -73,7 +73,8 @@ struct MapCoordinatorTests {
         route: DisplayedRoute? = nil,
         tileSource: ActiveTileSource? = osm,
         sidePanelInset: CGFloat = 0,
-        showsWeatherBadge: Bool = true
+        showsWeatherBadge: Bool = true,
+        community: CommunityBrowser = CommunityBrowser(transport: nil)
     ) -> MapView {
         MapView(
             locationManager: locationManager,
@@ -87,6 +88,7 @@ struct MapCoordinatorTests {
             mapController: mapController,
             photoCapture: photoCapture,
             photoPins: photoPins,
+            community: community,
             sidePanelInset: sidePanelInset,
             showsWeatherBadge: showsWeatherBadge
         )

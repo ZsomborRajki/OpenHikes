@@ -326,6 +326,77 @@ nonisolated final class HikePhotoStore: @unchecked Sendable {
         return try? Data(contentsOf: url(for: photo), options: .mappedIfSafe)
     }
 
+    /// A bounded JPEG copy of `photo`, written into `directory`, for a
+    /// destination that is not this device.
+    ///
+    /// Here rather than in the community code because this file is the only
+    /// one that reads or writes photo pixels, and that rule is what keeps the
+    /// paths on disk in one place. Only the *destination* is new.
+    ///
+    /// A re-encoded copy rather than the original, which is the opposite of
+    /// what ``imageData(for:)`` is for, and the reason is that the original is
+    /// wrong for publication in two ways. It is several megabytes, and the
+    /// public database's asset storage is a shared quota this app pays for
+    /// rather than the walker's own — a dozen originals per hike is the
+    /// difference between a feature that fits in the free tier and one that
+    /// does not. And it carries the whole EXIF block, which for a photograph
+    /// taken on a walk includes the camera's own GPS fix: a walker sharing a
+    /// trail has agreed to publish where the *trail* is, and
+    /// ``CommunityPhotoPin`` already says that, deliberately and visibly.
+    /// Publishing the original would additionally hand over the device model,
+    /// the serial-numbered lens, and a position more precise than anything the
+    /// app itself shows. `CGImageDestination` writes only the properties it is
+    /// given, and it is given none.
+    ///
+    /// - Returns: The file written, or `nil` if the photo could not be read or
+    ///   encoded. The caller owns the directory and deletes it.
+    func exportCopy(
+        of photo: HikePhoto,
+        maxPixelSize: Int,
+        quality: Double,
+        named name: String,
+        into directory: URL
+    ) -> URL? {
+        assertOffMainThread("Photo export must stay off the main thread")
+        guard let source = CGImageSourceCreateWithURL(url(for: photo) as CFURL, nil),
+              let image = CGImageSourceCreateThumbnailAtIndex(
+                  source,
+                  0,
+                  [
+                      kCGImageSourceCreateThumbnailFromImageAlways: true,
+                      // The orientation is baked into the pixels here for the
+                      // same reason ``encode(_:)`` bakes it in: the tag is
+                      // honoured by everything reading through ImageIO and by
+                      // nothing reading the raw buffer, and this copy is going
+                      // to a reader this app will never see.
+                      kCGImageSourceCreateThumbnailWithTransform: true,
+                      kCGImageSourceThumbnailMaxPixelSize: maxPixelSize,
+                  ] as CFDictionary
+              )
+        else {
+            Self.logger.error("Could not read a photo to share it.")
+            return nil
+        }
+
+        let destinationURL = directory.appendingPathComponent(name, isDirectory: false)
+        guard let destination = CGImageDestinationCreateWithURL(
+            destinationURL as CFURL,
+            UTType.jpeg.identifier as CFString,
+            1,
+            nil
+        ) else { return nil }
+        CGImageDestinationAddImage(
+            destination,
+            image,
+            [kCGImageDestinationLossyCompressionQuality: quality] as CFDictionary
+        )
+        guard CGImageDestinationFinalize(destination) else {
+            Self.logger.error("Could not encode a photo to share it.")
+            return nil
+        }
+        return destinationURL
+    }
+
     /// What these photos cost on disk, thumbnails included.
     func byteCount(of photos: [HikePhoto]) -> Int64 {
         assertOffMainThread("Photo measurement must stay off the main thread")
