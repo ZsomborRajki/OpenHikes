@@ -66,7 +66,7 @@ enum SharedStoreDiagnostics {
         // `.public` because the whole point is to be readable in Console on a
         // device that is not attached to Xcode, and because everything
         // interpolated here is a file name, a coding key or a type name —
-        // never a coordinate, a title or anything else the walker owns.
+        // never a coordinate, a title or anything else the hiker owns.
         logger.error("\(diagnostic.summary, privacy: .public)")
         sink?.receive(diagnostic)
     }

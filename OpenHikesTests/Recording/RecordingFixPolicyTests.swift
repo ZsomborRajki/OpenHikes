@@ -433,7 +433,7 @@ struct RecordingDistanceTests {
 
     /// Distance is retracted when GPS wanders in place; climb is not. The
     /// altitude filter has already smoothed the vertical, and subtracting a
-    /// rise the walker's legs may genuinely have made is the larger error.
+    /// rise the hiker's legs may genuinely have made is the larger error.
     @Test("a stationary window retracts distance but keeps the climb")
     func stationaryWindowKeepsTheClimb() throws {
         var accumulator = RecordingDistanceAccumulator()

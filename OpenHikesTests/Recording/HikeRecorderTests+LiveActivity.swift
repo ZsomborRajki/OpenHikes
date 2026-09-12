@@ -67,7 +67,7 @@ extension HikeRecorderTests {
     ///
     /// Read off an *update* rather than the start, because the activity
     /// deliberately appears the moment recording begins — before there is a
-    /// fix to report — so the walker sees it come up when they press Start
+    /// fix to report — so the hiker sees it come up when they press Start
     /// rather than whenever GPS first agrees.
     @Test("the activity carries the recorder's own figures")
     func activityCarriesRecorderFigures() async throws {
@@ -90,7 +90,7 @@ extension HikeRecorderTests {
     }
 
     /// A paused recording is still a recording — the activity stays, and says
-    /// so. Ending it would lose the walker the thing they came back to.
+    /// so. Ending it would lose the hiker the thing they came back to.
     @Test("pausing updates the activity rather than ending it")
     func pausingKeepsTheActivity() async {
         let harness = liveActivityHarness()
@@ -124,7 +124,7 @@ extension HikeRecorderTests {
     }
 
     /// A recorder with its activity on screen, stopped straight into a
-    /// storage failure — the walker's "tap Stop, hit an error" path.
+    /// storage failure — the hiker's "tap Stop, hit an error" path.
     ///
     /// `failedSaveNumbers: [2]` because the first save is the draft
     /// `ensureRecordingHike` writes at activation and the second is `persist`.
@@ -168,12 +168,12 @@ extension HikeRecorderTests {
     /// recording turns the sensors off and the recorder publishes nothing
     /// further, so the last state the panel holds says
     /// `isCapturingFixes: false` — which it draws as *Paused*. Left there it
-    /// spends the whole ten-minute stale window telling a walker whose hike is
+    /// spends the whole ten-minute stale window telling a hiker whose hike is
     /// over that it is waiting for them.
     ///
     /// Removed outright rather than finished off with the walk's totals: no
     /// `Hike` was written, and a lingering final panel claims one that was.
-    /// The walker who retries the save is looking at the app.
+    /// The hiker who retries the save is looking at the app.
     @Test("a failed save takes the recording off the Lock Screen")
     func failedSaveEndsTheActivity() async throws {
         let harness = liveActivityHarness()
@@ -189,7 +189,7 @@ extension HikeRecorderTests {
     }
 
     /// And it stays off. A failed recorder is still `isActive` — that is how
-    /// the walker gets back to it — so pocketing the phone publishes one more
+    /// the hiker gets back to it — so pocketing the phone publishes one more
     /// snapshot, which the widget genuinely wants. Letting that reach the
     /// controller would find nothing running and *start* a second activity for
     /// the recording that just failed: the same "Paused" claim, arriving by a

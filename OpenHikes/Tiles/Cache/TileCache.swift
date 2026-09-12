@@ -148,7 +148,7 @@ nonisolated final class TileCache: @unchecked Sendable {
     /// tile this old not be *reused as current* without asking the server
     /// again; it does not ask that the bytes be unlinked at seven days, and the
     /// two are only the same thing for cache. For durable coverage they are
-    /// opposites: a walker who saved a map the week before a trip has no
+    /// opposites: a hiker who saved a map the week before a trip has no
     /// signal to re-ask with, and deleting on their behalf leaves them with a
     /// blank map instead of an old one. So this expires the browsing tier
     /// outright, and for the durable tier it decides only *when to try* — see
@@ -168,7 +168,7 @@ nonisolated final class TileCache: @unchecked Sendable {
     /// This is a ceiling, not a reservation — a session reaches it only after
     /// sustained browsing, and `NSCache` evicts under memory pressure before
     /// the app is the one killed for it. What the ceiling buys on the way
-    /// there is refetches not made over a connection a walker may not have.
+    /// there is refetches not made over a connection a hiker may not have.
     ///
     /// The tier was previously bounded only by `countLimit = 1_024`, an
     /// effective ceiling of 256 MB — twice this, and expressed in a unit that
@@ -200,7 +200,7 @@ nonisolated final class TileCache: @unchecked Sendable {
     /// them, and the event that makes a refresh possible is the event that
     /// should retire them: renderers answer the same notification with a
     /// redraw, `draw` consults ``memoryImage(forKey:referenceDate:)`` first,
-    /// and entries still standing there would answer it. A walker who regains
+    /// and entries still standing there would answer it. A hiker who regains
     /// signal over a map they are not panning would go on being shown week-old
     /// ground, with nothing scheduled to ask again.
     let staleCoverageInvalidatedAt = Mutex(Date.distantPast)
@@ -637,7 +637,7 @@ nonisolated extension TileCache {
     /// ``reserveDurableBytes(forKey:byteCount:)``. Reserving would be the
     /// obvious symmetry with ``storeFetchedTileDurably(_:forKey:token:)`` and
     /// is the wrong call: a reservation can refuse, and a refusal here returns
-    /// `nil` from a *browse*, so the tile the walker is looking at goes blank
+    /// `nil` from a *browse*, so the tile the hiker is looking at goes blank
     /// and the coverage their hike claims is gone for good, on a key whose
     /// bytes were counted against the ceiling a moment earlier. That trades an
     /// accounting drift for a functional regression. The ceiling still gates
@@ -650,7 +650,7 @@ nonisolated extension TileCache {
     /// durable coverage is deliberately left on disk until the bytes replacing
     /// it have actually arrived. Adding the full size there would count one
     /// tile twice. The `.atomic` write below is what makes the replacement a
-    /// single step, so a walker who backgrounds the app mid-refresh still has
+    /// single step, so a hiker who backgrounds the app mid-refresh still has
     /// a whole tile afterwards rather than half of one.
     private func storeFetchedTile(
         _ fetched: FetchedTile,
@@ -888,7 +888,7 @@ nonisolated extension TileCache {
     /// of a tile that is also stored durably. Runs at launch.
     ///
     /// **Durable tiles are not swept by age.** They used to be, and that is
-    /// what deleted a walker's saved map on the launch after its seventh day —
+    /// what deleted a hiker's saved map on the launch after its seventh day —
     /// before the app had any idea whether the phone could replace it, and
     /// while the hike went on claiming coverage whose bytes were gone. Age
     /// sends a durable tile to be *refreshed* on the next load instead; what
@@ -958,7 +958,7 @@ nonisolated extension TileCache {
         // ``promoteCachedTile(forKey:)`` moves a browsing-tier file into
         // durable storage while holding that lock and could land between the
         // stat and the unlink — the sweep finds a seven-day-stale tile, the
-        // walker re-views it, the promote writes fresh bytes, and the sweep
+        // hiker re-views it, the promote writes fresh bytes, and the sweep
         // unlinks those. Nothing deletes durable bytes for age any more, so
         // that interleaving no longer has a deletion to race.
         let durableNames = Set(allTileFiles(in: durableDirectory).map(\.lastPathComponent))

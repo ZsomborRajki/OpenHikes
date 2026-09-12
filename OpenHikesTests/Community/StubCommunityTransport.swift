@@ -36,7 +36,7 @@ final class StubCommunityTransport: CommunityTransporting, @unchecked Sendable {
         var titleQueries: [String] = []
         var detailRequests: [String] = []
         /// The exclusion set each listing request carried, in order. What
-        /// proves the browser spends its budget on rows the walker can see —
+        /// proves the browser spends its budget on rows the hiker can see —
         /// see `CommunityTransporting`'s note on why the set is a parameter.
         var exclusions: [Set<String>] = []
     }

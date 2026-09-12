@@ -77,7 +77,7 @@ struct TrailProgressView: View {
         let live = tracker.liveTrackerDistance
         let distance = live ?? tracker.trackerDistance
         // While this hike is being walked, the figure is coverage: what the
-        // walk has actually spanned rather than where the walker stands.
+        // walk has actually spanned rather than where the hiker stands.
         let walked = walk.flatMap { session in
             session.walkedHikeID == hikeID ? session.coveredFraction : nil
         }
@@ -113,7 +113,7 @@ struct TrailProgressView: View {
         .accessibilityElement(children: .ignore)
         .accessibilityLabel(title(walking: walked != nil, live: live != nil))
         // The covered length in whole metres as well as the percentage: a
-        // percentage of a long trail hides a walker's first few hundred
+        // percentage of a long trail hides a hiker's first few hundred
         // metres, and this is the value a test waits on to know a fix landed.
         .accessibilityValue(
             walked.map { fraction in
@@ -426,7 +426,7 @@ struct OfflineStorageStatus: View {
     let downloader: OfflineTileDownloader
     let storedBytes: Int64?
     /// Whether the selected map fetches tiles at all. `false` replaces the
-    /// auto-save note, which would otherwise invite the walker to turn on a
+    /// auto-save note, which would otherwise invite the hiker to turn on a
     /// switch that is no longer drawn and could save nothing if it were.
     let mapRendersTiles: Bool
     let scheduleStoredBytesRefresh: () -> Void

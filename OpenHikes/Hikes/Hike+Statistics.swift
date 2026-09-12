@@ -32,7 +32,7 @@ nonisolated struct ElevationAccumulator: Sendable {
     /// wrong: 1,150 m on a 1,000 m climb reads like a plausible figure.
     ///
     /// Three metres is above the barometer's short-term noise floor and below
-    /// anything a walker would call a rise, so real terrain passes through it
+    /// anything a hiker would call a rise, so real terrain passes through it
     /// unchanged — the fixture in `HikeStatisticsTests` reports the same
     /// +200/−60 with the deadband as without. It does not fully clean raw GPS
     /// altitude, which wanders by ±5–15 m; nothing at this layer can, because
@@ -109,7 +109,7 @@ nonisolated struct ElevationAccumulator: Sendable {
     /// Metres climbed, including the run in progress.
     ///
     /// The provisional run is included rather than withheld because a
-    /// recording reads this live: a walker halfway up a climb has climbed,
+    /// recording reads this live: a hiker halfway up a climb has climbed,
     /// and a total that froze until they came back down would be wrong in a
     /// way the user can see. It also means no caller has to remember to
     /// finalise the accumulator when the route ends.
@@ -129,7 +129,7 @@ nonisolated struct ElevationAccumulator: Sendable {
     var hasChange: Bool { count > 1 }
 }
 
-/// How much of a route's clock the walker spent moving, as opposed to standing
+/// How much of a route's clock the hiker spent moving, as opposed to standing
 /// at a viewpoint, eating lunch, or waiting out a shower.
 ///
 /// Derived from timestamps and coordinates alone, deliberately. The recording
@@ -139,11 +139,11 @@ nonisolated struct ElevationAccumulator: Sendable {
 /// position, a height, a time and two enums. So a recorded hike arrives here
 /// knowing exactly what an imported GPX knows, and the alternative — a moving
 /// average that exists for hikes this app recorded and is absent for the ones
-/// the walker brought with them — would be a worse answer than one rule that
+/// the hiker brought with them — would be a worse answer than one rule that
 /// works on both.
 ///
 /// The rule itself is not a new one. ``RecordingDistanceAccumulator`` already
-/// decides when a walker has stopped, and does it exactly this way: a window
+/// decides when a hiker has stopped, and does it exactly this way: a window
 /// of ``RecordingDistanceAccumulator/stationaryInterval`` with less than
 /// ``RecordingDistanceAccumulator/stationaryNetDisplacement`` of net
 /// displacement across it is somebody standing still rather than somebody
@@ -156,7 +156,7 @@ nonisolated struct ElevationAccumulator: Sendable {
 /// The bias is deliberate and runs one way: **time counts as moving until the
 /// window proves otherwise.** A window shorter than the interval has not seen
 /// enough to judge, and says so by saying nothing. That costs accuracy on a
-/// slow scramble, where a walker genuinely under half a metre per second is
+/// slow scramble, where a hiker genuinely under half a metre per second is
 /// booked as stopped; the alternative bias costs much more, because a rule
 /// that guesses "stopped" understates moving time and therefore *overstates*
 /// the moving average — and the whole reason for a second row is that it is
@@ -165,7 +165,7 @@ nonisolated struct ElevationAccumulator: Sendable {
 /// converge on the elapsed average, which is a number the app already stands
 /// behind.
 nonisolated struct MovingTimeAccumulator: Sendable {
-    /// The slowest a walker can be going and still be walking, in metres per
+    /// The slowest a hiker can be going and still be walking, in metres per
     /// second, taken from the pair of constants above rather than declared.
     static let stillnessRate =
         RecordingDistanceAccumulator.stationaryNetDisplacement
@@ -197,10 +197,10 @@ nonisolated struct MovingTimeAccumulator: Sendable {
     /// makes that last interval the 100 seconds it really is, and keeps the
     /// window in the order ``trim(newest:)`` assumes it is in.
     mutating func record(_ point: RouteCoordinate) {
-        // A pause is not a stop this rule has to judge — the walker declared
+        // A pause is not a stop this rule has to judge — the hiker declared
         // it. Neither the span it opened nor the displacement across it says
         // anything about walking, so the leg arriving here is dropped whole.
-        // Without this a walker who paused at the trailhead, drove to the next
+        // Without this a hiker who paused at the trailhead, drove to the next
         // one and resumed is credited with the whole drive as moving time,
         // because the rule sees only a long span and a large displacement and
         // calls that walking.
@@ -230,7 +230,7 @@ nonisolated struct MovingTimeAccumulator: Sendable {
     /// Every measurement here is made *between* two samples, so a boundary the
     /// clock must not cross is expressed by dropping the reference and the
     /// window rather than by starting a new accumulator: the seconds already
-    /// booked belong to the same walk and are still owed to the walker.
+    /// booked belong to the same walk and are still owed to the hiker.
     ///
     /// It drops the past and nothing else. The point that crosses the boundary
     /// is still recorded, and becomes the reference on the far side of it.
@@ -250,7 +250,7 @@ nonisolated struct MovingTimeAccumulator: Sendable {
     private func isMoving(at sample: Sample) -> Bool {
         guard let anchor = window.first else { return true }
         let span = sample.timestamp.timeIntervalSince(anchor.timestamp)
-        // Net displacement, not distance walked: a walker who spends four
+        // Net displacement, not distance walked: a hiker who spends four
         // minutes wandering ten metres around a bench has covered ground and
         // gone nowhere, which is the case this exists to catch.
         guard span >= RecordingDistanceAccumulator.stationaryInterval else { return true }
@@ -394,7 +394,7 @@ nonisolated struct HikeRouteStatistics: Sendable {
             segmentMeters meters: Double
         ) {
             // A pause leg has a length and a span but no walk between them, so
-            // dividing one by the other measures the walker's lunch break.
+            // dividing one by the other measures the hiker's lunch break.
             guard !point.isPauseBoundary,
                   let previousPoint,
                   let previousTimestamp = previousPoint.timestamp,
@@ -423,7 +423,7 @@ nonisolated struct HikeRouteStatistics: Sendable {
     let startDate: Date?
     let endDate: Date?
     let duration: TimeInterval?
-    /// The part of ``duration`` the walker spent moving — see
+    /// The part of ``duration`` the hiker spent moving — see
     /// ``MovingTimeAccumulator``. `nil` when the route carries no clock, and
     /// also when the rule was able to judge every window in it and called them
     /// all stops, which is what a stationary recording's own sparse fixes look
@@ -520,7 +520,7 @@ nonisolated struct HikeRouteStatistics: Sendable {
         duration = accumulator.duration
         // Divided into the same distance the row above it uses, rather than
         // into the metres the moving windows happened to contain: the two rows
-        // are the one distance seen through two clocks, and a walker who found
+        // are the one distance seen through two clocks, and a hiker who found
         // them disagreeing about how far they went would be right to stop
         // believing either.
         // Moving time is a part of the elapsed clock, so it is reported only

@@ -47,7 +47,7 @@ extension TrailWalkSessionTests {
         #expect(session.phase == .paused, "the reminder asks; it does not resume anything")
     }
 
-    /// The walker went out to the summit, came back down, and paused at the
+    /// The hiker went out to the summit, came back down, and paused at the
     /// hut on the way. Anchoring at the coverage *maximum* rather than at
     /// where they stopped told them, on the very next fix and while standing
     /// still, that they had covered the distance back down the hill.
@@ -74,7 +74,7 @@ extension TrailWalkSessionTests {
 
         #expect(
             harness.notifier.posted.isEmpty,
-            "a walker who has not moved since pausing has not resumed anything"
+            "a hiker who has not moved since pausing has not resumed anything"
         )
     }
 
@@ -93,7 +93,7 @@ extension TrailWalkSessionTests {
         #expect(harness.notifier.withdrawn.contains(.resumeWalk))
     }
 
-    /// The pause a walker actually forgets is the one their phone has been in
+    /// The pause a hiker actually forgets is the one their phone has been in
     /// a pocket through — which, across a background relaunch, is a pause this
     /// process never saw happen.
     @Test("a paused walk restored at launch is watched too")
@@ -117,7 +117,7 @@ extension TrailWalkSessionTests {
     /// The bug this pins: the background feed matches asynchronously, so a
     /// fix taken before a newer foreground one can be handed over after it —
     /// and after the Pause it happened before. Delivered as evidence, it says
-    /// the walker covered the distance back to where they were half a walk
+    /// the hiker covered the distance back to where they were half a walk
     /// ago, and it drags the walk's last-seen time backwards with it.
     @Test("a match overtaken by a newer one reminds nobody and does not age the walk")
     func overtakenMatchIsRejected() async {
@@ -129,7 +129,7 @@ extension TrailWalkSessionTests {
         let overtaken = clock.now
 
         // A newer foreground match, back down the trail, and the Pause taken
-        // there — the walker is standing where this leaves them.
+        // there — the hiker is standing where this leaves them.
         clock.advance(by: 60)
         session.recordForegroundMatch(hike: walked, profile: profile, distance: profile.distances[4])
         #expect(session.pause())
@@ -144,7 +144,7 @@ extension TrailWalkSessionTests {
 
         #expect(
             harness.notifier.posted.isEmpty,
-            "the walker moved before the pause, not since it"
+            "the hiker moved before the pause, not since it"
         )
         #expect(
             session.record?.lastMatchedAt == clock.now,
@@ -155,7 +155,7 @@ extension TrailWalkSessionTests {
     /// The foreground loop's own version of the same hazard, and the one the
     /// clock cannot see: a fix is accepted for matching up to
     /// ``LocationFixPolicy/foregroundMaximumAge`` after it was taken, so the
-    /// loop can read a pre-pause fix a second after the walker tapped Pause.
+    /// loop can read a pre-pause fix a second after the hiker tapped Pause.
     @Test("a foreground fix taken before the pause is not movement since it")
     func prePauseForegroundFixIsRejected() async {
         let harness = MovementReminderHarness.harness()
@@ -180,7 +180,7 @@ extension TrailWalkSessionTests {
 
         #expect(
             harness.notifier.posted.isEmpty,
-            "the walker walked that stretch before they stopped"
+            "the hiker walked that stretch before they stopped"
         )
     }
 }

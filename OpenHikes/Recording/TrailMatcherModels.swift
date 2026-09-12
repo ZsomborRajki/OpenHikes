@@ -83,19 +83,19 @@ nonisolated struct TrailMatchResult: Sendable {
 
     let points: [RecordingPoint]
     let matchedLegCount: Int
-    /// How many legs the walker will actually be asked about — derived from
+    /// How many legs the hiker will actually be asked about — derived from
     /// ``ambiguities`` rather than counted alongside it, so the two cannot
     /// disagree. They once could: a dense leg the matcher was unsure about
     /// went uncounted *and* unsurfaced, which read as a clean match.
     let ambiguousLegCount: Int
     let matchedTrailName: String?
-    /// The trail under the walker at the end of the window, and what OSM
+    /// The trail under the hiker at the end of the window, and what OSM
     /// records about it. `nil` when the last leg was not confidently matched.
     ///
     /// Distinct from ``matchedTrailName`` in tense as well as in content:
     /// that one is the trail the *whole* window mostly ran along and is what a
     /// finished hike is named after, while this describes only where the
-    /// walker is now. On an out-and-back that crosses onto a second path for
+    /// hiker is now. On an out-and-back that crosses onto a second path for
     /// the last kilometre the two genuinely disagree, and the live readout
     /// wants this one.
     let currentTrail: RecordingTrailContext?

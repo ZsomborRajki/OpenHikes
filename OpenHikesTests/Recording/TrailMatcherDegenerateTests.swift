@@ -81,7 +81,7 @@ struct TrailMatcherDegenerateTests {
     ///
     /// The fix sits 5 m off a named trail with nothing else nearby, so a
     /// matcher that ignored the count guard would have every reason to snap it
-    /// and would report a trail the walker was never observed to be on.
+    /// and would report a trail the hiker was never observed to be on.
     @Test("a single fix is returned untouched and unmatched")
     func singlePointIsNotMatched() {
         let points = [point(47.63005, 12.8610, at: 0)]
@@ -172,7 +172,7 @@ struct TrailMatcherDegenerateTests {
     /// zero in either would put a NaN coordinate into a saved hike — where it
     /// survives persistence and only surfaces later as a route that cannot be
     /// drawn. Both are floored rather than avoided, so this asserts the output
-    /// is real numbers at the place the walker actually stood.
+    /// is real numbers at the place the hiker actually stood.
     @Test("two identical fixes at one instant produce a finite standing route")
     func zeroIntervalDuplicateIsFinite() {
         let stationary = point(47.6300, 12.8610, at: 0)
@@ -188,7 +188,7 @@ struct TrailMatcherDegenerateTests {
         #expect(result.legs.count == 1)
     }
 
-    /// The same pair separated by time rather than distance — a walker who
+    /// The same pair separated by time rather than distance — a hiker who
     /// stopped. The elevation interpolation reads the fraction the route length
     /// produces, so this is the second way a zero-length leg reaches a divisor.
     @Test("two identical fixes minutes apart stay at one place")

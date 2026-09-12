@@ -27,16 +27,16 @@ struct WeatherFocusModifierTests {
 
         await settleDelegateHop(until: "the weather modifier appeared") { recording.appeared }
         recording.isActive = true
-        await settleDelegateHop(until: "the recording owns weather") { focus.isPinnedToWalker }
+        await settleDelegateHop(until: "the recording owns weather") { focus.isPinnedToHiker }
 
         let coordinate = CLLocationCoordinate2D(latitude: 48.2, longitude: 16.4)
         focus.focus(on: .place(coordinate, name: "Vienna"))
         #expect(focus.subject == nil)
-        focus.walkerMoved(to: coordinate)
+        focus.hikerMoved(to: coordinate)
         #expect(focus.subject == .me(coordinate))
 
         recording.isActive = false
-        await settleDelegateHop(until: "the recording released weather") { !focus.isPinnedToWalker }
+        await settleDelegateHop(until: "the recording released weather") { !focus.isPinnedToHiker }
         focus.focus(on: .place(coordinate, name: "Vienna"))
         #expect(focus.subject == .place(coordinate, name: "Vienna"))
     }
@@ -58,7 +58,7 @@ private struct FocusProbe: View {
 
     var body: some View {
         Text(verbatim: "Weather focus")
-            .weatherFocus(focus, trail: nil, isRecording: recording.isActive, walker: { nil })
+            .weatherFocus(focus, trail: nil, isRecording: recording.isActive, hiker: { nil })
             .onAppear { recording.appeared = true }
     }
 }

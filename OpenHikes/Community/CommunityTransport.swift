@@ -30,15 +30,15 @@ import Foundation
 
 /// Why a community request did not do what was asked.
 ///
-/// Deliberately short. Each case is a different thing to *say* to the walker,
+/// Deliberately short. Each case is a different thing to *say* to the hiker,
 /// not a different thing that went wrong underneath — CloudKit distinguishes
 /// dozens of conditions and almost none of them is a sentence anyone can act
 /// on. Anything without its own case is ``unavailable``, which is logged with
 /// the real diagnostic and shown as the one honest generality.
 nonisolated enum CommunityFailure: LocalizedError, Equatable, Sendable {
-    /// A published hike could not be found any more. A listing the walker is
+    /// A published hike could not be found any more. A listing the hiker is
     /// looking at can outlive the submission behind it: a reviewer can take
-    /// one down, and the walker's own copy of the list is a snapshot.
+    /// one down, and the hiker's own copy of the list is a snapshot.
     case noLongerAvailable
     /// The hike has nothing worth publishing — no route.
     case nothingToShare
@@ -92,7 +92,7 @@ nonisolated enum CommunityFailure: LocalizedError, Equatable, Sendable {
 ///
 /// ## Why the two queries take an exclusion set
 ///
-/// Because `limit` is a budget, and a budget spent on rows the walker will
+/// Because `limit` is a budget, and a budget spent on rows the hiker will
 /// never be shown is a budget wasted. Blocked authors are filtered on the way
 /// out of ``CommunityBrowser`` as well — a block made after results land has
 /// to reach rows already on screen — but doing it *only* there would mean a
@@ -110,7 +110,7 @@ nonisolated enum CommunityFailure: LocalizedError, Equatable, Sendable {
 nonisolated protocol CommunityTransporting: Sendable {
     /// Uploads `draft` and returns the submission's record name.
     ///
-    /// The returned name is what a walker's own device remembers so the share
+    /// The returned name is what a hiker's own device remembers so the share
     /// button can say the hike has already been sent — it is not a claim that
     /// anybody else can see it, and nothing in the app should read it as one.
     @concurrent
@@ -137,13 +137,13 @@ nonisolated protocol CommunityTransporting: Sendable {
     /// The route and photographs behind a listing, downloaded into
     /// `directory`.
     ///
-    /// Needs no account, like every other read here: a walker who never signs
+    /// Needs no account, like every other read here: a hiker who never signs
     /// in can open a published hike as well as find one — see
     /// ``CommunityFailure/notSignedIn``.
     ///
     /// The caller owns `directory` and is what eventually deletes it: these
     /// are somebody else's photographs held only for as long as the screen
-    /// showing them, unless the walker imports the hike and makes copies of
+    /// showing them, unless the hiker imports the hike and makes copies of
     /// their own.
     @concurrent
     func detail(

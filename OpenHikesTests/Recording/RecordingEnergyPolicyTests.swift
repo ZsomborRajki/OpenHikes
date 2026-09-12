@@ -3,14 +3,14 @@
 //  OpenHikesTests
 //
 //  The GPS configuration is the single largest thing this app spends a
-//  walker's battery on, and it is now a function rather than a constant. These
+//  hiker's battery on, and it is now a function rather than a constant. These
 //  pin the function.
 //
 //  Written as a table of conditions rather than as narrative scenarios,
 //  because what matters about this policy is that no combination of inputs
 //  produces a configuration nobody intended — a hike recorded at hundred-metre
 //  accuracy because two mitigations composed badly is a hike whose route is
-//  wrong, and the walker would not find out until they got home.
+//  wrong, and the hiker would not find out until they got home.
 //
 
 import CoreLocation

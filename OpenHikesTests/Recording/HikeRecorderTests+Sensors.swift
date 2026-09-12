@@ -337,7 +337,7 @@ extension HikeRecorderTests {
     ///
     /// The review state is asserted alongside the point count because folding
     /// into a finished journal is what a regression here actually does: the
-    /// merge throws, the recorder fails, and the review the walker is halfway
+    /// merge throws, the recorder fails, and the review the hiker is halfway
     /// through disappears.
     private func expectLateWidgetFixIsRefused(
         by recorder: HikeRecorder,

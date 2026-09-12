@@ -4,7 +4,7 @@
 //
 //  What a walk's coverage union is allowed to claim while the walk is under
 //  way. The gap bound bridges a lost signal on purpose; these are the cases
-//  where something positively says the walker did not walk the stretch in
+//  where something positively says the hiker did not walk the stretch in
 //  between, and the union has to say so too — it is what History, Show on
 //  Map and the completion rule read.
 //
@@ -16,7 +16,7 @@ import Testing
 
 extension TrailWalkSessionTests {
     /// The matcher can make the same statement a pause does. A fix accepted
-    /// and found off the route is positive evidence that the walker left the
+    /// and found off the route is positive evidence that the hiker left the
     /// trail, so the stretch they rejoin at is not walked route — however
     /// bridgeable the gap looks.
     @Test("a confirmed off-route excursion is not saved as walked")
@@ -38,12 +38,12 @@ extension TrailWalkSessionTests {
         session.end()
         let row = try #require(try walks(of: hike).first)
         #expect(row.coverage.coveredMeters == 200, "and the shortcut is not in History either")
-        #expect(row.coverage.furthestDistanceMeters == 450, "the walker did reach there")
+        #expect(row.coverage.furthestDistanceMeters == 450, "the hiker did reach there")
     }
 
     /// The break has to reach the sidecar, not only the record. An excursion
     /// accrues nothing of its own, so the fixes that keep arriving while the
-    /// walker is off the route are the only thing that can carry a write the
+    /// hiker is off the route are the only thing that can carry a write the
     /// cadence deferred — and a relaunch mid-excursion is exactly when the
     /// old anchor would come back.
     @Test("a continuity break deferred by the cadence still reaches the sidecar")
@@ -106,7 +106,7 @@ extension TrailWalkSessionTests {
         #expect(try #require(hike.walkInProgress).coverage.lastMatchedDistance == nil, "the prompt retry carries it")
     }
 
-    /// The other half of the rule: nothing said the walker left the route, so
+    /// The other half of the rule: nothing said the hiker left the route, so
     /// a re-acquisition inside the gap bound is still the lost signal it has
     /// always been.
     @Test("an ordinary signal gap is still bridged")
@@ -122,7 +122,7 @@ extension TrailWalkSessionTests {
     }
 
     /// An off-route fix along a trail nobody is walking says nothing about
-    /// the walk under way — the walker can have another trail on screen.
+    /// the walk under way — the hiker can have another trail on screen.
     @Test("an off-route report for another hike leaves the walk's coverage alone")
     func offRouteForAnotherHikeIsIgnored() throws {
         let session = session()

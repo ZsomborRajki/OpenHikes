@@ -9,7 +9,7 @@
 //  during a recording — every fix resolves a way in order to snap the line —
 //  so what is pinned here is that the tags on that way reach the screen, and
 //  that they stop reaching it at exactly the moment the matcher stops being
-//  sure where the walker is.
+//  sure where the hiker is.
 //
 
 import CoreLocation
@@ -131,10 +131,10 @@ struct RecordingTrailContextTests {
 
     // MARK: What must not reach it
 
-    /// A walker who has stepped off the path is told nothing, rather than
+    /// A hiker who has stepped off the path is told nothing, rather than
     /// told about the path they left — which for the surface and the grade
     /// matters more than it did for the name: "T2, rock" describes ground the
-    /// walker is provably not standing on.
+    /// hiker is provably not standing on.
     @Test("a trace that leaves the graph reports no trail at all")
     func unmatchableTraceReportsNothing() {
         let far = [

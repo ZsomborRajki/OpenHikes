@@ -4,7 +4,7 @@
 //
 //  Writes a hike back out as GPX 1.1 — the other half of ``GPXImport``, so a
 //  route recorded here can leave through the share sheet and be opened by
-//  whatever else the walker uses.
+//  whatever else the hiker uses.
 //
 
 import CoreTransferable
@@ -67,7 +67,7 @@ nonisolated enum GPXExport {
     /// rather than being quietly rounded.
     private static let timeStyle = Date.ISO8601FormatStyle(includingFractionalSeconds: true)
 
-    /// Local time, not UTC: the file name should say the day the walker
+    /// Local time, not UTC: the file name should say the day the hiker
     /// remembers walking, which is the day the rest of the UI shows.
     private static let fileDateStyle = Date.ISO8601FormatStyle(
         dateSeparator: .dash,
@@ -316,7 +316,7 @@ nonisolated extension GPXExport {
     static func writeTemporaryFile(for track: Track) async throws -> URL {
         assertOffMainThread("GPX serialization must stay off the main thread")
         // Spanning the write as well as the markup, since what a share costs
-        // the walker is both of them together.
+        // the hiker is both of them together.
         return try RenderSignpost.interval("GPXExported") {
             let directory = stagingDirectory
             purgeStagedExports(in: directory, before: .now - stagedExportLifetime)
@@ -364,7 +364,7 @@ nonisolated extension GPXExport {
 /// The share sheet's view of a hike: a GPX file, written on demand.
 ///
 /// The payload is a ``GPXExport/Track`` rather than the `Hike` itself — see
-/// that type for why — and nothing is serialized until the walker actually
+/// that type for why — and nothing is serialized until the hiker actually
 /// picks a destination, so opening the share sheet costs nothing.
 nonisolated struct HikeGPXFile: Transferable, Sendable {
     let track: GPXExport.Track

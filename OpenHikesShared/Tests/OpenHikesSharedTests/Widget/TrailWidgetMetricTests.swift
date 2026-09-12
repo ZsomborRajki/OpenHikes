@@ -112,9 +112,9 @@ struct TrailWidgetMetricTests {
         #expect(metrics.map(\.kind) == [.ascent])
     }
 
-    /// The second slot is the walker's own height, and only while there is a
+    /// The second slot is the hiker's own height, and only while there is a
     /// live fix to read it from — off the trail there is nothing to put there.
-    @Test("a live fix fills the second slot with the walker's elevation")
+    @Test("a live fix fills the second slot with the hiker's elevation")
     func liveElevationTakesTheSecondSlot() {
         let metrics = Self.snapshot(liveElevation: 740).metrics(limit: 2, locale: Self.locale)
         #expect(metrics.map(\.kind) == [.ascent, .currentElevation])

@@ -11,7 +11,7 @@
 //  disk — so the window between them is the dangerous one:
 //  `TileCache.trimCache(claimedBy:)` deletes every durable tile no hike
 //  claims, so a run whose tiles landed and whose record did not has spent a
-//  walker's connection, battery, time and storage on a map the next launch
+//  hiker's connection, battery, time and storage on a map the next launch
 //  quietly removes.
 //
 //  Which is why the claim is not a screen's job. It used to be:
@@ -54,7 +54,7 @@ nonisolated enum OfflineDownloadClaim {
     /// Merges `record` into the hike's manifest and commits it.
     ///
     /// The rollback is what keeps a refusal honest: a merge left pending in
-    /// the context is a claim the walker was told they don't have, waiting for
+    /// the context is a claim the hiker was told they don't have, waiting for
     /// whichever autosave lands next to make it true without a word. It also
     /// drops any other unsaved edit in the context, which is the price of not
     /// committing a claim that was refused — a context whose save has just

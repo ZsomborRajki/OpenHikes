@@ -40,7 +40,7 @@ struct OpenHikesView: View {
     ///
     /// Wider than the parser's own failure, because a file that read perfectly
     /// and a store that refused to keep it are different sentences and only
-    /// one of them is about the walker's file. See ``HikeImportFailure``.
+    /// one of them is about the hiker's file. See ``HikeImportFailure``.
     @State private var importFailure: HikeImportFailure?
     @State private var searchFailure: SearchFailure?
     /// Invalidates an import's permission to replace the current selection
@@ -488,7 +488,7 @@ struct OpenHikesView: View {
                 appModel.weatherFocus,
                 trail: selectedTrailSubject,
                 isRecording: appModel.hikeRecorder.isActive,
-                walker: {
+                hiker: {
                     appModel.locationManager.coordinate
                         ?? appModel.significantLocations.coordinate
                 }
@@ -712,7 +712,7 @@ private extension OpenHikesView {
         #endif
     }
 
-    /// Gives the imported hike the walks a walker would have come home with,
+    /// Gives the imported hike the walks a hiker would have come home with,
     /// so the History segment and the summary can be checked in seconds
     /// rather than after a simulated stroll. Mirrors ``seedRequestedPhotos``.
     func seedRequestedWalks(for hike: Hike?) {
@@ -798,7 +798,7 @@ struct ImportSelectionGate {
         /// A published hike's preview, keyed by its listing.
         ///
         /// Its own case rather than folded into ``root``, because an import
-        /// that finishes while one is open must not take the map: the walker
+        /// that finishes while one is open must not take the map: the hiker
         /// is looking at somebody else's trail and deciding whether to keep
         /// it, and a GPX arriving from Files is a different hike entirely.
         /// Folding it into `.root` would make the gate say the screen never

@@ -6,13 +6,13 @@
 //  delete durable tiles can stand it down before they run.
 //
 //  A download outlives the screen that started it — that is the whole point of
-//  ``OfflineDownloadClaim`` — which means the walker can reach Settings, or
+//  ``OfflineDownloadClaim`` — which means the hiker can reach Settings, or
 //  another hike's Delete, while tiles are still landing. Those actions take
 //  the manifests and the durable directory as they find them, and an in-flight
 //  run is invisible to both: its tiles are not claimed yet, so `Clear Map
 //  Cache` counts them as reclaimable, and `Delete All Saved Tiles` empties the
 //  manifest the run is about to write into. The run then finishes and commits
-//  a record for tiles the walker just deleted — coverage resurrected after an
+//  a record for tiles the hiker just deleted — coverage resurrected after an
 //  explicit deletion, and a hike reporting a saved map that is partly gone.
 //
 //  Standing the run down instead of racing it is what makes the deletion
@@ -54,7 +54,7 @@ final class OfflineDownloadRegistry {
     ///
     /// Runs that have already finished, failed or been cancelled are left
     /// alone: they hold no tiles nobody claims, and cancelling one would clear
-    /// a result the walker is still reading.
+    /// a result the hiker is still reading.
     @discardableResult func standDown() -> Int {
         let live = registrations.compactMap(\.downloader)
         registrations = live.map { Registration(downloader: $0) }
@@ -68,7 +68,7 @@ final class OfflineDownloadRegistry {
 
 @MainActor
 extension OfflineTileDownloader {
-    /// Whether this downloader has work the walker has not seen the end of —
+    /// Whether this downloader has work the hiker has not seen the end of —
     /// tiles landing, or a plan parked on the space confirmation. Defined
     /// beside its only caller: it is the question the registry asks, and the
     /// answer is what separates a run holding tiles nobody claims yet from a

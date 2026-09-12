@@ -26,7 +26,7 @@ struct MapSheetHikes: View, Equatable {
     /// Under the 8pt gap between the two action circles, so they stay separate
     /// targets at rest and their glass still blends at the edges.
     private static let actionGlassSpacing: CGFloat = 6
-    /// Every hike this walker has, newest first.
+    /// Every hike this hiker has, newest first.
     ///
     /// Internal rather than private so the community section can read it from
     /// its own file — `private` is file-scoped in Swift, and that section is
@@ -49,7 +49,7 @@ struct MapSheetHikes: View, Equatable {
     /// properties are read — the ones that change on a tap — so a fix that
     /// extends coverage never reaches this body.
     var walkSession: TrailWalkSession
-    /// Published hikes and whether the walker has asked for them. Only the
+    /// Published hikes and whether the hiker has asked for them. Only the
     /// coarse properties are read here — the two result lists, the state, the
     /// area's name and whether the map is offering to look somewhere else —
     /// so a pan that raises no offer never reaches this body, and one that
@@ -66,7 +66,7 @@ struct MapSheetHikes: View, Equatable {
     ///
     /// Here because a search that matched nothing anywhere now says so in a
     /// row rather than by silently putting the hikes list back, and the one
-    /// useful thing to offer in that row is the search the walker has already
+    /// useful thing to offer in that row is the search the hiker has already
     /// typed — see ``mapSearchFallback(matchingHikes:)``.
     let onSubmitQuery: () -> Void
     /// A published hike tapped in the results: the caller pushes its preview.
@@ -126,7 +126,7 @@ struct MapSheetHikes: View, Equatable {
         // anything has matched yet. That distinction used to be missing:
         // `isSearching` also required a non-empty result somewhere, so the
         // sheet flipped back to the hikes list between keystrokes and a query
-        // that matched nothing at all put the walker back where they started
+        // that matched nothing at all put the hiker back where they started
         // with no explanation. The empty case is now a row — see
         // ``mapSearchFallback(matchingHikes:)``.
         let hasQuery = !searchText.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
@@ -240,7 +240,7 @@ private extension MapSheetHikes {
         .accessibilityIdentifier("import-gpx-button")
     }
 
-    /// The walker's own hikes and the published ones, in one scrolling list.
+    /// The hiker's own hikes and the published ones, in one scrolling list.
     ///
     /// One list rather than two views swapped by a toggle, and that is the
     /// whole shape of this change. The *Nearby* chip used to replace this list

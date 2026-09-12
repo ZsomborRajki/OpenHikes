@@ -551,7 +551,7 @@ extension RouteReviewTests {
             RouteReviewSection.sections(in: fixture.result).first
         )
 
-        // Alternatives win the classification: offering the walker two mapped
+        // Alternatives win the classification: offering the hiker two mapped
         // routes is strictly more useful than telling them a gap exists, and
         // the silence is reported alongside either way.
         #expect(section.kind == .ambiguous)

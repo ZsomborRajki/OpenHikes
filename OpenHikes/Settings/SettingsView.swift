@@ -10,7 +10,7 @@
 //  with rather than configured, so the choice between cellular and Wi-Fi is
 //  made automatically by ``TileNetworkPolicy`` from conditions the system
 //  already publishes — see its notes for why that is both cheaper and less
-//  wrong than a switch the walker has to set before setting off.
+//  wrong than a switch the hiker has to set before setting off.
 //
 
 import StoreKit
@@ -58,7 +58,7 @@ struct SettingsView: View {
     let autoSave: AutoSaveController
     let backgroundTracker: BackgroundTrailTracker
     /// The community authors this device has blocked. Drawn by
-    /// ``BlockedWalkersSection``, which is absent while the list is empty.
+    /// ``BlockedHikersSection``, which is absent while the list is empty.
     let blocks: CommunityBlockList
     let cloudSync: CloudSyncCoordinator
     let entitlement: MapEntitlementStore
@@ -127,7 +127,7 @@ struct SettingsView: View {
                 // they turn on, it is a list of decisions they already made,
                 // and it sits next to the other thing the community feature
                 // put in this screen's reach.
-                BlockedWalkersSection(blocks: blocks)
+                BlockedHikersSection(blocks: blocks)
                 FieldMetricsSection()
                 contactSection
             }
@@ -501,12 +501,12 @@ private extension SettingsView {
 
 // MARK: - Live Activities
 
-/// The one switch the walker owns over the Lock Screen banner. Kept out of the
+/// The one switch the hiker owns over the Lock Screen banner. Kept out of the
 /// view's own body for length; it is a section like any other.
 private extension SettingsView {
     /// On by default — see ``SettingsDefault/liveActivitiesEnabled``. The
     /// switch is the app's half of the answer, so it says so rather than
-    /// pretending it is the only one: a walker who turned Live Activities off
+    /// pretending it is the only one: a hiker who turned Live Activities off
     /// for OpenHikes in the system's own Settings will see nothing however
     /// this reads, and the footer is where they find out why.
     @ViewBuilder var liveActivitySection: some View {
@@ -538,7 +538,7 @@ private extension SettingsView {
     /// surprising: a paused recording keeps a location feed alive when it
     /// otherwise would not, and a paused *walk* is watched only by fixes that
     /// were arriving anyway, so the two are not equally reliable and saying so
-    /// is cheaper than a walker discovering it on a trail. That is why the
+    /// is cheaper than a hiker discovering it on a trail. That is why the
     /// footer names the walk's case in its own sentence rather than letting the
     /// recording's "without Always access" clause stand for both: for a walk
     /// there is no such feed to fall back on, and a phone in a pocket with
@@ -570,14 +570,14 @@ private extension SettingsView {
 
 // MARK: - Display
 
-/// The one switch that can cost a walker battery rather than save it, and so
+/// The one switch that can cost a hiker battery rather than save it, and so
 /// the one whose footer has to say what it costs.
 private extension SettingsView {
     /// Off by default — see ``SettingsDefault/keepScreenAwake``. The footer
     /// names the scope in full because the scope is what makes the switch
     /// affordable: it holds the display only on the screens where a live hike
     /// is being read, only while that hike is live, and only while the app is
-    /// in front. A walker who reads "keep the screen on" as "for the whole
+    /// in front. A hiker who reads "keep the screen on" as "for the whole
     /// walk" would decline something they would in fact want.
     @ViewBuilder var displaySection: some View {
         #if os(iOS)

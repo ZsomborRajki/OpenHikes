@@ -183,7 +183,7 @@ struct HikeActivityLockScreenView: View {
 
     /// The second figure: a running recording's clock, a paused one's frozen
     /// clock, or a followed trail's distance remaining. Absent when there is
-    /// nothing to put there — a walker off the trail has no "remaining" that
+    /// nothing to put there — a hiker off the trail has no "remaining" that
     /// means anything.
     @ViewBuilder
     private func trailingFigure(

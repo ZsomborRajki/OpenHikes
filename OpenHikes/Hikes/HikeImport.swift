@@ -15,7 +15,7 @@
 //
 //  A refused save therefore comes back as a failure rather than as a hike, and
 //  says that it was the *storage* that refused. That distinction is not
-//  wording: the walker's file parsed, so it is still the one thing that can be
+//  wording: the hiker's file parsed, so it is still the one thing that can be
 //  imported again, and the copy in the inbox is the only source the app has
 //  left to try it from.
 //
@@ -33,7 +33,7 @@ import SwiftData
 /// Why a picked file did not become a hike.
 ///
 /// Two unrelated things fail here and they are not the same sentence to the
-/// walker. ``GPXImport/ImportFailure`` says the first — the bytes could not
+/// hiker. ``GPXImport/ImportFailure`` says the first — the bytes could not
 /// become a route, which is something they can act on — and nothing the parser
 /// does can express the second, which is why this wraps that enum rather than
 /// growing a case inside it that ``GPXImport/load(from:limits:)`` could never
@@ -45,7 +45,7 @@ nonisolated enum HikeImportFailure: LocalizedError, Equatable, Sendable {
     ///
     /// Carries no diagnostic: what SwiftData says about a refused commit is
     /// not a sentence anyone can act on, so it is logged where it is useful
-    /// and the alert says the part that is the walker's to know. Same division
+    /// and the alert says the part that is the hiker's to know. Same division
     /// ``HikeIntentFailure`` makes.
     case notSaved
 
@@ -139,7 +139,7 @@ enum HikeImport {
             track,
             // Both settled here, on the actor that owns the UI types they
             // reach: the title is bounded rather than absorbed downstream,
-            // because this name came out of a file the walker may never have
+            // because this name came out of a file the hiker may never have
             // opened (see ``HikeTitle``), and the tint is mixed through
             // SwiftUI's `Color`.
             titled: HikeTitle.imported(trackName: track.name, fileURL: url),
@@ -193,7 +193,7 @@ enum HikeImport {
             // The row goes with the context, which is this call's and nothing
             // else's. A pending insert left somewhere the *next* save might
             // accept would put the hike back on the list a moment after the
-            // walker was told it wasn't there — the same disagreement between
+            // hiker was told it wasn't there — the same disagreement between
             // screen and disk, only later and with no alert beside it.
             logger.error(
                 """

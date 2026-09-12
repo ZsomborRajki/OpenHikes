@@ -78,7 +78,7 @@ final class OpenHikesModel {
     /// ``CommunityBrowser`` filters through it and ``SettingsView`` undoes
     /// entries in it, and neither of those screens owns the other. Built off
     /// ``defaults`` so a UI-testing launch blocks into its own scratch domain
-    /// rather than the walker's.
+    /// rather than the hiker's.
     let communityBlocks: CommunityBlockList
     /// How a hike is shared and how a shared one is opened, or `nil` for a
     /// launch that must not reach CloudKit — see

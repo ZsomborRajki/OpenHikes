@@ -40,7 +40,7 @@ struct CommunityBlockListTests {
     }
 
     /// The whole reason the schema gained a field. `authorName` is free text
-    /// the walker types on every submission, so blocking on it would block a
+    /// the hiker types on every submission, so blocking on it would block a
     /// string — and would fail open for the one person it is meant to stop,
     /// who need only type something else next time.
     @Test("a block follows the author and not the name they typed")
@@ -86,7 +86,7 @@ struct CommunityBlockListTests {
         #expect(blocks.authors.count == 1)
     }
 
-    /// Settings draws this list, and the entry a walker just made is the one
+    /// Settings draws this list, and the entry a hiker just made is the one
     /// they are most likely to have made by accident.
     @Test("the newest block is listed first, with the name and the day")
     func theListIsOrderedForUndoing() throws {
@@ -103,7 +103,7 @@ struct CommunityBlockListTests {
     }
 
     /// A block list that forgot itself on the next launch would be a block
-    /// that quietly stopped working — and the walker would never be told.
+    /// that quietly stopped working — and the hiker would never be told.
     @Test("a block survives the launch it was made in")
     func blocksArePersisted() throws {
         let defaults = try Self.defaults()
@@ -128,7 +128,7 @@ struct CommunityBlockListTests {
     }
 
     /// Unreadable stored data reads as "nobody is blocked", which is the
-    /// reading that shows content a walker asked not to see — so it must at
+    /// reading that shows content a hiker asked not to see — so it must at
     /// least not take the app down with it, and must not erase what it could
     /// not read.
     @Test("unreadable stored blocks leave the list empty rather than failing")

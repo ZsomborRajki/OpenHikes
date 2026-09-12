@@ -125,7 +125,7 @@ struct HikeTitleBoundTests {
     /// The shared package's `HikeActivityTests` defends a 128-character title
     /// of four-byte emoji — 498 bytes — and it cannot import this target to
     /// check that the app agrees. This is that check from the app's side: the
-    /// heaviest name a walker can produce is the one that test measured.
+    /// heaviest name a hiker can produce is the one that test measured.
     @Test("the emoji worst case is bounded to what the payload defends")
     func boundedTitleFitsThePayloadWorstCase() throws {
         let name = String(repeating: "🏔", count: HikeTitle.maximumCharacters * 2)

@@ -41,7 +41,7 @@ struct HikeDistanceTodayIntent: AppIntent, HikeCoordinatingIntent {
     static let supportedModes: IntentModes = .background
 
     /// What the totals are read back against — "today", not a date. The
-    /// coordinator resolves which day that is against the walker's own
+    /// coordinator resolves which day that is against the hiker's own
     /// calendar, so this string and that fetch have to keep meaning the same
     /// thing.
     private static let dayLabel = "today"

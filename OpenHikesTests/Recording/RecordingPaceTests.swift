@@ -3,7 +3,7 @@
 //  OpenHikesTests
 //
 //  The two figures a live recording gained beside its distance: how long the
-//  walker has actually been walking, and how fast they are going *now* rather
+//  hiker has actually been walking, and how fast they are going *now* rather
 //  than on average since breakfast.
 //
 //  Both are read off ``RecordingDistanceAccumulator`` because that is the one
@@ -58,7 +58,7 @@ struct RecordingPaceTests {
     // MARK: Moving time
 
     /// The headline claim: standing still stops the moving clock, and it stops
-    /// it by the same rule the *saved* hike's figure uses. A walker who
+    /// it by the same rule the *saved* hike's figure uses. A hiker who
     /// watched this tick and then opened the saved hike to a different number
     /// would have no way to tell which one was the lie.
     @Test("standing still stops the moving clock but not the elapsed one")
@@ -67,7 +67,7 @@ struct RecordingPaceTests {
         walk(&accumulator, metersPerSecond: 1.4, seconds: 300)
         let movingWhileWalking = accumulator.movingSeconds
 
-        // Ten minutes at the viewpoint: fixes keep arriving, the walker does
+        // Ten minutes at the viewpoint: fixes keep arriving, the hiker does
         // not move.
         for step in stride(from: 310.0, through: 900, by: 10) {
             accumulator.append(point(metersNorth: 420, at: step))
@@ -137,7 +137,7 @@ struct RecordingPaceTests {
 
     /// The whole reason a live speed exists. An hour of strolling followed by
     /// a fast last few minutes leaves the average almost where it was, and the
-    /// walker wants to know what they are doing now.
+    /// hiker wants to know what they are doing now.
     @Test("the live speed follows a change of pace the average cannot")
     func liveSpeedLeadsTheAverage() throws {
         var accumulator = RecordingDistanceAccumulator()

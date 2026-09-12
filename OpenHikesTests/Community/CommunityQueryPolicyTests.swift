@@ -42,7 +42,7 @@ struct CommunityQueryPolicyTests {
         return area
     }
 
-    @Test("nothing is offered until the walker asks")
+    @Test("nothing is offered until the hiker asks")
     func browsingIsOptIn() {
         // `let`, because the decision is now side-effect free: a region that
         // nobody has opted in to changes nothing at all.
@@ -61,7 +61,7 @@ struct CommunityQueryPolicyTests {
         }
     }
 
-    /// The half that separates deciding from asking: a walker who ignores the
+    /// The half that separates deciding from asking: a hiker who ignores the
     /// offer keeps it, and one who takes it spends the request.
     @Test("an offer costs nothing until it is committed")
     func offersAreFree() {
@@ -117,7 +117,7 @@ struct CommunityQueryPolicyTests {
         }
     }
 
-    /// Zooming without moving changes what the walker is asking about even
+    /// Zooming without moving changes what the hiker is asking about even
     /// though the centre is identical, so the centre threshold alone would
     /// refuse it forever.
     @Test("zooming in far enough is a new question without moving")
@@ -157,7 +157,7 @@ struct CommunityQueryPolicyTests {
         #expect(policy.issuedQueries == 1)
     }
 
-    /// A failed request has to leave the region askable again, or the walker's
+    /// A failed request has to leave the region askable again, or the hiker's
     /// only recourse is to pan away and back.
     @Test("forgetting the last query makes the same region a new question")
     func forgettingReopensTheRegion() {

@@ -63,7 +63,7 @@ extension HikeIntentCoordinator {
     /// each call `requestTemporaryFullAccuracy()` and then fail with
     /// `.preciseLocationRequired` when it did not land. That request cannot
     /// show its alert from the background either, so treating a
-    /// reduced-accuracy walker as authorized turns "start a hike" into "turn
+    /// reduced-accuracy hiker as authorized turns "start a hike" into "turn
     /// on Precise Location in Settings" for somebody whose phone is in their
     /// pocket.
     var authorization: HikeIntentAuthorization {
@@ -76,7 +76,7 @@ extension HikeIntentCoordinator {
 
     /// Switched over exhaustively rather than gated on `isActive`, which is
     /// true for a *failed* and a *reviewing* session as well — that is how the
-    /// recording screen offers the walker their way back to one. Neither is a
+    /// recording screen offers the hiker their way back to one. Neither is a
     /// hike underway, and answering "already recording" to either would be the
     /// wrong sentence about the wrong problem. Exhaustive so that a phase
     /// added later fails to compile here rather than falling into a default
@@ -85,7 +85,7 @@ extension HikeIntentCoordinator {
         await settleRecorder()
         switch recorder.phase {
         // `start()` resets a failed session and tries again, so a refusal the
-        // walker has since fixed — permission granted in Settings — starts
+        // hiker has since fixed — permission granted in Settings — starts
         // cleanly on the second ask.
         case .idle, .failed: break
         case .waitingForFix, .recording, .paused: throw .alreadyRecording
@@ -95,7 +95,7 @@ extension HikeIntentCoordinator {
         await recorder.start()
         try throwIfRecorderFailed()
         // A failed session that kept its id is not reset by `start()`, which
-        // then returns having done nothing. Without this the walker is told
+        // then returns having done nothing. Without this the hiker is told
         // their hike is being recorded by the very call that declined to.
         guard recorder.isCapturingFixes else { throw .busyFinishing }
         return liveReport()
@@ -157,7 +157,7 @@ extension HikeIntentCoordinator {
 
     /// The recording as it stands.
     ///
-    /// A recording still waiting for its first fix counts: the walker started
+    /// A recording still waiting for its first fix counts: the hiker started
     /// it, the GPS is on, and "no hike is being recorded" would be a lie told
     /// during the ten seconds that matter most. A *failed* one does not, and
     /// is reported as the failure — its distance is real but it is no longer
@@ -184,7 +184,7 @@ extension HikeIntentCoordinator {
             // Carried rather than dropped: the recording screen dims this same
             // card when newer fixes have overtaken the match, and on a densely
             // sampled walk that is routinely true. This surface is the one
-            // used when the walker *cannot* look at the screen, so it is the
+            // used when the hiker *cannot* look at the screen, so it is the
             // last place to state a stale match flatly.
             isTrailNameStale: recorder.stats.isCurrentTrailStale
         )
@@ -224,7 +224,7 @@ extension HikeIntentCoordinator: HikeRecordingControlHandling {
     /// the likeliest way of all to launch this process purely to perform an
     /// intent, and the branch below is the one that reads ``phase`` *before*
     /// delegating. Unsettled, a cold tap lands in `.recovering` and answers
-    /// "still finishing your last recording" to a walker who wanted to start
+    /// "still finishing your last recording" to a hiker who wanted to start
     /// one.
     func toggleHikeRecording(
         canPromptForLocation: Bool
@@ -277,7 +277,7 @@ extension HikeIntentCoordinator {
         let day = calendar.startOfDay(for: date)
         guard let next = calendar.date(byAdding: .day, value: 1, to: day) else {
             // Only reachable for a date the calendar cannot step from, which
-            // is not a state the walker can be told anything useful about —
+            // is not a state the hiker can be told anything useful about —
             // and not a store failure, so not `.storage`, whose own sentence
             // would claim their hikes could not be read.
             throw .unknownDay
@@ -301,7 +301,7 @@ extension HikeIntentCoordinator {
         )
     }
 
-    /// Today, by the walker's own calendar and the injected clock.
+    /// Today, by the hiker's own calendar and the injected clock.
     func totalsForToday() throws(HikeIntentFailure) -> HikeTotalsReport {
         try totals(forDayContaining: clock())
     }

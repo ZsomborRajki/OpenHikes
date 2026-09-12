@@ -52,7 +52,7 @@ struct HikeDeletionFailureTests {
     private static let strippedCoverageComment: Comment = """
         A claim read that failed left the surviving hike out of the survivor set, and deleting the \
         other hike took its tiles too. In the app that hike still lists them, nothing re-downloads \
-        them, and the walker finds out where there is no signal.
+        them, and the hiker finds out where there is no signal.
         """
 
     private let context: ModelContext

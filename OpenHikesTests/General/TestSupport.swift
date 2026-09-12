@@ -136,7 +136,7 @@ enum Fixture {
     /// second pass over the same ground really is: near enough that both legs
     /// are the same trail, unequal enough that the segment *closest* to a fix
     /// at the trailhead is decided by sampling noise rather than by where the
-    /// walker is standing. An exactly mirrored fixture would hide the bug —
+    /// hiker is standing. An exactly mirrored fixture would hide the bug —
     /// with two identical candidates the earlier one wins by iteration order
     /// alone, which is the coin landing the right way up, not a tie being
     /// broken.

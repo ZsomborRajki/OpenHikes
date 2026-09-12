@@ -12,7 +12,7 @@
 //
 //  Before `endUnowned(_:)`, `endRecordingActivity(_:)` opened by asking the
 //  controller what *this process* was presenting, got `nil`, and returned. The
-//  panel then sat out its ten-minute stale window telling a walker with no
+//  panel then sat out its ten-minute stale window telling a hiker with no
 //  recording that their walk was live.
 //
 //  The recovery-then-discard path is here too, asserting the opposite: it
@@ -92,7 +92,7 @@ extension HikeRecorderTests {
         #expect(harness.presenter.calls.isEmpty)
     }
 
-    /// Precedence on the launch path. The walker was following a trail when
+    /// Precedence on the launch path. The hiker was following a trail when
     /// the app died; the trail is still there and the tracker adopts the panel
     /// back on the next matched fix. A launch discovering it has no recording
     /// must leave it alone.
@@ -114,7 +114,7 @@ extension HikeRecorderTests {
         #expect(harness.presenter.activeSubject?.isRecording == false)
     }
 
-    /// The recovery decision the walker actually makes, and the one place the
+    /// The recovery decision the hiker actually makes, and the one place the
     /// original report of this bug is wrong: by the time Discard is tapped,
     /// this process *does* own the panel. `finishRecovery` publishes a shared
     /// snapshot on both of its branches, that publish reaches
@@ -154,7 +154,7 @@ extension HikeRecorderTests {
         await recorder.recoverOpenSession()
         await harness.controller.settle()
         guard case .needsDecision = recorder.recoveryState else {
-            Issue.record("the recovered pause should have been offered to the walker")
+            Issue.record("the recovered pause should have been offered to the hiker")
             return
         }
         #expect(
@@ -172,7 +172,7 @@ extension HikeRecorderTests {
     }
 
     /// The third orphan path, and the one that needs no journal at all: a
-    /// walker whose app was killed mid-hike revokes location in Settings and
+    /// hiker whose app was killed mid-hike revokes location in Settings and
     /// then taps Record. `start()` fails on `.locationDenied` before a session
     /// exists, and `fail(_:endLocationUpdates:)` ends with
     /// `endRecordingActivity(.abandoned)` against a controller holding nothing.

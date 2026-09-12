@@ -2,14 +2,14 @@
 //  GPXImportLimitTests.swift
 //  OpenHikesTests
 //
-//  The bounds that exist because nobody looked at the file. A GPX the walker
+//  The bounds that exist because nobody looked at the file. A GPX the hiker
 //  picked from Files at least passed under their eyes; one delivered through
 //  `Documents/Inbox` — AirDrop, a mail attachment, a share extension — was
 //  chosen by the sender and is read unattended, so nothing upstream of the
 //  parser bounds what it costs.
 //
 //  Two things are checked here and they pull against each other: that an
-//  absurd file is refused with something the walker can act on, and that the
+//  absurd file is refused with something the hiker can act on, and that the
 //  shipping bounds are nowhere near a real day's walk. The second matters
 //  more — a ceiling that turns away a genuine hike leaves its owner with no
 //  way in at all.
@@ -108,7 +108,7 @@ struct GPXImportLimitTests {
     }
 
     /// An abandoned parse and a malformed document both come back `false`
-    /// from `XMLParser`, and the two have to reach the walker as different
+    /// from `XMLParser`, and the two have to reach the hiker as different
     /// sentences — "split the file" and "this isn't a GPX" are different
     /// instructions.
     @Test("a document that won't parse is unreadable rather than too large")

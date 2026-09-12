@@ -3,7 +3,7 @@
 //  OpenHikesTests
 //
 //  Auto-follow decides, once per selected hike, *which part of the trail* a
-//  walker is on — and on a trail that returns along its outbound leg, that is
+//  hiker is on — and on a trail that returns along its outbound leg, that is
 //  a genuine choice between two positions that fit the same GPS fix equally
 //  well. `RouteProfileTests` covers how a single fix is resolved. This covers
 //  the state carried between fixes, which is what decides how long a wrong
@@ -29,7 +29,7 @@ struct FollowAnchorTests {
     }
 
     /// The ordinary case: a match settled by a course anchors every fix after
-    /// it, so GPS noise can't flip a walker between two legs of the trail.
+    /// it, so GPS noise can't flip a hiker between two legs of the trail.
     @Test("a confirmed anchor carries every later fix")
     func confirmedAnchorHolds() {
         let anchor = FollowAnchor.matched(at: 800, course: Self.walkingBack, from: nil)
@@ -39,7 +39,7 @@ struct FollowAnchorTests {
     }
 
     /// Opening the app while standing still — at the turn, at a viewpoint,
-    /// anywhere a walker actually stops to look at their phone — leaves the
+    /// anywhere a hiker actually stops to look at their phone — leaves the
     /// match resting on the assumption that a hike starts at its start. On an
     /// out-and-back that assumption is wrong half the time, and continuity
     /// would then hold it wrong for the whole walk. So the first fix that
@@ -58,9 +58,9 @@ struct FollowAnchorTests {
     }
 
     /// …and that re-seeding happens once, not once per stop. Confirmation is
-    /// sticky, so a walker who settles onto the return leg and then stops for
+    /// sticky, so a hiker who settles onto the return leg and then stops for
     /// a photo doesn't have the leg re-decided when they set off again.
-    @Test("confirmation survives a walker standing still")
+    @Test("confirmation survives a hiker standing still")
     func confirmationIsSticky() {
         let confirmed = FollowAnchor.matched(at: 400, course: Self.walkingBack, from: nil)
         let paused = FollowAnchor.matched(at: 405, course: nil, from: confirmed)
@@ -69,7 +69,7 @@ struct FollowAnchorTests {
         #expect(FollowAnchor.tieBreak(paused, course: Self.walkingBack) == 405)
     }
 
-    /// The whole sequence, on the trail that motivates it: a walker opens the
+    /// The whole sequence, on the trail that motivates it: a hiker opens the
     /// app standing on the return leg of an out-and-back, then walks on.
     @Test("standing still on the return leg is corrected once walking resumes")
     func standingOnTheReturnLegIsCorrected() throws {
@@ -164,8 +164,8 @@ struct FollowInteractionTests {
 }
 
 /// The latch that keeps live follow from rescanning the whole route on every
-/// fix once the walker has left it. A full scan is O(route), so on a long
-/// trail an off-route walker paid for one per fix — the one case where the
+/// fix once the hiker has left it. A full scan is O(route), so on a long
+/// trail an off-route hiker paid for one per fix — the one case where the
 /// search can't short-circuit on a hit — to be told again that nothing is
 /// near.
 @Suite("Off-route search policy")
@@ -204,7 +204,7 @@ struct OffRouteSearchPolicyTests {
         #expect(policy.scope == .wholeRoute)
     }
 
-    /// A match means the walker is on the route, where the window is both
+    /// A match means the hiker is on the route, where the window is both
     /// correct and cheap — and the next miss deserves a fresh full scan rather
     /// than inheriting a count from the last time they wandered off.
     @Test("a match returns the policy to its starting state")

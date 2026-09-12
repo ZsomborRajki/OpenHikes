@@ -324,7 +324,7 @@ def backgrounded_windows(events: list[Event]) -> list[tuple[float, float]]:
     """The spans the app spent backgrounded, from its own scene-phase marks.
 
     Worth separating because a request is not equally expensive wherever it
-    lands. A tile fetched while the walker is looking at the map is the app
+    lands. A tile fetched while the hiker is looking at the map is the app
     doing its job; the same fetch with the phone in a pocket is a radio woken
     for output nobody can see, and it is the second one that decides whether
     the battery lasts the walk.
@@ -362,7 +362,7 @@ def count_within(windows: list[tuple[float, float]], events: list[Event]) -> int
     one timestamp against a window asks "did it end in a pocket?" when the
     question is "was the radio on in one". A 122 ms fetch begun in the
     foreground and landing 20 ms after the screen went dark counted as wholly
-    backgrounded; one begun in a pocket and answered after the walker looked
+    backgrounded; one begun in a pocket and answered after the hiker looked
     again counted as nothing at all. A mark has no duration and is unaffected.
     """
     return sum(
@@ -398,7 +398,7 @@ def energy_section(scenario: Scenario) -> list[str]:
 
     lines: list[str] = []
     if span > 0:
-        # Per hiking hour, because that is the unit the walker experiences.
+        # Per hiking hour, because that is the unit the hiker experiences.
         # A short scenario extrapolates badly, so the number is labelled as
         # what it is: an extrapolation, not a measurement.
         lines.extend(
@@ -797,7 +797,7 @@ def energy_findings(scenario: Scenario) -> list[Finding]:
     if received and rejected / received > 0.5:
         # Fixes are the expensive part of a recording. Paying for them and
         # then discarding most is the worst of both: full GPS duty, half a
-        # route. It means the filter is wrong, not that the walker is slow.
+        # route. It means the filter is wrong, not that the hiker is slow.
         collected.append(
             Finding(
                 key=("rejection-rate",),

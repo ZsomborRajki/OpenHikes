@@ -16,7 +16,7 @@
 //  ``CloudKitCommunityTransport`` deliberately asked for one page and dropped
 //  the cursor, on the grounds that the limit is already more rows than fit on
 //  a phone. That reasoning stops holding the moment rows are removed after the
-//  fact. A walker who has blocked a prolific author can be handed a page of
+//  fact. A hiker who has blocked a prolific author can be handed a page of
 //  twenty-five hikes that are all theirs, and the twenty-sixth — an ordinary
 //  hike by somebody else — is then unreachable: the list draws *No shared
 //  hikes here*, and asking the same question again returns the same blocked
@@ -27,26 +27,26 @@
 //
 //  ## Why the cap is fixed and small
 //
-//  The public database's quota is shared by every walker using the app, and
+//  The public database's quota is shared by every hiker using the app, and
 //  the thing this is guarding against is pathological rather than ordinary:
 //  somebody would have to have blocked most of the authors publishing near
 //  them. ``maxRequests`` bounds what that costs. Past it the answer is
 //  whatever was collected, including nothing — which is the honest reading of
 //  "everything near here is from people you have blocked".
 //
-//  A walker who has blocked nobody pays exactly one request, as before: the
+//  A hiker who has blocked nobody pays exactly one request, as before: the
 //  first page satisfies the limit and nothing asks for a second.
 //
 
 import Foundation
 
-/// Collects pages of a listing query until there are enough rows a walker is
+/// Collects pages of a listing query until there are enough rows a hiker is
 /// allowed to see, or until the request budget runs out.
 nonisolated struct CommunityPageBudget {
     /// How many round trips one browse request may spend.
     ///
     /// Four rather than one because a page can be entirely blocked, and four
-    /// rather than unbounded because a walker who has blocked everybody must
+    /// rather than unbounded because a hiker who has blocked everybody must
     /// not be able to walk the whole table by panning. See this file's header.
     static let maxRequests = 4
 
@@ -73,7 +73,7 @@ nonisolated struct CommunityPageBudget {
     /// - Returns: `true` when the caller should fetch the next page.
     mutating func accept(_ page: [CommunityListing], hasMore: Bool) -> Bool {
         requestsMade += 1
-        // The early return is the ordinary path: most walkers have blocked
+        // The early return is the ordinary path: most hikers have blocked
         // nobody, and filtering a page against an empty set is a pass over
         // twenty-five rows that can only ever keep all of them.
         kept += excluded.isEmpty ? page : page.filter { !excluded.contains($0.authorID) }

@@ -102,7 +102,7 @@ final class WidgetFeedBudgetTests {
 
     // MARK: Reload budget
 
-    /// A walker on the edge of the 75 m follow threshold — a ridge path with
+    /// A hiker on the edge of the 75 m follow threshold — a ridge path with
     /// trees, a switchback, a phone in a rucksack — flips on/off-route with
     /// ordinary GPS noise. Every flip that takes the escape hatch costs a full
     /// `SharedStore.load`, a re-encode, an atomic write to the App Group, and
@@ -247,7 +247,7 @@ final class WidgetFeedBudgetTests {
         await tracker.waitForLiveFixPublish()
 
         // Just past the follow threshold, but inside the hysteresis band —
-        // the walker has not left the trail.
+        // the hiker has not left the trail.
         let marginal = (
             distanceAlongRoute: onRoute.distanceAlongRoute,
             offRouteMeters: RouteProfile.followMatchThresholdMeters + 1
@@ -263,7 +263,7 @@ final class WidgetFeedBudgetTests {
         }
 
         #expect(writes == 0, "a metre past the threshold is noise, not a departure")
-        #expect(SharedStore.load()?.liveFix != nil, "and the walker is still shown on the trail")
+        #expect(SharedStore.load()?.liveFix != nil, "and the hiker is still shown on the trail")
     }
 
     /// The behaviour the bypass is there for, which any floor has to keep:

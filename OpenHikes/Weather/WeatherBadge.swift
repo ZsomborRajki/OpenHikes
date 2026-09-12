@@ -16,7 +16,7 @@
 //  nothing is ``WeatherBadgeState/idle`` — nobody has focused a subject yet.
 //  Everything else puts a capsule on screen, including the one where WeatherKit
 //  refused. That is the whole point of the type: a missing entitlement and a
-//  walker out of signal used to be pixel-identical to a feature that had never
+//  hiker out of signal used to be pixel-identical to a feature that had never
 //  been built, because all three drew nothing at all.
 //
 //  It names a searched place, but not a selected hike. A city name says where

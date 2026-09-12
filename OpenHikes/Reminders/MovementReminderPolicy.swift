@@ -6,7 +6,7 @@
 //  recording has stopped looking like walking.
 //
 //  Both questions are the same shape and neither is answerable from a single
-//  fix. A walker who steps out of a restaurant to find the toilets has moved;
+//  fix. A hiker who steps out of a restaurant to find the toilets has moved;
 //  so has one who put the phone down at a viewpoint and had the GPS wander
 //  eighty metres around them. Neither is a hike being recorded with the
 //  recorder paused, and a reminder for either is the app crying wolf at
@@ -21,13 +21,13 @@
 //    hour walks half a kilometre on its own. Displacement cannot, because
 //    noise around one spot has nowhere to go.
 //  * **Pace** — how much of that displacement arrived inside one short
-//    window. This is the bicycle clause. A walker who genuinely wandered off
+//    window. This is the bicycle clause. A hiker who genuinely wandered off
 //    trips the distance rule eventually; somebody who set off at cycling pace
 //    covers the same ground in two minutes and should hear about it then,
 //    not half an hour later at the bottom of the valley.
 //
 //  The cost of being wrong is asymmetric and the numbers below are chosen for
-//  it. A missed reminder costs a walker a kilometre of track. A spurious one
+//  it. A missed reminder costs a hiker a kilometre of track. A spurious one
 //  costs them a banner they did not need, in the middle of a hike, having
 //  already told the app they were stopping — which is the worse failure, and
 //  the reason the thresholds are on the conservative side of the issue's own
@@ -46,7 +46,7 @@ nonisolated enum MovementReminderPolicy {
     ///
     /// Chosen against the two cases the issue names. A trip from a restaurant
     /// to the toilets is tens of metres and a large car park is barely more;
-    /// a walker who has genuinely set off again clears this inside ten
+    /// a hiker who has genuinely set off again clears this inside ten
     /// minutes at hiking pace. Well above any plausible fix error too — the
     /// coarse watch below is a hundred-metre configuration, and significant
     /// location changes are coarser still.
@@ -57,14 +57,14 @@ nonisolated enum MovementReminderPolicy {
     /// 250 m inside two minutes is a shade over 2 m/s — a bicycle, a jog, or
     /// a bus, and comfortably above a stroll around a car park. It exists to
     /// shorten the *time* to a reminder for exactly the case the issue raises,
-    /// not to lower the bar: the walker still has to have covered real ground.
+    /// not to lower the bar: the hiker still has to have covered real ground.
     static let paceMeters = 250.0
     static let paceWindow: TimeInterval = 120
 
     /// How long after a reminder the next one may be sent, and how many a
     /// single pause may produce at all.
     ///
-    /// A reminder the walker ignored is information: either they meant to
+    /// A reminder the hiker ignored is information: either they meant to
     /// pause, or their phone is in a pocket and a fourth banner will not
     /// reach them any better than the third did. Both bounds apply — another
     /// reminder needs another ``awayMeters`` *and* another quarter of an hour.
@@ -76,7 +76,7 @@ nonisolated enum MovementReminderPolicy {
     ///
     /// Deliberately longer than most stops. A lunch, a summit photo and a
     /// boot re-lace are all normal parts of a walk and none of them wants a
-    /// notification; a quarter of an hour without moving is a rest the walker
+    /// notification; a quarter of an hour without moving is a rest the hiker
     /// might genuinely rather have out of their moving average.
     static let stillFor: TimeInterval = 15 * 60
 
@@ -107,7 +107,7 @@ nonisolated struct MovementWatch: Equatable, Sendable {
     }
 
     /// The reading the distance rule measures from. Starts at the anchor and
-    /// moves to wherever the walker was each time a reminder is sent, so a
+    /// moves to wherever the hiker was each time a reminder is sent, so a
     /// second reminder means another ``MovementReminderPolicy/awayMeters``
     /// rather than the same ones being counted again.
     private var baselineMeters = 0.0
@@ -122,7 +122,7 @@ nonisolated struct MovementWatch: Equatable, Sendable {
     /// the moment it was handed over, and those do not arrive in order:
     /// significant-location-change delivery batches, and the first event
     /// after monitoring starts is routinely a cached one. An out-of-order
-    /// reading is dropped rather than reordered — it says where the walker
+    /// reading is dropped rather than reordered — it says where the hiker
     /// was, and the watch has already been told where they were later than
     /// that.
     private(set) var lastObservedAt: Date?
@@ -134,10 +134,10 @@ nonisolated struct MovementWatch: Equatable, Sendable {
         remindersSent >= MovementReminderPolicy.maximumReminders
     }
 
-    /// Records how far from the anchor the walker was at `date`.
+    /// Records how far from the anchor the hiker was at `date`.
     ///
     /// - Parameter date: when the reading was *taken*, not when it arrived.
-    ///   The pace rule is a statement about the walker's speed, so a batch of
+    ///   The pace rule is a statement about the hiker's speed, so a batch of
     ///   fixes handed over together must not read as a burst; a reading older
     ///   than one already taken is dropped.
     /// - Returns: whether this reading is reason to remind them now. Sending
@@ -184,7 +184,7 @@ nonisolated struct StillnessWatch: Equatable, Sendable {
     private var stillSince: Date?
     private var hasReminded = false
 
-    /// - Returns: whether the walker should be asked whether they meant to
+    /// - Returns: whether the hiker should be asked whether they meant to
     ///   stop. Once per stop: moving again rearms it, and nothing else does.
     mutating func observe(isStationary: Bool, at date: Date) -> Bool {
         guard isStationary else {

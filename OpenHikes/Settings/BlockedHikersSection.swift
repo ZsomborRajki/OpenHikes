@@ -1,5 +1,5 @@
 //
-//  BlockedWalkersSection.swift
+//  BlockedHikersSection.swift
 //  OpenHikes
 //
 //  The settings section for people this device has blocked: who they are, and
@@ -10,10 +10,10 @@
 //  same screen is drawing — and ``SettingsView`` is an eight-section `Form` in
 //  one body that must not be rebuilt by it.
 //
-//  **A block a walker cannot see or undo is its own problem.** Blocking is
+//  **A block a hiker cannot see or undo is its own problem.** Blocking is
 //  reached from a menu on somebody else's hike, which is a screen they may
 //  never open again; without somewhere like this, a tap taken once would be
-//  permanent and invisible, and a walker who blocked the wrong person would
+//  permanent and invisible, and a hiker who blocked the wrong person would
 //  have no way back. So the entries are named, dated and individually
 //  reversible, and the section is absent rather than empty when there is
 //  nothing in it — an empty *Blocked* heading in a settings screen invites the
@@ -22,12 +22,12 @@
 //
 //  What it shows is the name the hike was published under at the moment of
 //  blocking, which is a label rather than the key — see ``CommunityBlockList``
-//  for why a block is keyed on something the walker did not type.
+//  for why a block is keyed on something the hiker did not type.
 //
 
 import SwiftUI
 
-struct BlockedWalkersSection: View {
+struct BlockedHikersSection: View {
     let blocks: CommunityBlockList
 
     @State private var isConfirmingUnblockAll = false
@@ -84,19 +84,19 @@ struct BlockedWalkersSection: View {
             Button("Unblock") { blocks.unblock(author.id) }
                 .buttonStyle(.bordered)
                 .accessibilityLabel("Unblock \(name(of: author))")
-                .accessibilityIdentifier("unblock-walker")
+                .accessibilityIdentifier("unblock-hiker")
         }
     }
 
     /// What the row calls them.
     ///
-    /// A walker may publish without a name, and an entry with a blank line
+    /// A hiker may publish without a name, and an entry with a blank line
     /// where the name goes is one nobody can decide whether to undo. There is
     /// nothing truer to put here — the key is an opaque record name — so the
     /// row says what it knows.
     private func name(of author: CommunityBlockList.BlockedAuthor) -> String {
         author.name.isEmpty
-            ? String(localized: "Walker who shared without a name")
+            ? String(localized: "Hiker who shared without a name")
             : author.name
     }
 }

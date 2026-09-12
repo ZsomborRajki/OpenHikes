@@ -88,10 +88,10 @@ struct WeatherReadingStoreTests {
         #expect(restored.snapshot.isStale(asOf: .now), "a reading this old is not current")
     }
 
-    /// A reading about the walker comes back as one, not as a place with no
+    /// A reading about the hiker comes back as one, not as a place with no
     /// name — the badge draws its "here" form off exactly this.
-    @Test("a reading about the walker restores without a place name")
-    func restoresTheWalkerWithoutAName() throws {
+    @Test("a reading about the hiker restores without a place name")
+    func restoresTheHikerWithoutAName() throws {
         let defaults = try makeDefaults()
         WeatherReadingStore(defaults: defaults).save(
             snapshot: snapshot(celsius: 4),

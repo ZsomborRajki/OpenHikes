@@ -230,7 +230,7 @@ struct DecimateTests {
         #expect(decimate(line(181), maxPoints: 180).count == 180)
     }
 
-    /// The endpoints are the one thing a walker recognises: a trail whose
+    /// The endpoints are the one thing a hiker recognises: a trail whose
     /// drawn line stops short of its own trailhead looks like the wrong
     /// trail.
     @Test("the first and last points are always kept")

@@ -182,7 +182,7 @@ struct RecordingTraceWidgetPolylineTests {
                 "not strictly forward: \(context)"
             )
             // A budget of one has only the start to spend itself on; every
-            // other budget owes the widget the walker's current position.
+            // other budget owes the widget the hiker's current position.
             if expectedCount > 1 {
                 #expect(indices.last == route.count - 1, "\(context)")
             }

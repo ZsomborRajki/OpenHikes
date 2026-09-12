@@ -152,7 +152,7 @@ public extension HikeActivityAttributes {
 
     /// A followed trail leads with the percentage and what is left, because
     /// both of those are only answerable when there *is* an end — and drops
-    /// straight back to the trail's own length when the walker has no usable
+    /// straight back to the trail's own length when the hiker has no usable
     /// fix, rather than claiming 0%.
     ///
     /// A walk under way changes what the percentage *means*, and says so:
@@ -160,7 +160,7 @@ public extension HikeActivityAttributes {
     /// walk's own clock in the second slot — ticking while it runs, frozen
     /// while it is paused or finished — and the distance left moved into the
     /// chips so it is not lost to the clock. Paused and Finished outrank
-    /// *Off trail* for the status word: a paused walker is standing still
+    /// *Off trail* for the status word: a paused hiker is standing still
     /// wherever they are, and a finished one is done.
     private func followingPresentation(
         for state: ContentState,
@@ -256,7 +256,7 @@ public extension HikeActivityAttributes {
     }
 
     /// The glyph and the word for a followed trail: what the walk is doing
-    /// when there is one, otherwise only whether the walker is on the trail.
+    /// when there is one, otherwise only whether the hiker is on the trail.
     ///
     /// `nil` for the ordinary case for the reason ``recordingStatus(for:)``
     /// gives: a status line that is always populated is one nobody reads.

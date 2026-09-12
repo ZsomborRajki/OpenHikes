@@ -15,7 +15,7 @@ import AppIntents
 @preconcurrency
 @MainActor
 public protocol HikeRecordingControlHandling: Sendable {
-    /// Starts or stops the walker's hike, whichever the recorder's own phase
+    /// Starts or stops the hiker's hike, whichever the recorder's own phase
     /// calls for when this runs.
     ///
     /// - Parameter canPromptForLocation: whether this call is running

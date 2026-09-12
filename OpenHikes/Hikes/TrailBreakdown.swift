@@ -169,7 +169,7 @@ nonisolated enum TrailBreakdownAnalyzer {
     /// and a stretch with no way beneath it is reported as
     /// ``TrailCategory/unmapped`` rather than snapped to the nearest thing
     /// available. Running the full HMM matcher here would be both slower and
-    /// less honest — it exists to decide where a walker *was*, and its answer
+    /// less honest — it exists to decide where a hiker *was*, and its answer
     /// for a leg it is unsure about is a straight line, which has no tagging.
     ///
     /// A way matched but carrying no tag of its own is the category's own

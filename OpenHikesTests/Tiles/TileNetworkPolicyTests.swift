@@ -59,7 +59,7 @@ struct TileNetworkPolicyTests {
         #expect(decide(.speculative, constrained: true) == .denied("low-data-mode"))
     }
 
-    /// The asymmetry the removal of the cellular toggle rests on. A walker on
+    /// The asymmetry the removal of the cellular toggle rests on. A hiker on
     /// a metered connection is looking at the map now, so the tile under their
     /// thumb loads; what a metered connection costs them is the reading ahead.
     @Test("Cellular keeps the map drawing and never carries speculative traffic")
@@ -72,7 +72,7 @@ struct TileNetworkPolicyTests {
 
     /// The rule that keeps a battery mitigation from turning into a blank
     /// map: Low Power Mode stops the app reading ahead, and does not stop it
-    /// drawing what the walker is looking at.
+    /// drawing what the hiker is looking at.
     @Test("Low Power Mode stops reading ahead but never blanks the map")
     func lowPowerModeStopsSpeculativeTrafficOnly() {
         let power = PowerState(isLowPowerModeEnabled: true)

@@ -59,7 +59,7 @@ struct PauseBoundaryTests {
         )
 
         #expect(prepared.route.map(\.isPauseBoundary) == [false, false, true, false])
-        // A pause is the walker's decision, not the app's guess, so the route
+        // A pause is the hiker's decision, not the app's guess, so the route
         // claims nothing was inferred across it.
         #expect(!prepared.route.containsInferredGeometry)
     }
@@ -140,7 +140,7 @@ struct PauseBoundaryTests {
     /// The live readout and the saved hike are meant to be the same number,
     /// which is why they are the same accumulator. Restarting that accumulator
     /// at a resume — rather than restarting only what it measures across —
-    /// dropped every second walked before the pause, so a walker who stopped
+    /// dropped every second walked before the pause, so a hiker who stopped
     /// for lunch watched their morning's moving time go back to zero.
     @Test("a pause keeps the moving time already walked")
     func pauseKeepsMovingTimeAlreadyWalked() {

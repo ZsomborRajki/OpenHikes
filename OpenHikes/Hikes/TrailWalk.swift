@@ -30,22 +30,22 @@ nonisolated enum TrailWalkPolicy {
     /// the route, is the walk reaching the end on its own.
     ///
     /// Either end, because the direction a track is stored in is the
-    /// importer's, not the walker's: a route planned or shared by someone
+    /// importer's, not the hiker's: a route planned or shared by someone
     /// else is as likely to run the way they walk it as the other way round.
     /// Coverage is a union and never cared which way it was accrued, so
     /// measuring proximity to the stored end alone left a whole-route walk in
     /// the other direction reading 100% and never finishing. The coverage
-    /// clause carries the *they actually walked it* requirement, so a walker
+    /// clause carries the *they actually walked it* requirement, so a hiker
     /// standing at the trailhead still completes nothing.
     static let reachedEndFraction: Double = 0.95
     static let reachedEndProximityMeters: Double = 50
     /// No on-route match for this long ends the walk as abandoned.
     ///
-    /// A *following* walk only: a pause is the walker saying the walk
+    /// A *following* walk only: a pause is the hiker saying the walk
     /// continues, and nothing advances a paused walk's last match — they are
     /// not moving, so no significant change wakes the background feed either.
     /// Measured against this, a hut evening or an overnight on a two-day
-    /// trail would close the walk with the walker looking at it.
+    /// trail would close the walk with the hiker looking at it.
     /// ``staleAtLaunchAfter`` is the backstop for a pause nobody came back to.
     static let abandonAfter: TimeInterval = 6 * 3600
     /// A walk found still open at launch, whose last activity is older than
@@ -69,7 +69,7 @@ nonisolated enum TrailWalkEndReason: String, Codable, Hashable, Sendable {
     /// No on-route match for ``TrailWalkPolicy/abandonAfter``, or a walk
     /// found open at launch and older than ``TrailWalkPolicy/staleAtLaunchAfter``.
     case abandoned = "abandoned"
-    /// The walker tapped End.
+    /// The hiker tapped End.
     case ended = "ended"
     /// Coverage and proximity said the walk reached the route's end.
     case reachedEnd = "reachedEnd"
@@ -93,7 +93,7 @@ nonisolated enum TrailWalkPhase: String, Codable, Hashable, Sendable {
 /// The union of along-route intervals a walk's consecutive on-route matches
 /// have spanned, and the furthest point any of them reached.
 ///
-/// Coverage, not position. A walker who opens the app on the return leg of
+/// Coverage, not position. A hiker who opens the app on the return leg of
 /// an out-and-back and walks to the end covers half the route, and this
 /// says half where a position along the route would say all of it. Walking
 /// a section twice adds nothing; skipping a section by road subtracts it.
@@ -142,9 +142,9 @@ nonisolated struct TrailWalkCoverage: Codable, Equatable, Sendable {
     /// interval the way a walk's first match does.
     ///
     /// What a pause needs, and what a confirmed off-route fix needs. The gap
-    /// bound is the right rule for a lost signal — the walker probably did
+    /// bound is the right rule for a lost signal — the hiker probably did
     /// walk the stretch in between — and it is exactly wrong when something
-    /// says they did not: a pause is the walker saying so, an accepted fix
+    /// says they did not: a pause is the hiker saying so, an accepted fix
     /// matched off the route is the matcher saying so. Without this, pausing
     /// at the col and walking 400 m down the ridge hands the union that
     /// 400 m on the first fix after Resume, and a road shortcut rejoined
@@ -233,14 +233,14 @@ nonisolated struct TrailWalkRecord: Codable, Equatable, Sendable {
     /// walk had reached, not the furthest it ever reached.
     ///
     /// Written only while following, which is what makes it the position the
-    /// walker paused at once they do: matches seen while paused move
+    /// hiker paused at once they do: matches seen while paused move
     /// ``lastMatchedAt`` (they prove the walk is not abandoned) and must not
     /// move this, or the anchor a paused walk is measured against would
-    /// follow the walker and never register that they had moved at all.
+    /// follow the hiker and never register that they had moved at all.
     ///
     /// Optional because a walk can be paused before its first match.
     /// ``TrailWalkCoverage/furthestDistanceMeters`` is the fallback and is
-    /// *not* an equivalent: it is a maximum, so a walker who turned round and
+    /// *not* an equivalent: it is a maximum, so a hiker who turned round and
     /// came back down before pausing would be measured against ground they
     /// left behind.
     var lastFollowedDistanceMeters: Double?
@@ -297,7 +297,7 @@ nonisolated struct TrailWalkRecord: Codable, Equatable, Sendable {
     /// Whether a match `distance` metres along the route is the walk
     /// reaching the end.
     ///
-    /// Whichever end is nearer. A walker who covered the route from its
+    /// Whichever end is nearer. A hiker who covered the route from its
     /// stored end to its stored start finishes at `distance` 0, and measuring
     /// to the stored end alone would call that the route's whole length away
     /// from finishing — see ``TrailWalkPolicy/reachedEndProximityMeters``.

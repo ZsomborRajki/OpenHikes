@@ -99,7 +99,7 @@ class SectionTests(unittest.TestCase):
             report.resource_section(scenario("idle")), ["_No resource samples were recorded._", ""]
         )
 
-    # Per hiking hour, because that is the unit the walker experiences — and
+    # Per hiking hour, because that is the unit the hiker experiences — and
     # labelled as an extrapolation, because a fifty-second scenario has not
     # measured an hour of anything.
     def test_the_hourly_cost_is_labelled_as_an_extrapolation(self):

@@ -9,7 +9,7 @@
 //  the app's main actor, and the answer travels to a system process that has
 //  no business holding a SwiftData row. Keeping the wording here — rather than
 //  in the `AppIntent` structs — is also what lets a suite assert on what the
-//  walker is told without going anywhere near AppIntents.
+//  hiker is told without going anywhere near AppIntents.
 //
 
 import Foundation
@@ -52,14 +52,14 @@ nonisolated struct LiveRecordingReport: Equatable, Sendable {
     let distance: Measurement<UnitLength>
     let elapsed: TimeInterval
     let isPaused: Bool
-    /// The trail under the walker, when the live matcher has one. Spoken back
+    /// The trail under the hiker, when the live matcher has one. Spoken back
     /// because "2.4 km along the Kalvarienberg path" is the answer somebody
     /// asks a phone in their pocket for.
     let trailName: String?
     /// Whether ``trailName`` describes a match newer fixes have already
     /// overtaken — ``RecordingStats/isCurrentTrailStale``, which the recording
     /// screen dims the trail card for. Carried here so the sentence can hedge
-    /// the same way the screen does; a walker who stepped off the path a
+    /// the same way the screen does; a hiker who stepped off the path a
     /// minute ago must not be told flatly that they are still on it.
     let isTrailNameStale: Bool
 }

@@ -5,7 +5,7 @@
 //  A route's outline, drawn without a map.
 //
 //  Used by ``CommunityHikeView`` for the one question a preview has to answer
-//  before the walker commits to a download and a row in their library: does
+//  before the hiker commits to a download and a row in their library: does
 //  this route go where I think it does. That question needs the *shape* — an
 //  out-and-back, a loop, a ridge traverse — and does not need tiles, a
 //  provider, an entitlement check or a network request, all of which a real
@@ -15,7 +15,7 @@
 //  The aspect ratio is preserved rather than stretched to the frame, which
 //  matters more here than it would for a decorative sparkline: a ten-kilometre
 //  ridge squashed into a square reads as a loop, and that is precisely the
-//  distinction the walker is looking at this for.
+//  distinction the hiker is looking at this for.
 //
 
 import CoreLocation

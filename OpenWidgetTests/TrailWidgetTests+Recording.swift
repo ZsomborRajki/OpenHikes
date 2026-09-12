@@ -3,7 +3,7 @@
 //  OpenWidgetTests
 //
 //  The one contention this widget has, and the decision that settles it: a
-//  live recording always outranks the trail the walker selected, and takes the
+//  live recording always outranks the trail the hiker selected, and takes the
 //  whole widget rather than a badge or a secondary line.
 //
 //  The rule is the same one `HikeLiveActivityController.accepts(_:)` applies
@@ -46,7 +46,7 @@ extension TrailWidgetTests {
     }
 
     /// The takeover is on the recording's *existence*, not on whether it is
-    /// still capturing fixes. A walker who pauses for lunch is still on the
+    /// still capturing fixes. A hiker who pauses for lunch is still on the
     /// walk, and handing the screen back to the trail underneath them —
     /// then taking it away again on the resume — would be the rule flickering
     /// rather than holding.
@@ -72,7 +72,7 @@ extension TrailWidgetTests {
     /// This is what lets the app go on writing the trail feed throughout a
     /// recording while spending no reloads on it — see `TrailWidgetReload` in
     /// the app target. If the takeover ever *cleared* the selection instead,
-    /// that gating would silently cost the walker their trail at the end of
+    /// that gating would silently cost the hiker their trail at the end of
     /// every walk, and this is the test that says so.
     @Test("the selected trail survives the takeover and returns when the walk ends")
     func selectionReturnsAfterTheRecordingClears() throws {
@@ -99,7 +99,7 @@ extension TrailWidgetTests {
     /// The widget and the Control Center button read the same payload and must
     /// name the same owner: a button offering "Start Hike" over a widget
     /// drawing a live trace is the two surfaces disagreeing about whether the
-    /// walker is out walking.
+    /// hiker is out walking.
     @Test("the widget and the recording control agree on who owns the walk")
     func controlAgreesWithTheWidget() throws {
         defer { try? SharedStore.clearRecording() }

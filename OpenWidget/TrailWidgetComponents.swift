@@ -80,7 +80,7 @@ struct TrailWidgetMetricRow: View {
 }
 
 /// The hairline under the stat line showing how much of the trail is behind
-/// the walker.
+/// the hiker.
 ///
 /// Drawn only while there is a live fix — without one there is no progress to
 /// report, and an empty track would read as "none of it done" rather than as

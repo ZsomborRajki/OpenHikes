@@ -20,7 +20,7 @@ extension HikeDetailView {
     ///
     /// Two share buttons rather than one menu, because they are not two ways
     /// of doing the same thing: the GPX export hands a file to whatever the
-    /// walker chooses and OpenHikes never sees it again, while this publishes
+    /// hiker chooses and OpenHikes never sees it again, while this publishes
     /// to a database other people read. Folding them into one control would
     /// make the second reachable by a gesture learned for the first, and the
     /// second is the one that cannot be taken back by the person who made it.

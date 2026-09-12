@@ -48,7 +48,7 @@ enum LiveActivityHarness {
         let controller: HikeLiveActivityController
         let presenter: StubHikeActivityPresenter
         let now: Clock
-        /// The controller's own suite, exposed so a test can flip the walker's
+        /// The controller's own suite, exposed so a test can flip the hiker's
         /// switch the way `SettingsView`'s `@AppStorage` does — which is the
         /// only trigger that reaches a controller with no walk to publish.
         let defaults: UserDefaults

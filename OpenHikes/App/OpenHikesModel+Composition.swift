@@ -268,7 +268,7 @@ private extension OpenHikesModel {
     /// which is a pause the walk suites take deliberately. `isRunningTests`
     /// rather than `isHostingTests` is what says both of those at once.
     ///
-    /// The walker's own switch is *not* read here. It is read on every
+    /// The hiker's own switch is *not* read here. It is read on every
     /// decision instead, so turning reminders off mid-hike stops the next one
     /// rather than the one after the next launch — see
     /// ``MovementReminderController/isEnabled``.

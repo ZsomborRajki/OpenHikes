@@ -64,7 +64,7 @@ struct RecordingColdStartFixTests {
             )
         }
 
-        // 150 m in 9 s is 17 m/s, and the walker's own 1.4 m/s says otherwise.
+        // 150 m in 9 s is 17 m/s, and the hiker's own 1.4 m/s says otherwise.
         let inside = fix(after: RecordingFixPolicy.maximumInterval - 1)
         #expect(!RecordingFixPolicy.accepts(
             inside,
@@ -83,9 +83,9 @@ struct RecordingColdStartFixTests {
 
     /// The walk the gate used to eat. A cold start reports 45 m of accuracy —
     /// inside the filter, so it is anchored on — while sitting 150 m from
-    /// where the walker is standing, and every accurate fix that follows is
+    /// where the hiker is standing, and every accurate fix that follows is
     /// measured against it. Before the interval term the first of them was
-    /// admitted at 23 s; the walker kept the phantom and lost the walk in
+    /// admitted at 23 s; the hiker kept the phantom and lost the walk in
     /// between.
     @Test("a cold-start outlier locks the walk out for one heartbeat, not for the error it made")
     func coldStartOutlierLockoutIsBoundedByTheHeartbeat() throws {
@@ -102,7 +102,7 @@ struct RecordingColdStartFixTests {
         let anchor = RecordingPoint(location: outlier)
 
         // A minute of accurate fixes, one a second, walking north at 1.4 m/s
-        // from where the walker actually is.
+        // from where the hiker actually is.
         var accepted: CLLocation?
         for second in 1...60 {
             let walked = coldStartLocation(
@@ -129,12 +129,12 @@ struct RecordingColdStartFixTests {
                 == RecordingFixPolicy.maximumInterval
         )
         // Re-anchored on the truth rather than on the phantom: the fix that
-        // got in is north of the start, where the walker is, not south of it.
+        // got in is north of the start, where the hiker is, not south of it.
         #expect(first.coordinate.latitude > coldStartLatitude)
 
         // And the gate itself has not moved. The fix it just admitted implies
         // twice the walking ceiling, and would have gone on doing so for
-        // another thirteen seconds as the walker walked further from the
+        // another thirteen seconds as the hiker walked further from the
         // phantom. It is overridden here, not deleted.
         let displacement = RouteGeometry.distanceMeters(
             from: anchor.coordinate,
@@ -151,7 +151,7 @@ struct RecordingColdStartFixTests {
     /// both a fix older than the anchor and one carrying its timestamp
     /// exactly. Nothing behind it would. A negative interval reads as a
     /// negative implied speed, which is not greater than the ceiling; a zero
-    /// one reads as an infinite speed, which the walker's reported speed then
+    /// one reads as an infinite speed, which the hiker's reported speed then
     /// *corroborates*, since everything is within an infinite tolerance.
     @Test("a reordered fix is refused however wide the gap it claims")
     func reorderedFixIsStillRefused() {

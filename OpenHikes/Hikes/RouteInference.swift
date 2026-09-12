@@ -4,7 +4,7 @@
 //
 //  Which parts of a saved route were measured and which were reasoned about.
 //
-//  Also which parts of it the walker chose not to record at all: a pause is
+//  Also which parts of it the hiker chose not to record at all: a pause is
 //  neither a measurement nor an inference, and ``RouteBoundary`` is what the
 //  map and the elevation profile read to say so.
 //

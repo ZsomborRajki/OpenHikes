@@ -56,7 +56,7 @@ final class WeatherReadingStore {
         var capturedAt: Date
         var latitude: Double
         var longitude: Double
-        /// `nil` for a reading that was about the walker.
+        /// `nil` for a reading that was about the hiker.
         var placeName: String?
         var subjectKind: SubjectKind
         var hikeID: UUID?

@@ -133,7 +133,7 @@ extension BackgroundTrailTracker {
         }
 
         /// Replaces just the walk portion of the stored snapshot, leaving the
-        /// fix where it is — a pause does not move the walker.
+        /// fix where it is — a pause does not move the hiker.
         ///
         /// Returns what landed, or `nil` when the store holds a different
         /// trail: a walk's state belongs beside its own trail and nowhere

@@ -2,19 +2,19 @@
 //  RecordingTrailContext.swift
 //  OpenHikes
 //
-//  What the matcher can say about the trail under the walker *right now*,
+//  What the matcher can say about the trail under the hiker *right now*,
 //  as opposed to what a finished walk turned out to have followed.
 //
 
 import Foundation
 
-/// The trail the live matcher has the walker on: its name, and what
+/// The trail the live matcher has the hiker on: its name, and what
 /// OpenStreetMap records about the way itself.
 ///
 /// The name and the tags are read from two different places on purpose. The
 /// name is the one ``TrailMatcher`` has always published — the trail the last
 /// leg ran *along*, which for a leg that crossed several ways is the trail as
-/// a whole rather than whichever way the walker happens to be standing on.
+/// a whole rather than whichever way the hiker happens to be standing on.
 /// The tags come from that single way, because "gravel" and "T2" are
 /// properties of ground underfoot and averaging them across a leg would
 /// describe a surface nobody is walking on.
@@ -22,7 +22,7 @@ import Foundation
 /// Both halves can be absent and neither implies the other: an unnamed
 /// forestry track is tagged and nameless, and a famous long-distance route can
 /// be named and carry no `surface` or `sac_scale` at all. A context exists
-/// whenever the matcher was confident about where the walker is, which is the
+/// whenever the matcher was confident about where the hiker is, which is the
 /// only claim it makes.
 nonisolated struct RecordingTrailContext: Equatable, Sendable {
     let name: String?

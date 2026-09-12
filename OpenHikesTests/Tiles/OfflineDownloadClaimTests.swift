@@ -6,7 +6,7 @@
 //  true on disk rather than in a screen.
 //
 //  `OfflineTileDownloaderTests` owns the state machine — what a run reports
-//  and what it counts. This suite owns the half that costs a walker something
+//  and what it counts. This suite owns the half that costs a hiker something
 //  when it is wrong: a download writes straight to durable storage, and
 //  `TileCache.trimCache(claimedBy:)` deletes every durable tile no hike
 //  claims, so coverage that reached disk without a committed record is a map
@@ -18,7 +18,7 @@
 //  dismissing that screen cancels nothing. So what is checked here is a
 //  lifetime rather than a merge: a run whose screen is gone still claims, a
 //  partial run claims exactly what it verified, a commit the store refused is
-//  never reported as a saved map, and a run the walker has overtaken with a
+//  never reported as a saved map, and a run the hiker has overtaken with a
 //  deletion is stood down rather than allowed to put the coverage back.
 //
 
@@ -153,7 +153,7 @@ struct OfflineDownloadClaimTests {
     }
 
     /// Coverage already on this device is the thing a second download must not
-    /// cost the walker. ``Hike/offlineDownloads`` reads through a sidecar
+    /// cost the hiker. ``Hike/offlineDownloads`` reads through a sidecar
     /// lookup that answers "nothing stored" when it fails, and writing through
     /// that answer inserts a *second* sidecar row: the real one is then
     /// unreachable behind a `fetchLimit` of one, and everything it claims is a
@@ -200,7 +200,7 @@ struct OfflineDownloadClaimTests {
     // MARK: A store that says no
 
     /// The other half of making the commit the download's own: it can fail,
-    /// and a failure has to reach the walker as one. "Saved for offline use"
+    /// and a failure has to reach the hiker as one. "Saved for offline use"
     /// over a refused commit is a map the storage row will not show, the
     /// delete button cannot free, and the next launch trim removes.
     @Test("a refused commit is not reported as a saved map")
@@ -236,7 +236,7 @@ struct OfflineDownloadClaimTests {
 
         #expect(
             try committedCoverage(for: id, in: sandbox).isEmpty,
-            "a claim the walker was told failed must not land at the next save"
+            "a claim the hiker was told failed must not land at the next save"
         )
     }
 
@@ -260,9 +260,9 @@ struct OfflineDownloadClaimTests {
         }
     }
 
-    // MARK: A walker who deletes while it runs
+    // MARK: A hiker who deletes while it runs
 
-    /// Surviving the screen means the walker can reach Settings while tiles
+    /// Surviving the screen means the hiker can reach Settings while tiles
     /// are still landing, and both buttons there take the manifests and the
     /// durable directory as they find them. An in-flight run is invisible to
     /// both — its tiles are not claimed yet — so left alone it would have its
@@ -305,7 +305,7 @@ struct OfflineDownloadClaimTests {
 
             // Only now do the tiles this run had in flight come back — the
             // window in which the old code committed a record for coverage
-            // the walker had just deleted.
+            // the hiker had just deleted.
             await held.release()
             await downloader.waitForCurrentRun()
             #expect(downloader.phase == .idle, "a stood-down run reports nothing of its own")
@@ -313,7 +313,7 @@ struct OfflineDownloadClaimTests {
 
         #expect(
             try committedCoverage(for: id, in: sandbox).isEmpty,
-            "a deletion the walker asked for must not be undone by the run it interrupted"
+            "a deletion the hiker asked for must not be undone by the run it interrupted"
         )
     }
 

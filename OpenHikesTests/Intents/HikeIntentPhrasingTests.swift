@@ -2,14 +2,14 @@
 //  HikeIntentPhrasingTests.swift
 //  OpenHikesTests
 //
-//  What the walker is actually told.
+//  What the hiker is actually told.
 //
 //  Nothing here asserts a rendered length or duration *literally*. These
 //  sentences are read out in the reader's own units and their own language, so
 //  a test spelling "1h 15m" would be asserting the region the machine happens
 //  to be set to. What is pinned instead is the shape: that the sentence is
 //  built out of the app's own formatting, that a paused hike says so, and that
-//  a fact the walker doesn't have — an unnamed trail, a route with no clock —
+//  a fact the hiker doesn't have — an unnamed trail, a route with no clock —
 //  is left out rather than read back blank.
 //
 
@@ -65,7 +65,7 @@ struct HikeIntentPhrasingTests {
     }
 
     /// The recording screen dims this same card when newer fixes have
-    /// overtaken the match. This surface is the one used when the walker
+    /// overtaken the match. This surface is the one used when the hiker
     /// cannot look at that screen, so it is the last place to drop the hedge:
     /// somebody who stepped off the path a minute ago must not hear that they
     /// are still on it.

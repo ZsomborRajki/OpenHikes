@@ -6,10 +6,10 @@
 //
 //  App Store Guideline 1.2 asks an app carrying user-generated content for two
 //  things, and this is the half that is not ``CommunityReport``: reporting asks
-//  a person to look at something, blocking hides it for the walker who blocked
+//  a person to look at something, blocking hides it for the hiker who blocked
 //  it and takes nothing down. They sit next to each other in the toolbar of
 //  ``CommunityHikeView`` because they are one gesture in most apps, and they
-//  are not the same gesture — a block is a reader's control, and a walker who
+//  are not the same gesture — a block is a reader's control, and a hiker who
 //  wants a hike removed for everybody has to report it.
 //
 //  ## Why this is device-local and has no schema
@@ -17,20 +17,20 @@
 //  Browsing is account-free by design: public reads need no Apple Account,
 //  which is why a signed-out phone can find a published hike and open one. The
 //  public database accepts a *write* only from an authenticated account, so a
-//  block that lived in CloudKit would be missing for exactly the walkers the
+//  block that lived in CloudKit would be missing for exactly the hikers the
 //  account-free flow exists for — the same argument that made reporting an
 //  email rather than a record type, reaching the same answer for a different
 //  reason. A list on the device needs no account, no network and no record
 //  type, and blocking is the kind of thing that is *supposed* to be one
 //  person's opinion rather than a fact about the hike.
 //
-//  What that costs is a list that does not follow the walker to a new phone.
+//  What that costs is a list that does not follow the hiker to a new phone.
 //  Deliberately not synced through ``SyncedSettings``: see
 //  ``SettingsKey/communityBlockedAuthors``.
 //
 //  ## Why it is keyed on `authorID` and not on a name
 //
-//  ``CommunityListing/authorName`` is free text the walker types when they
+//  ``CommunityListing/authorName`` is free text the hiker types when they
 //  share — chosen precisely because it is not an identity, so that publishing
 //  a trail does not mean publishing an Apple Account. Two people may type the
 //  same name and one person may type a different one every time, so a list
@@ -73,7 +73,7 @@ final class CommunityBlockList {
         /// moment of blocking. Shown in Settings so the entry can be
         /// recognised and undone; empty when the author published without one.
         var name: String
-        /// Sorts the Settings list newest-first, so the entry a walker just
+        /// Sorts the Settings list newest-first, so the entry a hiker just
         /// made — and may want back — is the one at the top.
         var blockedAt: Date
     }
@@ -114,7 +114,7 @@ final class CommunityBlockList {
     /// `listings` without anything from a blocked author.
     ///
     /// The early return is not a micro-optimisation but the ordinary case: a
-    /// walker who has never blocked anybody pays a `Set.isEmpty` per request
+    /// hiker who has never blocked anybody pays a `Set.isEmpty` per request
     /// rather than a pass over every row of every draw.
     func excludingBlocked(_ listings: [CommunityListing]) -> [CommunityListing] {
         guard !blockedIDs.isEmpty else { return listings }
@@ -169,12 +169,12 @@ final class CommunityBlockList {
     ///
     /// Three fields per entry and an order that matters, which a `[String]`
     /// cannot carry — and one write per change rather than a defaults domain
-    /// that grows a key for every person a walker ever blocked.
+    /// that grows a key for every person a hiker ever blocked.
     private func save() {
         do {
             defaults.set(try JSONEncoder().encode(authors), forKey: SettingsKey.communityBlockedAuthors)
         } catch {
-            // The in-memory list is already correct, so the block the walker
+            // The in-memory list is already correct, so the block the hiker
             // just made holds for this launch and is lost on the next one.
             // Nothing to tell them that they could act on, and unwinding the
             // block to match the failed write would be the worse half.
@@ -190,7 +190,7 @@ final class CommunityBlockList {
             return try JSONDecoder().decode([BlockedAuthor].self, from: data)
         } catch {
             // Read as "nobody is blocked", which is the reading that shows a
-            // walker content they asked not to see — so it is said in the log
+            // hiker content they asked not to see — so it is said in the log
             // rather than swallowed. Not erased: a shape this build cannot
             // read is not evidence there is nothing there, and the next launch
             // gets to try again.

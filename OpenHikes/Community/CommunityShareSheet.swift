@@ -2,7 +2,7 @@
 //  CommunityShareSheet.swift
 //  OpenHikes
 //
-//  What the share button opens: the one screen where a walker decides to make
+//  What the share button opens: the one screen where a hiker decides to make
 //  a private walk public.
 //
 //  It is a form rather than a confirmation alert, and the difference is the
@@ -51,13 +51,13 @@ struct CommunityShareSheet: View {
 
     /// The hike's description, if it has one worth showing.
     ///
-    /// Shown rather than merely mentioned, because this is the field a walker
+    /// Shown rather than merely mentioned, because this is the field a hiker
     /// is least likely to remember the contents of: a hike imported from a GPX
     /// file carries whatever its author wrote in it, which can be personal
     /// notes nothing in this app has displayed since the import. It goes to
     /// the public database either way — see ``CommunityPublisher/share``, which
     /// copies `trackDescription` into the draft — so the only question is
-    /// whether the walker sees it before or after it is published.
+    /// whether the hiker sees it before or after it is published.
     private var sharedDescription: String? {
         CommunityShareDisclosure.notes(from: hike.trackDescription)
     }
@@ -96,7 +96,7 @@ private extension CommunityShareSheet {
             LabeledContent("Route", value: hike.subtitle)
             if let sharedDescription {
                 // Multi-line and not truncated to a line: the point of showing
-                // it is that the walker can read what is about to be published
+                // it is that the hiker can read what is about to be published
                 // under their name, and half of a sentence would not serve
                 // that.
                 LabeledContent("Notes") {
@@ -113,7 +113,7 @@ private extension CommunityShareSheet {
             Text("What gets shared")
         } footer: {
             // Said plainly because it is the one surprise in the feature: a
-            // walker who has not thought about it assumes a shared trail is a
+            // hiker who has not thought about it assumes a shared trail is a
             // line on a map, and the photographs are the part they would want
             // to have been asked about.
             //
@@ -186,7 +186,7 @@ private extension CommunityShareSheet {
                     .accessibilityHidden(true)
                 Text("Sent for review")
                     .font(.headline)
-                Text("It'll appear for other walkers once it's been checked.")
+                Text("It'll appear for other hikers once it's been checked.")
                     .font(.subheadline)
                     .foregroundStyle(.secondary)
                     .multilineTextAlignment(.center)

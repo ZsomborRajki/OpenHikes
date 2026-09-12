@@ -137,7 +137,7 @@ nonisolated struct StoredTileDeletionPlan: Sendable {
     /// The failable initialisers above exist to *refuse* a plan whose claim
     /// set could not be established. A caller that established it itself
     /// before writing anything — which is the order ``StoredTileDeletion``
-    /// works in, so that a refusal costs the walker nothing — has nothing
+    /// works in, so that a refusal costs the hiker nothing — has nothing
     /// left to refuse, and a second optional there would be a `nil` branch no
     /// test could reach.
     init(doomed: TileOwnership, survivors: [TileOwnership]) {
@@ -177,7 +177,7 @@ extension TileOwnership {
     /// A claim set is only ever spent whole, by something whose job is
     /// removing what is not in it, so the difference between a short set and a
     /// complete one is the difference between freeing browsing residue and
-    /// deleting the map a walker downloaded for a valley with no signal. Both
+    /// deleting the map a hiker downloaded for a valley with no signal. Both
     /// ways a hike can go missing therefore arrive here as an error instead of
     /// as a shorter array: the fetch that produced `hikes`, and the sidecar
     /// read behind ``Hike/tileClaim()``.

@@ -41,7 +41,7 @@ nonisolated extension TileCache {
     /// Holds stale saved coverage in the memory tier so the map can draw it,
     /// and calls this when to go and ask for fresh bytes again.
     ///
-    /// Short, because the entry it governs is showing the walker ground that
+    /// Short, because the entry it governs is showing the hiker ground that
     /// may have changed, and every expiry is one disk read and one refresh
     /// attempt for a tile that is on screen. Long enough that a map held still
     /// over stale coverage is not re-reading it every draw pass — which is the
@@ -56,7 +56,7 @@ nonisolated extension TileCache {
     /// returned from here, however it got in.
     ///
     /// The exception is an entry the load path admitted *knowing* it was stale,
-    /// because a refresh was refused or failed and the walker's saved map is
+    /// because a refresh was refused or failed and the hiker's saved map is
     /// the only map there is. Those answer for
     /// ``staleCoverageRecheckInterval`` and are then evicted, which sends the
     /// next draw back down to ``loadTileResult(forKey:url:purpose:)`` to try

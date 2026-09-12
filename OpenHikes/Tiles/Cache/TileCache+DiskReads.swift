@@ -6,7 +6,7 @@
 //
 //  The split here is the difference between cache and coverage. A browsing
 //  tile is only ever offered while it is current; a durable tile — a map the
-//  walker saved for a trip — is offered current if it can be, and stale if
+//  hiker saved for a trip — is offered current if it can be, and stale if
 //  that is all there is. Serving the stale copy is the last step of
 //  ``TileCache/loadTileResult(forKey:url:purpose:)``, reached only once a
 //  refresh has been refused by policy or has failed outright, and it exists
@@ -100,7 +100,7 @@ nonisolated extension TileCache {
     /// policy, and a deadline a server named for itself in `Retry-After` — so
     /// the `TileFetchSuppressed` signpost is emitted for either, *before*
     /// anything is drawn. The signpost describes the refusal, not what the map
-    /// managed to put on screen in spite of it: a walker browsing downloaded
+    /// managed to put on screen in spite of it: a hiker browsing downloaded
     /// ground offline would otherwise emit none at all, and a tile that
     /// silently never loads is the hardest thing in this pipeline to debug.
     func withheldFetch(

@@ -107,7 +107,7 @@ final class TrailWalkSession {
     /// Capped at two: the first failure gets one prompt retry, then attempts
     /// wait for the regular cadence until a write succeeds.
     @ObservationIgnored private var persistenceFailures = 0
-    /// The hike whose walk was ended here, held until the walker leaves its
+    /// The hike whose walk was ended here, held until the hiker leaves its
     /// route or turns following on again.
     ///
     /// Without it End is not an end: the next accepted on-route fix finds no
@@ -115,7 +115,7 @@ final class TrailWalkSession {
     /// most visibly for a walk under 100 m, where End returns nothing and
     /// the detail is still on screen. Cleared by ``recordOffRoute(hikeID:)``
     /// and by turning Follow This Trail back on, which are the two ways a
-    /// walker says they mean to walk this trail again.
+    /// hiker says they mean to walk this trail again.
     @ObservationIgnored private var endedHikeID: UUID?
 
     /// - Parameters:
@@ -160,7 +160,7 @@ final class TrailWalkSession {
     }
 
     /// Whether the walk along `hikeID` was ended here and nothing has yet
-    /// said the walker means to walk it again.
+    /// said the hiker means to walk it again.
     ///
     /// The same boundary ``canStart(_:)`` refuses to start a second walk on,
     /// asked by the feeds rather than by the start path. An End leaves its
@@ -233,7 +233,7 @@ final class TrailWalkSession {
         return recordMatch(hikeID: hikeID, distance: distance, at: timestamp)
     }
 
-    /// An accepted fix that did not match `hikeID`'s route: the walker is
+    /// An accepted fix that did not match `hikeID`'s route: the hiker is
     /// off the trail. Breaks the walk under way's coverage continuity, and
     /// rearms auto-start for a hike whose walk was ended here — leaving the
     /// route is the boundary an End waits for.
@@ -268,13 +268,13 @@ final class TrailWalkSession {
         // news whatever order it arrived in. Rejected before the record is
         // touched, because both things it would do are wrong: it would move
         // the walk's last-seen time backwards, and — while paused — offer a
-        // stretch of trail the walker covered *before* they stopped as
+        // stretch of trail the hiker covered *before* they stopped as
         // evidence that they have set off again.
         //
         // Not a hypothetical ordering. ``BackgroundTrailTracker`` matches off
         // the main thread behind an await, so a fix taken earlier can be
         // handed over later than a foreground one; a significant-change
-        // delivery is routinely a cached fix from where the walker set off;
+        // delivery is routinely a cached fix from where the hiker set off;
         // and serialising the background feed against itself orders it
         // against nothing else.
         guard now >= current.lastActivityAt else { return false }
@@ -294,7 +294,7 @@ final class TrailWalkSession {
         current.coverage.record(distance: distance)
         // The walk's *position*, kept beside the coverage union rather than
         // derived from it: the union's maximum is where the walk has been,
-        // and a pause has to be anchored at where the walker is. See
+        // and a pause has to be anchored at where the hiker is. See
         // ``TrailWalkRecord/lastFollowedDistanceMeters``.
         current.lastFollowedDistanceMeters = distance
         record = current
@@ -353,14 +353,14 @@ final class TrailWalkSession {
         furthestDistanceMeters = walk.coverage.furthestDistanceMeters
         // A walk adopted from the sidecar was paused on a previous launch as
         // often as it was started on this one, and the pause a background
-        // relaunch inherits is exactly the one a walker forgets: the phone has
+        // relaunch inherits is exactly the one a hiker forgets: the phone has
         // been in a pocket since.
         updateReminder(for: walk)
     }
 
     // MARK: Pause and resume
 
-    /// The walker tapped Pause.
+    /// The hiker tapped Pause.
     ///
     /// - Returns: whether the walk is now paused. A phase is a milestone and
     ///   is committed the way an end is: the record, the screens and both
@@ -383,7 +383,7 @@ final class TrailWalkSession {
         return true
     }
 
-    /// The walker tapped Resume.
+    /// The hiker tapped Resume.
     ///
     /// - Returns: whether the walk is following again, refused for the reason
     ///   above — with the walk left paused, which is what it still is on disk.
@@ -415,7 +415,7 @@ final class TrailWalkSession {
 
     // MARK: End
 
-    /// The walker tapped End. Returns the row it became, a walk under the
+    /// The hiker tapped End. Returns the row it became, a walk under the
     /// minimum that was simply cleared, or a commit the store refused — see
     /// ``TrailWalkEnd``.
     @discardableResult func end() -> TrailWalkEnd {
@@ -433,7 +433,7 @@ final class TrailWalkSession {
     /// The same, for a hike that went away without anything telling us.
     ///
     /// `MapSheet`'s swipe is the one deletion that calls the method above; a
-    /// deletion mirrored from the walker's other device calls nothing, and
+    /// deletion mirrored from the hiker's other device calls nothing, and
     /// there is no remote-change handling to hang it off. Checked beside
     /// ``endIfAbandoned(at:)``, on every fix, because until the walk is
     /// cleared no trail can start one — ``canStart(_:)`` needs `record ==
@@ -562,7 +562,7 @@ final class TrailWalkSession {
     }
 
     /// Clears a walk whose hike is no longer in the store, on either branch
-    /// above: a hike deleted on the walker's other device takes the mirrored
+    /// above: a hike deleted on the hiker's other device takes the mirrored
     /// row and cannot touch this sidecar, so the column outlives it.
     ///
     /// Left uncleared it is picked again at every launch — it is the newest
@@ -663,16 +663,16 @@ private extension TrailWalkSession {
 
 private extension TrailWalkSession {
     /// Closes the walked interval at the last on-route match, so the fix that
-    /// brings the walker back to the trail starts a fresh one.
+    /// brings the hiker back to the trail starts a fresh one.
     ///
     /// The gap bound bridges a *lost signal*, on the reasoning that the
-    /// walker probably did walk the stretch in between. Here the evidence is
+    /// hiker probably did walk the stretch in between. Here the evidence is
     /// the opposite: a fix was accepted, matched, and found off the route.
     /// Without this, cutting a switchback by road and rejoining within
     /// ``TrailWalkPolicy/gapBoundMeters`` hands the union the whole shortcut —
     /// and this is the coverage that reaches `HikeWalk`, History, Show on Map
     /// and the completion rule. The same statement a pause makes, made by the
-    /// matcher instead of the walker.
+    /// matcher instead of the hiker.
     ///
     /// Kept to the cadence rather than committed like a milestone: this
     /// arrives per fix, and a walk that never comes back to the route is
@@ -692,7 +692,7 @@ private extension TrailWalkSession {
             current.coverage.breakContinuity()
             record = current
         }
-        // Nothing to carry once the sidecar holds this record: the walker can
+        // Nothing to carry once the sidecar holds this record: the hiker can
         // be off the route for hours, and an unchanged rewrite every cadence
         // is a save and a `@Query` tick for nothing. A refused write left the
         // column as it was, so it still differs here and is still retried.
@@ -707,24 +707,24 @@ private extension TrailWalkSession {
     /// Arms or disarms the reminder that a paused walk is being walked anyway.
     ///
     /// One function for the two places a walk's phase is set from a record —
-    /// the walker's own Pause, and a walk adopted from the sidecar at launch —
-    /// because a relaunched pause is exactly the one a walker forgets and the
+    /// the hiker's own Pause, and a walk adopted from the sidecar at launch —
+    /// because a relaunched pause is exactly the one a hiker forgets and the
     /// two must not disagree about what watches it.
     ///
     /// Anchored at the position the walk had reached rather than at a
     /// coordinate: the feeds a paused walk still hears from speak in distance
     /// along this route, and that is the measurement — which is also why the
-    /// controller takes the displacement in either direction, so a walker who
+    /// controller takes the displacement in either direction, so a hiker who
     /// covers the trail backwards while paused is noticed just the same.
     ///
     /// Stamped with the record's own ``TrailWalkRecord/phaseChangedAt``
     /// rather than with the clock, for the same reason one function serves
-    /// both callers: a pause adopted at launch happened whenever the walker
+    /// both callers: a pause adopted at launch happened whenever the hiker
     /// tapped it, possibly hours before this process existed, and dating it
     /// from launch would hand the watch a boundary every fix taken during the
     /// pause falls before.
     ///
-    /// The *position*, emphatically not the coverage maximum. A walker who
+    /// The *position*, emphatically not the coverage maximum. A hiker who
     /// went out to a summit and came back down before pausing has a maximum
     /// half a walk away from where they are standing, and anchoring there
     /// told them they had covered eight hundred metres for standing still.

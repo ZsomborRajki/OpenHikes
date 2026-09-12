@@ -20,7 +20,7 @@ import SwiftData
 #if DEBUG
 nonisolated enum SeededWalkFixture {
     /// The names a launch may ask for. Exactly one for now: half the route,
-    /// walked yesterday and ended by the walker, which is enough to draw
+    /// walked yesterday and ended by the hiker, which is enough to draw
     /// every element of a row and a summary.
     private static let halfLoop = "HalfLoop"
     private static let halfLoopActiveSeconds: TimeInterval = 45 * 60

@@ -31,7 +31,7 @@ struct TrailWidgetEntry: TimelineEntry {
     ///
     /// **A live recording always outranks the selected trail, and takes the
     /// whole widget rather than a badge or a second line.** They genuinely
-    /// overlap: a walker records their own track along an imported route. The
+    /// overlap: a hiker records their own track along an imported route. The
     /// recording wins because it is the thing that would be *lost* — a follow
     /// is re-derived from the trail and the next fix, a recording is not —
     /// and it is the only one of the two that is happening *now*. It is the
@@ -43,7 +43,7 @@ struct TrailWidgetEntry: TimelineEntry {
     /// budget the recording feed is already spending.
     ///
     /// Total, not conditional. A *paused* recording takes the widget too — it
-    /// is a walk the walker will come back to, and handing the screen back to
+    /// is a walk the hiker will come back to, and handing the screen back to
     /// a trail mid-hike would be the takeover flickering. The three questions
     /// this payload is asked are therefore deliberately different, and the
     /// difference is the policy rather than an oversight:
@@ -60,7 +60,7 @@ struct TrailWidgetEntry: TimelineEntry {
     ///
     /// The stored trail is *kept*, not cleared, throughout — nothing here
     /// writes — so the moment the recorder clears its payload the widget's
-    /// next timeline has the walker's selection back untouched, basemaps
+    /// next timeline has the hiker's selection back untouched, basemaps
     /// included. The takeover is a projection, and only a projection.
     init(
         date: Date,
@@ -123,7 +123,7 @@ final class WidgetRecordingRequest {
 
 /// The widget's configuration, which is deliberately empty.
 ///
-/// There is nothing for a walker to choose here: the widget shows whatever
+/// There is nothing for a hiker to choose here: the widget shows whatever
 /// hike the app has selected, and an active recording always wins. Picking a
 /// hike in two places would be one place too many.
 ///
@@ -192,7 +192,7 @@ struct TrailWidgetProvider: AppIntentTimelineProvider {
     /// What the Smart Stack ranks this widget by.
     ///
     /// A recording in progress is the one moment this widget is the most
-    /// useful thing on the stack — the walker is outdoors, moving, and looking
+    /// useful thing on the stack — the hiker is outdoors, moving, and looking
     /// at a wrist or a lock screen rather than unlocking the phone.
     /// `.fitness(.workoutActive)` is exactly that condition, and the system
     /// already knows when it holds.
@@ -570,7 +570,7 @@ private struct TrailWidgetContent: View {
     private var hasMap: Bool { !(basemaps?.images.isEmpty ?? true) }
 
     /// Everything the one accessibility element says after the trail's name:
-    /// how far along it the walker is, then each chip in words. The glyphs
+    /// how far along it the hiker is, then each chip in words. The glyphs
     /// themselves are hidden, so this is the only place the numbers are said.
     private var accessibilityValue: String {
         let spoken = snapshot.metricsAccessibilityText(limit: layout.metricLimit)
@@ -652,7 +652,7 @@ struct TrailWidget: Widget {
     ///
     /// `.systemExtraLarge` is deliberately absent: it exists on iPad and the
     /// Mac, and every target here declares `TARGETED_DEVICE_FAMILY = 1`, so
-    /// offering it advertised a size no walker could ever place.
+    /// offering it advertised a size no hiker could ever place.
     static let systemFamilies: [WidgetFamily] = [.systemSmall, .systemMedium, .systemLarge]
 
     /// The Lock Screen sizes, drawn by `TrailWidgetAccessories.swift`. They

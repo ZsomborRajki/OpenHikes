@@ -15,7 +15,7 @@ nonisolated struct PreparedRecording: Sendable {
     /// The saved line's own length: the plain sum along `route`, with none of
     /// the stationary windows ``distanceMeters`` retracts.
     ///
-    /// Not a second opinion about how far the walker went — `distanceMeters`
+    /// Not a second opinion about how far the hiker went — `distanceMeters`
     /// is that, and is the figure the hike shows. This is the *axis* a walk's
     /// coverage is measured on, which is `RouteProfile.totalDistanceMeters`
     /// and nothing else: `TrailWalkSession` starts every followed walk
@@ -29,7 +29,7 @@ nonisolated struct PreparedRecording: Sendable {
     /// Summed here, where the points are already being walked off the main
     /// thread, rather than by building a `RouteProfile` at save time: that is
     /// twenty thousand points of trigonometry on the main actor, at the one
-    /// moment a walker is waiting for their hike to appear.
+    /// moment a hiker is waiting for their hike to appear.
     let routeLengthMeters: Double
     /// How long the recording was actually recording: the sum of the gaps
     /// between consecutive saved points, with the leg a pause opened left
@@ -46,7 +46,7 @@ nonisolated struct PreparedRecording: Sendable {
     /// those intervals reported a walk of one minute, recovered an hour later,
     /// as an hour and eleven minutes of walking.
     ///
-    /// A gap the walker *did* walk still counts: a lost signal is an ordinary
+    /// A gap the hiker *did* walk still counts: a lost signal is an ordinary
     /// gap between two consecutive points and is summed like any other. Only a
     /// pause boundary — see ``RouteBoundary`` — takes its leg out.
     let recordedSeconds: TimeInterval
@@ -165,11 +165,11 @@ nonisolated enum RecordingPreparation {
         )
 
         // One distance rule, whether or not matching moved the line: the same
-        // accumulator the walker watched tick during the recording, replayed
+        // accumulator the hiker watched tick during the recording, replayed
         // over whatever geometry is being saved. A plain sum over the matched
         // legs is not the same rule — it hands back the stationary windows the
         // live readout retracted — so the hike came out longer than the walk
-        // the walker watched, with nothing to say which figure to believe.
+        // the hiker watched, with nothing to say which figure to believe.
         var accumulator = RecordingDistanceAccumulator()
         // The geometric length rides along in the same pass, by the same
         // arithmetic `RouteProfile` uses on the saved row — see

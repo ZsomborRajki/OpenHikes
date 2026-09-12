@@ -2,7 +2,7 @@
 //  TrailDifficulty.swift
 //  OpenHikes
 //
-//  The handful of hiking difficulty grades a walker actually plans around,
+//  The handful of hiking difficulty grades a hiker actually plans around,
 //  derived from OpenStreetMap's `sac_scale` tag.
 //
 

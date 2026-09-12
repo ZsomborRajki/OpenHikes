@@ -103,7 +103,7 @@ nonisolated extension TileCache {
     /// **The tier decides what age is allowed to do.** A browsing tile past
     /// ``TileCache/tileExpirationInterval`` is deleted here and reported
     /// absent: it is cache, nobody asked for it, and the only cost of losing
-    /// it is refetching it. A **durable** tile is offline coverage a walker
+    /// it is refetching it. A **durable** tile is offline coverage a hiker
     /// explicitly saved, so age never unlinks it — the date comes back as it
     /// stands and the caller decides whether to refresh. Deleting it here is
     /// what made a map saved a week before a trip blank on the trail: the

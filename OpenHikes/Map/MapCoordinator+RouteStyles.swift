@@ -55,7 +55,7 @@ extension MapView.Coordinator {
     ///
     /// Built on the inferred one rather than beside it: both are the route's
     /// own tint drawn weakly over ground the line crosses without evidence,
-    /// and the walker should not have to learn two visual languages for that.
+    /// and the hiker should not have to learn two visual languages for that.
     /// The dots and the extra fade are what say which of the two this is —
     /// nobody was watching, versus nobody was asked to.
     ///

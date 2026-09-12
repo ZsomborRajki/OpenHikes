@@ -20,7 +20,7 @@
 //  the hike goes on reporting a saved map, the storage row goes on counting
 //  bytes that are not there — and because the claim still exists, every sweep
 //  reads the state as intentional. Nothing re-downloads the map, and the
-//  walker finds out where there is no signal.
+//  hiker finds out where there is no signal.
 //
 //  Which is why the whole sequence is here rather than in `HikeDetailView`:
 //  the screen owned it, wrote the manifests without ever saving them, and
@@ -37,7 +37,7 @@ nonisolated enum StoredTileDeletion {
         category: "OfflineStorage"
     )
 
-    /// Why a deletion did not happen, in the two shapes the walker meets it —
+    /// Why a deletion did not happen, in the two shapes the hiker meets it —
     /// both of which mean every tile is still on the device.
     enum Failure: Equatable, Sendable {
         /// A claim could not be read, so no plan could be built. Nothing was
@@ -91,7 +91,7 @@ nonisolated enum StoredTileDeletion {
     /// - Every download in flight is stood down once the commit lands, before
     ///   the plan is spent: their tiles are precisely the ones no hike claims
     ///   yet, so left running they would have them deleted and then claim
-    ///   them back, putting the hike's coverage back moments after the walker
+    ///   them back, putting the hike's coverage back moments after the hiker
     ///   deleted it. Nothing can slip between the two — this holds the main
     ///   actor from the snapshot to here, and a claim is main-actor work.
     ///   Through ``OfflineDownloadRegistry`` rather than one screen's
@@ -106,7 +106,7 @@ nonisolated enum StoredTileDeletion {
     /// - Parameter downloads: Where the runs still in flight are, so they can
     ///   be stood down — and only once the deletion is on disk. A refusal
     ///   leaves them alone: nothing was deleted, so there is nothing for them
-    ///   to resurrect, and the walker never cancelled them.
+    ///   to resurrect, and the hiker never cancelled them.
     /// - Parameter fetch: The library, hikes and all, so the survivors' claims
     ///   can be read. A fetch that failed refuses the deletion rather than
     ///   shortening the set.
@@ -144,14 +144,14 @@ nonisolated enum StoredTileDeletion {
         }
 
         // Snapshotted before the fold, because that is what a refusal has to
-        // put back: the manifest as the walker last saw it, with the
+        // put back: the manifest as the hiker last saw it, with the
         // stand-down's own keys added on top by ``AutoSaveController``.
         let previousDownloads = hike.offlineDownloads
         let previousKeys = hike.autoSavedTileKeys
         let wasAutoSaving = hike.autoSaveTilesEnabled
         let standDown = autoSave.standDown(for: hike)
         // Recorded off as well as stood down: a hike whose saved map the
-        // walker just deleted must not start saving it again on the next pan.
+        // hiker just deleted must not start saving it again on the next pan.
         autoSave.setEnabled(false, for: hike)
         let plan = StoredTileDeletionPlan(doomed: TileOwnership(hike), survivors: survivors)
 
@@ -167,7 +167,7 @@ nonisolated enum StoredTileDeletion {
             // over an existing row. `AutoSaveController.sceneWillResignActive`
             // already restores this same property the same way, for the same
             // reason. And it has to be restored, because a manifest left empty
-            // in the context is coverage the walker still has, waiting for
+            // in the context is coverage the hiker still has, waiting for
             // whichever autosave lands next to forget it without a word —
             // durable tiles the launch trim then reclaims, for a hike whose
             // deletion was refused.

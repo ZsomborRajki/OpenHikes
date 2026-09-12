@@ -8,7 +8,7 @@
 //  with no notion of tier, so the launch sweep took durable tiles along with
 //  cached ones, and any lookup that beat the sweep to it deleted the file
 //  before `loadTile` had reached the line that asks whether the phone is even
-//  online. A walker who downloaded a map the week before a trip could open the
+//  online. A hiker who downloaded a map the week before a trip could open the
 //  hike on the trail, out of signal, and get nothing — while the hike went on
 //  showing an `Offline tiles` row for bytes that were gone.
 //
@@ -76,7 +76,7 @@ struct TileDurableCoverageTests {
 
     // MARK: - Offline, which is what the download was for
 
-    /// The headline. No signal, coverage a week old, and the walker gets their
+    /// The headline. No signal, coverage a week old, and the hiker gets their
     /// map — the tile is drawn from the durable tier and is still there
     /// afterwards.
     ///
@@ -136,7 +136,7 @@ struct TileDurableCoverageTests {
 
     /// And it is only admitted for a while. The entry is what damps the draw
     /// loop; expiring it is what stops the first stale draw of a session
-    /// standing as the answer for the rest of it, so a walker who regains
+    /// standing as the answer for the rest of it, so a hiker who regains
     /// signal gets fresh ground without restarting the app.
     ///
     /// Driven by a reference date rather than by waiting: a memory entry's age
@@ -187,7 +187,7 @@ struct TileDurableCoverageTests {
     /// The case the issue turns on: the request was allowed and still didn't
     /// produce anything. A timeout on a bar of signal, a 500, a captive portal.
     ///
-    /// The old code had already deleted the file by this point, so the walker
+    /// The old code had already deleted the file by this point, so the hiker
     /// lost coverage they had by being *nearly* online — worse than being
     /// offline outright. Nothing is unlinked until replacement bytes exist.
     @Test("a failed refresh leaves the saved bytes intact and still draws them")
@@ -202,7 +202,7 @@ struct TileDurableCoverageTests {
         let image = await stub.cache.loadTile(forKey: key, url: Self.url(0))
 
         #expect(StubTileProtocol.requestCount == 1, "precondition: the refresh was attempted")
-        #expect(image != nil, "the walker keeps the map they saved")
+        #expect(image != nil, "the hiker keeps the map they saved")
         #expect(stub.isSaved(key))
         #expect(try Self.modificationDate(of: file) == placed, "a failed refresh writes nothing")
     }
@@ -256,7 +256,7 @@ struct TileDurableCoverageTests {
         let image = await stub.cache.loadTile(forKey: key, url: Self.url(0))
 
         #expect(StubTileProtocol.requestCount == 1, "the server said fifteen minutes and meant it")
-        #expect(image != nil, "and the walker still gets the map they saved while it waits")
+        #expect(image != nil, "and the hiker still gets the map they saved while it waits")
     }
 
     /// Regaining signal has to reach the tiles already on screen. The renderer
@@ -348,7 +348,7 @@ struct TileDurableCoverageTests {
     /// asks the browsing tier before the durable one, and *asking* is what
     /// unlinks an expired browsing file — so where an older build left two
     /// copies that are both past the TTL, the newer of them was deleted before
-    /// anything reconciled the tiers, and the walker was drawn the older one.
+    /// anything reconciled the tiers, and the hiker was drawn the older one.
     @Test("a load past the TTL keeps the newer of two stale duplicates")
     func loadKeepsTheNewerStaleDuplicate() async throws {
         let stub = StubbedTileCache(reachable: false)
@@ -375,7 +375,7 @@ struct TileDurableCoverageTests {
     /// The accounting half of the same promise. A hike sheet's `Offline tiles`
     /// row measures the bytes its claimed keys actually occupy, so coverage
     /// deleted by the launch sweep used to make that row shrink to nothing
-    /// without anything having asked the walker.
+    /// without anything having asked the hiker.
     @Test("saved coverage still measures after the launch sweep has run")
     func claimedBytesSurviveTheLaunchSweep() async throws {
         let stub = try Self.sandboxWithStaleCoverage(reachable: false)

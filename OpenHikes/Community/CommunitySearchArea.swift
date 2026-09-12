@@ -8,7 +8,7 @@
 //  three separate things now have to agree about one area: the offer the map
 //  makes (*Search this area*), the request the transport sends, and the place
 //  name the list is headed with. While those were three arguments passed
-//  around separately, the question the walker confirmed and the question that
+//  around separately, the question the hiker confirmed and the question that
 //  was asked could differ by a pan that landed in between.
 //
 //  Stored as two `Double`s rather than as a `CLLocationCoordinate2D`, for the

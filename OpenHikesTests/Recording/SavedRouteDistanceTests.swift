@@ -8,7 +8,7 @@ import Foundation
 @testable import OpenHikes
 import Testing
 
-/// What a finished hike says it was, against what the walker watched it become.
+/// What a finished hike says it was, against what the hiker watched it become.
 ///
 /// The two used to be measured by different rules — the live readout ran
 /// ``RecordingDistanceAccumulator`` over every fix while a matched save summed
@@ -81,7 +81,7 @@ struct SavedRouteDistanceTests {
     }
 
     /// A walk up one straight trail with a stationary window in the middle:
-    /// the walker stands for a minute and a half and lets GPS wander, then
+    /// the hiker stands for a minute and a half and lets GPS wander, then
     /// carries on. Every leg snaps, so what gets saved is matched geometry
     /// rather than the recorded trace.
     private func stationaryWindowFixture() -> (
@@ -128,7 +128,7 @@ struct SavedRouteDistanceTests {
     /// The same stop seen only by Core Motion, and the shape where that
     /// matters: fixes that drift steadily enough that no thirty-second window
     /// is ever short of net displacement, every one of them flagged
-    /// stationary, and the recording ending there — a walker who stops at the
+    /// stationary, and the recording ending there — a hiker who stops at the
     /// top and presses stop. Nothing after the stop re-credits the drift as
     /// the displacement that ends a stationary window, so the flag is the only
     /// thing between the walk and seventy metres it never covered.
@@ -173,7 +173,7 @@ struct SavedRouteDistanceTests {
 
     // MARK: Tests
 
-    /// The walker watches one number climb for the whole walk and is then
+    /// The hiker watches one number climb for the whole walk and is then
     /// shown another one on the saved hike. Summing the matched legs instead
     /// of replaying the recording's own rule handed back the stationary window
     /// the live readout had retracted, and nothing said which figure to trust.
@@ -206,7 +206,7 @@ struct SavedRouteDistanceTests {
             abs(prepared.distanceMeters - live.distanceMeters) < 5,
             """
             the saved hike reports \(prepared.distanceMeters) m where the \
-            walker watched \(live.distanceMeters) m accumulate
+            hiker watched \(live.distanceMeters) m accumulate
             """
         )
     }
@@ -242,7 +242,7 @@ struct SavedRouteDistanceTests {
             abs(prepared.distanceMeters - live.distanceMeters) < 5,
             """
             the saved hike reports \(prepared.distanceMeters) m where the \
-            walker watched \(live.distanceMeters) m accumulate
+            hiker watched \(live.distanceMeters) m accumulate
             """
         )
     }

@@ -181,7 +181,7 @@ final class HikeRecorder: NSObject {
     nonisolated static let liveMatchingDuration: TimeInterval = 60
     /// How long a stop will wait for the trail-graph regions its gaps need.
     /// Long enough for a handful of Overpass queries on a working connection,
-    /// short enough that a walker who finished in a valley with no signal
+    /// short enough that a hiker who finished in a valley with no signal
     /// still gets their hike saved promptly.
     nonisolated static let gapGraphDownloadBudget: Duration = .seconds(20)
 
@@ -194,7 +194,7 @@ final class HikeRecorder: NSObject {
     }
 
     /// Waits out the automatic recovery pass, so ``phase`` answers about the
-    /// walker's hike rather than about the launch.
+    /// hiker's hike rather than about the launch.
     ///
     /// Cheap and idempotent: a finished task returns its value immediately,
     /// and a launch that started no pass has nothing to await. Suspending here
@@ -311,7 +311,7 @@ final class HikeRecorder: NSObject {
         self.journalFlushDelay = journalFlushDelay
         super.init()
         self.source.sourceDelegate = self
-        // The controller sees the walker's switch move; only the recorder can
+        // The controller sees the hiker's switch move; only the recorder can
         // stop the feed a pause started for it. See
         // ``stopWatchingPausedRecording()``.
         movementReminders?.watchingDidEnd = { [weak self] in
@@ -354,7 +354,7 @@ extension HikeRecorder {
         let pausedAt = clock()
         hasParkedPausedSensors = false
         // Told before the journal write rather than after it: the prompt this
-        // puts up belongs to the tap the walker has just made, not to a queued
+        // puts up belongs to the tap the hiker has just made, not to a queued
         // write landing after they have left the trailhead. The answer is not
         // carried across that wait — `parkLocationSensors()` asks the
         // controller for a fresh one, which is what lets a refusal answered in

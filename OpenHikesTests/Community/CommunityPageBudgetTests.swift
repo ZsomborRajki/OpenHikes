@@ -36,7 +36,7 @@ struct CommunityPageBudgetTests {
     }
 
     /// The failure this type exists for. Twenty-five hikes by somebody the
-    /// walker blocked used to draw *No shared hikes here* over an ordinary
+    /// hiker blocked used to draw *No shared hikes here* over an ordinary
     /// hike sitting at position twenty-six, and asking again returned the same
     /// hidden page forever.
     @Test("a page eaten by blocked rows buys another")
@@ -60,7 +60,7 @@ struct CommunityPageBudgetTests {
     }
 
     /// The public database's quota is shared by everybody using the app, so a
-    /// walker who has blocked most of the authors near them must not be able
+    /// hiker who has blocked most of the authors near them must not be able
     /// to walk the whole table by panning.
     @Test("the request stops at the cap however much is blocked")
     func pagingIsBounded() {

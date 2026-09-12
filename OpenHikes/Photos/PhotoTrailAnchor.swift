@@ -6,7 +6,7 @@
 //  importantly, when the answer is "none".
 //
 //  The elevation graph already carries a position: the live match while
-//  auto-follow has one, or wherever the walker last left the scrubber. That is
+//  auto-follow has one, or wherever the hiker last left the scrubber. That is
 //  the selection a photo is pinned to, so taking a picture needs no separate
 //  gesture and no second idea of "where I am".
 //
@@ -30,7 +30,7 @@ nonisolated enum PhotoTrailAnchor {
     /// - Parameters:
     ///   - live: ``TrackerState/liveTrackerDistance`` — a real GPS match onto
     ///     this route, or `nil` when auto-follow is off, has no fix, or the
-    ///     walker is off-trail.
+    ///     hiker is off-trail.
     ///   - scrubbed: ``TrackerState/trackerDistance`` — the persistent
     ///     tracker, which is 0 until it is moved.
     static func distanceAlongRoute(live: Double?, scrubbed: Double) -> Double? {
@@ -62,7 +62,7 @@ nonisolated enum PhotoTrailAnchor {
     }
 
     /// The coordinate for a photo taken while recording, where there is no
-    /// elevation graph to read and the walker is, by definition, standing at
+    /// elevation graph to read and the hiker is, by definition, standing at
     /// the point the picture is of.
     ///
     /// The draft's last accepted fix rather than a fresh location read: only

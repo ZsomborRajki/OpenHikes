@@ -15,7 +15,7 @@
 //
 //  The banner's own tap is deliberately left to the system: it brings the app
 //  to the front, and this app's route to a particular screen is view state
-//  that a delegate with no view hierarchy has no way to set. A walker who
+//  that a delegate with no view hierarchy has no way to set. A hiker who
 //  wanted the screen gets the app; one who wanted the recording resumed has a
 //  button that does it without unlocking anything.
 //
@@ -60,7 +60,7 @@ final class MovementReminderActions: NSObject {
 
     /// Performs one button, or does nothing when the button and the reminder
     /// it came from do not belong together — a banner delivered by a build
-    /// that spelled its categories differently, or one the walker had sitting
+    /// that spelled its categories differently, or one the hiker had sitting
     /// in Notification Centre across an update.
     func perform(_ action: MovementReminderAction, from kind: MovementReminderKind) async {
         guard action == kind.action else { return }
@@ -76,7 +76,7 @@ final class MovementReminderActions: NSObject {
             _ = try await recording.resumeRecording()
         } catch {
             // Spoken failures are for Siri; here there is nobody listening, and
-            // the walker's next look at the recording screen shows the truth
+            // the hiker's next look at the recording screen shows the truth
             // either way — including a `.preciseLocationRequired` refusal,
             // which is the one this path can genuinely walk into.
             Self.logger.error("Reminder could not resume the recording: \(error, privacy: .public)")
@@ -116,7 +116,7 @@ extension MovementReminderActions: UNUserNotificationCenterDelegate {
     // swiftlint:disable async_without_await
     /// Shown while the app is in the foreground as well.
     ///
-    /// A walker looking at the map with the recording paused is exactly the
+    /// A hiker looking at the map with the recording paused is exactly the
     /// person this feature is for — the screen they are on says "Paused" in
     /// small print at the top and nothing else knows they have started walking
     /// again. Sound and banner, no badge: the app has never used one.

@@ -7,7 +7,7 @@ import Foundation
 @testable import OpenHikes
 import Testing
 
-/// What a reviewer actually receives when a walker reports a published hike.
+/// What a reviewer actually receives when a hiker reports a published hike.
 ///
 /// Asserted against the composed message rather than against the screen,
 /// because the screen is the part that can be looked at and the message is the
@@ -53,7 +53,7 @@ struct CommunityReportTests {
         #expect(report.body.contains(CommunityReportReason.privacy.reportedDescription))
     }
 
-    @Test("what the walker typed reaches the reviewer")
+    @Test("what the hiker typed reaches the reviewer")
     func noteReachesTheReviewer() {
         let report = Self.report(reason: .other, note: "The third photo shows a house number")
 
@@ -90,7 +90,7 @@ struct CommunityReportTests {
     /// The whole reason the URL is built by hand. `URLComponents` treats `&`
     /// and `=` as legal in a query component and leaves them alone, so a note
     /// containing either would end the body early — and the complaint would
-    /// arrive truncated at exactly the character the walker typed.
+    /// arrive truncated at exactly the character the hiker typed.
     @Test("a note containing & or = does not truncate the body")
     func queryDelimitersInTheNoteAreEscaped() throws {
         let note = "Photo 2 & photo 3 = the same house"
@@ -113,7 +113,7 @@ struct CommunityReportTests {
 
     /// A title is somebody else's typing and can hold anything. The URL has to
     /// be formable regardless, because the fallback for one that is not is the
-    /// walker copying the report out by hand.
+    /// hiker copying the report out by hand.
     @Test("an awkward title still composes a mail")
     func awkwardTitleStillComposes() throws {
         let listing = CommunityListing.stub(title: "Ridge #4 — 100% up & over?")
@@ -124,7 +124,7 @@ struct CommunityReportTests {
 
     // MARK: - The fallback
 
-    /// What a walker with no mail app copies. It is useless without the
+    /// What a hiker with no mail app copies. It is useless without the
     /// address, which the composed `mailto:` carried for them.
     @Test("the copyable fallback carries the address and the record names")
     func fallbackCarriesEverything() {
@@ -137,7 +137,7 @@ struct CommunityReportTests {
     // MARK: - The reasons
 
     /// Every case has to be both pickable and readable out of context: the
-    /// walker sees ``CommunityReportReason/title`` in a list and the reviewer
+    /// hiker sees ``CommunityReportReason/title`` in a list and the reviewer
     /// sees ``CommunityReportReason/reportedDescription`` alone in an inbox.
     @Test("every reason is worded for both readers", arguments: CommunityReportReason.allCases)
     func everyReasonIsWorded(reason: CommunityReportReason) {
@@ -147,7 +147,7 @@ struct CommunityReportTests {
     }
 
     /// The picker draws `pickerOrder` and not `allCases`, so a reason added to
-    /// the enum and not to that list is a reason no walker can ever choose —
+    /// the enum and not to that list is a reason no hiker can ever choose —
     /// which nothing else here would notice, because every other assertion
     /// iterates `allCases`.
     @Test("the picker offers every reason, with Something Else last")

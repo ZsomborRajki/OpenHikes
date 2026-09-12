@@ -136,7 +136,7 @@ struct TileCorridorTests {
     /// as a plain longitude interval it comes out spanning the globe the long
     /// way round, and then auto-save treats *anywhere* at that latitude as
     /// "near the trail" — filling the hike's 3,000-tile budget with ocean the
-    /// walker will never see, and doing it while they browse somewhere else
+    /// hiker will never see, and doing it while they browse somewhere else
     /// entirely.
     @Test(
         "a trail across the antimeridian doesn't put the whole latitude band in its corridor",

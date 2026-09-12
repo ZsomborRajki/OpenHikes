@@ -79,7 +79,7 @@ nonisolated private func route(
 @Suite("Trail surface classification")
 struct TrailSurfaceClassificationTests {
     @Test(
-        "OSM surface values collapse onto the categories a walker plans around",
+        "OSM surface values collapse onto the categories a hiker plans around",
         arguments: [
             ("asphalt", TrailSurface.paved),
             ("concrete:plates", .paved),

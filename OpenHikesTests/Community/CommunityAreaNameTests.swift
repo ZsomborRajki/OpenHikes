@@ -12,7 +12,7 @@ import Testing
 /// What the shared-hikes section is headed with, and when.
 ///
 /// The header used to say *Nearby*, which named the query and never the
-/// answer. A walker who had panned, or who opened the app somewhere they were
+/// answer. A hiker who had panned, or who opened the app somewhere they were
 /// not yesterday, had no way to tell which "here" the rows were from — and a
 /// name that lagged behind the list would be worse than none, because it would
 /// be a place the rows are not about.
@@ -83,7 +83,7 @@ struct CommunityAreaNameTests {
         #expect(names.asked.last?.latitude == 48.03)
     }
 
-    /// A pan the walker never confirms changes nothing the header says,
+    /// A pan the hiker never confirms changes nothing the header says,
     /// because it changes nothing the list shows.
     @Test("an untaken offer does not rename the list")
     func anOfferDoesNotRename() async {

@@ -75,13 +75,13 @@ struct RecordingView: View {
         }
         // A recording being read on this screen is the case the switch exists
         // for — see ``ScreenWakePolicy``. `isActive` rather than
-        // `isCapturingFixes`, because a walker who paused at a junction to
+        // `isCapturingFixes`, because a hiker who paused at a junction to
         // work out where they are is precisely the one asking not to have the
         // screen dim on them. The read is in the closure so it belongs to the
         // modifier's body, though this one is free either way: the body above
         // already reads `phase`.
         .keepsScreenAwake { recorder.isActive }
-        // Each photo is pinned to the walker's last accepted fix — read at the
+        // Each photo is pinned to the hiker's last accepted fix — read at the
         // shutter, so a picture taken twenty minutes in is pinned twenty
         // minutes along. The recorder's live fix, not the draft `Hike`'s
         // `route`: that is only written when the recording stops. A draft only
@@ -395,7 +395,7 @@ private struct RecordingStatsGrid: View {
     }
 
     /// The last few minutes rather than the whole walk — and the word
-    /// "Stopped" rather than a rounded-down number, because a walker standing
+    /// "Stopped" rather than a rounded-down number, because a hiker standing
     /// at a viewpoint is not travelling at 0.1 km/h, they have stopped, and
     /// the distance beside this has stopped counting for the same reason.
     private var currentSpeed: String {

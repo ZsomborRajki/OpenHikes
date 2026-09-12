@@ -50,7 +50,7 @@ final class MapAttributionView: UIView {
     /// built-in text style still draws it larger than any map app draws its
     /// credit. Scaled through `UIFontMetrics` rather than fixed at
     /// ten points, so it still grows with the system's text — a notice a
-    /// walker who needs larger text cannot read is not a notice.
+    /// hiker who needs larger text cannot read is not a notice.
     private static let font = UIFontMetrics(forTextStyle: .caption2)
         .scaledFont(for: .systemFont(ofSize: 10))
     private static let horizontalPadding: CGFloat = 8

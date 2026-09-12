@@ -10,7 +10,7 @@
 //  a status change bypasses the update interval; these ask what happens when
 //  two status changes compete, which is where the panel used to be left saying
 //  the opposite of the truth: a run-state change and an on/off-route change
-//  shared one clock and one ten-second floor, so a walker who stepped off the
+//  shared one clock and one ten-second floor, so a hiker who stepped off the
 //  route and paused a few seconds later had the pause refused by a floor that
 //  exists to damp GPS noise — and refused for good, because
 //  `HikeRecorder.pause()` stops the location sensors, so no later fix arrives
@@ -67,7 +67,7 @@ struct LiveActivityStatusFloorTests {
     /// to land.
     ///
     /// A pause is not GPS noise. It is a deliberate tap, and it is the last
-    /// thing this controller will hear about the walk until the walker acts
+    /// thing this controller will hear about the walk until the hiker acts
     /// again — so a refusal here is permanent, and the panel goes on reading
     /// "Recording" with its self-ticking clock still counting.
     @Test("a pause is not refused by a route flip that just happened")
@@ -286,7 +286,7 @@ struct LiveActivityStatusFloorTests {
 
     /// A walk that takes the screen from another one starts with both floors
     /// clear, exactly as it starts with the update interval clear: the first
-    /// thing the walker is told about *this* walk must not be held back by
+    /// thing the hiker is told about *this* walk must not be held back by
     /// something the last one spent.
     ///
     /// Reached through a replacement rather than an end, because `finish`

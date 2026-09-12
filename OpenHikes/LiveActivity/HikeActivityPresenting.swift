@@ -55,7 +55,7 @@ enum HikeActivityKind: CaseIterable, Equatable {
 @MainActor
 protocol HikeActivityPresenting: AnyObject {
     /// Whether the system will accept an activity at all: the per-app Live
-    /// Activities switch in Settings, which the walker owns and the app only
+    /// Activities switch in Settings, which the hiker owns and the app only
     /// reads.
     var areActivitiesEnabled: Bool { get }
 
@@ -63,7 +63,7 @@ protocol HikeActivityPresenting: AnyObject {
     ///
     /// Authoritative rather than remembered. A Live Activity outlives the
     /// process that started it, so a fresh launch holds no handle to one that
-    /// is nonetheless on the walker's Lock Screen — and an implementation that
+    /// is nonetheless on the hiker's Lock Screen — and an implementation that
     /// answered from its own handle would report `nil` while the panel is
     /// plainly there. `HikeLiveActivityController.activeSubject` is the other
     /// question, "what is *this process* presenting", and the two differ
@@ -71,7 +71,7 @@ protocol HikeActivityPresenting: AnyObject {
     var activeSubject: HikeActivityAttributes.Subject? { get }
 
     /// Requests a new activity. Silent on failure: a refusal is the system's
-    /// answer about a decoration, and there is nothing for the walker to do
+    /// answer about a decoration, and there is nothing for the hiker to do
     /// about it in the middle of a hike.
     func start(
         _ attributes: HikeActivityAttributes,

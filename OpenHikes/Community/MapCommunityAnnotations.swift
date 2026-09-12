@@ -7,13 +7,13 @@
 //  This is the half of the feature that was missing. The nearby query is
 //  driven entirely by the map — ``CommunityBrowser`` takes a region and asks
 //  about a circle of it — and until now its answer was a list of names in a
-//  sheet drawn over the map that asked the question. A walker could see that
+//  sheet drawn over the map that asked the question. A hiker could see that
 //  eleven hikes were near here and nothing at all about *where* near here, so
 //  the one input the feature takes had no output anywhere near it.
 //
 //  A marker per listing closes that loop. It also makes the two halves of the
 //  section point at each other: the rows and the pins are the same twenty-five
-//  listings, a tap on either opens the same preview, and a walker who pans
+//  listings, a tap on either opens the same preview, and a hiker who pans
 //  away can see the pins leave the screen — which is the most direct possible
 //  statement of what *Search this area* is for.
 //
@@ -24,9 +24,9 @@
 //  two lines of text and where the tap goes.
 //
 //  Unlike the photo pins, these are allowed to declutter. A hike is one of a
-//  page of results rather than a place the walker asked to be shown, two
+//  page of results rather than a place the hiker asked to be shown, two
 //  trailheads in one valley can sit on top of each other, and a map that
-//  hides the pin underneath is telling the truth about a list the walker can
+//  hides the pin underneath is telling the truth about a list the hiker can
 //  still scroll.
 //
 
@@ -117,11 +117,11 @@ extension MapView.Coordinator {
         mapView.addAnnotations(annotations)
     }
 
-    /// A marker in the app's tint with a walker in it, and the hike's name in
+    /// A marker in the app's tint with a hiker in it, and the hike's name in
     /// the callout MapKit draws for it.
     ///
     /// Deliberately not the route tint the photo pins take: that colour
-    /// belongs to the walker's own selected hike, which may well be drawn on
+    /// belongs to the hiker's own selected hike, which may well be drawn on
     /// the same screen, and somebody else's published trail is not it.
     func communityAnnotationView(
         for annotation: CommunityMapAnnotation,

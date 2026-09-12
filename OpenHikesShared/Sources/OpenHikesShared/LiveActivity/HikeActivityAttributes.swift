@@ -3,7 +3,7 @@
 //  OpenHikesShared
 //
 //  The payload behind the Lock Screen and Dynamic Island Live Activity, for
-//  the two things a walker can have running: a recording, and an imported
+//  the two things a hiker can have running: a recording, and an imported
 //  trail they are following.
 //
 //  It carries the same facts the home screen widget draws, and deliberately
@@ -39,7 +39,7 @@ public struct HikeActivityAttributes: Codable, Hashable, Sendable {
     /// belongs there instead.
     ///
     /// One attributes type with two subjects rather than two types, because a
-    /// walker can only be doing one of these at a time and the system should
+    /// hiker can only be doing one of these at a time and the system should
     /// show one activity either way. Two types would make "end whichever is
     /// running" something every caller had to spell out twice.
     public enum Subject: Codable, Hashable, Sendable {
@@ -64,7 +64,7 @@ public struct HikeActivityAttributes: Codable, Hashable, Sendable {
     /// The trail's name, or what to call a recording that has no name yet.
     public var title: String
     /// The route's tint, so the activity's progress bar matches the line the
-    /// walker sees on the map and in the widget.
+    /// hiker sees on the map and in the widget.
     public var tintHex: String
     /// When the walk started. Recordings show elapsed time from here; a follow
     /// carries the walk's own start when there is a walk, and otherwise uses
@@ -110,10 +110,10 @@ public struct HikeActivityAttributes: Codable, Hashable, Sendable {
 
         /// Recording: metres walked so far. Following: metres covered along
         /// the route. The same field because it means the same thing to the
-        /// walker, and because a 4 KB budget is not the place for two.
+        /// hiker, and because a 4 KB budget is not the place for two.
         public var distanceMeters: Double
         public var elevationGainMeters: Double?
-        /// The trail's height where the walker was matched — following only,
+        /// The trail's height where the hiker was matched — following only,
         /// and read off the route profile rather than from GPS, exactly as
         /// ``SharedTrailSnapshot/LiveFix/elevationMeters`` is.
         public var currentElevationMeters: Double?
@@ -125,13 +125,13 @@ public struct HikeActivityAttributes: Codable, Hashable, Sendable {
         /// this is optional rather than a large number.
         public var offRouteMeters: Double?
         /// Following only: how much of the trail the walk has *covered*, as
-        /// opposed to ``distanceMeters``, which is where along it the walker
+        /// opposed to ``distanceMeters``, which is where along it the hiker
         /// is. `nil` for a recording, and for a follow with no walk under way.
         ///
         /// A field of its own rather than a re-meaning of ``distanceMeters``:
         /// the two really are different numbers on an out-and-back walked
         /// from the turn, and a panel that could not tell them apart would
-        /// say 100% to a walker who had done half.
+        /// say 100% to a hiker who had done half.
         public var coveredFractionComplete: Double?
         /// Whether fixes are being taken, deliberately not, or done with.
         ///
@@ -139,7 +139,7 @@ public struct HikeActivityAttributes: Codable, Hashable, Sendable {
         /// reachable and says something different. A recording that has been
         /// stopped and saved stays on the Lock Screen for a few minutes
         /// showing what the walk came to — and a final panel reading "Paused"
-        /// would be telling the walker their hike is still waiting for them.
+        /// would be telling the hiker their hike is still waiting for them.
         /// A walk along a followed trail uses the same three words.
         public var runState: RunState
 

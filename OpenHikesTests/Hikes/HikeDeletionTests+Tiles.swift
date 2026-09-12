@@ -104,7 +104,7 @@ extension HikeDeletionTests {
 
         // A refusal hands back no plan, which is the whole of it: there is
         // nothing for the caller to spend, so nothing is deleted and the hike
-        // the walker still has still claims every tile it had.
+        // the hiker still has still claims every tile it had.
         guard case .refused = outcome else {
             Issue.record("a save that threw must be reported as a refusal")
             return

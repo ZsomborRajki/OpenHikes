@@ -34,7 +34,7 @@ struct CommunityPublisherTests {
         #expect(draft.hikeID == hike.id)
     }
 
-    /// The listing is found by where the walk *starts*, because a walker
+    /// The listing is found by where the walk *starts*, because a hiker
     /// searching near a place is looking for something to set off on.
     @Test("the submission is located at the trailhead")
     func draftStartsAtTheTrailhead() async throws {
@@ -83,7 +83,7 @@ struct CommunityPublisherTests {
     }
 
     /// A hike with no route is refused before anything is encoded or uploaded,
-    /// so a walker never waits on a request that was never going to be taken.
+    /// so a hiker never waits on a request that was never going to be taken.
     @Test("a hike with no route is refused without a request")
     func routelessHikeIsRefused() async throws {
         let context = try Fixture.modelContext()

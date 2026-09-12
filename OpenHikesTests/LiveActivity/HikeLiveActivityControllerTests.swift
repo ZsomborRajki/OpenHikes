@@ -20,7 +20,7 @@ import OpenHikesShared
 import Testing
 
 /// Records what the controller asked ActivityKit to do, and answers the one
-/// question ActivityKit would: whether the walker allows any of this.
+/// question ActivityKit would: whether the hiker allows any of this.
 ///
 /// ``subject`` models the *system's* state rather than the stub's memory of
 /// its own calls, which is what the real presenter's `activeSubject` now
@@ -44,7 +44,7 @@ final class StubHikeActivityPresenter: HikeActivityPresenting {
     var activeSubject: HikeActivityAttributes.Subject? { subject }
 
     /// Puts an activity on screen that this process never started, which is
-    /// what a walker sees after the app is killed mid-hike and relaunched.
+    /// what a hiker sees after the app is killed mid-hike and relaunched.
     /// Deliberately does not touch ``calls``: nothing in this process did it.
     func simulatePreviousLaunch(_ subject: HikeActivityAttributes.Subject) {
         self.subject = subject
@@ -65,7 +65,7 @@ final class StubHikeActivityPresenter: HikeActivityPresenting {
     }
 
     /// The states that came with a `start`, kept beside the subjects so a
-    /// wiring test can assert on the first thing the walker saw.
+    /// wiring test can assert on the first thing the hiker saw.
     private(set) var startedStates: [HikeActivityAttributes.ContentState] = []
 
     var endCount: Int {
@@ -140,7 +140,7 @@ struct HikeLiveActivityControllerTests {
         #expect(!harness.controller.isEnabled)
     }
 
-    /// The system's switch is the walker's veto and the app cannot argue with
+    /// The system's switch is the hiker's veto and the app cannot argue with
     /// it. Distinct from the app's own preference, which is why both are
     /// consulted.
     @Test("the system's switch is respected")
@@ -176,7 +176,7 @@ struct HikeLiveActivityControllerTests {
 
     // MARK: Precedence
 
-    /// They genuinely overlap — a walker records their own track along an
+    /// They genuinely overlap — a hiker records their own track along an
     /// imported route — and the system shows one activity.
     @Test("a recording takes the screen from a followed trail")
     func recordingOutranksFollowing() async {
@@ -261,7 +261,7 @@ struct HikeLiveActivityControllerTests {
         #expect(harness.presenter.updatedStates.count == 1)
     }
 
-    /// The interval alone is not enough: a walker standing still for a minute
+    /// The interval alone is not enough: a hiker standing still for a minute
     /// has nothing new to report, and spending the budget on it is what the
     /// distance threshold exists to prevent.
     @Test("time alone does not buy an update")
@@ -310,7 +310,7 @@ struct HikeLiveActivityControllerTests {
     }
 
     /// Unbounded, the bypass is a hole straight through the throttle it
-    /// bypasses — a walker flapping either side of the follow threshold would
+    /// bypasses — a hiker flapping either side of the follow threshold would
     /// take it on every fix. The first flip is free; a second one waits.
     @Test("a second status flip inside the floor waits")
     func flipBypassHasAFloor() async {
@@ -428,7 +428,7 @@ struct HikeLiveActivityTeardownTests {
 
     /// A restart after an end is a fresh activity, not a resumed one — and it
     /// must not inherit the previous walk's throttle, or the first thing the
-    /// walker sees would be up to twenty seconds stale.
+    /// hiker sees would be up to twenty seconds stale.
     @Test("a new walk after an end starts immediately")
     func restartingIsNotThrottled() async {
         let harness = LiveActivityHarness.harness()

@@ -111,12 +111,12 @@ final class Hike {
     ///
     /// Mirrored along with the rest of the row, which is the right side to err
     /// on: sharing is an account-level act, so a second device should know the
-    /// walker already sent this trail rather than offering to send it again.
+    /// hiker already sent this trail rather than offering to send it again.
     /// Optional, as every mirrored column that can be absent must be.
     var communitySubmissionID: String?
 
     /// The published listing this hike was imported from, or `nil` for a hike
-    /// this walker recorded or imported from a file.
+    /// this hiker recorded or imported from a file.
     ///
     /// Kept so the same shared hike is not imported twice — the community list
     /// shows what is already in the library rather than offering it again —

@@ -114,7 +114,7 @@ struct TrailGlyphView: View {
         // Centre on what is actually drawn, which for a route with no extent
         // at all is a point. Centring on the *floored* extents instead would
         // multiply the 1e-9 floor by the enormous scale that same floor
-        // produced and get back a full available width, putting a walker who
+        // produced and get back a full available width, putting a hiker who
         // is standing still — every fix identical — in the top-left corner
         // rather than in the middle of the glyph.
         let originX = (size.width - (maxX - minX) * scale) / 2

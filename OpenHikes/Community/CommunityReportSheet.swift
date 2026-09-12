@@ -2,14 +2,14 @@
 //  CommunityReportSheet.swift
 //  OpenHikes
 //
-//  The screen a walker reports somebody else's published hike from.
+//  The screen a hiker reports somebody else's published hike from.
 //
 //  A form rather than an alert, for the same reason ``CommunityShareSheet`` is
 //  one: a report that arrives saying only "reported" is a report a reviewer
 //  cannot act on inside a day, and the two fields that make it actionable —
-//  what is wrong, and anything the walker wants to add — need somewhere to be
+//  what is wrong, and anything the hiker wants to add — need somewhere to be
 //  typed. It also has to *name what is being reported*, which an alert over a
-//  list could not: the walker sees the title and the author they are
+//  list could not: the hiker sees the title and the author they are
 //  complaining about before they send anything.
 //
 //  ## What this does not claim
@@ -25,14 +25,14 @@
 //  composed, and it does not say the device has a mail account at all. Mail is
 //  installed on every iPhone and registered for the scheme, so a phone with no
 //  account configured takes the URL, opens, and offers account setup: accepted
-//  is `true` and no message exists. A walker who discards the composer lands in
+//  is `true` and no message exists. A hiker who discards the composer lands in
 //  the same place from the other direction.
 //
 //  So the handed-off screen says the report was *opened in* the mail app
 //  rather than that one is waiting in it, and — the part that matters — it
 //  never becomes a dead end. The message stays copyable and the form stays
 //  reachable from **both** outcomes, because the two cases this app cannot
-//  tell apart are exactly the ones where a walker needs the text back. A
+//  tell apart are exactly the ones where a hiker needs the text back. A
 //  screen that offered only *Done* would have taken the complaint away from
 //  the person who typed it.
 //
@@ -106,7 +106,7 @@ private extension CommunityReportSheet {
     /// What is being reported, said before anything is sent.
     ///
     /// The first section rather than assumed context: this sheet can be opened
-    /// from a preview whose contents are still loading, and a walker who
+    /// from a preview whose contents are still loading, and a hiker who
     /// reached it from the wrong row should find that out here.
     var reportedSection: some View {
         Section {
@@ -123,7 +123,7 @@ private extension CommunityReportSheet {
         Section {
             // Inline rather than a menu: five short choices are quicker to
             // read down than to open, and a menu would hide the one the
-            // walker is looking for behind a tap.
+            // hiker is looking for behind a tap.
             // ``pickerOrder`` rather than `allCases`: the cases are declared
             // alphabetically to satisfy the linter, and that is not the order
             // to read five choices in.
@@ -164,7 +164,7 @@ private extension CommunityReportSheet {
             }
             .font(.footnote)
         } footer: {
-            // Said because the walker is about to watch their mail app open,
+            // Said because the hiker is about to watch their mail app open,
             // which is surprising if nobody warned them, and because a report
             // needing no account is the part that is worth knowing.
             Text("""
@@ -226,7 +226,7 @@ private extension CommunityReportSheet {
     /// The report itself, kept reachable after *either* outcome.
     ///
     /// Shown after a successful handoff too, and that is the point rather than
-    /// clutter: no message may have been composed at all, and a walker who
+    /// clutter: no message may have been composed at all, and a hiker who
     /// finds their mail app asking them to set up an account has otherwise
     /// lost everything they typed.
     var messageSection: some View {
@@ -257,7 +257,7 @@ private extension CommunityReportSheet {
     /// complaint again.
     ///
     /// The reason and the note are `@State` on this sheet and survive the
-    /// round trip, so this really is the report the walker already wrote.
+    /// round trip, so this really is the report the hiker already wrote.
     var editAgainSection: some View {
         Section {
             Button("Back to the Report") { phase = .editing }
@@ -294,7 +294,7 @@ private extension CommunityReportSheet {
     /// Opens the composed mail, or says nothing would.
     ///
     /// A `mailto:` that cannot even be *formed* takes the same outcome as one
-    /// nothing opened: both leave the walker holding a report with nowhere to
+    /// nothing opened: both leave the hiker holding a report with nowhere to
     /// put it, and the screen offers the same copyable text either way.
     func send() {
         guard let url = report.mailURL else {

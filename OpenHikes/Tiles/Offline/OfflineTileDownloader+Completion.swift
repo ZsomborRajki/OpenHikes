@@ -44,7 +44,7 @@ extension OfflineTileDownloader {
 
     /// Said when the tiles landed but the hike they belong to could not be
     /// updated. Deliberately not a count of what was saved: those tiles are
-    /// spoken for by nobody, so what the walker has is a download to run
+    /// spoken for by nobody, so what the hiker has is a download to run
     /// again rather than a map to finish.
     static let unclaimedMessage =
         "Downloaded the map, but couldn't record it for this hike. Try again."

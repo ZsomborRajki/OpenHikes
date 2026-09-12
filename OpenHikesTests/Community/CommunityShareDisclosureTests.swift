@@ -12,7 +12,7 @@ import Testing
 ///
 /// The two are written in different files — `CommunityShareSheet` says it and
 /// `CommunityPublisher` does it — and the first version of this screen told a
-/// walker sharing a hike with no photographs that it sent "your route and its
+/// hiker sharing a hike with no photographs that it sent "your route and its
 /// name, nothing else" while the draft carried the hike's description, its
 /// date, and a timestamp on every point of the route. So these assert the
 /// wording against a real draft rather than against itself.
@@ -37,7 +37,7 @@ struct CommunityShareDisclosureTests {
     }
 
     /// The one the reviewer caught: a GPX file's description can be personal
-    /// notes the walker has not seen since the import, and it is published
+    /// notes the hiker has not seen since the import, and it is published
     /// under their name.
     @Test("a description that is uploaded is disclosed")
     func uploadedDescriptionIsDisclosed() async throws {

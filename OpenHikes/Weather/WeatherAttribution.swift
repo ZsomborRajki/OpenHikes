@@ -96,8 +96,8 @@ nonisolated enum AppleWeatherAttribution {
     /// asked.
     ///
     /// Failure is expected rather than exceptional: this is a network call
-    /// against the same entitlement the forecast needs, so a walker with no
-    /// signal — exactly the walker most likely to open this sheet, since a
+    /// against the same entitlement the forecast needs, so a hiker with no
+    /// signal — exactly the hiker most likely to open this sheet, since a
     /// stale reading is what draws them to it — will get `nil`. The caller
     /// draws the wording and the fallback link in that case; a sheet that
     /// shows nothing at all would satisfy neither the user nor the terms.

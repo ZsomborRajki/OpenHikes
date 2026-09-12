@@ -105,7 +105,7 @@ struct ElevationChartView: View, Equatable {
     var body: some View {
         // Live follow is *meant* to invalidate this body (and the progress
         // row) once per published fix — at most once a second, and only while
-        // the walker is moving. That rate is the reference every other body's
+        // the hiker is moving. That rate is the reference every other body's
         // rate is judged against: anything else moving at it is following
         // location it was supposed to be insulated from.
         RenderSignpost.mark("ElevationChartBody", "\(profile.samples.count) samples")
@@ -240,7 +240,7 @@ struct ElevationChartView: View, Equatable {
         .lineStyle(StrokeStyle(lineWidth: 2))
     }
 
-    /// Where the walker stopped recording, as a rule through the profile.
+    /// Where the hiker stopped recording, as a rule through the profile.
     ///
     /// A rule rather than a break in the line: the pause took time out of the
     /// walk but no distance out of it, so the x-axis runs on and the profile

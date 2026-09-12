@@ -414,7 +414,7 @@ extension HikeRecorderTests {
         #expect(!FileManager.default.fileExists(atPath: journal.journalURL.path))
     }
 
-    /// Whether the walker is standing still is derived state: a function of
+    /// Whether the hiker is standing still is derived state: a function of
     /// the points before this one, which the accumulator answers live and
     /// nothing persists. This says so from both ends — the recorder writes no
     /// verdict of its own onto the fixes it journals, and a replay of exactly

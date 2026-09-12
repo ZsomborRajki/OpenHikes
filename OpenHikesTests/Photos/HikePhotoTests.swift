@@ -158,7 +158,7 @@ struct PhotoCaptureControllerTests {
         let context = try Fixture.modelContext()
         let hike = Fixture.hike(in: context)
         let controller = PhotoCaptureController()
-        // Stands in for the walker moving between opening the camera and
+        // Stands in for the hiker moving between opening the camera and
         // taking the picture.
         let position = Position()
         controller.attach(to: hike) { position.coordinate }

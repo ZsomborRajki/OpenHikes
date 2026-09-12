@@ -42,7 +42,7 @@ struct FollowAnchor: Equatable {
     ///
     /// `false` while it rests on nothing better than
     /// ``RouteProfile/nearestPoint(to:near:heading:scope:)``'s assumption that
-    /// a hike starts at its start — which is what a walker gets if they open
+    /// a hike starts at its start — which is what a hiker gets if they open
     /// the app *standing still* halfway round an out-and-back. They'd be
     /// placed on the outbound leg, and continuity would then hold them there
     /// for the rest of the walk however far they went.
@@ -64,7 +64,7 @@ struct FollowAnchor: Equatable {
 
     /// The anchor left behind by a fix that matched at `distance`.
     ///
-    /// Confirmation is sticky: once a course has settled which leg the walker
+    /// Confirmation is sticky: once a course has settled which leg the hiker
     /// is on, later fixes without one — they stopped for a photo — can't
     /// unsettle it and start the re-seeding over.
     static func matched(
@@ -83,13 +83,13 @@ struct FollowAnchor: Equatable {
 ///
 /// Bounding the search to a window around the last match is what keeps a fix
 /// from costing a full-route scan — but a fix with nothing on-route inside the
-/// window falls back to scanning the rest of the route, and a walker who has
+/// window falls back to scanning the rest of the route, and a hiker who has
 /// simply stepped off the trail produces one of those every second. Left
 /// alone, being off-route costs exactly what the window was introduced to
 /// avoid, for as long as it lasts.
 ///
 /// So the fallback is latched off once it has already come up empty, and
-/// re-armed every ``rearmIntervalFixes`` fixes: a walker who really did rejoin
+/// re-armed every ``rearmIntervalFixes`` fixes: a hiker who really did rejoin
 /// somewhere else — driven round to the far trailhead — is found within half a
 /// minute instead of within a second, and the intervening fixes cost a window.
 struct OffRouteSearchPolicy: Equatable {

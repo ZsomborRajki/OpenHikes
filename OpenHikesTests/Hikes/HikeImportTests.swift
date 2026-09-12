@@ -6,11 +6,11 @@
 //
 //  Parsing is covered by the `GPXImport*` suites; this one owns the half after
 //  it, which is the half that can lose a walk. An import that reports success
-//  is immediately treated as a hike the walker has — it is selected, drawn,
+//  is immediately treated as a hike the hiker has — it is selected, drawn,
 //  and for a file the system copied into the app, ``GPXInbox`` deletes the
 //  only copy OpenHikes controls. An insert alone does not earn that: it is a
 //  change pending in a context, and a store that refuses the commit, or a
-//  process that ends before autosave reaches it, leaves the walker with a hike
+//  process that ends before autosave reaches it, leaves the hiker with a hike
 //  that was on screen, is not on disk, and whose source file was thrown away
 //  in the meantime.
 //
@@ -149,7 +149,7 @@ struct HikeImportTests {
     }
 
     /// The row goes with the failure. Left anywhere a later commit could pick
-    /// it up, it is a hike the walker was told they don't have, waiting for
+    /// it up, it is a hike the hiker was told they don't have, waiting for
     /// whichever save does succeed to put it on the list without a word.
     @Test("a refused save leaves no hike behind to land later")
     func refusedSaveLeavesNothingInserted() async throws {
@@ -176,7 +176,7 @@ struct HikeImportTests {
         let afterALaterSave = try openStore(in: sandbox).fetch(FetchDescriptor<Hike>())
         #expect(
             afterALaterSave.isEmpty,
-            "a save the walker was told failed must not land at the next one"
+            "a save the hiker was told failed must not land at the next one"
         )
     }
 
@@ -204,7 +204,7 @@ struct HikeImportTests {
     }
 
     /// The alert has to name the half that actually failed: a GPX message
-    /// sends the walker off to inspect a file that read perfectly. The parse
+    /// sends the hiker off to inspect a file that read perfectly. The parse
     /// copy still has to arrive unchanged for the failures that *are* the
     /// file's, which is the whole reason the two are one type.
     @Test("a refused save says storage rather than blaming the file")

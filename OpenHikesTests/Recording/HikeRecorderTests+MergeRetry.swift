@@ -13,7 +13,7 @@
 //
 //  `HikeRecorderTests+WidgetMerge.swift` pins that the loop *terminates* under
 //  sustained contention. This pins what terminating leaves behind, which is the
-//  half a walker would notice: the merged fixes are durable in the journal
+//  half a hiker would notice: the merged fixes are durable in the journal
 //  either way, and the live state either adopted them or kept the values it
 //  already had. Both branches are driven here, one after the other on the same
 //  recording, so the give-up assertion cannot pass because the fixture had

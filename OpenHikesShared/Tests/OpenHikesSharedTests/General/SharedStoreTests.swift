@@ -120,7 +120,7 @@ struct SharedStoreTests {
     }
 
     /// `clear()` is scoped to the *tracked trail*, not to the container: a
-    /// walker deselecting a hike mid-walk must not lose the recording their
+    /// hiker deselecting a hike mid-walk must not lose the recording their
     /// phone is still capturing. Nothing else asserts the boundary, and the
     /// two live one line apart.
     @Test("clearing the trail leaves a live recording alone")

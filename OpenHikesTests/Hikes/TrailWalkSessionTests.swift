@@ -34,7 +34,7 @@ struct TrailWalkSessionTests {
     }
 
     /// Feeds the session one match per route point from `start` to `end`,
-    /// a minute apart — a walker, not a teleport. `end` before `start` walks
+    /// a minute apart — a hiker, not a teleport. `end` before `start` walks
     /// the route the way it is not stored, which is a walk like any other.
     func walk(
         _ session: TrailWalkSession,
@@ -176,7 +176,7 @@ struct TrailWalkSessionTests {
         #expect(try walks(of: hike).count == 1)
     }
 
-    // MARK: Ends the walker did not tap
+    // MARK: Ends the hiker did not tap
 
     @Test("reaching the end closes the walk as completed and pushes it")
     func reachedEnd() throws {
@@ -196,11 +196,11 @@ struct TrailWalkSessionTests {
         #expect(try walks(of: hike).count == 1)
     }
 
-    /// A pause says the walk continues, and a paused walker produces nothing
+    /// A pause says the walk continues, and a paused hiker produces nothing
     /// that could advance the clock abandonment is measured from: they are not
     /// moving, so no significant change wakes the background feed either.
     /// Measured against the six-hour rule, a hut evening closes the walk with
-    /// the walker looking at it.
+    /// the hiker looking at it.
     @Test("a pause outlasts the abandonment bound")
     func pauseOutlastsTheAbandonmentBound() {
         let session = session()
@@ -218,7 +218,7 @@ struct TrailWalkSessionTests {
         #expect(session.phase == .following, "and it is still the walk that resumes")
     }
 
-    /// The gap bound bridges a lost signal, on the reasoning that the walker
+    /// The gap bound bridges a lost signal, on the reasoning that the hiker
     /// probably did walk the stretch in between. A pause is the opposite
     /// statement, and the one case where the bridge is known to be wrong.
     @Test("the stretch walked while paused is not counted on resume")
@@ -241,7 +241,7 @@ struct TrailWalkSessionTests {
         #expect(try #require(session.record).coverage.coveredMeters == covered)
         #expect(
             try #require(session.record).coverage.furthestDistanceMeters == resumedAt,
-            "the walker did get there, they just did not walk it as part of this walk"
+            "the hiker did get there, they just did not walk it as part of this walk"
         )
     }
 

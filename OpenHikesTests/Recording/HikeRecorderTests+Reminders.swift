@@ -52,7 +52,7 @@ extension HikeRecorderTests {
     }
 
     /// The other half of the same decision, and the one that keeps this
-    /// feature free for a walker who does not want it.
+    /// feature free for a hiker who does not want it.
     @Test("a pause with reminders off stops everything, as it always did")
     func pauseWithoutRemindersStopsTheFeed() async {
         let harness = MovementReminderHarness.harness(remindersEnabled: false)
@@ -65,7 +65,7 @@ extension HikeRecorderTests {
         #expect(source.stopCount == 1)
     }
 
-    /// The issue's own case: the walker left the restaurant without tapping
+    /// The issue's own case: the hiker left the restaurant without tapping
     /// Resume, and half a kilometre later the phone says so.
     @Test("a fix that arrives while paused can post the resume reminder")
     func aPausedRecorderRemindsOnMovement() async {
@@ -81,11 +81,11 @@ extension HikeRecorderTests {
         #expect(harness.notifier.postedKinds == [.resumeRecording])
         #expect(
             hikeRecorder.stats.pointCount == 1,
-            "a watch fix is evidence the walker moved, never part of the track"
+            "a watch fix is evidence the hiker moved, never part of the track"
         )
     }
 
-    /// The pause a walker most often forgets is one their phone died during:
+    /// The pause a hiker most often forgets is one their phone died during:
     /// the journal comes back at the next launch, the recording is parked, and
     /// nothing in the new process is holding the anchor the previous one had.
     @Test("a pause recovered from the journal is watched again")
@@ -137,12 +137,12 @@ extension HikeRecorderTests {
         )
     }
 
-    /// The walker's switch is only half of "reminders are on". The other half
-    /// is iOS's, and a walker who has denied notifications — months ago, or at
+    /// The hiker's switch is only half of "reminders are on". The other half
+    /// is iOS's, and a hiker who has denied notifications — months ago, or at
     /// the prompt this pause puts up — cannot be sent anything, so a pause
     /// that keeps a feed alive for a banner is spending a background activity
     /// session and the location indicator on nothing at all.
-    @Test("a pause the walker cannot be notified about stops the feed")
+    @Test("a pause the hiker cannot be notified about stops the feed")
     func pauseWithNotificationsDeniedStopsTheFeed() async {
         let harness = MovementReminderHarness.harness()
         harness.notifier.isAuthorized = false
@@ -154,7 +154,7 @@ extension HikeRecorderTests {
 
         #expect(
             source.stopCount == 1,
-            "a refusal costs the walker what the switch costs them: nothing"
+            "a refusal costs the hiker what the switch costs them: nothing"
         )
     }
 
@@ -187,7 +187,7 @@ extension HikeRecorderTests {
         #expect(source.stopCount == 1)
     }
 
-    /// A walker who leaves the prompt on screen, taps Resume, and refuses it
+    /// A hiker who leaves the prompt on screen, taps Resume, and refuses it
     /// half an hour later. The recording is running again by then, and
     /// parking its sensors would stop the walk being recorded.
     @Test("a refusal that lands after Resume leaves the recording running")
@@ -204,14 +204,14 @@ extension HikeRecorderTests {
         harness.notifier.answerPrompt(allowing: false)
         await harness.controller.settle()
 
-        #expect(hikeRecorder.phase != .paused, "precondition: the walker resumed")
+        #expect(hikeRecorder.phase != .paused, "precondition: the hiker resumed")
         #expect(
             source.stopCount == stopsBefore,
             "a late answer is about the pause that asked, and that pause is over"
         )
     }
 
-    /// The switch's version of the same race, and the one a walker is far
+    /// The switch's version of the same race, and the one a hiker is far
     /// likelier to run into than a refusal: Settings is one swipe away while
     /// the pause's journal write is still in flight. The controller disarms
     /// itself and tells the recorder, but the recorder has not parked

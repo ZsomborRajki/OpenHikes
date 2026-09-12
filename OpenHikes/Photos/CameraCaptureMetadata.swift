@@ -10,7 +10,7 @@
 //  everything the camera knew — including the EXIF timestamp. Taking only the
 //  image and dating the photograph `.now` dates it by the delegate callback,
 //  and the callback is not the shutter: the camera shows the shot for review
-//  first, and Use Photo is tapped whenever the walker gets round to it. On a
+//  first, and Use Photo is tapped whenever the hiker gets round to it. On a
 //  walk that gap is a position — ``HikePhoto/capturedAt`` is what puts the
 //  picture on the elevation profile and what orders the gallery — so a photo
 //  accepted a minute after it was taken would sit a minute further along the

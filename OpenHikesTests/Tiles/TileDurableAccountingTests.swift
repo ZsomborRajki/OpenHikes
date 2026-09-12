@@ -106,7 +106,7 @@ struct TileDurableAccountingTests {
     ///
     /// This used to be the opposite assertion: the browse deleted the tile and
     /// credited the bytes back. Crediting was right *given* the deletion; the
-    /// deletion was the bug, because it threw away a walker's saved map at the
+    /// deletion was the bug, because it threw away a hiker's saved map at the
     /// moment they had no signal to replace it.
     @Test("a stale durable tile is drawn, kept, and still counted")
     func staleDurableTileIsKeptAndCounted() async throws {
@@ -226,7 +226,7 @@ struct TileDurableAccountingTests {
 
     /// The reason this write is *counted* rather than *reserved*. At the
     /// ceiling a reservation refuses, and a refusal on this path fails the
-    /// browse: the walker's map goes blank exactly where their hike's own
+    /// browse: the hiker's map goes blank exactly where their hike's own
     /// offline coverage is, and the tile they had is gone while the manifest
     /// still claims it. Refreshing a tile that is already counted cannot grow
     /// the store, so it must not be able to be turned away.
@@ -243,7 +243,7 @@ struct TileDurableAccountingTests {
             "precondition: the provider is at its ceiling before the re-fetch"
         )
 
-        #expect(await sandbox.cache.loadTile(forKey: key, url: Self.url(0)) != nil, "the walker still gets their tile")
+        #expect(await sandbox.cache.loadTile(forKey: key, url: Self.url(0)) != nil, "the hiker still gets their tile")
         #expect(sandbox.isSaved(key), "and their hike still has it offline")
         #expect(await Self.measuredBytes(sandbox.cache) == TileStore.tileByteCount * 2, "with no more bytes spent")
     }

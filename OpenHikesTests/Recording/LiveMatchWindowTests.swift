@@ -72,7 +72,7 @@ struct LiveMatchWindowTests {
         )
     }
 
-    /// A walker who stops for lunch comes back to a window whose points are
+    /// A hiker who stops for lunch comes back to a window whose points are
     /// minutes apart. The duration bound then trims further than the point cap
     /// already did, which is the case where the two bounds interact rather
     /// than one of them simply winning.
@@ -123,7 +123,7 @@ struct LiveMatchWindowTests {
     /// Every point is older than the window, so the duration bound would walk
     /// the start off the end of the recording if nothing stopped it. What
     /// stops it is the same thing `scheduleLiveMatching` needs: a window of
-    /// fewer than two points is not matchable, so the walker's matched trail
+    /// fewer than two points is not matchable, so the hiker's matched trail
     /// name would stop updating entirely.
     @Test("a window whose points are all stale still keeps a matchable leg")
     func aStaleRecordingKeepsALeg() {

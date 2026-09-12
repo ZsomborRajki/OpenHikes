@@ -125,7 +125,7 @@ extension MXLaunchTaskID {
     /// `didFinishLaunchingWithOptions` to the moment SwiftUI asks the map
     /// representable to build its `MKMapView`. Opening the SwiftData store,
     /// building the model and evaluating the view tree down to the map all sit
-    /// inside it — the app's own share of the time a walker spends looking at
+    /// inside it — the app's own share of the time a hiker spends looking at
     /// a screen with no map on it.
     ///
     /// It ends *before* `MKMapView()` runs:

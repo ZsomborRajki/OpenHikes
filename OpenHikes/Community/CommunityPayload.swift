@@ -70,7 +70,7 @@ nonisolated struct CommunitySubmissionDraft: Sendable {
 
     /// Where the route begins, which is what the listing is found by.
     ///
-    /// The first point rather than a centroid: a walker searching near a place
+    /// The first point rather than a centroid: a hiker searching near a place
     /// is looking for something to set off on from there, and the trailhead is
     /// the part of a route that answers that. A centroid would put a long
     /// linear route's match ten kilometres from either end of it.
@@ -84,13 +84,13 @@ nonisolated struct CommunitySubmissionDraft: Sendable {
 ///
 /// Deliberately carries neither the route nor any image. A location query can
 /// come back with fifty of these, and fifty routes is tens of megabytes of
-/// transfer for a list the walker will scroll past — so the route and the
+/// transfer for a list the hiker will scroll past — so the route and the
 /// photographs are fetched from the submission only once a hike is opened.
 ///
 /// No thumbnail either, which is a lifetime decision rather than a visual
 /// one: a `CKAsset` handed back by a query points into CloudKit's own cache,
 /// and the framework may delete the file behind it whenever it likes. A row
-/// in a list the walker scrolls a minute later would be reading a path that
+/// in a list the hiker scrolls a minute later would be reading a path that
 /// has gone. Copying each one to keep it would mean a file write per row of a
 /// list nobody asked to keep, so the row draws a symbol and a photo count and
 /// the pictures arrive with the hike itself.
@@ -100,12 +100,12 @@ nonisolated struct CommunityListing: Identifiable, Hashable, Sendable {
     /// The submission record this was published from, fetched on open.
     var submissionID: String
     var title: String
-    /// What the walker typed when they shared it, which is a credit and not
+    /// What the hiker typed when they shared it, which is a credit and not
     /// an identity. See ``authorID`` for the difference and why both are here.
     var authorName: String
     /// Who published it, as CloudKit knows them.
     ///
-    /// Carried on every listing so a walker can block the person rather than
+    /// Carried on every listing so a hiker can block the person rather than
     /// the name they happened to type — see ``CommunitySchema/Listing/authorID``
     /// and ``CommunityBlockList``. Never shown: it is an opaque record name,
     /// and the screen credits ``authorName``.

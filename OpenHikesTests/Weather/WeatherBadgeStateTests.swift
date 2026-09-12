@@ -6,7 +6,7 @@
 //
 //  The complaint these come from is "I rarely see the weather badge", and the
 //  cause was that ``WeatherManager`` published `WeatherSnapshot?` set only on
-//  success: a missing entitlement, a token failure, a rate limit, a walker out
+//  success: a missing entitlement, a token failure, a rate limit, a hiker out
 //  of signal and a launch that had not asked yet were one value — `nil` — and
 //  the overlay drew nothing for all five. There was no way, from outside the
 //  process, to tell a broken forecast from a feature that did not exist.
@@ -99,11 +99,11 @@ struct WeatherBadgeStateTests {
         #expect(manager.state == .reading(reading, subject: .place(budapest, name: "Budapest")))
     }
 
-    /// The walker is one subject however far they walk, so a `me` reading
+    /// The hiker is one subject however far they walk, so a `me` reading
     /// survives a move — the badge should not blank between a step and the
     /// response to it.
-    @Test("a reading for the walker survives them moving")
-    func walkerReadingSurvivesMovement() {
+    @Test("a reading for the hiker survives them moving")
+    func hikerReadingSurvivesMovement() {
         let manager = WeatherManager()
         let reading = snapshot(celsius: 8)
         manager.applyUITestSnapshot(reading, subject: .me(budapest))

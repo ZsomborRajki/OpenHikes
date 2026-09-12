@@ -181,7 +181,7 @@ struct WeatherDetailView: View {
     ///
     /// This is the other half of the badge's dimming: the map shows only that
     /// something is off, deliberately, because a timestamp over the map is
-    /// chrome a walker did not ask for. The number belongs here, where they
+    /// chrome a hiker did not ask for. The number belongs here, where they
     /// came to ask.
     private func freshnessSection(_ snapshot: WeatherSnapshot) -> some View {
         Section {

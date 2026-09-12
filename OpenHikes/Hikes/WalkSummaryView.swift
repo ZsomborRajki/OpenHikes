@@ -72,7 +72,7 @@ struct WalkSummaryView: View {
             profile = await Self.profile(of: route)
         }
         // A `.task` rather than the unstructured `Task` the button used to
-        // start: that one outlived this view, and a walker who backed out and
+        // start: that one outlived this view, and a hiker who backed out and
         // opened another trail during the await had the old walk's stretches
         // drawn over it by a task nothing could stop. This one is cancelled
         // when the summary goes away.
@@ -145,7 +145,7 @@ struct WalkSummaryView: View {
     ///
     /// The length disagreement is a state the button is in, not something the
     /// tap discovers: it used to stay live on a re-imported route, return
-    /// silently, and leave the walker tapping a control that did nothing and
+    /// silently, and leave the hiker tapping a control that did nothing and
     /// explained nothing.
     private var showOnMapButton: some View {
         VStack(spacing: 8) {

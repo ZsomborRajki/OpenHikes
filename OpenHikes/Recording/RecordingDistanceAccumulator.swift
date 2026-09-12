@@ -8,7 +8,7 @@ import DequeModule
 import Foundation
 
 /// Distance accumulation that can retract a short window of GPS wander when
-/// the walker has remained within one small area for long enough.
+/// the hiker has remained within one small area for long enough.
 ///
 /// It also keeps the recording's running elevation totals. Not because climb
 /// and distance belong together, but because this is the one place every
@@ -33,7 +33,7 @@ nonisolated struct RecordingDistanceAccumulator: Sendable {
     /// Moving time, by the same rule a *saved* route is measured with.
     ///
     /// Deliberately `MovingTimeAccumulator` rather than a second subtraction
-    /// off ``recordedDuration``: a walker who watched "2h 10m moving" tick
+    /// off ``recordedDuration``: a hiker who watched "2h 10m moving" tick
     /// during the hike and then opens the saved hike to find "1h 58m" has
     /// been shown two numbers with one name, and neither is checkable. This
     /// is the same type the detail screen's figure comes from, fed the same
@@ -52,7 +52,7 @@ nonisolated struct RecordingDistanceAccumulator: Sendable {
         let distanceMeters: Double
     }
 
-    /// How long a walker has to stay inside one small area before the
+    /// How long a hiker has to stay inside one small area before the
     /// recording stops calling it walking, and how small that area is.
     ///
     /// Not private, because ``MovingTimeAccumulator`` answers the same
@@ -68,7 +68,7 @@ nonisolated struct RecordingDistanceAccumulator: Sendable {
     ///
     /// Five minutes is the shortest window that survives the thing it is for.
     /// A live speed exists because the average stops moving — an hour in, a
-    /// steep half-kilometre barely disturbs it — and the walker wants to know
+    /// steep half-kilometre barely disturbs it — and the hiker wants to know
     /// what they are doing *now*. Any shorter and it is reporting GPS noise
     /// and the gaps between fixes rather than the walk: accepted fixes can be
     /// ten seconds apart on open ground and a minute apart under trees, so a
@@ -99,7 +99,7 @@ nonisolated struct RecordingDistanceAccumulator: Sendable {
     /// stationary window hands back the wander it accumulated, which leaves
     /// the newest total below one taken minutes earlier. That is the intended
     /// behaviour of the retraction and reads correctly here as a speed of
-    /// zero — the walker really has gone nowhere — rather than as the negative
+    /// zero — the hiker really has gone nowhere — rather than as the negative
     /// speed the subtraction literally produces.
     var recentSpeedMetersPerSecond: Double? {
         guard let anchor = recentWindow.first,
@@ -114,7 +114,7 @@ nonisolated struct RecordingDistanceAccumulator: Sendable {
     ///
     /// Unlike distance, this is never retracted. A stationary window is GPS
     /// wandering across the ground, which the altitude filter has already
-    /// smoothed vertically; subtracting a climb that the walker's own legs
+    /// smoothed vertically; subtracting a climb that the hiker's own legs
     /// may well have made would be the larger error.
     var elevationGainMeters: Double? {
         elevation.hasChange ? elevation.gainMeters : nil
@@ -138,7 +138,7 @@ nonisolated struct RecordingDistanceAccumulator: Sendable {
         // drops the leg and its window there. Replacing the accumulator
         // outright — which is what this used to do — also discarded the
         // seconds already walked, so the live readout fell back to zero the
-        // moment a walker resumed.
+        // moment a hiker resumed.
         if point.flags.contains(.resumed) {
             recentWindow.removeAll(keepingCapacity: true)
         }

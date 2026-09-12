@@ -2,8 +2,8 @@
 //  MovementReminderPolicyTests.swift
 //  OpenHikesTests
 //
-//  The two cases from the issue, written as tests: a walker who steps out of a
-//  restaurant to find the toilets is not hiking, and a walker who covers half
+//  The two cases from the issue, written as tests: a hiker who steps out of a
+//  restaurant to find the toilets is not hiking, and a hiker who covers half
 //  a kilometre — or a quarter of one at cycling pace — is.
 //
 //  Everything here is a value type fed by hand, which is the point of the
@@ -58,7 +58,7 @@ struct MovementReminderPolicyTests {
 
     /// The bicycle clause. The same distance, arriving inside two minutes
     /// rather than over half an hour, is what makes the reminder land while the
-    /// walker is still near the trailhead.
+    /// hiker is still near the trailhead.
     @Test("cycling pace reminds before the distance rule would")
     func paceCrossingReminds() {
         var watch = MovementWatch()
@@ -106,7 +106,7 @@ struct MovementReminderPolicyTests {
         #expect(further)
     }
 
-    @Test("the quiet period holds even when the walker keeps going")
+    @Test("the quiet period holds even when the hiker keeps going")
     func quietPeriodHolds() {
         var watch = MovementWatch()
         let first = watch.observe(awayMeters: 600, at: start)
@@ -120,7 +120,7 @@ struct MovementReminderPolicyTests {
         #expect(!tooSoon)
     }
 
-    /// A walker who ignored three banners is not going to read a fourth.
+    /// A hiker who ignored three banners is not going to read a fourth.
     @Test("one pause is worth three reminders at most")
     func remindersAreCapped() {
         var watch = MovementWatch()

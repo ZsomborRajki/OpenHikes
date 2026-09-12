@@ -12,7 +12,7 @@
 //  be pushed and popped by identity. And the cascade on the relationship is
 //  what takes the walks with the hike without a new deletion step.
 //
-//  A walk is a fact about the walker, not about the phone, so it syncs. The
+//  A walk is a fact about the hiker, not about the phone, so it syncs. The
 //  host is a `Hike` whichever way it arrived — an imported GPX or a saved
 //  recording — and no column records which, because the host already knows.
 //

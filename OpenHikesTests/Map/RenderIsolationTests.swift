@@ -435,7 +435,7 @@ struct LocationPublishingTests {
     }
 
     /// A fix's course is what tells auto-follow which leg of an out-and-back
-    /// a walker is on, so what counts as a *usable* course decides whether
+    /// a hiker is on, so what counts as a *usable* course decides whether
     /// that works at all — and both the foreground and the background feed
     /// ask this one question, so they can't drift apart.
     @Test("only a fix from someone actually moving carries a usable course")
@@ -474,7 +474,7 @@ struct LocationPublishingTests {
         #expect(LocationFixPolicy.course(of: fix(course: 180, courseAccuracy: -1, speed: 1.4)) == 180)
     }
 
-    /// Position and course have to describe the same instant, or a walker
+    /// Position and course have to describe the same instant, or a hiker
     /// gets matched against the way they were going somewhere else.
     @Test("a route fix carries the course of the fix it came from")
     func routeFixCarriesItsCourse() async throws {
@@ -535,7 +535,7 @@ struct LocationPublishingTests {
         #expect(manager.coordinate?.latitude == 47.64, "and the window reopens rather than latching shut")
     }
 
-    /// A walker who has stopped — at a viewpoint, a hut, a photo — still gets
+    /// A hiker who has stopped — at a viewpoint, a hut, a photo — still gets
     /// a fix every second. Republishing each one as a new value would wake the
     /// map coordinator, which re-registers its observation through a `Task`
     /// hop, once a second for as long as the app is open.

@@ -11,7 +11,7 @@ import Foundation
 /// What a stretch of route is underfoot.
 ///
 /// OSM's `surface` key has dozens of values, most of which differ in ways no
-/// walker cares about — `concrete:plates` and `paving_stones` are both "you
+/// hiker cares about — `concrete:plates` and `paving_stones` are both "you
 /// could push a pram along it". These are the distinctions worth drawing, plus
 /// the two honest ways of not knowing.
 ///

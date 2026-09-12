@@ -8,7 +8,7 @@
 //
 //  Ten metres is the case worth the most. It is inside a good GPS fix's own
 //  error, so the emission term alone will put some fixes on the wrong path, and
-//  the only thing standing between a walker on the upper trail and a saved hike
+//  the only thing standing between a hiker on the upper trail and a saved hike
 //  drawn along the lower one is the cost of the detour needed to get there.
 //  The matcher gets that one right, in both directions.
 //
@@ -111,7 +111,7 @@ struct TrailMatcherJunctionTests {
     /// means returning to the junction 90 m west and coming out again, against
     /// an expected 30 m of walking. That is the failure this shape exists to
     /// catch — one noisy fix dragging a leg onto the wrong path.
-    @Test("a walker on the upper of two trails 10 m apart stays on it")
+    @Test("a hiker on the upper of two trails 10 m apart stays on it")
     func upperOfParallelPairWins() {
         let points = [
             point(47.630092, 12.8602, at: 0),
@@ -136,7 +136,7 @@ struct TrailMatcherJunctionTests {
     /// The same shape walked along the lower trail, so the assertion above
     /// cannot be passing because the matcher prefers whichever way was listed
     /// first or happens to sort earlier by name.
-    @Test("a walker on the lower of two trails 10 m apart stays on it")
+    @Test("a hiker on the lower of two trails 10 m apart stays on it")
     func lowerOfParallelPairWins() {
         let points = [
             point(47.630002, 12.8602, at: 0),
@@ -328,7 +328,7 @@ struct TrailMatcherJunctionTests {
     ///
     /// All of that is unchanged, and is still the conservative answer: the raw
     /// fixes are handed back untouched rather than moved onto a trail the
-    /// matcher could not vouch for. What changed is that the walker is now
+    /// matcher could not vouch for. What changed is that the hiker is now
     /// told. The leg that declined the apex is surfaced as ambiguous, with the
     /// trail it turned down offered beside the GPS line it drew, so the cut
     /// corner can be put back from the review screen. It used to be counted

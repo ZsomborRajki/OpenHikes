@@ -12,7 +12,7 @@
 //
 //  Nothing here configures networking. What the app puts on the radio is
 //  decided from live conditions by ``TileNetworkPolicy``, not from a switch
-//  the walker had to find before they set off.
+//  the hiker had to find before they set off.
 //
 
 import Foundation
@@ -75,7 +75,7 @@ nonisolated enum SettingsKey {
     /// ``MovementReminderController`` on every decision rather than captured,
     /// so turning it off mid-hike stops the next reminder — and read *before*
     /// a pause arms anything, which is what keeps a pause exactly as cheap as
-    /// it was for a walker who does not want them.
+    /// it was for a hiker who does not want them.
     static let movementRemindersEnabled = "settings.movementRemindersEnabled"
     /// Whether the screens a live hike is watched from may hold the display
     /// awake. Read by ``ScreenWakePolicy`` through the modifier on those
@@ -84,12 +84,12 @@ nonisolated enum SettingsKey {
     /// three answers that have to agree, the others being a live subject and
     /// a foreground app.
     static let keepScreenAwake = "settings.keepScreenAwake"
-    /// The name a walker's shared hikes are published under, as they last
+    /// The name a hiker's shared hikes are published under, as they last
     /// typed it.
     ///
     /// Remembered rather than asked for every time, and asked for rather than
     /// derived: the alternative is `CKUserIdentity`, which needs a
-    /// discoverability prompt about the walker's Apple Account and hands back
+    /// discoverability prompt about the hiker's Apple Account and hands back
     /// a name they never chose to attach to a trail. This is the one they did.
     ///
     /// Deliberately not synced through ``SyncedSettings``. It travels on the
@@ -101,9 +101,9 @@ nonisolated enum SettingsKey {
     ///
     /// Deliberately not synced through ``SyncedSettings``, for the reason
     /// browsing needs no account in the first place: a block has to work on a
-    /// signed-out phone, and a value that only travelled for walkers with
+    /// signed-out phone, and a value that only travelled for hikers with
     /// iCloud on would be a feature that quietly exists for some of them. The
-    /// cost is that the list does not follow the walker to a new phone, which
+    /// cost is that the list does not follow the hiker to a new phone, which
     /// is the smaller half — they can block again, and the alternative is a
     /// block that does not work at all where there is nothing to sync with.
     static let communityBlockedAuthors = "community.blockedAuthors"
@@ -129,17 +129,17 @@ nonisolated enum SettingsDefault {
     /// activity costs a redraw every twenty seconds rather than any new
     /// wakeups, and it is the difference between glancing at a Lock Screen and
     /// unlocking a phone with wet gloves on. The system's own per-app switch
-    /// is still the walker's veto.
+    /// is still the hiker's veto.
     static let liveActivitiesEnabled = true
-    /// On. The reminder the walker never sees costs nothing: a paused
+    /// On. The reminder the hiker never sees costs nothing: a paused
     /// recording is watched by the cheapest delivery Core Location has, and a
     /// paused walk is watched by fixes that were arriving anyway. The failure
     /// it prevents is the expensive one — a hike whose second half is missing
-    /// because the walker set off from lunch without tapping Resume, which no
+    /// because the hiker set off from lunch without tapping Resume, which no
     /// later screen can put right.
     static let movementRemindersEnabled = true
     /// Off. The display is the largest single consumer on the device, and a
-    /// walk is measured in hours — so the walker who has not asked for this
+    /// walk is measured in hours — so the hiker who has not asked for this
     /// keeps every bit of what the other energy policies buy them. The case
     /// it exists for is narrow and real enough to be worth a switch, and
     /// narrow enough not to be worth assuming: see ``ScreenWakePolicy``.

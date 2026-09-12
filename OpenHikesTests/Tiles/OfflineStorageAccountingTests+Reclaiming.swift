@@ -157,7 +157,7 @@ extension StorageAccountingTests {
 
     /// The sweep clears the browsing tier and leaves saved coverage alone.
     ///
-    /// It used to take both, which is what deleted a walker's downloaded map on
+    /// It used to take both, which is what deleted a hiker's downloaded map on
     /// the launch after its seventh day — the hike went on claiming tiles whose
     /// bytes were gone, and the claim was only discovered to be empty out of
     /// signal. Age now sends a durable tile to be refreshed on its next load;

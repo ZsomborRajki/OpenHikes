@@ -8,7 +8,7 @@
 //  badge and its VoiceOver value were two independent renderings of the same
 //  number and they disagreed. The badge drew `Int(temperature.value)` with a
 //  bare degree sign, and WeatherKit hands this app Celsius: in `en_US` a
-//  walker read `12°` — twelve degrees Fahrenheit, which is −11 °C — while
+//  hiker read `12°` — twelve degrees Fahrenheit, which is −11 °C — while
 //  VoiceOver, which did convert, said "53.6 degrees Fahrenheit" for the same
 //  reading. On a hike a temperature is safety information, and the two
 //  renderings have to be the same quantity by construction rather than by
@@ -79,17 +79,17 @@ extension WeatherPollingPolicy {
     ///
     /// The argument for *two*: one interval is simply "due for a refresh",
     /// which happens constantly and harmlessly — a poll a few seconds late, a
-    /// walker who has not moved, a request already in flight — and dimming
+    /// hiker who has not moved, a request already in flight — and dimming
     /// there would cry wolf on the ordinary case. By two, the reading has had
     /// one whole scheduled refresh miss plus the entire backoff ladder
     /// (`retryDelays`: 5 s, 30 s, 2 min, then 15 min) fail against it, which
-    /// is four or more refused attempts. That is a walker out of signal, or an
+    /// is four or more refused attempts. That is a hiker out of signal, or an
     /// entitlement that has stopped answering, rather than a slow response.
     ///
     /// WeatherKit's own `WeatherMetadata.expirationDate` was the obvious
     /// alternative and is the wrong instrument: it is the provider saying when
     /// *it* will have new data (typically around an hour out), not this app
-    /// saying when it last managed to reach the provider. A walker who has
+    /// saying when it last managed to reach the provider. A hiker who has
     /// been out of signal for fifty minutes would still be shown an
     /// unqualified reading from before the front came through.
     var stalenessInterval: TimeInterval { freshnessInterval * 2 }

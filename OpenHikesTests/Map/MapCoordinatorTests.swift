@@ -234,7 +234,7 @@ extension MapCoordinatorTests {
         #expect(!map.overlays.contains { $0 === installed })
     }
 
-    /// And back again, because a walker who tries Apple Maps and returns to a
+    /// And back again, because a hiker who tries Apple Maps and returns to a
     /// topographic source must get their tiles back without relaunching.
     @Test("returning to a tile source reinstalls the overlay under the route")
     func returningFromSystemBaseMapReinstallsTheOverlay() throws {
