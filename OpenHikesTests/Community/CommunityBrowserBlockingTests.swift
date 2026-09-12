@@ -186,4 +186,68 @@ struct CommunityBrowserBlockingTests {
         #expect(transport.recording.nearbyRequests.count == 1)
         #expect(browser.nearbyListings.map(\.id) == ["somebody-else"])
     }
+
+    // MARK: A block is not an answer to the map's question
+
+    /// The refill used to go through `retry()`, which reads the *latest*
+    /// region and commits it. So blocking somebody while the map sat over an
+    /// unaccepted pan searched that pan instead: a different area's hikes
+    /// replaced the list, and the *Search this area* offer the hiker had not
+    /// taken was silently accepted on their behalf.
+    @Test("a block refills the area on screen, not wherever the map has drifted")
+    func blockRefillsTheAnsweredArea() async {
+        let transport = StubCommunityTransport()
+        let blocks = CommunityBlockList.scratch()
+        transport.listingsResult = .success([.stub(id: "theirs", authorID: "author-1")])
+        let browser = CommunityBrowser(transport: transport, blockList: blocks)
+        browser.regionDidSettle(Self.region())
+        browser.startBrowsing()
+        await settle(browser)
+
+        // Pan somewhere else and leave the offer standing, unaccepted.
+        browser.regionDidSettle(Self.region(latitude: 48.03))
+        #expect(browser.areaPrompt == .search, "precondition: an offer nobody took")
+
+        transport.listingsResult = .success([.stub(id: "somebody-else", authorID: "author-2")])
+        blocks.block(.stub(authorID: "author-1"))
+        browser.refreshAfterBlock()
+        await settle(browser)
+
+        #expect(
+            transport.recording.nearbyRequests.last?.coordinate.latitude == 47.63,
+            "the refill asks about the area the emptied rows answered"
+        )
+        #expect(
+            browser.areaPrompt == .search,
+            "and the offer the hiker never accepted is still theirs to take"
+        )
+        #expect(browser.nearbyListings.map(\.id) == ["somebody-else"])
+    }
+
+    /// The other half of leaving the offer alone: a refill must not spend the
+    /// policy's memory of the committed area either, or the pan that is still
+    /// on offer would stop being offered.
+    @Test("a block refill does not commit the area it re-asks about")
+    func blockRefillDoesNotRecommit() async {
+        let transport = StubCommunityTransport()
+        let blocks = CommunityBlockList.scratch()
+        transport.listingsResult = .success([.stub(id: "theirs", authorID: "author-1")])
+        let browser = CommunityBrowser(transport: transport, blockList: blocks)
+        browser.regionDidSettle(Self.region())
+        browser.startBrowsing()
+        await settle(browser)
+        let committedBefore = browser.issuedRequests
+
+        browser.regionDidSettle(Self.region(latitude: 48.03))
+        transport.listingsResult = .success([.stub(id: "somebody-else", authorID: "author-2")])
+        blocks.block(.stub(authorID: "author-1"))
+        browser.refreshAfterBlock()
+        await settle(browser)
+
+        #expect(browser.issuedRequests == committedBefore + 1, "one refill, and only one")
+        // Taking the standing offer must still work, and must still be about B.
+        browser.searchVisibleArea()
+        await settle(browser)
+        #expect(transport.recording.nearbyRequests.last?.coordinate.latitude == 48.03)
+    }
 }

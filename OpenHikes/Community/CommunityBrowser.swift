@@ -178,6 +178,29 @@ final class CommunityBrowser {
     /// hiker's tap asks about the region that raised it rather than
     /// re-deriving one from a map that may have drifted since.
     @ObservationIgnored private var offeredArea: CommunitySearchArea?
+    /// The area ``nearbyResults`` actually came back for.
+    ///
+    /// Written when results *land*, never when a request starts, and that is
+    /// the distinction the two bugs it fixes both turned on. Three areas are
+    /// in play at once and they are routinely different: ``latestRegion`` is
+    /// wherever the map happens to be, ``offeredArea`` is a question the
+    /// hiker has not accepted, and this is the only one the rows on screen
+    /// are an answer to.
+    ///
+    /// It survives a failure, because the rows do — see ``fail(with:answering:)``.
+    /// So it is what a block refill re-asks about, and what ``areaName`` is
+    /// allowed to describe.
+    @ObservationIgnored private var resultsArea: CommunitySearchArea?
+    /// The area a name is currently being resolved for, and the name once
+    /// MapKit has given one.
+    ///
+    /// Held apart from ``areaName`` so a name can arrive before, after, or
+    /// instead of the results it describes without ever being published over
+    /// rows it is not about. The geocode and the query are two independent
+    /// requests with two independent failure modes, and the header is only
+    /// ever allowed to say what the *rows* are about.
+    @ObservationIgnored private var pendingArea: CommunitySearchArea?
+    @ObservationIgnored private var pendingName: String?
     /// Whether an opt-in is still waiting for a region to be about. See
     /// ``startBrowsing()``.
     @ObservationIgnored private var wantsFirstRegion = false
@@ -337,6 +360,9 @@ final class CommunityBrowser {
         nameTask = nil
         nearbyResults = []
         offeredArea = nil
+        resultsArea = nil
+        pendingArea = nil
+        pendingName = nil
         wantsFirstRegion = false
         areaPrompt = .settled
         areaName = nil
@@ -372,9 +398,22 @@ final class CommunityBrowser {
     /// Nothing equivalent for the typed search, and that is not an oversight:
     /// it has no remembered question to re-ask, and the field the hiker typed
     /// into is still in front of them.
+    ///
+    /// It re-asks about ``resultsArea`` — the area the emptied rows were an
+    /// answer to — and deliberately **not** about wherever the map is now.
+    /// This used to go through ``retry()``, which reads ``latestRegion`` and
+    /// commits it, so blocking somebody while the map sat over an unaccepted
+    /// pan silently accepted that pan: the list was replaced with a different
+    /// area's hikes, the *Search this area* offer the hiker had not taken was
+    /// cleared, and none of it was anything they asked for. A block is not an
+    /// answer to the map's question.
+    ///
+    /// So this touches neither the policy, the offer, nor the prompt. It is
+    /// the same question as before with one more author excluded.
     func refreshAfterBlock() {
         guard isBrowsing, !nearbyResults.isEmpty, nearbyListings.isEmpty else { return }
-        retry()
+        guard let resultsArea else { return }
+        requestNearby(resultsArea)
     }
 
     // MARK: - Map pins
@@ -451,8 +490,21 @@ final class CommunityBrowser {
         offeredArea = nil
         areaPrompt = .settled
         nameArea(area)
+        requestNearby(area)
+    }
+
+    /// Asks the transport about `area`, and nothing else.
+    ///
+    /// Split out from ``commit(_:)`` because a block refill needs the request
+    /// without any of the rest of it: re-asking the question already on screen
+    /// must not re-commit a region, clear an offer, or restart a geocode for
+    /// an area whose name has not changed. See ``refreshAfterBlock()``.
+    ///
+    /// The exclusion set is read here rather than passed in, which is what
+    /// makes the refill carry the author who was just blocked.
+    private func requestNearby(_ area: CommunitySearchArea) {
         let excluded = blockList.blockedIDs
-        perform(.nearby, describing: "a nearby search") { transport in
+        perform(.nearby, describing: "a nearby search", about: area) { transport in
             try await transport.listings(
                 near: area.coordinate,
                 radiusMeters: area.radiusMeters,
@@ -462,19 +514,36 @@ final class CommunityBrowser {
         }
     }
 
-    /// Asks what the searched area is called, superseding any earlier ask.
+    /// Asks what the area being searched is called, superseding any earlier
+    /// ask. Publishes nothing on its own.
     ///
-    /// Cleared first rather than left standing: the previous name describes
-    /// somewhere the list is no longer about, and a header that keeps it until
-    /// the geocode lands is wrong for as long as that takes.
+    /// The name lands in ``pendingName`` and reaches ``areaName`` only when
+    /// the rows it describes are the rows on screen — either here, if the
+    /// results got back first, or in ``accept(_:answering:about:)`` if they
+    /// have not.
+    ///
+    /// It used to clear ``areaName`` up front and publish straight into it,
+    /// on the reasoning that the old name described somewhere the list was no
+    /// longer about. That is true only if the new request succeeds. When it
+    /// failed — the rows are deliberately kept, see
+    /// ``fail(with:answering:)`` — the geocode had already renamed the header,
+    /// so the section sat there showing one area's hikes under another area's
+    /// name, with nothing on screen saying anything had gone wrong. A name
+    /// and a list are two answers to two questions that fail separately, and
+    /// the header may only ever describe the one that arrived.
     private func nameArea(_ area: CommunitySearchArea) {
-        areaName = nil
         nameTask?.cancel()
+        pendingArea = area
+        pendingName = nil
         guard let areaNames else { return }
         nameTask = Task { [weak self] in
             let name = await areaNames.name(for: area)
             guard !Task.isCancelled, let self else { return }
-            areaName = name
+            guard pendingArea == area else { return }
+            pendingName = name
+            // The rows this names are already up, so it is safe to say now.
+            // Otherwise the results publish it when they land.
+            if resultsArea == area { areaName = name }
         }
     }
 
@@ -490,9 +559,13 @@ final class CommunityBrowser {
     /// change: a pan superseding a typed search is not a newer answer to the
     /// same question, it is an answer to a different one — and it used to
     /// arrive in the same array.
+    /// - Parameter area: The area a nearby request is about, carried through
+    ///   so the results can be published together with the name and the area
+    ///   they belong to. `nil` for a title search, which is about a word.
     private func perform(
         _ question: Question,
         describing reason: String,
+        about area: CommunitySearchArea? = nil,
         _ work: @escaping @Sendable (any CommunityTransporting) async throws -> [CommunityListing]
     ) {
         guard let transport else { return }
@@ -516,7 +589,7 @@ final class CommunityBrowser {
             do {
                 let results = try await work(transport)
                 guard !Task.isCancelled else { return }
-                self?.accept(results, answering: question)
+                self?.accept(results, answering: question, about: area)
             } catch is CancellationError {
                 return
             } catch {
@@ -532,10 +605,24 @@ final class CommunityBrowser {
         setTask(task, for: question)
     }
 
-    private func accept(_ results: [CommunityListing], answering question: Question) {
+    /// Publishes an answer: the rows, the area they are about, and the name
+    /// of that area, in one place so the three cannot disagree.
+    private func accept(
+        _ results: [CommunityListing],
+        answering question: Question,
+        about area: CommunitySearchArea?
+    ) {
         switch question {
         case .nearby:
             nearbyResults = results
+            resultsArea = area
+            // The header describes these rows from here on. If MapKit has
+            // already said what this area is called, say it; if it has not,
+            // say nothing rather than keep the last area's name — the geocode
+            // will publish it when it lands. A refill of the area already on
+            // screen re-publishes the name it already had, since the pending
+            // area is unchanged.
+            areaName = area == pendingArea ? pendingName : nil
             state = .loaded
         case .title:
             matchingResults = results
