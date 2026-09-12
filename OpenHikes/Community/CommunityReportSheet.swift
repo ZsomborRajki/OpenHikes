@@ -14,43 +14,54 @@
 //
 //  ## What this does not claim
 //
-//  It hands the report to the device's mail app and stops. It cannot watch the
-//  message leave, so the confirmation says the report is *ready to send in
-//  your mail app* rather than that it was sent — the same discipline that
-//  keeps the share sheet saying "sent for review" instead of "published". See
+//  It hands the report to the device's mail app and stops. See
 //  ``CommunityReport`` for why this is mail at all rather than a record type;
 //  the short version is that browsing works signed out and a public-database
 //  write does not.
 //
-//  A phone with no mail account configured is a real case and not an error
-//  state. `openURL`'s completion says so, and the fallback is the whole
-//  message as copyable text with the address above it — which is worse than a
-//  composed mail and is still a route the walker can take, unlike a button
-//  that did nothing.
+//  What `openURL`'s completion reports is **narrower than it looks**, and the
+//  wording here is held to the narrow reading. `accepted` says the system
+//  found something willing to open the `mailto:` — it does not say a draft was
+//  composed, and it does not say the device has a mail account at all. Mail is
+//  installed on every iPhone and registered for the scheme, so a phone with no
+//  account configured takes the URL, opens, and offers account setup: accepted
+//  is `true` and no message exists. A walker who discards the composer lands in
+//  the same place from the other direction.
+//
+//  So the handed-off screen says the report was *opened in* the mail app
+//  rather than that one is waiting in it, and — the part that matters — it
+//  never becomes a dead end. The message stays copyable and the form stays
+//  reachable from **both** outcomes, because the two cases this app cannot
+//  tell apart are exactly the ones where a walker needs the text back. A
+//  screen that offered only *Done* would have taken the complaint away from
+//  the person who typed it.
 //
 
 import SwiftUI
 
 struct CommunityReportSheet: View {
-    /// Where the sheet is in the one-way trip from form to handoff.
+    /// Where the sheet is in the trip from form to handoff.
     ///
     /// One value rather than two booleans, for the reason
     /// ``CommunityHikeView``'s `Phase` gives: a sheet that is both handed off
-    /// and showing the fallback is a state nobody has to reason about if it
+    /// and reporting no mail app is a state nobody has to reason about if it
     /// cannot be spelled.
+    ///
+    /// Not a one-way trip, which is the correction a review made. Both
+    /// outcomes below lead back to ``editing``, since neither of them is
+    /// evidence that the report got anywhere.
     private enum Phase: Equatable {
         /// Filling the form in.
         case editing
-        /// The mail app took it. Nothing more happens in this app.
+        /// Something opened the `mailto:`. Whether it composed anything is not
+        /// knowable from here — see this file's header.
         case handedOff
-        /// Nothing opened the `mailto:`. The message is shown to be copied.
+        /// Nothing opened the `mailto:` at all.
         case noMailApp
     }
 
     let listing: CommunityListing
 
-    @Environment(\.dismiss)
-    private var dismiss
     @Environment(\.openURL)
     private var openURL
     @State private var reason: CommunityReportReason = .objectionable
@@ -72,8 +83,12 @@ struct CommunityReportSheet: View {
                     commitmentSection
                 case .handedOff:
                     handedOffSection
+                    messageSection
+                    editAgainSection
                 case .noMailApp:
-                    fallbackSection
+                    noMailAppSection
+                    messageSection
+                    editAgainSection
                 }
             }
             .navigationTitle("Report Hike")
@@ -85,7 +100,7 @@ struct CommunityReportSheet: View {
     }
 }
 
-// MARK: - Sections
+// MARK: - Filling it in
 
 private extension CommunityReportSheet {
     /// What is being reported, said before anything is sent.
@@ -158,19 +173,24 @@ private extension CommunityReportSheet {
             """)
         }
     }
+}
 
+// MARK: - After the handoff
+
+private extension CommunityReportSheet {
+    /// Something took the URL. Deliberately worded as *opened in* rather than
+    /// *waiting in*: see this file's header for why the Boolean behind this
+    /// does not support the stronger claim.
     var handedOffSection: some View {
         Section {
             VStack(spacing: 8) {
-                Image(systemName: "envelope.badge")
+                Image(systemName: "envelope")
                     .font(.largeTitle)
                     .foregroundStyle(.tint)
                     .accessibilityHidden(true)
-                Text("Ready to send")
+                Text("Opened in your mail app")
                     .font(.headline)
-                // What is true: this app composed it and handed it over. It
-                // reaches anybody when the walker presses send in Mail.
-                Text("The report is waiting in your mail app. It reaches the reviewer once you send it.")
+                Text("The report reaches the reviewer only once you send it there.")
                     .font(.subheadline)
                     .foregroundStyle(.secondary)
                     .multilineTextAlignment(.center)
@@ -182,9 +202,34 @@ private extension CommunityReportSheet {
         }
     }
 
-    /// No mail app took the link. The message is shown whole so it can be
-    /// copied somewhere that will.
-    var fallbackSection: some View {
+    var noMailAppSection: some View {
+        Section {
+            VStack(spacing: 8) {
+                Image(systemName: "envelope.badge.shield.half.filled")
+                    .font(.largeTitle)
+                    .foregroundStyle(.secondary)
+                    .accessibilityHidden(true)
+                Text("No mail app answered")
+                    .font(.headline)
+                Text("Nothing on this device offered to write the message.")
+                    .font(.subheadline)
+                    .foregroundStyle(.secondary)
+                    .multilineTextAlignment(.center)
+            }
+            .frame(maxWidth: .infinity)
+            .padding(.vertical, 8)
+            .accessibilityElement(children: .combine)
+            .accessibilityIdentifier("community-report-no-mail-app")
+        }
+    }
+
+    /// The report itself, kept reachable after *either* outcome.
+    ///
+    /// Shown after a successful handoff too, and that is the point rather than
+    /// clutter: no message may have been composed at all, and a walker who
+    /// finds their mail app asking them to set up an account has otherwise
+    /// lost everything they typed.
+    var messageSection: some View {
         Section {
             Text(report.plainText)
                 .font(.footnote.monospaced())
@@ -196,17 +241,43 @@ private extension CommunityReportSheet {
             } label: {
                 Label("Copy Report", systemImage: "doc.on.doc")
             }
+            .accessibilityIdentifier("community-report-copy")
             #endif
         } header: {
             Text("Send this to \(CommunityReport.recipient)")
         } footer: {
-            Text("No mail app answered, so the report is here to copy and send yourself.")
+            Text("""
+            If no message opened — no mail account set up, or you closed the \
+            draft — copy this and send it yourself.
+            """)
         }
     }
 
+    /// The way back to the form, so a second attempt does not mean typing the
+    /// complaint again.
+    ///
+    /// The reason and the note are `@State` on this sheet and survive the
+    /// round trip, so this really is the report the walker already wrote.
+    var editAgainSection: some View {
+        Section {
+            Button("Back to the Report") { phase = .editing }
+                .accessibilityIdentifier("community-report-edit-again")
+        }
+    }
+}
+
+// MARK: - Toolbar
+
+private extension CommunityReportSheet {
+    /// ``DismissButton`` rather than `Button("Done") { dismiss() }`, because a
+    /// `.toolbar` closure is inlined into the body that declares it — so
+    /// `@Environment(\.dismiss)` here would belong to this whole form and
+    /// rebuild it on every scene-phase transition. The mail handoff *is* a
+    /// scene-phase transition, which makes this screen the shape the rule was
+    /// measured on. See ``DismissButton``.
     @ToolbarContentBuilder var toolbarContent: some ToolbarContent {
         ToolbarItem(placement: .cancellationAction) {
-            Button(phase == .editing ? "Cancel" : "Done") { dismiss() }
+            DismissButton(phase == .editing ? "Cancel" : "Done")
         }
         ToolbarItem(placement: .confirmationAction) {
             if phase == .editing {
@@ -220,11 +291,11 @@ private extension CommunityReportSheet {
 // MARK: - Handing it over
 
 private extension CommunityReportSheet {
-    /// Opens the composed mail, or falls back to showing it.
+    /// Opens the composed mail, or says nothing would.
     ///
-    /// A `mailto:` that cannot even be *formed* takes the same fallback as one
+    /// A `mailto:` that cannot even be *formed* takes the same outcome as one
     /// nothing opened: both leave the walker holding a report with nowhere to
-    /// put it, and there is nothing useful to say about the difference.
+    /// put it, and the screen offers the same copyable text either way.
     func send() {
         guard let url = report.mailURL else {
             phase = .noMailApp
