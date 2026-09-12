@@ -769,12 +769,22 @@ final class CommunityBrowser {
             // rather than refusing it as "the same question".
             policy.forgetLastQuery()
         case .title:
-            // Logged and no more. There is nowhere on screen that reports a
-            // failed title search, and the two things this could touch instead
-            // both belong to the map: ``state`` draws the nearby list's empty
-            // state, and the remembered query is the nearby one. A typed word
-            // that could not be looked up must not cost either.
-            break
+            // Nothing on screen is touched, and that much is deliberate.
+            // There is nowhere that reports a failed title search, and the two
+            // things this could reach for instead both belong to the map:
+            // ``state`` draws the nearby list's empty state, and the
+            // remembered query is the nearby one. A typed word that could not
+            // be looked up must not cost either.
+            //
+            // What it does forget is that the word was asked, which is what
+            // lets Return ask it again. The deduplication in ``search`` is
+            // there to stop a submission re-asking a question already
+            // *answered*; a question that failed has no answer to reuse, and
+            // the field the hiker typed into is the only retry this has.
+            // Without this line the same word could never be submitted twice,
+            // so a search that failed while the train was in a tunnel stayed
+            // failed until the query was edited to something else and back.
+            requestedTitle = nil
         }
     }
 
