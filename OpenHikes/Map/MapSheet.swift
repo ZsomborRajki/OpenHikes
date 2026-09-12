@@ -213,7 +213,10 @@ struct MapSheet: View {
                     // answer different questions and a place suggestion the
                     // hiker has already committed to is still a trail name
                     // worth looking up.
-                    appModel.community.search(matching: value)
+                    appModel.community.prepareTitleSearch(matching: value)
+                }
+                .task(id: CommunityBrowser.normalizedTitle(searchText)) {
+                    await appModel.community.searchAfterQuietPeriod(matching: searchText)
                 }
                 #if os(iOS)
                 .textInputAutocapitalization(.words)
@@ -440,6 +443,7 @@ private func select(_ completion: MKLocalSearchCompletion) {
 private func performSearch() {
     let query = searchText.trimmingCharacters(in: .whitespacesAndNewlines)
     guard !query.isEmpty else { return }
+    appModel.community.search(matching: query)
     searchFocused = false
     let request = MKLocalSearch.Request()
     request.naturalLanguageQuery = query

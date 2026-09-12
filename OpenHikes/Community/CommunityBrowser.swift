@@ -253,6 +253,8 @@ final class CommunityBrowser {
     /// way round, is how the two used to interfere.
     @ObservationIgnored private var nearbyTask: Task<Void, Never>?
     @ObservationIgnored private var matchTask: Task<Void, Never>?
+    @ObservationIgnored private var titleQuery = ""
+    @ObservationIgnored private var requestedTitle: String?
     @ObservationIgnored private var nameTask: Task<Void, Never>?
     /// The outline fetch for whatever the nearby list currently holds.
     ///
@@ -486,24 +488,51 @@ final class CommunityBrowser {
 
     // MARK: - The search field
 
-    /// Published hikes whose title matches a typed query.
-    ///
-    /// Separate from the location path and deliberately not gated by opting
-    /// in: somebody who types a trail's name has asked for it by name,
-    /// wherever they are and whether or not they have asked for the section.
+    /// Invalidates an old response synchronously, before the new quiet period.
+    /// The field calls this on edits, including an empty edit, so clearing never
+    /// waits for SwiftUI to start the replacement task.
+    func prepareTitleSearch(matching query: String) {
+        let normalized = Self.normalizedTitle(query)
+        guard normalized != titleQuery else { return }
+        titleQuery = normalized
+        requestedTitle = nil
+        matchTask?.cancel()
+        matchTask = nil
+        if normalized.isEmpty { matchingResults = [] }
+    }
+
+    private static let titleQuietPeriodMilliseconds = 300
+    private static let titleQuietPeriod: Duration = .milliseconds(titleQuietPeriodMilliseconds)
+
+    static func normalizedTitle(_ query: String) -> String {
+        query.trimmingCharacters(in: .whitespacesAndNewlines).lowercased()
+    }
+
+    /// Owned by the search field's `.task(id:)`: a new normalized edit or a
+    /// disappearing field cancels the clock wait. Return uses `search` directly.
+    func searchAfterQuietPeriod(
+        matching query: String,
+        clock: some Clock<Duration> = ContinuousClock()
+    ) async {
+        guard !Task.isCancelled, hasTransport else { return }
+        prepareTitleSearch(matching: query)
+        let normalized = Self.normalizedTitle(query)
+        guard !normalized.isEmpty, requestedTitle != normalized else { return }
+        do {
+            try await clock.sleep(for: Self.titleQuietPeriod)
+        } catch { return }
+        guard !Task.isCancelled, titleQuery == normalized else { return }
+        search(matching: query)
+    }
+
+    /// Published title matches need no nearby opt-in: typing asks by name.
+    /// Submits immediately, also flushing a pending debounce without a second
+    /// request when its clock later expires. Equivalent edits reuse the answer.
     func search(matching query: String) {
+        prepareTitleSearch(matching: query)
         let trimmed = query.trimmingCharacters(in: .whitespacesAndNewlines)
-        guard !trimmed.isEmpty else {
-            matchTask?.cancel()
-            matchTask = nil
-            // Dropping the matches is the whole of it. The map's answer was
-            // never replaced by them and so has nothing to be restored from —
-            // which is also why this no longer depends on the policy agreeing
-            // to re-ask: above the zoom ceiling it would refuse, and the title
-            // matches used to be left on screen as a result.
-            matchingResults = []
-            return
-        }
+        guard !trimmed.isEmpty, requestedTitle != titleQuery, hasTransport else { return }
+        requestedTitle = titleQuery
         // Snapshotted here rather than read inside the request: the closure is
         // `@Sendable` and runs off this actor, and a set taken at the moment
         // the question is asked is the right one — a block made while it is in
