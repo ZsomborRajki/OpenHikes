@@ -14,6 +14,7 @@
 //
 
 import CoreLocation
+import Foundation
 @testable import OpenHikes
 import Testing
 
@@ -42,19 +43,79 @@ struct CommunityRouteOutlineTests {
     }
 
     /// What a real recording looks like to a simplifier: metre-spaced points
-    /// with a lateral wobble on them.
+    /// along a trail that climbs, wanders and switchbacks, with GPS noise on
+    /// top of all three.
     ///
-    /// A dead-straight line of twenty thousand points would collapse to two
-    /// at any tolerance at all, which would make the two size assertions below
-    /// pass without measuring anything. The wobble is a few metres either
-    /// side, which is GPS noise, and is what makes the point budget do work.
+    /// Every part of that is load-bearing, because the two size assertions
+    /// below measure nothing against a route the simplifier can answer in one
+    /// step. This fixture was previously a dead-straight climb with the
+    /// longitude alternating between two values — described as "a few metres"
+    /// of wobble, but 0.0002° at this latitude is **15 m**, so every point sat
+    /// the same distance off the chord between the endpoints. Ramer–Douglas–
+    /// Peucker then fell off a cliff rather than thinning: 19,992 points at the
+    /// 8 m tolerance and **2** at 16 m, which was the answer accepted. Both
+    /// assertions passed against a two-point line and a sixteen-byte string,
+    /// and the discarded first pass cost 24 seconds apiece in a Debug build —
+    /// 48 of the suite's 66 seconds, for two tests that checked nothing.
+    ///
+    /// Shape at several scales is what fixes that, because it gives RDP points
+    /// at many different deviations instead of one. Measured against this
+    /// fixture: 682 points at 8 m, 153 at 16 m, and 102 at 32 m, which is the
+    /// pass the budget accepts. So the doubling loop in
+    /// ``CommunityRouteOutline/simplified(_:maximumPoints:)`` really runs —
+    /// three passes rather than one — and lands comfortably inside the budget
+    /// rather than on its floor. The whole fixture is thinned in about a
+    /// quarter of a second in a Debug build, against the old one's 24.
+    ///
+    /// Deterministic, deliberately: the noise comes from hashing the index
+    /// rather than from a random generator, so a failure is reproducible and
+    /// the numbers above stay true from one run to the next.
     private static func denseRoute(_ count: Int) -> [RouteCoordinate] {
-        (0..<count).map { index in
-            RouteCoordinate(
-                latitude: startLatitude + Double(index) * 0.00001,
-                longitude: startLongitude + Double(index % 2) * 0.0002
+        var latitude = startLatitude
+        var longitude = startLongitude
+        return (0..<count).map { index in
+            let sample = Double(index)
+            latitude += climbPerFix + sin(sample / climbPeriod) * climbVariation
+            longitude += sin(sample / wanderPeriod) * wanderAmplitude
+                + sin(sample / bendPeriod) * bendAmplitude
+                + sin(sample / switchbackPeriod) * switchbackAmplitude
+            return RouteCoordinate(
+                latitude: latitude + jitter(index, salt: 1) * noiseLatitude,
+                longitude: longitude + jitter(index, salt: 2) * noiseLongitude
             )
         }
+    }
+
+    /// About a metre of northward progress per fix, varying over a long climb.
+    private static let climbPerFix = 0.0000090
+    private static let climbVariation = 0.0000030
+    private static let climbPeriod = 900.0
+    /// The valley the trail follows, and a shorter bend inside it.
+    private static let wanderAmplitude = 0.0000110
+    private static let wanderPeriod = 450.0
+    private static let bendAmplitude = 0.0000040
+    private static let bendPeriod = 130.0
+    /// The switchbacks, ±30 m every 140-odd fixes. These are what survive the
+    /// 8 m tolerance in numbers and thin gradually as it doubles, which is the
+    /// property the old fixture lacked.
+    private static let switchbackAmplitude = 0.00040
+    private static let switchbackPeriod = 45.0
+    /// GPS noise, about two metres either way.
+    private static let noiseLatitude = 0.000018
+    private static let noiseLongitude = 0.000027
+
+    /// A repeatable value in `-1...1` for `index`, so the fixture is noisy
+    /// without being random.
+    ///
+    /// `salt` separates the latitude's noise from the longitude's; hashing the
+    /// index twice with the same salt would put the two on the same curve and
+    /// turn the noise into a diagonal.
+    private static func jitter(_ index: Int, salt: Int) -> Double {
+        var hashed = UInt64(truncatingIfNeeded: index &* 2_654_435_761 &+ salt &* 2_246_822_519)
+        hashed ^= hashed >> 33
+        hashed = hashed &* 14_029_467_366_897_019_727
+        hashed ^= hashed >> 33
+        return Double(hashed % 2001) / 1000.0 - 1.0
     }
 
     // MARK: - The round trip
@@ -111,12 +172,22 @@ struct CommunityRouteOutlineTests {
     /// The budget is the reason the map can afford geometry at all. A day's
     /// recording is tens of thousands of points and has to come back under it
     /// however wiggly it is.
+    ///
+    /// The floor is the half that had to be added, and it is the house rule
+    /// about upper bounds applied to a fixture rather than to a counter: a
+    /// ceiling alone is scored perfectly by a simplifier that returns the two
+    /// endpoints, which is exactly what the old fixture provoked and what
+    /// nothing here noticed. A thinned day's walk is a line somebody can
+    /// recognise, so it is worth tens of points and not two.
     @Test("a long route is thinned to the point budget")
     func aLongRouteIsThinned() {
         let outline = CommunityRouteOutline.simplified(Self.denseRoute(20_000))
 
         #expect(outline.count <= CommunityRouteOutline.maximumPoints)
-        #expect(outline.count >= 2, "a thinned route is still a line")
+        #expect(
+            outline.count > Self.thinnedFloor,
+            "a thinned route is still the shape of the walk, not its endpoints"
+        )
     }
 
     /// What the budget is worth in bytes, which is the number the design rests
@@ -126,7 +197,21 @@ struct CommunityRouteOutlineTests {
         let encoded = try #require(CommunityRouteOutline.encoded(Self.denseRoute(20_000)))
 
         #expect(encoded.utf8.count < 2048)
+        // Paired with the bound above for the reason the point count is: a
+        // "small enough" assertion is met most comfortably by an outline that
+        // carries nothing, and this one used to pass against sixteen bytes.
+        #expect(
+            encoded.utf8.count > Self.smallestUsefulOutlineBytes,
+            "an outline that fits in a couple of hundred bytes is not a day's walk"
+        )
     }
+
+    /// Below this the outline has stopped describing the walk. Both are set
+    /// well under what this fixture actually produces — 102 points and 515
+    /// bytes — so an ordinary change to the simplifier moves neither, and a
+    /// collapse moves both.
+    private static let thinnedFloor = 32
+    private static let smallestUsefulOutlineBytes = 256
 
     /// Thinning must not straighten. A stride over the points would keep the
     /// count and lose the corner, which is the distinction a hiker is looking
