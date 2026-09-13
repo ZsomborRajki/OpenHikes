@@ -2,7 +2,7 @@
 
 OpenHikes is a local-first SwiftUI and SwiftData trail viewer for iPhone. It imports GPX tracks, records live hikes, displays them on a MapKit map, provides route statistics and an interactive elevation profile, and keeps selected map areas available offline.
 
-There is no backend and no OpenHikes account. Everything lives on the device, and what syncs travels through the hiker's own private iCloud database.
+That is local-first with one deliberate exception. There is no OpenHikes account and no server holding your hikes: everything lives on the device, and what syncs travels through the hiker's own private iCloud database. The exception is sharing a hike, which publishes it — by name, on purpose, one hike at a time — to a public CloudKit database other people browse. `OpenHikes/PrivacyInfo.xcprivacy` and [the privacy policy](https://zsomborrajki.github.io/OpenHikes/privacy/) describe exactly what that sends.
 
 ## Features
 
@@ -16,6 +16,7 @@ There is no backend and no OpenHikes account. Everything lives on the device, an
 - **Home Screen widget.** Trail progress, a climb/descent/high-point stat line, live-recording takeover, recording deep links, and sparse location anchors that help repair degraded GPS gaps.
 - **Live Activity.** The same figures on the Lock Screen and in the Dynamic Island while a recording runs or a trail is being followed, ticking their own clock so a walk costs no updates while it is simply going well.
 - **iCloud sync.** Hikes and their metadata follow the hiker across their own devices, through their own private CloudKit database. Photo files and the tile cache stay on the device that produced them.
+- **Community hikes.** Shared hikes are found by panning the map and asking, or by typing a name, and are drawn as lines rather than only as pins. Opening one shows the same statistics a hike of your own gets; saving it copies its route and photographs into your library. Publishing your own is behind the subscription and is reviewed by a person before anyone else can see it; every published hike can be reported or its author blocked. Browsing needs no account.
 
 ## Requirements
 
@@ -23,7 +24,7 @@ There is no backend and no OpenHikes account. Everything lives on the device, an
 - An Apple development team that can sign the WeatherKit entitlement, the shared App Group, the iCloud container and the push entitlement.
 - iPhone only. Every target sets `TARGETED_DEVICE_FAMILY = 1`.
 
-OpenStreetMap is the keyless default and Apple Maps needs no key either. Stadia and Thunderforest require build-time API keys *and* a paid subscription with each vendor, whose terms forbid using them free of charge in a shipping app — in OpenHikes they sit behind a yearly subscription, which is what pays for them. A build without keys shows them locked, and OpenStreetMap keeps working.
+OpenStreetMap is the keyless default and Apple Maps needs no key either. Stadia and Thunderforest require build-time API keys *and* a paid subscription with each vendor, whose terms forbid using them free of charge in a shipping app — in OpenHikes they sit behind a monthly subscription, OpenHikes Pro, which is what pays for them. It covers publishing a hike to the community too, for the same reason: a published route and its photographs are storage and downloads OpenHikes pays for as long as the hike stands. A build without keys shows them locked, and OpenStreetMap keeps working.
 
 ## Setup
 
@@ -39,9 +40,9 @@ OpenStreetMap is the keyless default and Apple Maps needs no key either. Stadia 
 
    Add your keys to the copied file. `OpenHikes/Secrets.plist` is gitignored and must never be committed; unavailable providers stay disabled in Settings.
 
-6. Build and run. `OpenHikes.storekit` at the repository root describes the paid-maps purchase and the shared scheme already points its Run action at it, so a local build has a working paywall with no Apple account involved.
+6. Build and run. `OpenHikes.storekit` at the repository root describes the OpenHikes Pro subscription and the shared scheme already points its Run action at it, so a local build has a working paywall with no Apple account involved.
 
-Shipping the paid maps for real additionally needs a matching auto-renewable subscription in App Store Connect and an active Paid Apps agreement; `.github/copilot-instructions.md` carries the exact contract, including the product ID that can never change.
+Shipping the subscription for real additionally needs a matching auto-renewable subscription in App Store Connect and an active Paid Apps agreement; `.github/copilot-instructions.md` carries the exact contract, including the product ID that can never change.
 
 ## Recording demo
 
@@ -106,11 +107,13 @@ Following Apple's [Food Truck](https://github.com/apple/sample-food-truck) and [
 | `OpenHikes/Recording/` | Live recording, recovery journal, sensors, trail matching, recording UI. |
 | `OpenHikes/Map/` | MapKit bridge, map state, search, location tracking, map rendering. |
 | `OpenHikes/Tiles/` | Tile provider policy, cache, auto-save, offline downloads, overlay rendering. |
+| `OpenHikes/Community/` | Publishing a hike to the public database, browsing and searching what other people published, the map's lines and pins for them, importing one, reporting and blocking. |
 | `OpenHikes/Photos/` | Capture and import, library discovery and time-to-place matching, the file store, trail anchoring, gallery, viewer and map pins. |
 | `OpenHikes/Sync/` | iCloud sync status and control, and the settings key-value mirror. |
 | `OpenHikes/Weather/` | WeatherKit polling, the badge over the map and its detail sheet, unit formatting, and Apple Weather attribution. |
-| `OpenHikes/Purchases/` | Paid-maps entitlement and its StoreKit state, the paywall, and the subscription terms and links. |
+| `OpenHikes/Purchases/` | The Pro entitlement and its StoreKit state, the paywall, and the subscription terms and links. |
 | `OpenHikes/Settings/` | User-facing app, recording, map and storage settings. |
+| `OpenHikes/Reminders/` | Noticing that a paused hike has started moving again, or that a running one has stopped, and saying so once. |
 | `OpenHikes/LiveActivity/` | When a Lock Screen activity starts, updates and ends, behind a seam that keeps ActivityKit out of the tests. |
 | `OpenHikes/Intents/` | App Intents for controlling and querying a recording, the Siri and Spotlight shortcuts they are offered through, and the seam they perform behind. |
 | `OpenHikes/General/` | Cross-domain extensions and diagnostics. |
