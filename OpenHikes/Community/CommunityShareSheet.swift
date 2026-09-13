@@ -416,11 +416,23 @@ nonisolated enum CommunityShareDisclosure {
             sentences.append("The notes above go with it.")
         }
         if photoCount > 0 {
+            // The time as well as the place, because a pin is both. The
+            // sentence used to name only the coordinate while
+            // ``CommunityPhotoPin`` carried `capturedAt` too — uploaded in the
+            // pins asset, where the re-encode that strips EXIF never reaches
+            // it — so the reassurance that followed read as a promise in the
+            // other direction. *Taken* is the word the rest of the app already
+            // uses for that timestamp: see `PhotoDiscoverySheet` and
+            // ``HikePhotoViewer``.
+            //
             // Number-neutral after the count, so one photograph reads as
             // written English rather than as a template with a 1 in it.
             let photos = photoCount == 1
-                ? "One photo goes with it, with the spot on the trail it was taken at"
-                : "\(photoCount) photos go with it, each with the spot on the trail it was taken at"
+                ? "One photo goes with it, with the spot on the trail and the time it was taken at"
+                : """
+                \(photoCount) photos go with it, each with the spot on the trail \
+                and the time it was taken at
+                """
             sentences.append(
                 """
                 \(photos) — resized before sending, with camera details and original \
