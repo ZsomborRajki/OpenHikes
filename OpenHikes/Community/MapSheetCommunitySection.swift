@@ -12,25 +12,70 @@
 //  its body like any other computed property, and the render-isolation note in
 //  that file's header covers them.
 //
-//  What is here is the section that replaced the *Nearby* chip. The chip was a
-//  mode: tapping it swapped the hikes list for a list of published ones, so
-//  one question — where shall I walk? — became two screens to choose between,
-//  and the same records appeared under two different headings depending on how
-//  they had been found. This is a section of the same list instead, offered by
-//  a single row until somebody asks for it, so nothing about the feature
-//  reaches the network for a hiker who never does.
+//  What is here is the *Community* half of ``MapSheetList``: its picker, its
+//  list, and the three things that list can say when it has no rows.
+//
+//  It has been all three shapes this feature has had, and the differences
+//  matter. The *Nearby* chip was a mode with nothing to say for itself: it
+//  swapped the hikes list for a list of published ones, and the same records
+//  appeared under two different headings depending on how they had been found.
+//  The section that replaced it put the shared hikes under the hiker's own in
+//  one list, which fixed that and bought a new problem — the shared half sat
+//  below a library that only ever gets longer, so the hiker scrolled past
+//  everything they had already walked to reach the hikes they had not.
+//
+//  So: two lists, and a picker that says which one is showing. What keeps that
+//  from being the chip again is that the picker is *labelled on both sides*
+//  and the heading is not a control — nothing is a mode you can be in without
+//  being told. The energy bargain is unchanged and is now carried by the tab
+//  itself: until *Community* is selected nothing about this feature reaches
+//  the network, and leaving the tab ends the session — see
+//  ``CommunityBrowser/startBrowsing()`` and ``CommunityBrowser/stopBrowsing()``.
 //
 
 import SwiftUI
 
-/// The opt-in row's glyph, sized to ``CommunityHikeRow``'s own so the row that
-/// offers the section and the rows that fill it line up.
-private enum CommunityRowMetrics {
-    static let glyphFrameSize: CGFloat = 38
-    static let glyphPointSize: CGFloat = 16
+/// Which of the sheet's two lists is showing.
+///
+/// Deliberately not a `@State` of its own. The *Community* tab and the browse
+/// session are the same thing — selecting the tab is the opt-in, leaving it
+/// ends the session — so a separate flag could only ever disagree with
+/// ``CommunityBrowser/isBrowsing`` about which list the hiker is looking at.
+/// It also means the map's *Search this area* pill can follow the tab without
+/// anything in SwiftUI telling it to: the pill already observes the browser.
+enum MapSheetList: Hashable {
+    case community
+    case mine
 }
 
 extension MapSheetHikes {
+    /// The picker, bound to the browse session rather than to state of its own.
+    ///
+    /// Selecting *Community* is the one request nobody confirms twice, and
+    /// selecting *My Hikes* takes the results, the pins and the route lines
+    /// with it: a list that is not on screen has no business holding the map's
+    /// answer to a question the hiker has moved on from.
+    var listPicker: some View {
+        Picker("Hikes to show", selection: selectedListBinding) {
+            Text("My Hikes").tag(MapSheetList.mine)
+            Text("Community").tag(MapSheetList.community)
+        }
+        .pickerStyle(.segmented)
+        .accessibilityIdentifier("hike-list-picker")
+    }
+
+    var selectedListBinding: Binding<MapSheetList> {
+        Binding(
+            get: { community.isBrowsing ? .community : .mine },
+            set: { selection in
+                switch selection {
+                case .community: community.startBrowsing()
+                case .mine: community.stopBrowsing()
+                }
+            }
+        )
+    }
+
     /// Listing ids this hiker has already imported.
     ///
     /// Derived from the query that is already loaded rather than fetched: the
@@ -40,20 +85,16 @@ extension MapSheetHikes {
         Set(hikes.compactMap(\.importedFromListingID))
     }
 
-    /// Published hikes, as a section of the hiker's own list.
+    /// Published hikes: the *Community* tab's whole list.
     ///
-    /// A section rather than the mode this used to be. The *Nearby* chip
-    /// replaced the hikes list wholesale, which made one question — where
-    /// shall I walk? — into two screens the hiker had to choose between, and
-    /// put the same records under two different headings depending on how
-    /// they were found. Here the shared hikes sit under the hiker's own,
-    /// where a scroll reaches them.
-    ///
-    /// Absent entirely when this launch has no transport — a hosted suite or
-    /// UI automation — rather than shown empty, for the same reason the share
-    /// button is.
-    @ViewBuilder var communitySection: some View {
-        if community.hasTransport {
+    /// Its own `List` rather than a section of the hiker's own, and it draws
+    /// only while browsing — which is the same thing as the tab being
+    /// selected. Unreachable entirely when this launch has no transport,
+    /// since ``listPicker`` is absent then and nothing can select it: a hosted
+    /// suite or UI automation gets the hikes list and no second tab at all,
+    /// for the same reason the share button is absent rather than disabled.
+    var communityList: some View {
+        List {
             Section {
                 communitySectionContent
             } header: {
@@ -62,13 +103,16 @@ extension MapSheetHikes {
                 communitySectionFooter
             }
         }
+        .listStyle(.plain)
+        .scrollContentBackground(.hidden)
     }
 
-    /// What the section is currently able to show.
+    /// What the list is currently able to show.
+    ///
+    /// No opt-in row among them any more: reaching this list at all means the
+    /// tab was selected, and that selection is the opt-in.
     @ViewBuilder var communitySectionContent: some View {
-        if !community.isBrowsing {
-            communityOptInRow
-        } else if community.nearbyListings.isEmpty {
+        if community.nearbyListings.isEmpty {
             communityEmptyRow
         } else {
             // A failure over rows that are still on screen. The empty state
@@ -95,12 +139,15 @@ extension MapSheetHikes {
         }
     }
 
-    /// The heading, and the place it is about.
+    /// The place the rows are about, and whether more are coming.
     ///
     /// Naming the area is the other half of taking the chip away. *Nearby*
     /// named the query and never the answer, so a hiker who had panned — or
     /// who opened the app somewhere they were not yesterday — had no way to
     /// tell which "here" the rows were from. See ``CommunityAreaNaming``.
+    ///
+    /// No *Hide* button in it any more: the off switch is the other segment of
+    /// ``listPicker``, which is on screen at all times and says what it does.
     var communitySectionHeader: some View {
         HStack(spacing: 8) {
             Text(headerTitle)
@@ -112,73 +159,22 @@ extension MapSheetHikes {
                     .accessibilityLabel("Loading community hikes")
             }
             Spacer(minLength: 0)
-            if community.isBrowsing {
-                // The off switch the chip used to be. Kept because turning
-                // something on is only half a decision, and a hiker who has
-                // seen what is here should be able to put the section away —
-                // it takes the map's pins with it.
-                Button("Hide") { community.stopBrowsing() }
-                    .font(.subheadline)
-                    .buttonStyle(.plain)
-                    .foregroundStyle(.tint)
-                    // A four-letter word is not a tap target. The audits
-                    // measure every control the same way, whatever it is made
-                    // of — see ``minimumTapTarget()``.
-                    .minimumTapTarget()
-                    .accessibilityLabel("Hide community hikes")
-                    .accessibilityIdentifier("community-hide-button")
-            }
         }
         .textCase(nil)
     }
 
-    /// "Community Hikes", or "Community Hikes · near Esztergom" once something has
-    /// answered and MapKit has a name for where.
+    /// "Community Hikes", or "Near Esztergom" once something has answered and
+    /// MapKit has a name for where.
     ///
-    /// One string rather than two `Text`s so it is one spoken phrase: a
-    /// heading read as two elements is read as two headings.
+    /// Just the place, because the picker above it has already said
+    /// *Community* — the heading's whole job here is the *where*. One string
+    /// rather than two `Text`s so it is one spoken phrase: a heading read as
+    /// two elements is read as two headings.
     var headerTitle: String {
-        guard community.isBrowsing, let areaName = community.areaName else {
+        guard let areaName = community.areaName else {
             return String(localized: "Community Hikes")
         }
-        return String(localized: "Community Hikes · near \(areaName)")
-    }
-
-    /// The one thing the section says before it has ever been asked anything.
-    ///
-    /// This is where the feature's energy bargain now lives, and it is the
-    /// same bargain the chip made: until this row is tapped nothing about
-    /// community hikes reaches the network — no query, no geocode, no pins.
-    /// See ``CommunityQueryPolicy``'s third reason to refuse.
-    var communityOptInRow: some View {
-        Button {
-            community.startBrowsing()
-        } label: {
-            HStack(spacing: 12) {
-                Image(systemName: "figure.hiking")
-                    .font(.system(size: CommunityRowMetrics.glyphPointSize, weight: .semibold))
-                    .foregroundStyle(.white)
-                    .frame(
-                        width: CommunityRowMetrics.glyphFrameSize,
-                        height: CommunityRowMetrics.glyphFrameSize
-                    )
-                    .background(.tint, in: Circle())
-                    .accessibilityHidden(true)
-                VStack(alignment: .leading, spacing: 2) {
-                    Text("Find community hikes near here")
-                        .font(.body.weight(.medium))
-                        .foregroundStyle(.primary)
-                    Text("Trails other hikers have published")
-                        .font(.subheadline)
-                        .foregroundStyle(.secondary)
-                }
-                Spacer(minLength: 0)
-            }
-            .contentShape(.rect)
-            .accessibilityElement(children: .combine)
-            .accessibilityIdentifier("community-find-nearby")
-        }
-        .buttonStyle(.plain)
+        return String(localized: "Near \(areaName)")
     }
 
     /// What a failed refresh says when there are still rows underneath it.
@@ -267,16 +263,16 @@ extension MapSheetHikes {
         }
     }
 
-    /// The one thing the map cannot offer as a button.
+    /// Why the pill above the map has gone quiet.
     ///
     /// Above ``CommunityQueryPolicy/maximumRadiusMeters`` a nearby result
     /// means "somewhere on this continent", so there is nothing worth asking
-    /// and the *Search this area* pill stays down. Saying so here is what
-    /// stops that reading as a feature that has quietly stopped working — the
-    /// same distinction the empty state above draws.
+    /// and the *Search this area* pill is disabled. The pill itself stays on
+    /// screen for the whole of this tab now, so this footer is what says
+    /// *why* it cannot be tapped rather than merely standing in for a control
+    /// that is missing — the same distinction the empty state above draws.
     @ViewBuilder var communitySectionFooter: some View {
-        if community.isBrowsing,
-           community.areaPrompt == .zoomIn,
+        if community.areaPrompt == .zoomIn,
            !community.nearbyListings.isEmpty {
             Text("Zoom in to search somewhere else.")
                 .font(.footnote)
