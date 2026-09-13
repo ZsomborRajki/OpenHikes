@@ -188,10 +188,11 @@ nonisolated final class SettingsUITests: XCTestCase {
     /// build without their API keys, and an entitled one, where the paywall
     /// dismisses itself the moment the store answers. Neither may need it.
     ///
-    /// The link is not tapped. A `Link` hands the URL to Safari, which takes
-    /// the test out of the app for an assertion about a web page; that the URL
-    /// is absolute and reachable is what `MapSubscriptionTermsTests` pins, and
-    /// the row spends the same constant the paywall does.
+    /// Neither link is tapped. A `Link` hands the URL to Safari, which takes
+    /// the test out of the app for an assertion about a web page; that both
+    /// URLs are absolute and are two different pages is what
+    /// `MapSubscriptionTermsTests` pins, and the rows spend the same constants
+    /// the paywall and the share form do.
     @MainActor
     func testPrivacyPolicyIsReachableWithoutThePaywall() {
         for arguments in [[], ["--ui-test-entitled"]] {
@@ -206,6 +207,15 @@ nonisolated final class SettingsUITests: XCTestCase {
             XCTAssertTrue(
                 scrollIntoView(element("privacy-policy-link", in: app), in: app),
                 "Settings should link the privacy policy on a \(arguments) launch"
+            )
+            // The terms belong here for a sharper version of the same reason.
+            // They are what a hiker agrees to by publishing a hike, publishing
+            // is free, and the paywall is the one screen that need never be
+            // opened — so a hiker can be bound by them having passed nothing
+            // that links them.
+            XCTAssertTrue(
+                scrollIntoView(element("terms-link", in: app), in: app),
+                "Settings should link the terms on a \(arguments) launch"
             )
             XCTAssertFalse(
                 element("map-paywall", in: app).exists,

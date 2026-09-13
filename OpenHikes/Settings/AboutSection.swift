@@ -40,6 +40,19 @@ struct AboutSection: View {
             }
             .accessibilityIdentifier("privacy-policy-link")
 
+            // Beside the policy rather than behind the paywall, and for a
+            // different reason than 5.1.1(i). These terms are what a hiker
+            // agrees to by publishing a hike — what they may share, the
+            // licence they grant, and how to have something taken down — and
+            // publishing is free, so a hiker bound by them may never see the
+            // one screen that links Apple's EULA. The share form links them
+            // too, at the moment they matter; this is where somebody goes
+            // looking for them afterwards.
+            Link(destination: MapPurchaseLinks.termsAndConditions) {
+                Label("Terms & Conditions", systemImage: "doc.text")
+            }
+            .accessibilityIdentifier("terms-link")
+
             Link(destination: URL(string: "https://github.com/ZsomborRajki/OpenHikes")!) {
                 Label("Project on GitHub", systemImage: "chevron.left.forwardslash.chevron.right")
             }
@@ -48,8 +61,8 @@ struct AboutSection: View {
             Text("About")
         } footer: {
             Text(
-                "The privacy policy opens in your browser, and is the one the App Store listing"
-                + " links too. Share feedback, suggestions, or report an issue on GitHub."
+                "The policy and the terms open in your browser, and are the ones the App Store"
+                + " listing links too. Share feedback, suggestions, or report an issue on GitHub."
             )
         }
     }

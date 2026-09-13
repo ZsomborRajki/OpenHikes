@@ -61,14 +61,37 @@ struct MapSubscriptionTermsTests {
 
     // MARK: Legal links
 
-    /// App Review opens both. A link that 404s fails the whole binary, not
+    /// App Review opens all three. A link that 404s fails the whole binary, not
     /// just the purchase.
-    @Test("both required links are absolute https URLs")
+    @Test("every linked document is an absolute https URL")
     func legalLinksAreWellFormed() {
-        for url in [MapPurchaseLinks.termsOfUse, MapPurchaseLinks.privacyPolicy] {
+        let links = [
+            MapPurchaseLinks.termsOfUse,
+            MapPurchaseLinks.privacyPolicy,
+            MapPurchaseLinks.termsAndConditions,
+        ]
+        for url in links {
             #expect(url.scheme == "https")
             #expect(url.host()?.isEmpty == false)
         }
+        #expect(Set(links.map(\.absoluteString)).count == links.count, "two links are the same page")
+    }
+
+    /// The app's own terms and Apple's EULA are two different documents doing
+    /// two different jobs, and the paywall and the share form link one each.
+    ///
+    /// `termsOfUse` governs the subscription and is Apple's standard agreement.
+    /// `termsAndConditions` is what a hiker agrees to by publishing a hike —
+    /// what may be shared, the licence granted by sharing it, and how to have
+    /// it taken down — and publishing is free, so a hiker bound by it may never
+    /// open the paywall at all. Collapsing the two would leave the rules the
+    /// community runs on linked from a screen most people never see.
+    @Test("the community terms are this app's page and not Apple's EULA")
+    func theCommunityTermsAreTheAppsOwnPage() {
+        let terms = MapPurchaseLinks.termsAndConditions
+        #expect(terms != MapPurchaseLinks.termsOfUse)
+        #expect(terms.host() == MapPurchaseLinks.privacyPolicy.host())
+        #expect(terms.path().hasSuffix("/terms/"))
     }
 
     // MARK: Configuration
