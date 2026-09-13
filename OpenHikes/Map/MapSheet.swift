@@ -289,8 +289,9 @@ struct MapSheet: View {
                 // the preview is replaced rather than left underneath — which
                 // is what should happen: backing out of a hike that is now in
                 // the library, into a screen offering to add it, describes a
-                // decision already made.
-                onImport: open,
+                // decision already made. That same assignment is why it is
+                // guarded — see ``openImported(_:from:)``.
+                onImport: { openImported($0, from: listing) },
                 // Back to the list, which the block has already taken this hike
                 // out of — ``CommunityBrowser`` filters on read, so the row is
                 // gone by the time the pop lands. The refresh is for the case
@@ -540,6 +541,19 @@ private func showSavedRecording(_ hike: Hike) {
     selectedHike = hike
     presentation.path = [.hike(hike)]
     withAnimation { presentation.detent = .medium }
+}
+
+/// A hike a published preview has just added to the library.
+///
+/// Navigated to only while that preview is still the screen in front. The
+/// import is unstructured on purpose — a stranger's photographs are still
+/// being copied when the hiker may walk away, and that copy is finished
+/// rather than abandoned — so its success can arrive after they went Back and
+/// opened something else. The hike is saved either way; what is skipped is
+/// replacing a newer navigation with an older screen's answer.
+private func openImported(_ hike: Hike, from listing: CommunityListing) {
+    guard presentation.isShowingCommunityHike(listing) else { return }
+    open(hike)
 }
 
 private func open(_ hike: Hike) {
