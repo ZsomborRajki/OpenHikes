@@ -373,7 +373,14 @@ nonisolated struct CloudKitCommunityTransport: CommunityTransporting {
         return CommunityHikeDetail(
             listing: listing,
             route: document.route,
-            trackDescription: record[CommunitySchema.Submission.trackDescription] as? String,
+            // Bounded for the reason ``CommunityListing/init(record:)`` bounds
+            // the title: a submission is written by any client with an Apple
+            // Account, and this string is rendered on the preview and copied
+            // onto a `Hike` if the walk is saved.
+            trackDescription: BoundedText.bounded(
+                record[CommunitySchema.Submission.trackDescription] as? String,
+                to: .notes
+            ),
             photoPins: Self.pins(pins, for: downloaded, of: assets.count, takenOn: listing.hikeDate),
             photoFileURLs: downloaded.map(\.url)
         )
@@ -456,7 +463,13 @@ nonisolated struct CloudKitCommunityTransport: CommunityTransporting {
 // `nonisolated` on the extension, not decoration: `SWIFT_DEFAULT_ACTOR_ISOLATION
 // = MainActor` makes an unannotated extension main-actor isolated, and this
 // initializer is called from the `@concurrent` query path.
-nonisolated private extension CommunityListing {
+//
+// Internal rather than private, for the reason `stage(_:)` and `pins(...)`
+// below are: it is the half of a query a suite can hold to account without an
+// Apple Account or the public database, and what it decides — which records
+// are dropped, and how far the text on the ones that are kept is trusted — is
+// invisible in the result otherwise.
+nonisolated extension CommunityListing {
     /// Builds a listing from a published record, or `nil` when the record is
     /// missing something the row cannot be drawn without.
     ///
@@ -483,9 +496,21 @@ nonisolated private extension CommunityListing {
 
         id = record.recordID.recordName
         submissionID = reference.recordID.recordName
-        self.title = title
+        // Bounded on the way in, which is the same suspicion
+        // ``CommunityRouteOutline/decoded(_:)`` applies to the field beside
+        // this one and for the same reason: what is being read is text off a
+        // record in a public database, which a reviewer may have pasted by
+        // hand. A title with no ceiling is a row with no ceiling — the row's
+        // subtitle is `lineLimit(1)` and its title deliberately is not, so one
+        // listing could push every other one off the screen. Bounding rather
+        // than refusing, because unlike a corrupt outline an over-long title
+        // still says which hike this is.
+        self.title = BoundedText.boundedOrEmpty(title, to: .title)
         self.authorID = authorID
-        authorName = record[CommunitySchema.Listing.authorName] as? String ?? ""
+        authorName = BoundedText.boundedOrEmpty(
+            record[CommunitySchema.Listing.authorName] as? String,
+            to: .credit
+        )
         hikeDate = record[CommunitySchema.Listing.hikeDate] as? Date ?? .distantPast
         distanceMeters = record[CommunitySchema.Listing.distanceMeters] as? Double ?? 0
         photoCount = Int(record[CommunitySchema.Listing.photoCount] as? Int64 ?? 0)
