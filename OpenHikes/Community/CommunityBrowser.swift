@@ -486,67 +486,6 @@ final class CommunityBrowser {
         openListing?(listing)
     }
 
-    // MARK: - The search field
-
-    /// Invalidates an old response synchronously, before the new quiet period.
-    /// The field calls this on edits, including an empty edit, so clearing never
-    /// waits for SwiftUI to start the replacement task.
-    func prepareTitleSearch(matching query: String) {
-        let normalized = Self.normalizedTitle(query)
-        guard normalized != titleQuery else { return }
-        titleQuery = normalized
-        requestedTitle = nil
-        matchTask?.cancel()
-        matchTask = nil
-        if normalized.isEmpty { matchingResults = [] }
-    }
-
-    private static let titleQuietPeriodMilliseconds = 300
-    private static let titleQuietPeriod: Duration = .milliseconds(titleQuietPeriodMilliseconds)
-
-    static func normalizedTitle(_ query: String) -> String {
-        query.trimmingCharacters(in: .whitespacesAndNewlines).lowercased()
-    }
-
-    /// Owned by the search field's `.task(id:)`: a new normalized edit or a
-    /// disappearing field cancels the clock wait. Return uses `search` directly.
-    func searchAfterQuietPeriod(
-        matching query: String,
-        clock: some Clock<Duration> = ContinuousClock()
-    ) async {
-        guard !Task.isCancelled, hasTransport else { return }
-        prepareTitleSearch(matching: query)
-        let normalized = Self.normalizedTitle(query)
-        guard !normalized.isEmpty, requestedTitle != normalized else { return }
-        do {
-            try await clock.sleep(for: Self.titleQuietPeriod)
-        } catch { return }
-        guard !Task.isCancelled, titleQuery == normalized else { return }
-        search(matching: query)
-    }
-
-    /// Published title matches need no nearby opt-in: typing asks by name.
-    /// Submits immediately, also flushing a pending debounce without a second
-    /// request when its clock later expires. Equivalent edits reuse the answer.
-    func search(matching query: String) {
-        prepareTitleSearch(matching: query)
-        let trimmed = query.trimmingCharacters(in: .whitespacesAndNewlines)
-        guard !trimmed.isEmpty, requestedTitle != titleQuery, hasTransport else { return }
-        requestedTitle = titleQuery
-        // Snapshotted here rather than read inside the request: the closure is
-        // `@Sendable` and runs off this actor, and a set taken at the moment
-        // the question is asked is the right one — a block made while it is in
-        // flight is applied by the read-time filter above.
-        let excluded = blockList.blockedIDs
-        perform(.title, describing: "a title search") { transport in
-            try await transport.listings(
-                matching: trimmed,
-                limit: Self.resultLimit,
-                excluding: excluded
-            )
-        }
-    }
-
     // MARK: - Requests
 
     /// Which of the two questions a request is answering.
@@ -688,10 +627,14 @@ final class CommunityBrowser {
     /// - Parameter area: The area a nearby request is about, carried through
     ///   so the results can be published together with the name and the area
     ///   they belong to. `nil` for a title search, which is about a word.
+    /// - Parameter title: The normalized word a title search is about, for the
+    ///   same reason — an answer is published only while it is still an answer
+    ///   to what is being asked. `nil` for a nearby search.
     private func perform(
         _ question: Question,
         describing reason: String,
         about area: CommunitySearchArea? = nil,
+        matching title: String? = nil,
         _ work: @escaping @Sendable (any CommunityTransporting) async throws -> [CommunityListing]
     ) {
         guard let transport else { return }
@@ -715,7 +658,7 @@ final class CommunityBrowser {
             do {
                 let results = try await work(transport)
                 guard !Task.isCancelled else { return }
-                self?.accept(results, answering: question, about: area)
+                self?.accept(results, answering: question, about: area, matching: title)
             } catch is CancellationError {
                 return
             } catch {
@@ -736,7 +679,8 @@ final class CommunityBrowser {
     private func accept(
         _ results: [CommunityListing],
         answering question: Question,
-        about area: CommunitySearchArea?
+        about area: CommunitySearchArea?,
+        matching title: String?
     ) {
         switch question {
         case .nearby:
@@ -752,6 +696,11 @@ final class CommunityBrowser {
             areaName = area == pendingArea ? pendingName : nil
             state = .loaded
         case .title:
+            // Only while the answer is still an answer to what is being
+            // asked. `perform` already supersedes the same question, so this
+            // is the belt to that braces: matches are keyed to a word rather
+            // than to whichever request happened to land last.
+            guard title == titleQuery else { return }
             matchingResults = results
         }
     }
@@ -799,6 +748,82 @@ final class CommunityBrowser {
         switch question {
         case .nearby: nearbyTask = task
         case .title: matchTask = task
+        }
+    }
+}
+
+// MARK: - The search field
+
+// An extension rather than more of the class, for the reason the one
+// below is: this is a whole question of its own — a word the hiker typed,
+// answered against titles rather than against the map's region — and it
+// shares only the two arrays it writes with everything above. Private
+// state is file-scoped, so nothing had to be opened up to move it here.
+extension CommunityBrowser {
+    /// Invalidates an old response synchronously, before the new quiet period.
+    /// The field calls this on edits, including an empty edit, so clearing never
+    /// waits for SwiftUI to start the replacement task.
+    func prepareTitleSearch(matching query: String) {
+        let normalized = Self.normalizedTitle(query)
+        guard normalized != titleQuery else { return }
+        titleQuery = normalized
+        requestedTitle = nil
+        matchTask?.cancel()
+        matchTask = nil
+        // Whatever is on screen answered the *previous* word, so it goes with
+        // it. Matches are the answer to a word the hiker typed, and a word
+        // they have edited is a different question — keeping the rows would
+        // offer Pilis Ridge as a match for "alps" the moment the new request
+        // failed or while it was still in flight, with nothing saying which
+        // word they belong to. The nearby list is deliberately the other way
+        // round: those rows are about an area that is still on screen, which
+        // is why a failed refresh keeps them.
+        matchingResults = []
+    }
+
+    private static let titleQuietPeriodMilliseconds = 300
+    private static let titleQuietPeriod: Duration = .milliseconds(titleQuietPeriodMilliseconds)
+
+    static func normalizedTitle(_ query: String) -> String {
+        query.trimmingCharacters(in: .whitespacesAndNewlines).lowercased()
+    }
+
+    /// Owned by the search field's `.task(id:)`: a new normalized edit or a
+    /// disappearing field cancels the clock wait. Return uses `search` directly.
+    func searchAfterQuietPeriod(
+        matching query: String,
+        clock: some Clock<Duration> = ContinuousClock()
+    ) async {
+        guard !Task.isCancelled, hasTransport else { return }
+        prepareTitleSearch(matching: query)
+        let normalized = Self.normalizedTitle(query)
+        guard !normalized.isEmpty, requestedTitle != normalized else { return }
+        do {
+            try await clock.sleep(for: Self.titleQuietPeriod)
+        } catch { return }
+        guard !Task.isCancelled, titleQuery == normalized else { return }
+        search(matching: query)
+    }
+
+    /// Published title matches need no nearby opt-in: typing asks by name.
+    /// Submits immediately, also flushing a pending debounce without a second
+    /// request when its clock later expires. Equivalent edits reuse the answer.
+    func search(matching query: String) {
+        prepareTitleSearch(matching: query)
+        let trimmed = query.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !trimmed.isEmpty, requestedTitle != titleQuery, hasTransport else { return }
+        requestedTitle = titleQuery
+        // Snapshotted here rather than read inside the request: the closure is
+        // `@Sendable` and runs off this actor, and a set taken at the moment
+        // the question is asked is the right one — a block made while it is in
+        // flight is applied by the read-time filter above.
+        let excluded = blockList.blockedIDs
+        perform(.title, describing: "a title search", matching: titleQuery) { transport in
+            try await transport.listings(
+                matching: trimmed,
+                limit: Self.resultLimit,
+                excluding: excluded
+            )
         }
     }
 }
