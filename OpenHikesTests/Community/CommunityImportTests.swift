@@ -187,4 +187,66 @@ struct CommunityImportTests {
 
         #expect(writer.saves.isEmpty)
     }
+
+    /// The pins and the files describe each other by index, and `zip` pairs
+    /// them by index whether or not they still agree about how many there are.
+    ///
+    /// A detail whose two arrays disagree is one a reviewer edited by hand, or
+    /// a transport this app did not write. Attaching it anyway would put a
+    /// photograph at another photograph's coordinate — saved, ordinary-looking
+    /// and wrong for good, since nothing downstream can tell.
+    @Test("photos whose pins no longer match them are not attached")
+    func mismatchedPinsCostThePhotos() async throws {
+        let context = try Fixture.modelContext()
+        let directory = FileManager.default.temporaryDirectory
+            .appendingPathComponent("CommunityImportTests-\(UUID().uuidString)", isDirectory: true)
+        try FileManager.default.createDirectory(at: directory, withIntermediateDirectories: true)
+        defer { try? FileManager.default.removeItem(at: directory) }
+
+        let first = directory.appendingPathComponent("photo-0.jpeg", isDirectory: false)
+        let second = directory.appendingPathComponent("photo-1.jpeg", isDirectory: false)
+        try Self.sampleJPEG().write(to: first)
+        try Self.sampleJPEG().write(to: second)
+
+        // One pin for two files: `zip` would silently hand the first file the
+        // first pin and drop the second file altogether.
+        let outcome = await CommunityImport.importHike(
+            Self.detail(
+                pins: [CommunityPhotoPin(capturedAt: .now, coordinate: nil)],
+                photoURLs: [first, second]
+            ),
+            into: context,
+            libraryWriter: StubPhotoLibraryWriter()
+        )
+
+        let hike = try #require(outcome.hike)
+        #expect(hike.photos.isEmpty, "a pairing that cannot be trusted must cost the photographs")
+    }
+
+    /// And it costs the photographs rather than the walk. The route committed
+    /// before the pictures began copying and is the thing the hiker asked for,
+    /// so a refusal here would be the wrong size of answer.
+    @Test("a mismatched pairing still keeps the hike")
+    func mismatchedPinsKeepTheWalk() async throws {
+        let context = try Fixture.modelContext()
+        let directory = FileManager.default.temporaryDirectory
+            .appendingPathComponent("CommunityImportTests-\(UUID().uuidString)", isDirectory: true)
+        try FileManager.default.createDirectory(at: directory, withIntermediateDirectories: true)
+        defer { try? FileManager.default.removeItem(at: directory) }
+
+        let url = directory.appendingPathComponent("photo-0.jpeg", isDirectory: false)
+        try Self.sampleJPEG().write(to: url)
+
+        let outcome = await CommunityImport.importHike(
+            Self.detail(pins: [], photoURLs: [url]),
+            into: context,
+            libraryWriter: StubPhotoLibraryWriter()
+        )
+
+        // `hike` is `nil` only for a refusal, so requiring it is the assertion
+        // that the walk survived.
+        let hike = try #require(outcome.hike, "a mismatched pairing must not refuse the walk")
+        #expect(hike.route.count == Fixture.ridgeRoute.count)
+        #expect(hike.photos.isEmpty)
+    }
 }
