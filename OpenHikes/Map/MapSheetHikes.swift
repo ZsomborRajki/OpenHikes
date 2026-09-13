@@ -158,15 +158,48 @@ private extension MapSheetHikes {
     var hikesSection: some View {
         VStack(alignment: .leading, spacing: 12) {
             HStack(spacing: 12) {
-                Text("Hikes")
-                    .font(.title2.bold())
-                    .foregroundStyle(.primary)
-                    .accessibilityAddTraits(.isHeader)
-                Spacer()
+                listHeading
                 hikeActions
             }
             .padding(.horizontal)
 
+            selectedList
+        }
+    }
+
+    /// The switch between the two lists — or the old title, on a launch that
+    /// has no second list to switch to.
+    ///
+    /// A segmented control rather than a heading because there are now two
+    /// answers to *where shall I walk?* and they are the same length: the
+    /// hiker's own hikes and the published ones. The picker names whichever is
+    /// showing, which is why neither list carries a title of its own any more.
+    @ViewBuilder var listHeading: some View {
+        if community.hasTransport {
+            listPicker
+        } else {
+            // Absent rather than disabled, for the reason the share button is:
+            // this launch is never going to reach the community — see
+            // ``CommunityBrowser/hasTransport``.
+            Text("Hikes")
+                .font(.title2.bold())
+                .foregroundStyle(.primary)
+                .accessibilityAddTraits(.isHeader)
+            Spacer()
+        }
+    }
+
+    /// Whichever of the two the picker has selected.
+    ///
+    /// Two `List`s rather than two sections of one, which is the whole of this
+    /// change. As sections, the shared hikes sat under however many of the
+    /// hiker's own there were — reachable only by scrolling past a library
+    /// that grows — and a scroll position meant something different depending
+    /// on which half you were reading. Each list now starts at the top.
+    @ViewBuilder var selectedList: some View {
+        if community.isBrowsing {
+            communityList
+        } else {
             hikesList
         }
     }
@@ -240,29 +273,27 @@ private extension MapSheetHikes {
         .accessibilityIdentifier("import-gpx-button")
     }
 
-    /// The hiker's own hikes and the published ones, in one scrolling list.
+    /// The hiker's own hikes, and nothing else.
     ///
-    /// One list rather than two views swapped by a toggle, and that is the
-    /// whole shape of this change. The *Nearby* chip used to replace this list
-    /// outright, so the two halves of "what can I walk?" were a mode apart:
-    /// the same records, two headings, and an answer you could only see by
-    /// giving up the other one. They are sections of one list now, and the
-    /// shared half costs nothing at all until it is asked for — see
-    /// ``communityOptInRow``.
+    /// The published ones are ``communityList``, behind the other segment of
+    /// ``listPicker``. They shared this list for a while — a *Community Hikes*
+    /// section under the hiker's own — which fixed the thing the old *Nearby*
+    /// chip got wrong (the same records under two headings depending on how
+    /// they were found) at the cost of burying the shared half under a library
+    /// that only ever gets longer. The two are a tab apart again, but a tab is
+    /// not the chip: the picker says which list is showing and the community
+    /// half still costs nothing until it is selected.
     var hikesList: some View {
         List {
-            Section {
-                if hikes.isEmpty {
-                    emptyState
-                        .listRowBackground(Color.clear)
-                        .listRowSeparator(.hidden)
-                } else {
-                    ForEach(hikes) { hike in
-                        hikeRow(hike)
-                    }
+            if hikes.isEmpty {
+                emptyState
+                    .listRowBackground(Color.clear)
+                    .listRowSeparator(.hidden)
+            } else {
+                ForEach(hikes) { hike in
+                    hikeRow(hike)
                 }
             }
-            communitySection
         }
         .listStyle(.plain)
         .scrollContentBackground(.hidden)

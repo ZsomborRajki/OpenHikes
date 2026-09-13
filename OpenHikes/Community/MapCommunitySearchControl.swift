@@ -2,16 +2,30 @@
 //  MapCommunitySearchControl.swift
 //  OpenHikes
 //
-//  *Search this area*: the button the map raises once it has moved somewhere
-//  the list does not describe.
+//  *Search this area*: the map's half of the *Community* tab, and the only
+//  thing on screen that spends a request.
 //
 //  It exists because the alternative was invisible. The nearby list used to
 //  re-query itself whenever ``CommunityQueryPolicy``'s thresholds were
 //  crossed, so the rows under the hiker's thumb changed for reasons nothing
 //  on screen gave — and the pans the thresholds refused left the list
-//  describing somewhere else, equally silently. One button says both things
-//  at once: while it is absent the list is about what you are looking at, and
-//  while it is up it is not.
+//  describing somewhere else, equally silently.
+//
+//  It used to say that by coming and going: absent, the list was about what
+//  you were looking at. It now stands for the whole of the *Community* tab
+//  and goes with it — see ``MapSheetList``. A control that appears where the
+//  hiker is already panning is a control they have to notice mid-gesture, and
+//  the thing it does is the tab's one verb; a permanent one is somewhere to
+//  aim. What the thresholds decide is therefore no longer whether the button
+//  exists, only whether a tap has a *new* question to ask — and a tap with no
+//  offer standing re-asks the visible region, which is a thing the hiker can
+//  legitimately want and previously had no way to say. The page of results
+//  that costs is still spent only on a tap.
+//
+//  The one state it cannot answer in is above the zoom ceiling, where it is
+//  disabled rather than withdrawn: the list's footer says why, and a control
+//  that vanished at a zoom level would be back to reporting policy by
+//  absence.
 //
 //  It is also the cheaper half of the bargain. A pan nobody confirms now
 //  costs nothing at all, where before every threshold crossing was a request
@@ -41,11 +55,24 @@ final class MapAreaSearchView: UIView {
     private static let height: CGFloat = 44
 
     private let onTap: () -> Void
+    /// Held so the ceiling can turn the pill off without taking it off screen.
+    private var button: UIButton?
 
     init(onTap: @escaping () -> Void) {
         self.onTap = onTap
         super.init(frame: .zero)
         buildHierarchy()
+    }
+
+    /// Whether a tap would ask anything.
+    ///
+    /// Above ``CommunityQueryPolicy/maximumRadiusMeters`` there is nothing
+    /// worth asking, so the pill dims and stops answering taps while staying
+    /// where it is. `UIButton.Configuration` draws the disabled state itself,
+    /// which is why nothing here touches colours.
+    var isEnabled: Bool {
+        get { button?.isEnabled ?? false }
+        set { button?.isEnabled = newValue }
     }
 
     @available(*, unavailable)
@@ -74,18 +101,19 @@ final class MapAreaSearchView: UIView {
         // every text size rather than truncating into a glyph and a comma.
         configuration.titleLineBreakMode = .byTruncatingTail
 
-        let button = UIButton(
+        let searchButton = UIButton(
             configuration: configuration,
             primaryAction: UIAction { [onTap] _ in onTap() }
         )
-        button.translatesAutoresizingMaskIntoConstraints = false
-        button.titleLabel?.adjustsFontForContentSizeCategory = true
-        button.accessibilityIdentifier = "community-search-this-area"
+        searchButton.translatesAutoresizingMaskIntoConstraints = false
+        searchButton.titleLabel?.adjustsFontForContentSizeCategory = true
+        searchButton.accessibilityIdentifier = "community-search-this-area"
+        button = searchButton
 
         let glass = UIVisualEffectView(effect: UIGlassEffect(style: .regular))
         glass.translatesAutoresizingMaskIntoConstraints = false
         glass.cornerConfiguration = .capsule()
-        glass.contentView.addSubview(button)
+        glass.contentView.addSubview(searchButton)
         addSubview(glass)
 
         NSLayoutConstraint.activate([
@@ -94,10 +122,10 @@ final class MapAreaSearchView: UIView {
             glass.topAnchor.constraint(equalTo: topAnchor),
             glass.bottomAnchor.constraint(equalTo: bottomAnchor),
             heightAnchor.constraint(greaterThanOrEqualToConstant: Self.height),
-            button.leadingAnchor.constraint(equalTo: glass.contentView.leadingAnchor),
-            button.trailingAnchor.constraint(equalTo: glass.contentView.trailingAnchor),
-            button.topAnchor.constraint(equalTo: glass.contentView.topAnchor),
-            button.bottomAnchor.constraint(equalTo: glass.contentView.bottomAnchor),
+            searchButton.leadingAnchor.constraint(equalTo: glass.contentView.leadingAnchor),
+            searchButton.trailingAnchor.constraint(equalTo: glass.contentView.trailingAnchor),
+            searchButton.topAnchor.constraint(equalTo: glass.contentView.topAnchor),
+            searchButton.bottomAnchor.constraint(equalTo: glass.contentView.bottomAnchor),
         ])
     }
 }
@@ -108,10 +136,17 @@ extension MapView.Coordinator {
     /// camera pill uses, so the two controls on this map behave alike.
     private static let areaSearchFadeDuration: TimeInterval = 0.25
 
-    /// Observes whether the map has moved somewhere the list does not
-    /// describe, and shows or hides the pill — the same imperative
-    /// arrangement ``observePhotoControls(_:)`` uses, so panning never
-    /// re-renders anything in SwiftUI.
+    /// Observes which list the sheet is showing and what the map has to offer
+    /// about the region on screen, and shows, hides or dims the pill — the
+    /// same imperative arrangement ``observePhotoControls(_:)`` uses, so
+    /// panning and tab switches never re-render anything in SwiftUI.
+    ///
+    /// Both flags are read in one tracking closure because they answer the
+    /// two halves of one question: `isBrowsing` decides whether the control is
+    /// there at all, `areaPrompt` whether it can answer. Both are coarse —
+    /// a tab is selected by hand and the policy refuses everything under a
+    /// quarter of the search radius — so this fires a handful of times in a
+    /// browsing session.
     ///
     /// Idempotent, like every other registration here: a second would leave
     /// two observers running overlapping fades against one view, and
@@ -134,6 +169,7 @@ extension MapView.Coordinator {
     private func trackAreaPrompt(_ browser: CommunityBrowser, animated: Bool) {
         applyAreaSearchVisibility(animated: animated)
         withObservationTracking {
+            _ = browser.isBrowsing
             _ = browser.areaPrompt
         } onChange: { [weak self, weak browser] in
             let coordinator = self
@@ -148,10 +184,17 @@ extension MapView.Coordinator {
     private func applyAreaSearchVisibility(animated: Bool) {
         #if os(iOS)
         guard let areaSearchControl else { return }
-        // Only the offer draws a button. `zoomIn` has something to say and
-        // nothing to do, so the sheet's section header says it instead — a
-        // control that cannot answer is worse than no control.
-        let visible = community?.areaPrompt == .search
+        // The tab decides, not the offer. The pill is the *Community* list's
+        // one verb, so it is on screen for as long as that list is and gone
+        // the moment the hiker switches back to their own hikes — where a
+        // control offering to search for published trails would be offering
+        // to fill a list that is not there.
+        let visible = community?.isBrowsing == true
+        // Above the ceiling it stays put and stops answering. `zoomIn` has
+        // something to say and nothing to do; the list's footer says it, and
+        // a pill that disappeared at a zoom level would be reporting policy by
+        // absence again — the thing this control exists to stop.
+        areaSearchControl.isEnabled = community?.areaPrompt != .zoomIn
         // Hidden as well as transparent, for the reason the camera pill is:
         // an invisible view still answers hit tests, and this one sits over
         // the map the hiker is panning. Interaction goes at once rather than
@@ -170,7 +213,7 @@ extension MapView.Coordinator {
             // with: two settles in quick succession overlap, and a completion
             // that hid the pill the next animation had just brought back would
             // leave a visible control answering no taps.
-            guard let self, community?.areaPrompt != .search else { return }
+            guard let self, community?.isBrowsing != true else { return }
             areaSearchControl.isHidden = true
         }
         #endif

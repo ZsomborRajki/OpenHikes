@@ -136,10 +136,12 @@ struct CommunityBrowserTests {
         #expect(browser.areaPrompt == .settled)
     }
 
-    /// Nothing to take is nothing to spend: the button is not on screen in
-    /// this state, and a stray call must not invent a question.
-    @Test("searching the visible area does nothing without an offer")
-    func searchingWithoutAnOfferIsInert() async {
+    /// The pill stands for the whole of the *Community* tab rather than only
+    /// while an offer is up, so a tap with the map where the list already
+    /// describes is a hiker asking for that list again — and the policy's
+    /// memory of the question must not refuse it.
+    @Test("searching the visible area re-asks when there is no offer")
+    func searchingWithoutAnOfferReasks() async {
         let transport = StubCommunityTransport()
         let browser = CommunityBrowser(transport: transport, blockList: .scratch())
         browser.regionDidSettle(Self.region())
@@ -148,6 +150,25 @@ struct CommunityBrowserTests {
 
         browser.searchVisibleArea()
         await settle(browser)
+        #expect(transport.recording.nearbyRequests.count == 2)
+        #expect(transport.recording.nearbyRequests.last?.coordinate.latitude == Self.region().center.latitude)
+    }
+
+    /// It is still a tap that spends the request and nothing else. The pill
+    /// being permanent must not turn a pan into a query — the whole of the
+    /// bargain in ``CommunityQueryPolicy``.
+    @Test("a pan still asks nothing without a tap")
+    func panningStillSpendsNothing() async {
+        let transport = StubCommunityTransport()
+        let browser = CommunityBrowser(transport: transport, blockList: .scratch())
+        browser.regionDidSettle(Self.region())
+        browser.startBrowsing()
+        await settle(browser)
+
+        browser.regionDidSettle(Self.region(latitude: 48.03))
+        browser.regionDidSettle(Self.region(latitude: 48.06))
+        await settle(browser)
+
         #expect(transport.recording.nearbyRequests.count == 1)
     }
 

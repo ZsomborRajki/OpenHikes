@@ -38,10 +38,11 @@
 //  costs nothing at all. ``areaName`` then says which area answered, so the
 //  list is headed with a place rather than with the word *Nearby*.
 //
-//  The one request the hiker does not have to confirm is the first: tapping
-//  *Find community hikes near here* is itself the confirmation, and asking twice
-//  for one intention would be a worse bargain than the automatic re-query
-//  ever was.
+//  The one request the hiker does not have to confirm is the first: selecting
+//  the *Community* tab is itself the confirmation, and asking twice for one
+//  intention would be a worse bargain than the automatic re-query ever was.
+//  Leaving the tab calls ``stopBrowsing()``, so the session lasts exactly as
+//  long as the list that is showing it.
 //
 //  ## Where blocked authors are taken out
 //
@@ -182,9 +183,14 @@ final class CommunityBrowser {
     /// rows and is logged; it must not put an error over a nearby list that
     /// is perfectly good.
     private(set) var state: CommunityBrowseState = .idle
-    /// Whether the hiker has asked for shared hikes at all. Drawn as the
-    /// difference between the section's opt-in row and its results, so it is
-    /// observed on purpose.
+    /// Whether the hiker has asked for shared hikes at all.
+    ///
+    /// Also *which list the sheet is showing*: the ``MapSheetList`` picker is
+    /// bound to this rather than to a `@State` of its own, because the
+    /// *Community* tab and the browse session are the same thing and a second
+    /// flag could only disagree with this one. Observed on purpose, by the
+    /// sheet and by the map's *Search this area* pill, which stands for as
+    /// long as the tab does.
     private(set) var isBrowsing = false
     /// Whether the map has moved somewhere the list does not describe.
     ///
@@ -345,21 +351,31 @@ final class CommunityBrowser {
 
     /// Asks about the area the map is showing: what *Search this area* runs.
     ///
-    /// Takes the offered area rather than re-reading the map, so the question
-    /// asked is the one the offer was made about — a settle landing between
-    /// the hiker seeing the button and hitting it would otherwise change it
-    /// underneath them.
+    /// Takes the offered area when there is one, so the question asked is the
+    /// one the offer was made about — a settle landing between the hiker
+    /// seeing the button and hitting it would otherwise change it underneath
+    /// them.
+    ///
+    /// Without an offer it asks about wherever the map is, and that is not a
+    /// stray call any more: the pill stands for the whole of the *Community*
+    /// tab rather than only while an offer is up, so a tap with the map
+    /// sitting where the list already describes is a hiker asking for that
+    /// list again. The policy has to forget its last query first or the region
+    /// would be refused as the same question — which is exactly ``retry()``,
+    /// so this asks it rather than spelling the same three lines again.
+    /// `.tooFarOut` still asks nothing, which is what the pill being disabled
+    /// above the ceiling says on screen.
     func searchVisibleArea() {
-        guard isBrowsing, let offeredArea else { return }
-        commit(offeredArea)
+        guard isBrowsing else { return }
+        if let offeredArea { commit(offeredArea) } else { retry() }
     }
 
     // MARK: - Opting in
 
-    /// Turns the community section on and asks about wherever the map is.
+    /// Turns the community list on and asks about wherever the map is.
     ///
-    /// The one request nobody has to confirm — the tap that gets here *is*
-    /// the confirmation. See this file's header.
+    /// The one request nobody has to confirm — the tab selection that gets
+    /// here *is* the confirmation. See this file's header.
     func startBrowsing() {
         guard !isBrowsing else { return }
         policy.startBrowsing()
@@ -392,7 +408,7 @@ final class CommunityBrowser {
         }
     }
 
-    /// Hides the section again.
+    /// Puts the community list away again: what leaving the tab runs.
     ///
     /// Takes the map's answer with it and leaves the typed one alone:
     /// somebody who searched for a trail by name asked for it by name — see
@@ -423,10 +439,12 @@ final class CommunityBrowser {
 
     /// Asks again about the current region, ignoring the thresholds.
     ///
-    /// What a failed request needs: the policy remembers a query that produced
-    /// nothing, so without forgetting it first the same region would be
-    /// refused as "the same question" and the hiker's only recourse would be
-    /// to pan away and back.
+    /// What a failed request needs, and what a tap on the pill with no offer
+    /// standing needs: the policy remembers a query that produced nothing, so
+    /// without forgetting it first the same region would be refused as "the
+    /// same question" and the hiker's only recourse would be to pan away and
+    /// back. Above the ceiling it still asks nothing — a region that means
+    /// "this continent" is not a question however many times it is put.
     func retry() {
         guard isBrowsing, let latestRegion else { return }
         policy.forgetLastQuery()
