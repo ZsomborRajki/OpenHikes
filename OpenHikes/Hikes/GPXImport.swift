@@ -312,11 +312,23 @@ nonisolated enum GPXImport {
         return Track(
             name: nonEmpty(document.firstTrackName)
                 ?? nonEmpty(document.metadataName),
-            trackDescription: nonEmpty(document.firstTrackDescription)
-                ?? nonEmpty(document.firstTrackComment)
-                ?? nonEmpty(document.metadataDescription),
-            author: nonEmpty(document.metadataAuthor),
-            keywords: nonEmpty(document.metadataKeywords),
+            // Bounded here, where the file enters, for the reason
+            // ``HikeTitle`` bounds the name two lines up — see
+            // ``BoundedText``. All three land on mirrored columns and the
+            // description travels on to the public database when a hike is
+            // shared, so an unattended file with a `<desc>` spending the whole
+            // 32 MB budget would otherwise make a row that CloudKit cannot
+            // carry. Whichever source wins is picked first and cut second,
+            // because a description that is present is the one the hiker
+            // meant even when it is too long.
+            trackDescription: BoundedText.bounded(
+                nonEmpty(document.firstTrackDescription)
+                    ?? nonEmpty(document.firstTrackComment)
+                    ?? nonEmpty(document.metadataDescription),
+                to: .notes
+            ),
+            author: BoundedText.bounded(document.metadataAuthor, to: .credit),
+            keywords: BoundedText.bounded(document.metadataKeywords, to: .keywords),
             // Read through the segments rather than off a flattened copy:
             // `Track` builds that copy itself, and a second one costs a
             // half-million-point file another array for one timestamp.

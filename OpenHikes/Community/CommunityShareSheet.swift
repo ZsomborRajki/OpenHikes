@@ -108,8 +108,14 @@ struct CommunityShareSheet: View {
             )
     }
 
-    private var trimmedAuthorName: String {
-        authorName.trimmingCharacters(in: .whitespacesAndNewlines)
+    /// The name this share is published under.
+    ///
+    /// Bounded and not merely trimmed, which is ``HikeTitle``'s rule applied
+    /// to the other piece of free text a person types into this app — and the
+    /// one that goes furthest, since it is written to a record in the public
+    /// database and drawn in every other hiker's list. See ``TextBound/credit``.
+    private var boundedAuthorName: String {
+        BoundedText.boundedOrEmpty(authorName, to: .credit)
     }
 
     /// The hike's description, if it has one worth showing.
@@ -357,7 +363,7 @@ private extension CommunityShareSheet {
         Task {
             let outcome = await CommunityPublisher.share(
                 hike,
-                authorName: trimmedAuthorName,
+                authorName: boundedAuthorName,
                 entitlement: entitlement.state,
                 transport: transport
             )
