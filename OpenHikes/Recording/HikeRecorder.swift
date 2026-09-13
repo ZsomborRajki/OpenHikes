@@ -142,6 +142,16 @@ final class HikeRecorder: NSObject {
     @ObservationIgnored var pendingResumeFlag = false
     @ObservationIgnored var acceptedFixRevision: UInt64 = 0
     @ObservationIgnored var liveMatchWindow: [RecordingPoint] = []
+    /// How far this walk has gone along each trail the live matcher could
+    /// name — see ``RecordingTrailNames``, and ``suggestedTitle(forDistance:)``
+    /// for what it is read for.
+    ///
+    /// `@ObservationIgnored` like the window it is fed alongside, and for the
+    /// same budget: this is written on every accepted fix, and an observed
+    /// write at fix rate would invalidate every body that reads the recorder.
+    /// Nothing draws it. It is read twice — once when the hiker asks to stop,
+    /// and once when the hike is written — both outside a `body`.
+    @ObservationIgnored var trailNames = RecordingTrailNames()
     @ObservationIgnored var liveMatchingTask: Task<Void, Never>?
     @ObservationIgnored var liveMatchingTaskID: UUID?
     @ObservationIgnored var liveMatchNeedsRun = false
@@ -191,6 +201,33 @@ final class HikeRecorder: NSObject {
         case .recovering: true
         case .waitingForFix, .recording, .paused, .saving, .reviewing, .failed: sessionID != nil || startRequested
         }
+    }
+
+    /// The name to offer this walk, or `nil` when no trail covered enough of
+    /// it to be worth claiming — see ``RecordingTrailNames/coverageFloor``.
+    ///
+    /// Bounded through ``HikeTitle`` like every other name this app stores.
+    /// OpenStreetMap's `name` is somebody else's free text arriving over the
+    /// network, which is exactly the input that bound exists for, and a route
+    /// relation's name is occasionally a paragraph.
+    ///
+    /// - Parameter totalMeters: The walk's distance. Passed rather than read
+    ///   off ``stats`` so the two callers can each use the figure that is
+    ///   authoritative for them: the live accumulator's while the walk is
+    ///   still running, and the prepared recording's once it has been
+    ///   measured for the last time.
+    func suggestedTitle(forDistance totalMeters: Double) -> String? {
+        HikeTitle.bounded(trailNames.dominantName(of: totalMeters))
+    }
+
+    /// What the walk would be named if it ended now.
+    ///
+    /// Read when the hiker asks to stop, to fill the name field's placeholder.
+    /// Deliberately *not* read from inside a `body`: it reads
+    /// ``RecordingStats/distanceMeters``, which changes on every accepted fix,
+    /// and a body that observed it would re-run at fix rate.
+    var suggestedTitle: String? {
+        suggestedTitle(forDistance: stats.distanceMeters)
     }
 
     /// Waits out the automatic recovery pass, so ``phase`` answers about the

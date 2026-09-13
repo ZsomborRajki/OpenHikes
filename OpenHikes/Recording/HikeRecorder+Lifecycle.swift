@@ -223,6 +223,9 @@ extension HikeRecorder {
         }
         var point = RecordingPoint(location: location, flags: consumeFlagsForNextPoint())
         point.elevation = elevationFilter.elevation(for: location)
+        // Read before the append, so the metres this fix adds can be
+        // attributed to the trail they were walked on — see just below.
+        let distanceBeforeFix = accumulator.distanceMeters
         accumulator.append(point)
         // An immutable copy: the journal append below hands this to a
         // `@Sendable` closure, which cannot capture the mutable `point`.
@@ -235,6 +238,22 @@ extension HikeRecorder {
         }
         trace.append(accepted.coordinate, provisional: liveMatchingEnabled)
         stats.update(from: accumulator)
+        // The metres this fix bought, credited to whatever the live matcher
+        // last called the ground underfoot. Deliberately the *last* answer
+        // rather than a current one: matching a window takes long enough that
+        // a fix routinely lands mid-match, which is why the readout keeps a
+        // stale verdict rather than blanking it — see ``applyCurrentTrail``.
+        // A trail from thirty seconds ago is still very likely the trail, and
+        // the alternative is crediting nothing on a densely-sampled walk.
+        //
+        // Nothing here is a claim about where the hiker was; it is a tally of
+        // what the matcher said while they walked. The measurement of where
+        // the route actually ran is still ``TrailMatcher``'s, made over the
+        // whole track once the recording is finished.
+        trailNames.add(
+            meters: accumulator.distanceMeters - distanceBeforeFix,
+            on: stats.currentTrail?.name
+        )
         // The accumulator's own answer rather than a second opinion: it is
         // already what the energy profile, the saved distance and the moving
         // time are decided by, and a stillness rule of this feature's own
