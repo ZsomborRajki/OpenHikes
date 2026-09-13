@@ -26,6 +26,15 @@
 //  task that inherits no cancellation and is not yet held anywhere
 //  `onDisappear` can reach.
 //
+//  The last three are about *whose* directory is being removed rather than
+//  when. Waiting for a visit's own work is the whole protection, and it is no
+//  protection at all against a second visit to the same listing: that one has
+//  its own tasks, the discard left over from the first visit has never heard
+//  of them, and both were reading and writing the same path. So the name now
+//  carries the visit — see ``CommunityHikeView/downloadDirectory(of:in:)`` —
+//  and these pin what that name has to keep apart and what it has to hold
+//  still.
+//
 
 import Foundation
 @testable import OpenHikes
@@ -40,13 +49,33 @@ struct CommunityPreviewDownloadTests {
     private func downloadDirectory() throws -> URL {
         let directory = FileManager.default.temporaryDirectory
             .appendingPathComponent("CommunityHikeTest-\(UUID().uuidString)", isDirectory: true)
-        try FileManager.default.createDirectory(at: directory, withIntermediateDirectories: true)
-        try Data("photo".utf8).write(to: directory.appendingPathComponent("photo-0.jpeg"))
+        try photograph(in: directory)
         return directory
     }
 
-    private func exists(_ directory: URL) -> Bool {
-        FileManager.default.fileExists(atPath: directory.path)
+    /// Puts a stranger's photograph in a preview's directory and hands back the
+    /// file, so a test can ask after *that* rather than after the directory —
+    /// which is the difference the per-visit name is for: a discard that takes
+    /// the wrong directory takes the photographs in it.
+    @discardableResult private func photograph(in directory: URL) throws -> URL {
+        try FileManager.default.createDirectory(at: directory, withIntermediateDirectories: true)
+        let photo = directory.appendingPathComponent("photo-0.jpeg")
+        try Data("photo".utf8).write(to: photo)
+        return photo
+    }
+
+    private func exists(_ url: URL) -> Bool {
+        FileManager.default.fileExists(atPath: url.path)
+    }
+
+    /// Clears up a directory the discard under test was supposed to *spare*.
+    /// The suite's other cases end with nothing left in the temporary
+    /// directory because the thing they are testing removes it; the ones that
+    /// assert a directory survived have to do it themselves.
+    private func remove(_ directories: URL...) {
+        for directory in directories {
+            try? FileManager.default.removeItem(at: directory)
+        }
     }
 
     /// The discard is fire-and-forget off a detached task, so this waits for
@@ -187,5 +216,83 @@ struct CommunityPreviewDownloadTests {
 
         await settleRemoval(of: directory)
         #expect(!exists(directory))
+    }
+
+    /// The gesture the waiting above cannot survive: open a hike, back out
+    /// while its download is still running, open the *same* hike again, and let
+    /// the first visit's work finish underneath the second one.
+    ///
+    /// The first visit's discard is still pending — that is what the wait is
+    /// for — and it removes a path. While the path carried only the listing,
+    /// the path it removed was the one the second visit had just downloaded a
+    /// stranger's photographs into, and the import reading them would find
+    /// nothing there. Nothing in the first visit's task list mentions the
+    /// second visit, and nothing could: the second visit did not exist when the
+    /// discard was handed its work.
+    @Test("a reopened preview keeps the photographs the last visit's cleanup wanted")
+    func aReopenedVisitOutlivesTheDiscardOfTheOneBeforeIt() async throws {
+        let listing = CommunityListing.stub()
+        let left = CommunityHikeView.downloadDirectory(of: listing, in: UUID())
+        let reopened = CommunityHikeView.downloadDirectory(of: listing, in: UUID())
+        #expect(left != reopened, "two visits to one listing were handed one directory")
+
+        try photograph(in: left)
+        let photo = try photograph(in: reopened)
+
+        // The download the hiker backed out of, still going: the only reason
+        // the first visit's directory is still here to be removed at all.
+        let gate = AsyncGate()
+        let stranded = Task { await gate.wait() }
+        CommunityHikeView.discardDownloads(at: left, after: [stranded, nil])
+
+        await gate.open()
+        await settleRemoval(of: left)
+        #expect(
+            exists(photo),
+            "the departed visit's cleanup took the reopened preview's photographs"
+        )
+        remove(reopened)
+    }
+
+    /// The other half of the same name, and the half a fresh directory per
+    /// *screen* would have broken: a push over an open preview is not the hiker
+    /// leaving it, `onDisappear` declines to discard for one — see
+    /// `remainsPushed` — and the view that comes back has to come back to its
+    /// own downloads rather than to a name nothing was ever written under.
+    @Test("a preview pushed over and returned to keeps one directory")
+    func oneVisitKeepsOneDirectoryAcrossAPush() throws {
+        let listing = CommunityListing.stub()
+        let visit = UUID()
+
+        let onOpening = CommunityHikeView.downloadDirectory(of: listing, in: visit)
+        let photo = try photograph(in: onOpening)
+        let onReturning = CommunityHikeView.downloadDirectory(of: listing, in: visit)
+
+        #expect(onOpening == onReturning, "one visit was given two directories")
+        #expect(exists(photo))
+        remove(onOpening)
+    }
+
+    /// A → B → A: a pin on the map pushes a second preview over an open one,
+    /// and backing out of that one discards it while the first is still sitting
+    /// underneath with its photographs loaded and its detail pointing at them.
+    @Test("backing out of a preview pushed over another spares the first")
+    func aPushedPreviewsDiscardSparesTheOneUnderneath() async throws {
+        let underneath = CommunityHikeView.downloadDirectory(
+            of: .stub(id: "listing-1"),
+            in: UUID()
+        )
+        let pushedOver = CommunityHikeView.downloadDirectory(
+            of: .stub(id: "listing-2"),
+            in: UUID()
+        )
+        let photo = try photograph(in: underneath)
+        try photograph(in: pushedOver)
+
+        CommunityHikeView.discardDownloads(at: pushedOver, after: [nil, nil])
+
+        await settleRemoval(of: pushedOver)
+        #expect(exists(photo), "backing out of the pushed preview took the first one's photographs")
+        remove(underneath)
     }
 }
