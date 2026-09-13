@@ -205,6 +205,146 @@ nonisolated enum UITestTimeout {
     static let existence: TimeInterval = 15
     static let navigation: TimeInterval = 10
     static let trace: TimeInterval = 40
+    /// How often ``XCTestCase/waitUntil(timeout:_:)`` re-asks. Every query
+    /// crosses to the app and back, so polling faster buys nothing and costs
+    /// the very contention these waits exist to survive.
+    static let pollInterval: TimeInterval = 0.25
+}
+
+// MARK: - Waiting
+
+/// How an element's text reads in a failure message, or why it does not.
+///
+/// A wait that times out is only worth the message it leaves behind: on
+/// someone else's machine, or in a `--all` run nobody watched, the observed
+/// string is the entire difference between "the screen was in the wrong
+/// state" and "the element was never there".
+private func quoted(_ text: String?) -> String {
+    guard let text else { return "<absent>" }
+    return "\"\(text)\""
+}
+
+/// What a caller said the assertion was *for*, ahead of what was observed.
+/// The observation says which state the screen was in; only this says which
+/// state it was supposed to be in and why that matters.
+private func prefixed(_ message: String) -> String {
+    message.isEmpty ? "" : message + " — "
+}
+
+extension XCTestCase {
+    /// The one poll loop this bundle needs, and the only sanctioned way to
+    /// wait on something that is not plain existence.
+    ///
+    /// Every wait here re-asks the app rather than sleeping a guessed
+    /// duration, per the *No fixed sleeps as barriers* rule in `AGENTS.md`.
+    /// The condition is evaluated once more after the deadline, because a
+    /// loop that only checks on the way round can give up on a change that
+    /// landed within the last poll interval and still report a timeout.
+    @MainActor
+    func waitUntil(
+        timeout: TimeInterval = UITestTimeout.navigation,
+        _ condition: () -> Bool
+    ) -> Bool {
+        let deadline = Date().addingTimeInterval(timeout)
+        while Date() < deadline {
+            if condition() { return true }
+            Thread.sleep(forTimeInterval: UITestTimeout.pollInterval)
+        }
+        return condition()
+    }
+
+    /// Waits for what an element *says* to contain `text`, and fails naming
+    /// what it said instead.
+    ///
+    /// Existence and content are two events. A phase label, a row's badge and
+    /// a progress summary are all drawn after the element holding them is in
+    /// the tree, so reading `.label` on the line below `waitForExistence`
+    /// asks the question before the answer exists. That race is invisible on
+    /// an idle machine and lost regularly under `--all`, where three
+    /// simulator clones share one machine's cores.
+    ///
+    /// Reporting the observed label is the other half. The
+    /// `expectation(for:evaluatedWith:)` this replaces timed out with
+    /// "unfulfilled expectations" and no clue which state the screen was
+    /// actually in.
+    @MainActor
+    @discardableResult func expectLabel(
+        _ element: XCUIElement,
+        contains text: String,
+        _ message: String = "",
+        timeout: TimeInterval = UITestTimeout.navigation,
+        file: StaticString = #filePath,
+        line: UInt = #line
+    ) -> Bool {
+        let matched = waitUntil(timeout: timeout) {
+            element.exists && element.label.contains(text)
+        }
+        XCTAssertTrue(
+            matched,
+            """
+            \(prefixed(message))no label contained "\(text)"; \
+            it read \(quoted(element.exists ? element.label : nil))
+            """,
+            file: file,
+            line: line
+        )
+        return matched
+    }
+
+    /// Waits for an element's value to contain `text`, the same way
+    /// ``expectLabel(_:contains:timeout:file:line:)`` waits on a label.
+    @MainActor
+    @discardableResult func expectValue(
+        _ element: XCUIElement,
+        contains text: String,
+        _ message: String = "",
+        timeout: TimeInterval = UITestTimeout.navigation,
+        file: StaticString = #filePath,
+        line: UInt = #line
+    ) -> Bool {
+        let matched = waitUntil(timeout: timeout) {
+            element.exists && (element.value as? String ?? "").contains(text)
+        }
+        XCTAssertTrue(
+            matched,
+            """
+            \(prefixed(message))no value contained "\(text)"; \
+            it read \(quoted(element.exists ? (element.value as? String) : nil))
+            """,
+            file: file,
+            line: line
+        )
+        return matched
+    }
+
+    /// Polls an element's value until it differs from `previous`, so a fix is
+    /// waited on by the row it moves rather than by a duration.
+    @MainActor
+    func waitUntilValueChanges(
+        from previous: String?,
+        on element: XCUIElement,
+        timeout: TimeInterval = UITestTimeout.navigation
+    ) -> Bool {
+        waitUntil(timeout: timeout) {
+            element.exists && (element.value as? String) != previous
+        }
+    }
+
+    /// Polls an element's label until it differs from `previous`.
+    ///
+    /// Which section a review is showing is drawn as a title and nothing
+    /// else, so a Next that redrew without moving is indistinguishable from
+    /// one that worked — unless the title is watched for a change.
+    @MainActor
+    func waitUntilLabelChanges(
+        from previous: String,
+        on element: XCUIElement,
+        timeout: TimeInterval = UITestTimeout.navigation
+    ) -> Bool {
+        waitUntil(timeout: timeout) {
+            element.exists && element.label != previous
+        }
+    }
 }
 
 // MARK: - Element lookup
@@ -398,12 +538,29 @@ extension XCTestCase {
         _ target: XCUIElement,
         timeout: TimeInterval = UITestTimeout.navigation
     ) -> Bool {
-        let deadline = Date().addingTimeInterval(timeout)
-        while Date() < deadline {
-            if target.isSelected { return true }
-            Thread.sleep(forTimeInterval: 0.25)
+        waitUntil(timeout: timeout) { target.isSelected }
+    }
+
+    /// Taps a control once it is actually there.
+    ///
+    /// `tap()` does no waiting of its own: it resolves the query, finds
+    /// nothing and fails with "No matches found", which reads as a control
+    /// the app never drew rather than one the test asked for too early. Use
+    /// this for anything that appears *in response* to the previous step —
+    /// ``scrollToTap(_:in:timeout:attempts:)`` is the version for a control
+    /// that also has to be brought into reach.
+    @MainActor
+    func tapWhenReady(
+        _ target: XCUIElement,
+        timeout: TimeInterval = UITestTimeout.navigation,
+        file: StaticString = #filePath,
+        line: UInt = #line
+    ) {
+        guard target.waitForExistence(timeout: timeout) else {
+            XCTFail("the control to tap never appeared", file: file, line: line)
+            return
         }
-        return false
+        target.tap()
     }
 }
 
@@ -489,7 +646,7 @@ extension XCTestCase {
                 redeliver()
                 nextDelivery = Date().addingTimeInterval(pace)
             }
-            Thread.sleep(forTimeInterval: 0.25)
+            Thread.sleep(forTimeInterval: UITestTimeout.pollInterval)
         }
         return false
     }

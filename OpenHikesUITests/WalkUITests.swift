@@ -159,16 +159,31 @@ nonisolated final class WalkUITests: XCTestCase {
         startRecording(in: app)
         let recordingPhase = element("recording-phase", in: app)
         XCTAssertTrue(recordingPhase.waitForExistence(timeout: UITestTimeout.navigation))
-        XCTAssertTrue(app.buttons["Pause"].exists)
-        XCTAssertTrue(app.buttons["Stop"].exists)
+        // The phase label arriving does not mean the controls beside it have
+        // been drawn, so the two that must be there are waited for. The two
+        // that must not are read straight after — by then the screen has
+        // finished, which is what makes an absence worth asserting rather
+        // than merely early.
+        XCTAssertTrue(
+            app.buttons["Pause"].waitForExistence(timeout: UITestTimeout.navigation)
+        )
+        XCTAssertTrue(
+            app.buttons["Stop"].waitForExistence(timeout: UITestTimeout.navigation)
+        )
         XCTAssertFalse(element("walk-controls", in: app).exists)
         XCTAssertFalse(app.buttons["End Walk"].exists)
 
         popScreen(in: app)
         let walked = awaitHikeRow(titled: UITestFixture.importedHikeTitle, in: app)
-        XCTAssertTrue(
-            walked.label.contains("Active"),
-            "starting a recording neither pauses nor ends the walk on the trail beside it"
+        // ``awaitHikeRow`` matches on the title the label *begins* with, and
+        // the walk badge is appended to it. So the row can exist a redraw
+        // before it says anything about the walk, and reading `.label` here
+        // asked whether the walk was still active before the row had said.
+        expectLabel(
+            walked,
+            contains: "Active",
+            "starting a recording neither pauses nor ends the walk on the trail beside it",
+            timeout: UITestTimeout.existence
         )
     }
 
@@ -269,13 +284,16 @@ nonisolated final class WalkUITests: XCTestCase {
 
     // MARK: - Helpers
 
+    /// `file` and `line` are forwarded, or every phase that never arrived is
+    /// reported against this line rather than the step that was waiting.
     @MainActor
-    private func expectPhase(_ phase: XCUIElement, contains text: String) {
-        expectation(
-            for: NSPredicate(format: "label CONTAINS %@", text),
-            evaluatedWith: phase
-        )
-        waitForExpectations(timeout: UITestTimeout.navigation)
+    private func expectPhase(
+        _ phase: XCUIElement,
+        contains text: String,
+        file: StaticString = #filePath,
+        line: UInt = #line
+    ) {
+        expectLabel(phase, contains: text, file: file, line: line)
     }
 
     /// Confirms the "End this walk?" dialog, found the way `confirmDiscard`
@@ -297,19 +315,4 @@ nonisolated final class WalkUITests: XCTestCase {
         XCTFail("ending a walk should ask before closing its record")
     }
 
-    /// Polls an element's value until it differs from `previous`, so a fix
-    /// is waited on by the row it moves rather than by a duration.
-    @MainActor
-    private func waitUntilValueChanges(
-        from previous: String?,
-        on element: XCUIElement,
-        timeout: TimeInterval = UITestTimeout.navigation
-    ) -> Bool {
-        let deadline = Date().addingTimeInterval(timeout)
-        while Date() < deadline {
-            if element.exists, (element.value as? String) != previous { return true }
-            Thread.sleep(forTimeInterval: 0.25)
-        }
-        return false
-    }
 }

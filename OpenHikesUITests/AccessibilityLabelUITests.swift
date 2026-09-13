@@ -187,7 +187,7 @@ nonisolated final class AccessibilityLabelUITests: XCTestCase {
                 )
             )
         XCTAssertTrue(
-            waitUntilValueChanges(from: start, in: chart),
+            waitUntilValueChanges(from: start, on: chart),
             "scrubbing should change what the graph reads out"
         )
     }
