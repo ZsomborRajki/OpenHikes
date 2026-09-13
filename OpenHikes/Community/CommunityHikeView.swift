@@ -32,11 +32,21 @@
 //  behind this one.
 //
 //  Everything downloaded lands in one directory owned by this screen and
-//  deleted when it goes — or when an import that is still reading out of it
-//  finishes, whichever is later. These are a stranger's photographs held for
-//  as long as they are being looked at, and no longer, unless the hiker
-//  imports the hike, at which point ``CommunityImport`` makes copies that are
-//  theirs.
+//  deleted when it goes — or when the last thing using it finishes, whichever
+//  is later. These are a stranger's photographs held for as long as they are
+//  being looked at, and no longer, unless the hiker imports the hike, at which
+//  point ``CommunityImport`` makes copies that are theirs.
+//
+//  *The last thing using it* is two tasks and not one, and the second half is
+//  a fix. The import reads out of the directory, so deleting underneath it
+//  costs the hiker the pictures of a hike they asked for. The download
+//  **writes** into it, so deleting underneath that leaves files behind
+//  instead: the writer re-creates the directory after the remove, and nothing
+//  ever comes back for it. So the load is held in ``loadTask`` like the
+//  import, cancelled when the hiker leaves, and waited for before anything is
+//  removed — and ``CloudKitCommunityTransport/detail(for:downloadingInto:)``
+//  checks that cancellation before it writes, since a cancelled task that
+//  never looks is a task that carries on.
 //
 //  ## Why reporting and blocking are here and not on the row
 //
@@ -127,6 +137,16 @@ struct CommunityHikeView: View {
     /// is still reading photographs out of, and nothing else may delete
     /// underneath it. See ``discardDownloads()``.
     @State private var importTask: Task<Void, Never>?
+    /// The download, held for the same reason and a sharper one.
+    ///
+    /// This is what *writes* into the directory ``discardDownloads()``
+    /// removes, so leaving it unowned meant `onDisappear` could neither stop
+    /// it nor wait for it: a hiker backing out mid-download had the directory
+    /// deleted and then re-created underneath them, and a stranger's
+    /// photographs stayed in a temporary directory with nothing left that
+    /// would ever collect them. *Try Again* writes to the same handle, since
+    /// an unowned retry is the same leak by a second route.
+    @State private var loadTask: Task<Void, Never>?
     /// Whether this author was blocked while the screen was up.
     ///
     /// Read by the import when it finishes, so a hike the hiker asked for a
@@ -183,7 +203,15 @@ struct CommunityHikeView: View {
             Settings. Blocking doesn't report the hike or take it down.
             """)
         }
-        .task { await load() }
+        // Started here and *held*, rather than simply run by the modifier.
+        // `.task`'s own cancellation is the right trigger and the wrong reach:
+        // it cancels this closure, and the work that writes into the download
+        // directory is one `await` deeper. See ``loadTask``.
+        .task {
+            let task = Task { await load() }
+            loadTask = task
+            await task.value
+        }
         .onAppear {
             existingHike = CommunityImport.existingImport(of: listing.id, in: context)
             // Before the route exists, deliberately: this only says which hike
@@ -209,6 +237,9 @@ struct CommunityHikeView: View {
             // screen the hiker is one Back from returning to, with its own
             // cached detail still pointing at the deleted files.
             guard !remainsPushed() else { return }
+            // Before the discard, so a download still running is told to stop
+            // rather than raced to the directory it is writing into.
+            loadTask?.cancel()
             browser.previewClosed(listing)
             discardDownloads()
         }
@@ -335,7 +366,12 @@ private extension CommunityHikeView {
             }
             Button("Try Again") {
                 phase = .loading
-                Task { await load() }
+                // The same handle the first attempt used. An unowned retry is
+                // the leak in ``loadTask`` by a second route: `onDisappear`
+                // would neither stop it nor wait for it, and backing out of a
+                // retry would leave its download writing into a directory that
+                // had already been removed.
+                loadTask = Task { await load() }
             }
             .buttonStyle(.bordered)
             .padding(.top, 4)
@@ -459,6 +495,14 @@ private extension CommunityHikeView {
             // compute.
             browser.previewLoaded(detail.route, of: listing)
             stats = await Self.preparedStats(for: detail)
+        } catch is CancellationError {
+            // The screen has gone. There is nothing to report a failure on and
+            // nothing the hiker could do about it — the same call
+            // ``CommunityBrowser/perform(_:describing:about:matching:_:)``
+            // makes, and leaving the phase alone is what keeps a screen that
+            // is on its way back from a push showing *Loading route…* rather
+            // than an error nobody caused.
+            return
         } catch {
             phase = .failed(
                 error as? CommunityFailure ?? .unavailable(error.localizedDescription)
@@ -539,10 +583,41 @@ private extension CommunityHikeView {
     /// for, silently and for no reason they could ever connect to what they
     /// did.
     func discardDownloads() {
-        let directory = downloadDirectory
-        let pendingImport = importTask
+        // Both tasks, for opposite reasons. The import is still *reading* a
+        // stranger's photographs out of here, so deleting underneath it costs
+        // the hiker the pictures of a hike they asked for. The download is
+        // still *writing* them, so deleting underneath it leaves files behind
+        // instead — the writer re-creates the directory after the remove, and
+        // nothing ever comes back for it. Cancelling the load in `onDisappear`
+        // is what keeps this wait short rather than a whole download long.
+        Self.discardDownloads(at: downloadDirectory, after: [loadTask, importTask])
+    }
+}
+
+// MARK: - Clearing up after a preview
+
+// Not `private`, and a `static` taking its work rather than a method reading
+// `@State`, for the reason `CloudKitCommunityTransport.pins(_:for:of:takenOn:)`
+// is one: what matters here is an *ordering*, and an ordering is invisible in
+// the result. A discard that waited and a discard that raced both leave no
+// directory on a good day, and differ only when something is still writing. A
+// suite can hold a task open across this one and watch.
+extension CommunityHikeView {
+    /// Removes a preview's downloads, once nothing is still using them.
+    ///
+    /// Off the main actor and fire-and-forget, in the shape the photo and tile
+    /// deletions already use: what a kill leaves behind is a directory the
+    /// system reclaims on its own, which is the cheapest failure here.
+    ///
+    /// - Parameter work: Everything that may still be reading from or writing
+    ///   into `directory`. Waited on in turn before anything is removed — a
+    ///   `nil` is work that never started, and costs nothing.
+    static func discardDownloads(
+        at directory: URL,
+        after work: [Task<Void, Never>?]
+    ) {
         Task.detached(priority: .utility) {
-            await pendingImport?.value
+            for task in work { await task?.value }
             try? FileManager.default.removeItem(at: directory)
         }
     }
