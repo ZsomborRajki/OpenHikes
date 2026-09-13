@@ -117,6 +117,20 @@ nonisolated enum CommunityImport {
     /// One at a time, and a failure costs its own picture rather than the
     /// import: the hike is already committed and already useful, and a single
     /// photograph that would not decode is not a reason to refuse a walk.
+    ///
+    /// The pairing is checked first rather than trusted, which is what
+    /// ``CommunityHikeDetail/isConsistent`` is for and the one place it can be
+    /// asked to any purpose: the pins and the files describe each other *by
+    /// index*, and `zip` truncates to the shorter of two arrays without
+    /// saying so. Pairing a photograph with another photograph's coordinate is
+    /// the one failure nothing downstream could notice — the hike is saved,
+    /// the pin looks ordinary, and the picture is on the wrong part of the
+    /// trail for good.
+    ///
+    /// Costs the photographs and not the walk, because that is the
+    /// proportionate answer: the route committed before this ran and is the
+    /// thing the hiker asked for. It is the same bargain the loop below makes
+    /// for one unreadable file, one size larger.
     @MainActor
     private static func attachPhotos(
         of detail: CommunityHikeDetail,
@@ -125,6 +139,15 @@ nonisolated enum CommunityImport {
         libraryWriter: any PhotoLibraryWriting,
         save: (ModelContext) throws -> Void
     ) async {
+        guard detail.isConsistent else {
+            logger.error(
+                """
+                Imported \(detail.listing.id, privacy: .public) without its photos: \
+                \(detail.photoPins.count) pins for \(detail.photoFileURLs.count) files.
+                """
+            )
+            return
+        }
         for (pin, url) in zip(detail.photoPins, detail.photoFileURLs) {
             guard let data = await readFile(at: url) else { continue }
             // The hike can be swiped away while a dozen photographs are being

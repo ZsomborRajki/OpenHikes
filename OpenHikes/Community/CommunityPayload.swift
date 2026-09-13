@@ -41,7 +41,7 @@ nonisolated struct CommunityPhotoPin: Codable, Hashable, Sendable {
 ///
 /// A struct rather than two loose arrays so the one invariant that matters —
 /// a pin per photo, in order — has somewhere to be enforced. See
-/// ``isConsistent(withPhotoCount:)``.
+/// ``CommunityHikeDetail/isConsistent``.
 nonisolated struct CommunityRouteDocument: Codable, Hashable, Sendable {
     var route: [RouteCoordinate]
 }
@@ -173,11 +173,20 @@ nonisolated struct CommunityHikeDetail: Sendable {
 
     /// Whether the pins and the assets still describe each other.
     ///
-    /// Asked before anything is imported rather than trusted. The two fields
-    /// are written together by this app and read back from a database a
-    /// reviewer edits by hand, so they can disagree — and the failure mode of
-    /// not checking is a photograph silently pinned to a different
-    /// photograph's coordinate, which nothing downstream could ever detect.
+    /// Asked before a photograph is attached rather than trusted — by
+    /// ``CommunityImport``, which is the only thing that reads the two arrays
+    /// against each other. The two fields are written together by this app and
+    /// read back from a database a reviewer edits by hand, so they can
+    /// disagree, and the failure mode of not checking is a photograph silently
+    /// pinned to a different photograph's coordinate — which nothing
+    /// downstream could ever detect, and which a saved hike keeps for good.
+    ///
+    /// ``CloudKitCommunityTransport/detail(for:downloadingInto:)`` builds both
+    /// arrays from the same downloaded files, so nothing it hands back can
+    /// fail this. That is a reason to keep the check rather than to drop it:
+    /// the guarantee lives in one conformance, the consequence of losing it is
+    /// undetectable and permanent, and the check costs a comparison on a path
+    /// that already walks every photograph.
     var isConsistent: Bool {
         photoPins.count == photoFileURLs.count
     }
