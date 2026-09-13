@@ -2,13 +2,13 @@
 //  HikeDifficultySection.swift
 //  OpenHikes
 //
-//  The SAC-scale difficulty breakdown shown on a hike's detail screen: a
-//  stacked bar of how demanding each stretch of trail is, and a legend that
-//  reads it out.
+//  The SAC-scale difficulty breakdown: a stacked bar of how demanding each
+//  stretch of trail is, and a legend that reads it out.
 //
-//  Split into its own view so the write that fills it in — see
-//  ``HikeTrailAnalysis`` — invalidates this section rather than the whole
-//  detail screen.
+//  Split in two exactly as ``HikeSurfaceSection`` is, and for its reasons:
+//  ``TrailDifficultySection`` draws a breakdown from anywhere, and
+//  ``HikeDifficultySection`` is the wrapper that reads one off a ``Hike`` so
+//  the write filling it in redraws the section rather than the detail screen.
 //
 
 import SwiftUI
@@ -30,10 +30,10 @@ nonisolated extension TrailDifficulty {
     }
 }
 
-/// Absent until OpenStreetMap has actually answered for this route — see
-/// ``HikeSurfaceSection``, which it mirrors.
-struct HikeDifficultySection: View {
-    let hike: Hike
+/// The section itself, for anything holding a measured breakdown — see
+/// ``TrailSurfaceSection``, which it mirrors.
+struct TrailDifficultySection: View {
+    let breakdown: TrailDifficultyBreakdown
 
     private static let percentStyle = FloatingPointFormatStyle<Double>.Percent
         .percent
@@ -41,31 +41,40 @@ struct HikeDifficultySection: View {
     private static let fullCoverageThreshold = 0.995
 
     var body: some View {
-        if let breakdown = hike.difficultyBreakdown {
-            VStack(alignment: .leading, spacing: 12) {
-                Text("Difficulty")
-                    .font(.headline)
-                    .frame(maxWidth: .infinity, alignment: .leading)
-                    .accessibilityAddTraits(.isHeader)
-                TrailDifficultyBar(shares: breakdown.shares)
-                VStack(spacing: 8) {
-                    ForEach(breakdown.shares) { share in
-                        TrailDifficultyLegendRow(share: share)
-                    }
+        VStack(alignment: .leading, spacing: 12) {
+            Text("Difficulty")
+                .font(.headline)
+                .frame(maxWidth: .infinity, alignment: .leading)
+                .accessibilityAddTraits(.isHeader)
+            TrailDifficultyBar(shares: breakdown.shares)
+            VStack(spacing: 8) {
+                ForEach(breakdown.shares) { share in
+                    TrailDifficultyLegendRow(share: share)
                 }
-                Text(footnote(for: breakdown))
-                    .font(.caption2)
-                    .foregroundStyle(.secondary)
             }
+            Text(footnote)
+                .font(.caption2)
+                .foregroundStyle(.secondary)
         }
     }
 
-    private func footnote(for breakdown: TrailDifficultyBreakdown) -> String {
+    private var footnote: String {
         let surveyed = breakdown.surveyedFraction
         guard surveyed < Self.fullCoverageThreshold else { return "Difficulty grades from OpenStreetMap (SAC scale)." }
         let formatted = surveyed.formatted(Self.percentStyle)
         return "Difficulty grades from OpenStreetMap (SAC scale), which"
             + " describes \(formatted) of this route."
+    }
+}
+
+/// Absent until OpenStreetMap has actually answered for this hike's route.
+struct HikeDifficultySection: View {
+    let hike: Hike
+
+    var body: some View {
+        if let breakdown = hike.difficultyBreakdown {
+            TrailDifficultySection(breakdown: breakdown)
+        }
     }
 }
 

@@ -201,27 +201,13 @@ struct HikeTrailProgress: View {
 
 /// Keeps the empty chart's tint observation out of `HikeDetailView.body`.
 struct HikeElevationPlaceholder: View {
-    private static let tintOpacity = 0.12
-
     let hike: Hike
 
     var body: some View {
-        ZStack {
-            RoundedRectangle(cornerRadius: 16)
-                .fill(
-                    hike.tintOpaque.opacity(Self.tintOpacity)
-                )
-            VStack(spacing: 8) {
-                Image(systemName: "chart.xyaxis.line")
-                    .font(.largeTitle)
-                    .foregroundStyle(hike.tintOpaque)
-                    .accessibilityHidden(true)
-                Text("No elevation data in this file")
-                    .font(.subheadline)
-                    .foregroundStyle(.secondary)
-            }
-        }
-        .frame(height: 180)
+        ElevationPlaceholderView(
+            tint: hike.tintOpaque,
+            message: "No elevation data in this file"
+        )
     }
 }
 

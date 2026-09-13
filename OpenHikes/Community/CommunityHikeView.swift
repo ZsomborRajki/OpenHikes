@@ -10,7 +10,7 @@
 //  about whether a route goes where the hiker wants, and the photographs are
 //  half of why they would want it.
 //
-//  ## The route is on the map, and the numbers are here
+//  ## The route is on the map, and the rest of the page is here
 //
 //  This screen used to draw the route itself, as an unscaled outline with no
 //  ground under it. That was the right answer while a shared hike had no line
@@ -22,14 +22,50 @@
 //  answer, and draws *this* one properly, from the full route loaded here —
 //  see ``MapCommunityRoutes`` and ``CommunityBrowser/previewLoaded(_:of:)``.
 //  So the sketch is gone, and what replaces it is the thing the sketch could
-//  never show: the same statistics a hike in the library carries, built by the
-//  same ``HikeDetailPreparation`` off the same route. Track points, elevation
-//  loss, moving speed, when the walk started and ended.
+//  never show: the hike detail screen's own page, off the same route and out
+//  of the same types. ``ElevationChartView`` at the top, ``StatGrid`` and
+//  ``StatTile`` under it, then the photographs, then ``TrailSurfaceSection``
+//  and ``TrailDifficultySection`` — the order ``HikeDetailView`` puts them in,
+//  because what somebody deciding whether to keep a stranger's trail compares
+//  is *their* hike against *this* one, and two layouts would make that
+//  comparison work.
 //
-//  It is still not a map of its own, and for the reason it never was: tiles
-//  mean a provider, the entitlement check, the cache and a download, for a
-//  screen a hiker may back out of in two seconds. There is already a map
-//  behind this one.
+//  Reused rather than rebuilt, and that is a constraint on this screen rather
+//  than a convenience: not one of those views takes a `Hike`. Each takes the
+//  value it draws — a profile, a breakdown, a tint — and the wrapper that
+//  reads one off a hike stays on the hike's own screen. See
+//  ``TrailSurfaceSection``.
+//
+//  What deliberately does *not* come across is everything that customises a
+//  hike somebody owns: no route colour, no line pattern, no auto-follow, no
+//  offline tiles, no walk. This is not their hike yet, and the two controls
+//  that would be lying about that are the ones this screen must not offer. The
+//  chart is drawn in the app's own tint for the same reason the lines and the
+//  pins are — it is the colour the map behind is already drawing this very
+//  route in.
+//
+//  ## OpenStreetMap is asked on open, and the answer is not kept
+//
+//  Surface and Difficulty need a trail graph, and a shared hike has nowhere to
+//  put the result: ``Hike/surfaceBreakdown`` is a column on a model this
+//  screen does not have and must not create to hold a measurement about a
+//  trail nobody has imported. So the analysis runs when the route lands and
+//  its answer lives in `@State` for as long as the screen does — opened twice
+//  is measured twice, and what keeps that cheap is
+//  ``OverpassTrailGraphProvider``'s own region cache, which this shares with
+//  the hiker's hikes and with the recorder.
+//
+//  It is a request on a screen that refuses to fetch a single map tile, and
+//  the difference is what each one buys. Tiles mean a provider, the
+//  entitlement check, the cache and a download, for ground the map behind is
+//  already drawing. The analysis is a bounded run over the route's own regions
+//  — capped by ``TrailGraphProviding/maximumPrefetchRegions``, tied to no
+//  account and no API key, cancelled when the screen goes — and it answers the
+//  question that brought the hiker here, which is what this trail is actually
+//  like. Failure stays invisible exactly as it does on a hike in the library:
+//  an outage, a flight-mode gap or a valley nobody has mapped leaves both
+//  sections absent rather than explaining itself to somebody who never asked.
+//  There is still no map of its own here.
 //
 //  Everything downloaded lands in one directory owned by this screen and
 //  deleted when it goes — or when the last thing using it finishes, whichever
@@ -114,17 +150,41 @@ struct CommunityHikeView: View {
     /// the stack: SwiftUI reports a pushed-over view and a popped one the
     /// same way. See ``SheetPresentation/isPresentingCommunityHike(_:)``.
     var remainsPushed: () -> Bool = { false }
+    /// OSM walking graph behind the Surface and Difficulty sections. `nil`
+    /// leaves both absent and asks nothing — which is what a preview and a
+    /// suite get, exactly as on ``HikeDetailView``.
+    var trailGraphProvider: (any TrailGraphProviding)?
 
     @Environment(\.modelContext)
     private var context
     @State private var phase: Phase = .loading
-    /// The same tiles a hike in the library shows, from the same builder.
+    /// The elevation profile and the stat tiles, from the same builder a hike
+    /// in the library uses.
     ///
     /// Held apart from ``phase`` because they arrive after it: the route is
-    /// what the screen is waiting for and the statistics are a walk of that
+    /// what the screen is waiting for and both of these are a walk of that
     /// route, so folding them together would hold the photographs and the Add
     /// button back on a computation nothing is blocked by.
-    @State private var stats: [Stat] = []
+    ///
+    /// One optional rather than a profile and an array, because they land
+    /// together and the difference between them matters on screen: `nil` is
+    /// "the route has not been walked yet" and a value with a flat profile in
+    /// it is "this hike has no elevations", which are two different things to
+    /// draw. See ``elevationSection``.
+    @State private var prepared: HikeDetailPreparedContent?
+    /// What OpenStreetMap says this route runs on, measured on open and kept
+    /// no longer than the screen — see this file's header.
+    @State private var breakdowns = HikeTrailBreakdowns.empty
+    /// The elevation chart's scrub position.
+    ///
+    /// A reference type for the reason ``HikeDetailView``'s is, and handed
+    /// down without ever being read here: a finger dragging the chart moves
+    /// the marker and redraws the chart, and nothing on this screen above it.
+    /// Unlike the hike's own, nothing else writes to it — there is no live
+    /// location to project onto a stranger's trail and no map pin to hand
+    /// back, so ``TrackerState/liveTrackerDistance`` stays `nil` for the life
+    /// of this screen.
+    @State private var tracker = TrackerState()
     @State private var isImporting = false
     @State private var importFailure: CommunityFailure?
     @State private var existingHike: Hike?
@@ -147,6 +207,16 @@ struct CommunityHikeView: View {
     /// would ever collect them. *Try Again* writes to the same handle, since
     /// an unowned retry is the same leak by a second route.
     @State private var loadTask: Task<Void, Never>?
+    /// The trail analysis, held so backing out stops it.
+    ///
+    /// Nothing waits for this — it writes two sections that are absent until
+    /// it answers — but a hiker who leaves must not leave a run of Overpass
+    /// requests going for a screen that has gone. Deliberately **not** in
+    /// ``discardDownloads()``'s wait list: it neither reads from nor writes
+    /// into the download directory, and making a stranger's photographs wait
+    /// on a trail graph would couple two unrelated things through one `for`
+    /// loop.
+    @State private var analysisTask: Task<Void, Never>?
     /// Whether this author was blocked while the screen was up.
     ///
     /// Read by the import when it finishes, so a hike the hiker asked for a
@@ -164,7 +234,14 @@ struct CommunityHikeView: View {
 
     var body: some View {
         ScrollView {
-            VStack(alignment: .leading, spacing: 20) {
+            VStack(alignment: .leading, spacing: 24) {
+                // Above the header and outside the switch, both deliberately.
+                // Above, because that is where ``HikeDetailView`` puts it and
+                // this page is meant to read as that one. Outside, because it
+                // is keyed on the walk of the route rather than on the fetch,
+                // and it draws nothing at all until there is one — so a screen
+                // still loading is the header and a spinner, exactly as it was.
+                elevationSection
                 header
                 switch phase {
                 case .loading:
@@ -177,6 +254,10 @@ struct CommunityHikeView: View {
             }
             .padding()
         }
+        // The chart now runs up under the navigation bar, so it gets the
+        // progressive blur the hike's own detail screen gives it rather than
+        // meeting the bar's glass at a hard line.
+        .softScrollEdgeEffect(for: .top)
         .navigationTitle(listing.title)
         #if os(iOS)
         .navigationBarTitleDisplayMode(.inline)
@@ -240,6 +321,10 @@ struct CommunityHikeView: View {
             // Before the discard, so a download still running is told to stop
             // rather than raced to the directory it is writing into.
             loadTask?.cancel()
+            // Nothing waits for this one; it is cancelled because a screen
+            // that has gone has no use for an answer and no right to keep
+            // asking Overpass for it.
+            analysisTask?.cancel()
             browser.previewClosed(listing)
             discardDownloads()
         }
@@ -381,21 +466,104 @@ private extension CommunityHikeView {
         .accessibilityIdentifier("community-hike-failure")
     }
 
+    /// The page below the header, in ``HikeDetailView``'s order: the numbers,
+    /// the photographs, what the trail runs on, how hard it is, and then what
+    /// the hiker who shared it wrote about it.
+    ///
+    /// The description moved down here from directly under the stats when the
+    /// two trail sections arrived, because the hike's own screen has always
+    /// put *Details* last and this page is meant to read as that one. Its
+    /// sections are each absent until they have something to say, which is why
+    /// the order is stated once here rather than negotiated between them.
     @ViewBuilder
     func loadedState(_ detail: CommunityHikeDetail) -> some View {
         statsGrid
-
-        if let description = detail.trackDescription, !description.isEmpty {
-            Text(description)
-                .font(.subheadline)
-                .foregroundStyle(.secondary)
-        }
 
         if !detail.photoFileURLs.isEmpty {
             photoStrip(detail)
         }
 
+        surfaceSection
+        difficultySection
+
+        if let description = detail.trackDescription, !description.isEmpty {
+            detailsSection(description)
+        }
+
         importButton(detail)
+    }
+
+    /// The route's shape, in the same chart the hiker's own hikes draw.
+    ///
+    /// ``ElevationChartView`` rather than anything built for this screen, and
+    /// the scrub comes with it: reading an elevation off a point of a trail is
+    /// most of what a hiker is deciding on, and it is the one interaction on
+    /// this page that costs nothing to offer. What does not come with it is
+    /// everything that needs a hike — the route tint, the map pin, the live
+    /// dot — so the callbacks end at ``tracker`` and go no further.
+    ///
+    /// Nothing at all until the route has been walked, and the placeholder
+    /// only once it has: *no elevation data* is an answer, and a screen that
+    /// is still loading has not got one.
+    @ViewBuilder var elevationSection: some View {
+        if let profile = prepared?.profile {
+            if profile.samples.count > 1 {
+                ElevationChartView(
+                    profile: profile,
+                    // The app's tint rather than a hike's, exactly as the
+                    // lines and the markers on the map are: the map behind
+                    // this screen is drawing this very route in it, and the
+                    // route tints belong to hikes the hiker owns.
+                    tint: .accentColor,
+                    tracker: tracker,
+                    onScrub: { tracker.trackerDistance = $0 }
+                )
+                .equatable()
+            } else {
+                ElevationPlaceholderView(
+                    tint: .accentColor,
+                    // Not "in this file": what the hiker is looking at is
+                    // somebody's upload, and they have never seen a file.
+                    message: "No elevation data in this hike"
+                )
+            }
+        }
+    }
+
+    /// What OpenStreetMap says this stretch of trail runs on, in the hike
+    /// detail screen's own section — see ``TrailSurfaceSection``.
+    ///
+    /// Absent until the analysis answers, and absent for good if it never
+    /// does. The `if let` is here rather than inside the section because the
+    /// section draws a breakdown and does not decide whether there is one.
+    @ViewBuilder var surfaceSection: some View {
+        if let surface = breakdowns.surface {
+            TrailSurfaceSection(breakdown: surface)
+        }
+    }
+
+    /// Mirrors ``surfaceSection``.
+    @ViewBuilder var difficultySection: some View {
+        if let difficulty = breakdowns.difficulty {
+            TrailDifficultySection(breakdown: difficulty)
+        }
+    }
+
+    /// What the hiker who shared this wrote about it, under the heading and in
+    /// the row a hike in the library gives its own description.
+    ///
+    /// ``DetailRow`` rather than the bare paragraph this used to be, for the
+    /// reason the numbers above are ``StatTile``s: the label is what makes a
+    /// stranger's sentence read as the hike's description rather than as a
+    /// caption on the photographs it sat under.
+    func detailsSection(_ description: String) -> some View {
+        VStack(alignment: .leading, spacing: 12) {
+            Text("Details")
+                .font(.headline)
+                .frame(maxWidth: .infinity, alignment: .leading)
+                .accessibilityAddTraits(.isHeader)
+            DetailRow(label: "Description", value: description)
+        }
     }
 
     /// The hike's numbers, in the same grid and the same tiles the hiker's own
@@ -409,12 +577,12 @@ private extension CommunityHikeView {
     /// against *this* one, and two layouts would make that comparison work.
     ///
     /// Empty until the walk of the route finishes, which is a beat after the
-    /// route lands — see ``preparedStats(for:)``. Nothing is drawn in the
-    /// meantime rather than a row of placeholders: the photographs and the Add
-    /// button are already up, and a grid of dashes that fills itself in is a
-    /// worse thing to look at than a grid that appears.
+    /// route lands — see ``prepare(_:)``. Nothing is drawn in the meantime
+    /// rather than a row of placeholders: the photographs and the Add button
+    /// are already up, and a grid of dashes that fills itself in is a worse
+    /// thing to look at than a grid that appears.
     @ViewBuilder var statsGrid: some View {
-        if !stats.isEmpty {
+        if let stats = prepared?.stats, !stats.isEmpty {
             StatGrid {
                 ForEach(stats) { stat in
                     StatTile(label: stat.label, value: stat.value)
@@ -424,9 +592,10 @@ private extension CommunityHikeView {
     }
 
     func photoStrip(_ detail: CommunityHikeDetail) -> some View {
-        VStack(alignment: .leading, spacing: 8) {
+        VStack(alignment: .leading, spacing: 12) {
             Text("Photos")
                 .font(.headline)
+                .frame(maxWidth: .infinity, alignment: .leading)
                 .accessibilityAddTraits(.isHeader)
             ScrollView(.horizontal, showsIndicators: false) {
                 HStack(spacing: 8) {
@@ -490,11 +659,17 @@ private extension CommunityHikeView {
             )
             phase = .loaded(detail)
             // The route this screen no longer draws, handed to the map that
-            // does — see this file's header. Before the statistics, because it
-            // is what the hiker is waiting to see and it costs nothing to
-            // compute.
+            // does — see this file's header. Before anything derived from it,
+            // because it is what the hiker is waiting to see and it costs
+            // nothing to compute.
             browser.previewLoaded(detail.route, of: listing)
-            stats = await Self.preparedStats(for: detail)
+            // Started rather than awaited, so the round trip to Overpass runs
+            // alongside the walk of the route below instead of behind it. It
+            // is also what a retry re-runs: a first attempt that failed has
+            // measured nothing, and the analysis belongs to the route rather
+            // than to the screen's first visit.
+            analyse(detail.route)
+            prepared = await Self.prepare(detail)
         } catch is CancellationError {
             // The screen has gone. There is nothing to report a failure on and
             // nothing the hiker could do about it — the same call
@@ -510,26 +685,32 @@ private extension CommunityHikeView {
         }
     }
 
-    /// One walk of the route, off the main actor, producing the same tiles a
-    /// hike in the library shows.
+    /// Asks OpenStreetMap what this route runs on and how hard it is — see
+    /// this file's header for why that request is worth making on a screen
+    /// that refuses to fetch a map tile.
     ///
-    /// The distance is the route's own length rather than
-    /// ``CommunityListing/distanceMeters``, and that is the same call
-    /// ``CommunityImport`` makes for the same reason: the listing's figure is
-    /// typed by a person in the CloudKit Console, the route is what was
-    /// uploaded, and a preview whose stated length disagreed with the hike it
-    /// is about to become would be wrong in the one place the hiker can see
-    /// both.
+    /// Held in ``analysisTask`` rather than fired and forgotten, and the
+    /// cancellation check is the same one ``HikeDetailView`` makes before its
+    /// write: ``HikeTrailAnalysis`` never throws, so a torn-down screen and a
+    /// valley nobody has mapped both come back as an empty answer and only
+    /// `Task.isCancelled` tells them apart.
     ///
-    /// A cancelled preparation — the hiker backing out mid-walk — leaves no
-    /// tiles and says nothing. There is nothing to report: the screen it would
-    /// have drawn on has gone.
-    static func preparedStats(for detail: CommunityHikeDetail) async -> [Stat] {
-        let prepared = try? await HikeDetailPreparation.prepare(
-            route: detail.route,
-            distanceMeters: CommunityImport.routeLength(of: detail.route)
-        )
-        return prepared?.stats ?? []
+    /// A provider-less launch — a preview, or any suite — asks nothing and
+    /// leaves both sections absent, exactly as one does on a hike in the
+    /// library.
+    func analyse(_ route: [RouteCoordinate]) {
+        guard let trailGraphProvider else { return }
+        analysisTask = Task {
+            let measured = await HikeTrailAnalysis.breakdowns(
+                route: route,
+                provider: trailGraphProvider
+            )
+            guard !Task.isCancelled, !measured.isEmpty else { return }
+            // No transition and no curve of our own, for the reason the hike's
+            // own screen gives: SwiftUI's default insertion is a fade, and it
+            // is what every other section that appears late here already uses.
+            withAnimation { breakdowns = measured }
+        }
     }
 
     /// Adds the hike, and holds the task that does it.
@@ -594,15 +775,37 @@ private extension CommunityHikeView {
     }
 }
 
-// MARK: - Clearing up after a preview
+// MARK: - The page, and clearing up after it
 
-// Not `private`, and a `static` taking its work rather than a method reading
-// `@State`, for the reason `CloudKitCommunityTransport.pins(_:for:of:takenOn:)`
-// is one: what matters here is an *ordering*, and an ordering is invisible in
-// the result. A discard that waited and a discard that raced both leave no
-// directory on a good day, and differ only when something is still writing. A
-// suite can hold a task open across this one and watch.
+// Neither of these is `private`, and both are `static`s taking their work
+// rather than methods reading `@State`, for the reason
+// `CloudKitCommunityTransport.pins(_:for:of:takenOn:)` is one: what each
+// decides is invisible in the result it produces.
 extension CommunityHikeView {
+    /// One walk of the route, off the main actor, producing the elevation
+    /// profile and the same stat tiles a hike in the library shows.
+    ///
+    /// The distance is the route's own length rather than
+    /// ``CommunityListing/distanceMeters``, and that is the same call
+    /// ``CommunityImport`` makes for the same reason: the listing's figure is
+    /// typed by a person in the CloudKit Console, the route is what was
+    /// uploaded, and a preview whose stated length disagreed with the hike it
+    /// is about to become would be wrong in the one place the hiker can see
+    /// both. That disagreement is what is invisible here — a page built off
+    /// the listing's figure looks entirely correct until somebody imports the
+    /// hike and reads the two numbers side by side — so it is asserted rather
+    /// than left to the comment.
+    ///
+    /// A cancelled preparation — the hiker backing out mid-walk — leaves no
+    /// chart and no tiles and says nothing. There is nothing to report: the
+    /// screen it would have drawn on has gone.
+    static func prepare(_ detail: CommunityHikeDetail) async -> HikeDetailPreparedContent? {
+        try? await HikeDetailPreparation.prepare(
+            route: detail.route,
+            distanceMeters: CommunityImport.routeLength(of: detail.route)
+        )
+    }
+
     /// Removes a preview's downloads, once nothing is still using them.
     ///
     /// Off the main actor and fire-and-forget, in the shape the photo and tile
@@ -612,6 +815,11 @@ extension CommunityHikeView {
     /// - Parameter work: Everything that may still be reading from or writing
     ///   into `directory`. Waited on in turn before anything is removed — a
     ///   `nil` is work that never started, and costs nothing.
+    ///
+    /// What matters here is an *ordering*, and an ordering is invisible in the
+    /// result: a discard that waited and a discard that raced both leave no
+    /// directory on a good day, and differ only when something is still
+    /// writing. A suite can hold a task open across this one and watch.
     static func discardDownloads(
         at directory: URL,
         after work: [Task<Void, Never>?]
