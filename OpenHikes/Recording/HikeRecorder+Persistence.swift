@@ -168,45 +168,27 @@ extension HikeRecorder {
     ) throws(RecordingFailure) -> Hike {
         let hikeID = session.metadata.sessionID
         stats.dominantTrailName = prepared.matchedTrailName
+        // Measured against the prepared distance rather than the live one:
+        // this is the last word on how long the walk was, and the share the
+        // floor is applied to should be a share of it. The figure the stop
+        // alert previewed was the accumulator's, moments earlier and by the
+        // same rule — see ``HikeRecorder/suggestedTitle``.
+        let suggestedTitle = suggestedTitle(forDistance: prepared.distanceMeters)
         if let existing = try existingHike(sessionID: hikeID) {
             guard existing.isRecording else { return existing }
-
-            let previousDistance = existing.distanceMeters
-            let previousDate = existing.date
-            let previousRoute = existing.route
-            let previousRawRoute = existing.rawRoute
-            let previousCustomName = existing.customName
-
-            existing.distanceMeters = prepared.distanceMeters
-            existing.date = prepared.startedAt
-            existing.route = prepared.route
-            existing.rawRoute = prepared.rawRoute
-            existing.customName = customName
-            existing.isRecording = false
-            // The walk this recording was, in the same commit as the hike it
-            // finalizes — see ``RecordedWalk``.
-            let walk = insertRecordedWalk(
-                for: existing,
+            return try finalizeDraft(
+                existing,
                 session: session,
-                prepared: prepared
+                prepared: prepared,
+                customName: customName,
+                suggestedTitle: suggestedTitle
             )
-            do {
-                try saveModelContext(container.mainContext)
-                return existing
-            } catch {
-                discardRecordedWalk(walk)
-                existing.distanceMeters = previousDistance
-                existing.date = previousDate
-                existing.route = previousRoute
-                existing.rawRoute = previousRawRoute
-                existing.customName = previousCustomName
-                existing.isRecording = true
-                throw .save(error.localizedDescription)
-            }
         }
 
         let hike = Hike(
-            title: session.metadata.title ?? Self.defaultTitle(for: prepared.startedAt),
+            title: session.metadata.title
+                ?? suggestedTitle
+                ?? Self.defaultTitle(for: prepared.startedAt),
             distanceMeters: prepared.distanceMeters,
             id: hikeID,
             date: prepared.startedAt,
@@ -228,6 +210,69 @@ extension HikeRecorder {
         } catch {
             discardRecordedWalk(walk)
             container.mainContext.delete(hike)
+            throw .save(error.localizedDescription)
+        }
+    }
+
+    /// Finishes the draft this recording has been writing into, in the one
+    /// commit that also writes the walk it was.
+    ///
+    /// Every field it touches is read back first, because a refused save has
+    /// to leave a draft that is still recordable — see the rollback below and
+    /// ``aRefusedSaveLeavesNoWalk``. A half-finalized draft is worse than a
+    /// failed save: it is a hike the recorder no longer owns and the hiker
+    /// cannot finish.
+    private func finalizeDraft(
+        _ existing: Hike,
+        session: TrackJournalSession,
+        prepared: PreparedRecording,
+        customName: String?,
+        suggestedTitle: String?
+    ) throws(RecordingFailure) -> Hike {
+        let previousDistance = existing.distanceMeters
+        let previousDate = existing.date
+        let previousRoute = existing.route
+        let previousRawRoute = existing.rawRoute
+        let previousCustomName = existing.customName
+        let previousTitle = existing.title
+
+        existing.distanceMeters = prepared.distanceMeters
+        existing.date = prepared.startedAt
+        existing.route = prepared.route
+        existing.rawRoute = prepared.rawRoute
+        existing.customName = customName
+        // The draft was named for the time of day before the first fix
+        // arrived, because that was all there was to go on. Replaced here
+        // rather than while the walk was running: the draft is a mirrored row
+        // and it is what the Live Activity draws, so a name that changed
+        // every time one trail overtook another would be a CloudKit export
+        // per flip and a Lock Screen renaming itself under the hiker.
+        //
+        // Into `title` and never `customName`. `customName` is the name a
+        // person typed and `displayTitle` prefers it, so a hiker who typed
+        // one in the stop alert keeps it — what is replaced here is only ever
+        // a default this app chose for them.
+        if let suggestedTitle { existing.title = suggestedTitle }
+        existing.isRecording = false
+        // The walk this recording was, in the same commit as the hike it
+        // finalizes — see ``RecordedWalk``.
+        let walk = insertRecordedWalk(
+            for: existing,
+            session: session,
+            prepared: prepared
+        )
+        do {
+            try saveModelContext(container.mainContext)
+            return existing
+        } catch {
+            discardRecordedWalk(walk)
+            existing.distanceMeters = previousDistance
+            existing.date = previousDate
+            existing.route = previousRoute
+            existing.rawRoute = previousRawRoute
+            existing.customName = previousCustomName
+            existing.title = previousTitle
+            existing.isRecording = true
             throw .save(error.localizedDescription)
         }
     }
@@ -439,6 +484,7 @@ extension HikeRecorder {
         pendingResumeFlag = false
         acceptedFixRevision = 0
         liveMatchWindow = []
+        trailNames = RecordingTrailNames()
         liveMatchingTask?.cancel()
         liveMatchingTask = nil
         liveMatchingTaskID = nil

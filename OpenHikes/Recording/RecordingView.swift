@@ -483,6 +483,14 @@ private struct RecordingControls: View {
     @State private var showDiscardConfirmation = false
     @State private var showStopAlert = false
     @State private var stopNameDraft = ""
+    /// The name the walk has earned, taken once when the hiker asks to stop.
+    ///
+    /// Held here rather than read in `body`, which is the whole reason it is
+    /// a `@State`: ``HikeRecorder/suggestedTitle`` reads the live distance,
+    /// and a body observing that re-runs on every accepted fix. A button's
+    /// action is not a body, so reading it there costs one look and creates
+    /// no dependency. `nil` when no trail covered enough of the walk.
+    @State private var stopNameSuggestion: String?
 
     var body: some View {
         VStack(spacing: 12) {
@@ -508,8 +516,13 @@ private struct RecordingControls: View {
             Text("The recorded track cannot be recovered after it is discarded.")
         }
         .alert("Name Your Hike", isPresented: $showStopAlert) {
+            // The trail the walk mostly followed, when there is one, and the
+            // draft's own name — the time of day and the date — when there
+            // is not. A placeholder is a promise about what happens if the
+            // hiker types nothing, so this is the same answer ``persist``
+            // writes, measured moments earlier against the live distance.
             TextField(
-                recorder.currentHike?.title ?? "Hike name",
+                stopNameSuggestion ?? recorder.currentHike?.title ?? "Hike name",
                 text: $stopNameDraft
             )
             Button("Save") {
@@ -612,6 +625,7 @@ private struct RecordingControls: View {
             // The rendered name was identical, which is why nothing looked
             // wrong; the state was just no longer true.
             stopNameDraft = ""
+            stopNameSuggestion = recorder.suggestedTitle
             showStopAlert = true
         }
         .prominentGlassButtonStyle()
