@@ -31,7 +31,7 @@
 //  protection at all against a second visit to the same listing: that one has
 //  its own tasks, the discard left over from the first visit has never heard
 //  of them, and both were reading and writing the same path. So the name now
-//  carries the visit — see ``CommunityHikeView/downloadDirectory(of:in:)`` —
+//  carries the visit — see ``CommunityStaging/previewDirectory(of:in:)`` —
 //  and these pin what that name has to keep apart and what it has to hold
 //  still.
 //
@@ -232,8 +232,8 @@ struct CommunityPreviewDownloadTests {
     @Test("a reopened preview keeps the photographs the last visit's cleanup wanted")
     func aReopenedVisitOutlivesTheDiscardOfTheOneBeforeIt() async throws {
         let listing = CommunityListing.stub()
-        let left = CommunityHikeView.downloadDirectory(of: listing, in: UUID())
-        let reopened = CommunityHikeView.downloadDirectory(of: listing, in: UUID())
+        let left = CommunityStaging.previewDirectory(of: listing, in: UUID())
+        let reopened = CommunityStaging.previewDirectory(of: listing, in: UUID())
         #expect(left != reopened, "two visits to one listing were handed one directory")
 
         try photograph(in: left)
@@ -264,9 +264,9 @@ struct CommunityPreviewDownloadTests {
         let listing = CommunityListing.stub()
         let visit = UUID()
 
-        let onOpening = CommunityHikeView.downloadDirectory(of: listing, in: visit)
+        let onOpening = CommunityStaging.previewDirectory(of: listing, in: visit)
         let photo = try photograph(in: onOpening)
-        let onReturning = CommunityHikeView.downloadDirectory(of: listing, in: visit)
+        let onReturning = CommunityStaging.previewDirectory(of: listing, in: visit)
 
         #expect(onOpening == onReturning, "one visit was given two directories")
         #expect(exists(photo))
@@ -278,11 +278,11 @@ struct CommunityPreviewDownloadTests {
     /// underneath with its photographs loaded and its detail pointing at them.
     @Test("backing out of a preview pushed over another spares the first")
     func aPushedPreviewsDiscardSparesTheOneUnderneath() async throws {
-        let underneath = CommunityHikeView.downloadDirectory(
+        let underneath = CommunityStaging.previewDirectory(
             of: .stub(id: "listing-1"),
             in: UUID()
         )
-        let pushedOver = CommunityHikeView.downloadDirectory(
+        let pushedOver = CommunityStaging.previewDirectory(
             of: .stub(id: "listing-2"),
             in: UUID()
         )
