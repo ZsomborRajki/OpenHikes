@@ -169,6 +169,23 @@ final class SheetPresentation {
         path.append(route)
     }
 
+    /// Whether `listing`'s preview is the screen the hiker is on.
+    ///
+    /// What an import asks before it navigates. The save itself is already
+    /// authorized and finishes either way — see
+    /// ``CommunityHikeView``'s `performImport` — but the trip to the saved
+    /// hike belongs to the screen that asked for it, and a copy of somebody's
+    /// photographs can outlast the screen by seconds. Without this, going
+    /// Back and opening something else while one was running had the hiker's
+    /// newer choice replaced by the older one.
+    ///
+    /// The top of the stack rather than membership in it, because the
+    /// navigation this guards assigns the whole path: acting while another
+    /// screen sits over the preview would take that screen away too.
+    func isShowingCommunityHike(_ listing: CommunityListing) -> Bool {
+        path.last == .communityHike(listing)
+    }
+
     func photoSelection(for route: SheetRoute) -> PhotoViewerSelection {
         if let existing = photoSelections[route] { return existing }
         let selection = PhotoViewerSelection()
