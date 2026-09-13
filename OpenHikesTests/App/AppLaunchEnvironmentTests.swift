@@ -45,6 +45,47 @@ struct AppLaunchEnvironmentTests {
         )
     }
 
+    /// The stand-in public database, and the two halves of the guarantee that
+    /// adding one had to preserve.
+    ///
+    /// A scenario that names one gets it; a launch that does not name one gets
+    /// nothing, whatever else it passed. The second half is the one worth a
+    /// test: the rule has always been that no suite reaches the real shared
+    /// database, and the only thing standing between a hosted suite and a
+    /// submission somebody else can read is that this stays `nil`.
+    @Test("a stand-in community database is only ever selected by name")
+    func communityScenarioIsExplicit() {
+        let named = AppLaunchEnvironment.Configuration(
+            arguments: ["OpenHikes", "--ui-testing", "--ui-test-community=seeded"]
+        )
+        #expect(named.communityScenarioName == "seeded")
+        #expect(SeededCommunityTransport.Scenario(argument: named.communityScenarioName) == .seeded)
+
+        let silent = AppLaunchEnvironment.Configuration(
+            arguments: ["OpenHikes", "--ui-testing", "--ui-test-expanded-sheet"]
+        )
+        #expect(silent.communityScenarioName == nil)
+        #expect(SeededCommunityTransport.Scenario(argument: silent.communityScenarioName) == nil)
+
+        // A shipping launch cannot ask at all: the argument is only read for a
+        // `--ui-testing` process, and the parsing is not compiled into a
+        // release build in the first place.
+        let shipping = AppLaunchEnvironment.Configuration(
+            arguments: ["OpenHikes", "--ui-test-community=seeded"]
+        )
+        #expect(shipping.communityScenarioName == nil)
+    }
+
+    /// A name nobody defined is not a database.
+    @Test("an unknown community scenario selects nothing")
+    func unknownCommunityScenarioIsRefused() {
+        let configuration = AppLaunchEnvironment.Configuration(
+            arguments: ["OpenHikes", "--ui-testing", "--ui-test-community=whatever"]
+        )
+        #expect(configuration.communityScenarioName == "whatever")
+        #expect(SeededCommunityTransport.Scenario(argument: configuration.communityScenarioName) == nil)
+    }
+
     @Test("UI-test location stays off unless explicitly requested")
     func uiTestLocationDefaultsOff() {
         let configuration = AppLaunchEnvironment.Configuration(

@@ -20,6 +20,7 @@ suites=(
   WalkUITests
   PhotoUITests
   SettingsUITests
+  CommunityUITests
   AccessibilityUITests
   AccessibilityLabelUITests
 )

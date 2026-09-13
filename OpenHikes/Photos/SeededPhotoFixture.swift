@@ -100,17 +100,29 @@ nonisolated enum SeededPhotoFixture {
         }
     }
 
-    /// JPEG bytes, drawn off the main thread because a 12 MP render and encode
-    /// is exactly the kind of work the rest of this app refuses to do on it.
+    /// JPEG bytes at `size`, drawn off the main thread because a 12 MP render
+    /// and encode is exactly the kind of work the rest of this app refuses to
+    /// do on it.
+    ///
+    /// The size is a parameter and defaults to a phone camera's, which is the
+    /// only thing this fixture was originally for: a decode is priced per
+    /// pixel, so a performance scenario measuring the gallery has to be
+    /// measuring a real one.
+    ///
+    /// ``SeededCommunityTransport`` is the caller that wants a smaller one. It
+    /// encodes these every time a preview opens rather than once per scenario,
+    /// and what a functional test needs from a photograph is that it is a real
+    /// file the real decode path can read — so it pays for a real JPEG and not
+    /// for twelve megapixels of it.
     @concurrent
-    private static func encodedImage(index: Int) async -> Data? {
+    static func encodedImage(index: Int, size: CGSize = pixelSize) async -> Data? {
         #if os(iOS)
         let format = UIGraphicsImageRendererFormat()
         format.scale = 1
         format.opaque = true
-        let renderer = UIGraphicsImageRenderer(size: pixelSize, format: format)
+        let renderer = UIGraphicsImageRenderer(size: size, format: format)
         let image = renderer.image { context in
-            draw(index: index, in: context.cgContext)
+            draw(index: index, in: context.cgContext, size: size)
         }
         return image.jpegData(compressionQuality: quality)
         #else
@@ -119,8 +131,8 @@ nonisolated enum SeededPhotoFixture {
     }
 
     #if os(iOS)
-    private static func draw(index: Int, in context: CGContext) {
-        let bounds = CGRect(origin: .zero, size: pixelSize)
+    private static func draw(index: Int, in context: CGContext, size: CGSize) {
+        let bounds = CGRect(origin: .zero, size: size)
         let hue = Double(index % hueCount) / Double(hueCount)
         context.setFillColor(
             UIColor(
