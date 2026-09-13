@@ -2,12 +2,17 @@
 //  HikeSurfaceSection.swift
 //  OpenHikes
 //
-//  The surface breakdown shown on a hike's detail screen: a stacked bar of
-//  what the route runs on, and the legend that reads it out.
+//  The surface breakdown: a stacked bar of what a route runs on, and the
+//  legend that reads it out.
 //
-//  Split into its own view so the write that fills it in — see
-//  ``HikeTrailAnalysis`` — invalidates this section rather than the whole
-//  detail screen.
+//  Two views, and the split is the point. ``TrailSurfaceSection`` draws a
+//  breakdown and knows nothing about where it came from; ``HikeSurfaceSection``
+//  is the one-line wrapper that reads one off a ``Hike``. That keeps the write
+//  that fills it in — see ``HikeTrailAnalysis`` — invalidating the wrapper
+//  rather than the whole detail screen, and it is what lets the community
+//  preview draw the identical section from a breakdown it measured for a
+//  stranger's route, with no `Hike` anywhere in sight. The same shape
+//  ``HikeElevationChart`` has around ``ElevationChartView``.
 //
 
 import SwiftUI
@@ -32,19 +37,20 @@ nonisolated extension TrailSurface {
     }
 }
 
-/// Absent until OpenStreetMap has actually answered for this route.
+/// The section itself, for anything holding a measured breakdown.
 ///
-/// There is no placeholder, no spinner and no error: the analysis runs by
-/// itself when the hike is opened, and a route it can't describe simply has no
-/// surface section rather than an empty one explaining why.
+/// There is no placeholder, no spinner and no error anywhere in this family:
+/// the analysis runs by itself, and a route it can't describe simply has no
+/// surface section rather than an empty one explaining why. Which is why the
+/// absence is decided by the callers below — this draws what it is given.
 ///
 /// The container deliberately carries no identifier of its own. SwiftUI pushes
 /// one down onto every descendant, which would leave the bar, all three legend
 /// rows and the footnote answering to the same name — and take
 /// ``TrailSurfaceBar``'s own identifier away from the automation that looks
 /// for it.
-struct HikeSurfaceSection: View {
-    let hike: Hike
+struct TrailSurfaceSection: View {
+    let breakdown: TrailSurfaceBreakdown
 
     private static let percentStyle = FloatingPointFormatStyle<Double>.Percent
         .percent
@@ -54,31 +60,43 @@ struct HikeSurfaceSection: View {
     private static let fullCoverageThreshold = 0.995
 
     var body: some View {
-        if let breakdown = hike.surfaceBreakdown {
-            VStack(alignment: .leading, spacing: 12) {
-                Text("Surface")
-                    .font(.headline)
-                    .frame(maxWidth: .infinity, alignment: .leading)
-                    .accessibilityAddTraits(.isHeader)
-                TrailSurfaceBar(shares: breakdown.shares)
-                VStack(spacing: 8) {
-                    ForEach(breakdown.shares) { share in
-                        TrailSurfaceLegendRow(share: share)
-                    }
+        VStack(alignment: .leading, spacing: 12) {
+            Text("Surface")
+                .font(.headline)
+                .frame(maxWidth: .infinity, alignment: .leading)
+                .accessibilityAddTraits(.isHeader)
+            TrailSurfaceBar(shares: breakdown.shares)
+            VStack(spacing: 8) {
+                ForEach(breakdown.shares) { share in
+                    TrailSurfaceLegendRow(share: share)
                 }
-                Text(footnote(for: breakdown))
-                    .font(.caption2)
-                    .foregroundStyle(.secondary)
             }
+            Text(footnote)
+                .font(.caption2)
+                .foregroundStyle(.secondary)
         }
     }
 
-    private func footnote(for breakdown: TrailSurfaceBreakdown) -> String {
+    private var footnote: String {
         let surveyed = breakdown.surveyedFraction
         guard surveyed < Self.fullCoverageThreshold else { return "Surfaces from OpenStreetMap." }
         let formatted = surveyed.formatted(Self.percentStyle)
         return "Surfaces from OpenStreetMap, which describes \(formatted)"
             + " of this route."
+    }
+}
+
+/// Absent until OpenStreetMap has actually answered for this hike's route.
+///
+/// Reads the breakdown here rather than in the detail screen's body, so the
+/// write that fills it in redraws this and nothing above it.
+struct HikeSurfaceSection: View {
+    let hike: Hike
+
+    var body: some View {
+        if let breakdown = hike.surfaceBreakdown {
+            TrailSurfaceSection(breakdown: breakdown)
+        }
     }
 }
 

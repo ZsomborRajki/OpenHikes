@@ -412,3 +412,42 @@ struct ElevationChartView: View, Equatable {
         return (mid - span / 2 - padding)...(mid + span / 2 + padding)
     }
 }
+
+// MARK: - Empty state
+
+/// What stands in for the graph when a route carries no elevations.
+///
+/// Split from ``HikeElevationPlaceholder`` for the reason the chart itself is
+/// split from ``HikeElevationChart``: the tint is an observable read on the
+/// hike's own screen and a constant on the community preview, and only the
+/// former needs a wrapper to absorb it.
+///
+/// The message is a parameter rather than a constant because the two callers
+/// are looking at different things. A hike in the library came from a file the
+/// hiker has; a shared one came from somebody else's upload, and telling them
+/// their *file* is missing elevations would be naming something they have
+/// never seen.
+struct ElevationPlaceholderView: View {
+    private static let tintOpacity = 0.12
+    private static let height: CGFloat = 180
+
+    let tint: Color
+    let message: LocalizedStringKey
+
+    var body: some View {
+        ZStack {
+            RoundedRectangle(cornerRadius: 16)
+                .fill(tint.opacity(Self.tintOpacity))
+            VStack(spacing: 8) {
+                Image(systemName: "chart.xyaxis.line")
+                    .font(.largeTitle)
+                    .foregroundStyle(tint)
+                    .accessibilityHidden(true)
+                Text(message)
+                    .font(.subheadline)
+                    .foregroundStyle(.secondary)
+            }
+        }
+        .frame(height: Self.height)
+    }
+}

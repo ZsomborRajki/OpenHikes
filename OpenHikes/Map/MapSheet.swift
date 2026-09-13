@@ -303,7 +303,11 @@ struct MapSheet: View {
                 // Asked while the screen is going, to tell a push over it from
                 // the hiker leaving: the pop has already taken the route out
                 // of the path by then, and a push has not.
-                remainsPushed: { presentation.isPresentingCommunityHike(listing) }
+                remainsPushed: { presentation.isPresentingCommunityHike(listing) },
+                // The same graph the hiker's own hikes are measured against,
+                // and the same region cache — so a shared trail through a
+                // valley they have already walked costs nothing to describe.
+                trailGraphProvider: appModel.trailGraphProvider
             )
         }
     }
