@@ -15,13 +15,19 @@
 	  what lands there is a route, photographs and a name, readable by
 	  everybody.
 
-	  All three entries set `NSPrivacyCollectedDataTypeLinked` to true,
-	  which is the honest answer rather than the flattering one. The submission
-	  carries a name the hiker typed and CloudKit stamps every record with its
-	  creator's user record ID, so the developer can tell whose submission is
-	  whose — which is precisely what makes reviewing and taking down a
-	  submission possible, and therefore not something to claim otherwise
-	  about.
+	  Every entry sets `NSPrivacyCollectedDataTypeLinked` to true, which is the
+	  honest answer rather than the flattering one. The submission carries a
+	  name the hiker typed and CloudKit stamps every record with its creator's
+	  user record ID, so the developer can tell whose submission is whose —
+	  which is precisely what makes reviewing and taking down a submission
+	  possible, and therefore not something to claim otherwise about.
+
+	  That creator ID used to be argued for in this comment and declared
+	  nowhere, which is the wrong way round. An identifier the app keeps on
+	  purpose, copies onto the published listing and refuses a listing without
+	  is collected data under Apple's own definitions, whatever it is kept for
+	  — so it has an entry of its own below, and so does the walk considered as
+	  exercise rather than as a place.
 
 	  Not used for tracking: nothing here is joined with data from other
 	  companies' apps or sites, and `NSPrivacyTracking` stays false.
@@ -69,14 +75,80 @@
 		</dict>
 		<dict>
 			<!--
-			  The name the hiker chose to be credited under, and the hike's
-			  title and description. `OtherUserContent` rather than `Name`:
-			  this is a display name typed into this app for this purpose, not
-			  the account holder's real name, and it travels with the text they
-			  wrote about the walk.
+			  The hike's title and whatever the hiker wrote about the walk —
+			  free text they typed, published under their credit.
+
+			  The display name used to be declared here too, on the argument
+			  that it is not the account holder's real name. That is true and
+			  it was the wrong conclusion: Apple's definitions put a screen
+			  name or handle under User ID, and calling a field the app
+			  specifically asks for "other user content" is the move that
+			  guidance names. It is declared below instead.
 			-->
 			<key>NSPrivacyCollectedDataType</key>
 			<string>NSPrivacyCollectedDataTypeOtherUserContent</string>
+			<key>NSPrivacyCollectedDataTypeLinked</key>
+			<true/>
+			<key>NSPrivacyCollectedDataTypeTracking</key>
+			<false/>
+			<key>NSPrivacyCollectedDataTypePurposes</key>
+			<array>
+				<string>NSPrivacyCollectedDataTypePurposeAppFunctionality</string>
+			</array>
+		</dict>
+		<dict>
+			<!--
+			  Two identifiers, arriving by different routes and both retained.
+
+			  CloudKit stamps every record with its creator's user record ID,
+			  and nothing about this feature treats that as incidental: the
+			  reviewer copies it onto the published listing as
+			  `CommunityHike.authorID`, and the app refuses a listing that has
+			  none — see `CloudKitCommunityTransport`. It is what a block is
+			  against, so that blocking one hiker survives them publishing
+			  under a different name, and it is what a takedown is aimed at.
+
+			  The other is the name typed into the share form, which is a
+			  display name and not the account holder's:
+			  `CommunityListing.authorName` has said "a credit and not an
+			  identity" since it was written, blank is allowed, and the form
+			  now says so rather than leaving the hiker to read "Name" and
+			  decide for themselves — see `CommunityShareSheet`. Apple's
+			  definition puts a screen name or handle here rather than under
+			  Contact Info, which is the answer that follows from what the
+			  field now asks for.
+			-->
+			<key>NSPrivacyCollectedDataType</key>
+			<string>NSPrivacyCollectedDataTypeUserID</string>
+			<key>NSPrivacyCollectedDataTypeLinked</key>
+			<true/>
+			<key>NSPrivacyCollectedDataTypeTracking</key>
+			<false/>
+			<key>NSPrivacyCollectedDataTypePurposes</key>
+			<array>
+				<string>NSPrivacyCollectedDataTypePurposeAppFunctionality</string>
+			</array>
+		</dict>
+		<dict>
+			<!--
+			  The walk as an activity rather than as a place, which is the
+			  second thing a published route is.
+
+			  Every point carries its timestamp and the submission uploads the
+			  route whole, so the duration, the pace and where the hiker
+			  stopped go with it; the listing carries the date and the
+			  distance beside them. None of that is inferred by somebody
+			  determined to — the preview draws it straight back out, on the
+			  same stat tiles a hike in the library gets.
+
+			  Declared even though none of it comes from HealthKit and none of
+			  it is a heart rate. Apple's category is fitness and exercise
+			  data, a timed hike is exercise, and what this manifest answers
+			  is what leaves the device rather than which framework it came
+			  from.
+			-->
+			<key>NSPrivacyCollectedDataType</key>
+			<string>NSPrivacyCollectedDataTypeFitness</string>
 			<key>NSPrivacyCollectedDataTypeLinked</key>
 			<true/>
 			<key>NSPrivacyCollectedDataTypeTracking</key>
