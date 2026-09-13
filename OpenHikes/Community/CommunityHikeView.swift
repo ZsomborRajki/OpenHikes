@@ -73,8 +73,9 @@
 //  being looked at, and no longer, unless the hiker imports the hike, at which
 //  point ``CommunityImport`` makes copies that are theirs.
 //
-//  One directory per *visit*, and not per listing, for the reason
-//  ``CommunityPublisher`` stages one per attempt rather than one per hike: the
+//  One directory per *visit*, and not per listing, for the reason a share
+//  stages one per attempt rather than one per hike — see ``CommunityStaging``,
+//  which owns both names and sweeps up after the ones a kill orphaned: the
 //  same listing can be open twice over, and the second time is not the first.
 //  A hiker who backs out mid-download and opens the same hike again leaves the
 //  first visit's discard still waiting on the first visit's tasks — and a
@@ -257,7 +258,7 @@ struct CommunityHikeView: View {
     /// Where this visit's downloads live. Per-visit rather than per-listing —
     /// see ``previewSession`` — and removed in `onDisappear`.
     private var downloadDirectory: URL {
-        Self.downloadDirectory(of: listing, in: previewSession)
+        CommunityStaging.previewDirectory(of: listing, in: previewSession)
     }
 
     var body: some View {
@@ -680,6 +681,11 @@ private extension CommunityHikeView {
 private extension CommunityHikeView {
     func load() async {
         guard case .loading = phase else { return }
+        // A preview about to stage a directory of its own is the moment to
+        // clear away the ones an earlier preview or share never got to remove
+        // — a kill reaches neither teardown, and no name is ever reused. See
+        // ``CommunityStaging``.
+        CommunityStaging.sweep()
         do {
             let detail = try await Self.detail(
                 of: listing,
@@ -874,28 +880,6 @@ extension CommunityHikeView {
             route: detail.route,
             distanceMeters: CommunityImport.routeLength(of: detail.route)
         )
-    }
-
-    /// The temporary directory one visit to one listing downloads into.
-    ///
-    /// Both halves of the name earn their place. The listing is there to be
-    /// read by a person looking at a temporary directory and asking what left
-    /// it behind; the session is what makes the name unique, and it is the half
-    /// that matters, because ``discardDownloads(at:after:)`` removes whatever
-    /// is at this path once the work it was handed has finished. Two visits
-    /// sharing a name is the first visit's discard taking the second visit's
-    /// photographs — see this file's header.
-    ///
-    /// A `static` taking its work, like the others here: what it decides is
-    /// invisible in the result. Either name produces an ordinary-looking
-    /// directory with a stranger's photographs in it, and the two differ only
-    /// on the day one visit is still finishing as the next one starts.
-    static func downloadDirectory(of listing: CommunityListing, in session: UUID) -> URL {
-        FileManager.default.temporaryDirectory
-            .appendingPathComponent(
-                "CommunityHike-\(listing.id)-\(session.uuidString)",
-                isDirectory: true
-            )
     }
 
     /// Removes a preview's downloads, once nothing is still using them.

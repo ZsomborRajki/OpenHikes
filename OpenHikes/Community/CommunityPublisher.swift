@@ -114,18 +114,14 @@ nonisolated enum CommunityPublisher {
         )
         let photos = selectedPhotos(of: hike)
 
-        // One directory per *attempt*, not per hike. Two shares can be in
-        // flight at once — a re-share started while the first upload is still
-        // running, which the form deliberately allows — and a name that only
-        // carried the hike would stage both into one directory, under the same
-        // file names. The second writer would then decide what the first one
-        // uploaded, since an atomic write makes a file whole rather than
-        // private.
-        let workingDirectory = FileManager.default.temporaryDirectory
-            .appendingPathComponent(
-                "CommunityShare-\(details.hikeID.uuidString)-\(UUID().uuidString)",
-                isDirectory: true
-            )
+        // One directory per *attempt*, not per hike, and under the parent a
+        // sweep can reach — see ``CommunityStaging``. The `defer` below is the
+        // ordinary way this directory goes, and the sweep is for the way it
+        // does not: being killed mid-upload is how a long share in the
+        // background usually ends, and a `defer` is code that has to get to
+        // run.
+        let workingDirectory = CommunityStaging.shareDirectory(of: details.hikeID)
+        CommunityStaging.sweep()
         defer { discard(workingDirectory) }
 
         let draft = await prepare(
