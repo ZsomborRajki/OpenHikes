@@ -318,6 +318,20 @@ nonisolated struct CloudKitCommunityTransport: CommunityTransporting {
             throw Self.failure(from: error, while: "opening a community hike")
         }
 
+        // Everything past this line writes into `directory`, and the caller
+        // owns that directory and deletes it when its screen goes. Cancelling
+        // is how the screen says it has gone, and the rest of this method has
+        // no other way to hear it: a hiker who backs out mid-download would
+        // otherwise have the delete land first and these writes re-create the
+        // directory behind it, leaving a stranger's photographs in a temporary
+        // directory with nothing left that would ever remove them.
+        //
+        // Checked rather than hoped for. `record(for:)` above may or may not
+        // honour cancellation — that is CloudKit's business — but the file
+        // writes below are this app's, and they are the ones that leave
+        // something behind.
+        try Task.checkCancellation()
+
         try FileManager.default.createDirectory(
             at: directory,
             withIntermediateDirectories: true
@@ -334,6 +348,10 @@ nonisolated struct CloudKitCommunityTransport: CommunityTransporting {
 
         let pins = Self.decodePins(in: record)
         let assets = record[CommunitySchema.Submission.photos] as? [CKAsset] ?? []
+        // Again before the photographs, which are the expensive half and the
+        // half that leaves files: a dozen copies started after the screen has
+        // gone are a dozen files nobody will collect.
+        try Task.checkCancellation()
         let downloaded = Self.copyPhotos(assets, into: directory)
         if downloaded.count != assets.count {
             Self.logger.error(
