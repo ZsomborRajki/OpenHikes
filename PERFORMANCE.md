@@ -9,7 +9,8 @@ rather than annotated. What stays is what
 is still open, and how to read a measurement correctly — not a table of last
 week's numbers, which has to be re-measured to stay true and which nobody can
 act on. A run's own report carries its figures; `Scripts/performance-baseline.json`
-is what a run is diffed against. The rules this harness learned, and the energy
+is what a run is diffed against, once somebody has recorded one on their own
+machine. The rules this harness learned, and the energy
 policies it justifies, live in `.github/copilot-instructions.md` so they cannot
 drift away from the code they constrain.
 
@@ -48,11 +49,17 @@ would measure an app that reports nothing. The MetricKit integration is the
 exact inverse — it ships in Release and reports nothing here — which is why the
 two coexist rather than compete.
 
-`PerformanceReports/` is git-ignored. A run is evidence on the machine that
-produced it and nowhere else, so this document carries the numbers rather than
-the paths. `Scripts/performance-baseline.json` is the exception, and is tracked:
-it holds the counters and XCTest metrics a whole-suite run is diffed against, so
-the report says what *changed* rather than only what stayed inside a budget.
+`PerformanceReports/` is git-ignored, and **no baseline is committed either**.
+A run is evidence on the machine that produced it and nowhere else, so this
+document carries the numbers rather than the paths — and a
+`Scripts/performance-baseline.json` committed from one developer's run would be
+asserting that developer's hardware for everyone.
+
+What that file does when it exists: it holds the counters and XCTest metrics a
+whole-suite run is diffed against, so the report says what *changed* rather than
+only what stayed inside a budget. `--update-baseline` records one, against the
+default path or whatever `--baseline` names.
+
 That direction matters more than it looks. Every assertion in the suite is an
 upper bound, and an upper bound cannot notice work that has stopped — the 1 Hz
 recording clock once froze because a refactor made its view structurally
@@ -60,10 +67,12 @@ identical on every tick, and it scored perfectly against every budget while
 doing so. The diff reports a counter that *fell*, a counter that reached zero,
 and a counter the run never reported at all, each as its own finding.
 
-Record one on an otherwise idle machine, and re-record it deliberately rather
-than to make a red report go away. There is no baseline in the tree today: the
-numbers below were measured on one developer's hardware, and a file committed
-from that run would be asserting them for everyone.
+**So until somebody records a baseline on the machine they are measuring on,
+that whole class of regression is not being watched.** A run with no baseline
+file reports against its budgets alone, and says so when it finishes: *No
+baseline at Scripts/performance-baseline.json — run again with
+`--update-baseline` to record one.* Record one on an otherwise idle machine,
+and re-record it deliberately rather than to make a red report go away.
 
 Three pieces do the measuring, because no single one sees the whole picture.
 `PerformanceLog` is a debug-only text sink switched on by
