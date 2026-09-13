@@ -109,6 +109,12 @@ struct MapPaywallView: View {
                 }
             }
             .dismiss(when: store.isEntitled)
+            // Asked here as well as at launch, because this is the screen the
+            // answer is for: a lookup that failed on a train has no other way
+            // back short of force-quitting the app. Coalesced in the store, so
+            // arriving while the launch query is still running joins it rather
+            // than asking twice.
+            .task { await store.loadProduct() }
         }
         .accessibilityIdentifier("map-paywall")
     }
@@ -161,7 +167,11 @@ struct MapPaywallView: View {
                 Task { await buy() }
             } label: {
                 Group {
-                    if store.isWorking {
+                    // A price still on its way looks like work in progress,
+                    // because it is. What it must not look like is a button
+                    // that has decided there is nothing to sell — that is the
+                    // row below, and it is the one with a way out.
+                    if store.isWorking || store.productAvailability == .loading {
                         ProgressView().controlSize(.small)
                     } else {
                         Text(store.terms?.callToAction ?? "Unlock OpenHikes Pro")
@@ -176,6 +186,27 @@ struct MapPaywallView: View {
             // and its reasoning live on ``MapEntitlementStore/canPurchase``.
             .disabled(!store.canPurchase)
             .accessibilityIdentifier("paywall-purchase-button")
+
+            if store.productAvailability == .unavailable {
+                // The App Store answered with nothing — offline, or a product
+                // that is not configured yet. Said plainly and with the retry
+                // beside it: the query used to be fired once at launch and
+                // never again, so a customer whose signal came back had no way
+                // to buy the thing short of force-quitting the app.
+                VStack(spacing: 4) {
+                    Text("The App Store couldn't be reached, so there's no price to show yet.")
+                        .font(.footnote)
+                        .foregroundStyle(.secondary)
+                        .multilineTextAlignment(.center)
+                        .accessibilityIdentifier("paywall-product-unavailable")
+                    Button("Try Again") {
+                        Task { await store.loadProduct() }
+                    }
+                    .font(.subheadline)
+                    .accessibilityIdentifier("paywall-retry-button")
+                }
+                .frame(maxWidth: .infinity)
+            }
 
             Button("Restore Purchases") {
                 Task { await restore() }
