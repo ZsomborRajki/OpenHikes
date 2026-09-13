@@ -225,9 +225,23 @@ private extension CommunityShareSheet {
         }
     }
 
+    /// What the hike is credited to, asked for as the display name it is.
+    ///
+    /// It used to be labelled "Name", which left the hiker to decide whether
+    /// they were being asked for the name on their Apple Account. Nothing in
+    /// this app ever wanted that — ``CommunityListing/authorName`` has said
+    /// "a credit and not an identity" since it was written, blank has always
+    /// been allowed, and what it sits beside is a walk rather than a profile.
+    /// The field now says so, which is also what settles how it is declared:
+    /// Apple's definitions put a handle under `NSPrivacyCollectedDataTypeUserID`
+    /// and a person's name under Contact Info. See `PrivacyInfo.xcprivacy`.
+    ///
+    /// Still capitalised by word. A display name is far more often "Anna" or
+    /// "Ridge Walker" than a lowercase handle, and a keyboard can be overruled
+    /// where a wrong guess about what is being asked for cannot be.
     var nameSection: some View {
         Section {
-            TextField("Name", text: $authorName)
+            TextField("Display name", text: $authorName)
                 .accessibilityIdentifier("community-author-field")
                 .autocorrectionDisabled()
                 #if os(iOS)
@@ -237,7 +251,10 @@ private extension CommunityShareSheet {
         } header: {
             Text("Shared as")
         } footer: {
-            Text("Shown next to your hike. Leave it blank to share without a name.")
+            Text("""
+            Shown publicly next to your hike. It doesn't have to be your real \
+            name, and you can leave it blank to share without one.
+            """)
         }
     }
 
