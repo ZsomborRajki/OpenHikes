@@ -34,14 +34,14 @@ extension OpenHikesUITests {
 
         chart.coordinate(withNormalizedOffset: CGVector(dx: Self.laterChartPosition, dy: 0.5)).tap()
         XCTAssertTrue(
-            waitUntilValueChanges(from: initial, in: chart),
+            waitUntilValueChanges(from: initial, on: chart),
             "a tap must move the tracker and retain its readout after release"
         )
         let firstTap = chart.value as? String ?? ""
 
         chart.coordinate(withNormalizedOffset: CGVector(dx: Self.earlierChartPosition, dy: 0.5)).tap()
         XCTAssertTrue(
-            waitUntilValueChanges(from: firstTap, in: chart),
+            waitUntilValueChanges(from: firstTap, on: chart),
             "a second tap must move the tracker to the newly tapped distance"
         )
         XCTAssertNotEqual(chart.value as? String, initial)

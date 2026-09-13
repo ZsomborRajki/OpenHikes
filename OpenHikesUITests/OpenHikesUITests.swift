@@ -22,14 +22,20 @@ nonisolated final class OpenHikesUITests: XCTestCase {
             element("trail-map", in: app)
                 .waitForExistence(timeout: UITestTimeout.navigation)
         )
-        XCTAssertTrue(element("map-search", in: app).exists)
+        XCTAssertTrue(
+            element("map-search", in: app)
+                .waitForExistence(timeout: UITestTimeout.navigation)
+        )
 
         element("settings-button", in: app).tap()
         XCTAssertTrue(
             app.navigationBars["Settings"]
                 .waitForExistence(timeout: UITestTimeout.navigation)
         )
-        XCTAssertTrue(element("settings-screen", in: app).exists)
+        XCTAssertTrue(
+            element("settings-screen", in: app)
+                .waitForExistence(timeout: UITestTimeout.navigation)
+        )
         app.buttons["Done"].tap()
     }
 

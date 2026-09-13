@@ -160,17 +160,4 @@ extension XCTestCase {
         )
     }
 
-    @MainActor
-    func waitUntilValueChanges(
-        from original: String,
-        in element: XCUIElement,
-        timeout: TimeInterval = UITestTimeout.navigation
-    ) -> Bool {
-        let deadline = Date().addingTimeInterval(timeout)
-        while Date() < deadline {
-            if element.value as? String != original { return true }
-            Thread.sleep(forTimeInterval: 0.25)
-        }
-        return false
-    }
 }

@@ -39,11 +39,7 @@ nonisolated final class RecordingUITests: XCTestCase {
         XCTAssertTrue(
             phase.waitForExistence(timeout: UITestTimeout.navigation)
         )
-        expectation(
-            for: NSPredicate(format: "label CONTAINS %@", "Recording"),
-            evaluatedWith: phase
-        )
-        waitForExpectations(timeout: UITestTimeout.navigation)
+        expectPhase(phase, contains: "Recording")
     }
 
     /// Pausing stops the recording without ending it, and resuming picks it
@@ -78,14 +74,14 @@ nonisolated final class RecordingUITests: XCTestCase {
             "a running recording must not offer a one-tap way to lose it"
         )
 
-        app.buttons["Pause"].tap()
+        tapWhenReady(app.buttons["Pause"])
         expectPhase(phase, contains: "Paused")
         XCTAssertTrue(
             discard.waitForExistence(timeout: UITestTimeout.navigation),
             "a paused recording is where discarding is offered"
         )
 
-        app.buttons["Resume"].tap()
+        tapWhenReady(app.buttons["Resume"])
         expectPhase(phase, contains: "Recording")
     }
 
@@ -116,10 +112,17 @@ nonisolated final class RecordingUITests: XCTestCase {
         XCTAssertTrue(
             phase.waitForExistence(timeout: UITestTimeout.navigation)
         )
-        app.buttons["Pause"].tap()
+        tapWhenReady(app.buttons["Pause"])
         expectPhase(phase, contains: "Paused")
 
-        app.buttons["Discard Recording"].tap()
+        // Waited for, not assumed: the phase reading "Paused" and the discard
+        // button being in the tree are two separate redraws, which
+        // `testPausingAndResumingARecording` asserts directly above. Tapping
+        // it on the line after the phase check won that race on an idle
+        // machine and lost it under `--all`, where three simulator clones
+        // share the cores — and a lost race arrives as "No matches found for
+        // Button Discard Recording", which reads like the button is gone.
+        tapWhenReady(app.buttons["Discard Recording"])
         confirmDiscard(in: app)
 
         XCTAssertTrue(
@@ -162,8 +165,12 @@ nonisolated final class RecordingUITests: XCTestCase {
         )
         let keepTrail = element("review-choice-trail", in: app)
         let useGPS = element("review-choice-gps", in: app)
-        XCTAssertTrue(keepTrail.exists)
-        XCTAssertTrue(useGPS.exists)
+        XCTAssertTrue(
+            keepTrail.waitForExistence(timeout: UITestTimeout.navigation)
+        )
+        XCTAssertTrue(
+            useGPS.waitForExistence(timeout: UITestTimeout.navigation)
+        )
         XCTAssertTrue(
             keepTrail.isSelected,
             "the matched trail is the standing choice"
@@ -296,29 +303,15 @@ nonisolated final class RecordingUITests: XCTestCase {
     private static let saveTimeout: TimeInterval = 20
     private static let reviewedHikeName = "Reviewed Route"
 
+    /// `file` and `line` are forwarded, or every phase that never arrived is
+    /// reported against this line rather than the step that was waiting.
     @MainActor
-    private func expectPhase(_ phase: XCUIElement, contains text: String) {
-        expectation(
-            for: NSPredicate(format: "label CONTAINS %@", text),
-            evaluatedWith: phase
-        )
-        waitForExpectations(timeout: UITestTimeout.navigation)
-    }
-
-    /// Which section the review is showing is drawn as a title and nothing
-    /// else, so a Next that redrew without moving is indistinguishable from
-    /// one that worked — unless the title is watched for a change.
-    @MainActor
-    private func waitUntilLabelChanges(
-        from label: String,
-        on element: XCUIElement,
-        timeout: TimeInterval = UITestTimeout.navigation
-    ) -> Bool {
-        let deadline = Date().addingTimeInterval(timeout)
-        while Date() < deadline {
-            if element.exists, element.label != label { return true }
-            Thread.sleep(forTimeInterval: 0.25)
-        }
-        return false
+    private func expectPhase(
+        _ phase: XCUIElement,
+        contains text: String,
+        file: StaticString = #filePath,
+        line: UInt = #line
+    ) {
+        expectLabel(phase, contains: text, file: file, line: line)
     }
 }

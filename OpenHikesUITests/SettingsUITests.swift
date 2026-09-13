@@ -255,11 +255,6 @@ nonisolated final class SettingsUITests: XCTestCase {
         is expected: Bool,
         timeout: TimeInterval = UITestTimeout.navigation
     ) -> Bool {
-        let deadline = Date().addingTimeInterval(timeout)
-        while Date() < deadline {
-            if toggleIsOn(toggle) == expected { return true }
-            Thread.sleep(forTimeInterval: 0.25)
-        }
-        return false
+        waitUntil(timeout: timeout) { toggleIsOn(toggle) == expected }
     }
 }

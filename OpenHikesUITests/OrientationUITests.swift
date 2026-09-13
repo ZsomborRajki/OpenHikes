@@ -79,7 +79,8 @@ nonisolated final class OrientationUITests: XCTestCase {
             "the sheet's contents should sit beside the map, not over it"
         )
         XCTAssertTrue(
-            element("map-search", in: app).exists,
+            element("map-search", in: app)
+                .waitForExistence(timeout: UITestTimeout.navigation),
             "and should still be usable — searching is what the sheet is for"
         )
 
@@ -88,7 +89,10 @@ nonisolated final class OrientationUITests: XCTestCase {
             waitForPortrait(app),
             "the app never returned to portrait"
         )
-        XCTAssertTrue(map.exists)
+        XCTAssertTrue(
+            map.waitForExistence(timeout: UITestTimeout.navigation),
+            "the map should survive the way back out of landscape"
+        )
         XCTAssertTrue(
             sheet.waitForExistence(timeout: UITestTimeout.navigation),
             "the sheet should be presented again on the way back"
@@ -120,7 +124,10 @@ nonisolated final class OrientationUITests: XCTestCase {
                 .waitForExistence(timeout: UITestTimeout.navigation),
             "the hike's screen should still be the one on top"
         )
-        XCTAssertTrue(element("trail-map", in: app).exists)
+        XCTAssertTrue(
+            element("trail-map", in: app)
+                .waitForExistence(timeout: UITestTimeout.navigation)
+        )
     }
 
     @MainActor
