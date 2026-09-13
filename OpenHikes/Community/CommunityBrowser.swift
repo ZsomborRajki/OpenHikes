@@ -330,13 +330,18 @@ final class CommunityBrowser {
     /// reaches no network — the most it does is raise an offer.
     func regionDidSettle(_ region: MKCoordinateRegion) {
         latestRegion = region
+        // Asked once and read twice. ``CommunityQueryPolicy/action(for:)`` is
+        // side-effect free by contract, so the two calls this used to make
+        // could not disagree — but a settle is the hot path this whole type is
+        // arranged around, and one answer is also one thing to reason about.
+        let action = policy.action(for: region)
         // The opt-in that arrived before the map did — see ``startBrowsing()``.
-        if wantsFirstRegion, case .offer(let area) = policy.action(for: region) {
+        if wantsFirstRegion, case .offer(let area) = action {
             wantsFirstRegion = false
             commit(area)
             return
         }
-        switch policy.action(for: region) {
+        switch action {
         case .ignore:
             offeredArea = nil
             areaPrompt = .settled
@@ -346,6 +351,19 @@ final class CommunityBrowser {
         case .tooFarOut:
             offeredArea = nil
             areaPrompt = .zoomIn
+            // A deferred opt-in whose first region turns out to be above the
+            // ceiling. Nothing was asked and nothing is coming until the hiker
+            // zooms in, so the spinner ``startBrowsing()`` put up has to come
+            // down: `.loading` means a request exists, and the header draws it
+            // as a promise of an answer. This is the resting state
+            // ``startBrowsing()`` already reaches for itself when the map had
+            // settled somewhere too wide before the tab was selected — the two
+            // paths express one intention and must agree about it.
+            //
+            // `wantsFirstRegion` deliberately stays set. The tap that opted in
+            // is still the confirmation, so the first region that *does* clear
+            // the ceiling is asked about rather than offered.
+            if wantsFirstRegion { state = .loaded }
         }
     }
 

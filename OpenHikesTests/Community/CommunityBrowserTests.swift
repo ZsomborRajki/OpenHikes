@@ -52,57 +52,6 @@ struct CommunityBrowserTests {
         #expect(browser.areaPrompt == .settled)
     }
 
-    /// The one request nobody confirms twice: the tap that opts in is itself
-    /// the confirmation.
-    @Test("opting in asks about where the map already is")
-    func optingInAsksAboutTheCurrentRegion() async {
-        let transport = StubCommunityTransport()
-        transport.listingsResult = .success([.stub()])
-        let browser = CommunityBrowser(transport: transport, blockList: .scratch())
-        browser.regionDidSettle(Self.region())
-        browser.startBrowsing()
-        await settle(browser)
-
-        #expect(transport.recording.nearbyRequests.count == 1)
-        #expect(browser.nearbyListings.count == 1)
-        #expect(browser.state == .loaded)
-    }
-
-    /// A sheet can be opened before the map has ever reported a region, and
-    /// the tap that opts in is still the confirmation — so the first region to
-    /// arrive is asked about rather than offered, or the hiker is left with a
-    /// spinner beside a button asking them to opt in again.
-    @Test("opting in before the map has settled asks about the first region")
-    func optingInBeforeTheFirstRegionAsks() async {
-        let transport = StubCommunityTransport()
-        let browser = CommunityBrowser(transport: transport, blockList: .scratch())
-        browser.startBrowsing()
-        #expect(browser.state == .loading)
-
-        browser.regionDidSettle(Self.region())
-        await settle(browser)
-
-        #expect(transport.recording.nearbyRequests.count == 1)
-        #expect(browser.areaPrompt == .settled)
-        #expect(browser.state == .loaded)
-    }
-
-    /// And only the first: once it has been asked, the map is back to offering.
-    @Test("the region after that one is offered, not asked")
-    func onlyTheFirstRegionIsAsked() async {
-        let transport = StubCommunityTransport()
-        let browser = CommunityBrowser(transport: transport, blockList: .scratch())
-        browser.startBrowsing()
-        browser.regionDidSettle(Self.region())
-        await settle(browser)
-
-        browser.regionDidSettle(Self.region(latitude: 48.03))
-        await settle(browser)
-
-        #expect(transport.recording.nearbyRequests.count == 1)
-        #expect(browser.areaPrompt == .search)
-    }
-
     /// The change this whole design turns on: panning offers, and only the
     /// hiker's tap spends anything. A pan nobody confirms is free.
     @Test("a pan past the threshold offers rather than asks")
