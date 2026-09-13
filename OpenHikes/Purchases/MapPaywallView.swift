@@ -41,7 +41,8 @@ struct MapPaywallView: View {
         (
             "map.fill",
             "Thunderforest Outdoors",
-            "Bright, high-contrast trail cartography that stays readable in sunlight."
+            "Bright, high-contrast trail cartography that stays readable in sunlight. It keeps "
+                + "the tiles you've looked at; downloading a route ahead is Stadia only."
         ),
         (
             "arrow.down.circle.fill",
@@ -117,10 +118,18 @@ struct MapPaywallView: View {
                 .accessibilityHidden(true)
             Text("Read the ground you walk on")
                 .font(.title2.weight(.semibold))
+            // Named rather than collapsed into "them", which is what this
+            // used to say. Two styles are unlocked and exactly one of them may
+            // be downloaded ahead of a walk: `TileProvider.stadiaOutdoors` sets
+            // `supportsBulkDownload`, and Thunderforest does not, because their
+            // licence reserves pre-caching for a plan this app is not on. A
+            // header promising that Pro "saves them to your phone" sold the
+            // wrong half of the subscription to anybody who bought it for
+            // Thunderforest.
             Text(
                 "OpenStreetMap stays free and stays the default. Pro adds two commercial "
-                + "outdoor map styles built for trails, and saves them to your phone for "
-                + "a walk with no signal."
+                + "outdoor map styles built for trails, and Stadia Outdoors downloads a "
+                + "whole route to your phone for a walk with no signal."
             )
             .font(.subheadline)
             .foregroundStyle(.secondary)

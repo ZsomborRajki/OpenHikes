@@ -258,6 +258,24 @@ private extension CommunityShareSheet {
         }
     }
 
+    /// The two things a hiker should know before the Share button, in the
+    /// order they matter: that a person looks at this first, and what they are
+    /// agreeing to by sending it.
+    ///
+    /// The terms were published from the day Community shipped and linked from
+    /// nowhere in the app. That is the gap this closes. They are not boilerplate
+    /// about a subscription — they are the rules this screen is the entry point
+    /// to: that a hiker may publish only what is theirs to publish, that
+    /// publishing grants a licence to show it inside the app, that a route
+    /// starting at their front door says where they live, and how to have a
+    /// hike taken down afterwards. A page nobody can reach from the screen it
+    /// governs is a page nobody has agreed to.
+    ///
+    /// Stated beside Share rather than gated behind a checkbox. Apple mandates
+    /// no particular control here, an unticked box on a form with one action is
+    /// a tap spent on a sentence the hiker has already read, and what makes
+    /// consent mean anything is that the rules were in front of them and
+    /// reachable — which a `Link` is and a modal they have to dismiss is not.
     var reviewSection: some View {
         Section {
             Label {
@@ -267,6 +285,17 @@ private extension CommunityShareSheet {
                     .foregroundStyle(.tint)
             }
             .font(.footnote)
+        } footer: {
+            VStack(alignment: .leading, spacing: 6) {
+                Text("""
+                Share only a route, photos and notes that are yours to publish. A hike that \
+                starts at your front door shows where you live.
+                """)
+                Link(destination: MapPurchaseLinks.termsAndConditions) {
+                    Text("By sharing, you agree to the Terms & Conditions.")
+                }
+                .accessibilityIdentifier("community-terms-link")
+            }
         }
     }
 

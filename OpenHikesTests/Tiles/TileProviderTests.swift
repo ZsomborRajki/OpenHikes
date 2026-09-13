@@ -95,6 +95,24 @@ struct TileProviderTests {
         #expect(!TileProvider.thunderforestOutdoors.supportsBulkDownload)
     }
 
+    /// The copy that depends on there being exactly one.
+    ///
+    /// The paywall header, the Thunderforest feature row and the Subscriptions
+    /// section of `docs/terms/index.html` all name Stadia Outdoors in the
+    /// singular as the style a route can be downloaded on. They used to say
+    /// Pro "saves them to your phone", which sold the wrong half of the
+    /// subscription to anybody who bought it for Thunderforest.
+    ///
+    /// So this is a copy check wearing a data check's clothes: a source added
+    /// with `supportsBulkDownload`, or Thunderforest gaining it under a plan
+    /// this app moved to, makes three sentences wrong in three files, and none
+    /// of those files can notice on their own.
+    @Test("exactly one source may be downloaded ahead of a walk")
+    func onlyStadiaMayBeDownloadedAhead() {
+        let downloadable = TileProvider.all.filter(\.supportsBulkDownload)
+        #expect(downloadable.map(\.id) == [TileProvider.stadiaOutdoors.id])
+    }
+
     /// Stadia permits offline caching only up to "100MB cached at a time per
     /// device", and it is the only source with a ceiling. A limit that grew
     /// past that figure, or spread to a source whose terms don't set one,

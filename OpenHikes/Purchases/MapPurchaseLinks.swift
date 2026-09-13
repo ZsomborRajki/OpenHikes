@@ -2,9 +2,15 @@
 //  MapPurchaseLinks.swift
 //  OpenHikes
 //
-//  The two documents a paywall has to link to. Kept apart from the view
-//  because App Review checks that both open something real, and a URL buried
-//  in a `Link` in the middle of a layout is a URL nobody re-reads.
+//  The documents the app has to be able to open, kept apart from the views
+//  that link them. App Review checks that they open something real, and a URL
+//  buried in a `Link` in the middle of a layout is a URL nobody re-reads.
+//
+//  Two of the three are published from this repository and are shown in more
+//  than one place — the privacy policy on the paywall and in Settings, the
+//  terms in Settings and on the share form — which is the other half of why
+//  they are constants: two spellings of the same page are two pages to keep
+//  current, and the one nobody edits is the one somebody opens.
 //
 
 import Foundation
@@ -37,6 +43,23 @@ enum MapPurchaseLinks {
     ///   than pointing this somewhere else, so the text a reviewer opens and
     ///   the text in the repository cannot drift apart.
     static let privacyPolicy = URL(string: "https://zsomborrajki.github.io/OpenHikes/privacy/")!
+
+    /// This app's own terms — **not** ``termsOfUse``, which is Apple's EULA
+    /// for the subscription and governs the purchase alone.
+    ///
+    /// What lives here and nowhere else is the half of the agreement that has
+    /// nothing to do with paying: what a hiker may publish to the community,
+    /// the licence they grant by publishing it, what is removed and how, and
+    /// how to have something taken down. Until this constant existed the app
+    /// linked it from nowhere at all, so the rules a hiker agrees to by
+    /// tapping Share were a page they had no way to reach from the screen
+    /// they tapped it on.
+    ///
+    /// Served from this repository — `docs/terms/index.html`, published by
+    /// GitHub Pages from `main` — for the reason ``privacyPolicy`` is: edit
+    /// the page there rather than pointing this somewhere else, so the text a
+    /// reviewer opens and the text in the repository cannot drift.
+    static let termsAndConditions = URL(string: "https://zsomborrajki.github.io/OpenHikes/terms/")!
 
     // swiftlint:enable force_unwrapping
 }
