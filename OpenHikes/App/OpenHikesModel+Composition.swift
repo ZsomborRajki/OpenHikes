@@ -144,25 +144,42 @@ extension OpenHikesModel {
                 monitor: Self.dormantLocationSource()
             ),
             trailGraphProvider: graphProvider,
+            // Asked here as well as on the shipping path, which it was not.
+            // A UI-test launch still gets `nil` out of this unless it named a
+            // scenario — that guard is inside the factory — but until this
+            // line existed there was no argument a scenario could pass that
+            // would have made any difference, because this initializer never
+            // called it. The feature was unreachable from automation by
+            // composition rather than by policy.
+            communityTransport: Self.makeCommunityTransport(),
             defaults: uiTestingDefaults
         )
     }
 
     /// The browser, with a geocoder only for the launches that have a
-    /// transport.
+    /// transport and are not automation.
     ///
     /// Tied to the transport rather than built unconditionally, and for the
     /// same reason: the launches that must not reach CloudKit must not reach
     /// MapKit's geocoder either, and a browser that will never ask anything
     /// has no area to name. See ``CommunityAreaNaming``.
+    ///
+    /// UI testing is now the case where those two came apart. A scenario that
+    /// names a seeded database *has* a transport and still must not reach the
+    /// network, so the geocoder stays behind. What that costs is the area name
+    /// — the header reads "Community Hikes" rather than "Near Bad Reichenhall"
+    /// — and what it buys is a heading that says the same thing on a machine
+    /// with no signal as on one with, which is the only kind a test can assert
+    /// against anyway.
     static func makeCommunityBrowser(
         transport: (any CommunityTransporting)?,
         blocks: CommunityBlockList
     ) -> CommunityBrowser {
-        CommunityBrowser(
+        let namesAreas = transport != nil && !AppLaunchEnvironment.isUITesting
+        return CommunityBrowser(
             transport: transport,
             blockList: blocks,
-            areaNames: transport == nil ? nil : GeocodedAreaNames()
+            areaNames: namesAreas ? GeocodedAreaNames() : nil
         )
     }
 }
@@ -322,7 +339,28 @@ private extension OpenHikesModel {
     /// button are simply absent for that launch, the same shape
     /// ``makeLiveActivityController(defaults:)`` is absent rather than stubbed
     /// for a hosted suite.
+    ///
+    /// Which left the feature with no coverage at all — the picker, the list,
+    /// the preview and the share flow are all downstream of this returning
+    /// something, so a green UI suite said nothing about any of them. The
+    /// answer is not to loosen the guard but to add a third thing it can
+    /// return: ``SeededCommunityTransport``, a debug-only stand-in a scenario
+    /// selects by name. Nothing reaches it by default, and no shipping build
+    /// contains it.
     static func makeCommunityTransport() -> (any CommunityTransporting)? {
+        #if DEBUG
+        // Asked for by name, and the only way past the guard below. A launch
+        // that does not name a scenario is unaffected by this branch, which is
+        // what keeps the rule intact rather than merely mostly intact: the
+        // exception is one a scenario has to spell out, not one it can fall
+        // into. See ``SeededCommunityTransport`` for what it serves and why a
+        // stub was worth building rather than leaving the feature uncovered.
+        if let scenario = SeededCommunityTransport.Scenario(
+            argument: AppLaunchEnvironment.communityScenarioName
+        ) {
+            return SeededCommunityTransport(scenario: scenario)
+        }
+        #endif
         guard !AppLaunchEnvironment.isRunningTests else { return nil }
         return CloudKitCommunityTransport()
     }

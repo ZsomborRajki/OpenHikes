@@ -25,6 +25,9 @@ nonisolated enum AppLaunchEnvironment {
         let usesLiveLocation: Bool
         let importedGPXFixtureName: String?
         let trailGraphFixtureName: String?
+        /// `nil` unless a launch asked for a stand-in public database — see
+        /// ``AppLaunchEnvironment/communityScenarioName``.
+        let communityScenarioName: String?
         let performanceLogScenario: String?
         let simulatesOffline: Bool
         let seededPhotoCount: Int
@@ -58,6 +61,7 @@ nonisolated enum AppLaunchEnvironment {
             self.usesLiveLocation = usesLiveLocation
             importedGPXFixtureName = nil
             trailGraphFixtureName = nil
+            communityScenarioName = nil
             performanceLogScenario = nil
             simulatesOffline = false
             seededPhotoCount = 0
@@ -76,6 +80,7 @@ nonisolated enum AppLaunchEnvironment {
         private static let liveLocationArgument = "--ui-test-enable-location"
         private static let importGPXPrefix = "--ui-test-import-gpx="
         private static let trailGraphPrefix = "--ui-test-trail-graph="
+        private static let communityPrefix = "--ui-test-community="
         private static let performanceLogPrefix = "--ui-test-performance-log="
         private static let offlineArgument = "--ui-test-offline"
         private static let seedPhotosPrefix = "--ui-test-seed-photos="
@@ -128,6 +133,11 @@ nonisolated enum AppLaunchEnvironment {
                 prefix: Self.trailGraphPrefix,
                 isUITesting: isUITesting
             )
+            communityScenarioName = Self.fixtureName(
+                in: arguments,
+                prefix: Self.communityPrefix,
+                isUITesting: isUITesting
+            )
             performanceLogScenario = Self.fixtureName(
                 in: arguments,
                 prefix: Self.performanceLogPrefix,
@@ -158,19 +168,32 @@ nonisolated enum AppLaunchEnvironment {
                 && arguments.contains(Self.stubWeatherArgument)
             grantsPaidMaps = isUITesting
                 && arguments.contains(Self.entitledArgument)
-            // `nil` rather than 0 when absent: zero is a real answer — a
-            // library with nothing in it — and the empty state is one of the
-            // things a scenario needs to be able to ask for.
-            stubbedLibraryPhotoCount = isUITesting && arguments.contains(where: { argument in
+            stubbedLibraryPhotoCount = Self.stubbedLibraryPhotoCount(
+                in: arguments,
+                isUITesting: isUITesting
+            )
+        }
+
+        /// How many photos to put in the stand-in library, or `nil` to read
+        /// the real one.
+        ///
+        /// `nil` rather than 0 when the argument is absent: zero is a real
+        /// answer — a library with nothing in it — and the empty state is one
+        /// of the things a scenario needs to be able to ask for.
+        private static func stubbedLibraryPhotoCount(
+            in arguments: [String],
+            isUITesting: Bool
+        ) -> Int? {
+            let isAsked = isUITesting && arguments.contains { argument in
                 argument.hasPrefix(Self.photoLibraryPrefix)
-            })
-                ? Self.count(
-                    in: arguments,
-                    prefix: Self.photoLibraryPrefix,
-                    isUITesting: isUITesting,
-                    limit: Self.maximumStubbedLibraryPhotos
-                )
-                : nil
+            }
+            guard isAsked else { return nil }
+            return count(
+                in: arguments,
+                prefix: Self.photoLibraryPrefix,
+                isUITesting: isUITesting,
+                limit: Self.maximumStubbedLibraryPhotos
+            )
         }
 
         /// A bounded count read out of a `--flag=N` argument. Clamped rather
@@ -263,6 +286,18 @@ nonisolated enum AppLaunchEnvironment {
     /// review section does not depend on reaching Overpass.
     static let trailGraphFixtureName =
         configuration.trailGraphFixtureName
+
+    /// Which stand-in public database this launch asked for, or `nil` for
+    /// every launch that did not — which is all of them but the scenarios that
+    /// name one.
+    ///
+    /// The community feature is the one part of the app with no sandbox to
+    /// test against: a submission made from a test is a submission, in the
+    /// developer's own container, waiting in a reviewer's queue. So the rule
+    /// stays what it always was — a launch running tests gets no transport at
+    /// all — and this is the single, explicit exception a scenario has to
+    /// spell out by name. See ``SeededCommunityTransport``.
+    static let communityScenarioName = configuration.communityScenarioName
 
     /// Name of the scenario whose render marks, main-thread stalls and
     /// resource samples this launch should write to a file — see

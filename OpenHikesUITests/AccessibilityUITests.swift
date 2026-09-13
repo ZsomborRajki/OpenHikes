@@ -65,6 +65,44 @@ nonisolated final class AccessibilityUITests: XCTestCase {
         try audit(app)
     }
 
+    /// The published hikes list, which no audit had ever seen.
+    ///
+    /// ``OpenHikesModel/makeCommunityTransport()`` hands back `nil` for a test
+    /// launch, so the picker, the list and everything behind them were absent
+    /// from every sweep in this file — a screen full of somebody else's titles,
+    /// distances and credits, shipped without once being read the way a
+    /// screen reader reads it. `--ui-test-community=seeded` is what makes it
+    /// reachable; see ``SeededCommunityTransport``.
+    @MainActor
+    func testCommunityListPassesAccessibilityAudit() throws {
+        let app = launchCommunity(scenario: .seeded)
+        selectCommunityTab(in: app)
+        XCTAssertTrue(
+            communityRow(titled: SeededHike.ridgeTitle, in: app)
+                .waitForExistence(timeout: UITestTimeout.existence),
+            "the audit is worth nothing against a list that has not answered yet"
+        )
+
+        try audit(app)
+    }
+
+    /// The preview, which is the densest screen in the feature: a chart, a
+    /// grid of stats, a strip of a stranger's photographs and two moderation
+    /// actions, all about a hike the hiker does not own yet.
+    @MainActor
+    func testCommunityPreviewPassesAccessibilityAudit() throws {
+        let app = launchCommunity(scenario: .seeded)
+        selectCommunityTab(in: app)
+        openCommunityHike(titled: SeededHike.ridgeTitle, in: app)
+        XCTAssertTrue(
+            element("community-import-button", in: app)
+                .waitForExistence(timeout: UITestTimeout.existence),
+            "the preview should have finished loading before it is swept"
+        )
+
+        try audit(app)
+    }
+
     /// The recording screen is the one a hiker uses without looking at it, so
     /// its live numbers have to be readable and its phase has to be announced.
     @MainActor
