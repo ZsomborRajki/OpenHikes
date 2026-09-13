@@ -150,23 +150,44 @@ final class SheetPresentation {
         return interaction
     }
 
-    /// Pushes a published hike's preview, from somewhere outside the sheet.
+    /// Opens a published hike's preview, from anywhere.
     ///
-    /// Here rather than at the call site because the two rules it keeps belong
-    /// to the sheet rather than to whatever asked. The map's shared-hike pins
-    /// are the only caller today — see ``OpenHikesView``'s
-    /// `attachCommunityPins()` — and a pin can be tapped again while its own
-    /// preview is still on top.
+    /// Here rather than at the call sites because the rules it keeps belong to
+    /// the sheet rather than to whatever asked, and because there are two ways
+    /// in that must not disagree: the map's shared-hike pins and its line taps
+    /// — see ``OpenHikesView``'s `onAppear` — and the sheet's own community
+    /// rows, which reach this through ``MapSheet``'s `select(_:)`. Both are a
+    /// tap on the same hike, so both can arrive at one already open.
+    ///
+    /// **A listing is never on the stack twice**, and that is this method's
+    /// job rather than a happy accident. ``isPresentingCommunityHike(_:)`` is
+    /// what a disappearing preview asks to tell a push over it from the hiker
+    /// leaving, and it asks about the *listing*: a second copy of the same one
+    /// answers for the copy being popped, so that screen cancels no download,
+    /// cancels no analysis, tells the map nothing and leaves its downloads in
+    /// `tmp` forever. Guarding only the top of the stack left that a gesture
+    /// away — pin A, pin B, pin A — and left `[A, A]`, where Back lands the
+    /// hiker on the screen they were already looking at.
+    ///
+    /// Popping back to the open copy rather than refusing, because the two are
+    /// the same answer to *show me this hike* and only one of them moves: a
+    /// hiker who taps A's pin over B's preview asked to see A.
     func showCommunityHike(_ listing: CommunityListing) {
         let route = SheetRoute.communityHike(listing)
         guard path.last != route else { return }
         // The compact detent is only tall enough for the search field, so a
         // screen pushed into it would arrive with nowhere to draw — the same
-        // reason opening a recording moves the sheet.
+        // reason opening a recording moves the sheet. Before either branch,
+        // since a preview popped back to is as unreadable down there as one
+        // pushed: the hiker can have dragged the sheet down over it.
         if isCompact {
             withAnimation { detent = .medium }
         }
-        path.append(route)
+        if let open = path.firstIndex(of: route) {
+            path.removeSubrange((open + 1)...)
+        } else {
+            path.append(route)
+        }
     }
 
     /// Whether `listing`'s preview is the screen the hiker is on.
@@ -198,6 +219,11 @@ final class SheetPresentation {
     ///
     /// Membership rather than the top of the stack, because that is precisely
     /// what separates a push over this screen from this screen being popped.
+    ///
+    /// Which makes this an answer about the *listing* being asked by one
+    /// screen, and it is only the right one because a listing cannot be on the
+    /// stack twice — see ``showCommunityHike(_:)``, which is the single door
+    /// every push goes through and the reason that holds.
     func isPresentingCommunityHike(_ listing: CommunityListing) -> Bool {
         path.contains(.communityHike(listing))
     }
