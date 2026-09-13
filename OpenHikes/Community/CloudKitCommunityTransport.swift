@@ -337,14 +337,24 @@ nonisolated struct CloudKitCommunityTransport: CommunityTransporting {
             withIntermediateDirectories: true
         )
 
+        // Read through ``CommunityRoutePayload`` rather than straight into a
+        // `CommunityRouteDocument`, because this is the one place a stranger's
+        // geometry enters the app. What comes back off this asset is drawn on
+        // the map, walked for an elevation profile and — if the hiker keeps
+        // the hike — saved for good, and none of those three had anything
+        // standing in front of them: no cap on the bytes read in one
+        // allocation, no cap on the points, and no check that a position is
+        // somewhere on earth. A reviewer approving a listing reads a title and
+        // a distance; the asset is a file they cannot open.
         guard let routeAsset = record[CommunitySchema.Submission.route] as? CKAsset,
-              let routeURL = routeAsset.fileURL,
-              let routeData = try? Data(contentsOf: routeURL),
-              let document = try? JSONDecoder().decode(
-                  CommunityRouteDocument.self,
-                  from: routeData
-              )
+              let routeURL = routeAsset.fileURL
         else { throw CommunityFailure.noLongerAvailable }
+        let route = CommunityRoutePayload.route(atAssetURL: routeURL)
+        // Empty is every way the file can fail to be a route worth opening —
+        // absent, unreadable, over either budget, or nothing but positions
+        // that are not on earth — and they reach the hiker as one sentence
+        // because there is one thing to do about all of them.
+        guard !route.isEmpty else { throw CommunityFailure.noLongerAvailable }
 
         let pins = Self.decodePins(in: record)
         let assets = record[CommunitySchema.Submission.photos] as? [CKAsset] ?? []
@@ -372,7 +382,7 @@ nonisolated struct CloudKitCommunityTransport: CommunityTransporting {
 
         return CommunityHikeDetail(
             listing: listing,
-            route: document.route,
+            route: route,
             // Bounded for the reason ``CommunityListing/init(record:)`` bounds
             // the title: a submission is written by any client with an Apple
             // Account, and this string is rendered on the preview and copied
