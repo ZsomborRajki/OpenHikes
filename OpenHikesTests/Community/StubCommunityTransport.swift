@@ -70,6 +70,10 @@ final class StubCommunityTransport: CommunityTransporting, @unchecked Sendable {
     /// The same, for the outline request — which lands *after* the rows it
     /// belongs to and so is the one a suite has to be able to hold.
     var beforeOutlinesReturn: (@Sendable () async -> Void)?
+    /// The same, for a publication check. Held so a suite can re-share the
+    /// hike while the check is waiting, which is the window the check has to
+    /// notice it is no longer answering about the submission it asked after.
+    var beforePublicationReturns: (@Sendable () async -> Void)?
 
     private let state = Mutex(Recording())
 
@@ -85,6 +89,7 @@ final class StubCommunityTransport: CommunityTransporting, @unchecked Sendable {
     @concurrent
     func publication(of submissionID: String) async throws -> CommunityListing? {
         state.withLock { $0.publicationChecks.append(submissionID) }
+        await beforePublicationReturns?()
         return try publicationResult.get()
     }
 

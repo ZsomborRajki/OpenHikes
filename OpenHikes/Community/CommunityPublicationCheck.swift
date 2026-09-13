@@ -120,6 +120,26 @@ enum CommunityPublicationCheck {
         // there is simply nothing left to record it on. The same guard, and
         // the same reasoning, as the end of ``CommunityPublisher/share``.
         guard hike.isAttached else { return false }
+        // And it may be asking about a different submission than the one this
+        // answer is about. A re-share landing inside the await replaces
+        // ``Hike/communitySubmissionID`` and clears the listing beside it —
+        // both deliberately, because the two columns are one answer about one
+        // submission — and writing this listing back would undo exactly that:
+        // the pair would read new-submission/old-listing, which reports
+        // *published* about a copy no reviewer has seen and, because the guard
+        // above skips a hike that already has a listing, stops the new
+        // submission ever being asked about. That is the state #256 fixed,
+        // reached from the other side.
+        //
+        // It does not take a second tap to get here. Both columns are mirrored
+        // so a second device does not offer to send a trail that is already
+        // sent, so a share from the iPad can rewrite this one while the
+        // iPhone's check is waiting on the network.
+        //
+        // Silent, like every other way this gives up: nothing asked for it,
+        // and the answer for the current submission is *waiting for review*,
+        // which is what the screen already says.
+        guard hike.communitySubmissionID == submissionID else { return false }
         hike.communityListingID = listing.id
         guard let context = hike.modelContext else { return false }
         do {

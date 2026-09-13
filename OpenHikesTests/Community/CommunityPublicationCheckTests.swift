@@ -172,4 +172,78 @@ struct CommunityPublicationCheckTests {
         #expect(changed)
         #expect(hike.communityListingID == "listing-1")
     }
+
+    // MARK: A submission that changed underneath the check
+
+    /// The two columns are one answer about one submission, so an answer about
+    /// a submission the hike has moved on from is not an answer at all.
+    ///
+    /// A re-share landing inside the await replaces `communitySubmissionID`
+    /// and clears the listing beside it, both deliberately. Writing this
+    /// listing back would undo exactly that and leave the pair reading
+    /// new-submission/old-listing — *published* about a copy no reviewer has
+    /// seen, and, because the check skips a hike that already has a listing,
+    /// a new submission that is never asked about again. That is the state
+    /// #256 fixed, reached from the other side.
+    @Test("a re-share during the check is not overwritten by its answer")
+    func reshareDuringTheCheckKeepsItsOwnState() async throws {
+        let context = try Fixture.modelContext()
+        let hike = Fixture.hike(in: context)
+        hike.communitySubmissionID = "submission-1"
+        let transport = StubCommunityTransport()
+        transport.publicationResult = .success(Self.listing())
+        let gate = AsyncGate()
+        transport.beforePublicationReturns = { await gate.wait() }
+
+        let check = Task { await CommunityPublicationCheck.refresh(hike, transport: transport) }
+        await settleDelegateHop(until: "the check reaches the transport") {
+            transport.recording.publicationChecks == ["submission-1"]
+        }
+        // The re-share lands while the check is waiting, in the shape
+        // `CommunityPublisher.share` writes it: a new submission, and this
+        // device's memory of the old publication cleared alongside it.
+        hike.communitySubmissionID = "submission-2"
+        hike.communityListingID = nil
+        await gate.open()
+        let changed = await check.value
+
+        #expect(!changed)
+        #expect(hike.communityListingID == nil)
+        #expect(
+            CommunityPublicationState(
+                submissionID: hike.communitySubmissionID,
+                listingID: hike.communityListingID
+            ) == .awaitingReview
+        )
+    }
+
+    /// And the new submission is still a question, which is the half that
+    /// matters: the failure this guards against is silent precisely because
+    /// nothing asks again once a listing is recorded.
+    @Test("the submission that replaced it is still asked about")
+    func theReplacementSubmissionIsStillChecked() async throws {
+        let context = try Fixture.modelContext()
+        let hike = Fixture.hike(in: context)
+        hike.communitySubmissionID = "submission-1"
+        let transport = StubCommunityTransport()
+        transport.publicationResult = .success(Self.listing())
+        let gate = AsyncGate()
+        transport.beforePublicationReturns = { await gate.wait() }
+
+        let check = Task { await CommunityPublicationCheck.refresh(hike, transport: transport) }
+        await settleDelegateHop(until: "the check reaches the transport") {
+            transport.recording.publicationChecks == ["submission-1"]
+        }
+        hike.communitySubmissionID = "submission-2"
+        await gate.open()
+        _ = await check.value
+
+        transport.beforePublicationReturns = nil
+        transport.publicationResult = .success(Self.listing(id: "listing-2"))
+        let changed = await CommunityPublicationCheck.refresh(hike, transport: transport)
+
+        #expect(changed)
+        #expect(hike.communityListingID == "listing-2")
+        #expect(transport.recording.publicationChecks == ["submission-1", "submission-2"])
+    }
 }
