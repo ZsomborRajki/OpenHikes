@@ -103,6 +103,53 @@ struct CommunityTitleSearchTests {
         #expect(transport.recording.titleQueries == ["Pilis", "Pilis"])
     }
 
+    /// The one this pair is really about: matches belong to the word that
+    /// produced them, so a request that never answered cannot leave the
+    /// previous word's hikes standing as if they answered this one.
+    @Test("a failed search does not leave the previous word's matches up")
+    func aFailedSearchDropsTheOldMatches() async {
+        transport.listingsResult = .success([.stub(id: "pilis")])
+        let browser = CommunityBrowser(transport: transport, blockList: .scratch())
+        browser.search(matching: "Pilis")
+        await settle(browser)
+        #expect(browser.matchingListings.map(\.id) == ["pilis"])
+
+        transport.listingsResult = .failure(.unreachable)
+        browser.search(matching: "Alps")
+        await settle(browser)
+
+        #expect(
+            browser.matchingListings.isEmpty,
+            "Pilis Ridge offered as a match for Alps, with nothing saying so"
+        )
+        #expect(transport.recording.titleQueries == ["Pilis", "Alps"])
+    }
+
+    /// And not while the new word is still being asked about either: rows
+    /// under a query the hiker has moved on from are wrong before the request
+    /// fails, not only after.
+    @Test("a search in flight does not show the previous word's matches")
+    func aPendingSearchDropsTheOldMatches() async {
+        let gate = TitleResponseGate()
+        transport.listingsResult = .success([.stub(id: "pilis")])
+        let browser = CommunityBrowser(transport: transport, blockList: .scratch())
+        browser.search(matching: "Pilis")
+        await settle(browser)
+        #expect(browser.matchingListings.map(\.id) == ["pilis"])
+
+        transport.beforeListingsReturn = { await gate.waitForFirstRequest() }
+        transport.listingsResult = .success([.stub(id: "alps")])
+        browser.search(matching: "Alps")
+        await settleDelegateHop(until: "the new query reaches the transport") {
+            transport.recording.titleQueries == ["Pilis", "Alps"]
+        }
+        #expect(browser.matchingListings.isEmpty)
+
+        await gate.open()
+        await settle(browser)
+        #expect(browser.matchingListings.map(\.id) == ["alps"])
+    }
+
     @Test("a disappearing field cancels its wait without a request")
     func disappearance() async {
         let browser = CommunityBrowser(transport: transport, blockList: .scratch())
