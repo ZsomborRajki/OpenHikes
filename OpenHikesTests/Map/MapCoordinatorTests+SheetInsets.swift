@@ -16,9 +16,9 @@
 //  the top clamp is the button's height plus its spacing. That is the point of
 //  measuring it rather than hard-coding a device's inset.
 //
-//  The credit line takes no part in any of it: it is pinned to the top of the
-//  map and does not move. `attributionStaysPutAcrossTheSheetsTravel` is what
-//  holds that, and it is the reason every number below is the button's own.
+//  The credit line is on the same row, driven by the same call and the same
+//  constant — `attributionRidesTheSheetWithTheButton` is what holds that — so
+//  every number below is the button's own and the line's at once.
 //
 
 import CoreLocation
@@ -247,46 +247,51 @@ extension MapCoordinatorTests {
         #endif
     }
 
-    /// The behaviour this move introduced. The credit line used to ride the
-    /// sheet as the bottom-most row of the stack; it is now pinned to the top
-    /// of the map, so a drag that moves the button through its whole travel —
-    /// including the part where the button parks and fades — leaves the line
-    /// exactly where it was.
+    /// The credit line is the leading half of the same row, so a drag moves it
+    /// exactly as far as it moves the button opposite — through the part where
+    /// both park at the middle detent, and through the fade past it.
     ///
-    /// Asserted through the view's own frame rather than a constraint, because
-    /// "it does not move" is a claim about where it ends up and there is no
-    /// longer a constraint of its own carrying that.
-    @Test("the credit line stays put across the sheet's whole travel")
-    func attributionStaysPutAcrossTheSheetsTravel() throws {
+    /// Asserted through the views' own frames rather than the constraints they
+    /// share, because "level with each other" is a claim about where they end
+    /// up: the pill above the line is positioned against the line rather than
+    /// by that constant, and it has to come out on the row too.
+    @Test("the credit line rides the sheet with the tracking button")
+    func attributionRidesTheSheetWithTheButton() throws {
         #if os(iOS)
         let coordinator = MapView.Coordinator()
         let map = makeMap(mapView(), coordinator)
         defer { detach(map) }
         let credit = try #require(coordinator.attributionView)
+        let pill = try #require(coordinator.photoControls)
         let button = try #require(coordinator.trackingButton)
 
         settle(sheetMetrics, at: map.bounds.height * 0.45)
         coordinator.applySheetTop(on: map)
+        map.setNeedsLayout()
         map.layoutIfNeeded()
-        let resting = credit.frame
 
-        #expect(!credit.isHidden, "there is a line to hold still")
-        // Above the tracking button rather than below it, which is the move.
-        #expect(resting.maxY < button.frame.minY)
+        #expect(!credit.isHidden, "there is a line to move")
 
         for topY in stride(from: map.bounds.height, through: 40, by: -20) {
             sheetMetrics.report(topY: topY, atMiddleDetent: true)
             coordinator.applySheetTop(on: map)
+            map.setNeedsLayout()
             map.layoutIfNeeded()
             #expect(
-                credit.frame == resting,
-                "the credit line moved at a sheet top of \(topY)"
+                abs(credit.frame.maxY - button.frame.maxY) < 1,
+                "the credit line left the row at a sheet top of \(topY)"
             )
-            // And it is a notice rather than a control, so it does not fade
-            // out with the two that the sheet is covering.
-            #expect(credit.alpha == 1)
+            #expect(
+                abs(credit.frame.minY - pill.frame.maxY - MapView.creditLineSpacing) < 1,
+                "the camera pill left the credit line at a sheet top of \(topY)"
+            )
+            // And it is covered by the sheet exactly when they are, so it
+            // takes the same fade rather than showing through the sheet's top
+            // curve.
+            #expect(credit.alpha == button.alpha)
         }
         #expect(button.alpha == 0, "the button did fade, so the drag was real")
+        #expect(credit.alpha == 0)
         #endif
     }
 

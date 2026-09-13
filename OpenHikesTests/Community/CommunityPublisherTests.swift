@@ -23,7 +23,6 @@ struct CommunityPublisherTests {
         let outcome = await CommunityPublisher.share(
             hike,
             authorName: "Anna",
-            entitlement: .entitled,
             transport: transport
         )
 
@@ -43,7 +42,7 @@ struct CommunityPublisherTests {
         let hike = Fixture.hike(in: context)
         let transport = StubCommunityTransport()
 
-        _ = await CommunityPublisher.share(hike, authorName: "", entitlement: .entitled, transport: transport)
+        _ = await CommunityPublisher.share(hike, authorName: "", transport: transport)
 
         let draft = try #require(transport.recording.submissions.first)
         let start = try #require(draft.startCoordinate)
@@ -64,7 +63,6 @@ struct CommunityPublisherTests {
         let outcome = await CommunityPublisher.share(
             hike,
             authorName: "Anna",
-            entitlement: .entitled,
             transport: transport
         )
 
@@ -82,7 +80,6 @@ struct CommunityPublisherTests {
         _ = await CommunityPublisher.share(
             hike,
             authorName: "Anna",
-            entitlement: .entitled,
             transport: transport
         )
 
@@ -106,7 +103,6 @@ struct CommunityPublisherTests {
         _ = await CommunityPublisher.share(
             hike,
             authorName: "Anna",
-            entitlement: .entitled,
             transport: transport
         )
 
@@ -136,7 +132,6 @@ struct CommunityPublisherTests {
         _ = await CommunityPublisher.share(
             hike,
             authorName: "Anna",
-            entitlement: .entitled,
             transport: transport
         )
         await CommunityPublicationCheck.refresh(hike, transport: transport)
@@ -160,7 +155,6 @@ struct CommunityPublisherTests {
         let outcome = await CommunityPublisher.share(
             hike,
             authorName: "Anna",
-            entitlement: .entitled,
             transport: transport
         )
 
@@ -180,7 +174,6 @@ struct CommunityPublisherTests {
         let outcome = await CommunityPublisher.share(
             hike,
             authorName: "Anna",
-            entitlement: .entitled,
             transport: transport
         )
 
@@ -200,55 +193,10 @@ struct CommunityPublisherTests {
         let outcome = await CommunityPublisher.share(
             hike,
             authorName: "Anna",
-            entitlement: .entitled,
             transport: transport,
             save: { _ in throw CocoaError(.fileWriteNoPermission) }
         )
 
         #expect(outcome == .submitted)
-    }
-
-    /// The paid gate, at the funnel rather than at the button. The share
-    /// button opens the paywall instead of this form, so what this covers is
-    /// every other way here: a lapse while the form is open, and any future
-    /// caller that has not thought about it.
-    @Test("a hike is not published without the subscription")
-    func unentitledShareIsRefused() async throws {
-        let context = try Fixture.modelContext()
-        let hike = Fixture.hike(in: context)
-        let transport = StubCommunityTransport()
-
-        let outcome = await CommunityPublisher.share(
-            hike,
-            authorName: "Anna",
-            entitlement: .notEntitled,
-            transport: transport
-        )
-
-        #expect(outcome == .refused(.requiresSubscription))
-        #expect(transport.recording.submissions.isEmpty, "and nothing reached the network")
-        #expect(hike.communitySubmissionID == nil)
-    }
-
-    /// The strict reading of the unresolved window, and the half most likely
-    /// to be loosened by somebody who reads ``MapEntitlementState/allows(_:)``
-    /// first: *that* gate treats `unknown` as a yes because being briefly
-    /// wrong costs a few tiles. Here it would cost a public record this app
-    /// has no method to delete.
-    @Test("an unresolved entitlement is not a yes")
-    func unresolvedEntitlementIsRefused() async throws {
-        let context = try Fixture.modelContext()
-        let hike = Fixture.hike(in: context)
-        let transport = StubCommunityTransport()
-
-        let outcome = await CommunityPublisher.share(
-            hike,
-            authorName: "Anna",
-            entitlement: .unknown,
-            transport: transport
-        )
-
-        #expect(outcome == .refused(.requiresSubscription))
-        #expect(transport.recording.submissions.isEmpty)
     }
 }

@@ -37,12 +37,6 @@ struct CommunityShareSheet: View {
 
     let hike: Hike
     let transport: any CommunityTransporting
-    /// The Pro unlock, observed rather than snapshotted, so a subscription
-    /// that lapses while this form is open is refused by the Share button
-    /// rather than by the upload. ``HikeDetailView`` holds it for the same
-    /// reason — a snapshot that cannot invalidate a body is a snapshot that
-    /// lets a lapsed subscription start work against a paid resource.
-    let entitlement: MapEntitlementStore
     /// Where the photo files are, so the form can ask which of this hike's
     /// pictures this device actually holds. Injected rather than reached for,
     /// like every other store this app hands a view.
@@ -344,12 +338,10 @@ private extension CommunityShareSheet {
             } else if phase != .sent {
                 Button("Share") { share() }
                     .accessibilityIdentifier("community-share-confirm")
-                    // The second half is the lapse case. This form is only
-                    // reachable while the subscription is current, but it can
-                    // outlive one — a renewal that fails while it is open — and
-                    // a live button would send the hiker through an upload that
-                    // ``CommunityPublisher/share`` is going to refuse anyway.
-                    .disabled(hike.pointCount < 2 || entitlement.state.publishTap != .allow)
+                    // The same floor ``CommunityPublisher/share`` refuses
+                    // below, so a hike with no route cannot start an upload
+                    // that was always going to come back as a failure.
+                    .disabled(hike.pointCount < 2)
             }
         }
     }
@@ -364,7 +356,6 @@ private extension CommunityShareSheet {
             let outcome = await CommunityPublisher.share(
                 hike,
                 authorName: boundedAuthorName,
-                entitlement: entitlement.state,
                 transport: transport
             )
             switch outcome {

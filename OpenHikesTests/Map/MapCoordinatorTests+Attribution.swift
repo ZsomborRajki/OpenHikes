@@ -2,20 +2,21 @@
 //  MapCoordinatorTests+Attribution.swift
 //  OpenHikesTests
 //
-//  Where the credit line ends up, now that it hangs beneath the weather badge
-//  rather than riding the sheet at the bottom of the map.
+//  Where the credit line ends up, now that it is the bottom of the map's
+//  leading-edge stack rather than a notice pinned under the weather badge.
 //
-//  It has two slots and no others: below the badge when there is a forecast to
-//  show, and in the badge's own place when there is not. Nothing else moves
-//  it, and in particular the sheet does not.
+//  Three claims, and they are the whole of the placement. It sits on the
+//  leading edge at the same inset the camera pill takes. Its bottom is the row
+//  the sheet drives, level with the "my location" button opposite it — which
+//  ``MapCoordinatorTests+SheetInsets`` holds across a whole drag. And the
+//  camera pill sits directly above it, a small fixed gap up, whatever the line
+//  itself is doing: one credit or three, one row or two.
 //
-//  The badge itself cannot be measured from here, or from anywhere in this
-//  hierarchy: it is a SwiftUI overlay drawn over the map rather than a subview
-//  of it. So what these assert is the *slot* — that the line lands under where
-//  the badge draws and lines up with its leading edge — computed from
-//  ``WeatherBadge``'s own published geometry rather than from
-//  ``MapView/addAttribution(to:_:alignedTo:)``'s arithmetic restated, which
-//  would only ever agree with itself.
+//  The pill's gap is asserted against ``MapView/creditLineSpacing`` rather
+//  than a number repeated here, because the two would agree with each other
+//  and with nothing else. What is not the constant is the *relationship* —
+//  above, not below; measured from the line's own frame, so a credit that
+//  wraps moves the pill with it.
 //
 //  Test maps are 390x844 with no window, so `safeAreaInsets` is zero all round
 //  and every number below is measured from the map's own edges.
@@ -27,107 +28,147 @@ import MapKit
 import Testing
 
 extension MapCoordinatorTests {
-    /// The badge's height at the default text size, which is
-    /// `.minimumTapTarget()`'s floor rather than the capsule's own size — the
-    /// symbol and its padding come to a little under 44 points.
-    private static let badgeHeight = MapPhotoControlsView.controlSize
-
-    /// The whole point of the move: the line clears the bottom of the weather
-    /// badge instead of sharing a row with it or sitting above it.
-    ///
-    /// A gap rather than a mere ordering, because the two are chrome of the
-    /// same kind over live map imagery and a credit touching the badge reads
-    /// as part of it.
-    @Test("the credit line hangs below the weather badge")
-    func attributionSitsBelowTheWeatherBadge() throws {
-        #if os(iOS)
-        let coordinator = MapView.Coordinator()
-        let map = makeMap(mapView(), coordinator)
-        defer { detach(map) }
-        let credit = try #require(coordinator.attributionView)
-        map.layoutIfNeeded()
-
-        let badgeBottom = WeatherBadge.topPadding + Self.badgeHeight
-        #expect(!credit.isHidden, "there is a line to place")
-        #expect(credit.frame.minY >= badgeBottom, "the credit line runs under the badge")
-        #expect(credit.frame.minY - badgeBottom < 24, "the credit line has drifted off the badge")
-        #endif
-    }
-
-    /// Left-aligned *with the badge*, not merely near the edge. The two are
-    /// laid out by different frameworks against different anchors, so the only
-    /// thing making them a column is that both read
-    /// ``WeatherBadge/leadingPadding``.
-    @Test("the credit line lines up with the weather badge's leading edge")
-    func attributionAlignsWithTheWeatherBadge() throws {
-        #if os(iOS)
-        let coordinator = MapView.Coordinator()
-        let map = makeMap(mapView(), coordinator)
-        defer { detach(map) }
-        let credit = try #require(coordinator.attributionView)
-        map.layoutIfNeeded()
-
-        #expect(credit.frame.minX == map.safeAreaInsets.left + WeatherBadge.leadingPadding)
-        #endif
-    }
-
-    /// Chrome near the top of the map, not a control riding the sheet.
-    ///
-    /// The tracking button is the comparison because it is the thing that does
-    /// ride it, and because the credit line used to sit below it.
-    @Test("the credit line sits at the top of the map")
-    func attributionSitsAtTheTop() throws {
+    /// The move itself: the line is down on the sheet's edge with the
+    /// controls, not up at the top of the map with the compass.
+    @Test("the credit line rides the sheet beside the tracking button")
+    func attributionSitsOnTheControlRow() throws {
         #if os(iOS)
         let coordinator = MapView.Coordinator()
         let map = makeMap(mapView(), coordinator)
         defer { detach(map) }
         let credit = try #require(coordinator.attributionView)
         let button = try #require(coordinator.trackingButton)
-        map.layoutIfNeeded()
+        let sheetTop = map.bounds.height * 0.45
+        sheetMetrics.topY = sheetTop
+        coordinator.applySheetTop(on: map)
+        layOut(map)
 
-        #expect(credit.frame.maxY < map.bounds.midY)
-        #expect(credit.frame.maxY < button.frame.minY)
+        #expect(!credit.isHidden, "there is a line to place")
+        #expect(credit.frame.maxY < sheetTop, "the line is above the sheet's edge")
+        #expect(sheetTop - credit.frame.maxY < 24, "and it is on that edge, not adrift of it")
+        #expect(
+            abs(credit.frame.maxY - button.frame.maxY) < 1,
+            "the line and the tracking button are one row"
+        )
         #endif
     }
 
-    /// Without a forecast there is no badge, and the line stands in for it
-    /// rather than hanging under an empty space.
+    /// Left-aligned with the camera pill above it, and at the control inset
+    /// rather than the map's own edge: in landscape the map's edge is under
+    /// the notch and behind the side panel, and a credit the reader cannot see
+    /// is not a credit.
+    @Test("the credit line lines up with the camera pill")
+    func attributionAlignsWithTheCameraPill() throws {
+        #if os(iOS)
+        let coordinator = MapView.Coordinator()
+        let map = makeMap(mapView(), coordinator)
+        defer { detach(map) }
+        let credit = try #require(coordinator.attributionView)
+        let pill = try #require(coordinator.photoControls)
+        layOut(map)
+
+        #expect(credit.frame.minX == pill.frame.minX)
+        #expect(credit.frame.minX > map.safeAreaInsets.left)
+        #endif
+    }
+
+    /// The pill is above the line, close enough to read as one stack. Both
+    /// halves matter: *above*, which is the order, and the gap, which is what
+    /// keeps it from reading as two unrelated pieces of chrome.
+    @Test("the camera pill sits just above the credit line")
+    func cameraPillSitsAboveTheCreditLine() throws {
+        #if os(iOS)
+        let coordinator = MapView.Coordinator()
+        let map = makeMap(mapView(), coordinator)
+        defer { detach(map) }
+        let credit = try #require(coordinator.attributionView)
+        let pill = try #require(coordinator.photoControls)
+        layOut(map)
+
+        #expect(
+            abs(credit.frame.minY - pill.frame.maxY - MapView.creditLineSpacing) < 1,
+            "the pill is not sitting on the credit line"
+        )
+        #endif
+    }
+
+    /// A credit that wraps has to push the pill up rather than draw underneath
+    /// it. Nothing recomputes anything to make that happen — the pill hangs
+    /// off the line's top edge — and this is what would catch a later change
+    /// back to an arithmetic offset.
     ///
-    /// The badge's exact slot, not merely "higher": these are the only two
-    /// positions this view has, and the one it falls back to is the one the
-    /// badge would have had.
-    @Test("with no weather badge the credit line takes its place")
-    func attributionTakesTheBadgesPlaceWhenItIsAbsent() throws {
+    /// Wrapped by narrowing the map rather than by a longer credit, because
+    /// the longest one any provider here asks for still fits on one row at
+    /// phone width. What is being tested is the height changing at all.
+    @Test("a credit that wraps takes the camera pill up with it")
+    func cameraPillFollowsAWrappedCreditLine() throws {
         #if os(iOS)
         let coordinator = MapView.Coordinator()
-        let map = makeMap(mapView(showsWeatherBadge: false), coordinator)
+        let map = makeMap(mapView(), coordinator)
         defer { detach(map) }
         let credit = try #require(coordinator.attributionView)
-        map.layoutIfNeeded()
+        let pill = try #require(coordinator.photoControls)
+        credit.update(with: TileProvider.stadiaOutdoors.attribution)
+        layOut(map)
+        let oneRow = credit.frame.height
+        let pillAboveOneRow = pill.frame.maxY
 
-        #expect(credit.frame.minY == WeatherBadge.topPadding)
-        #expect(credit.frame.minX == map.safeAreaInsets.left + WeatherBadge.leadingPadding)
+        map.frame = CGRect(x: 0, y: 0, width: 200, height: map.bounds.height)
+        layOut(map)
+
+        #expect(credit.frame.height > oneRow, "the credit did not wrap")
+        #expect(pill.frame.maxY < pillAboveOneRow, "the pill stayed where the shorter line was")
+        #expect(abs(credit.frame.minY - pill.frame.maxY - MapView.creditLineSpacing) < 1)
         #endif
     }
 
-    /// The forecast arrives after launch, so both slots are reached through
-    /// `update(_:_:)` rather than only at build time — and the line has to
-    /// move out of the badge's way when it does.
-    @Test("the credit line moves aside when a forecast arrives")
-    func attributionMovesWhenTheBadgeAppears() throws {
+    /// The system base map draws no line of ours, and the pill must not be
+    /// left hanging over the space one would have taken: a hidden view is
+    /// still laid out, so this is the case the second constraint exists for.
+    @Test("with nothing to credit the camera pill takes the line's place")
+    func cameraPillClosesTheGapWithoutACreditLine() throws {
         #if os(iOS)
         let coordinator = MapView.Coordinator()
-        let map = makeMap(mapView(showsWeatherBadge: false), coordinator)
+        let map = makeMap(mapView(tileSource: nil), coordinator)
         defer { detach(map) }
         let credit = try #require(coordinator.attributionView)
-        map.layoutIfNeeded()
-        let withoutBadge = credit.frame.minY
+        let pill = try #require(coordinator.photoControls)
+        let button = try #require(coordinator.trackingButton)
+        sheetMetrics.topY = map.bounds.height * 0.45
+        coordinator.applySheetTop(on: map)
+        layOut(map)
 
-        mapView(showsWeatherBadge: true).update(map, coordinator)
-        map.layoutIfNeeded()
+        #expect(credit.isHidden)
+        #expect(
+            abs(pill.frame.maxY - button.frame.maxY) < 1,
+            "without a line to clear, the pill is level with the tracking button"
+        )
+        #endif
+    }
 
-        #expect(credit.frame.minY > withoutBadge, "the credit line stayed under the badge")
-        #expect(credit.frame.minY >= WeatherBadge.topPadding + Self.badgeHeight)
+    /// And back again when a provider of ours is selected, because the source
+    /// changes while the map is up — from Settings, on any launch.
+    @Test("selecting a credited source makes room for the line again")
+    func cameraPillMakesRoomWhenACreditArrives() throws {
+        #if os(iOS)
+        let coordinator = MapView.Coordinator()
+        let view = mapView(tileSource: nil)
+        let map = makeMap(view, coordinator)
+        defer { detach(map) }
+        let credit = try #require(coordinator.attributionView)
+        let pill = try #require(coordinator.photoControls)
+        // Applied before and after, so the only thing that moves the pill
+        // between the two readings is the line appearing.
+        coordinator.applySheetTop(on: map)
+        layOut(map)
+        let withoutCredit = pill.frame.maxY
+
+        mapView().update(map, coordinator)
+        layOut(map)
+
+        #expect(!credit.isHidden)
+        #expect(pill.frame.maxY < withoutCredit, "the pill did not make room for the line")
+        #expect(abs(credit.frame.minY - pill.frame.maxY - MapView.creditLineSpacing) < 1)
         #endif
     }
 
@@ -142,9 +183,20 @@ extension MapCoordinatorTests {
         defer { detach(map) }
         let credit = try #require(coordinator.attributionView)
         credit.update(with: TileProvider.stadiaOutdoors.attribution)
-        map.layoutIfNeeded()
+        layOut(map)
 
         #expect(credit.frame.maxX <= map.bounds.width - map.safeAreaInsets.right)
         #endif
+    }
+
+    /// Lays the map out from scratch.
+    ///
+    /// `layoutIfNeeded` alone is not enough here: writing a constraint's
+    /// constant marks the map as needing its constraints updated rather than
+    /// as needing layout, and a map with no window has nothing else coming
+    /// along to lay it out. The app's own passes are what stand in for this.
+    private func layOut(_ map: MKMapView) {
+        map.setNeedsLayout()
+        map.layoutIfNeeded()
     }
 }

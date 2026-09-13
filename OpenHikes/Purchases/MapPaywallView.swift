@@ -3,16 +3,14 @@
 //  OpenHikes
 //
 //  The one screen that sells anything. Reached only from a locked row in
-//  Settings or from the community share button, never presented on its own —
-//  a hiking app that opens on a price is not the app this is trying to be.
+//  Settings, never presented on its own — a hiking app that opens on a price
+//  is not the app this is trying to be.
 //
 //  It is honest about what the money is for, because the honest answer is also
 //  the persuasive one: Stadia and Thunderforest charge OpenHikes per map view,
-//  publishing a hike puts a route and a dozen photographs in a public database
-//  the developer pays to hold for as long as the hike stands, and
-//  OpenStreetMap's own tile servers are donated infrastructure this app has no
-//  right to push a paying feature onto. The free map is not a crippled version
-//  of the paid one; it is the one that costs nothing to serve.
+//  and OpenStreetMap's own tile servers are donated infrastructure this app
+//  has no right to push a paying feature onto. The free map is not a crippled
+//  version of the paid one; it is the one that costs nothing to serve.
 //
 //  **Everything listed here has to be something the subscription actually
 //  unlocks, and everything it unlocks has to be listed here.** That is not a
@@ -51,17 +49,10 @@ struct MapPaywallView: View {
             "Save a route's map to your phone for a walk with no signal."
         ),
         (
-            "person.2.fill",
-            "Share Your Hikes",
-            "Publish a walk — its route, its photos and your name — for other hikers to "
-                + "find. Browsing and saving other people's hikes stays free for everyone."
-        ),
-        (
             "heart.fill",
             "Keeps OpenStreetMap Free",
-            "The paid maps are billed per view, and a published hike is storage and "
-                + "downloads OpenHikes pays for as long as it stands. Paying for those is "
-                + "what keeps the free map on donated servers OpenHikes doesn't charge for."
+            "The paid maps are billed per view. Paying for those is what keeps the free "
+                + "map on donated servers OpenHikes doesn't charge for."
         ),
     ]
 
@@ -92,13 +83,12 @@ struct MapPaywallView: View {
                 }
                 .padding(20)
             }
-            // "Pro" rather than "Pro Maps": the subscription stopped being
-            // only about maps when publishing moved behind it, and a title
-            // narrower than what the screen sells is the kind of thing App
-            // Review reads as a misdescribed subscription. The product
-            // identifier still says `.maps` and cannot ever change — see
-            // ``MapEntitlementStore/productID`` — which is exactly why the
-            // name a customer reads is kept separate from it.
+            // The product's own name, as App Store Connect and
+            // `OpenHikes.storekit` spell it, rather than a description of
+            // what it currently unlocks: a customer reads this beside a
+            // charge on their account and the two have to match. The product
+            // identifier is a separate string again and can never change —
+            // see ``MapEntitlementStore/productID``.
             .navigationTitle("OpenHikes Pro")
             #if os(iOS)
             .navigationBarTitleDisplayMode(.inline)
@@ -125,12 +115,12 @@ struct MapPaywallView: View {
                 .font(.system(size: Self.headerGlyphSize))
                 .foregroundStyle(.tint)
                 .accessibilityHidden(true)
-            Text("Read the ground, and add to it")
+            Text("Read the ground you walk on")
                 .font(.title2.weight(.semibold))
             Text(
                 "OpenStreetMap stays free and stays the default. Pro adds two commercial "
-                + "outdoor map styles built for trails, and lets you publish your own "
-                + "walks for other hikers to follow."
+                + "outdoor map styles built for trails, and saves them to your phone for "
+                + "a walk with no signal."
             )
             .font(.subheadline)
             .foregroundStyle(.secondary)

@@ -10,9 +10,10 @@
 //  a drag reaches the constraint without a SwiftUI pass in between, the same
 //  arrangement `observeHighlight` and `observeRouteStyle` use.
 //
-//  The camera pill on the opposite edge rides the same arithmetic, from the
-//  same call: see ``MapPhotoControlsView`` for why it is a UIKit subview
-//  rather than a SwiftUI overlay.
+//  The credit line on the opposite edge rides the same arithmetic, from the
+//  same call, and the camera pill rides the credit line: see
+//  ``MapPhotoControlsView`` for why the pill is a UIKit subview rather than a
+//  SwiftUI overlay.
 //
 //  It follows the sheet only as far as the middle detent, and fades out over
 //  the rest of the way up. Two things had to be measured rather than assumed to
@@ -72,9 +73,10 @@ extension MapView.Coordinator {
         applySheetTop(on: mapView)
     }
 
-    /// Positions the "my location" button — and the camera pill opposite it —
-    /// just above the sheet's top edge, and hands them over to the sheet once
-    /// the sheet is expanding past them.
+    /// Positions the "my location" button — and the credit line opposite it,
+    /// with the camera pill stacked on top of that line — just above the
+    /// sheet's top edge, and hands them over to the sheet once the sheet is
+    /// expanding past them.
     ///
     /// The constraint's constant is the control's *bottom* in the map's own
     /// coordinates, and the map fills the screen, so this is one comparison
@@ -87,18 +89,21 @@ extension MapView.Coordinator {
     /// sheet's top curve reads as a glitch, the more so once tracking mode
     /// fills it in.
     ///
-    /// Both controls take the same constant and the same opacity, which is the
-    /// reason the pill is a UIKit subview at all — see ``MapPhotoControlsView``.
+    /// Everything on this row takes the same constant and the same opacity,
+    /// which is the reason the pill is a UIKit subview at all — see
+    /// ``MapPhotoControlsView``.
     ///
-    /// The credit line is not part of this. It is pinned to the top of the map
-    /// and stays there — see ``MapView/addAttribution(to:_:alignedTo:)``.
+    /// Two constraints rather than three. The camera pill has no driven
+    /// constant of its own: it is constrained a fixed gap above the credit
+    /// line, so writing the line's bottom moves both — see
+    /// ``MapView/addPhotoControls(to:_:alignedTo:)``.
     func applySheetTop(on mapView: MKMapView) {
         guard mapView.bounds.height > 0 else { return }
         let wanted = sheetTop(in: mapView) - Self.trackingButtonSpacing
         let limit = trackingButtonLimit(in: mapView)
         let controls = max(wanted, limit)
         trackingBottomConstraint?.constant = controls
-        photoControlsBottomConstraint?.constant = controls
+        attributionBottomConstraint?.constant = controls
         applyControlAlpha(
             encroachment: limit - wanted,
             over: fadeDistance(from: limit, in: mapView)
@@ -172,8 +177,7 @@ extension MapView.Coordinator {
         #endif
     }
 
-    /// Fades the controls out as the sheet takes their place, the way Maps
-    /// does.
+    /// Fades the row out as the sheet takes its place, the way Maps does.
     ///
     /// `encroachment` is how far past them the sheet has come: at or below
     /// zero they still have their full spacing and are fully opaque. No
@@ -181,6 +185,12 @@ extension MapView.Coordinator {
     /// reports that move them, which arrive at display rate throughout a drag,
     /// so the fade tracks the hand directly and an animation would only lag
     /// behind it.
+    ///
+    /// The credit line fades with them rather than being exempt as a legal
+    /// notice would suggest. It is only ever transparent where the sheet is
+    /// already drawn over that part of the map, and a credit showing through
+    /// the sheet's top curve is not a credit anybody can read — it is the
+    /// glitch the fade exists to prevent.
     private func applyControlAlpha(encroachment: CGFloat, over fadeDistance: CGFloat) {
         #if canImport(UIKit)
         let alpha = Self.trackingButtonAlpha(
@@ -189,6 +199,9 @@ extension MapView.Coordinator {
         )
         if let trackingButton, trackingButton.alpha != alpha {
             trackingButton.alpha = alpha
+        }
+        if let attributionView, attributionView.alpha != alpha {
+            attributionView.alpha = alpha
         }
         // The pill has a second reason to be hidden — there may be no hike to
         // photograph — so it takes this through the accessor that combines the

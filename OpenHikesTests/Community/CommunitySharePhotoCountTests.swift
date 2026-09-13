@@ -69,7 +69,6 @@ struct CommunitySharePhotoCountTests {
         let outcome = await CommunityPublisher.share(
             hike,
             authorName: "Anna",
-            entitlement: .entitled,
             transport: transport,
             store: sandbox.store
         )

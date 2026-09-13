@@ -2,12 +2,15 @@
 //  MapCoordinatorTests+PhotoControls.swift
 //  OpenHikesTests
 //
-//  The camera pill sits opposite the "my location" button and is positioned by
-//  the same call, so what is worth asserting is not where it is but that it is
-//  never anywhere else: same constant, same opacity, through every sheet
-//  position. A second control drawn independently would only be *approximately*
-//  level with the first, and the drift would show up at the detents nobody
-//  tests by hand.
+//  The camera pill sits opposite the "my location" button, a credit line's
+//  height above it, and rides the sheet because that line does — so what is
+//  worth asserting is not where it is but that it is never anywhere else: the
+//  same travel, the same opacity, through every sheet position. A second
+//  control drawn independently would only be *approximately* level with the
+//  first, and the drift would show up at the detents nobody tests by hand.
+//
+//  Where it sits relative to the credit line is ``MapCoordinatorTests+Attribution``'s
+//  subject, including the case where there is no line to sit above.
 //
 //  The other half is the pill's own reason to be hidden. There is nothing to
 //  photograph on the search screen, so the pill is not merely transparent
@@ -25,25 +28,29 @@ import MapKit
 import Testing
 
 extension MapCoordinatorTests {
-    @Test("the camera pill rides at exactly the tracking button's height")
+    @Test("the camera pill rides the sheet exactly as the tracking button does")
     func photoControlsTrackTheTrackingButton() throws {
         #if os(iOS)
         let coordinator = MapView.Coordinator()
         let map = makeMap(mapView(), coordinator)
         defer { detach(map) }
-        let tracking = try #require(coordinator.trackingBottomConstraint)
-        let pill = try #require(coordinator.photoControlsBottomConstraint)
+        let tracking = try #require(coordinator.trackingButton)
+        let pill = try #require(coordinator.photoControls)
+        map.layoutIfNeeded()
 
         // Every detent a sheet can rest at, plus the clamped range above the
-        // middle one where the tracking button stops climbing.
+        // middle one where the tracking button stops climbing. The offset
+        // between the two is the credit line's height plus its gap, and what
+        // matters is that it never changes.
+        var offsets: Set<CGFloat> = []
         for topY in stride(from: 120.0, through: map.bounds.height, by: 20) {
             sheetMetrics.topY = topY
             coordinator.applySheetTop(on: map)
-            #expect(
-                pill.constant == tracking.constant,
-                "the pill and the tracking button disagree at a top of \(topY)"
-            )
+            map.setNeedsLayout()
+            map.layoutIfNeeded()
+            offsets.insert((tracking.frame.maxY - pill.frame.maxY).rounded())
         }
+        #expect(offsets.count == 1, "the pill drifted away from the tracking button")
         #endif
     }
 

@@ -293,12 +293,7 @@ struct OpenHikesView: View {
             community: appModel.community,
             // Keeps the credit line and the camera pill beside the landscape
             // panel instead of behind it.
-            sidePanelInset: usesSidePanel ? MapSidePanelLayout.mapInset : 0,
-            // The same condition the overlay below is built on, so the credit
-            // line knows whether there is a badge above it to hang from. Read
-            // here rather than there because a `@ViewBuilder` closure cannot
-            // hand a value back to the view it decorates.
-            showsWeatherBadge: appModel.weatherManager.state != .idle
+            sidePanelInset: usesSidePanel ? MapSidePanelLayout.mapInset : 0
         )
             .equatable()
             .accessibilityIdentifier("trail-map")
