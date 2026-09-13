@@ -73,6 +73,17 @@
 //  being looked at, and no longer, unless the hiker imports the hike, at which
 //  point ``CommunityImport`` makes copies that are theirs.
 //
+//  One directory per *visit*, and not per listing, for the reason
+//  ``CommunityPublisher`` stages one per attempt rather than one per hike: the
+//  same listing can be open twice over, and the second time is not the first.
+//  A hiker who backs out mid-download and opens the same hike again leaves the
+//  first visit's discard still waiting on the first visit's tasks — and a
+//  discard removes a *path*, so a name carrying only the listing would have it
+//  take the second visit's photographs the moment the first visit's download
+//  finished. Waiting for work protects one screen's files from that screen's
+//  own tasks; it says nothing about another screen holding the same name. See
+//  ``previewSession``.
+//
 //  *The last thing using it* is two tasks and not one, and the second half is
 //  a fix. The import reads out of the directory, so deleting underneath it
 //  costs the hiker the pictures of a hike they asked for. The download
@@ -228,12 +239,25 @@ struct CommunityHikeView: View {
     /// ``performImport(_:)``.
     @State private var wasAuthorBlocked = false
 
-    /// Where this screen's downloads live. Per-listing so two pushes of
-    /// different hikes cannot overwrite each other's photographs, and removed
-    /// in `onDisappear`.
+    /// This visit, told apart from every other visit to the same listing.
+    ///
+    /// `@State` is what makes it a *visit* rather than a screen or a listing.
+    /// It is made once per pushed view and kept for as long as that view is on
+    /// the stack, so a push over this preview and the Back out of it come home
+    /// to the same downloads — the case ``remainsPushed`` already protects from
+    /// the other side. Opening the same listing again after leaving builds a
+    /// new view, and a new view gets a new one of these.
+    ///
+    /// Two visits to one listing must not share a directory, because
+    /// ``discardDownloads()`` removes a path once the tasks *it* was given have
+    /// finished, and the tasks of a visit that has gone know nothing about the
+    /// visit that replaced it.
+    @State private var previewSession = UUID()
+
+    /// Where this visit's downloads live. Per-visit rather than per-listing —
+    /// see ``previewSession`` — and removed in `onDisappear`.
     private var downloadDirectory: URL {
-        FileManager.default.temporaryDirectory
-            .appendingPathComponent("CommunityHike-\(listing.id)", isDirectory: true)
+        Self.downloadDirectory(of: listing, in: previewSession)
     }
 
     var body: some View {
@@ -776,6 +800,11 @@ private extension CommunityHikeView {
         // instead — the writer re-creates the directory after the remove, and
         // nothing ever comes back for it. Cancelling the load in `onDisappear`
         // is what keeps this wait short rather than a whole download long.
+        //
+        // Both of them are this visit's, and so is the path — see
+        // ``previewSession``. What is waited for and what is removed have to
+        // belong to the same screen, or the wait is for one visit's work and
+        // the remove lands on another's.
         Self.discardDownloads(at: downloadDirectory, after: [loadTask, importTask])
     }
 }
@@ -845,6 +874,28 @@ extension CommunityHikeView {
             route: detail.route,
             distanceMeters: CommunityImport.routeLength(of: detail.route)
         )
+    }
+
+    /// The temporary directory one visit to one listing downloads into.
+    ///
+    /// Both halves of the name earn their place. The listing is there to be
+    /// read by a person looking at a temporary directory and asking what left
+    /// it behind; the session is what makes the name unique, and it is the half
+    /// that matters, because ``discardDownloads(at:after:)`` removes whatever
+    /// is at this path once the work it was handed has finished. Two visits
+    /// sharing a name is the first visit's discard taking the second visit's
+    /// photographs — see this file's header.
+    ///
+    /// A `static` taking its work, like the others here: what it decides is
+    /// invisible in the result. Either name produces an ordinary-looking
+    /// directory with a stranger's photographs in it, and the two differ only
+    /// on the day one visit is still finishing as the next one starts.
+    static func downloadDirectory(of listing: CommunityListing, in session: UUID) -> URL {
+        FileManager.default.temporaryDirectory
+            .appendingPathComponent(
+                "CommunityHike-\(listing.id)-\(session.uuidString)",
+                isDirectory: true
+            )
     }
 
     /// Removes a preview's downloads, once nothing is still using them.
