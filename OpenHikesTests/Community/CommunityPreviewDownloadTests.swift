@@ -18,6 +18,14 @@
 //  invisible in the result. A discard that waited and a discard that raced
 //  both leave no directory on a good day.
 //
+//  The last test here is about the other half of backing out: what the load
+//  does with a detail that arrives anyway. Cancelling it is not enough on its
+//  own, because the transport's last cancellation check comes *before* it
+//  copies the photographs and a copy that finishes hands back a detail rather
+//  than throwing — and the work the load starts next includes an unstructured
+//  task that inherits no cancellation and is not yet held anywhere
+//  `onDisappear` can reach.
+//
 
 import Foundation
 @testable import OpenHikes
@@ -108,6 +116,65 @@ struct CommunityPreviewDownloadTests {
         await importGate.open()
         await settleRemoval(of: directory)
         #expect(!exists(directory))
+    }
+
+    /// The reported bug's twin, one step later. The hiker backs out while a
+    /// stranger's photographs are being copied: the transport has already made
+    /// its last cancellation check, so the copy finishes and the detail comes
+    /// back successfully into a load that has been cancelled.
+    ///
+    /// What that costs is not the directory — the discard above covers that —
+    /// but the trail analysis, which `load()` starts in an unstructured `Task`
+    /// straight after this call. That task inherits no cancellation, and
+    /// `onDisappear` has already run by the time it exists, so its own
+    /// `Task.isCancelled` guard is false and it would spend up to
+    /// ``TrailGraphProviding/maximumPrefetchRegions`` Overpass requests on a
+    /// preview that has gone. Refusing the detail here is what keeps `load()`
+    /// from ever reaching it: the throw lands in the branch that returns
+    /// without touching the phase.
+    ///
+    /// Pinned at the fetch rather than through the view because the analysis
+    /// is spawned from `@State` a suite cannot install — and because a
+    /// cancellation that was checked and one that was missed hand back the
+    /// same detail on any day the hiker stays.
+    @Test("a detail that lands after the hiker leaves is refused")
+    func aCancelledLoadRefusesTheDetail() async throws {
+        // Never created: the stub writes nothing, and what is under test is
+        // the check made after the transport has returned.
+        let directory = FileManager.default.temporaryDirectory
+            .appendingPathComponent("CommunityHikeTest-\(UUID().uuidString)", isDirectory: true)
+        let transport = StubCommunityTransport()
+        transport.detailResult = .success(
+            CommunityHikeDetail(
+                listing: .stub(),
+                route: Fixture.ridgeRoute,
+                trackDescription: "A ridge walk",
+                photoPins: [],
+                photoFileURLs: []
+            )
+        )
+        // Held open where the production transport is copying photographs,
+        // which is past the last cancellation check it makes.
+        let gate = AsyncGate()
+        transport.beforeDetailReturns = { await gate.wait() }
+
+        let load = Task {
+            try await CommunityHikeView.detail(
+                of: .stub(),
+                from: transport,
+                downloadingInto: directory
+            )
+        }
+        await settleDelegateHop(until: "the detail request to reach the transport") {
+            !transport.recording.detailRequests.isEmpty
+        }
+
+        load.cancel()
+        await gate.open()
+
+        await #expect(throws: CancellationError.self) {
+            try await load.value
+        }
     }
 
     /// A preview the hiker backed out of before anything started, which is the

@@ -82,7 +82,11 @@
 //  import, cancelled when the hiker leaves, and waited for before anything is
 //  removed — and ``CloudKitCommunityTransport/detail(for:downloadingInto:)``
 //  checks that cancellation before it writes, since a cancelled task that
-//  never looks is a task that carries on.
+//  never looks is a task that carries on. The check it cannot make is the one
+//  *after* it returns, and that is ``detail(of:from:downloadingInto:)``: a
+//  copy that finished before the cancellation arrived hands back a detail
+//  rather than throwing, and everything ``load()`` does next would then be
+//  done for a screen that has gone.
 //
 //  ## Why reporting and blocking are here and not on the row
 //
@@ -653,8 +657,9 @@ private extension CommunityHikeView {
     func load() async {
         guard case .loading = phase else { return }
         do {
-            let detail = try await transport.detail(
-                for: listing,
+            let detail = try await Self.detail(
+                of: listing,
+                from: transport,
                 downloadingInto: downloadDirectory
             )
             phase = .loaded(detail)
@@ -777,11 +782,47 @@ private extension CommunityHikeView {
 
 // MARK: - The page, and clearing up after it
 
-// Neither of these is `private`, and both are `static`s taking their work
+// None of these is `private`, and all three are `static`s taking their work
 // rather than methods reading `@State`, for the reason
 // `CloudKitCommunityTransport.pins(_:for:of:takenOn:)` is one: what each
 // decides is invisible in the result it produces.
 extension CommunityHikeView {
+    /// Fetches the shared hike, and refuses to hand back one nobody is
+    /// waiting for any more.
+    ///
+    /// The check after the transport returns is the one the transport cannot
+    /// make on the caller's behalf.
+    /// ``CloudKitCommunityTransport/detail(for:downloadingInto:)`` checks
+    /// cancellation before it copies a stranger's photographs and then returns
+    /// whatever the copy produced — so a hiker who backs out *during* that
+    /// copy gets a detail handed back rather than a `CancellationError`, and
+    /// every step ``load()`` takes with a detail would run for a screen that
+    /// has gone.
+    ///
+    /// The analysis is the step that makes this matter. It is spawned into an
+    /// unstructured task, which inherits no cancellation and is not yet in
+    /// ``analysisTask`` for `onDisappear` to have reached — the disappearance
+    /// has already happened by the time it exists — so its own
+    /// `Task.isCancelled` guard stays false and a run of up to
+    /// ``TrailGraphProviding/maximumPrefetchRegions`` Overpass requests
+    /// carries on for a preview nobody can see. Throwing here instead lands in
+    /// ``load()``'s `CancellationError` branch, which is already the "the
+    /// screen has gone, report nothing" case.
+    ///
+    /// A `static` taking its work, like the two below and for the same reason:
+    /// what it decides is invisible in the result. A cancellation that was
+    /// checked and one that was missed both produce the same detail on a day
+    /// when the hiker stays.
+    static func detail(
+        of listing: CommunityListing,
+        from transport: any CommunityTransporting,
+        downloadingInto directory: URL
+    ) async throws -> CommunityHikeDetail {
+        let detail = try await transport.detail(for: listing, downloadingInto: directory)
+        try Task.checkCancellation()
+        return detail
+    }
+
     /// One walk of the route, off the main actor, producing the elevation
     /// profile and the same stat tiles a hike in the library shows.
     ///
