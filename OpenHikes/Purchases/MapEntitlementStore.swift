@@ -89,6 +89,19 @@ final class MapEntitlementStore {
         case failed(String)
     }
 
+    /// Where the product query has got to, from a screen's point of view.
+    ///
+    /// Three states rather than the presence of a `Product`, because "we are
+    /// still asking" and "we asked and there is nothing to sell" are different
+    /// things to a customer and only one of them is worth offering a retry
+    /// for. Before the first attempt this reads `.loading`, which is what the
+    /// paywall's own query is about to make true.
+    enum ProductAvailability: Equatable {
+        case available
+        case loading
+        case unavailable
+    }
+
     private(set) var state: MapEntitlementState = .unknown
     private(set) var product: Product?
     /// The offer in the words the paywall shows, or `nil` until the product
@@ -100,6 +113,12 @@ final class MapEntitlementStore {
     private(set) var isWorking = false
 
     var isEntitled: Bool { state == .entitled }
+
+    /// What the paywall draws while there is no price to show.
+    var productAvailability: ProductAvailability {
+        if product != nil { return .available }
+        return isLoadingProduct || !hasAttemptedProductLoad ? .loading : .unavailable
+    }
 
     /// Whether the paywall's purchase button is live, and the one place that
     /// rule is written down.
@@ -122,6 +141,15 @@ final class MapEntitlementStore {
     /// subscriber whose product query just failed is exactly the person who
     /// needs the button, so a failed load must not take it away.
     var canRestore: Bool { !isWorking }
+
+    /// Whether a product query is in flight, and whether one has ever
+    /// finished. Together they are ``productAvailability``.
+    private(set) var isLoadingProduct = false
+    private var hasAttemptedProductLoad = false
+    /// The query in flight, so a second caller joins it rather than starting
+    /// another. Two are ordinary now that the lookup is retried: the paywall
+    /// asks on presentation and the foreground asks again.
+    private var productLoadTask: Task<Void, Never>?
 
     /// Never cancelled: the store is created once by ``OpenHikesModel`` and
     /// lives as long as the process, and a `deinit` cannot touch a main-actor
@@ -245,6 +273,14 @@ final class MapEntitlementStore {
     /// back. It is a cheap local query and does not prompt for a password.
     func sceneDidBecomeActive() {
         Task { await refresh() }
+        // And ask again for a price there still isn't one for. A lookup that
+        // failed at launch — no signal on the walk out of the door — used to
+        // stay failed for the life of the process, so the subscription could
+        // not be bought again until the app was force-quit. Only while there
+        // is nothing: a product already loaded is not re-queried on every
+        // foreground.
+        guard product == nil else { return }
+        Task { await loadProduct() }
     }
 
     /// Re-reads the entitlement and publishes it.
@@ -253,7 +289,39 @@ final class MapEntitlementStore {
         publish(entitled ? .entitled : .notEntitled)
     }
 
+    /// Asks the App Store what the subscription costs.
+    ///
+    /// Retryable, and coalesced rather than guarded off: `start()` fires one
+    /// at launch, the paywall asks on every presentation, and a foreground
+    /// asks again — so the ordinary case is several callers wanting the same
+    /// answer at once, and what they must not produce is several queries. A
+    /// caller arriving while one is in flight joins it; a caller arriving
+    /// after one succeeded returns at once, since the price does not change
+    /// inside a process.
     func loadProduct() async {
+        if let productLoadTask {
+            await productLoadTask.value
+            return
+        }
+        guard product == nil else { return }
+        let task = Task { [weak self] in
+            guard let self else { return }
+            await performProductLoad()
+        }
+        productLoadTask = task
+        await task.value
+    }
+
+    private func performProductLoad() async {
+        isLoadingProduct = true
+        // In a `defer` so the bookkeeping is done before any caller waiting on
+        // this task resumes — otherwise a retry could find the finished query
+        // still parked in `productLoadTask` and join a task that is over.
+        defer {
+            isLoadingProduct = false
+            hasAttemptedProductLoad = true
+            productLoadTask = nil
+        }
         do {
             let loaded = try await loadProducts([Self.productID]).first
             product = loaded
