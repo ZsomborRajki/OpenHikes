@@ -70,6 +70,11 @@ final class StubCommunityTransport: CommunityTransporting, @unchecked Sendable {
     /// The same, for the outline request — which lands *after* the rows it
     /// belongs to and so is the one a suite has to be able to hold.
     var beforeOutlinesReturn: (@Sendable () async -> Void)?
+    /// The same, for the detail. Held so a suite can cancel the load while a
+    /// stranger's photographs are still being copied — the window in which the
+    /// production transport has already made its last cancellation check and
+    /// will return a detail rather than throw.
+    var beforeDetailReturns: (@Sendable () async -> Void)?
     /// The same, for a publication check. Held so a suite can re-share the
     /// hike while the check is waiting, which is the window the check has to
     /// notice it is no longer answering about the submission it asked after.
@@ -154,6 +159,7 @@ final class StubCommunityTransport: CommunityTransporting, @unchecked Sendable {
         downloadingInto directory: URL
     ) async throws -> CommunityHikeDetail {
         state.withLock { $0.detailRequests.append(listing.id) }
+        await beforeDetailReturns?()
         guard let detailResult else { throw CommunityFailure.noLongerAvailable }
         return try detailResult.get()
     }
