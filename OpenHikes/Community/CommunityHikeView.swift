@@ -96,6 +96,14 @@ struct CommunityHikeView: View {
     /// Called once this author has been blocked, so the caller can pop a
     /// screen that is now showing hidden content.
     let onBlock: () -> Void
+    /// Whether this screen is still on the navigation stack while it is
+    /// disappearing — which is the difference between a push over it and the
+    /// hiker leaving.
+    ///
+    /// Injected rather than inferred, because the only thing that knows is
+    /// the stack: SwiftUI reports a pushed-over view and a popped one the
+    /// same way. See ``SheetPresentation/isPresentingCommunityHike(_:)``.
+    var remainsPushed: () -> Bool = { false }
 
     @Environment(\.modelContext)
     private var context
@@ -182,8 +190,25 @@ struct CommunityHikeView: View {
             // the map is now about, so that a fetch landing after the hiker
             // backed out is ignored rather than drawn.
             browser.previewOpened(listing)
+            // Coming *back* to this screen, with the answer it already has.
+            // `load()` returns at once for a loaded phase, so without this the
+            // map would be told which hike it is about and never told where
+            // that hike goes — the line the preview exists to show, missing on
+            // the second visit and every one after it. Published here rather
+            // than from the task so it cannot race the call above, which is
+            // what retires the previous preview's line.
+            if case .loaded(let detail) = phase {
+                browser.previewLoaded(detail.route, of: listing)
+            }
         }
         .onDisappear {
+            // A screen pushed over this one is not the hiker leaving it, and
+            // both look identical from here — a map pin can push another
+            // preview over an open one. Disposing on the first would take the
+            // line off the map and delete the photographs out from under a
+            // screen the hiker is one Back from returning to, with its own
+            // cached detail still pointing at the deleted files.
+            guard !remainsPushed() else { return }
             browser.previewClosed(listing)
             discardDownloads()
         }

@@ -186,6 +186,22 @@ final class SheetPresentation {
         path.last == .communityHike(listing)
     }
 
+    /// Whether `listing`'s preview is still *somewhere* in the sheet's stack.
+    ///
+    /// The other half of the question above, and the one a disappearing
+    /// screen asks. SwiftUI takes a pushed-over view out of the hierarchy
+    /// exactly as it takes a popped one out, and a community preview treated
+    /// both as the hiker leaving: it retired its line from the map and
+    /// deleted the stranger's photographs it had downloaded, while the screen
+    /// itself was still on the stack with its answer intact. A map pin can
+    /// push a second preview over an open one, so this is a gesture away.
+    ///
+    /// Membership rather than the top of the stack, because that is precisely
+    /// what separates a push over this screen from this screen being popped.
+    func isPresentingCommunityHike(_ listing: CommunityListing) -> Bool {
+        path.contains(.communityHike(listing))
+    }
+
     func photoSelection(for route: SheetRoute) -> PhotoViewerSelection {
         if let existing = photoSelections[route] { return existing }
         let selection = PhotoViewerSelection()

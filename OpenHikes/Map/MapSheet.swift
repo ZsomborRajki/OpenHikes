@@ -299,7 +299,11 @@ struct MapSheet: View {
                 onBlock: {
                     appModel.community.refreshAfterBlock()
                     presentation.path.removeAll()
-                }
+                },
+                // Asked while the screen is going, to tell a push over it from
+                // the hiker leaving: the pop has already taken the route out
+                // of the path by then, and a push has not.
+                remainsPushed: { presentation.isPresentingCommunityHike(listing) }
             )
         }
     }

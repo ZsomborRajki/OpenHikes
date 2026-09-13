@@ -343,6 +343,37 @@ struct CommunityBrowserRouteLinesTests {
         #expect(browser.routeLines.first?.isPreviewed == true)
     }
 
+    /// Coming back to a preview a second one was pushed over.
+    ///
+    /// The screen keeps its answer across that trip — SwiftUI does not tear a
+    /// pushed-over destination's state down — so nothing re-fetches, and the
+    /// map is told which hike it is about by a screen that already knows
+    /// where that hike goes. The sequence below is what the screen now
+    /// performs on re-appearance; without the second `previewLoaded` the map
+    /// draws the hike the hiker is looking at as no line at all.
+    @Test("returning to a stacked preview puts its route back on the map")
+    func returningToAStackedPreviewRedrawsIt() async {
+        let first = CommunityListing.stub(id: "ridge")
+        let second = CommunityListing.stub(id: "summit", submissionID: "submission-2")
+        let (browser, _) = await loaded([], outlines: [:])
+        let route = Self.outline()
+
+        browser.previewOpened(first)
+        browser.previewLoaded(route, of: first)
+        // A map pin pushes another preview over the open one.
+        browser.previewOpened(second)
+        browser.previewLoaded(Self.outline(offset: 0.05), of: second)
+        #expect(browser.routeLines.map(\.id) == ["summit"])
+
+        // Back, with the first screen's own detail still in hand.
+        browser.previewOpened(first)
+        browser.previewLoaded(route, of: first)
+
+        #expect(browser.routeLines.map(\.id) == ["ridge"])
+        #expect(browser.routeLines.first?.isPreviewed == true)
+        #expect(browser.routeLines.first?.coordinates.count == route.count)
+    }
+
     /// A fetch that lands after the hiker backed out has nowhere to go, and
     /// must not put a line on a map with no screen behind it.
     @Test("a route arriving after the preview closes is ignored")
