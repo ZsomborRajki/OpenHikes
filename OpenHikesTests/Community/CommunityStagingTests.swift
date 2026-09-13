@@ -51,7 +51,6 @@ struct CommunityStagingTests {
         let outcome = await CommunityPublisher.share(
             hike,
             authorName: "Anna",
-            entitlement: .entitled,
             transport: transport,
             store: store
         )
@@ -194,7 +193,6 @@ struct CommunityStagingTests {
             await CommunityPublisher.share(
                 ridge,
                 authorName: "Anna",
-                entitlement: .entitled,
                 transport: transport,
                 store: sandbox.store
             )
@@ -203,7 +201,6 @@ struct CommunityStagingTests {
             await CommunityPublisher.share(
                 loop,
                 authorName: "Anna",
-                entitlement: .entitled,
                 transport: transport,
                 store: sandbox.store
             )

@@ -16,7 +16,7 @@ That is local-first with one deliberate exception. There is no OpenHikes account
 - **Home Screen widget.** Trail progress, a climb/descent/high-point stat line, live-recording takeover, recording deep links, and sparse location anchors that help repair degraded GPS gaps.
 - **Live Activity.** The same figures on the Lock Screen and in the Dynamic Island while a recording runs or a trail is being followed, ticking their own clock so a walk costs no updates while it is simply going well.
 - **iCloud sync.** Hikes and their metadata follow the hiker across their own devices, through their own private CloudKit database. Photo files and the tile cache stay on the device that produced them.
-- **Community hikes.** Shared hikes are found by panning the map and asking, or by typing a name, and are drawn as lines rather than only as pins. Opening one shows the same statistics a hike of your own gets; saving it copies its route and photographs into your library. Publishing your own is behind the subscription and is reviewed by a person before anyone else can see it; every published hike can be reported or its author blocked. Browsing needs no account.
+- **Community hikes.** Shared hikes are found by panning the map and asking, or by typing a name, and are drawn as lines rather than only as pins. Opening one shows the same statistics a hike of your own gets; saving it copies its route and photographs into your library. Publishing your own is free and is reviewed by a person before anyone else can see it; every published hike can be reported or its author blocked. Browsing needs no account.
 
 ## Requirements
 
@@ -24,7 +24,7 @@ That is local-first with one deliberate exception. There is no OpenHikes account
 - An Apple development team that can sign the WeatherKit entitlement, the shared App Group, the iCloud container and the push entitlement.
 - iPhone only. Every target sets `TARGETED_DEVICE_FAMILY = 1`.
 
-OpenStreetMap is the keyless default and Apple Maps needs no key either. Stadia and Thunderforest require build-time API keys *and* a paid subscription with each vendor, whose terms forbid using them free of charge in a shipping app — in OpenHikes they sit behind a monthly subscription, OpenHikes Pro, which is what pays for them. It covers publishing a hike to the community too, for the same reason: a published route and its photographs are storage and downloads OpenHikes pays for as long as the hike stands. A build without keys shows them locked, and OpenStreetMap keeps working.
+OpenStreetMap is the keyless default and Apple Maps needs no key either. Stadia and Thunderforest require build-time API keys *and* a paid subscription with each vendor, whose terms forbid using them free of charge in a shipping app — in OpenHikes they sit behind a monthly subscription, OpenHikes Pro, which is what pays for them, along with saving their tiles for offline use. Everything else in the app, the community feature included, is free. A build without keys shows them locked, and OpenStreetMap keeps working.
 
 ## Setup
 

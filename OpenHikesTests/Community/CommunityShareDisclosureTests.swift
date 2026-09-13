@@ -36,7 +36,6 @@ struct CommunityShareDisclosureTests {
         _ = await CommunityPublisher.share(
             hike,
             authorName: "Anna",
-            entitlement: .entitled,
             transport: transport
         )
         return try #require(transport.recording.submissions.first)
@@ -134,7 +133,6 @@ struct CommunityShareDisclosureTests {
         _ = await CommunityPublisher.share(
             hike,
             authorName: "Anna",
-            entitlement: .entitled,
             transport: transport,
             store: store
         )

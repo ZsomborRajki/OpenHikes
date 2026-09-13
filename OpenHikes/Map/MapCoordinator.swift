@@ -128,37 +128,27 @@ extension MapView {
         var controlsLeadingConstraint: NSLayoutConstraint?
 
         // MARK: Camera pill
-        // Stored state for `MapPhotoControls.swift`. The pill rides the sheet
-        // on the map's leading edge, at the same height and through the same
-        // constraint arithmetic as the tracking button above — see
-        // `applySheetTop(on:)`, which drives both.
+        // Stored state for `MapPhotoControls.swift`. The pill sits on the
+        // map's leading edge directly above the credit line, and rides the
+        // sheet because the line does — see `MapView.addPhotoControls`. The
+        // two constraints are the same relationship with and without a credit
+        // to leave room for; exactly one is active at a time.
 
-        var photoControlsBottomConstraint: NSLayoutConstraint?
+        var photoControlsAboveCreditLine: NSLayoutConstraint?
+        var photoControlsWithoutCreditLine: NSLayoutConstraint?
 
         #if os(iOS)
         weak var photoControls: MapPhotoControlsView?
         #endif
 
         // MARK: Attribution
-        // Stored state for `MapAttributionView.swift`. The credit line hangs
-        // beneath the weather badge and does not move with the sheet — see
-        // `MapView.addAttribution`. What is stored is the one constraint that
-        // is not a constant, and the two things that move it: whether there is
-        // a badge above it at all, and how tall that badge draws.
+        // Stored state for `MapAttributionView.swift`. The credit line is the
+        // bottom of that leading-edge stack and rides the sheet with the
+        // tracking button opposite it — see `MapView.addAttribution`. What is
+        // stored is the one constraint that is not a constant: its bottom,
+        // which `applySheetTop(on:)` drives.
 
-        var attributionTopConstraint: NSLayoutConstraint?
-
-        /// Whether the weather badge is on screen, mirrored from `MapView` so
-        /// the Dynamic Type callback can reposition the line without it.
-        var showsWeatherBadge = false
-
-        #if os(iOS)
-        // periphery:ignore - assigned and never read on purpose; dropping the
-        // token is what unregisters the callback.
-        /// Retains the Dynamic Type registration for the offset above; a
-        /// dropped token unregisters it.
-        var attributionTraitRegistration: (any UITraitChangeRegistration)?
-        #endif
+        var attributionBottomConstraint: NSLayoutConstraint?
 
         #if canImport(UIKit)
         weak var attributionView: MapAttributionView?

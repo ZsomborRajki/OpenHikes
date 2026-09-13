@@ -129,21 +129,6 @@ struct MapEntitlementTests {
         }
     }
 
-    /// Publishing takes the strict reading of every state, including the
-    /// unresolved one. It is the heaviest thing behind this subscription: a
-    /// published hike is a public record this app has no method to withdraw,
-    /// so unlike a map it must never be started on an entitlement nobody has
-    /// confirmed. See ``MapEntitlementState/publishTap``.
-    @Test("publishing is allowed only on a confirmed entitlement")
-    func publishTapIsStrict() {
-        #expect(MapEntitlementState.entitled.publishTap == .allow)
-        #expect(MapEntitlementState.notEntitled.publishTap == .unlock)
-        #expect(
-            MapEntitlementState.unknown.publishTap == .wait,
-            "the unresolved window is not a yes for something that cannot be taken back"
-        )
-    }
-
     /// The free sources are never gated, in any state — the same guarantee
     /// ``MapEntitlementState/allows(_:)`` makes, on the selection side.
     @Test("the free sources are selectable in every state")

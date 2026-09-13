@@ -108,19 +108,6 @@ struct MapView: MapViewRepresentable, Equatable {
     /// types above it is a plain value compared in `==` below.
     var sidePanelInset: CGFloat = 0
 
-    /// Whether the weather badge is currently drawn over the map.
-    ///
-    /// The badge is a SwiftUI overlay in the root view's body and this map
-    /// cannot see it, but the credit line hangs off its bottom edge — so when
-    /// there is no forecast to show, the line takes the badge's own slot
-    /// instead of leaving a gap where it would have been. See
-    /// ``attributionTop(in:belowWeatherBadge:)``.
-    ///
-    /// This costs the root body nothing it was not already paying: the overlay
-    /// closure is inlined into that body and already reads the same forecast,
-    /// so the dependency exists whether or not it is passed down here.
-    var showsWeatherBadge: Bool
-
     /// Lets `.equatable()` skip `updateUIView` when nothing actually changed —
     /// without it, SwiftUI calls `updateUIView` on every ancestor body pass
     /// that touches this view's transaction (e.g. the sheet's per-frame drag
@@ -143,7 +130,6 @@ struct MapView: MapViewRepresentable, Equatable {
             && lhs.photoCapture === rhs.photoCapture
             && lhs.photoPins === rhs.photoPins
             && lhs.community === rhs.community
-            && lhs.showsWeatherBadge == rhs.showsWeatherBadge
             && lhs.sidePanelInset == rhs.sidePanelInset
     }
 
@@ -223,10 +209,12 @@ struct MapView: MapViewRepresentable, Equatable {
         // credit too — MapKit draws its own **Legal** link, so ours has to go
         // away rather than keep crediting a provider that is no longer drawn.
         //
-        // No repositioning to do afterwards: the credit line is pinned to the
-        // top of the map and takes no part in the row the sheet drives.
+        // And the camera pill above it has to close the gap the line leaves
+        // behind, which is the one thing here that is not Auto Layout's own
+        // doing — see ``MapView/Coordinator/applyCreditLineClearance()``.
         #if os(iOS)
         coordinator.attributionView?.update(with: tileSource?.attribution)
+        coordinator.applyCreditLineClearance()
         #endif
 
         if let existing = coordinator.tileOverlay {
@@ -288,9 +276,12 @@ struct MapView: MapViewRepresentable, Equatable {
             bottom,
         ])
 
+        // The credit line first: the camera pill is constrained against it
+        // rather than against a constant of its own, so it has to exist by the
+        // time the pill's constraints are made.
+        addAttribution(to: mapView, coordinator, alignedTo: guide)
         addPhotoControls(to: mapView, coordinator, alignedTo: guide)
         addAreaSearchControl(to: mapView, coordinator, alignedTo: guide)
-        addAttribution(to: mapView, coordinator, alignedTo: guide)
         // Replaces the placeholders above with real positions as soon as the
         // map has a height to measure against.
         coordinator.applySheetTop(on: mapView)
@@ -321,30 +312,23 @@ struct MapView: MapViewRepresentable, Equatable {
         return controls
     }
 
-    /// The credit line, hung directly beneath the weather badge on the leading
-    /// edge and left-aligned with it. It stays on the map rather than moving
-    /// into the sheet, as the providers' terms require. See
-    /// ``MapAttributionView``.
+    /// The credit line, on the leading edge just above the sheet, riding it
+    /// exactly as the "my location" button and the camera pill do. It stays on
+    /// the map rather than moving into the sheet, as the providers' terms
+    /// require. See ``MapAttributionView``.
     ///
-    /// It does not move. The tracking button and the camera pill ride the
-    /// sheet because they are controls the sheet would otherwise cover; this
-    /// is a legal notice, and one that slides around under every drag is
-    /// harder to read and harder to hit than one that stays put. Pinning it to
-    /// the top takes it out of ``MapView/Coordinator/applySheetTop(on:)``
-    /// altogether, so a drag now moves two views rather than three.
+    /// The bottom-most of the three things on this edge, and the one the
+    /// others are measured from: the camera pill hangs off its top edge — see
+    /// ``addPhotoControls(to:_:alignedTo:)`` — so the column is built by Auto
+    /// Layout rather than by arithmetic that would have to be redone every
+    /// time the line wrapped or the reader's text size moved.
     ///
-    /// Below the badge rather than beside it, which is what keeps it clear of
-    /// everything else up there in one stroke: MapKit draws its compass and
-    /// its scale bar in the strip above, and this sits under both. The badge
-    /// itself cannot be anchored against — it is a SwiftUI overlay in a
-    /// different hierarchy, not a subview of this map — so the two agree by
-    /// sharing ``WeatherBadge``'s own geometry instead; see
-    /// ``attributionTop(in:belowWeatherBadge:)``.
-    ///
-    /// The badge is conditional and the slot is not. Without a forecast there
-    /// is nothing above the line to hang it from, so it moves up and takes the
-    /// badge's own position; when one arrives it drops below it. That is the
-    /// only thing that moves this view — it takes no part in the sheet's drag.
+    /// Its bottom is the same driven Y the tracking button's is, written by
+    /// ``MapView/Coordinator/applySheetTop(on:)``, which is what makes the
+    /// notice and the controls one row rather than three views that happen to
+    /// agree. It takes that call's fade as well: past the middle detent the
+    /// sheet is over this part of the map, and a credit drawn behind a sheet
+    /// is not a credit anybody is reading.
     private func addAttribution(
         to mapView: MKMapView,
         _ coordinator: Coordinator,
@@ -354,27 +338,29 @@ struct MapView: MapViewRepresentable, Equatable {
         attribution.translatesAutoresizingMaskIntoConstraints = false
         mapView.addSubview(attribution)
         coordinator.attributionView = attribution
-        coordinator.showsWeatherBadge = showsWeatherBadge
 
-        // Against the map's own top edge, because that is what the badge's
-        // padding is measured from — the map ignores the safe area. Re-applied
-        // when the forecast comes or goes, and on a text-size change, which is
-        // the only other thing that moves the badge's bottom.
-        let top = attribution.topAnchor.constraint(
+        let initialAttributionY: CGFloat = 400
+        // Against the map's own top edge, like the two controls: the constant
+        // is a global Y, and the map ignores the safe area, so it is the same
+        // space ``SheetMetrics`` reports its own in. A placeholder until
+        // `applySheetTop(on:)` has a height to measure against.
+        let bottom = attribution.bottomAnchor.constraint(
             equalTo: mapView.topAnchor,
-            constant: Self.attributionTop(in: mapView, belowWeatherBadge: showsWeatherBadge)
+            constant: initialAttributionY
         )
-        coordinator.attributionTopConstraint = top
+        coordinator.attributionBottomConstraint = bottom
 
         NSLayoutConstraint.activate([
-            top,
-            // The safe area rather than the map's edge, which are the same
-            // thing in portrait — where this lines up with the badge exactly —
-            // and are not in landscape, where the map's edge is under the
-            // notch. A credit the reader cannot see is not a credit.
+            bottom,
+            // The same inset the camera pill takes, so the notice and the
+            // control above it share an edge. Against the guide rather than
+            // the map, which are the same thing in portrait and are not in
+            // landscape, where the map's edge is under the notch and the side
+            // panel takes this edge. A credit the reader cannot see is not a
+            // credit.
             attribution.leadingAnchor.constraint(
                 equalTo: guide.leadingAnchor,
-                constant: WeatherBadge.leadingPadding
+                constant: Self.controlInset
             ),
             // A ceiling rather than a width: the line is as wide as its
             // credits need and no wider, but a provider that names three
@@ -384,15 +370,30 @@ struct MapView: MapViewRepresentable, Equatable {
                 constant: -Self.controlInset
             ),
         ])
-        coordinator.trackContentSizeCategory(on: mapView)
         attribution.update(with: tileSource?.attribution)
     }
     #endif
 
     #if os(iOS)
-    /// The camera pill, on the leading edge opposite the tracking button and
-    /// bottom-pinned to the same driven Y, so the two stay level through every
-    /// sheet drag without either of them re-rendering.
+    /// The camera pill, on the leading edge directly above the credit line and
+    /// sharing its edge, so the two read as one stack rather than as a control
+    /// and a notice that happen to be near each other.
+    ///
+    /// Constrained against the line rather than given a driven constant of its
+    /// own, which is what keeps the gap between them exactly
+    /// ``creditLineSpacing`` through everything that changes the line's height:
+    /// a provider that names three parties and wraps onto a second row, and the
+    /// reader's own text size. The line's bottom is the one number the sheet
+    /// drives — see ``MapView/Coordinator/applySheetTop(on:)`` — and this rides
+    /// it for free.
+    ///
+    /// The second constraint is the case where there is nothing to credit: the
+    /// system base map, whose one credit MapKit draws its own **Legal** link
+    /// for. A hidden view still takes part in Auto Layout, so hanging off its
+    /// top would park the pill a credit line's height above the sheet with
+    /// nothing drawn in between. Swapping to the line's *bottom* edge closes
+    /// that gap exactly, and ``MapView/Coordinator/applyCreditLineClearance()``
+    /// is what picks between the two.
     private func addPhotoControls(
         to mapView: MKMapView,
         _ coordinator: Coordinator,
@@ -411,20 +412,22 @@ struct MapView: MapViewRepresentable, Equatable {
         mapView.addSubview(controls)
         coordinator.photoControls = controls
 
-        let initialPhotoControlsY: CGFloat = 400
-        let bottom = controls.bottomAnchor.constraint(
-            equalTo: mapView.topAnchor,
-            constant: initialPhotoControlsY
+        guard let attribution = coordinator.attributionView else { return }
+        coordinator.photoControlsAboveCreditLine = controls.bottomAnchor.constraint(
+            equalTo: attribution.topAnchor,
+            constant: -Self.creditLineSpacing
         )
-        coordinator.photoControlsBottomConstraint = bottom
+        coordinator.photoControlsWithoutCreditLine = controls.bottomAnchor.constraint(
+            equalTo: attribution.bottomAnchor
+        )
 
         NSLayoutConstraint.activate([
             controls.leadingAnchor.constraint(
                 equalTo: guide.leadingAnchor,
                 constant: Self.controlInset
             ),
-            bottom,
         ])
+        coordinator.applyCreditLineClearance()
     }
     #endif
 
@@ -432,37 +435,12 @@ struct MapView: MapViewRepresentable, Equatable {
     private static let controlInset: CGFloat = 12
 
     #if os(iOS)
-    /// How far below the map's top edge the credit line is pinned.
+    /// The gap between the camera pill and the credit line under it.
     ///
-    /// Two slots, not one. With a forecast on screen the line clears the
-    /// badge's bottom, using the same gap as the rest of this chrome; without
-    /// one it moves up into the slot the badge would have occupied, rather
-    /// than hanging under a space where nothing is drawn.
-    ///
-    /// Recomputed rather than stored because the badge's height is not fixed;
-    /// see ``weatherBadgeHeight(in:)``.
-    static func attributionTop(in mapView: MKMapView, belowWeatherBadge: Bool) -> CGFloat {
-        guard belowWeatherBadge else { return WeatherBadge.topPadding }
-        return WeatherBadge.topPadding + weatherBadgeHeight(in: mapView) + controlInset
-    }
-
-    /// How tall the weather badge draws at the reader's current text size.
-    ///
-    /// Computed rather than measured because the badge is a SwiftUI overlay
-    /// *over* this map rather than a subview *of* it — there is no view here
-    /// to ask. What there is instead is the badge's own geometry, which it
-    /// exposes for exactly this; the arithmetic below is its body's.
-    ///
-    /// The floor is real and is what applies at the default text size: the
-    /// capsule is a little under the standard control size, and
-    /// `.minimumTapTarget()` grows the button around it to meet that.
-    private static func weatherBadgeHeight(in mapView: MKMapView) -> CGFloat {
-        let capsule = UIFont.preferredFont(
-            forTextStyle: WeatherBadge.heightDrivingUITextStyle,
-            compatibleWith: mapView.traitCollection
-        ).lineHeight + WeatherBadge.verticalPadding * 2
-        return max(MapPhotoControlsView.controlSize, capsule)
-    }
+    /// Much smaller than the inset above, on purpose: this is the space
+    /// *inside* one stack of leading-edge chrome, not the space between that
+    /// chrome and the edge of the map.
+    static let creditLineSpacing: CGFloat = 4
     #endif
 
     /// Draws the current route (if any) and fits the map to it. No-op while the
@@ -611,13 +589,6 @@ struct MapView: MapViewRepresentable, Equatable {
         // here unconditionally would just repeat that work on every one of
         // this method's (frequent, often no-op) calls.
         coordinator.applySheetTopIfHeightChanged(on: mapView)
-        #if os(iOS)
-        // Cheap and idempotent — it writes only when the line's slot has
-        // actually moved, which a forecast arriving, a rotation or a text-size
-        // change can each do.
-        coordinator.showsWeatherBadge = showsWeatherBadge
-        coordinator.applyAttributionClearance(on: mapView)
-        #endif
     }
 
     #if os(macOS)

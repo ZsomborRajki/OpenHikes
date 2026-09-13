@@ -61,27 +61,6 @@ nonisolated enum MapEntitlementState: Sendable, Equatable {
     /// where it has not.
     func tapAction(for provider: TileProvider) -> PaidFeatureTap {
         guard provider.requiresPaidAccess else { return .allow }
-        return paidTap
-    }
-
-    /// What a tap on the community share button should do.
-    ///
-    /// The same three answers as a paid provider row, from the same property,
-    /// because it is the same rule and not a second one that happens to agree:
-    /// a lapsed subscriber and a subscriber StoreKit has not answered for yet
-    /// are different people to a screen that has to decide what a tap does.
-    ///
-    /// It takes the **strict** reading of ``unknown`` for a reason of its own,
-    /// and a heavier one than the provider row's. Selecting a map writes an id
-    /// that can be written again; publishing hands a route, a set of
-    /// photographs and a name to a public database that this app has no method
-    /// to delete from — see ``CommunityTransporting``, which deliberately has
-    /// no way to withdraw a submission. An action that cannot be taken back
-    /// must not be taken on an entitlement nobody has confirmed.
-    var publishTap: PaidFeatureTap { paidTap }
-
-    /// The three-way answer for anything behind the Pro unlock, written once.
-    private var paidTap: PaidFeatureTap {
         switch self {
         case .entitled: return .allow
         case .notEntitled: return .unlock
@@ -90,25 +69,24 @@ nonisolated enum MapEntitlementState: Sendable, Equatable {
     }
 
     /// Whether the answer is settled — the name for the window `unknown`
-    /// stands for, which is what both halves of the gate above are shaped
-    /// around and what the store's own suites assert against.
+    /// stands for, which is what the gate above is shaped around and what the
+    /// store's own suites assert against.
     var isResolved: Bool { self != .unknown }
 }
 
 /// What tapping something behind the Pro unlock should do.
 ///
-/// Switched over exhaustively in ``MapEntitlementState/tapAction(for:)`` and
-/// ``MapEntitlementState/publishTap``, so a fourth entitlement state cannot be
-/// added without deciding what a tap on a paid control does while the app is
-/// in it.
+/// Switched over exhaustively in ``MapEntitlementState/tapAction(for:)``, so a
+/// fourth entitlement state cannot be added without deciding what a tap on a
+/// paid control does while the app is in it.
 ///
-/// Not named for the map, though the map was its first caller: two features
-/// are behind this subscription now — the commercial tile sources and
-/// publishing a hike to the community — and one enum with one mapping is what
-/// stops the second quietly disagreeing with the first about what the
-/// unresolved window means.
+/// Not named for the map, though the map is its only caller: what is behind
+/// the subscription is a question about the *feature*, and a name that said
+/// `map` would have to be renamed rather than reused the next time something
+/// else goes behind it. Publishing a hike was behind it once and is not any
+/// more — see ``CommunityPublisher/share(_:authorName:transport:store:save:)``.
 nonisolated enum PaidFeatureTap: Equatable {
-    /// Do the thing: persist the tapped provider, or open the share form.
+    /// Do the thing: persist the tapped provider.
     case allow
     /// Open the paywall: the feature is real and available, just not bought.
     case unlock

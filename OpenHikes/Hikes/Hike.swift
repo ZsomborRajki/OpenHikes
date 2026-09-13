@@ -98,7 +98,7 @@ final class Hike {
     /// has never been shared from this account.
     ///
     /// Written only once CloudKit has accepted the upload — see
-    /// ``CommunityPublisher/share(_:authorName:entitlement:transport:store:save:)``, where
+    /// ``CommunityPublisher/share(_:authorName:transport:store:save:)``, where
     /// the ordering is the contract rather than an implementation detail.
     ///
     /// It says *sent*, and deliberately not *published*. A submission waits
@@ -139,7 +139,7 @@ final class Hike {
     ///
     /// The one thing that does clear it is a second share of the same hike,
     /// which makes a second submission — see
-    /// ``CommunityPublisher/share(_:authorName:entitlement:transport:store:save:)``.
+    /// ``CommunityPublisher/share(_:authorName:transport:store:save:)``.
     /// This column and ``communitySubmissionID`` are read together as one
     /// answer about one submission, so a new submission arrives with no
     /// listing known for it yet, and the two are written in the same commit so
