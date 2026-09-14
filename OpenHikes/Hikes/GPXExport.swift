@@ -442,11 +442,24 @@ nonisolated extension UTType {
 extension GPXExport.Track {
     /// Reads `hike` where its SwiftData context lives, and hands on the
     /// `Sendable` copy everything downstream uses.
+    ///
+    /// The community credit stands in for `<author>` when a hike has no GPX
+    /// author of its own, which for a hike saved from the community is always
+    /// — ``CommunityImport`` writes ``Hike/importedAuthorName`` and never
+    /// ``Hike/author``. Without this, a file exported from somebody else's
+    /// published route carried no trace of who published it, while a GPX that
+    /// *arrived* with an author round-trips its one back out
+    /// (see ``HikeImport``). This is the half of the credit that leaves the
+    /// app, and so the half where losing it matters most.
+    ///
+    /// A file's own author wins where both exist. It is the more specific
+    /// claim about the document being written, and nothing in the app sets
+    /// both.
     init(hike: Hike) {
         self.init(
             name: hike.displayTitle,
             trackDescription: hike.trackDescription,
-            author: hike.author,
+            author: hike.author ?? hike.importedAuthorName,
             keywords: hike.keywords,
             date: hike.date,
             route: hike.route

@@ -581,9 +581,30 @@ private extension HikeDetailView {
     // MARK: Metadata
 
     private var hasMetadata: Bool {
-        hike.trackDescription != nil || hike.author != nil || hike.keywords != nil
+        hike.trackDescription != nil
+            || hike.author != nil
+            || hike.importedAuthorName != nil
+            || hike.keywords != nil
     }
 
+    /// GPX metadata, plus the one credit that does not come from a file.
+    ///
+    /// ``Hike/importedAuthorName`` is a name a person typed into this app in
+    /// order to be credited by it, and until this row existed it was collected
+    /// at the moment of saving and then drawn nowhere: the preview screen is
+    /// headed *Shared by Anna*, and the hike it saves appears in the library
+    /// as one of the hiker's own. For a hike imported with no description that
+    /// went further than losing a line — ``hasMetadata`` was false, so the
+    /// whole section was absent and the screen had no place the credit could
+    /// have been.
+    ///
+    /// Labelled *Shared by* rather than *Author*, and a separate row rather
+    /// than a fallback into that one, because the two are different claims.
+    /// ``Hike/author`` is whatever a GPX file's `<author>` element said, which
+    /// this app neither vouches for nor collected; this is somebody who
+    /// published a walk here. Only one of them is ever set today — the
+    /// community import writes no `author` — but a row that can say which it
+    /// is costs nothing and cannot mislead later.
     private var metadataSection: some View {
         VStack(alignment: .leading, spacing: 12) {
             Text("Details")
@@ -591,6 +612,7 @@ private extension HikeDetailView {
                 .accessibilityAddTraits(.isHeader)
             if let description = hike.trackDescription { DetailRow(label: "Description", value: description) }
             if let author = hike.author { DetailRow(label: "Author", value: author) }
+            if let sharedBy = hike.importedAuthorName { DetailRow(label: "Shared by", value: sharedBy) }
             if let keywords = hike.keywords { DetailRow(label: "Keywords", value: keywords) }
         }
     }
