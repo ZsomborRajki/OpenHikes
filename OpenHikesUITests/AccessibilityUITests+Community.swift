@@ -2,8 +2,8 @@
 //  AccessibilityUITests+Community.swift
 //  OpenHikesUITests
 //
-//  The Community withdrawal form's audits, in an extension because the class
-//  they belong to is at its line limit.
+//  The Community audits that did not fit in the class they belong to, which is
+//  at its line limit: the withdrawal form's two, and the review screen's.
 //
 //  Not a second test class — SwiftLint's `single_test_class` forbids that and
 //  it would also have to be added to the list of functional classes
@@ -12,9 +12,10 @@
 //  `accessibility-ui-tests` job with the rest, and `--suite AccessibilityUITests`
 //  still selects them.
 //
-//  They are here rather than beside the share and report audits because they
-//  are the two that need a *submitted* hike, which is four taps of setup the
-//  other Community audits do not pay — see `shareTheImportedHike(scenario:)`.
+//  The withdrawal pair are here rather than beside the share and report audits
+//  because they need a *submitted* hike, which is four taps of setup the other
+//  Community audits do not pay — see `shareTheImportedHike(scenario:)`. The
+//  review screen's is here only because the class had no room left for it.
 //
 
 import XCTest
@@ -138,5 +139,31 @@ extension AccessibilityUITests {
         )
         app.buttons["Done"].firstMatch.tap()
         return app
+    }
+
+    /// The review screen, which is the *other* consequential one.
+    ///
+    /// Swept for the reason the share form is: this is where a decision is
+    /// made that reaches every other user of the app, and it had never been
+    /// looked at because it did not exist. The screen is mostly a stranger's
+    /// text and photographs at a size chosen to be judged by, which is exactly
+    /// the shape an audit has something to say about — and the two decisions
+    /// under it are a destructive pair.
+    @MainActor
+    func testCommunityReviewScreenPassesAccessibilityAudit() throws {
+        let app = launchCommunity(scenario: .reviewing)
+        selectCommunityTab(in: app)
+        let row = communityRow(titled: SeededQueuedHike.photographedTitle, in: app)
+        XCTAssertTrue(
+            row.waitForExistence(timeout: UITestTimeout.existence),
+            "the queue should have drawn before one of its rows is opened"
+        )
+        row.tap()
+        XCTAssertTrue(
+            app.staticTexts["Submission"].waitForExistence(timeout: UITestTimeout.existence),
+            "the review screen should have drawn before it is swept"
+        )
+
+        try audit(app)
     }
 }

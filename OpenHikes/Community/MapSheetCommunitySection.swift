@@ -151,9 +151,13 @@ extension MapSheetHikes {
                     .buttonStyle(.plain)
                 }
             } header: {
+                // On the header rather than the `Section`, and that is not a
+                // detail: an identifier on a `Section` is inherited by every
+                // element inside it, which silently replaced the rows' own
+                // `community-hike-row` and made them unfindable as hikes.
                 Text("Pending Review (\(review.pending.count))")
+                    .accessibilityIdentifier("community-review-section")
             }
-            .accessibilityIdentifier("community-review-section")
         }
     }
 
