@@ -63,11 +63,26 @@ extension HikeDetailView {
                 submissionID: hike.communitySubmissionID,
                 listingID: hike.communityListingID
             )
-            communityControl(publication)
-                .accessibilityLabel(Self.shareButtonLabel(publication))
+            // The two rules that can be answered from this hike alone. The
+            // third — whether it retraces something already sent — needs a
+            // fetch and a pass over other routes, so the share form asks that
+            // one when it opens; see ``CommunityPublishingCheck``.
+            //
+            // A refused hike keeps its button and opens the form, which
+            // refuses and says why. Disabling the glyph instead would leave a
+            // hiker looking at a dimmed control with no explanation anywhere
+            // on the screen, which is the dead end the keyless provider rows
+            // were fixed for one screen over.
+            let eligibility = CommunityPublishingEligibility.of(
+                importedFromListingID: hike.importedFromListingID,
+                importedAuthorName: hike.importedAuthorName,
+                distanceMeters: hike.distanceMeters
+            )
+            communityControl(publication, eligibility)
+                .accessibilityLabel(Self.shareButtonLabel(publication, eligibility))
                 // What a tap will do is invisible in a toolbar glyph, so the
                 // hint is the only place it can be explained.
-                .accessibilityHint(Self.shareButtonHint(publication))
+                .accessibilityHint(Self.shareButtonHint(publication, eligibility))
                 .accessibilityIdentifier("community-share-button")
                 .disabled(hike.pointCount < 2)
                 // Asks once per appearance, and only for a hike that has been
@@ -94,17 +109,26 @@ extension HikeDetailView {
     }
 
     /// A button where there is one thing to do, a menu where there are two.
+    ///
+    /// Eligibility only reaches the *not shared* state. A hike that has
+    /// already been sent is past the gate by definition, and the menu it gets
+    /// is about the submission rather than about a new one — an import cannot
+    /// be in either of those states, since ``CommunityImport`` writes no
+    /// submission id.
     @ViewBuilder
-    private func communityControl(_ publication: CommunityPublicationState) -> some View {
+    private func communityControl(
+        _ publication: CommunityPublicationState,
+        _ eligibility: CommunityPublishingEligibility
+    ) -> some View {
         switch publication {
         case .notShared:
             Button { isSharingToCommunity = true } label: {
-                Self.shareButtonGlyph(publication)
+                Self.shareButtonGlyph(publication, eligibility)
             }
             .buttonStyle(.plain)
         case .awaitingReview:
             Button { isWithdrawingFromCommunity = true } label: {
-                Self.shareButtonGlyph(publication)
+                Self.shareButtonGlyph(publication, eligibility)
             }
             .buttonStyle(.plain)
         case .published:
@@ -117,25 +141,33 @@ extension HikeDetailView {
                 }
                 .accessibilityIdentifier("community-withdraw-button")
             } label: {
-                Self.shareButtonGlyph(publication)
+                Self.shareButtonGlyph(publication, eligibility)
             }
             .menuStyle(.button)
             .buttonStyle(.plain)
         }
     }
 
-    private static func shareButtonGlyph(_ publication: CommunityPublicationState) -> some View {
-        Image(systemName: shareButtonSymbol(publication))
+    private static func shareButtonGlyph(
+        _ publication: CommunityPublicationState,
+        _ eligibility: CommunityPublishingEligibility
+    ) -> some View {
+        Image(systemName: shareButtonSymbol(publication, eligibility))
             .font(.subheadline)
             .foregroundStyle(.secondary)
             .minimumTapTarget()
     }
 
-    /// Three glyphs for three states, because a badge on one glyph would be
-    /// unreadable at the size a toolbar draws this.
-    private static func shareButtonSymbol(_ publication: CommunityPublicationState) -> String {
+    /// A glyph per state, because a badge on one glyph would be unreadable at
+    /// the size a toolbar draws this. The slashed one is the fourth: a hike
+    /// that cannot be offered at all, which reads as *not shared* to every
+    /// other part of the app and is not the same thing.
+    private static func shareButtonSymbol(
+        _ publication: CommunityPublicationState,
+        _ eligibility: CommunityPublishingEligibility
+    ) -> String {
         switch publication {
-        case .notShared: "person.2"
+        case .notShared: eligibility.isEligible ? "person.2" : "person.2.slash"
         case .awaitingReview: "hourglass"
         case .published: "person.2.fill"
         }
@@ -144,9 +176,13 @@ extension HikeDetailView {
     /// Says *waiting for review* and never *rejected*: the absence of a
     /// listing covers a reviewer who has not looked and one who declined, and
     /// this app cannot tell those apart. See ``Hike/communityListingID``.
-    private static func shareButtonLabel(_ publication: CommunityPublicationState) -> String {
+    private static func shareButtonLabel(
+        _ publication: CommunityPublicationState,
+        _ eligibility: CommunityPublishingEligibility
+    ) -> String {
         switch publication {
-        case .notShared: "Share with the community"
+        case .notShared:
+            eligibility.reason?.shortLabel ?? "Share with the community"
         case .awaitingReview: "Waiting for review"
         case .published: "Published to the community"
         }
@@ -154,10 +190,13 @@ extension HikeDetailView {
 
     /// Spoken after the button, for the two states where the glyph alone does
     /// not say what a tap will do.
-    private static func shareButtonHint(_ publication: CommunityPublicationState) -> String {
+    private static func shareButtonHint(
+        _ publication: CommunityPublicationState,
+        _ eligibility: CommunityPublishingEligibility
+    ) -> String {
         switch publication {
         case .notShared:
-            ""
+            eligibility.isEligible ? "" : "Opens an explanation of why this hike can't be shared."
         case .awaitingReview:
             "Sent. It appears for other hikers once a person has checked it."
                 + " Opens a request to withdraw it."

@@ -98,6 +98,18 @@ nonisolated enum CommunityPublisher {
         save: (ModelContext) throws -> Void = { try $0.save() }
     ) async -> CommunityShareOutcome {
         guard hike.pointCount >= 2 else { return .refused(.nothingToShare) }
+        // The two rules that need nothing but this hike, re-checked here for
+        // the same reason the point floor above is: the form's Share button
+        // holds both, and this is the one function that can actually start an
+        // upload. The retread rule is not among them — it needs a fetch, and
+        // a publisher that went looking for other hikes would be doing the
+        // form's job from inside the send.
+        let eligibility = CommunityPublishingEligibility.of(
+            importedFromListingID: hike.importedFromListingID,
+            importedAuthorName: hike.importedAuthorName,
+            distanceMeters: hike.distanceMeters
+        )
+        if let reason = eligibility.reason { return .refused(.notEligible(reason)) }
 
         // Everything read off the `@Model` happens here, on the main actor and
         // before any suspension. A `Hike` cannot cross to the executor that
