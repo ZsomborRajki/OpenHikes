@@ -26,6 +26,10 @@ Supporting documents, each owning its own facts:
 # Strict SwiftLint, the pinned version, the same script CI runs
 Scripts/lint.sh
 
+# Boot the simulator before any test command below
+xcrun simctl boot "iPhone 17 Pro" || true
+xcrun simctl bootstatus "iPhone 17 Pro" -b
+
 # App and widget unit tests — the two bundles, and nothing else
 xcodebuild test -project OpenHikes.xcodeproj -scheme OpenHikes \
   -destination 'platform=iOS Simulator,name=iPhone 17 Pro' \
@@ -34,6 +38,13 @@ xcodebuild test -project OpenHikes.xcodeproj -scheme OpenHikes \
 # The standalone shared package
 swift test --package-path OpenHikesShared
 ```
+
+**The boot is part of the test command, not a refinement of it.** A cold
+simulator fails with "Early unexpected exit, operation never finished
+bootstrapping" or "The test runner hung before establishing connection" —
+nearly six minutes of a red run that says nothing about the code, against
+eighteen seconds of a green one. CI boots as its own step for the same reason;
+see *Build and test* in the instructions file.
 
 Those three are what CI gates on. **The `-only-testing:` scoping is part of the
 command, not a refinement of it** — `OpenHikes.xctestplan` also carries

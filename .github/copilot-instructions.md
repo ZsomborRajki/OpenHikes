@@ -5,6 +5,10 @@
 The main project requires Xcode 26.5+, the iOS 26.0 platform, and a development team capable of signing the WeatherKit entitlement, the shared App Group, the iCloud container and the push entitlement. The shared package can be built and tested independently on macOS.
 
 ```sh
+# Boot the simulator first. Anything below that runs tests needs this.
+xcrun simctl boot "iPhone 17 Pro" || true
+xcrun simctl bootstatus "iPhone 17 Pro" -b
+
 # Build the app and its embedded widget target
 xcodebuild build \
   -project OpenHikes.xcodeproj \
@@ -59,6 +63,10 @@ Scripts/run-script-tests.sh
 ruff check Scripts
 python3 -m unittest discover --start-directory Scripts/tests
 ```
+
+Boot the simulator before running any of the test commands, and treat that as part of the command rather than a refinement of it. A cold simulator is a known source of *"Early unexpected exit, operation never finished bootstrapping"*: the host app is killed by the watchdog that is timing its launch, and the run fails without a single test having reported anything. CI boots as its own step in both the `unit-tests` and `accessibility-ui-tests` jobs for exactly this reason, and the failure is not confined to a shared runner — the documented command run as written against a cold simulator on `main` took 342 seconds to fail with *"The test runner hung before establishing connection"*, having passed the widget bundle's 36 tests and never connected the app bundle's runner. Booted first, the identical command is green in eighteen seconds. `bootstatus -b` is the half that matters: `boot` returns as soon as the request is accepted, so without it the wait is the one being avoided.
+
+This is the same class of trap as the exit-code warning below, and the more common one: the first thing a new contributor or a coding agent does is run the documented command.
 
 Scope the local test command the way CI does. The `unit-tests` job passes `-only-testing:OpenHikesTests -only-testing:OpenWidgetTests`, so an unscoped `xcodebuild test -scheme OpenHikes` is not the gate CI runs — it is that gate plus the whole `OpenHikesUITests` bundle, which turns roughly twenty seconds into roughly thirteen minutes of real gestures. Run the UI automation deliberately, through `Scripts/run-ui-tests.sh`, where a bare `--all` parallelises by default: about thirteen minutes of serial test execution becomes 5m49s end to end, measured on a 16-core M-series machine.
 
