@@ -799,6 +799,15 @@ struct ImportSelectionGate {
         /// Folding it into `.root` would make the gate say the screen never
         /// changed.
         case communityHike(String)
+        /// A submission being reviewed, keyed by its queue entry.
+        ///
+        /// Its own case for the reason above, sharpened: a reviewer is part
+        /// way through deciding whether a stranger's hike goes in front of
+        /// everybody, and an arriving GPX must not pull the screen out from
+        /// under that. Distinct from ``communityHike(_:)`` because the two
+        /// names come from different record types and mean different things,
+        /// even though no two of them would ever collide.
+        case pendingSubmission(String)
     }
 
     private(set) var revision: UInt64 = 0
@@ -847,6 +856,7 @@ struct ImportSelectionGate {
         // terms as the photo viewer.
         case .some(.walk(let walk)): .hike(walk.hikeID)
         case .some(.communityHike(let listing)): .communityHike(listing.id)
+        case .some(.pendingSubmission(let pending)): .pendingSubmission(pending.id)
         }
     }
 }

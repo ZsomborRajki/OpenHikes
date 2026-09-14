@@ -152,6 +152,10 @@ struct CommunityHikeView: View {
     /// produce is a line on the map behind this sheet rather than anything
     /// here. See ``CommunityBrowser/previewOpened(_:)``.
     let browser: CommunityBrowser
+    /// Read for one thing: whether this account may take a published hike
+    /// down, which is a fact about the account and not about this hike. See
+    /// ``CommunityReviewQueue/isReviewer``.
+    var review: CommunityReviewQueue?
     /// Called with the imported hike, so the caller can pop this screen and
     /// open the real one.
     let onImport: (Hike) -> Void
@@ -206,6 +210,9 @@ struct CommunityHikeView: View {
     @State private var existingHike: Hike?
     @State private var isReporting = false
     @State private var isConfirmingBlock = false
+    @State private var isConfirmingTakeDown = false
+    @State private var isTakingDown = false
+    @State private var takeDownFailure: CommunityFailure?
     /// The import, held rather than fired and forgotten.
     ///
     /// It outlives this screen — an unstructured `Task` is not tied to a view
@@ -313,6 +320,34 @@ struct CommunityHikeView: View {
             Settings. Blocking doesn't report the hike or take it down.
             """)
         }
+        // Here for the reason the one above is: a dialog attached inside the
+        // `Menu` dismisses with it.
+        .confirmationDialog(
+            "Take this hike down?",
+            isPresented: $isConfirmingTakeDown,
+            titleVisibility: .visible
+        ) {
+            Button("Take Down", role: .destructive) { takeDown() }
+                .accessibilityIdentifier("community-take-down-confirm")
+            Button("Cancel", role: .cancel) { /* intentionally empty */ }
+        } message: {
+            Text("""
+            It stops appearing for everybody, and the route and photographs \
+            behind it are deleted for good. This can't be undone.
+            """)
+        }
+        .alert(
+            "Couldn't take it down",
+            isPresented: Binding(
+                get: { takeDownFailure != nil },
+                set: { if !$0 { takeDownFailure = nil } }
+            ),
+            presenting: takeDownFailure
+        ) { _ in
+            Button("OK", role: .cancel) { takeDownFailure = nil }
+        } message: { failure in
+            Text(failure.recoverySuggestion ?? failure.localizedDescription)
+        }
         // Started here and *held*, rather than simply run by the modifier.
         // `.task`'s own cancellation is the right trigger and the wrong reach:
         // it cancels this closure, and the work that writes into the download
@@ -391,6 +426,26 @@ private extension CommunityHikeView {
                 }
                 .accessibilityHint("Hides their hikes on this device")
                 .accessibilityIdentifier("community-block-button")
+
+                // A third entry only for an account the server has already
+                // let read the queue. Not a permission check — the permission
+                // is on the record type, and this account would be refused the
+                // delete anyway — but an ordinary hiker should not be offered
+                // a control that can only fail. It is the one action here that
+                // reaches everybody rather than this device: reporting sends a
+                // mail and blocking writes to `UserDefaults`, while this
+                // unlists a hike for the whole world.
+                if review?.isReviewer == true {
+                    Divider()
+                    Button(role: .destructive) {
+                        isConfirmingTakeDown = true
+                    } label: {
+                        Label("Take Down", systemImage: "trash")
+                    }
+                    .disabled(isTakingDown)
+                    .accessibilityHint("Unlists it for everybody and deletes the submission")
+                    .accessibilityIdentifier("community-take-down-button")
+                }
             } label: {
                 Label("More", systemImage: "ellipsis.circle")
             }
@@ -425,6 +480,34 @@ private extension CommunityHikeView {
     /// the hiker has just said they do not want to see, and backing out of it
     /// into a list the hike has vanished from reads as a glitch rather than as
     /// the thing they asked for.
+    /// Unlists this hike for everybody and deletes what is behind it.
+    ///
+    /// Leaves by ``onBlock`` rather than a route of its own, because what has
+    /// to happen next is the same thing blocking needs: the list this hike was
+    /// on no longer describes the database, and the screen showing it is about
+    /// a record that is gone. The refresh that closure runs is what takes the
+    /// row away.
+    ///
+    /// A failure is reported rather than swallowed. This is an action somebody
+    /// is waiting on, unlike the queue read that decided whether to offer it —
+    /// see ``CommunityReviewQueue``.
+    func takeDown() {
+        guard !isTakingDown else { return }
+        isTakingDown = true
+        Task {
+            do {
+                try await transport.takeDown(listing)
+            } catch {
+                isTakingDown = false
+                takeDownFailure = error as? CommunityFailure
+                    ?? .unavailable(error.localizedDescription)
+                return
+            }
+            isTakingDown = false
+            onBlock()
+        }
+    }
+
     func block() {
         blockList.block(listing)
         // Before the pop, so an import still in flight finds it set when it

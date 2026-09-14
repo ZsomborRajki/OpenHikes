@@ -43,9 +43,23 @@ reporting:
   environment carrying `QUERYABLE SEARCHABLE SORTABLE` by itself, because a
   schema promote can drop an index and downgrade a grant, not only add.
 - **`CommunityHike`** — the published listing. `_world` read; create and write
-  granted to a custom admin role — the reviewer's — and to nobody else. A
-  build of this app cannot create one; `CommunityTransporting` has no method
-  for it.
+  granted to a custom admin role — the reviewer's — and to nobody else. The app
+  *does* have a method for it (`CommunityTransporting.publish(_:)`), and that
+  is not the control: the grant is. A build calling it from an account outside
+  the role gets a permission failure, exactly as a hand-rolled request would.
+  A report that the method exists is not a finding; a report that a
+  non-reviewer's call **succeeded** is.
+- **`CommunitySubmissionNotice`** — the reviewer's queue. `_icloud` create,
+  and read and write granted to the `reviewer` role and to nobody else. It
+  carries a reference to a submission and no other field. This is the one type
+  in the schema that is indexed on purpose, and its read grant is what makes
+  that safe — a query returns the rows the caller may read, which for
+  everybody but the reviewer is none. **Any read of this type by an account
+  outside the role is a finding**, because a notice names a pending
+  submission and a name is all it takes to fetch one.
+- **`CommunityHikeSubmission` grants `WRITE` to `reviewer`**, which is how a
+  declined submission is deleted. Write reaching any other role — `_creator`
+  above all — is the finding described in the first bullet.
 - **`CommunityHike.authorID`** is deliberately unindexed as well: blocking is
   applied on the device, so the field is never a predicate, and indexing it
   would let anybody enumerate one person's published hikes.

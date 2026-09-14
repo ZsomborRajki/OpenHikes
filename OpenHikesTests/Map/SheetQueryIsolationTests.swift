@@ -187,6 +187,7 @@ struct SheetQueryIsolationTests {
             recorder: HikeRecorder(container: container, automaticallyRecovers: false),
             walkSession: TrailWalkSession(context: ModelContext(container)),
             community: CommunityBrowser(transport: nil, blockList: .scratch()),
+            review: CommunityReviewQueue(transport: nil),
             selectedHikeID: nil,
             onOpen: { _ in /* unused */ },
             onSelectResult: { _ in /* unused */ },

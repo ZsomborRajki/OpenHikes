@@ -46,6 +46,20 @@ final class StubCommunityTransport: CommunityTransporting, @unchecked Sendable {
         /// the map's lines cost one request per answer rather than one per
         /// row.
         var outlineRequests: [[String]] = []
+        /// How many times the review queue was asked for. What proves an
+        /// ordinary browse does not ask, and that a reviewer's does not ask
+        /// twice for one appearance.
+        var queueRequests = 0
+        /// The submissions a preview was opened for, in order.
+        var pendingDetailRequests: [String] = []
+        /// What was published, in order. Held whole rather than by id: what
+        /// these suites assert is that the *values the reviewer saw* are the
+        /// ones that went, ``CommunityPendingSubmission/photoCount`` included.
+        var published: [CommunityPendingSubmission] = []
+        /// What was declined, in order.
+        var declined: [CommunityPendingSubmission] = []
+        /// The listings taken down, in order.
+        var takenDown: [String] = []
     }
 
     /// What each call should do. Set before the call, read inside it.
@@ -60,6 +74,18 @@ final class StubCommunityTransport: CommunityTransporting, @unchecked Sendable {
     /// which is the honest state of a database whose hikes were all published
     /// before outlines existed.
     var outlinesResult: Result<[String: [RouteCoordinate]], CommunityFailure> = .success([:])
+    /// What the review queue answers. Empty — the default — is what the server
+    /// tells everybody who is not a reviewer, so a suite that sets nothing is
+    /// testing the ordinary hiker's app.
+    var pendingResult: Result<[CommunityPendingSubmission], CommunityFailure> = .success([])
+    /// The detail a pending preview loads. Falls back to ``detailResult`` when
+    /// unset, since most suites want one answer for both paths.
+    var pendingDetailResult: Result<CommunityHikeDetail, CommunityFailure>?
+    /// What publishing answers. The default succeeds with a listing built from
+    /// whatever was handed in, which is what the real transport does.
+    var publishResult: Result<CommunityListing, CommunityFailure>?
+    var declineResult: Result<Void, CommunityFailure> = .success(())
+    var takeDownResult: Result<Void, CommunityFailure> = .success(())
     /// Held open so a suite can watch two requests overlap — see
     /// `CommunityBrowserTests`.
     var beforeListingsReturn: (@Sendable () async -> Void)?
@@ -79,6 +105,9 @@ final class StubCommunityTransport: CommunityTransporting, @unchecked Sendable {
     /// hike while the check is waiting, which is the window the check has to
     /// notice it is no longer answering about the submission it asked after.
     var beforePublicationReturns: (@Sendable () async -> Void)?
+    /// The same, for the review queue. Held so a suite can watch the section
+    /// appear and disappear around a request in flight.
+    var beforeQueueReturns: (@Sendable () async -> Void)?
 
     private let state = Mutex(Recording())
 
@@ -162,6 +191,109 @@ final class StubCommunityTransport: CommunityTransporting, @unchecked Sendable {
         await beforeDetailReturns?()
         guard let detailResult else { throw CommunityFailure.noLongerAvailable }
         return try detailResult.get()
+    }
+
+    // MARK: - Reviewing
+
+    @concurrent
+    func pendingSubmissions() async throws -> [CommunityPendingSubmission] {
+        state.withLock { $0.queueRequests += 1 }
+        await beforeQueueReturns?()
+        return try pendingResult.get()
+    }
+
+    @concurrent
+    func detail(
+        ofPending pending: CommunityPendingSubmission,
+        downloadingInto directory: URL
+    ) async throws -> CommunityHikeDetail {
+        state.withLock { $0.pendingDetailRequests.append(pending.submissionID) }
+        await beforeDetailReturns?()
+        guard let result = pendingDetailResult ?? detailResult else {
+            throw CommunityFailure.noLongerAvailable
+        }
+        return try result.get()
+    }
+
+    @concurrent
+    func publish(_ pending: CommunityPendingSubmission) async throws -> CommunityListing {
+        state.withLock { $0.published.append(pending) }
+        if let publishResult { return try publishResult.get() }
+        // The real transport reads its answer back off the record it wrote, so
+        // the default answer here is built from what went in rather than from
+        // a fixture: a suite that does not care what the listing looks like
+        // still gets one that agrees with the submission it came from.
+        return CommunityListing(
+            id: "listing-for-\(pending.submissionID)",
+            submissionID: pending.submissionID,
+            title: pending.title,
+            authorName: pending.authorName,
+            authorID: pending.authorID,
+            hikeDate: pending.hikeDate,
+            distanceMeters: pending.distanceMeters,
+            photoCount: pending.photoCount,
+            latitude: pending.latitude,
+            longitude: pending.longitude,
+            publishedAt: pending.noticedAt
+        )
+    }
+
+    @concurrent
+    func decline(_ pending: CommunityPendingSubmission) async throws {
+        state.withLock { $0.declined.append(pending) }
+        try declineResult.get()
+    }
+
+    @concurrent
+    func takeDown(_ listing: CommunityListing) async throws {
+        state.withLock { $0.takenDown.append(listing.id) }
+        try takeDownResult.get()
+    }
+}
+
+extension CommunityPendingSubmission {
+    /// Fixed moments, for the reason ``CommunityListing/stub(id:submissionID:title:authorName:authorID:distanceMeters:photoCount:latitude:longitude:)``
+    /// has them: two of these built in different suites have to compare equal.
+    private enum StubDate {
+        static let walkedInterval: TimeInterval = 1_750_000_000
+        static let noticedInterval: TimeInterval = 1_750_050_000
+        static let walked = Date(timeIntervalSince1970: walkedInterval)
+        static let noticed = Date(timeIntervalSince1970: noticedInterval)
+    }
+
+    /// A queue entry with everything filled in.
+    ///
+    /// ``CommunityPendingSubmission/photoCount`` defaults to zero, which is
+    /// not laziness: it is what the transport actually returns, because the
+    /// count cannot be known without downloading the photographs. A suite
+    /// asserting on a published count has to set it the way the review screen
+    /// does — from a loaded detail.
+    static func stub(
+        id: String = "notice-1",
+        submissionID: String = "submission-1",
+        title: String = "Pilis Ridge",
+        authorName: String = "Anna",
+        authorID: String = "author-1",
+        trackDescription: String = "",
+        distanceMeters: Double = 8000,
+        photoCount: Int = 0,
+        latitude: Double = 47.63,
+        longitude: Double = 12.86
+    ) -> Self {
+        Self(
+            id: id,
+            submissionID: submissionID,
+            title: title,
+            authorName: authorName,
+            authorID: authorID,
+            trackDescription: trackDescription,
+            hikeDate: StubDate.walked,
+            distanceMeters: distanceMeters,
+            photoCount: photoCount,
+            latitude: latitude,
+            longitude: longitude,
+            noticedAt: StubDate.noticed
+        )
     }
 }
 

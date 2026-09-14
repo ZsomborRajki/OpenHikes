@@ -111,12 +111,14 @@ struct MapSheet: View {
                     recorder: hikeRecorder,
                     walkSession: appModel.walkSession,
                     community: appModel.community,
+                    review: appModel.communityReview,
                     selectedHikeID: selectedHike?.id,
                     onOpen: open,
                     onSelectResult: select,
                     onSelectCompletion: select,
                     onSubmitQuery: performSearch,
                     onSelectListing: select,
+                    onSelectPending: { presentation.path.append(.pendingSubmission($0)) },
                     onDelete: delete,
                     onWithdraw: { withdrawingHike = $0 },
                     onRecord: openRecording,
@@ -284,6 +286,29 @@ struct MapSheet: View {
         .accessibilityIdentifier("settings-button")
     }
 
+    /// The review screen, or nothing.
+    ///
+    /// Guarded on the transport exactly as the preview above is, and
+    /// unreachable without one for a second reason: the route that gets here
+    /// comes from a queue that only a transport can fill.
+    @ViewBuilder
+    private func pendingSubmissionDestination(
+        _ pending: CommunityPendingSubmission
+    ) -> some View {
+        if let transport = appModel.communityTransport {
+            CommunityReviewView(
+                pending: pending,
+                transport: transport,
+                queue: appModel.communityReview,
+                browser: appModel.community,
+                // Back to the list the row was on. The row itself is already
+                // gone — the screen tells the queue before it pops — so this
+                // lands on a list that agrees with the decision just made.
+                onFinished: { presentation.path.removeAll() }
+            )
+        }
+    }
+
     /// Somebody else's hike, or nothing at all on a launch that must not reach
     /// CloudKit — see ``OpenHikesModel/makeCommunityTransport()``.
     ///
@@ -301,6 +326,9 @@ struct MapSheet: View {
                 // this hike's real route on the map behind the sheet — see
                 // ``CommunityHikeView``'s `browser`.
                 browser: appModel.community,
+                // Read for one thing: whether to offer *Take Down*. See
+                // ``CommunityReviewQueue/isReviewer``.
+                review: appModel.communityReview,
                 // `open` assigns the whole path rather than appending to it, so
                 // the preview is replaced rather than left underneath — which
                 // is what should happen: backing out of a hike that is now in
@@ -352,6 +380,8 @@ struct MapSheet: View {
             )
         case let .communityHike(listing):
             communityHikeDestination(listing)
+        case let .pendingSubmission(pending):
+            pendingSubmissionDestination(pending)
         case .recording:
             RecordingView(
                 recorder: appModel.hikeRecorder,
