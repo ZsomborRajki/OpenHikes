@@ -103,6 +103,87 @@ nonisolated final class AccessibilityUITests: XCTestCase {
         try audit(app)
     }
 
+    /// The publish form, which is the consequential one.
+    ///
+    /// A text field the hiker types a display name into, the disclosure footer
+    /// `CommunityShareDisclosureTests` pins the wording of, the photo count,
+    /// and a button that sends a hike to a database every other user reads.
+    /// Nothing else in the app is a form of comparable consequence, and it had
+    /// never been swept: the two community audits that existed covered the
+    /// list and the preview, both of which are screens to *read*.
+    @MainActor
+    func testCommunityShareFormPassesAccessibilityAudit() throws {
+        let app = launchCommunity(
+            scenario: .seeded,
+            extraArguments: ["--ui-test-import-gpx=\(UITestFixture.gpxName)"]
+        )
+        openHikeDetail(in: app)
+        tapWhenReady(element("community-share-button", in: app))
+        XCTAssertTrue(
+            element("community-author-field", in: app)
+                .waitForExistence(timeout: UITestTimeout.existence),
+            "the audit is worth nothing against a form that has not drawn yet"
+        )
+
+        try audit(app)
+    }
+
+    /// The report form: a reason picker, a free-text note, and the commitment
+    /// footer.
+    ///
+    /// One half of the Guideline 1.2 pair, and the half a reviewer is most
+    /// likely to open. Driven by the functional suite already — which does not
+    /// run in CI, deliberately — so until now it had working automation and
+    /// none that gates a merge.
+    @MainActor
+    func testCommunityReportFormPassesAccessibilityAudit() throws {
+        let app = launchCommunity(scenario: .seeded)
+        selectCommunityTab(in: app)
+        openCommunityHike(titled: SeededHike.ridgeTitle, in: app)
+        tapWhenReady(element("community-moderation-menu", in: app))
+        tapWhenReady(element("community-report-button", in: app))
+        XCTAssertTrue(
+            element("community-report-reason", in: app)
+                .waitForExistence(timeout: UITestTimeout.existence),
+            "the report form should have asked its question before it is swept"
+        )
+
+        try audit(app)
+    }
+
+    /// Settings *with* a blocked author in it.
+    ///
+    /// ``BlockedHikersSection`` is absent rather than empty for anybody who has
+    /// never blocked anyone, which is right for the screen and meant
+    /// `testSettingsPassesAccessibilityAudit` walked a Settings that never
+    /// contained it. Its rows — a name, a date and an Unblock control each —
+    /// had never been audited. Blocking one author first is the whole
+    /// difference.
+    @MainActor
+    func testBlockedHikersSectionPassesAccessibilityAudit() throws {
+        let app = launchCommunity(scenario: .seeded)
+        selectCommunityTab(in: app)
+        openCommunityHike(titled: SeededHike.ridgeTitle, in: app)
+        tapWhenReady(element("community-moderation-menu", in: app))
+        tapWhenReady(element("community-block-button", in: app))
+        tapWhenReady(element("community-block-confirm", in: app))
+        XCTAssertTrue(
+            waitUntil(timeout: UITestTimeout.existence) {
+                !communityRow(titled: SeededHike.ridgeTitle, in: app).exists
+            },
+            "the section is drawn from a block, so the block has to have landed"
+        )
+
+        openSettings(in: app)
+        let unblockAll = element("unblock-everyone", in: app)
+        XCTAssertTrue(
+            scrollUntilVisible(unblockAll, in: app),
+            "a device with a blocked author should show the Blocked section"
+        )
+
+        try audit(app)
+    }
+
     /// The recording screen is the one a hiker uses without looking at it, so
     /// its live numbers have to be readable and its phase has to be announced.
     @MainActor
