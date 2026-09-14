@@ -42,8 +42,9 @@ extension HikeRecorderTests {
     /// attempt. The spin this replaced had to be *scheduled* into that window
     /// instead, and on a loaded runner it was not: the first attempt found the
     /// quiet moment this test says never comes and adopted the merge,
-    /// `pointCount → 3` against a `liveBefore` of 2. See the header of
-    /// `SettleSupport.swift` for the same failure in the same job.
+    /// `pointCount → 3` against a `liveBefore` of 2, in run 34850059609. The
+    /// header of `SettleSupport.swift` diagnoses the same thing in two other
+    /// suites, and is the longer version of why a yield is not a wait.
     ///
     /// The `.timeLimit` is not decoration. With the contention running for as
     /// long as the refresh does, a refresh that lost its cap never returns.
