@@ -504,6 +504,29 @@ final class CommunityBrowser {
         requestNearby(resultsArea)
     }
 
+    /// Takes a hike out of both lists, because it is no longer in the
+    /// database at all.
+    ///
+    /// What a takedown runs — see ``CommunityTransporting/takeDown(_:)``.
+    /// ``refreshAfterBlock()`` is the wrong tool for it and looks like the
+    /// right one: a block hides an author at *read* time, so its rows go on
+    /// their own and that method exists only for the page a block emptied
+    /// entirely. Nothing filters a taken-down listing, so left alone the row
+    /// and its line stay on a list describing a database they are no longer
+    /// in, and the next tap opens a preview that fails with *this hike isn't
+    /// available any more*.
+    ///
+    /// Locally and at once, for the reason ``CommunityReviewQueue/forget(_:)``
+    /// gives: the delete has already landed, and a round trip before the row
+    /// goes would put the reviewer through a request to be told what their own
+    /// device just did. The outline goes with it, because the line is drawn
+    /// through the row.
+    func forgetTakenDown(_ listing: CommunityListing) {
+        nearbyResults.removeAll { $0.id == listing.id }
+        matchingResults.removeAll { $0.id == listing.id }
+        nearbyOutlines[listing.id] = nil
+    }
+
     // MARK: - Map pins
 
     /// Where a tapped pin goes.

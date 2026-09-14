@@ -473,20 +473,20 @@ private extension CommunityHikeView {
             : String(localized: "Block \(listing.authorName)?")
     }
 
-    /// Blocks the author and hands the screen back, because what is on it is
-    /// now hidden everywhere else.
-    ///
-    /// Leaving it up would be the one place in the app still showing content
-    /// the hiker has just said they do not want to see, and backing out of it
-    /// into a list the hike has vanished from reads as a glitch rather than as
-    /// the thing they asked for.
     /// Unlists this hike for everybody and deletes what is behind it.
     ///
     /// Leaves by ``onBlock`` rather than a route of its own, because what has
-    /// to happen next is the same thing blocking needs: the list this hike was
-    /// on no longer describes the database, and the screen showing it is about
-    /// a record that is gone. The refresh that closure runs is what takes the
-    /// row away.
+    /// to happen next is the same pop blocking needs: the screen is about a
+    /// record that is gone.
+    ///
+    /// The row is taken off the list *here* rather than by that closure,
+    /// which is the difference between this and a block. A block hides an
+    /// author at read time, so its rows go on their own and
+    /// ``CommunityBrowser/refreshAfterBlock()`` only re-asks for the page a
+    /// block emptied; nothing filters a hike that has merely been deleted, so
+    /// without ``CommunityBrowser/forgetTakenDown(_:)`` the row and its line
+    /// would sit on the list until the next search, and the next tap on it
+    /// would open a preview that fails.
     ///
     /// A failure is reported rather than swallowed. This is an action somebody
     /// is waiting on, unlike the queue read that decided whether to offer it —
@@ -504,10 +504,20 @@ private extension CommunityHikeView {
                 return
             }
             isTakingDown = false
+            // Before the pop, so the list the pop lands on already agrees
+            // with the delete that has just happened.
+            browser.forgetTakenDown(listing)
             onBlock()
         }
     }
 
+    /// Blocks the author and hands the screen back, because what is on it is
+    /// now hidden everywhere else.
+    ///
+    /// Leaving it up would be the one place in the app still showing content
+    /// the hiker has just said they do not want to see, and backing out of it
+    /// into a list the hike has vanished from reads as a glitch rather than as
+    /// the thing they asked for.
     func block() {
         blockList.block(listing)
         // Before the pop, so an import still in flight finds it set when it

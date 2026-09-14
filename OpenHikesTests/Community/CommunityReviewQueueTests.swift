@@ -146,9 +146,9 @@ struct CommunityReviewQueueTests {
         #expect(!queue.isLoading)
     }
 
-    /// A refresh is what an action runs, and it is the one thing that asks
-    /// again — otherwise a reviewer who published something would be looking
-    /// at a launch-old list until they quit the app.
+    /// The one thing that asks again, whatever has been asked before — without
+    /// it a reviewer who published something would be looking at a launch-old
+    /// list until they quit the app.
     @Test("refreshing asks again")
     func refreshingAsksAgain() async {
         let transport = StubCommunityTransport()
@@ -195,6 +195,56 @@ struct CommunityReviewQueueTests {
 
         #expect(queue.pending.map(\.id) == ["notice-2"])
         #expect(transport.recording.queueRequests == 1, "no round trip to drop a row")
+    }
+
+    /// The other half of dropping the row: the launch's one question has been
+    /// spent. A reviewer who publishes something and comes back to the tab is
+    /// the one person in the app whose answer is known to be out of date, and
+    /// without this they would be looking at the queue as it stood at launch
+    /// until they quit — never seeing anything that arrived while they worked.
+    @Test("acting spends the launch's question, so the next selection asks again")
+    func actingMakesTheNextSelectionAskAgain() async {
+        let transport = StubCommunityTransport()
+        let decided = CommunityPendingSubmission.stub(id: "notice-1")
+        transport.pendingResult = .success([decided, .stub(id: "notice-2")])
+        let queue = CommunityReviewQueue(transport: transport)
+
+        queue.startBrowsing()
+        await settle(queue)
+        queue.forget(decided)
+        #expect(transport.recording.queueRequests == 1, "not on the way back to the list")
+
+        queue.stopBrowsing()
+        queue.startBrowsing()
+        await settle(queue)
+
+        #expect(transport.recording.queueRequests == 2)
+        #expect(queue.pending.map(\.id) == ["notice-1", "notice-2"], "the server's answer, not ours")
+    }
+
+    /// The guard that keeps two requests from overlapping has to survive a
+    /// cancelled one landing late. Without a generation to check, the
+    /// superseded task clears ``isLoading`` for the request that replaced it,
+    /// and the next caller gets to start a third.
+    @Test("a superseded request does not clear the flag for the one that replaced it")
+    func aSupersededRequestLeavesTheFlagAlone() async {
+        let transport = StubCommunityTransport()
+        transport.pendingResult = .success([.stub()])
+        let queue = CommunityReviewQueue(transport: transport)
+        let gate = AsyncGate()
+        transport.beforeQueueReturns = { await gate.wait() }
+
+        queue.startBrowsing()
+        // Cancel the first without waiting on it, then start a second that is
+        // still in flight when the first comes back.
+        queue.stopBrowsing()
+        queue.refresh()
+        await gate.open()
+        await settle(queue)
+
+        #expect(transport.recording.queueRequests == 2)
+        #expect(queue.pending.count == 1, "the second answer stands")
+        #expect(!queue.isLoading)
     }
 }
 

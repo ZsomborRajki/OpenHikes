@@ -107,6 +107,14 @@ nonisolated final class CommunityReviewUITests: XCTestCase {
             scrollUntilVisible(publish, in: app),
             "the decision is at the foot of the screen, under what it is about"
         )
+        // Enabled only once the submission has loaded, which is not a detail of
+        // the test: the photo count that goes onto the listing arrives with the
+        // photographs, and a reviewer publishing before them would be approving
+        // a title. See `CommunityReviewView.hasLoaded`.
+        XCTAssertTrue(
+            waitUntil(timeout: UITestTimeout.trace) { publish.isEnabled },
+            "publishing should wait for what is being decided about"
+        )
         publish.tap()
 
         XCTAssertTrue(

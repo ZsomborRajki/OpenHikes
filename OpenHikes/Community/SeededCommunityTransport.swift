@@ -259,20 +259,25 @@ nonisolated struct SeededCommunityTransport: CommunityTransporting {
         )
     }
 
+    // `.unreachable` rather than `.notPermitted`, like every other method
+    // here: ``Scenario/failing`` is a database that cannot be reached, and a
+    // stand-in that answered a broken network with *this account can't review
+    // submissions* would put the one sentence in front of a reviewer that
+    // sends them to the CloudKit Console over a lost signal.
     @concurrent
     func publish(_ pending: CommunityPendingSubmission) async throws -> CommunityListing {
-        guard scenario != .failing else { throw CommunityFailure.notPermitted }
+        guard scenario != .failing else { throw CommunityFailure.unreachable }
         return Self.publishedListing(of: pending.submissionID)
     }
 
     @concurrent
     func decline(_ pending: CommunityPendingSubmission) async throws {
-        guard scenario != .failing else { throw CommunityFailure.notPermitted }
+        guard scenario != .failing else { throw CommunityFailure.unreachable }
     }
 
     @concurrent
     func takeDown(_ listing: CommunityListing) async throws {
-        guard scenario != .failing else { throw CommunityFailure.notPermitted }
+        guard scenario != .failing else { throw CommunityFailure.unreachable }
     }
 
     @concurrent
