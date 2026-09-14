@@ -59,6 +59,10 @@ Scripts/simulate-hike.sh stop           # stop and clear location playback
 ## Build and test
 
 ```sh
+# Boot the simulator first — the test commands below need it awake
+xcrun simctl boot "iPhone 17 Pro" || true
+xcrun simctl bootstatus "iPhone 17 Pro" -b
+
 # Build the app and its embedded widget
 xcodebuild build -project OpenHikes.xcodeproj -scheme OpenHikes \
   -destination 'platform=iOS Simulator,name=iPhone 17 Pro'
@@ -81,6 +85,8 @@ Scripts/run-performance-tests.sh
 # Strict SwiftLint, the same one CI runs; --fix applies what it can correct
 Scripts/lint.sh
 ```
+
+Against a cold simulator, `xcodebuild test` fails with "The test runner hung before establishing connection" after several minutes without a single test having reported — which is why the boot is the first line above rather than an optional one.
 
 Unit and integration tests use Swift Testing; `OpenHikesUITests` uses XCUITest, because Apple's UI automation and launch metrics are not available through Swift Testing.
 
