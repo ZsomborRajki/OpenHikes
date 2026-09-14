@@ -737,10 +737,19 @@ jobs:
       # Two classes, run separately so a failure names which half broke: the
       # audits are a sweep of each screen, the label tests are assertions on
       # what individual controls promise.
+      # `--device "$IOS_SIMULATOR"` rather than the script's own default, and
+      # that is the coupling this makes explicit rather than a flag for its own
+      # sake: the step above boots `$IOS_SIMULATOR`, and until this was passed
+      # the two agreed only because the script's default happened to spell the
+      # same device. It does not any more — the default names the simulator
+      # this repository's documented commands name, which is an iOS 27 device
+      # the runner image has never had — so the job that boots one device and
+      # tested on whatever the script picked now says which one it means.
       - name: Run the accessibility audits
         run: |
           mkdir -p TestResults
           Scripts/run-ui-tests.sh \
+            --device "$IOS_SIMULATOR" \
             --suite AccessibilityUITests \
             --all \
             --retry \
@@ -749,6 +758,7 @@ jobs:
       - name: Run the accessibility label assertions
         run: |
           Scripts/run-ui-tests.sh \
+            --device "$IOS_SIMULATOR" \
             --suite AccessibilityLabelUITests \
             --all \
             --retry \

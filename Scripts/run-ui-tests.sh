@@ -78,7 +78,7 @@ default_test="testReviewsSnappedRouteAfterStopping"
 # bare `--all` uses; `--parallel N` overrides it and `--serial` turns it off.
 default_parallel_workers=3
 
-device="${OPENHIKES_SIMULATOR_NAME:-iPhone 17 Pro}"
+device="${OPENHIKES_SIMULATOR_NAME:-iPhone 18 Pro}"
 test_name="$default_test"
 suite=""
 run_all=false

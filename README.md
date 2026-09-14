@@ -60,16 +60,16 @@ Scripts/simulate-hike.sh stop           # stop and clear location playback
 
 ```sh
 # Boot the simulator first — the test commands below need it awake
-xcrun simctl boot "iPhone 17" || true
-xcrun simctl bootstatus "iPhone 17" -b
+xcrun simctl boot "iPhone 18 Pro" || true
+xcrun simctl bootstatus "iPhone 18 Pro" -b
 
 # Build the app and its embedded widget
 xcodebuild build -project OpenHikes.xcodeproj -scheme OpenHikes \
-  -destination 'platform=iOS Simulator,name=iPhone 17'
+  -destination 'platform=iOS Simulator,name=iPhone 18 Pro'
 
 # Unit and integration tests, app and widget
 xcodebuild test -project OpenHikes.xcodeproj -scheme OpenHikes \
-  -destination 'platform=iOS Simulator,name=iPhone 17' \
+  -destination 'platform=iOS Simulator,name=iPhone 18 Pro' \
   -only-testing:OpenHikesTests -only-testing:OpenWidgetTests
 
 # The standalone shared-package suite

@@ -34,7 +34,7 @@ body:
     id: device
     attributes:
       label: Device and iOS version
-      placeholder: iPhone 17 Pro, iOS 27.0 — or "iPhone 17 Simulator"
+      placeholder: iPhone 18 Pro, iOS 27.0 — or "iPhone 18 Pro Simulator"
     validations:
       required: true
 
