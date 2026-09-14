@@ -160,7 +160,11 @@ nonisolated final class PhotoUITests: XCTestCase {
         )
         XCTAssertTrue(app.buttons["Next photo"].isEnabled)
 
+        // The trash button is an offer. The file goes with the row and photo
+        // pixels stay on the device the photo was added on, so the
+        // destructive step is behind a question.
         element("photo-delete-button", in: app).tap()
+        confirmDestructive("Delete Photo", in: app, failureMessage: Self.shouldAsk)
         XCTAssertTrue(
             app.navigationBars["1 of 1"]
                 .waitForExistence(timeout: UITestTimeout.navigation),
@@ -168,6 +172,7 @@ nonisolated final class PhotoUITests: XCTestCase {
         )
 
         element("photo-delete-button", in: app).tap()
+        confirmDestructive("Delete Photo", in: app, failureMessage: Self.shouldAsk)
         let closed = NSPredicate(format: "exists == false")
         expectation(for: closed, evaluatedWith: viewer)
         waitForExpectations(timeout: UITestTimeout.existence)
@@ -425,4 +430,6 @@ nonisolated final class PhotoUITests: XCTestCase {
     /// anything below four fifths is unambiguously it while leaving room for
     /// the home indicator and for a taller device.
     private static let collapsedSheetFraction: CGFloat = 0.8
+    private static let shouldAsk = "deleting a photograph should ask first"
+
 }

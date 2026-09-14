@@ -37,6 +37,13 @@ struct MapSheetHikes: View, Equatable {
     var hikes: [Hike]
     /// Keeps the matching-hike ranking across body passes — see ``HikeSearch``.
     @State private var hikeSearch = HikeSearch()
+    /// The hike a swipe has asked to delete, while the dialog is up.
+    ///
+    /// Held here rather than as a `Bool` per row: one dialog on the list, not
+    /// one per `ForEach` element, and the pending hike is what the wording is
+    /// built from. Cleared by the dialog's own dismissal, so *Cancel*, a tap
+    /// outside and the swipe sliding shut all land in the same place.
+    @State private var pendingDeletion: Hike?
 
     let searchText: String
     let isSearchFocused: Bool
@@ -131,6 +138,10 @@ struct MapSheetHikes: View, Equatable {
         // ``mapSearchFallback(matchingHikes:)``.
         let hasQuery = !searchText.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
         let isSearching = isSearchFocused && hasQuery
+        // Built from the pending hike rather than from a captured copy, so the
+        // wording names the row that was actually swiped. `nil` whenever no
+        // dialog is up, which is every pass but one.
+        let prompt = pendingDeletion.map(HikeDeletionPrompt.init(hike:))
 
         return Group {
             if isCompact {
@@ -148,6 +159,27 @@ struct MapSheetHikes: View, Equatable {
             // cached ranking worth keeping — and holding one would keep every
             // matched hike alive behind a search nobody is running.
             if !focused { hikeSearch.clear() }
+        }
+        // One dialog for the whole list rather than one per `ForEach` row, and
+        // out here rather than inside `hikesSection` so a detent change or a
+        // search focus arriving mid-swipe cannot take it off screen with the
+        // list. `presenting:` so the buttons act on the hike the dialog was
+        // built for and never on a leftover from the previous swipe.
+        .confirmationDialog(
+            prompt?.title ?? "",
+            isPresented: Binding(
+                get: { pendingDeletion != nil },
+                set: { if !$0 { pendingDeletion = nil } }
+            ),
+            titleVisibility: .visible,
+            presenting: pendingDeletion
+        ) { hike in
+            Button(prompt?.confirmTitle ?? "", role: .destructive) {
+                onDelete(hike, hikes)
+            }
+            Button("Cancel", role: .cancel) { /* intentionally empty */ }
+        } message: { _ in
+            Text(prompt?.message ?? "")
         }
     }
 }
@@ -318,8 +350,12 @@ private extension MapSheetHikes {
         )
         .swipeActions(edge: .trailing) {
             if !belongsToActiveRecording(hike) {
+                // Asks first. A hike's photographs are the one thing in this
+                // app with no second copy anywhere — see ``HikeDeletionPrompt``
+                // for what a single swipe used to take, and from how many
+                // devices.
                 Button(role: .destructive) {
-                    onDelete(hike, hikes)
+                    pendingDeletion = hike
                 } label: {
                     Label("Delete", systemImage: "trash")
                 }
