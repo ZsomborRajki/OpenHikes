@@ -64,9 +64,11 @@ import Foundation
 nonisolated struct SeededCommunityTransport: CommunityTransporting {
     /// Which shape of database this launch wants.
     ///
-    /// Three, because the list has three states worth looking at and only one
-    /// of them is the happy one. A screen that has never been seen empty or
-    /// broken is a screen whose empty and broken states were written blind.
+    /// Four, because the list has three states worth looking at and only one
+    /// of them is the happy one — and because one screen depends not on what
+    /// the list holds but on what a *reviewer* has done since. A screen that
+    /// has never been seen empty or broken is a screen whose empty and broken
+    /// states were written blind.
     enum Scenario: String, CaseIterable {
         /// Nothing published anywhere near here, which is the ordinary answer
         /// for most of the world and the one the empty row is for.
@@ -74,8 +76,24 @@ nonisolated struct SeededCommunityTransport: CommunityTransporting {
         /// Every read fails, so the failure row, the retry and the preview's
         /// own error state can be driven.
         case failing = "failing"
+        /// ``seeded``, and a reviewer who has said yes.
+        ///
+        /// The only way to reach the *published* state from automation.
+        /// `publication(of:)` is what promotes a hike from *awaiting review*
+        /// to *published* — ``CommunityPublicationCheck`` writes
+        /// ``Hike/communityListingID`` from its answer and nothing else does
+        /// — so a scenario that always answers `nil` leaves two screens
+        /// undriveable: the *published* share-button menu, and
+        /// ``CommunityWithdrawalSheet``'s published footer, which is a
+        /// different sentence from its awaiting-review one.
+        case published = "published"
         /// Three published hikes, one of them with photographs.
         case seeded = "seeded"
+
+        /// Whether this scenario has a database behind it at all, as opposed
+        /// to being empty or broken. The two that do differ only in what
+        /// ``publication(of:)`` says.
+        var servesListings: Bool { self == .seeded || self == .published }
 
         /// The scenario a launch argument names, or `nil` for a launch that
         /// did not ask — which is every launch that must get no transport at
@@ -123,7 +141,7 @@ nonisolated struct SeededCommunityTransport: CommunityTransporting {
     @concurrent
     func outlines(for listings: [CommunityListing]) async throws -> [String: [RouteCoordinate]] {
         guard scenario != .failing else { throw CommunityFailure.unreachable }
-        guard scenario == .seeded else { return [:] }
+        guard scenario.servesListings else { return [:] }
         // Through the real encoder and back out through the real decoder,
         // rather than handing the route over directly: the map draws whatever
         // survives that round trip in production, and an outline that would
@@ -143,7 +161,7 @@ nonisolated struct SeededCommunityTransport: CommunityTransporting {
         for listing: CommunityListing,
         downloadingInto directory: URL
     ) async throws -> CommunityHikeDetail {
-        guard scenario == .seeded else { throw CommunityFailure.noLongerAvailable }
+        guard scenario.servesListings else { throw CommunityFailure.noLongerAvailable }
         // The same check the real transport makes in the same place and for
         // the same reason: a hiker who backs out mid-download must not have
         // files written into a directory the screen has already deleted.
@@ -185,7 +203,35 @@ nonisolated struct SeededCommunityTransport: CommunityTransporting {
         // process invented a moment ago and the state the share screen has to
         // be able to draw: a hike waiting for a reviewer looks the same as one
         // a reviewer declined, deliberately — see ``CommunityTransporting``.
-        return nil
+        guard scenario == .published else { return nil }
+        // A listing derived from the submission rather than one of the three
+        // seeded rows, because what the caller does with it is read its `id`
+        // onto the hike — and an id borrowed from another hike's listing would
+        // make a withdrawal request name a record that has nothing to do with
+        // it. The record name is the whole content of that request.
+        return Self.publishedListing(of: submissionID)
+    }
+
+    /// The listing a reviewer would have created from `submissionID`.
+    ///
+    /// Only the id is load-bearing — it is what ``CommunityPublicationCheck``
+    /// writes to ``Hike/communityListingID``, and what
+    /// ``CommunityWithdrawal`` then names. The rest is filled in so the value
+    /// is a listing rather than a shape.
+    private static func publishedListing(of submissionID: String) -> CommunityListing {
+        CommunityListing(
+            id: "seeded-listing-\(submissionID)",
+            submissionID: submissionID,
+            title: "Published by a reviewer",
+            authorName: "",
+            authorID: "seeded-reviewer",
+            hikeDate: Self.hikeDate,
+            distanceMeters: 0,
+            photoCount: 0,
+            latitude: Self.startLatitude,
+            longitude: Self.startLongitude,
+            publishedAt: Self.publishedDate
+        )
     }
 
     /// One read's worth of answer, or the failure the scenario promises.
@@ -196,7 +242,7 @@ nonisolated struct SeededCommunityTransport: CommunityTransporting {
     /// put under a test.
     private func answer(_ listings: [CommunityListing]) throws -> [CommunityListing] {
         switch scenario {
-        case .seeded: listings
+        case .seeded, .published: listings
         case .empty: []
         case .failing: throw CommunityFailure.unreachable
         }
@@ -285,8 +331,8 @@ nonisolated extension SeededCommunityTransport {
     /// same row and a screenshot from either is worth comparing.
     private static let hikeInterval: TimeInterval = 1_750_000_000
     private static let publishedInterval: TimeInterval = 1_750_100_000
-    private static let hikeDate = Date(timeIntervalSince1970: hikeInterval)
-    private static let publishedDate = Date(timeIntervalSince1970: publishedInterval)
+    static let hikeDate = Date(timeIntervalSince1970: hikeInterval)
+    static let publishedDate = Date(timeIntervalSince1970: publishedInterval)
     /// `UITestFixture.trailheadCoordinate`, which is where every scenario puts
     /// the simulated fix. Spelled out rather than shared because that fixture
     /// lives in the UI test bundle, which this target cannot import.
