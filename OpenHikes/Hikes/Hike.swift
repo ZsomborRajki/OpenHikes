@@ -394,6 +394,43 @@ extension Hike {
     func belongsToActiveRecording(currentHikeID: UUID?) -> Bool {
         isRecording || id == currentHikeID
     }
+
+    /// A draft whose `isRecording` flag no device on this phone stands behind.
+    ///
+    /// `isRecording` is a *mirrored* column and ``ownsRecordingDraft`` is not:
+    /// the claim lives in ``HikeLocalState``, which is deliberately kept in an
+    /// unmirrored store. So a draft can arrive from CloudKit — onto a
+    /// reinstalled app, or a second device — with the flag set and no local
+    /// journal behind it, and that pairing is exactly what this asks about.
+    ///
+    /// `HikeRecorder.deleteOrphanedRecordingHikes()` sweeps the *owned* case
+    /// and refuses this one, correctly: absent a local claim it cannot tell a
+    /// dead draft from one another phone is recording into right now, and
+    /// deleting a live walk is the worse mistake. That refusal is why the
+    /// hikes list has to offer the choice by hand instead — see
+    /// ``canBeDeletedFromLibrary(currentHikeID:)``.
+    func isAbandonedRecordingDraft(currentHikeID: UUID?) -> Bool {
+        isRecording && id != currentHikeID && !ownsRecordingDraft
+    }
+
+    /// Whether the hikes list may offer to delete this row.
+    ///
+    /// Not the inverse of ``belongsToActiveRecording(currentHikeID:)``, and
+    /// the difference is a bug this fixes: gating the swipe on that predicate
+    /// meant *any* row carrying `isRecording` had no Delete button built for
+    /// it at all, so an abandoned draft could be neither recorded into, swept,
+    /// nor removed. The live recording is the thing to protect, and this
+    /// device's own journal is what identifies it.
+    ///
+    /// Reads ``ownsRecordingDraft`` — a fetch against the sidecar store — only
+    /// once `isRecording` is already true, which is at most a row or two in a
+    /// whole library.
+    func canBeDeletedFromLibrary(currentHikeID: UUID?) -> Bool {
+        guard belongsToActiveRecording(currentHikeID: currentHikeID) else {
+            return true
+        }
+        return isAbandonedRecordingDraft(currentHikeID: currentHikeID)
+    }
 }
 
 extension Hike {

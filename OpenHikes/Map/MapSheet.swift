@@ -388,7 +388,11 @@ struct MapSheet: View {
 
 private extension MapSheet {
 private func delete(_ hike: Hike, among hikes: [Hike]) {
-    guard !belongsToActiveRecording(hike) else {
+    // An abandoned draft deletes like any other hike rather than bouncing to
+    // the recorder: the screen it would open cannot adopt one — recovery
+    // needs a journal this device does not have — so this was the second half
+    // of a dead end. See ``Hike/canBeDeletedFromLibrary(currentHikeID:)``.
+    guard canDeleteFromLibrary(hike) else {
         openRecording()
         return
     }
@@ -597,6 +601,12 @@ private func open(_ hike: Hike) {
 
 private func belongsToActiveRecording(_ hike: Hike) -> Bool {
     hike.belongsToActiveRecording(
+        currentHikeID: hikeRecorder.currentHike?.id
+    )
+}
+
+private func canDeleteFromLibrary(_ hike: Hike) -> Bool {
+    hike.canBeDeletedFromLibrary(
         currentHikeID: hikeRecorder.currentHike?.id
     )
 }
