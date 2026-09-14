@@ -52,15 +52,18 @@ nonisolated private final class StoreSandbox: Sendable {
         try Data("this is not a SQLite database".utf8).write(to: url)
     }
 
+    @MainActor
     func openContainer() throws -> ModelContainer {
         try ModelContainer.openHikes(url: hikesURL, localURL: localURL)
     }
 
+    @MainActor
     func inMemoryFallback() throws -> ModelContainer {
         try ModelContainer.openHikes(isStoredInMemoryOnly: true)
     }
 }
 
+@MainActor
 @Suite("Store open failure")
 struct StoreOpenFailureTests {
     private static let claimedTileKey = "osm/14/8723/5685@2.0"
@@ -152,6 +155,7 @@ struct StoreOpenFailureTests {
 /// This suite pins that rather than papering over it. The assertions are
 /// written as claims about today's behaviour, so the day someone attributes a
 /// failure to a store, they fail and say what changed.
+@MainActor
 @Suite("Store failure attribution")
 struct StoreFailureAttributionTests {
     private func issue(corrupting store: KeyPath<StoreSandbox, URL>) throws -> StorageStartupIssue {

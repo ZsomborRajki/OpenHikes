@@ -128,7 +128,6 @@ final class PowerStateMonitor {
         guard next != state else { return false }
         state = next
         PowerState.publish(next)
-        RenderSignpost.mark("PowerStateChanged", next.signpostDetail)
         return true
     }
 

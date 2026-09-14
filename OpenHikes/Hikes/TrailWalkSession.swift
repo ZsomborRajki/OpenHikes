@@ -333,7 +333,6 @@ final class TrailWalkSession {
             startedAt: now
         )
         adopt(started, hike: hike)
-        RenderSignpost.mark("TrailWalkStarted")
         // A refused first write is not a refused start: nothing on disk says
         // otherwise yet, and the walk is under way in memory. `persist` left
         // the next write due at once, so the next matched fix writes it.
@@ -378,7 +377,6 @@ final class TrailWalkSession {
         record = current
         phase = .paused
         updateReminder(for: current)
-        RenderSignpost.mark("TrailWalkPhase", "paused")
         publishState()
         return true
     }
@@ -396,7 +394,6 @@ final class TrailWalkSession {
         record = current
         phase = .following
         reminders?.walkDidResumeOrEnd()
-        RenderSignpost.mark("TrailWalkPhase", "following")
         publishState()
         return true
     }
@@ -498,7 +495,6 @@ final class TrailWalkSession {
             lastPersistedAt = nil
             return .refused
         }
-        RenderSignpost.mark("TrailWalkEnded", reason.rawValue)
         let lingers = row != nil && reason != .abandoned
         let final = lingers ? Self.payload(for: closing, at: endedAt, state: .finished) : nil
         let endedID = closing.hikeID
@@ -632,7 +628,6 @@ private extension TrailWalkSession {
         let previous = walkedHike.walkInProgress
         walkedHike.walkInProgress = walk
         lastPersistenceAttemptAt = now
-        RenderSignpost.mark("TrailWalkPersisted")
         guard save(reason: "writing the walk in progress") else {
             walkedHike.walkInProgress = previous
             persistenceFailures = min(persistenceFailures + 1, 2)

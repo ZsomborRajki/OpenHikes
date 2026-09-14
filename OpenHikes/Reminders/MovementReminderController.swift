@@ -427,7 +427,6 @@ extension MovementReminderController {
     }
 
     private func post(_ reminder: MovementReminder) {
-        RenderSignpost.mark("MovementReminder", reminder.kind.rawValue)
         enqueue { [weak self] in
             guard let self, await notifier.authorize() else { return }
             await notifier.post(reminder)

@@ -142,7 +142,6 @@ struct MapView: MapViewRepresentable, Equatable {
         // Fires once per MKMapView creation — if this repeats, something is
         // destroying the representable's identity (e.g. an `.id()` upstream
         // churning), which throws away all MapKit state, not just SwiftUI's.
-        RenderSignpost.mark("MapViewCreated")
         // The launch is over when the app has nothing left to do before the
         // map, not when there is a frame: `histogrammedTimeToFirstDraw` stops
         // at the first CA commit, which on this app is a sheet over an empty
@@ -207,7 +206,6 @@ struct MapView: MapViewRepresentable, Equatable {
         } ?? Self.systemBaseMapKey
         guard coordinator.tileSourceKey != key else { return }
         coordinator.tileSourceKey = key
-        RenderSignpost.mark("MapTileSourceRebuilt", key)
 
         // Before the early return below: the system base map is a change of
         // credit too — MapKit draws its own **Legal** link, so ours has to go
@@ -452,7 +450,6 @@ struct MapView: MapViewRepresentable, Equatable {
     private func updateRoute(_ mapView: MKMapView, _ coordinator: Coordinator) {
         guard coordinator.routeID != route?.id else { return }
         coordinator.routeID = route?.id
-        RenderSignpost.mark("MapRouteRebuilt")
 
         if let existing = coordinator.routeOverlay {
             mapView.removeOverlay(existing)
@@ -574,7 +571,6 @@ struct MapView: MapViewRepresentable, Equatable {
         // steps below actually change anything — compare its rate against the
         // "Rebuilt"/"Centered"/"Restyled" marks to see how much of that is
         // real work vs. free no-ops.
-        RenderSignpost.mark("MapUpdateCalled")
         applySidePanelInset(coordinator)
         applyTileSource(to: mapView, coordinator)
         updateRoute(mapView, coordinator)

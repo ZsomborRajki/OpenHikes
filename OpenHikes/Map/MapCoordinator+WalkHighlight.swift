@@ -52,7 +52,6 @@ extension MapView.Coordinator {
             walkHighlightOverlays = []
         }
         guard !segments.isEmpty else { return }
-        RenderSignpost.mark("MapWalkHighlightApplied", "\(segments.count) stretches")
         let casings = segments.map { stretch in MKPolyline(coordinates: stretch, count: stretch.count) }
         let lines = segments.map { stretch in MKPolyline(coordinates: stretch, count: stretch.count) }
         walkHighlightCasingOverlays = casings

@@ -134,8 +134,7 @@ struct HikeDetailView: View {
         // (directly or via a computed var it calls, like `elevationSection`).
         // The same goes for `walkSession`: a matched fix that extends a walk
         // redraws the progress row and the controls, and nothing above them.
-        RenderSignpost.mark("HikeDetailBody")
-        return VStack(spacing: 0) {
+        VStack(spacing: 0) {
             segmentPicker
             switch interaction.segment {
             case .details: details
@@ -692,9 +691,6 @@ private extension HikeDetailView {
         // `tracker` for nothing.
         if tracker.liveTrackerDistance != nil {
             tracker.liveTrackerDistance = nil
-            RenderSignpost.mark("LiveFollowUpdate", "cleared")
-        } else {
-            RenderSignpost.mark("LiveFollowUpdate", reason)
         }
         // An active walk still reports losing the route with its chart off.
         // A paused walk is left alone: the widget says Paused, and that stands.
@@ -754,8 +750,6 @@ private extension HikeDetailView {
         )
         if hike.autoFollowEnabled {
             updateLiveTracker(distance: match.distanceAlongRoute)
-        } else {
-            RenderSignpost.mark("LiveFollowUpdate", "walk-only")
         }
         // A paused walk still moves the dot above, and publishes nothing. Nor
         // does the fix that just completed a walk: with the record gone the
@@ -785,7 +779,6 @@ private extension HikeDetailView {
         guard FollowInteractionPolicy.appliesMatchToPersistentTracker(
             isScrubbing: isScrubbing
         ) else {
-            RenderSignpost.mark("LiveFollowUpdate", moved ? "moved-scrubbing" : "unchanged-scrubbing")
             return
         }
         // Skip the tracker write when the projected position hasn't actually
@@ -802,7 +795,6 @@ private extension HikeDetailView {
         // sections of the trail. Clearing an already-clear highlight is free —
         // `move(to:)` does the comparison this path used to do by hand.
         highlight.move(to: nil)
-        RenderSignpost.mark("LiveFollowUpdate", moved ? "moved" : "unchanged")
     }
 
 }

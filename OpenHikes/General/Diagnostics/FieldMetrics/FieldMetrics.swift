@@ -6,9 +6,8 @@
 //  `MXMetricManager`.
 //
 //  Registered once from `OpenHikesModel`. Not `#if DEBUG` — and that is the
-//  whole point of it. Every other file in `Diagnostics/` compiles to nothing
-//  in Release, because `RenderSignpost`, `PerformanceLog` and
-//  `MainThreadWatchdog` measure a build nobody ships. MetricKit measures the
+//  whole point of it. `MainThreadWatchdog` beside it compiles to nothing in
+//  Release, because it measures a build nobody ships. MetricKit measures the
 //  build everybody ships, on the walk it was written for, and a Debug-only
 //  MetricKit integration would report on a configuration that never leaves
 //  this machine.

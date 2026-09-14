@@ -89,8 +89,8 @@ final class CloudSyncCoordinator {
     /// `CKContainer(identifier:)` in a process loads CloudKit and shakes hands
     /// with its daemon, synchronously, and on a fresh install that is seconds
     /// rather than milliseconds. See ``accountStatus(making:)`` for where it is
-    /// allowed to run, and `PERFORMANCE.md` for the launch cost that first
-    /// moved it off the stored default it used to be.
+    /// allowed to run; it was measured on the launch path before it was moved
+    /// off the stored default it used to be.
     @ObservationIgnored private let makeCloudContainer: @Sendable () -> CKContainer
     @ObservationIgnored private let settings: SyncedSettingsMirror
     @ObservationIgnored private var eventObserver: (any NSObjectProtocol)?

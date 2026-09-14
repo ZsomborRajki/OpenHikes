@@ -78,7 +78,6 @@ struct HikePhotoViewer: View {
     }
 
     var body: some View {
-        RenderSignpost.mark("PhotoViewerBody")
         let photos = hike.orderedPhotos
         let currentIndex = index(of: currentID, in: photos)
         // A photo is shown against black everywhere in iOS, and the strip's

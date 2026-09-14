@@ -122,39 +122,11 @@ jobs:
           sudo installer -pkg SwiftLint.pkg -target /
           rm SwiftLint.pkg
 
-      # Ruff is to the Python in this repository what SwiftLint is to the
-      # Swift, and is pinned the same way and for the same reason: a rule set
-      # that moves underneath a branch reports violations that are about the
-      # tool's release notes rather than about the change, and a contributor
-      # cannot tell the two apart. The checksum is the release's own and is
-      # tied to this version *and* to the runner's architecture, so bumping
-      # `.ruff-version` means replacing the line below with it.
-      - name: Install pinned ruff
-        run: |
-          version="$(cat .ruff-version)"
-          curl --fail --location --retry 3 \
-            --output ruff.tar.gz \
-            "https://github.com/astral-sh/ruff/releases/download/${version}/ruff-aarch64-apple-darwin.tar.gz"
-          echo "77513748c833b435b82453ba20e07db808ef6c5121945ede80a6cf21bee468a4  ruff.tar.gz" \
-            | shasum --algorithm 256 --check
-          tar --extract --gunzip --file ruff.tar.gz --strip-components 1 \
-            --directory "$RUNNER_TEMP" ruff-aarch64-apple-darwin/ruff
-          rm ruff.tar.gz
-          echo "$RUNNER_TEMP" >> "$GITHUB_PATH"
-
       # The same script a developer runs locally, and the same one the
       # opt-in pre-push hook runs — so a violation cannot be green in one
       # place and red in another.
       - name: Run strict SwiftLint
         run: Scripts/lint.sh
-
-      # Three programs and their tests, at the version `.ruff-version` pins
-      # and under the rules `ruff.toml` sets, both of which a developer reads
-      # too. `--no-cache` because a cache written into the workspace is one
-      # more thing the checkout carries between steps for no gain on a runner
-      # that starts clean.
-      - name: Run ruff
-        run: ruff check --no-cache Scripts
 
       # SwiftLint sees no shell. Nothing else in this repository executes
       # ci_scripts/ci_post_clone.sh either — Xcode Cloud runs it by name, and a
@@ -185,45 +157,16 @@ jobs:
           done < <(find Scripts ci_scripts -name '*.sh' | sort)
           exit "$status"
 
-      # The same argument as above, for the other interpreter in the tree.
-      # Nothing compiles a Python file either: `Scripts/perf-report.py` is run
-      # by `Scripts/run-performance-tests.sh` long after a pull request has
-      # merged, and the two gate programs beside it are run by jobs that can
-      # each fail one — so a syntax error in any of them surfaces as a broken
-      # measurement or a broken merge rather than as a red pull request.
-      - name: Check Python programs parse
-        run: |
-          set -euo pipefail
-          status=0
-          while IFS= read -r program; do
-            if python3 -m py_compile "$program"; then
-              echo "  ok   $program"
-            else
-              echo "::error file=$program::$program is not valid Python syntax."
-              status=1
-            fi
-          done < <(find Scripts ci_scripts -name '*.py' | sort)
-          exit "$status"
-
-      # Parsing is not behaviour. Scripts/run-ui-tests.sh and
-      # Scripts/run-performance-tests.sh decide which simulator a run lands on
-      # and whether a performance report was assembled out of anything at all,
-      # and no suite in this repository can cover them — they are what runs the
-      # suites. These cases run them for real against a stubbed xcrun and
-      # xcodebuild, so nothing is built and no simulator is touched.
+      # Parsing is not behaviour. Scripts/run-ui-tests.sh decides which
+      # simulator a run lands on and which tests it selects, and no suite in
+      # this repository can cover it — it is what runs the suites. The two CI
+      # gate scripts are covered for a plainer reason: one of them can fail a
+      # merge, and the other is the only thing that would notice a sanitized
+      # suite silently not running. These cases run them for real against a
+      # stubbed xcrun and xcodebuild, so nothing is built and no simulator is
+      # touched.
       - name: Run script smoke tests
         run: Scripts/run-script-tests.sh
-
-      # Parsing is not behaviour here either. `Scripts/perf-report.py` decides
-      # what a person reads first after a performance run and has shipped a
-      # finding it invented — "52.2 network requests per accepted fix", for a
-      # recording that woke the radio zero times — so its ratios are asserted
-      # against input small enough to check by hand. The two gate programs are
-      # covered for a plainer reason: one of them can fail a merge, and the
-      # other is the only thing that would notice a sanitized suite silently
-      # not running.
-      - name: Run Python unit tests
-        run: python3 -m unittest discover --start-directory Scripts/tests --verbose
 
       - name: Test shared package
         run: |
@@ -361,7 +304,7 @@ jobs:
           xcrun xccov view --report TestResults/UnitTests.xcresult
           xcrun xccov view --report --json TestResults/UnitTests.xcresult \
             > TestResults/coverage.json
-          python3 Scripts/check-coverage-floor.py TestResults/coverage.json
+          Scripts/check-coverage-floor.sh TestResults/coverage.json
 
   # Both entries build for the *simulator*. What that proves is that the code
   # compiles and links at `-Onone` and at `-O` with whole-module optimisation,
@@ -723,7 +666,7 @@ jobs:
           xcrun xcresulttool get test-results tests \
             --path TestResults/ThreadSanitizer.xcresult \
             --compact > TestResults/tsan-tests.json
-          python3 Scripts/check-sanitized-selection.py TestResults/tsan-tests.json
+          Scripts/check-sanitized-selection.sh TestResults/tsan-tests.json
 
       - name: Delete the private simulator
         if: always() && steps.sim.outputs.udid != ''
@@ -787,9 +730,9 @@ jobs:
 
       # The same script a developer runs locally, for the same reason as
       # Scripts/lint.sh above. --suite scopes each run to one accessibility
-      # class, so neither PerformanceUITests nor the launch-metric test in
-      # OpenHikesUITests can execute here: a measurement taken on a shared
-      # runner is noise, and both assert nothing.
+      # class, so the launch-metric test in OpenHikesUITests cannot execute
+      # here: a measurement taken on a shared runner is noise, and it asserts
+      # nothing.
       #
       # Two classes, run separately so a failure names which half broke: the
       # audits are a sweep of each screen, the label tests are assertions on
@@ -821,11 +764,9 @@ jobs:
             TestResults/AccessibilityLabelUITests.xcresult
           retention-days: 7
 
-# The functional UI automation and the performance suite are deliberately not
-# run here. Both drive a simulator through real gestures and timing-sensitive
-# waits, which a shared runner makes slow and unreliable, and
-# `PerformanceUITests` additionally produces measurements that are only
-# comparable against the same hardware.
+# The functional UI automation is deliberately not run here. It drives a
+# simulator through real gestures and timing-sensitive waits, which a shared
+# runner makes slow and unreliable.
 #
 # `AccessibilityUITests` and `AccessibilityLabelUITests` are the exception
 # above: together they are the only automated guard on the VoiceOver contract,
@@ -835,4 +776,3 @@ jobs:
 # location and no measurement.
 #
 #   Scripts/run-ui-tests.sh --all
-#   Scripts/run-performance-tests.sh

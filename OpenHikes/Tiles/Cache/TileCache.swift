@@ -552,16 +552,11 @@ nonisolated extension TileCache {
         // its remaining tiles and discard each — the exact traffic the
         // provider's limit exists to prevent.
         guard !isDurableLimitReached(forKey: key) else {
-            RenderSignpost.mark("TileDurableLimitReached", "key=\(key)")
             return false
         }
 
         let decision = networkDecision(for: .speculative)
         guard decision.isAllowed else {
-            RenderSignpost.mark(
-                "TileFetchSuppressed",
-                "purpose=speculative reason=\(decision.reason ?? "unknown")"
-            )
             return false
         }
         guard let fetched = await fetchTileOnce(forKey: key, url: url) else { return false }
@@ -715,8 +710,6 @@ nonisolated extension TileCache {
         // The counter an offline-first app is judged on. Everything else in
         // this file is about *not* reaching here; this is the one place that
         // does, so a scenario's tile traffic is exactly this signpost's count.
-        let interval = RenderSignpost.beginInterval("TileNetworkFetch")
-        defer { RenderSignpost.endInterval("TileNetworkFetch", interval) }
         do {
             let (data, response) = try await session.data(from: url)
             guard let http = response as? HTTPURLResponse else {

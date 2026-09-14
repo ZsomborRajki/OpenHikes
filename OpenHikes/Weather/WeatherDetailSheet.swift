@@ -93,8 +93,7 @@ struct WeatherDetailView: View {
     @State private var marks: WeatherAttributionMarks?
 
     var body: some View {
-        RenderSignpost.mark("WeatherDetailBody")
-        return NavigationStack {
+        NavigationStack {
             List {
                 if let snapshot = weather.current {
                     conditionsSection(snapshot)

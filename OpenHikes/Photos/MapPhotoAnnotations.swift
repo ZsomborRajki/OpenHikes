@@ -267,7 +267,6 @@ extension MapView.Coordinator {
     /// list from dropping and re-dropping every marker on the map.
     func applyPhotoPins(_ pins: [PhotoMapPin], on mapView: MKMapView) {
         guard photoAnnotations.map(\.pin) != pins else { return }
-        RenderSignpost.mark("MapPhotoPinsRebuilt", "\(pins.count) pins")
         if !photoAnnotations.isEmpty {
             mapView.removeAnnotations(photoAnnotations)
             photoAnnotations = []

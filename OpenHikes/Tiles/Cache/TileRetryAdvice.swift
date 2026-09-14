@@ -189,10 +189,6 @@ nonisolated extension TileCache {
         guard let delay = RetryAfterHeader.delay(from: response) else { return }
         let now = ContinuousClock.now
         retryAdvice.withLock { $0.record(key, notBefore: now.advanced(by: delay), at: now) }
-        RenderSignpost.mark(
-            "TileRetryAfterHonoured",
-            "key=\(key) status=\(response.statusCode) seconds=\(delay.components.seconds)"
-        )
     }
 
     /// When a server last said `key` may be asked for again, if that moment

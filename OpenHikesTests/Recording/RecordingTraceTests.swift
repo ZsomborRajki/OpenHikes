@@ -15,9 +15,8 @@
 //    the provisional remainder rather than the whole tail, which means every
 //    path that empties or commits underneath that prefix has to invalidate it.
 //
-//  The performance harness measures the first property as a per-fix ratio
-//  (see PERFORMANCE.md); these tests are what say *why* the ratio is what it
-//  is, and they fail long before a UI test would.
+//  These tests are what say *why* the per-fix cost is what it is, and they
+//  fail long before a UI test would.
 //
 
 import CoreLocation

@@ -351,24 +351,22 @@ nonisolated extension GPXExport {
         assertOffMainThread("GPX serialization must stay off the main thread")
         // Spanning the write as well as the markup, since what a share costs
         // the hiker is both of them together.
-        return try RenderSignpost.interval("GPXExported") {
-            let directory = stagingDirectory
-            purgeStagedExports(in: directory, before: .now - stagedExportLifetime)
-            let staged = directory.appending(
-                path: UUID().uuidString,
-                directoryHint: .isDirectory
-            )
-            try FileManager.default.createDirectory(
-                at: staged,
-                withIntermediateDirectories: true
-            )
-            let url = staged.appending(
-                path: fileName(for: track),
-                directoryHint: .notDirectory
-            )
-            try data(for: track).write(to: url, options: .atomic)
-            return url
-        }
+        let directory = stagingDirectory
+        purgeStagedExports(in: directory, before: .now - stagedExportLifetime)
+        let staged = directory.appending(
+            path: UUID().uuidString,
+            directoryHint: .isDirectory
+        )
+        try FileManager.default.createDirectory(
+            at: staged,
+            withIntermediateDirectories: true
+        )
+        let url = staged.appending(
+            path: fileName(for: track),
+            directoryHint: .notDirectory
+        )
+        try data(for: track).write(to: url, options: .atomic)
+        return url
     }
 
     /// Removes exports staged before `cutoff`.

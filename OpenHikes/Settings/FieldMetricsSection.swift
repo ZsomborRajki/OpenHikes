@@ -19,9 +19,8 @@
 //    out as eighty fragments is not a diagnostics screen, it is a punishment.
 //  * A number MetricKit did not report is drawn as "Not reported" rather than
 //    as a zero. The difference between "the GPS never stepped down" and "this
-//    payload contained no location metrics" is the entire value of what
-//    `PERFORMANCE.md`'s *Blind spots* section is waiting on, and a dash would
-//    erase it.
+//    payload contained no location metrics" is the whole value of the
+//    number, and a dash would erase it.
 //
 
 import SwiftUI

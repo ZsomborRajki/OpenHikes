@@ -62,7 +62,6 @@ struct HikePhotoSection: View {
         // it up into `HikeDetailBody` — or a strip that re-renders once per
         // tile decode — becomes visible in the report rather than being
         // argued about.
-        RenderSignpost.mark("HikePhotoSectionBody", "\(hike.photos.count) photos")
         // Ordered once and handed down. `orderedPhotos` sorts, and reading it
         // from both the strip and the caption below would sort twice for one
         // pass.

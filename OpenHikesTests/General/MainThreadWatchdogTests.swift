@@ -5,10 +5,9 @@
 //  The watchdog is measurement infrastructure rather than a feature, and the
 //  way infrastructure fails is by quietly stopping. A watchdog that has
 //  stopped turning reports no stalls, which is indistinguishable from a
-//  healthy app — and it would go on reporting no stalls while every budget in
-//  `PerformanceUITests` scored perfectly. So both directions are asserted
-//  here: that the ping loop is still turning, and that a main thread which
-//  genuinely stops answering is reported.
+//  healthy app. So both directions are asserted here: that the ping loop is
+//  still turning, and that a main thread which genuinely stops answering is
+//  reported.
 //
 //  The second one is harder than it looks, and a fixed provocation cannot do
 //  it. The loop posts a ping, waits the warn threshold, and then sleeps the

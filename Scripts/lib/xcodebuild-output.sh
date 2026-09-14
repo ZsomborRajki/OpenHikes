@@ -1,36 +1,35 @@
 #!/usr/bin/env bash
 #
-# Shared xcodebuild output formatting, sourced by Scripts/run-ui-tests.sh and
-# Scripts/run-performance-tests.sh. Not executable on its own.
+# Shared xcodebuild output formatting, sourced by Scripts/run-ui-tests.sh. Not
+# executable on its own.
 #
 # xcodebuild's raw output is thousands of lines per run, most of it compiler
-# invocations nobody reads. The scripts here used to reduce it with hand-rolled
-# `grep -E` pipelines, which had two problems: a pattern that stopped matching
-# silently showed nothing, and a compiler warning never appeared at all because
-# no pattern asked for one. xcbeautify does that job properly and, under
+# invocations nobody reads. It used to be reduced with hand-rolled `grep -E`
+# pipelines, which had two problems: a pattern that stopped matching silently
+# showed nothing, and a compiler warning never appeared at all because no
+# pattern asked for one. xcbeautify does that job properly and, under
 # `--renderer github-actions`, turns each diagnostic into an inline annotation
 # on the pull request.
 #
 # It is used rather than depended on. xcbeautify 3.2.1 ships preinstalled on
 # the `macos-26` runner image and is the version Homebrew installs today, so
 # local and CI output match — but a machine without it still gets the previous
-# grep behaviour rather than an error, because neither script's job is to
-# format text.
+# grep behaviour rather than an error, because formatting text is not the
+# script's job.
 #
 # One thing xcbeautify must not be trusted with: it drops `measured [Time, s]`
-# lines, and drops indented `PERF-` markers, in both its default mode and under
-# `--preserve-unbeautified`. Those two are the entire product of
-# Scripts/run-performance-tests.sh and of the launch-metric test in
+# lines in both its default mode and under `--preserve-unbeautified`. Those
+# lines are the entire product of the launch-metric test in
 # Scripts/run-ui-tests.sh, so the raw stream is always tee'd to a log and the
 # measurement lines are re-emitted from it afterwards by
 # print_measurement_lines. Formatting the display must never be able to lose
 # the numbers the run was for.
 
-# Lines the scripts need that xcbeautify does not emit. Kept in one place
+# Lines the script needs that xcbeautify does not emit. Kept in one place
 # because both the fallback filter and the post-run re-emission use it.
-readonly XCODEBUILD_MEASUREMENT_PATTERN='PERF-|measured \['
+readonly XCODEBUILD_MEASUREMENT_PATTERN='measured \['
 
-# The pattern the scripts filtered with before xcbeautify existed. Retained
+# The pattern the script filtered with before xcbeautify existed. Retained
 # verbatim so a machine without xcbeautify behaves exactly as it used to.
 readonly XCODEBUILD_FALLBACK_PATTERN="Test Case|Test Suite .* (passed|failed)|error:|TEST (SUCCEEDED|FAILED)|${XCODEBUILD_MEASUREMENT_PATTERN}"
 

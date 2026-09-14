@@ -10,9 +10,9 @@
 //  1. **An absent measurement is not a zero.** "The GPS never dropped to ten
 //     metres" and "this payload carried no location metrics" are different
 //     facts with opposite implications, and a formatter that turns both into
-//     "0s" destroys the only evidence there is for the question
-//     `PERFORMANCE.md` leaves open under *Blind spots*: whether the
-//     conserving GPS profile is ever reached on a real walk. Every entry point
+//     "0s" destroys the only evidence there is for an open question: whether
+//     the conserving GPS profile is ever reached on a real walk. Every entry
+//     point
 //     here takes an optional and says ``notReported`` when it is `nil`.
 //  2. **A histogram statistic is an upper bound, and has to look like one.**
 //     ``HistogramSummary`` cannot produce a true median — see its own note —

@@ -180,8 +180,6 @@ final class WeatherManager {
         // a hiker's behalf without being asked, and the freshness window that
         // keeps it rare is a constant nobody would notice regressing. The
         // count per hike is the check.
-        let interval = RenderSignpost.beginInterval("WeatherFetch")
-        defer { RenderSignpost.endInterval("WeatherFetch", interval) }
         do {
             let snapshot = WeatherSnapshot(
                 try await service.weather(for: location, including: .current)

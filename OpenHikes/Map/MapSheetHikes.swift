@@ -138,10 +138,6 @@ struct MapSheetHikes: View, Equatable {
         // per-property granularity: any write to any `Hike` re-runs it. The
         // mark is how a recording that writes to its draft hike per fix would
         // show up — as this body ticking at fix rate.
-        RenderSignpost.mark(
-            "MapSheetHikesBody",
-            "\(hikes.count) hikes searching=\(isSearchFocused)"
-        )
         let matchingHikes = isSearchFocused ? hikeSearch.rankedHikes(matching: searchText, in: hikes) : []
         // A focused field with nothing typed in it is not a search — but a
         // focused field with something typed in it is one whether or not

@@ -191,7 +191,6 @@ final class LocationManager: NSObject {
         // Marks only the publishes that survive both filters above, so the
         // rate here is the rate every downstream body is allowed to move at.
         // Anything re-rendering faster than this is following something else.
-        RenderSignpost.mark("LocationPublished")
         coordinate = next
     }
 
@@ -243,7 +242,6 @@ extension LocationManager: CLLocationManagerDelegate {
         // the throttle is absorbing — and a delivery this app throws away is
         // still a fix the GPS spent energy producing, which is what the
         // distance filter, not the throttle, is there to prevent.
-        RenderSignpost.mark("LocationFixDelivered")
         onMainActor { [weak self] in self?.publish(location) }
     }
 

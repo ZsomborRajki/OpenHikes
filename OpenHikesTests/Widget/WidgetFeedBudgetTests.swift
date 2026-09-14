@@ -74,8 +74,8 @@ final class WidgetFeedBudgetTests {
     /// went red on CI at 5.9 ms and again under ThreadSanitizer at 5.8 ms —
     /// having moved nothing back onto the main actor. A shared runner is
     /// several times slower, and a sanitizer that instruments every memory
-    /// access slower again. `PERFORMANCE.md` reaches the same conclusion about
-    /// footprints measured under XCUITest: only compare within a run.
+    /// access slower again. The same rule holds for any figure measured under
+    /// instrumentation: only compare within a run.
     ///
     /// A rebuild is the yardstick because it is the route-sized work these
     /// paths exist to keep off the frame, and it is charged to the same host

@@ -2,29 +2,31 @@
 #
 # Smoke tests for the shell scripts no Swift suite can reach.
 #
-# Neither Scripts/run-ui-tests.sh nor Scripts/run-performance-tests.sh can be
-# exercised by any suite in this repository: they *are* the thing that runs the
-# suites. What they decide — which device the run lands on, whether a report was
-# assembled out of anything at all — is invisible until a developer reads a
-# number that came from the wrong machine, so it is asserted here instead.
+# Scripts/run-ui-tests.sh cannot be exercised by any suite in this repository:
+# it *is* the thing that runs the suites. What it decides — which device the
+# run lands on, which tests it selects — is invisible until a developer reads a
+# result that came from the wrong machine, so it is asserted here instead.
 # Scripts/lint.sh is here for the same reason: it is what decides whether a
 # change is clean, and a run that accepted an option it did not understand
 # reports "clean" about a lint it never configured the way it was asked to.
-# Scripts/perf-report.py is the third: it decides what a person reads first
-# after a performance run, and a finding about the instrument rather than about
-# the app reads exactly like a regression until somebody checks it against the
-# event file by hand. Those cases run the real script against a fixture; the
-# arithmetic underneath each finding — the per-fix ratio, the backgrounded
-# window, the rejection rate — is asserted a level down, in Scripts/tests/,
-# which `python3 -m unittest discover --start-directory Scripts/tests` runs.
-# Scripts/periphery.sh is the fourth, and for the same reason as lint.sh: a
-# Periphery that read none of .periphery.yml scans on anyway and prints a
-# result, and on this project the result it prints is a clean one.
+# Scripts/periphery.sh is the third, and for the same reason: a Periphery that
+# read none of .periphery.yml scans on anyway and prints a result, and on this
+# project the result it prints is a clean one.
 #
-# `xcrun`, `xcodebuild`, `python3`, `swiftlint` and `periphery` are replaced
-# with recording stubs on PATH and the scripts are run for real against them. Nothing is built,
-# nothing is booted, no simulator on this machine is touched, and no file in the
-# working tree is rewritten.
+# The two CI gate programs are here for a plainer reason. Scripts/
+# check-coverage-floor.sh can fail a merge, and Scripts/
+# check-sanitized-selection.sh is the only thing that would notice a sanitized
+# suite that silently did not run — `xcodebuild` drops an `-only-testing:`
+# identifier that resolves to nothing without a warning and still exits 0.
+# Scripts/check-release-secrets.sh is the archive checklist's second step, and
+# the mistake it catches is the silent one: a template copied into place and
+# not filled in parses, resolves to nothing, and reads exactly like a working
+# file. They run against fixtures written here rather than against a stub.
+#
+# `xcrun`, `xcodebuild`, `swiftlint` and `periphery` are replaced with
+# recording stubs on PATH and the scripts are run for real against them.
+# Nothing is built, nothing is booted, no simulator on this machine is touched,
+# and no file in the working tree is rewritten.
 #
 # Exit status:
 #   0  every case passed
@@ -104,36 +106,13 @@ case "${1:-}" in
 esac
 STUB
 
-# STUB_SCENARIO_LOGS names the scenario logs this run "writes", standing in for
-# the app writing them into its own container while the suite drives it. It
-# only ever fills a PerformanceLogs directory that already exists, so the cases
-# about a container with no directory and a run that logged nothing still see
-# what they are about.
+# Records every xcodebuild invocation so a case can assert which device and
+# which selection the run addressed, and reports whatever outcome it asks for.
 cat > "$stub_bin/xcodebuild" <<'STUB'
 #!/usr/bin/env bash
 printf 'xcodebuild %s\n' "$*" >> "$STUB_CALL_LOG"
-logs="${STUB_CONTAINER:-}/Documents/PerformanceLogs"
-if [[ -n "${STUB_CONTAINER:-}" && -d "$logs" ]]; then
-    for scenario in ${STUB_SCENARIO_LOGS:-}; do
-        printf '# scenario\t%s\n' "$scenario" > "$logs/$scenario.tsv"
-    done
-fi
 echo "Test Suite 'All tests' passed at 2026-08-30 12:00:00.000."
 exit "${STUB_XCODEBUILD_STATUS:-0}"
-STUB
-
-# Stands in for Scripts/perf-report.py, which has its own inputs and is not
-# what these cases are about. It writes the report the script announces.
-cat > "$stub_bin/python3" <<'STUB'
-#!/usr/bin/env bash
-printf 'python3 %s\n' "$*" >> "$STUB_CALL_LOG"
-previous=""
-for argument in "$@"; do
-    if [[ "$previous" == "--out" ]]; then
-        printf '# stub report\n' > "$argument"
-    fi
-    previous="$argument"
-done
 STUB
 
 # Records every swiftlint invocation and reports whatever outcome a case asks
@@ -251,7 +230,6 @@ expect_absent() {
 }
 
 ui_tests="$repository_root/Scripts/run-ui-tests.sh"
-performance_tests="$repository_root/Scripts/run-performance-tests.sh"
 
 echo "Simulator resolution"
 
@@ -430,73 +408,6 @@ if expect_status 2 \
     pass
 fi
 
-echo "Performance collection"
-
-# The app container the stubbed get_app_container hands back. The two files
-# seeded here are what a *previous* run left in it — a scenario this suite has
-# since renamed, or one that only exists on another branch — which is exactly
-# what used to be copied out and reported as though it had just been measured.
-container="$work/container"
-report_root="$work/reports"
-mkdir -p "$container/Documents/PerformanceLogs"
-printf 'stub\n' > "$container/Documents/PerformanceLogs/live-recording.tsv"
-printf 'stub\n' > "$container/Documents/PerformanceLogs/map-pan.tsv"
-
-run_performance() {
-    run_script "$1" "$performance_tests" --device "iPhone 17 Pro" \
-        --output "$report_root-$RANDOM"
-}
-
-STUB_CONTAINER="$container" STUB_SCENARIO_LOGS="background-recording idle" \
-    run_performance "run-performance-tests addresses one device throughout"
-if expect_status 0 \
-    && expect_contains "$calls" "id=$pro_udid" "the xcodebuild call" \
-    && expect_contains "$calls" "xcrun simctl privacy $pro_udid grant" "the recorded calls" \
-    && expect_contains "$calls" "xcrun simctl get_app_container $pro_udid" "the recorded calls" \
-    && expect_absent "$calls" "booted " "the recorded calls" \
-    && expect_contains "$output" "Collected 2 event file(s)" "the output"; then
-    pass
-fi
-
-# The run above cleared two stale logs and collected two of its own. What it
-# must not do is report four scenarios, two of which no test drove.
-current="run-performance-tests reports no scenario a previous run left behind"
-collected_events="$(find "$report_root"-* -type d -name events -exec ls {} \; 2>/dev/null | sort -u)"
-if expect_contains "$output" "Cleared:   2 stale scenario log(s)" "the output" \
-    && expect_contains "$collected_events" "background-recording.tsv" "the events collected" \
-    && expect_absent "$collected_events" "live-recording.tsv" "the events collected" \
-    && expect_absent "$collected_events" "map-pan.tsv" "the events collected"; then
-    pass
-fi
-
-STUB_CONTAINER="" \
-    run_performance "run-performance-tests fails when the app has no container"
-if [[ "$status" == 0 ]]; then
-    fail "a run with no container exited 0" "$output"
-elif expect_contains "$output" "measured nothing" "the error"; then
-    pass
-fi
-
-empty_container="$work/empty-container"
-mkdir -p "$empty_container/Documents"
-STUB_CONTAINER="$empty_container" \
-    run_performance "run-performance-tests fails when the container holds no logs"
-if [[ "$status" == 0 ]]; then
-    fail "a run with no PerformanceLogs directory exited 0" "$output"
-elif expect_contains "$output" "No PerformanceLogs directory" "the error"; then
-    pass
-fi
-
-logless_container="$work/logless-container"
-mkdir -p "$logless_container/Documents/PerformanceLogs"
-STUB_CONTAINER="$logless_container" \
-    run_performance "run-performance-tests fails a passing run that wrote no scenario logs"
-if [[ "$status" == 0 ]]; then
-    fail "a passing run that collected nothing exited 0" "$output"
-elif expect_contains "$output" "Collected 0 event file(s)" "the output"; then
-    pass
-fi
-
 echo "Raw log handling"
 
 # Drives Scripts/lib/xcodebuild-output.sh the way both test scripts do — as the
@@ -560,122 +471,289 @@ if expect_status 0 \
     fi
 fi
 
-echo "Report findings"
+echo "Coverage floor gate"
 
-# One fixture carrying one of each artefact the findings list used to report:
-# the sampler's own 1 Hz counter and its two gauges, a body count that is
-# entirely the phase's scene transitions, a decode kept off the main thread,
-# and a launch cost every scenario pays. Run against the real
-# Scripts/perf-report.py rather than the stub above, on a PATH without it.
-report_work="$work/report"
-mkdir -p "$report_work/events"
+# The gate that can fail a merge on a number nothing else checks. What is
+# asserted is the decision it makes about a report produced by a tool this
+# suite cannot run: which target it measured, what it publishes, and when it
+# says no.
+coverage_gate="$repository_root/Scripts/check-coverage-floor.sh"
+gate_work="$work/gates"
+mkdir -p "$gate_work"
 
-{
-    printf "Test Case '\-[PerformanceUITests testBackgroundRecording]' passed\n"
-    printf 'PERF-PHASE\tbackground-recording\tbackground-recording\t1000.0\t1016.7\n'
-    # Four bodies for four scene transitions and three fixes: the app rendered
-    # nothing a fix paid for.
-    printf 'PERF-COUNT\tbackground-recording\tbackground-recording\tMapSheetBody\t4.0\t1.3333333333333333\n'
-    printf 'PERF-COUNT\tbackground-recording\tbackground-recording\tScenePhaseChanged\t4.0\t1.3333333333333333\n'
-    printf 'PERF-COUNT\tbackground-recording\tbackground-recording\tLiveFixAccepted\t3.0\t1.0\n'
-    # Nine for the same four transitions: five of them are the fixes'.
-    printf 'PERF-COUNT\tbackground-recording\tbackground-recording\tMapSheetHikesBody\t9.0\t3.0\n'
-    printf 'PERF-PHASE\tidle\tidle\t1000.0\t1010.0\n'
-    printf 'PERF-COUNT\tidle\tidle\tProcess\t7.0\t\n'
-    printf 'PERF-COUNT\tidle\tidle\tFootprint.MB\t12.0\t\n'
-} > "$report_work/build.log"
-
-write_events() {
-    printf '# epoch_s\telapsed_s\tkind\tname\tvalue\tdetail\n' > "$1"
-    printf '1000.1\t0.1\tinterval\tModelContainerInit\t%s\tthread=main\n' "$2" >> "$1"
-    printf '1000.2\t0.2\tinterval\tPhotoImageDecoded\t67.0\tthread=off-main\n' >> "$1"
-    printf '1000.3\t0.3\tinterval\tTileUnclaimedSweep\t43.8\tthread=off-main\n' >> "$1"
-}
-write_events "$report_work/events/photo-gallery.tsv" 40.2
-write_events "$report_work/events/settings.tsv" 43.8
-
-# Two scenes going into a pocket and coming back out of one. A scene returns
-# through `background → inactive → active`, so the `inactive` here is the app
-# already on its way onto the screen and not a second of pocket — and an
-# interval is stamped when it *finishes*, so the fetch below ran from 2.08 to
-# 2.2 and never overlapped the dark. `pocket-woken` is the same shape with the
-# radio genuinely woken inside the window, and is what stops the fix above
-# from being "report nothing".
-{
-    printf '# epoch_s\telapsed_s\tkind\tname\tvalue\tdetail\n'
-    printf '1001.0\t1.0\tmark\tScenePhaseChanged\t\tbackground\n'
-    printf '1002.0\t2.0\tmark\tScenePhaseChanged\t\tinactive\n'
-    printf '1002.2\t2.2\tinterval\tTileNetworkFetch\t120.0\tthread=off-main\n'
-    printf '1002.5\t2.5\tmark\tScenePhaseChanged\t\tactive\n'
-} > "$report_work/events/pocket.tsv"
-{
-    printf '# epoch_s\telapsed_s\tkind\tname\tvalue\tdetail\n'
-    printf '1001.0\t1.0\tmark\tScenePhaseChanged\t\tbackground\n'
-    printf '1001.5\t1.5\tinterval\tTileNetworkFetch\t100.0\tthread=off-main\n'
-    printf '1002.0\t2.0\tmark\tScenePhaseChanged\t\tinactive\n'
-    printf '1002.5\t2.5\tmark\tScenePhaseChanged\t\tactive\n'
-} > "$report_work/events/pocket-woken.tsv"
-
-# Sets `findings` to the report's findings list alone, which is the section
-# these cases are about.
-run_report() {
-    current="$1"
-    status=0
-    output="$(python3 "$repository_root/Scripts/perf-report.py" \
-        --log "$report_work/build.log" \
-        --events "$report_work/events" \
-        --out "$report_work/report.md" 2>&1)" || status=$?
-    findings="$(awk '/^## Findings/{inside=1; next} /^## /{inside=0} inside' \
-        "$report_work/report.md")"
-    if [[ "$verbose" == true ]]; then
-        printf '\n--- %s ---\n%s\n' "$current" "$findings"
-    fi
+# One target at a stated coverage, in the shape `xccov --report --json` writes.
+write_coverage() {
+    local path="$1" name="$2" fraction="$3" covered="$4" executable="$5"
+    printf '{"targets":[{"name":"%s","lineCoverage":%s,"coveredLines":%s,"executableLines":%s}]}\n' \
+        "$name" "$fraction" "$covered" "$executable" > "$path"
 }
 
-run_report "perf-report keeps the sampler's own counters out of the findings"
+run_coverage() {
+    local description="$1" report="$2" floor="${3:-55.0}"
+    run_script "$description" env \
+        COVERAGE_TARGET=OpenHikes.app \
+        COVERAGE_FLOOR="$floor" \
+        COVERAGE_SELECTION=OpenHikesTests \
+        "$coverage_gate" "$report"
+}
+
+write_coverage "$gate_work/above.json" OpenHikes.app 0.5742 5742 10000
+run_coverage "check-coverage-floor publishes what it measured over which selection" \
+    "$gate_work/above.json"
 if expect_status 0 \
-    && expect_absent "$findings" "Process" "the findings" \
-    && expect_absent "$findings" "Footprint.MB" "the findings"; then
+    && expect_contains "$output" \
+        '`OpenHikes.app` line coverage **57.42%**, at or above the 55.00% floor (5742/10000 lines), measured over `OpenHikesTests`.' \
+        "the published line"; then
     pass
 fi
 
-run_report "perf-report charges scene transitions to nobody's fixes"
-if expect_status 0 \
-    && expect_absent "$findings" "MapSheetBody" "the findings" \
-    && expect_contains "$findings" "MapSheetHikesBody" "the findings"; then
+# The floor is a floor. Equal to it is not under it.
+write_coverage "$gate_work/exact.json" OpenHikes.app 0.55 110 200
+run_coverage "check-coverage-floor passes coverage exactly at the floor" \
+    "$gate_work/exact.json"
+if expect_status 0 && expect_contains "$output" "at or above" "the published line"; then
     pass
 fi
 
-run_report "perf-report applies the frame budget to main-thread work only"
-if expect_status 0 \
-    && expect_absent "$findings" "PhotoImageDecoded" "the findings" \
-    && expect_absent "$findings" "TileUnclaimedSweep" "the findings" \
-    && expect_contains "$findings" "ModelContainerInit" "the findings"; then
+# The measured number is worth reading on a failing run too, which is why the
+# line is printed beside the failure rather than instead of it.
+write_coverage "$gate_work/under.json" OpenHikes.app 0.4999 100 200
+run_coverage "check-coverage-floor fails under the floor and still says what it measured" \
+    "$gate_work/under.json"
+if expect_status 1 \
+    && expect_contains "$output" "below the 55.00% floor" "the published line" \
+    && expect_contains "$output" "::error::Coverage fell to 49.99%" "the annotation" \
+    && expect_contains "$output" ".github/workflows/ci.yml" "the annotation"; then
     pass
 fi
 
-run_report "perf-report does not charge a returning scene's fetches to the pocket"
-if expect_status 0 \
-    && expect_absent "$findings" "\`pocket\` woke the radio" "the findings"; then
+# A report with no such target is not zero coverage — it is a report about
+# something else, and the names it did carry are what say which.
+write_coverage "$gate_work/renamed.json" OpenHikesShared 0.9 90 100
+run_coverage "check-coverage-floor does not read a renamed target as a fall" \
+    "$gate_work/renamed.json"
+if expect_status 1 \
+    && expect_contains "$output" "saw OpenHikesShared" "the annotation" \
+    && expect_absent "$output" "line coverage **" "the output"; then
     pass
 fi
 
-run_report "perf-report still catches a radio woken inside the pocket"
-if expect_status 0 \
-    && expect_contains "$findings" "\`pocket-woken\` woke the radio 1 time(s)" \
-        "the findings"; then
+printf '{"targets":[]}\n' > "$gate_work/uninstrumented.json"
+run_coverage "check-coverage-floor says it saw nothing on an uninstrumented build" \
+    "$gate_work/uninstrumented.json"
+if expect_status 1 && expect_contains "$output" "saw nothing" "the annotation"; then
     pass
 fi
 
-run_report "perf-report states a finding two scenarios share once"
+# The summary line goes on the job summary as well as into the log, and only
+# when there is one to write to.
+current="check-coverage-floor writes its line to the job summary"
+summary_file="$gate_work/summary.md"
+: > "$summary_file"
+status=0
+output="$(PATH="$stub_bin:/usr/bin:/bin:/usr/sbin:/sbin" env \
+    COVERAGE_TARGET=OpenHikes.app COVERAGE_FLOOR=55.0 COVERAGE_SELECTION=OpenHikesTests \
+    GITHUB_STEP_SUMMARY="$summary_file" \
+    "$coverage_gate" "$gate_work/above.json" 2>&1)" || status=$?
 if expect_status 0 \
-    && expect_contains "$findings" "in 2 scenarios — worst 43.8 ms in \`settings\`" \
-        "the findings"; then
-    if [[ "$(grep -c 'ModelContainerInit' <<< "$findings")" == 1 ]]; then
-        pass
-    else
-        fail "the shared launch cost was stated more than once" "$findings"
-    fi
+    && expect_contains "$(cat "$summary_file")" "line coverage **57.42%**" "the job summary"; then
+    pass
+fi
+
+echo "Sanitized selection gate"
+
+# `xcodebuild` never validates an `-only-testing:` identifier: one that
+# resolves to nothing is dropped without a warning and the run still exits 0.
+# The exit status cannot see that, so this gate counts what the result bundle
+# says actually ran — and these cases assert it counts the right things and
+# fails in both directions.
+selection_gate="$repository_root/Scripts/check-sanitized-selection.sh"
+
+# Two suites and three tests, nested under a plan and a bundle the way
+# `xcresulttool get test-results tests` nests them.
+cat > "$gate_work/nested.json" <<'FIXTURE'
+{"testNodes":[{"nodeType":"Test Plan","name":"OpenHikes","children":[
+  {"nodeType":"Unit test bundle","name":"OpenHikesTests.xctest","children":[
+    {"nodeType":"Test Suite","name":"TileCacheTests","children":[
+      {"nodeType":"Test Case","name":"testTrimKeepsClaimedTiles()"},
+      {"nodeType":"Test Case","name":"testTrimRemovesOrphans()"}]},
+    {"nodeType":"Test Suite","name":"HikeStoreTests","children":[
+      {"nodeType":"Test Case","name":"testSaveIsAtomic()"}]}]}]}]}
+FIXTURE
+
+# Two suites in different bundles are allowed to share a name, and counting
+# them as one would hide exactly the disappearance this gate is for.
+cat > "$gate_work/shared-name.json" <<'FIXTURE'
+{"testNodes":[
+  {"nodeType":"Unit test bundle","name":"OpenHikesTests.xctest","children":[
+    {"nodeType":"Test Suite","name":"StoreTests","children":[
+      {"nodeType":"Test Case","name":"testSaves()"}]}]},
+  {"nodeType":"Unit test bundle","name":"OpenWidgetTests.xctest","children":[
+    {"nodeType":"Test Suite","name":"StoreTests","children":[
+      {"nodeType":"Test Case","name":"testReads()"}]}]}]}
+FIXTURE
+
+run_selection() {
+    local description="$1" results="$2" suites="$3" floor="$4"
+    run_script "$description" env \
+        EXPECTED_SUITES="$suites" TEST_FLOOR="$floor" \
+        "$selection_gate" "$results"
+}
+
+run_selection "check-sanitized-selection counts suites and tests wherever they nest" \
+    "$gate_work/nested.json" 2 3
+if expect_status 0 \
+    && expect_contains "$output" "**3 tests**" "the published line" \
+    && expect_contains "$output" "**2 suites**" "the published line"; then
+    pass
+fi
+
+run_selection "check-sanitized-selection counts two suites sharing a name as two" \
+    "$gate_work/shared-name.json" 2 2
+if expect_status 0 \
+    && expect_contains "$output" "**2 suites**" "the published line" \
+    && expect_contains "$output" "OpenHikesTests.xctest/StoreTests" "the listed suites" \
+    && expect_contains "$output" "OpenWidgetTests.xctest/StoreTests" "the listed suites"; then
+    pass
+fi
+
+# A fall means an identifier stopped matching and its suite was skipped
+# without a word.
+run_selection "check-sanitized-selection fails a suite that stopped resolving" \
+    "$gate_work/nested.json" 3 3
+if expect_status 1 && expect_contains "$output" "fell to 2" "the annotation"; then
+    pass
+fi
+
+# A rise means the list grew and the pin did not, and the next fall would be
+# measured against a stale number.
+run_selection "check-sanitized-selection fails a suite added without the pin" \
+    "$gate_work/nested.json" 1 3
+if expect_status 1 && expect_contains "$output" "rose to 2" "the annotation"; then
+    pass
+fi
+
+# Tests are a floor: a suite gaining one must not turn the build red.
+run_selection "check-sanitized-selection lets the test count rise above its floor" \
+    "$gate_work/nested.json" 2 2
+if expect_status 0; then
+    pass
+fi
+
+run_selection "check-sanitized-selection fails a suite emptied out under a name that resolves" \
+    "$gate_work/nested.json" 2 9
+if expect_status 1 && expect_contains "$output" "Only 3 tests ran" "the annotation"; then
+    pass
+fi
+
+# Both, when both are wrong: a run that lost a suite and its tests should not
+# have to be fixed twice to find out.
+printf '{"testNodes":[]}\n' > "$gate_work/nothing-ran.json"
+run_selection "check-sanitized-selection reports both pins when a run broke both" \
+    "$gate_work/nothing-ran.json" 2 3
+if expect_status 1 \
+    && expect_contains "$output" "fell to 0" "the annotation" \
+    && expect_contains "$output" "Only 0 tests ran" "the annotation"; then
+    pass
+fi
+
+echo "Release secrets gate"
+
+# The archive checklist's second step. `OpenHikes/Secrets.plist` is gitignored
+# and exists on one laptop, and an archive cut without it ships an app whose
+# two paid map styles cannot draw a tile — while building, signing and passing
+# CI.
+secrets_gate="$repository_root/Scripts/check-release-secrets.sh"
+
+# A plist with whatever values a case wants, written the way a person's own
+# file is written.
+write_secrets() {
+    local path="$1"
+    shift
+    {
+        printf '<?xml version="1.0" encoding="UTF-8"?>\n'
+        printf '<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" '
+        printf '"http://www.apple.com/DTDs/PropertyList-1.0.dtd">\n'
+        printf '<plist version="1.0">\n<dict>\n'
+        while (( $# > 0 )); do
+            printf '  <key>%s</key>\n  <string>%s</string>\n' "$1" "$2"
+            shift 2
+        done
+        printf '</dict>\n</plist>\n'
+    } > "$path"
+}
+
+write_secrets "$gate_work/real.plist" \
+    StadiaAPIKey "8f2b1c" ThunderforestAPIKey "4d9e7a"
+run_script "check-release-secrets passes a file where both keys resolve" \
+    "$secrets_gate" --plist "$gate_work/real.plist"
+if expect_status 0 \
+    && expect_contains "$output" "2 keys resolve" "the output" \
+    && expect_contains "$output" "Safe to archive" "the output"; then
+    pass
+fi
+
+run_script "check-release-secrets names the template when the file is absent" \
+    "$secrets_gate" --plist "$gate_work/not-here.plist"
+if expect_status 1 \
+    && expect_contains "$output" "Secrets.example.plist" "the error" \
+    && expect_contains "$output" "gitignored" "the error"; then
+    pass
+fi
+
+write_secrets "$gate_work/one-key.plist" StadiaAPIKey "8f2b1c"
+run_script "check-release-secrets names a missing key with its provider" \
+    "$secrets_gate" --plist "$gate_work/one-key.plist"
+if expect_status 1 \
+    && expect_contains "$output" "ThunderforestAPIKey is missing" "the error" \
+    && expect_contains "$output" "Thunderforest Outdoors" "the error" \
+    && expect_absent "$output" "StadiaAPIKey" "the error"; then
+    pass
+fi
+
+write_secrets "$gate_work/empty.plist" \
+    StadiaAPIKey "" ThunderforestAPIKey "4d9e7a"
+run_script "check-release-secrets refuses an emptied key" \
+    "$secrets_gate" --plist "$gate_work/empty.plist"
+if expect_status 1 && expect_contains "$output" "StadiaAPIKey is empty" "the error"; then
+    pass
+fi
+
+# The likelier mistake than a missing file: the template copied into place and
+# not filled in leaves a file that parses, resolves to nothing, and reads
+# exactly like a working one.
+run_script "check-release-secrets refuses the checked-in template unfilled" \
+    "$secrets_gate" --plist "$repository_root/Secrets.example.plist"
+if expect_status 1 \
+    && expect_contains "$output" "template placeholder" "the error" \
+    && expect_contains "$output" "StadiaAPIKey" "the error" \
+    && expect_contains "$output" "ThunderforestAPIKey" "the error"; then
+    pass
+fi
+
+# Both problems at once, so a person fixing one does not have to run it again
+# to learn about the other.
+write_secrets "$gate_work/both-wrong.plist" \
+    StadiaAPIKey "" ThunderforestAPIKey "YOUR_THUNDERFOREST_API_KEY"
+run_script "check-release-secrets reports every unusable key at once" \
+    "$secrets_gate" --plist "$gate_work/both-wrong.plist"
+if expect_status 1 \
+    && expect_contains "$output" "StadiaAPIKey is empty" "the error" \
+    && expect_contains "$output" "ThunderforestAPIKey is still the template placeholder" "the error"; then
+    pass
+fi
+
+cat > "$gate_work/array.plist" <<'FIXTURE'
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0">
+<array><string>not a dictionary</string></array>
+</plist>
+FIXTURE
+run_script "check-release-secrets refuses a plist that is not a dictionary" \
+    "$secrets_gate" --plist "$gate_work/array.plist"
+if expect_status 1 && expect_contains "$output" "not a dictionary" "the error"; then
+    pass
 fi
 
 echo "This suite's own arguments"

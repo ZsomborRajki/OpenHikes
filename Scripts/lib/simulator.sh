@@ -1,9 +1,9 @@
 #!/usr/bin/env bash
 #
-# Simulator resolution, sourced by Scripts/run-ui-tests.sh and
-# Scripts/run-performance-tests.sh. Not executable on its own.
+# Simulator resolution, sourced by Scripts/run-ui-tests.sh. Not executable on
+# its own.
 #
-# Both scripts used to send `xcodebuild` to `name=<device>` while doing their
+# The script used to send `xcodebuild` to `name=<device>` while doing its
 # simulator housekeeping — clearing a leftover simulated location, granting
 # location authorisation, reading the app container back out — against
 # `simctl booted`. `booted` is not a device: with more than one simulator up it

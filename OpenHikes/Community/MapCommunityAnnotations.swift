@@ -106,7 +106,6 @@ extension MapView.Coordinator {
     /// from dropping and re-dropping every marker on the map.
     func applyCommunityPins(_ listings: [CommunityListing], on mapView: MKMapView) {
         guard communityAnnotations.map(\.listing) != listings else { return }
-        RenderSignpost.mark("MapCommunityPinsRebuilt", "\(listings.count) pins")
         if !communityAnnotations.isEmpty {
             mapView.removeAnnotations(communityAnnotations)
             communityAnnotations = []
