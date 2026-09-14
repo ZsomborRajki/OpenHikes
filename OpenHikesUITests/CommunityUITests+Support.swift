@@ -40,7 +40,22 @@ nonisolated enum SeededCommunityScenario: String {
     /// *published* hike from automation, since `publication(of:)` is what
     /// writes ``Hike/communityListingID`` and nothing else does.
     case published = "published"
+    /// ``seeded``, with a queue in front of it — the only way to reach the
+    /// review section from automation, since in production an empty queue is
+    /// what the *server* gives everybody who is not a reviewer.
+    case reviewing = "reviewing"
     case seeded = "seeded"
+}
+
+/// What `--ui-test-community=reviewing` puts in the reviewer's queue.
+///
+/// Mirrors ``SeededCommunityTransport``'s own constants. Shares no word with
+/// ``SeededHike``'s titles, so a scenario asserting that the queue and the
+/// browse list are separate cannot be fooled by a match across both.
+nonisolated enum SeededQueuedHike {
+    static let title = "Karwendel Hut Approach"
+    static let photographedTitle = "Steinerne Rinne"
+    static let allTitles = [title, photographedTitle]
 }
 
 extension XCTestCase {
