@@ -58,21 +58,57 @@ struct CommunityReviewQueueTests {
         #expect(transport.recording.queueRequests == 1, "one launch, one question")
     }
 
-    /// Leaving takes the rows with it, for the reason the browse list's own
-    /// results go: a list that is not on screen has no business holding an
-    /// answer. The *asked* flag is what survives, which the test above pins.
-    @Test("leaving the tab drops the rows")
-    func leavingDropsTheRows() async {
+    /// The section came back empty after a trip to *My Hikes* and stayed empty
+    /// until the app was relaunched, and this is the pair of rules that did
+    /// it: leaving emptied the list, and coming back declined to ask again
+    /// because the launch had already had its one question. Each was
+    /// defensible alone. Together they meant a reviewer got one look.
+    ///
+    /// The rows are what gave way. A queue is not an answer about an area of
+    /// the map — nothing that happens between the two segments can make it
+    /// wrong — so there is nothing to protect by throwing it away, and a whole
+    /// launch's worth of usefulness to lose.
+    @Test("leaving the tab and coming back still shows the queue")
+    func leavingAndReturningKeepsTheRows() async {
         let transport = StubCommunityTransport()
-        transport.pendingResult = .success([.stub()])
+        transport.pendingResult = .success([.stub(), .stub(id: "notice-2")])
         let queue = CommunityReviewQueue(transport: transport)
 
         queue.startBrowsing()
         await settle(queue)
-        #expect(!queue.pending.isEmpty)
+        #expect(queue.pending.count == 2)
 
         queue.stopBrowsing()
-        #expect(queue.pending.isEmpty)
+        queue.startBrowsing()
+        await settle(queue)
+
+        #expect(queue.pending.count == 2, "the rows are still there")
+        #expect(queue.isReviewer)
+        #expect(transport.recording.queueRequests == 1, "and cost nothing to get back")
+    }
+
+    /// The same disappearance in a narrower window: leave during the one
+    /// request of the launch and it is cancelled, so the launch has asked and
+    /// been told nothing. Coming back has to ask, or the queue is empty for
+    /// the rest of the launch for a reason nobody can see.
+    @Test("a request abandoned on the way out is asked again on the way back")
+    func anAbandonedRequestIsAskedAgain() async {
+        let transport = StubCommunityTransport()
+        transport.pendingResult = .success([.stub()])
+        let gate = AsyncGate()
+        transport.beforeQueueReturns = { await gate.wait() }
+        let queue = CommunityReviewQueue(transport: transport)
+
+        queue.startBrowsing()
+        queue.stopBrowsing()
+        // Open before the second selection, so the replacement request is not
+        // held behind the abandoned one.
+        await gate.open()
+        queue.startBrowsing()
+        await settle(queue)
+
+        #expect(transport.recording.queueRequests == 2)
+        #expect(queue.pending.count == 1)
     }
 
     /// What every hiker who is not a reviewer gets: the server refuses the

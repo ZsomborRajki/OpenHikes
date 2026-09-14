@@ -31,6 +31,11 @@
 //  next selection of the tab — see ``forget(_:)`` — because acting is the
 //  thing that changes the answer, and it is the only thing that does.
 //
+//  That budget is why the rows outlive the tab — see ``stopBrowsing()``. A
+//  list held for one request a launch and thrown away on every tap between
+//  the segments is a list that is gone for the rest of the launch, which is
+//  exactly what it was.
+//
 //  ## Why a failed load says nothing
 //
 //  This is the one list in the feature that fails silently, and it is
@@ -178,20 +183,34 @@ final class CommunityReviewQueue {
         }
     }
 
-    /// The tab was left. Drops the rows and any request still in flight.
+    /// The tab was left. Abandons a request still in flight; keeps the rows.
     ///
-    /// The rows go for the reason ``CommunityBrowser/stopBrowsing()`` drops
-    /// its own: a list that is not on screen has no business holding an answer
-    /// to a question the reviewer has moved on from. ``hasAsked`` survives, so
-    /// coming back does not spend another request.
+    /// The rows stay, and this is the one place this type deliberately parts
+    /// company with ``CommunityBrowser/stopBrowsing()``, which drops its own.
+    /// The browser's results are an answer about *an area of the map*, and the
+    /// map moves while the list is away, so holding them would be holding
+    /// something that may since have become untrue. A queue is not an answer
+    /// about anywhere. Nothing a reviewer does between the two segments can
+    /// make it wrong, and the once-a-launch rule means there is no second
+    /// request coming to replace what is thrown away.
+    ///
+    /// Emptying it here is what made the section vanish on the way back and
+    /// stay vanished until the app was relaunched: the rows went, and
+    /// ``startBrowsing()`` then declined to ask for them again because the
+    /// launch had already had its question. The two rules were each defensible
+    /// and could not both hold.
+    ///
+    /// ``isReviewer`` stays for the same reason: it is a fact about the
+    /// account rather than about the list.
     func stopBrowsing() {
         loadTask?.cancel()
         loadTask = nil
+        // A request cancelled on the way out never answered, so the launch has
+        // not in fact asked yet — otherwise leaving the tab during the one
+        // request of the launch would lose it, which is the same disappearance
+        // in a narrower window.
+        if isLoading { hasAsked = false }
         isLoading = false
-        pending = []
-        // ``isReviewer`` stays, like ``hasAsked``: it is a fact about the
-        // account rather than about the list, and re-deciding it would need
-        // the request the once-a-launch rule exists to avoid.
     }
 
     /// Takes one entry out, because it has been published or declined.
