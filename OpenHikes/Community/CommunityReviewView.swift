@@ -161,6 +161,12 @@ struct CommunityReviewView: View {
     /// until Publish: a removal is reversible for exactly as long as the
     /// decision is.
     @State private var removedPhotos: Set<Int> = []
+    /// Whether the title field has the keyboard.
+    ///
+    /// Written by the *Done* button above the keyboard and by nothing else —
+    /// see ``submissionSection`` for why that button is here rather than
+    /// being a convenience.
+    @FocusState private var isEditingTitle: Bool
     @State private var isDeciding = false
     @State private var isConfirmingDecline = false
     @State private var decisionFailure: CommunityFailure?
@@ -313,6 +319,24 @@ private extension CommunityReviewView {
                 TextField("Title", text: $titleDraft)
                     .multilineTextAlignment(.trailing)
                     .disabled(isDeciding)
+                    .focused($isEditingTitle)
+                    .submitLabel(.done)
+                    // The same *Done* the hike's own title field carries, and
+                    // here it is the difference between reaching the decision
+                    // and not. This screen is a `Form` in a sheet that rests
+                    // at half height: the keyboard covers what is left of it,
+                    // *Publish* and *Decline* are at the foot, and a `Form`
+                    // builds its rows lazily — so a reviewer who has just
+                    // corrected a name can be left with neither the room to
+                    // scroll to the decision nor a row down there to scroll
+                    // to. `CommunityReviewUITests` failed on both halves of
+                    // that before this button existed.
+                    .toolbar {
+                        ToolbarItemGroup(placement: .keyboard) {
+                            Spacer()
+                            Button("Done") { isEditingTitle = false }
+                        }
+                    }
                     .accessibilityIdentifier("review-title-field")
             }
             LabeledContent("Credit") {

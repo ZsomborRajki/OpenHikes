@@ -229,6 +229,14 @@ nonisolated final class CommunityReviewUITests: XCTestCase {
             String(repeating: XCUIKeyboardKey.delete.rawValue, count: SeededQueuedHike.title.count)
         )
         field.typeText("Karwendelhaus, by the north side")
+        // The keyboard goes before anything below it is asked for, and that
+        // is the gesture rather than a tidy-up. It covers what the sheet has
+        // left at its resting height, so a swipe meant to scroll starts
+        // inside it, and `review-publish` sits in a `Form`, which does not
+        // build a row until something scrolls to it. The runs that found this
+        // failed at exactly those two points: one on a *Publish* that was
+        // there and covered, one on a *Publish* that was never built.
+        commitKeyboardEdit(in: app)
 
         XCTAssertTrue(
             element("review-original-title", in: app).waitForExistence(timeout: UITestTimeout.existence),
