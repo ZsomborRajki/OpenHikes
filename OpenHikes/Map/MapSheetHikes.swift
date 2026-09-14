@@ -63,6 +63,10 @@ struct MapSheetHikes: View, Equatable {
     /// does reaches it once. The map's results and the typed query's are
     /// separate lists on purpose; see ``CommunityBrowser``.
     var community: CommunityBrowser
+    /// Submissions waiting for a person, which is an empty list for everybody
+    /// who is not a reviewer — so for almost every launch this draws nothing
+    /// and costs one comparison. See ``CommunityReviewQueue``.
+    var review: CommunityReviewQueue
     let selectedHikeID: UUID?
     let onOpen: (Hike) -> Void
     /// A hike tapped in the search results: the caller clears the field and
@@ -78,6 +82,8 @@ struct MapSheetHikes: View, Equatable {
     let onSubmitQuery: () -> Void
     /// A published hike tapped in the results: the caller pushes its preview.
     let onSelectListing: (CommunityListing) -> Void
+    /// A queued submission tapped: the caller pushes the review screen.
+    var onSelectPending: (CommunityPendingSubmission) -> Void = { _ in /* no-op default */ }
     /// The surviving hikes are handed over with the doomed one because freeing
     /// its tiles means asking which of them are still claimed elsewhere.
     let onDelete: (Hike, [Hike]) -> Void
@@ -118,6 +124,7 @@ struct MapSheetHikes: View, Equatable {
             && lhs.recorder === rhs.recorder
             && lhs.walkSession === rhs.walkSession
             && lhs.community === rhs.community
+            && lhs.review === rhs.review
     }
 
     var body: some View {

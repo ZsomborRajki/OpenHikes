@@ -14,6 +14,13 @@ enum SheetRoute: Hashable {
     /// a store the way a pushed `Hike` can.
     case communityHike(CommunityListing)
     case hike(Hike)
+    /// A submission waiting for review. Carries the queue entry for the reason
+    /// ``communityHike(_:)`` carries a listing — there is no `Hike` and no
+    /// listing either, and the value is `Sendable` with no store behind it.
+    ///
+    /// Reachable only from a queue that came back non-empty, which is a thing
+    /// the server decides. See ``CommunityReviewQueue``.
+    case pendingSubmission(CommunityPendingSubmission)
     /// A hike's gallery, opened at one photo. Carries the hike rather than the
     /// photo so the viewer can page through the rest of them, and so a photo
     /// deleted from inside the viewer doesn't invalidate the route showing it.
@@ -49,7 +56,7 @@ enum SheetRoute: Hashable {
         // Neither shows a `Hike`, so neither is popped by one being deleted.
         // A community preview is about a hike that is not in the library at
         // all, which is exactly the state a deletion puts one back into.
-        case .communityHike, .recording: false
+        case .communityHike, .pendingSubmission, .recording: false
         }
     }
 
@@ -98,6 +105,7 @@ enum SheetRoute: Hashable {
         case (.recording, .recording): true
         case let (.walk(left), .walk(right)): left.persistentModelID == right.persistentModelID
         case let (.communityHike(left), .communityHike(right)): left.id == right.id
+        case let (.pendingSubmission(left), .pendingSubmission(right)): left.id == right.id
         default: false
         }
     }
@@ -122,6 +130,12 @@ enum SheetRoute: Hashable {
             // of a listing is a snapshot of a record a reviewer can edit, and
             // two pushes of the same hike a minute apart are the same screen.
             hasher.combine(listing.id)
+        case let .pendingSubmission(pending):
+            hasher.combine(5)
+            // The notice's record name, for the reason above: the fields
+            // beside it are a snapshot of a submission, and two pushes of the
+            // same queue entry are the same screen.
+            hasher.combine(pending.id)
         }
     }
 }

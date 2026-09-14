@@ -2,7 +2,11 @@
 //  CloudKitCommunityTransport.swift
 //  OpenHikes
 //
-//  The only file in the app that talks to the public database.
+//  Where the app talks to the public database. The reviewer's half of that
+//  conversation is in `CloudKitCommunityTransport+Reviewing.swift`, split off
+//  for length alone — which is why `database`, `logger` and `contents` are
+//  internal rather than private: `private` is file-scoped in Swift, and those
+//  two files are one type.
 //
 //  It is raw CloudKit rather than anything SwiftData does, and that is not a
 //  choice so much as the absence of one: SwiftData's mirroring drives the
@@ -28,7 +32,7 @@ import Foundation
 import os
 
 nonisolated struct CloudKitCommunityTransport: CommunityTransporting {
-    private static let logger = Logger(subsystem: "OpenHikes", category: "Community")
+    static let logger = Logger(subsystem: "OpenHikes", category: "Community")
 
     /// The same container the mirrored store uses, and the same one the
     /// entitlement names. The public database inside it is a different
@@ -39,7 +43,7 @@ nonisolated struct CloudKitCommunityTransport: CommunityTransporting {
         self.containerIdentifier = containerIdentifier
     }
 
-    private var database: CKDatabase {
+    var database: CKDatabase {
         CKContainer(identifier: containerIdentifier).publicCloudDatabase
     }
 
@@ -93,12 +97,19 @@ nonisolated struct CloudKitCommunityTransport: CommunityTransporting {
             record[CommunitySchema.Submission.photos] = draft.photoFileURLs.map(CKAsset.init(fileURL:))
         }
 
+        let submissionID: String
         do {
             let saved = try await database.save(record)
-            return saved.recordID.recordName
+            submissionID = saved.recordID.recordName
         } catch {
             throw Self.failure(from: error, while: "submitting a hike")
         }
+
+        // A submission nobody is told about is lost rather than waiting —
+        // see ``queueForReview(_:)``, which is why this is awaited and its
+        // failure is thrown.
+        try await queueForReview(submissionID)
+        return submissionID
     }
 
     // MARK: - Browsing
@@ -294,6 +305,27 @@ nonisolated struct CloudKitCommunityTransport: CommunityTransporting {
     @concurrent
     func detail(
         for listing: CommunityListing,
+        downloadingInto directory: URL
+    ) async throws -> CommunityHikeDetail {
+        try await contents(of: listing, downloadingInto: directory)
+    }
+
+    /// What both of the two above actually do.
+    ///
+    /// A split rather than a shared base or a flag, which is the pattern the
+    /// preview screen's own reuse follows: the two callers differ in *what
+    /// they hold* — a listing somebody published, or the listing publishing
+    /// would write — and in nothing this function does. Everything here reads
+    /// ``CommunityListing/submissionID`` and ``CommunityListing/hikeDate``,
+    /// which a pending submission answers as truthfully as a published one.
+    ///
+    /// The one place the difference shows is the log, which names
+    /// ``CommunityListing/id`` — a listing's record name on one path and a
+    /// notice's on the other. That is the right identifier either way: it is
+    /// the thing a reader has in front of them when they come looking.
+    @concurrent
+    func contents(
+        of listing: CommunityListing,
         downloadingInto directory: URL
     ) async throws -> CommunityHikeDetail {
         let record: CKRecord
@@ -584,7 +616,11 @@ nonisolated extension CloudKitCommunityTransport {
 // `nonisolated` for the reason the listing initializer above is: an
 // unannotated extension is main-actor isolated here, and every caller is
 // `@concurrent`.
-nonisolated private extension CloudKitCommunityTransport {
+//
+// Internal rather than `private` only because `failure(from:while:)` is what
+// the reviewing half turns its own `CKError`s into sentences with, and that
+// half is a sibling file. Nothing outside those two calls either of these.
+nonisolated extension CloudKitCommunityTransport {
     static func writeJSON(
         _ value: some Encodable,
         named name: String,
@@ -630,6 +666,11 @@ nonisolated private extension CloudKitCommunityTransport {
         return switch ckError.code {
         case .notAuthenticated, .managedAccountRestricted: .notSignedIn
         case .unknownItem: .noLongerAvailable
+        // The server saying no to a reviewer's action, which is the review
+        // path's own failure and reaches no other caller: every other method
+        // here reads a type `_world` may read or writes one `_icloud` may
+        // create. See ``CommunityFailure/notPermitted``.
+        case .permissionFailure: .notPermitted
         default: .unavailable(ckError.localizedDescription)
         }
     }

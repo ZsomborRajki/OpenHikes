@@ -71,6 +71,16 @@ final class OpenHikesModel {
     /// sheet draws its results. A `@State` in either would be rebuilt by the
     /// other's navigation.
     let community: CommunityBrowser
+    /// Submissions waiting for a person, which is an empty list for everybody
+    /// who is not a reviewer.
+    ///
+    /// Owned here beside ``community`` and for the same reason: the tab
+    /// selection that fills it lives in the sheet and the screen that empties
+    /// it is pushed from the map, so neither owns the other. Separate from
+    /// ``CommunityBrowser`` because it answers a different question of a
+    /// different record type with a different permission — see
+    /// ``CommunityReviewQueue``.
+    let communityReview: CommunityReviewQueue
     /// The people this device has blocked, which both the browse lists and the
     /// Settings section read.
     ///
@@ -134,6 +144,10 @@ final class OpenHikesModel {
         self.communityTransport = communityTransport
         communityBlocks = CommunityBlockList(defaults: defaults)
         community = Self.makeCommunityBrowser(transport: communityTransport, blocks: communityBlocks)
+        // The same transport the browser got, or the same `nil`: a launch that
+        // must not reach CloudKit must not reach it for this either, and a
+        // queue with no transport simply never asks.
+        communityReview = CommunityReviewQueue(transport: communityTransport)
         self.locationManager = locationManager
         self.weatherManager = weatherManager
         self.significantLocations = significantLocations

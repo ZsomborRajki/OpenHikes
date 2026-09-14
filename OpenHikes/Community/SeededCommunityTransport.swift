@@ -64,11 +64,11 @@ import Foundation
 nonisolated struct SeededCommunityTransport: CommunityTransporting {
     /// Which shape of database this launch wants.
     ///
-    /// Four, because the list has three states worth looking at and only one
-    /// of them is the happy one — and because one screen depends not on what
-    /// the list holds but on what a *reviewer* has done since. A screen that
-    /// has never been seen empty or broken is a screen whose empty and broken
-    /// states were written blind.
+    /// Five, because the list has three states worth looking at and only one
+    /// of them is the happy one — and because two screens depend not on what
+    /// the list holds but on what a *reviewer* has done, or has yet to do. A
+    /// screen that has never been seen empty or broken is a screen whose empty
+    /// and broken states were written blind.
     enum Scenario: String, CaseIterable {
         /// Nothing published anywhere near here, which is the ordinary answer
         /// for most of the world and the one the empty row is for.
@@ -87,13 +87,27 @@ nonisolated struct SeededCommunityTransport: CommunityTransporting {
         /// ``CommunityWithdrawalSheet``'s published footer, which is a
         /// different sentence from its awaiting-review one.
         case published = "published"
+        /// ``seeded``, plus a queue with something in it.
+        ///
+        /// The only way to reach the review section from automation, and the
+        /// reason it needs a scenario of its own is the same reason the
+        /// section is safe: an ordinary launch gets an empty queue because the
+        /// *server* refuses one, so nothing a UI test can tap would ever fill
+        /// it. This scenario is the stand-in for being in the role.
+        case reviewing = "reviewing"
         /// Three published hikes, one of them with photographs.
         case seeded = "seeded"
 
         /// Whether this scenario has a database behind it at all, as opposed
         /// to being empty or broken. The two that do differ only in what
         /// ``publication(of:)`` says.
-        var servesListings: Bool { self == .seeded || self == .published }
+        var servesListings: Bool {
+            self == .seeded || self == .published || self == .reviewing
+        }
+
+        /// Whether a reviewer's queue has anything in it. One scenario, for
+        /// the reason ``reviewing`` gives.
+        var servesQueue: Bool { self == .reviewing }
 
         /// The scenario a launch argument names, or `nil` for a launch that
         /// did not ask — which is every launch that must get no transport at
@@ -196,6 +210,71 @@ nonisolated struct SeededCommunityTransport: CommunityTransporting {
         return "seeded-submission-\(draft.hikeID.uuidString)"
     }
 
+    // MARK: - Reviewing
+
+    @concurrent
+    func pendingSubmissions() async throws -> [CommunityPendingSubmission] {
+        guard scenario != .failing else { throw CommunityFailure.unreachable }
+        // A refusal rather than an empty list, because that is what the
+        // server gives an account outside the role — and the two are no longer
+        // the same answer: an *allowed* empty queue still means reviewer, and
+        // would put *Take Down* on every published hike in these scenarios.
+        // See ``CommunityReviewQueue/isReviewer``.
+        guard scenario.servesQueue else { throw CommunityFailure.notPermitted }
+        return Self.queuedSubmissions
+    }
+
+    @concurrent
+    func detail(
+        ofPending pending: CommunityPendingSubmission,
+        downloadingInto directory: URL
+    ) async throws -> CommunityHikeDetail {
+        guard scenario != .failing else { throw CommunityFailure.unreachable }
+        try Task.checkCancellation()
+        try FileManager.default.createDirectory(
+            at: directory,
+            withIntermediateDirectories: true
+        )
+
+        // Built here rather than handed to ``detail(for:downloadingInto:)``,
+        // because the two differ in the two things review is *about*. The
+        // description is the hiker's own words, not a sentence synthesised
+        // from the title — judging it is most of the job. And the photographs
+        // are decided here because a queue entry does not know how many it
+        // has: the count arrives with the assets, which is the production
+        // shape this scenario exists to imitate.
+        let route = Self.route(of: pending.prospectiveListing)
+        let photoCount = pending.title == Self.queuedPhotographedTitle
+            ? Self.photographedCount
+            : 0
+        let photos = await Self.writePhotos(count: photoCount, into: directory)
+        return CommunityHikeDetail(
+            listing: pending.prospectiveListing,
+            route: route,
+            trackDescription: pending.trackDescription.isEmpty ? nil : pending.trackDescription,
+            photoPins: photos.map { _ in
+                CommunityPhotoPin(capturedAt: pending.hikeDate, coordinate: route.first?.clCoordinate)
+            },
+            photoFileURLs: photos
+        )
+    }
+
+    @concurrent
+    func publish(_ pending: CommunityPendingSubmission) async throws -> CommunityListing {
+        guard scenario != .failing else { throw CommunityFailure.notPermitted }
+        return Self.publishedListing(of: pending.submissionID)
+    }
+
+    @concurrent
+    func decline(_ pending: CommunityPendingSubmission) async throws {
+        guard scenario != .failing else { throw CommunityFailure.notPermitted }
+    }
+
+    @concurrent
+    func takeDown(_ listing: CommunityListing) async throws {
+        guard scenario != .failing else { throw CommunityFailure.notPermitted }
+    }
+
     @concurrent
     func publication(of submissionID: String) async throws -> CommunityListing? {
         guard scenario != .failing else { throw CommunityFailure.unreachable }
@@ -242,7 +321,7 @@ nonisolated struct SeededCommunityTransport: CommunityTransporting {
     /// put under a test.
     private func answer(_ listings: [CommunityListing]) throws -> [CommunityListing] {
         switch scenario {
-        case .seeded, .published: listings
+        case .seeded, .published, .reviewing: listings
         case .empty: []
         case .failing: throw CommunityFailure.unreachable
         }
@@ -293,6 +372,72 @@ nonisolated extension SeededCommunityTransport {
             distanceMeters: scrambleDistanceMeters
         ),
     ]
+
+    /// Titles for the queue, sharing no word with the published three so a
+    /// scenario asserting that the review section is separate from the browse
+    /// list cannot be fooled by a match across both.
+    static let queuedTitle = "Karwendel Hut Approach"
+    static let queuedPhotographedTitle = "Steinerne Rinne"
+
+    /// What a reviewer's queue holds under ``Scenario/reviewing``.
+    ///
+    /// Two, and deliberately not alike: one carries a description and
+    /// photographs — the case a reviewer actually has to read and look at —
+    /// and one carries neither, which is the case where the screen has nothing
+    /// to show but a title, a credit and a line on the map.
+    ///
+    /// ``CommunityPendingSubmission/photoCount`` is zero on both, because that
+    /// is what the real transport returns: the count arrives with the
+    /// photographs, from the screen that fetches them. A scenario that wants
+    /// to see a count has to open the preview, which is the same thing a
+    /// reviewer has to do.
+    static let queuedSubmissions: [CommunityPendingSubmission] = [
+        queued(
+            id: "seeded-notice-hut",
+            title: queuedTitle,
+            authorName: "Chris",
+            trackDescription: "",
+            distanceMeters: queuedDistanceMeters
+        ),
+        queued(
+            id: "seeded-notice-rinne",
+            title: queuedPhotographedTitle,
+            authorName: blockableAuthorName,
+            trackDescription: """
+                A long approach on forest road, then the gully proper. \
+                Wet rock after rain and the chains are old.
+                """,
+            distanceMeters: queuedPhotographedDistanceMeters
+        ),
+    ]
+
+    private static let queuedDistanceMeters = 6700.0
+    private static let queuedPhotographedDistanceMeters = 9300.0
+
+    private static func queued(
+        id: String,
+        title: String,
+        authorName: String,
+        trackDescription: String,
+        distanceMeters: Double
+    ) -> CommunityPendingSubmission {
+        CommunityPendingSubmission(
+            id: id,
+            submissionID: "\(id)-submission",
+            title: title,
+            authorName: authorName,
+            // An opaque string, as the real one is: this is what CloudKit
+            // stamps on the upload, not anything the hiker chose.
+            authorID: "seeded-author-\(id)",
+            trackDescription: trackDescription,
+            hikeDate: hikeDate,
+            distanceMeters: distanceMeters,
+            photoCount: 0,
+            latitude: startLatitude,
+            longitude: startLongitude,
+            noticedAt: hikeDate
+        )
+    }
 
     /// Two, which is enough for a gallery to be a gallery and few enough that
     /// opening a preview is not an encode the test has to wait on.

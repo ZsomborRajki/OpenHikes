@@ -32,9 +32,12 @@
 //    of these for it, and no client can forge one.
 //
 //  Publishing is therefore creating a ``listingType`` record that points at a
-//  submission. It is deliberately small enough to be done by hand in the
-//  CloudKit Console, which is what lets review ship before any review tooling
-//  does.
+//  submission. It was small enough to be done by hand in the CloudKit Console,
+//  which is what let review ship before any review tooling did; the app now
+//  does it instead, from ``CommunityReviewView``, and the grant above is what
+//  makes that safe rather than the absence of a method. See
+//  ``CommunityTransporting`` for why leaving the method out never protected
+//  anything.
 //
 //  ## Why nobody may write a submission, including its author
 //
@@ -53,6 +56,14 @@
 //  cannot withdraw or edit a submission from the app; sharing an amended hike
 //  makes a new submission, and taking one down is a reviewer's delete.
 //
+//  The `reviewer` role does hold `WRITE` here, and that is what a delete
+//  needs — see ``CommunityTransporting/decline(_:)`` and
+//  ``CommunityTransporting/takeDown(_:)``. It is the narrowest grant that
+//  makes declining possible at all, and declining has to be possible: nothing
+//  enumerates this type, so a submission a reviewer turns down and leaves
+//  behind can never be found by anybody again, and would be a stranger's
+//  photographs and GPS trace held in a public database for good.
+//
 //  **`_world` reads it.** Browsing needs no account — public reads never do —
 //  and a signed-out hiker who can find a listing has to be able to open it.
 //  A reference being readable does not make its target readable, so without
@@ -65,8 +76,45 @@
 //  pending upload is an unguessable name rather than a permission. The
 //  alternative was copying every approved route and photograph into a record
 //  only the admin role can create, which cannot be done by hand in the Console
-//  for a dozen assets and so would make review wait on tooling this does not
-//  have yet.
+//  for a dozen assets. That argument was written when review was Console work
+//  and it survives the app learning to publish: the copy would still have to
+//  happen somewhere, and a reviewer's phone re-uploading a stranger's
+//  photographs in order to approve them is worse than the record name being
+//  the gate.
+//
+//  ## How a reviewer finds a submission, and why that needs a third type
+//
+//  The rule below — that ``submissionType`` carries no index at all — is what
+//  keeps a world-readable pending upload from being enumerable. It binds
+//  everybody. A CloudKit index belongs to a record *type*, not to a role, so
+//  there is no such thing as an index only the reviewer can query: making the
+//  queue visible to a reviewer that way would publish every unreviewed upload
+//  to everybody. That is not a trade worth making, so the queue is somewhere
+//  else.
+//
+//  ``noticeType`` is that somewhere else. One record per submission, carrying
+//  a reference to it and nothing else, created by the app the moment an upload
+//  succeeds. `_icloud` may create one; **only the `reviewer` role may read
+//  one**, which is what lets this type be indexed without leaking anything: a
+//  query returns the rows the caller may read, and for everybody but the
+//  reviewer that is none of them.
+//
+//  Two things about its shape are deliberate:
+//
+//  - **It carries a reference and no copied fields.** A title or a distance
+//    denormalised onto it would be text a client wrote, shown to a reviewer as
+//    though it described the record they were about to approve — so the queue
+//    reads the real values off each submission instead, with `desiredKeys`, the
+//    way ``CommunityTransporting/outlines(for:)`` already reads a page of
+//    outlines. Nothing on a notice can lie about what it points at.
+//  - **The order is `___createTime`, not a field.** A client-supplied date
+//    could be set to last year to jump the queue. The server stamps this one.
+//
+//  What a notice cannot do is make a submission *trustworthy*: anybody with an
+//  Apple Account can create one pointing anywhere, so the queue is a list of
+//  things to look at rather than a list of things that are real. The reviewer
+//  fetches each submission before deciding, and a notice whose submission is
+//  gone is dropped.
 //
 //  ## Indexes this schema needs
 //
@@ -100,6 +148,15 @@
 //  have already arrived and is never a predicate. Indexing it would let
 //  anybody enumerate one person's published hikes, which is a thing this
 //  schema has no reason to offer.
+//
+//  ``noticeType`` needs `___recordID` QUERYABLE — without it the queue cannot
+//  be listed at all — and `___createTime` SORTABLE, so the oldest submission
+//  is reviewed first. Both are safe *here* and would not be safe one type
+//  over, and the difference is the read grant rather than the index: this type
+//  is readable only by the `reviewer` role, so a query run by anybody else
+//  matches nothing. It is the one place in this schema where an index is
+//  added rather than argued away, and the reason is that permission is doing
+//  the work an absent index does elsewhere.
 //
 //  On ``submissionType``, **no index at all**, and that absence is a security
 //  control rather than an omission. A fetch by record ID is not a query and
@@ -139,6 +196,11 @@ nonisolated enum CommunitySchema {
     static let submissionType = "CommunityHikeSubmission"
     /// What a reviewer publishes. The only type the browse path reads.
     static let listingType = "CommunityHike"
+    /// One per submission, readable only by the `reviewer` role: the queue.
+    ///
+    /// See *How a reviewer finds a submission* in this file's header for why
+    /// the queue cannot live on ``submissionType`` itself.
+    static let noticeType = "CommunitySubmissionNotice"
 
     /// Fields on ``submissionType``.
     enum Submission {
@@ -186,6 +248,12 @@ nonisolated enum CommunitySchema {
         /// Where the route starts, copied onto the listing at publication so
         /// the reviewer does not have to work it out.
         static let startLocation = "startLocation"
+    }
+
+    /// Fields on ``noticeType``.
+    enum Notice {
+        /// The submission this notice is about. The whole of the record.
+        static let submission = "submission"
     }
 
     /// Fields on ``listingType``.

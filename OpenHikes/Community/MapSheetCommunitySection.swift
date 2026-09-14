@@ -69,8 +69,17 @@ extension MapSheetHikes {
             get: { community.isBrowsing ? .community : .mine },
             set: { selection in
                 switch selection {
-                case .community: community.startBrowsing()
-                case .mine: community.stopBrowsing()
+                case .community:
+                    community.startBrowsing()
+                    // The same opt-in covers both lists, because it is the
+                    // same tap: selecting *Community* is what the repository's
+                    // rule about reaching the network is about, and the queue
+                    // asks at most once a launch behind it. See
+                    // ``CommunityReviewQueue``.
+                    review.startBrowsing()
+                case .mine:
+                    community.stopBrowsing()
+                    review.stopBrowsing()
                 }
             }
         )
@@ -95,6 +104,7 @@ extension MapSheetHikes {
     /// for the same reason the share button is absent rather than disabled.
     var communityList: some View {
         List {
+            reviewSection
             Section {
                 communitySectionContent
             } header: {
@@ -105,6 +115,46 @@ extension MapSheetHikes {
         }
         .listStyle(.plain)
         .scrollContentBackground(.hidden)
+    }
+
+    /// Submissions waiting for a person, above the published ones.
+    ///
+    /// Absent for everybody whose queue is empty, which is everybody who is
+    /// not a reviewer — the server decides that, not this view, and there is
+    /// no flag anywhere saying which one the hiker is. See
+    /// ``CommunityReviewQueue`` for why that is the whole access control and
+    /// why a failed load draws nothing rather than a row.
+    ///
+    /// Above the browse list rather than behind a third segment of
+    /// ``listPicker``, because that picker is bound to
+    /// ``CommunityBrowser/isBrowsing`` and a third case would need state of
+    /// its own — which could then disagree with the browse session about which
+    /// list is showing. A section is also the truthful shape: this is work
+    /// waiting on the reviewer, and it belongs above the thing they would
+    /// otherwise be doing rather than somewhere they have to go and look.
+    @ViewBuilder var reviewSection: some View {
+        if !review.pending.isEmpty {
+            Section {
+                ForEach(review.pending) { pending in
+                    Button {
+                        onSelectPending(pending)
+                    } label: {
+                        // The row a published listing gets, drawn from what
+                        // publishing would write — so the reviewer sees the
+                        // row before deciding whether it should exist.
+                        CommunityHikeRow(
+                            listing: pending.prospectiveListing,
+                            isImported: false
+                        )
+                            .contentShape(.rect)
+                    }
+                    .buttonStyle(.plain)
+                }
+            } header: {
+                Text("Pending Review (\(review.pending.count))")
+            }
+            .accessibilityIdentifier("community-review-section")
+        }
     }
 
     /// What the list is currently able to show.
