@@ -224,6 +224,68 @@ nonisolated final class SettingsUITests: XCTestCase {
         }
     }
 
+    /// The paywall had exactly one entry point in the whole app, and a build
+    /// without `Secrets.plist` disables it.
+    ///
+    /// `MapPaywallView` was reached only from a locked row in Map Tiles, and
+    /// `providerRow` disables any source whose key did not resolve — which is
+    /// every source in a build without the gitignored plist. An archive cut on
+    /// a machine that lacks it therefore sells a subscription nobody can buy,
+    /// and hides **Restore Purchases** from a subscriber reinstalling, since
+    /// that button lives on the same screen.
+    ///
+    /// This build has the keys, so the disabled state cannot be reproduced
+    /// here. What is asserted instead is the guarantee that makes it not
+    /// matter: an entry point in the section that reads no entitlement, no
+    /// product and no key. Tapped, rather than merely present — a row that
+    /// opens nothing is the same dead end in a different place.
+    @MainActor
+    func testProIsReachableWithoutTheMapTilesSection() {
+        let app = launchApp()
+
+        element("settings-button", in: app).tap()
+        XCTAssertTrue(
+            element("settings-screen", in: app)
+                .waitForExistence(timeout: UITestTimeout.navigation)
+        )
+
+        let pro = element("about-pro-link", in: app)
+        XCTAssertTrue(
+            scrollIntoView(pro, in: app),
+            "Settings should offer OpenHikes Pro outside the Map Tiles section"
+        )
+        pro.tap()
+
+        XCTAssertTrue(
+            element("map-paywall", in: app)
+                .waitForExistence(timeout: UITestTimeout.navigation),
+            "the About row should open the paywall, where Restore Purchases lives"
+        )
+    }
+
+    /// The row is for buying, so a subscriber does not get it — they have
+    /// *Manage Subscription* in Map Tiles, and `MapPaywallView` dismisses
+    /// itself the moment the store answers, so opening it would flash a sheet
+    /// shut in their face.
+    @MainActor
+    func testProRowIsAbsentForASubscriber() {
+        let app = launchApp(arguments: ["--ui-test-entitled"])
+
+        element("settings-button", in: app).tap()
+        XCTAssertTrue(
+            element("settings-screen", in: app)
+                .waitForExistence(timeout: UITestTimeout.navigation)
+        )
+        // Scrolled to the bottom first: absence asserted against a row that
+        // was never drawn has to be told apart from one that is merely off
+        // screen, and `terms-link` is the row it would sit beside.
+        XCTAssertTrue(scrollIntoView(element("terms-link", in: app), in: app))
+        XCTAssertFalse(
+            element("about-pro-link", in: app).exists,
+            "a subscriber has Manage Subscription instead"
+        )
+    }
+
     /// Writing the diagnostics archive is off-main and unhurried.
     private static let exportTimeout: TimeInterval = 25
 

@@ -129,7 +129,22 @@ struct SettingsView: View {
                 // put in this screen's reach.
                 BlockedHikersSection(blocks: blocks)
                 FieldMetricsSection()
-                AboutSection()
+                // The paywall's second entry point, and the only one a build
+                // with no `Secrets.plist` still has — the provider rows that
+                // used to be its sole route are disabled outright there. Not
+                // drawn for a subscriber, who has `manageSubscriptionRow`
+                // above and for whom `MapPaywallView` dismisses itself the
+                // moment it opens.
+                //
+                // `isEntitled` is false while StoreKit is still answering, so
+                // the row is present in that window rather than missing from
+                // it. That is the right way round: the cost of showing it to
+                // somebody who turns out to be subscribed is a sheet that
+                // closes itself, and the cost of hiding it is the dead end
+                // this whole section is here to remove.
+                AboutSection(
+                    showPro: entitlement.isEntitled ? nil : { showPaywall = true }
+                )
             }
             .navigationTitle("Settings")
             #if os(iOS)
@@ -181,10 +196,18 @@ struct SettingsView: View {
                     )
                 }
                 if TileProvider.all.contains(where: { !Secrets.canLoadTiles($0) }) {
-                    Text(
-                        "Sources marked \u{201C}Needs API key\u{201D} aren't available in this build."
-                        + " Adding one is a build-time step — see Secrets.example.plist in the project."
-                    )
+                    // A sentence a hiker can act on, and — under `#if DEBUG`
+                    // — the one a contributor needs. It used to be the second
+                    // half alone, which named a file in the project to
+                    // whoever was reading it. That is a contributor's
+                    // instruction shown to a customer, and it could only ever
+                    // appear in a build where the paid rows are dead, which
+                    // is the build this text most needs to not read like a
+                    // half-finished app.
+                    Text("Sources marked \u{201C}Needs API key\u{201D} aren't available in this build.")
+                    #if DEBUG
+                    Text("Adding one is a build-time step — see Secrets.example.plist in the project.")
+                    #endif
                 }
                 if !entitlement.isEntitled,
                    TileProvider.all.contains(where: \.requiresPaidAccess) {
