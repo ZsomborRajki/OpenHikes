@@ -5,6 +5,13 @@
 //  What the weather badge opens: the conditions in full, how old the reading
 //  is, and Apple Weather's credits.
 //
+//  "In full" is meant literally and was not true before. One request for
+//  `.current` answers with a dozen measurements, and this screen drew three of
+//  them — the same three the badge draws — so a hiker who tapped the badge to
+//  ask a question was shown the thing they had just tapped, larger. Everything
+//  in ``WeatherConditions`` was already fetched, already paid for and already
+//  in memory; the rows below are that, and no second request.
+//
 //  Where this is attached matters more than what it draws. `OpenHikesView`
 //  keeps ``MapSheet`` presented permanently and puts it back if it is ever
 //  dismissed, and a view can only have one modal presented at a time — so a
@@ -97,6 +104,7 @@ struct WeatherDetailView: View {
             List {
                 if let snapshot = weather.current {
                     conditionsSection(snapshot)
+                    readingsSection(snapshot.conditions)
                     freshnessSection(snapshot)
                 } else if case .unavailable = weather.state {
                     unavailableSection
@@ -153,6 +161,85 @@ struct WeatherDetailView: View {
                     .accessibilityIdentifier("weather-detail-place")
             }
         }
+    }
+
+    /// The rest of the reading, one row each.
+    ///
+    /// ``DetailRow`` rather than a grid or a set of tiles, because that is what
+    /// this app already uses for a label and a value in a `List` — and what a
+    /// reader hears as one element rather than two.
+    ///
+    /// No identifier on the `Section`, deliberately. SwiftUI pushes a
+    /// container's identifier down onto every descendant, so one here would
+    /// both smother the rows underneath it and make nine rows answer to one
+    /// name — the reason the surface and difficulty sections carry theirs on
+    /// the bar alone.
+    ///
+    /// The order is not arbitrary and is worth keeping. It runs from what a
+    /// hiker acts on soonest to what they act on least: how cold it will feel,
+    /// what the wind will do to that, then the two that decide whether to
+    /// carry water and a hat, then what can be seen, and finally the three
+    /// that are context rather than instruction.
+    private func readingsSection(_ conditions: WeatherConditions) -> some View {
+        Section {
+            DetailRow(
+                label: "Feels like",
+                value: WeatherReadingFormat.temperature(
+                    conditions.apparentTemperature,
+                    width: .narrow
+                )
+            )
+            DetailRow(label: "Wind", value: Self.wind(conditions.wind))
+                .accessibilityIdentifier("weather-detail-wind")
+            DetailRow(
+                label: "Humidity",
+                value: WeatherReadingFormat.percentage(conditions.humidity)
+            )
+            DetailRow(
+                label: "UV index",
+                value: WeatherReadingFormat.uvIndex(conditions.uvIndex)
+            )
+            DetailRow(
+                label: "Visibility",
+                value: WeatherReadingFormat.visibility(conditions.visibility)
+            )
+            DetailRow(
+                label: "Pressure",
+                value: WeatherReadingFormat.pressure(conditions.pressure)
+            )
+            DetailRow(
+                label: "Dew point",
+                value: WeatherReadingFormat.temperature(conditions.dewPoint, width: .narrow)
+            )
+            DetailRow(
+                label: "Cloud cover",
+                value: WeatherReadingFormat.percentage(conditions.cloudCover)
+            )
+            DetailRow(
+                label: "Precipitation",
+                value: WeatherReadingFormat.precipitation(conditions.precipitationIntensity)
+            )
+        } header: {
+            Text("Conditions")
+        }
+    }
+
+    /// Speed, the way it came from, and the gust when there is one.
+    ///
+    /// One row rather than three, because wind is one fact: a speed with no
+    /// direction is half an answer, and a gust on a line of its own reads as a
+    /// separate wind. The gust is left out entirely when the provider reports
+    /// none — see ``WeatherWind/gust``.
+    private static func wind(_ wind: WeatherWind) -> String {
+        let speed = WeatherReadingFormat.windSpeed(wind.speed)
+        let described = WeatherReadingFormat.windDirection(wind.direction).map { direction in
+            String(localized: "\(speed) \(direction)", comment: "A wind speed and its compass direction")
+        } ?? speed
+        guard let gust = wind.gust else { return described }
+        return String(
+            localized: "\(described), gusting \(WeatherReadingFormat.windSpeed(gust))",
+            comment: "A wind speed and direction, followed by the gust speed"
+        )
     }
 
     /// Why there is no reading.

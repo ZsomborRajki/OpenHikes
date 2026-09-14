@@ -325,6 +325,50 @@ nonisolated final class OpenHikesUITests: XCTestCase {
         )
     }
 
+    /// What the badge opens, which nothing had ever tapped.
+    ///
+    /// The sheet used to draw the same three facts the capsule does, so a
+    /// hiker who tapped it to ask a question was shown the thing they tapped,
+    /// larger. It now carries everything the one `.current` request already
+    /// answered with — and the wind row is the one to assert, because it is
+    /// the only one assembled by this app rather than handed to a formatter:
+    /// a speed, a compass point, and a gust only when there is one.
+    ///
+    /// The compass point rather than the speed, deliberately. The unit is
+    /// regional and this runner's region is not a fact a test may depend on —
+    /// see ``WeatherConditionsFormatTests`` — while "NW" is the app's own
+    /// word for a bearing the fixture pins at 315°.
+    @MainActor
+    func testTheWeatherBadgeOpensTheWholeReading() {
+        let app = launchApp(arguments: ["--ui-test-weather"])
+
+        tapWhenReady(element("weather-badge", in: app))
+
+        XCTAssertTrue(
+            element("weather-detail-conditions", in: app)
+                .waitForExistence(timeout: UITestTimeout.existence),
+            "tapping the badge should open the reading it came from"
+        )
+        let wind = element("weather-detail-wind", in: app)
+        XCTAssertTrue(
+            wind.waitForExistence(timeout: UITestTimeout.existence),
+            "the sheet should carry the rest of the reading, not repeat the badge"
+        )
+        XCTAssertEqual(wind.label, "Wind")
+        XCTAssertTrue(
+            (wind.value as? String)?.contains("NW") ?? false,
+            "a wind row should say which way it is coming from"
+        )
+
+        tapWhenReady(element("weather-detail-done", in: app))
+        XCTAssertTrue(
+            waitUntil(timeout: UITestTimeout.navigation) {
+                !element("weather-detail-conditions", in: app).exists
+            },
+            "the sheet should close on Done"
+        )
+    }
+
     @MainActor
     func testLaunchPerformance() {
         let options = XCTMeasureOptions()

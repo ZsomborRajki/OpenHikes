@@ -19,10 +19,13 @@
 //  hiker out of signal used to be pixel-identical to a feature that had never
 //  been built, because all three drew nothing at all.
 //
-//  It names a searched place, but not a selected hike. A city name says where
-//  a remote reading belongs; a hike title is user content rather than a place
-//  label, and putting it in this compact control makes the badge compete with
-//  the map. The detail sheet still names the selected hike.
+//  It draws a symbol and a temperature, and nothing else. It used to put a
+//  searched city's name beside them, on the argument that a name says where a
+//  remote reading belongs — which is true, and still cost the badge up to 120
+//  points of the map it floats over for a fact the hiker had just typed in.
+//  The place is not lost: it is spoken in the accessibility label, and the
+//  detail sheet a tap away heads itself with it. What is over the map is the
+//  reading.
 //
 //  The tap does not present anything from here. The app keeps ``MapSheet``
 //  presented permanently, and a view can only have one modal up at a time, so
@@ -55,10 +58,6 @@ struct WeatherBadge: View {
     private static let staleOpacity: Double = 0.45
     private static let contentSpacing: CGFloat = 8
     private static let horizontalPadding: CGFloat = 14
-    /// How wide a searched place name may get before it truncates. Roughly "Budapest"
-    /// at the default text size; beyond that the badge starts competing with
-    /// the map it floats over.
-    private static let maximumNameWidth: CGFloat = 120
 
     /// Where the badge sits over the map.
     ///
@@ -94,15 +93,6 @@ struct WeatherBadge: View {
     var body: some View {
         Button(action: onTap) {
             HStack(spacing: Self.contentSpacing) {
-                if let name = state.badgeName {
-                    Text(name)
-                        .font(.subheadline)
-                        .lineLimit(1)
-                        .truncationMode(.tail)
-                        .frame(maxWidth: Self.maximumNameWidth, alignment: .leading)
-                        .fixedSize(horizontal: true, vertical: false)
-                        .accessibilityHidden(true)
-                }
                 contents
             }
             .opacity(isDimmed ? Self.staleOpacity : 1)
@@ -225,13 +215,14 @@ struct WeatherBadge: View {
 }
 
 extension WeatherBadgeState {
-    /// The compact badge names searched places only. A selected hike remains
-    /// identifiable in the detail sheet without spending map space on its title.
-    var badgeName: String? {
-        guard case .place(_, let name) = subject else { return nil }
-        return name
-    }
-
+    /// What the badge is *for*, which is the part a screen reader still needs
+    /// after the place name came off the capsule.
+    ///
+    /// The asymmetry is deliberate rather than an oversight: a sighted reader
+    /// knows which subject is focused because they chose it a moment ago and
+    /// the sheet repeats it, while a reader who cannot see the map has no such
+    /// context and "Current weather" for a city three hundred kilometres away
+    /// would be wrong.
     var badgeAccessibilityLabel: String {
         guard let subject else { return "Current weather" }
         switch subject {
@@ -249,7 +240,8 @@ extension WeatherBadgeState {
                 symbolName: "cloud.sun.fill",
                 temperature: Measurement(value: 12, unit: UnitTemperature.celsius),
                 conditionDescription: "Partly Cloudy",
-                capturedAt: .now
+                capturedAt: .now,
+                conditions: .preview
             ),
             subject: .me(.init(latitude: 47.4979, longitude: 19.0402))
         ),
@@ -264,7 +256,8 @@ extension WeatherBadgeState {
                 symbolName: "sun.max.fill",
                 temperature: Measurement(value: 24, unit: UnitTemperature.celsius),
                 conditionDescription: "Clear",
-                capturedAt: .now
+                capturedAt: .now,
+                conditions: .preview
             ),
             subject: .place(.init(latitude: 47.4979, longitude: 19.0402), name: "Budapest")
         ),
@@ -279,7 +272,8 @@ extension WeatherBadgeState {
                 symbolName: "cloud.rain.fill",
                 temperature: Measurement(value: 4, unit: UnitTemperature.celsius),
                 conditionDescription: "Rain",
-                capturedAt: .now.addingTimeInterval(-WeatherPollingPolicy.standard.stalenessInterval)
+                capturedAt: .now.addingTimeInterval(-WeatherPollingPolicy.standard.stalenessInterval),
+                conditions: .preview
             ),
             subject: .me(.init(latitude: 47.4979, longitude: 19.0402))
         ),

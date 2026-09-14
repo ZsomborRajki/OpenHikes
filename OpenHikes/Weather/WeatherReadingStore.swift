@@ -12,6 +12,15 @@
 //  badge is on screen immediately, dimmed by the same staleness rule that
 //  governs a live reading, and is replaced the moment a real one lands.
 //
+//  **A blob this build cannot read is re-fetched, not migrated.** There is no
+//  version field and there is deliberately no decoding branch for an older
+//  shape: `load()` returns `nil`, the badge is absent for the few seconds
+//  until WeatherKit answers, and the next save writes the current shape. That
+//  is the whole cost of adding a field here, and it is the *Schema and
+//  migration policy* answer rather than a shortcut — a reading is disposable
+//  by construction, since the thing being stored is already stale enough to
+//  dim within the hour.
+//
 //  Stored as one JSON blob in `UserDefaults` rather than in either SwiftData
 //  store. It is device state, not a hike, so it does not belong in the
 //  mirrored store; and it is one small value written a few times an hour,
@@ -50,6 +59,96 @@ final class WeatherReadingStore {
             case trail = "trail"
         }
 
+        /// The rest of the reading, in fixed units for the reason the
+        /// temperature is in Celsius: what is written here is read back by a
+        /// later build, and the bytes must not depend on how Foundation
+        /// happens to serialize a `Measurement` or on which unit the provider
+        /// used that day.
+        ///
+        /// Its own type rather than twelve more fields alongside the nine
+        /// above, so the two halves of this payload read as what they are: the
+        /// subject and the reading.
+        struct Conditions: Codable {
+            var apparentCelsius: Double
+            var dewPointCelsius: Double
+            var humidity: Double
+            var cloudCover: Double
+            var pressureHectopascals: Double
+            var uvIndexValue: Int
+            /// Spelled by ``WeatherUVCategory``'s explicit raw values, which
+            /// is why they are explicit.
+            var uvCategory: WeatherUVCategory
+            var visibilityMeters: Double
+            var precipitationMillimetersPerHour: Double
+            var windSpeedMetersPerSecond: Double
+            var windDirectionDegrees: Double
+            /// `nil` when there was no gust to report, which is a fact about
+            /// the weather rather than about the format.
+            var windGustMetersPerSecond: Double?
+
+            /// The reading as the app holds it, rebuilt from the fixed units
+            /// above.
+            ///
+            /// A member of this type rather than an initializer on
+            /// ``WeatherConditions`` in this file, because ``Payload`` is
+            /// private: an extension on another type cannot see it, and
+            /// widening it to `fileprivate` to let one would be widening the
+            /// storage format's visibility for the convenience of its own
+            /// mapping.
+            var restored: WeatherConditions {
+                WeatherConditions(
+                    apparentTemperature: Measurement(
+                        value: apparentCelsius,
+                        unit: UnitTemperature.celsius
+                    ),
+                    dewPoint: Measurement(value: dewPointCelsius, unit: UnitTemperature.celsius),
+                    humidity: humidity,
+                    cloudCover: cloudCover,
+                    pressure: Measurement(
+                        value: pressureHectopascals,
+                        unit: UnitPressure.hectopascals
+                    ),
+                    uvIndex: WeatherUVIndex(value: uvIndexValue, category: uvCategory),
+                    visibility: Measurement(value: visibilityMeters, unit: UnitLength.meters),
+                    precipitationIntensity: Measurement(
+                        value: precipitationMillimetersPerHour,
+                        unit: UnitLength.millimeters
+                    ),
+                    wind: WeatherWind(
+                        speed: Measurement(
+                            value: windSpeedMetersPerSecond,
+                            unit: UnitSpeed.metersPerSecond
+                        ),
+                        direction: Measurement(
+                            value: windDirectionDegrees,
+                            unit: UnitAngle.degrees
+                        ),
+                        gust: windGustMetersPerSecond.map { metersPerSecond in
+                            Measurement(value: metersPerSecond, unit: UnitSpeed.metersPerSecond)
+                        }
+                    )
+                )
+            }
+
+            init(_ conditions: WeatherConditions) {
+                apparentCelsius = conditions.apparentTemperature.converted(to: .celsius).value
+                dewPointCelsius = conditions.dewPoint.converted(to: .celsius).value
+                humidity = conditions.humidity
+                cloudCover = conditions.cloudCover
+                pressureHectopascals = conditions.pressure.converted(to: .hectopascals).value
+                uvIndexValue = conditions.uvIndex.value
+                uvCategory = conditions.uvIndex.category
+                visibilityMeters = conditions.visibility.converted(to: .meters).value
+                precipitationMillimetersPerHour = conditions.precipitationIntensity
+                    .converted(to: .millimeters).value
+                windSpeedMetersPerSecond = conditions.wind.speed
+                    .converted(to: .metersPerSecond).value
+                windDirectionDegrees = conditions.wind.direction.converted(to: .degrees).value
+                windGustMetersPerSecond = conditions.wind.gust?
+                    .converted(to: .metersPerSecond).value
+            }
+        }
+
         var symbolName: String
         var celsius: Double
         var conditionDescription: String
@@ -60,6 +159,10 @@ final class WeatherReadingStore {
         var placeName: String?
         var subjectKind: SubjectKind
         var hikeID: UUID?
+        /// Non-optional, which is what makes a blob written before these
+        /// existed fail to decode — see this file's header for why that is the
+        /// intended outcome and not a hazard.
+        var conditions: Conditions
     }
 
     private let defaults: UserDefaults
@@ -80,7 +183,8 @@ final class WeatherReadingStore {
             symbolName: payload.symbolName,
             temperature: Measurement(value: payload.celsius, unit: UnitTemperature.celsius),
             conditionDescription: payload.conditionDescription,
-            capturedAt: payload.capturedAt
+            capturedAt: payload.capturedAt,
+            conditions: payload.conditions.restored
         )
         let subject: WeatherSubject
         switch payload.subjectKind {
@@ -120,7 +224,8 @@ final class WeatherReadingStore {
             longitude: coordinate.longitude,
             placeName: subject.placeName,
             subjectKind: subjectKind,
-            hikeID: hikeID
+            hikeID: hikeID,
+            conditions: Payload.Conditions(snapshot.conditions)
         )
         guard let data = try? JSONEncoder().encode(payload) else { return }
         defaults.set(data, forKey: SettingsKey.lastWeatherReading)
