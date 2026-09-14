@@ -48,6 +48,162 @@ nonisolated enum WeatherReadingFormat {
         )
     }
 
+    /// A fraction of one, as a percentage.
+    ///
+    /// Whole percent: humidity and cloud cover are both reported to far more
+    /// precision than anybody can act on, and "72.4%" in a detail row reads as
+    /// a measurement rather than as an observation.
+    static func percentage(
+        _ fraction: Double,
+        locale: Locale = .autoupdatingCurrent
+    ) -> String {
+        fraction.formatted(
+            .percent.precision(.fractionLength(0)).locale(locale)
+        )
+    }
+
+    /// A wind speed, in whatever unit the reader's region measures speed in.
+    ///
+    /// `usage: .general` for the reason ``HikeFormat/speed(_:locale:)`` uses
+    /// it: `.asProvided` renders the unit it was handed, which would pin every
+    /// reader in the world to the provider's metres per second. `.general`
+    /// gives mph for `en_US` and km/h for `de_DE` from the same input.
+    ///
+    /// Whole units, unlike the hiker's own pace, which carries one decimal.
+    /// A tenth of a kilometre per hour separates one stroll from another and
+    /// means nothing at all about wind.
+    static func windSpeed(
+        _ measurement: Measurement<UnitSpeed>,
+        locale: Locale = .autoupdatingCurrent
+    ) -> String {
+        guard measurement.value.isFinite else { return "\u{2014}" }
+        return measurement.formatted(
+            .measurement(
+                width: .abbreviated,
+                usage: .general,
+                numberFormatStyle: .number.precision(.fractionLength(0))
+            )
+            .locale(locale)
+        )
+    }
+
+    /// Which way the wind is coming from, as a compass point.
+    ///
+    /// Sixteen points rather than the degrees the provider sends, because a
+    /// direction is read and not calculated: nobody stands at a junction
+    /// working out where 315° is. Sixteen rather than eight because eight puts
+    /// a forty-five degree error on every reading, and rather than
+    /// thirty-two because the extra points are names most readers cannot
+    /// place.
+    ///
+    /// The bearing is the direction the wind blows *from*, which is the
+    /// convention every forecast uses — see ``WeatherWind/direction``.
+    static func windDirection(_ measurement: Measurement<UnitAngle>) -> String? {
+        let degrees = measurement.converted(to: .degrees).value
+        guard degrees.isFinite else { return nil }
+        let sector = Int((degrees / Self.compassSectorDegrees).rounded())
+        let points = Self.compassPoints
+        return points[((sector % points.count) + points.count) % points.count]
+    }
+
+    private static let compassSectorDegrees = 22.5
+
+    /// North first, clockwise. Localized one by one rather than interpolated,
+    /// because these are abbreviations rather than letters: a language whose
+    /// word for north does not begin with N spells its own.
+    private static let compassPoints: [String] = [
+        String(localized: "N"),
+        String(localized: "NNE"),
+        String(localized: "NE"),
+        String(localized: "ENE"),
+        String(localized: "E"),
+        String(localized: "ESE"),
+        String(localized: "SE"),
+        String(localized: "SSE"),
+        String(localized: "S"),
+        String(localized: "SSW"),
+        String(localized: "SW"),
+        String(localized: "WSW"),
+        String(localized: "W"),
+        String(localized: "WNW"),
+        String(localized: "NW"),
+        String(localized: "NNW"),
+    ]
+
+    /// Barometric pressure, in the reader's own unit.
+    ///
+    /// `usage: .barometric` is what makes that happen: inches of mercury for
+    /// `en_US`, hectopascals almost everywhere else. Whole units for the
+    /// former is wrong — 29.92 inHg is the interesting figure and 30 inHg is
+    /// not — so the precision is given a range rather than a number, and each
+    /// region gets the digits its unit is read to.
+    static func pressure(
+        _ measurement: Measurement<UnitPressure>,
+        locale: Locale = .autoupdatingCurrent
+    ) -> String {
+        guard measurement.value.isFinite else { return "\u{2014}" }
+        return measurement.formatted(
+            .measurement(
+                width: .abbreviated,
+                usage: .barometric,
+                numberFormatStyle: .number.precision(.fractionLength(0...2))
+            )
+            .locale(locale)
+        )
+    }
+
+    /// How far it can be seen, in the unit the region measures road distance
+    /// in.
+    ///
+    /// `usage: .road`, which is the same question the hike's own distance row
+    /// asks and therefore the answer that agrees with it: kilometres where the
+    /// signs are metric, miles where they are not.
+    static func visibility(
+        _ measurement: Measurement<UnitLength>,
+        locale: Locale = .autoupdatingCurrent
+    ) -> String {
+        guard measurement.value.isFinite else { return "\u{2014}" }
+        return measurement.formatted(
+            .measurement(width: .abbreviated, usage: .road)
+                .locale(locale)
+        )
+    }
+
+    /// Rain or snow, as a depth per hour.
+    ///
+    /// `usage: .rainfall` picks millimetres or inches by region; the hour is
+    /// spelled beside it, because Foundation formats quantities and not rates.
+    /// See ``WeatherConditions/precipitationIntensity`` for why this is a
+    /// length at all when the provider calls it a speed.
+    static func precipitation(
+        _ measurement: Measurement<UnitLength>,
+        locale: Locale = .autoupdatingCurrent
+    ) -> String {
+        guard measurement.value.isFinite else { return "\u{2014}" }
+        let depth = measurement.formatted(
+            .measurement(
+                width: .abbreviated,
+                usage: .rainfall,
+                numberFormatStyle: .number.precision(.fractionLength(0...1))
+            )
+            .locale(locale)
+        )
+        return String(localized: "\(depth)/h", comment: "A depth of rain per hour")
+    }
+
+    /// The ultraviolet index: the number the sun is rated at, and the band it
+    /// falls in.
+    ///
+    /// Both, because neither is enough on its own. "8" means nothing to
+    /// somebody who does not know the scale, and "Very High" throws away the
+    /// one part of it that can be compared against yesterday.
+    static func uvIndex(_ index: WeatherUVIndex) -> String {
+        String(
+            localized: "\(index.value) \(index.category.label)",
+            comment: "A UV index number followed by its exposure band"
+        )
+    }
+
     /// How old a reading is, in words.
     ///
     /// Two units at most, and seconds are allowed only because they are the

@@ -58,17 +58,28 @@ nonisolated struct WeatherSnapshot: Equatable, Sendable {
     /// arrives instantly is not necessarily a reading taken just now, and
     /// stamping the arrival would reset the age of data that never changed.
     let capturedAt: Date
+    /// Everything else the same response carried. See ``WeatherConditions``
+    /// for why it is one value rather than nine properties here.
+    ///
+    /// Not optional. A reading either came out of a `CurrentWeather` — which
+    /// carries every one of these — or was restored from the one stored blob,
+    /// and a blob written before these fields existed simply fails to decode
+    /// and is re-fetched within seconds of launch. That is the reset policy
+    /// rather than an oversight: see ``WeatherReadingStore``.
+    let conditions: WeatherConditions
 
     init(
         symbolName: String,
         temperature: Measurement<UnitTemperature>,
         conditionDescription: String,
-        capturedAt: Date
+        capturedAt: Date,
+        conditions: WeatherConditions
     ) {
         self.symbolName = symbolName
         self.temperature = temperature
         self.conditionDescription = conditionDescription
         self.capturedAt = capturedAt
+        self.conditions = conditions
     }
 
     init(_ weather: CurrentWeather) {
@@ -76,8 +87,78 @@ nonisolated struct WeatherSnapshot: Equatable, Sendable {
             symbolName: weather.symbolName,
             temperature: weather.temperature,
             conditionDescription: weather.condition.description,
-            capturedAt: weather.metadata.date
+            capturedAt: weather.metadata.date,
+            conditions: WeatherConditions(weather)
         )
+    }
+}
+
+extension WeatherConditions {
+    /// The one place WeatherKit's own shape is read.
+    ///
+    /// `nonisolated` because the caller is: `SWIFT_DEFAULT_ACTOR_ISOLATION` is
+    /// `MainActor` here, so an extension written without it is main-actor
+    /// isolated and unreachable from ``WeatherSnapshot``'s own nonisolated
+    /// initializer — which is the whole point of that type being a value that
+    /// can cross actors.
+    ///
+    /// Here rather than beside the type for the reason ``WeatherSnapshot``
+    /// gives: these values exist so that a preview, a suite or a UI automation
+    /// launch can build a reading without the framework, and an import in that
+    /// file would take the whole point away.
+    nonisolated init(_ weather: CurrentWeather) {
+        self.init(
+            apparentTemperature: weather.apparentTemperature,
+            dewPoint: weather.dewPoint,
+            humidity: weather.humidity,
+            cloudCover: weather.cloudCover,
+            pressure: weather.pressure,
+            uvIndex: WeatherUVIndex(
+                value: weather.uvIndex.value,
+                category: WeatherUVCategory(weather.uvIndex.category)
+            ),
+            visibility: weather.visibility,
+            // Converted through the dimension rather than read off `.value`,
+            // which would be trusting the provider to have handed over the
+            // unit its documentation names. A depth per hour expressed as a
+            // speed is a millionth of a kilometre per hour, so this is exact
+            // whatever unit the measurement arrives in.
+            precipitationIntensity: Measurement(
+                value: weather.precipitationIntensity
+                    .converted(to: .kilometersPerHour).value * Self.millimetresPerKilometre,
+                unit: .millimeters
+            ),
+            wind: WeatherWind(
+                speed: weather.wind.speed,
+                direction: weather.wind.direction,
+                gust: weather.wind.gust
+            )
+        )
+    }
+
+    nonisolated private static let millimetresPerKilometre: Double = 1_000_000
+}
+
+extension WeatherUVCategory {
+    /// WeatherKit's bands, one for one.
+    ///
+    /// Spelled out rather than bridged through a raw value, so the two
+    /// spellings are matched here on purpose rather than by whatever
+    /// `init(rawValue:)` happened to find.
+    ///
+    /// A band this build has never heard of reads as ``extreme``, which is the
+    /// conservative direction for a sun-exposure reading: the failure of
+    /// over-reporting is a hiker who puts a hat on, and the failure of
+    /// under-reporting is the other one.
+    nonisolated init(_ category: UVIndex.ExposureCategory) {
+        switch category {
+        case .low: self = .low
+        case .moderate: self = .moderate
+        case .high: self = .high
+        case .veryHigh: self = .veryHigh
+        case .extreme: self = .extreme
+        @unknown default: self = .extreme
+        }
     }
 }
 
@@ -257,7 +338,8 @@ extension WeatherSnapshot {
             symbolName: "cloud.sun.fill",
             temperature: Measurement(value: 12, unit: UnitTemperature.celsius),
             conditionDescription: "Partly Cloudy",
-            capturedAt: .now
+            capturedAt: .now,
+            conditions: .preview
         )
     }
 }

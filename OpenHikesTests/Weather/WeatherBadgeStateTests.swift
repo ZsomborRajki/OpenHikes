@@ -34,7 +34,8 @@ struct WeatherBadgeStateTests {
             symbolName: "cloud.sun.fill",
             temperature: Measurement(value: celsius, unit: UnitTemperature.celsius),
             conditionDescription: "Partly Cloudy",
-            capturedAt: capturedAt
+            capturedAt: capturedAt,
+            conditions: .preview
         )
     }
 
@@ -43,9 +44,17 @@ struct WeatherBadgeStateTests {
         #expect(WeatherManager().state == .idle)
     }
 
-    @Test("the compact badge names searches but not hikes")
-    func badgeNamesOnlySearchedPlaces() {
+    /// The badge draws a symbol and a temperature and nothing else, so the
+    /// place it is *for* survives only in what a screen reader is told.
+    ///
+    /// Which makes this the whole of the subject's presence on that control,
+    /// rather than the redundant half of it that it used to be: a sighted
+    /// reader has the sheet a tap away and the search they just made, and a
+    /// reader who cannot see the map has this sentence.
+    @Test("the badge speaks which subject it is for")
+    func badgeSpeaksItsSubject() {
         let reading = snapshot(celsius: 12)
+        let here = WeatherBadgeState.reading(reading, subject: .me(budapest))
         let place = WeatherBadgeState.reading(
             reading,
             subject: .place(budapest, name: "Budapest")
@@ -55,9 +64,8 @@ struct WeatherBadgeStateTests {
             subject: .trail(budapest, hikeID: UUID(), name: "Pilis Loop")
         )
 
-        #expect(place.badgeName == "Budapest")
+        #expect(here.badgeAccessibilityLabel == "Current weather")
         #expect(place.badgeAccessibilityLabel == "Weather in Budapest")
-        #expect(trail.badgeName == nil)
         #expect(trail.badgeAccessibilityLabel == "Trail weather")
     }
 

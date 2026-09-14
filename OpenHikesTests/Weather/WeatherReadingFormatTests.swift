@@ -19,7 +19,8 @@ struct WeatherReadingFormatTests {
         symbolName: "cloud.sun.fill",
         temperature: Measurement(value: 12, unit: UnitTemperature.celsius),
         conditionDescription: "Partly Cloudy",
-        capturedAt: Date(timeIntervalSinceReferenceDate: 1_000_000)
+        capturedAt: Date(timeIntervalSinceReferenceDate: 1_000_000),
+        conditions: .preview
     )
 
     @Test("a Celsius reading is converted to the locale's weather unit")
@@ -62,7 +63,8 @@ struct WeatherReadingFormatTests {
             symbolName: "sun.max.fill",
             temperature: Measurement(value: 12.3456, unit: UnitTemperature.celsius),
             conditionDescription: "Clear",
-            capturedAt: .now
+            capturedAt: .now,
+            conditions: .preview
         )
 
         #expect(precise.formattedTemperature(locale: Locale(identifier: "en_US")) == "54°")
@@ -75,7 +77,8 @@ struct WeatherReadingFormatTests {
             symbolName: "snowflake",
             temperature: Measurement(value: -6, unit: UnitTemperature.celsius),
             conditionDescription: "Snow",
-            capturedAt: .now
+            capturedAt: .now,
+            conditions: .preview
         )
 
         #expect(freezing.formattedTemperature(locale: Locale(identifier: "en_GB")) == "-6°C")

@@ -103,7 +103,8 @@ struct WeatherFreshnessTests {
             symbolName: "cloud.sun.fill",
             temperature: Measurement(value: 12, unit: UnitTemperature.celsius),
             conditionDescription: "Partly Cloudy",
-            capturedAt: capturedAt
+            capturedAt: capturedAt,
+            conditions: .preview
         )
     }
 }
