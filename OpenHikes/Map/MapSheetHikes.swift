@@ -80,8 +80,10 @@ struct MapSheetHikes: View, Equatable {
     /// useful thing to offer in that row is the search the hiker has already
     /// typed — see ``mapSearchFallback(matchingHikes:)``.
     let onSubmitQuery: () -> Void
-    /// A published hike tapped in the results: the caller pushes its preview.
-    let onSelectListing: (CommunityListing) -> Void
+    /// A published hike tapped in the results, with the hiker's own copy of it
+    /// when they have one: the caller opens that copy, and pushes the preview
+    /// when there is none. See ``openListing(_:)``.
+    let onSelectListing: (CommunityListing, Hike?) -> Void
     /// A queued submission tapped: the caller pushes the review screen.
     var onSelectPending: (CommunityPendingSubmission) -> Void = { _ in /* no-op default */ }
     /// The surviving hikes are handed over with the doomed one because freeing

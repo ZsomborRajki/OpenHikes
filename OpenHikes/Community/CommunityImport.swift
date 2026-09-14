@@ -112,6 +112,29 @@ nonisolated enum CommunityImport {
         return try? context.fetch(descriptor).first
     }
 
+    /// The hiker's own copies of published hikes, keyed by the listing each
+    /// one came from.
+    ///
+    /// For the sheet's lists, which hold every hike in a `@Query` already:
+    /// asking ``existingImport(of:in:)`` per row would be a fetch per row
+    /// against a store those rows are drawn from. One pass answers both
+    /// questions a community row asks — whether it says *Saved*, and which
+    /// screen tapping it opens — so the badge and the destination are the
+    /// same fact rather than two readings of it.
+    ///
+    /// Two hikes carrying one listing id is a state the import refuses to
+    /// create — see ``importHike(_:into:store:libraryWriter:save:)`` — but a
+    /// mirrored store can deliver one from another device, so the first wins
+    /// rather than the last. The lists are sorted newest first, which makes
+    /// that the copy the hiker made most recently.
+    @MainActor
+    static func importedByListing(in hikes: [Hike]) -> [String: Hike] {
+        Dictionary(
+            hikes.compactMap { hike in hike.importedFromListingID.map { ($0, hike) } },
+            uniquingKeysWith: { first, _ in first }
+        )
+    }
+
     /// Copies the downloaded photographs into this hiker's own store.
     ///
     /// One at a time, and a failure costs its own picture rather than the

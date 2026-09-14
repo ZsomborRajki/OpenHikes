@@ -145,7 +145,7 @@ nonisolated final class AccessibilityUITests: XCTestCase {
         let app = launchCommunity(scenario: .seeded)
         selectCommunityTab(in: app)
         openCommunityHike(titled: SeededHike.ridgeTitle, in: app)
-        tapWhenReady(element("community-moderation-menu", in: app))
+        tapWhenReady(element("community-actions-menu", in: app))
         tapWhenReady(element("community-report-button", in: app))
         XCTAssertTrue(
             element("community-report-reason", in: app)
@@ -169,7 +169,7 @@ nonisolated final class AccessibilityUITests: XCTestCase {
         let app = launchCommunity(scenario: .seeded)
         selectCommunityTab(in: app)
         openCommunityHike(titled: SeededHike.ridgeTitle, in: app)
-        tapWhenReady(element("community-moderation-menu", in: app))
+        tapWhenReady(element("community-actions-menu", in: app))
         tapWhenReady(element("community-block-button", in: app))
         tapWhenReady(element("community-block-confirm", in: app))
         XCTAssertTrue(

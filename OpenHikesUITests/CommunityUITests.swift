@@ -171,6 +171,83 @@ nonisolated final class CommunityUITests: XCTestCase {
         awaitHikeRow(titled: SeededHike.ridgeTitle, in: app)
     }
 
+    /// Meeting a hike again after importing it.
+    ///
+    /// The row is still in the community list — an import does not take it out
+    /// of the database — and what it opens is the hiker's *own* copy. What it
+    /// used to open was the preview of a stranger's, with one button on it
+    /// reading *Open in My Hikes*: a second tap for the thing the first tap
+    /// asked for, in front of a page about a decision already made.
+    ///
+    /// Asserted on the share control rather than on the navigation bar,
+    /// because the two screens carry the same title — the listing's, and the
+    /// hike's, which is a copy of it. The share button belongs to the hiker's
+    /// own detail screen and the import button to the preview, so the pair
+    /// says which one is up.
+    @MainActor
+    func testTappingAnImportedHikeOpensTheHikeRatherThanThePreview() {
+        let app = launchCommunity(scenario: .seeded)
+        selectCommunityTab(in: app)
+        openCommunityHike(titled: SeededHike.ridgeTitle, in: app)
+        tapWhenReady(element("community-import-button", in: app))
+        XCTAssertTrue(
+            element("community-share-button", in: app)
+                .waitForExistence(timeout: UITestTimeout.existence),
+            "importing should open the hike it just saved"
+        )
+
+        // Back to the list, which is still the community one: importing a hike
+        // is not a decision to stop browsing.
+        popScreen(in: app)
+        let row = communityRow(titled: SeededHike.ridgeTitle, in: app)
+        XCTAssertTrue(
+            awaitCommunityAnswer(row, in: app),
+            "the imported hike should still be listed among the published ones"
+        )
+        row.tap()
+
+        XCTAssertTrue(
+            element("community-share-button", in: app)
+                .waitForExistence(timeout: UITestTimeout.existence),
+            "a hike already imported should open as the hiker's own"
+        )
+        XCTAssertFalse(
+            element("community-import-button", in: app).exists,
+            "and not as the page offering to add it again"
+        )
+    }
+
+    /// The import where the report is.
+    ///
+    /// The button is under the page, which is right for a hiker reading it and
+    /// wrong for one who decided from the row: the chart, the stats, a strip of
+    /// photographs and two trail sections stand between the top of the screen
+    /// and the only thing they came to do. The menu in the navigation bar is
+    /// the second way to the same tap.
+    ///
+    /// The lake rather than the ridge, so this covers an import with no
+    /// photographs behind it and the button's own scenario keeps the one with.
+    @MainActor
+    func testImportingFromTheToolbarMenuAddsItToTheLibrary() {
+        let app = launchCommunity(scenario: .seeded)
+        selectCommunityTab(in: app)
+        openCommunityHike(titled: SeededHike.lakeTitle, in: app)
+
+        tapWhenReady(element("community-actions-menu", in: app))
+        tapWhenReady(element("community-import-menu-button", in: app))
+
+        XCTAssertTrue(
+            element("community-share-button", in: app)
+                .waitForExistence(timeout: UITestTimeout.existence),
+            "importing from the menu should open the hike it just saved"
+        )
+
+        // And it is in the library rather than merely on screen.
+        popScreen(in: app)
+        selectMyHikesTab(in: app)
+        awaitHikeRow(titled: SeededHike.lakeTitle, in: app)
+    }
+
     /// Item 6 of the release review, from the outside.
     ///
     /// Backing out of a preview and opening the same listing again used to
@@ -205,7 +282,7 @@ nonisolated final class CommunityUITests: XCTestCase {
         selectCommunityTab(in: app)
         openCommunityHike(titled: SeededHike.ridgeTitle, in: app)
 
-        tapWhenReady(element("community-moderation-menu", in: app))
+        tapWhenReady(element("community-actions-menu", in: app))
         tapWhenReady(element("community-block-button", in: app))
         tapWhenReady(element("community-block-confirm", in: app))
 
@@ -232,7 +309,7 @@ nonisolated final class CommunityUITests: XCTestCase {
         selectCommunityTab(in: app)
         openCommunityHike(titled: SeededHike.ridgeTitle, in: app)
 
-        tapWhenReady(element("community-moderation-menu", in: app))
+        tapWhenReady(element("community-actions-menu", in: app))
         tapWhenReady(element("community-report-button", in: app))
 
         XCTAssertTrue(

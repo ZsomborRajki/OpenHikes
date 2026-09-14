@@ -308,7 +308,25 @@ struct OpenHikesView: View {
                 // them and the destination is a push into a stack the map
                 // cannot see. This view owns that stack, and is never taken
                 // down, so this is set once.
-                appModel.community.onOpenListing { [sheet] in sheet.showCommunityHike($0) }
+                //
+                // The three things it reaches are captured rather than read
+                // off `self`, because this closure outlives every copy of this
+                // struct: the sheet's presentation and the model context, both
+                // of which are references to something that outlives the view
+                // anyway, and the selection's own projection — whose storage
+                // does too, for the reason ``MapSheetHikes``'s `==` gives for
+                // the closures it excludes.
+                appModel.community.onOpenListing { [sheet, selection = $selectedHike, context = modelContext] listing in
+                    sheet.open(
+                        listing,
+                        // Fetched here where the sheet's rows read it off the
+                        // `@Query` they are already drawn from: a pin is one
+                        // tap and one listing, and there is no list in front
+                        // of it to derive it from.
+                        importedAs: CommunityImport.existingImport(of: listing.id, in: context),
+                        selectedHike: &selection.wrappedValue
+                    )
+                }
                 if AppLaunchEnvironment.usesLiveLocation {
                     appModel.locationManager.start()
                 }

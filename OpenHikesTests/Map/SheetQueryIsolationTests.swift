@@ -193,7 +193,7 @@ struct SheetQueryIsolationTests {
             onSelectResult: { _ in /* unused */ },
             onSelectCompletion: { _ in /* unused */ },
             onSubmitQuery: { /* unused */ },
-            onSelectListing: { _ in /* unused */ },
+            onSelectListing: { _, _ in /* unused */ },
             onDelete: { _, _ in /* unused */ },
             onRecord: { /* unused */ },
             onImport: { /* unused */ }

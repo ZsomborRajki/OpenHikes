@@ -85,13 +85,33 @@ extension MapSheetHikes {
         )
     }
 
-    /// Listing ids this hiker has already imported.
+    /// The hiker's own copies of published hikes, keyed by the listing each
+    /// one came from.
     ///
     /// Derived from the query that is already loaded rather than fetched: the
     /// hikes are in memory either way, and a second `@Query` filtered on the
     /// column would be a second invalidation source for this body.
-    var importedListingIDs: Set<String> {
-        Set(hikes.compactMap(\.importedFromListingID))
+    ///
+    /// One dictionary rather than a set of ids, because a row asks two
+    /// questions and they have to agree: whether it says *Saved*, and which
+    /// screen tapping it opens. See ``openListing(_:)``.
+    var importedHikes: [String: Hike] {
+        CommunityImport.importedByListing(in: hikes)
+    }
+
+    /// Where a tapped listing goes.
+    ///
+    /// A hike the hiker has already imported opens as *their* hike, not as
+    /// the preview of somebody else's. The preview asks whether to keep a
+    /// stranger's trail, and a row badged *Saved* has already answered it —
+    /// what stood there was a page whose one control read *Open in My Hikes*,
+    /// which is a second tap for the thing the first tap asked for.
+    ///
+    /// The decision itself is ``SheetPresentation/open(_:importedAs:selectedHike:)``,
+    /// because the map's shared-hike pins are a second door to the same two
+    /// screens and the two must not disagree.
+    func openListing(_ listing: CommunityListing) {
+        onSelectListing(listing, importedHikes[listing.id])
     }
 
     /// Published hikes: the *Community* tab's whole list.
@@ -180,11 +200,11 @@ extension MapSheetHikes {
             }
             ForEach(community.nearbyListings) { listing in
                 Button {
-                    onSelectListing(listing)
+                    openListing(listing)
                 } label: {
                     CommunityHikeRow(
                         listing: listing,
-                        isImported: importedListingIDs.contains(listing.id)
+                        isImported: importedHikes[listing.id] != nil
                     )
                         .contentShape(.rect)
                 }
@@ -346,10 +366,10 @@ extension MapSheetHikes {
         if !community.matchingListings.isEmpty {
             Section("Community Hikes") {
                 ForEach(community.matchingListings) { listing in
-                    Button { onSelectListing(listing) } label: {
+                    Button { openListing(listing) } label: {
                         CommunityHikeRow(
                             listing: listing,
-                            isImported: importedListingIDs.contains(listing.id)
+                            isImported: importedHikes[listing.id] != nil
                         )
                             .contentShape(.rect)
                     }
@@ -371,10 +391,10 @@ extension MapSheetHikes {
         if community.isBrowsing, !community.nearbyListings.isEmpty {
             Section("Near Here") {
                 ForEach(community.nearbyListings) { listing in
-                    Button { onSelectListing(listing) } label: {
+                    Button { openListing(listing) } label: {
                         CommunityHikeRow(
                             listing: listing,
-                            isImported: importedListingIDs.contains(listing.id)
+                            isImported: importedHikes[listing.id] != nil
                         )
                             .contentShape(.rect)
                     }

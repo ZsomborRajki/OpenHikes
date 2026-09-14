@@ -190,6 +190,51 @@ final class SheetPresentation {
         }
     }
 
+    /// Opens a published hike: the hiker's own copy of it when they have one,
+    /// and the stranger's preview when they do not.
+    ///
+    /// `imported` is that copy, resolved by the caller rather than here,
+    /// because the two doors already know it by different routes — the
+    /// sheet's rows read it out of the `@Query` they are drawn from, which is
+    /// the same fact that puts *Saved* on the row, and the map's pins fetch
+    /// it. What the two must not do is decide *what to open* separately: a
+    /// hiker who taps one trail on the map and then in the list would get two
+    /// different screens for the same hike.
+    ///
+    /// A hike already in the library goes to the library's own screen for it.
+    /// The preview is the page that asks whether to keep somebody else's
+    /// hike, and for a hike already kept it offered one control — *Open in My
+    /// Hikes* — which is a tap spent on the answer to the question the first
+    /// tap had already asked.
+    ///
+    /// The selection goes with it for the reason ``MapSheet``'s own `open`
+    /// sets one: it is what draws the route on the map behind the sheet, and
+    /// a hike reached from a community row has to land exactly as the same
+    /// hike reached from the hiker's own list does.
+    func open(
+        _ listing: CommunityListing,
+        importedAs imported: Hike?,
+        selectedHike: inout Hike?
+    ) {
+        guard let imported else {
+            showCommunityHike(listing)
+            return
+        }
+        // Before the push, for the reason ``showCommunityHike(_:)`` gives: the
+        // compact detent is only tall enough for the search field, and a map
+        // pin can be tapped with the sheet dragged down over it.
+        if isCompact {
+            withAnimation { detent = .medium }
+        }
+        selectedHike = imported
+        // Assigned rather than appended, exactly as `MapSheet.open` assigns:
+        // this is a jump to one trail rather than a step deeper into the
+        // screen the hiker was on.
+        let route = SheetRoute.hike(imported)
+        guard path != [route] else { return }
+        path = [route]
+    }
+
     /// Whether `listing`'s preview is the screen the hiker is on.
     ///
     /// What an import asks before it navigates. The save itself is already
