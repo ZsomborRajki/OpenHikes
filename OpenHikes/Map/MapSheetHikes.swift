@@ -364,7 +364,7 @@ private extension MapSheetHikes {
                 : Color.clear
         )
         .swipeActions(edge: .trailing) {
-            if !belongsToActiveRecording(hike) {
+            if canDeleteFromLibrary(hike) {
                 // Asks first. A hike's photographs are the one thing in this
                 // app with no second copy anywhere — see ``HikeDeletionPrompt``
                 // for what a single swipe used to take, and from how many
@@ -567,5 +567,17 @@ private extension MapSheetHikes {
 
     func belongsToActiveRecording(_ hike: Hike) -> Bool {
         hike.belongsToActiveRecording(currentHikeID: recorder.currentHike?.id)
+    }
+
+    /// Whether this row gets a Delete swipe built for it.
+    ///
+    /// Deliberately not `!belongsToActiveRecording(_:)`. That spelling took
+    /// the mirrored `isRecording` flag as proof a walk was under way, so a
+    /// draft that arrived from CloudKit without this device's journal — after
+    /// a reinstall, say — was left with no Delete action in the list, no
+    /// sweep willing to touch it, and a recording screen that could only
+    /// start a *new* hike. See ``Hike/canBeDeletedFromLibrary(currentHikeID:)``.
+    func canDeleteFromLibrary(_ hike: Hike) -> Bool {
+        hike.canBeDeletedFromLibrary(currentHikeID: recorder.currentHike?.id)
     }
 }
