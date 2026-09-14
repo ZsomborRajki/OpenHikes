@@ -16,8 +16,18 @@
 import SwiftUI
 
 struct AboutSection: View {
-    /// The privacy policy, the terms, the project, and which build this is —
-    /// in the one settings section that is drawn unconditionally.
+    /// Opens the paywall, or `nil` for a hiker who already has the
+    /// subscription and has the *Manage Subscription* row instead.
+    ///
+    /// A closure rather than the store, so this section keeps the property its
+    /// own header argues for: it reads no entitlement, no product and no key.
+    /// The caller decides whether the row is worth drawing; nothing here can
+    /// be switched off by a resource that failed to resolve.
+    var showPro: (() -> Void)?
+
+    /// The subscription, the privacy policy, the terms, the project, and which
+    /// build this is — in the one settings section that is drawn
+    /// unconditionally.
     ///
     /// App Review 5.1.1(i) wants the policy linked *inside* the app as well as
     /// in App Store Connect, and until this row existed the only link to it was
@@ -35,6 +45,38 @@ struct AboutSection: View {
     /// the two cannot drift and the assertion that it resolves covers both.
     var body: some View {
         Section {
+            // First, because it is the row this section exists to guarantee.
+            //
+            // `MapPaywallView` had exactly one entry point in the whole app —
+            // a locked provider row in Map Tiles — and that row is disabled
+            // whenever `Secrets.canLoadTiles` is false, which is every build
+            // without the gitignored `OpenHikes/Secrets.plist`. A Release
+            // archive cut without that file therefore shipped an app in which
+            // OpenHikes Pro could not be bought at all, and in which **Restore
+            // Purchases**, which lives on the same screen, was equally out of
+            // reach: an existing subscriber reinstalling starts un-entitled,
+            // and their route back was the row that build disables.
+            //
+            // App Review has to be able to find and buy a listed in-app
+            // purchase. A subscription in App Store Connect with no reachable
+            // buy screen is the shape of a 2.1 rejection, and the key that
+            // decided it lives on one laptop.
+            //
+            // So the row is here, in the section that is drawn unconditionally
+            // and reads nothing that can fail to resolve, for the same reason
+            // the policy link is. `Scripts/check-release-secrets.py` covers
+            // the other half — a keyless archive can now sell the
+            // subscription, but still cannot draw the styles it sells.
+            if let showPro {
+                Button {
+                    showPro()
+                } label: {
+                    Label("OpenHikes Pro", systemImage: "map.circle")
+                }
+                .accessibilityIdentifier("about-pro-link")
+                .accessibilityHint("Opens the subscription screen, where purchases can also be restored.")
+            }
+
             Link(destination: MapPurchaseLinks.privacyPolicy) {
                 Label("Privacy Policy", systemImage: "hand.raised")
             }
