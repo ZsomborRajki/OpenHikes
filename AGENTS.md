@@ -58,7 +58,16 @@ its own — 5m49s against thirteen minutes serial — so the line above is alrea
 the fast one; `--serial` goes back to a single device and `--parallel N`
 changes the count. Anything narrower than a bare `--all` stays serial, which is
 what keeps CI's `--suite` runs on one simulator. The performance suite has no
-such flag and must not get one. Rebase before trusting any of these timings —
+such flag and must not get one.
+
+Two things guard that fan-out against itself, because three clones booting,
+installing and first-launching at once make the machine slow enough that a test
+with a tight wait gives up. A bare `--all` **retries its failures** — failures
+and only failures, so a green run pays nothing; `--no-retry` turns it off — and
+it runs the tests in the script's `serial_tests` list in a **second, serial
+pass** on the one simulator afterwards. Neither is a place to put a test that is
+actually broken: anything failing a `--suite X --test Y` run fails for its own
+reasons, and pinning it would only make the same failure take longer to find. Rebase before trusting any of these timings —
 a branch cut before a fix that made a suite faster still pays the old cost.
 
 Check the exit code rather than the printed summary: `xcodebuild` will relaunch

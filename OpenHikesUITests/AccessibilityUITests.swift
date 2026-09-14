@@ -77,9 +77,14 @@ nonisolated final class AccessibilityUITests: XCTestCase {
     func testCommunityListPassesAccessibilityAudit() throws {
         let app = launchCommunity(scenario: .seeded)
         selectCommunityTab(in: app)
+        // The same wait `openCommunityHike` makes, for the same reason: the map
+        // can settle twice, and a list waited for through the second settle is
+        // a list that never answers. A bare `waitForExistence` here is what
+        // made this the audit that fails on a busy machine — and it failed
+        // saying the list had not answered, which was true and not the fault
+        // of anything it was about to audit.
         XCTAssertTrue(
-            communityRow(titled: SeededHike.ridgeTitle, in: app)
-                .waitForExistence(timeout: UITestTimeout.existence),
+            awaitCommunityAnswer(communityRow(titled: SeededHike.ridgeTitle, in: app), in: app),
             "the audit is worth nothing against a list that has not answered yet"
         )
 
