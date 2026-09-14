@@ -13,12 +13,25 @@
 //  (``CommunityPublicationState``), and whether there is a transport at all.
 //
 //  The button is not a single control with a badge on it. Its three states do
-//  three different things, and the middle one does nothing at all — a hike
-//  waiting for review has no action available, because this app cannot
-//  withdraw a submission, amend one, or hurry anybody along. A disabled
-//  button is the honest shape for that, and the alternative — leaving it live
-//  so the tap opens a form that would send a *second* copy — is the duplicate
-//  this state exists to prevent.
+//  three different things, and until recently the middle one did nothing at
+//  all: a hike waiting for review was a disabled glyph, because this app
+//  cannot amend a submission or hurry anybody along, and leaving the tap live
+//  so it opened a form that would send a *second* copy is the duplicate that
+//  state exists to prevent.
+//
+//  What it *can* do is ask for the submission back. `docs/privacy` and
+//  `docs/terms` both promise a hiker can have a shared hike taken down by
+//  email, and both say in the same breath that deleting it from the device
+//  does not withdraw it — and the two record names such a request needs live
+//  only on the `Hike` row, so a deletion is what destroys them. See
+//  ``CommunityWithdrawal``. So the two already-shared states now lead
+//  somewhere:
+//
+//  - *waiting for review* has exactly one thing to do, and opens the request
+//    form directly.
+//  - *published* has two — share again, or ask for removal — and is a `Menu`,
+//    which is the shape for a control that genuinely offers a choice. The
+//    warning about a second copy is still the share form's own business.
 //
 
 import SwiftUI
@@ -50,34 +63,72 @@ extension HikeDetailView {
                 submissionID: hike.communitySubmissionID,
                 listingID: hike.communityListingID
             )
-            let isWaiting = publication == .awaitingReview
-            Button {
-                isSharingToCommunity = true
-            } label: {
-                Image(systemName: Self.shareButtonSymbol(publication))
-                    .font(.subheadline)
-                    .foregroundStyle(.secondary)
-                    .minimumTapTarget()
+            communityControl(publication)
+                .accessibilityLabel(Self.shareButtonLabel(publication))
+                // What a tap will do is invisible in a toolbar glyph, so the
+                // hint is the only place it can be explained.
+                .accessibilityHint(Self.shareButtonHint(publication))
+                .accessibilityIdentifier("community-share-button")
+                .disabled(hike.pointCount < 2)
+                // Asks once per appearance, and only for a hike that has been
+                // sent and not yet seen live — see
+                // ``CommunityPublicationCheck``. Here rather than on the detail
+                // view's body because this control is the only thing that reads
+                // the answer.
+                .task(id: hike.id) {
+                    await CommunityPublicationCheck.refresh(hike, transport: transport)
+                }
+                .sheet(isPresented: $isSharingToCommunity) {
+                    CommunityShareSheet(hike: hike, transport: transport)
+                }
+                .sheet(isPresented: $isWithdrawingFromCommunity) {
+                    // Built here rather than held in state: the hike is the
+                    // source of both record names, and a value captured when
+                    // the menu opened could name a listing the refresh above
+                    // has since found.
+                    if let withdrawal = CommunityWithdrawal(hike: hike) {
+                        CommunityWithdrawalSheet(withdrawal: withdrawal)
+                    }
+                }
+        }
+    }
+
+    /// A button where there is one thing to do, a menu where there are two.
+    @ViewBuilder
+    private func communityControl(_ publication: CommunityPublicationState) -> some View {
+        switch publication {
+        case .notShared:
+            Button { isSharingToCommunity = true } label: {
+                Self.shareButtonGlyph(publication)
             }
             .buttonStyle(.plain)
-            .accessibilityLabel(Self.shareButtonLabel(publication))
-            // The wait is invisible in a toolbar glyph, so the hint is the only
-            // place it can be explained.
-            .accessibilityHint(Self.shareButtonHint(publication))
-            .accessibilityIdentifier("community-share-button")
-            .opacity(isWaiting ? Self.inactiveOpacity : 1)
-            .disabled(hike.pointCount < 2 || isWaiting)
-            // Asks once per appearance, and only for a hike that has been sent
-            // and not yet seen live — see ``CommunityPublicationCheck``. Here
-            // rather than on the detail view's body because this button is the
-            // only thing that reads the answer.
-            .task(id: hike.id) {
-                await CommunityPublicationCheck.refresh(hike, transport: transport)
+        case .awaitingReview:
+            Button { isWithdrawingFromCommunity = true } label: {
+                Self.shareButtonGlyph(publication)
             }
-            .sheet(isPresented: $isSharingToCommunity) {
-                CommunityShareSheet(hike: hike, transport: transport)
+            .buttonStyle(.plain)
+        case .published:
+            Menu {
+                Button("Share Again", systemImage: "person.2.badge.plus") {
+                    isSharingToCommunity = true
+                }
+                Button("Ask for Removal", systemImage: "envelope", role: .destructive) {
+                    isWithdrawingFromCommunity = true
+                }
+                .accessibilityIdentifier("community-withdraw-button")
+            } label: {
+                Self.shareButtonGlyph(publication)
             }
+            .menuStyle(.button)
+            .buttonStyle(.plain)
         }
+    }
+
+    private static func shareButtonGlyph(_ publication: CommunityPublicationState) -> some View {
+        Image(systemName: shareButtonSymbol(publication))
+            .font(.subheadline)
+            .foregroundStyle(.secondary)
+            .minimumTapTarget()
     }
 
     /// Three glyphs for three states, because a badge on one glyph would be
@@ -105,13 +156,13 @@ extension HikeDetailView {
     /// not say what a tap will do.
     private static func shareButtonHint(_ publication: CommunityPublicationState) -> String {
         switch publication {
-        case .notShared: ""
-        case .awaitingReview: "Sent. It appears for other hikers once a person has checked it."
-        case .published: "Sharing again adds a second copy. The published one stays as it is."
+        case .notShared:
+            ""
+        case .awaitingReview:
+            "Sent. It appears for other hikers once a person has checked it."
+                + " Opens a request to withdraw it."
+        case .published:
+            "Share it again, or ask for it to be taken down."
         }
     }
-
-    /// The same dimming Settings gives a row that is real but has nothing to
-    /// do yet, which is exactly what a hike waiting on a reviewer is.
-    private static let inactiveOpacity: Double = 0.55
 }

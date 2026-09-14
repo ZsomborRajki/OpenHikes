@@ -259,4 +259,47 @@ nonisolated final class CommunityUITests: XCTestCase {
             "a submitted hike should say it is waiting for review"
         )
     }
+
+    /// The state that used to be a dead end.
+    ///
+    /// A hike waiting for review was a disabled glyph with nothing to do,
+    /// while `docs/privacy` and `docs/terms` both promised the hiker could ask
+    /// for it back. Continues from the share above rather than seeding a
+    /// submitted hike, because the share is what puts one in that state — and
+    /// this way the test asserts the transition and not a fixture.
+    @MainActor
+    func testAWaitingHikeCanAskToBeWithdrawn() {
+        let app = launchCommunity(
+            scenario: .seeded,
+            extraArguments: ["--ui-test-import-gpx=\(UITestFixture.gpxName)"]
+        )
+        openHikeDetail(in: app)
+
+        tapWhenReady(element("community-share-button", in: app))
+        element("community-author-field", in: app).tap()
+        element("community-author-field", in: app).typeText("Ada")
+        tapWhenReady(element("community-share-confirm", in: app))
+        XCTAssertTrue(
+            element("community-share-sent", in: app)
+                .waitForExistence(timeout: UITestTimeout.existence)
+        )
+        app.buttons["Done"].firstMatch.tap()
+
+        tapWhenReady(element("community-share-button", in: app))
+        XCTAssertTrue(
+            element("community-withdrawal-note", in: app)
+                .waitForExistence(timeout: UITestTimeout.existence),
+            "a hike waiting for review should offer a way to ask for it back"
+        )
+        // The record names are the whole point: they live on the `Hike` row
+        // and nowhere else, so this screen is the last place to read them.
+        tapWhenReady(element("community-withdrawal-send", in: app))
+        let message = element("community-withdrawal-fallback-text", in: app)
+        XCTAssertTrue(message.waitForExistence(timeout: UITestTimeout.existence))
+        XCTAssertTrue(
+            (message.label + (message.value as? String ?? ""))
+                .contains("CommunityHikeSubmission:"),
+            "the request has to name the submission a reviewer would delete"
+        )
+    }
 }

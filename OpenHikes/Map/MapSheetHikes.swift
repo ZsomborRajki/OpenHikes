@@ -81,6 +81,14 @@ struct MapSheetHikes: View, Equatable {
     /// The surviving hikes are handed over with the doomed one because freeing
     /// its tiles means asking which of them are still claimed elsewhere.
     let onDelete: (Hike, [Hike]) -> Void
+    /// Opens the takedown-request form for a hike that has been shared.
+    ///
+    /// Offered from the delete dialog because that is the moment the request's
+    /// only inputs are about to go: `communitySubmissionID` and
+    /// `communityListingID` live on the `Hike` row and nowhere else, so after
+    /// the deletion "enough detail to identify it" is a title and a date typed
+    /// from memory. See ``CommunityWithdrawal``.
+    var onWithdraw: (Hike) -> Void = { _ in /* no-op default */ }
     let onRecord: () -> Void
     let onImport: () -> Void
 
@@ -176,6 +184,13 @@ struct MapSheetHikes: View, Equatable {
         ) { hike in
             Button(prompt?.confirmTitle ?? "", role: .destructive) {
                 onDelete(hike, hikes)
+            }
+            // Only for a hike that has actually been sent, and above Cancel
+            // rather than below the delete: it is the way out of this dialog
+            // that keeps the record names, and a hiker who wanted the shared
+            // copy gone has not yet been given what they came for.
+            if hike.communitySubmissionID != nil {
+                Button("Ask for Removal First") { onWithdraw(hike) }
             }
             Button("Cancel", role: .cancel) { /* intentionally empty */ }
         } message: { _ in

@@ -174,17 +174,27 @@ nonisolated struct CommunityReport: Equatable, Sendable {
     }
 
     /// The `mailto:` this opens, or `nil` if it could not be formed.
+    var mailURL: URL? {
+        Self.mailURL(subject: subject, body: body)
+    }
+
+    /// One composed message as a `mailto:` to ``recipient``, or `nil` if it
+    /// could not be formed.
     ///
     /// Built by hand rather than through `URLComponents.queryItems`, which
     /// would be the obvious way and is wrong here: `&` and `=` are legal in a
     /// query component, so `URLComponents` leaves them alone — and a note
     /// containing either would end the body early and silently truncate the
-    /// complaint.
-    var mailURL: URL? {
-        guard let escapedSubject = Self.escape(subject),
-              let escapedBody = Self.escape(body)
+    /// message.
+    ///
+    /// Shared with ``CommunityWithdrawal`` rather than restated there: both
+    /// carry a free-text note the hiker typed, and the escaping above is the
+    /// whole reason a note is safe to carry.
+    static func mailURL(subject: String, body: String) -> URL? {
+        guard let escapedSubject = escape(subject),
+              let escapedBody = escape(body)
         else { return nil }
-        return URL(string: "mailto:\(Self.recipient)?subject=\(escapedSubject)&body=\(escapedBody)")
+        return URL(string: "mailto:\(recipient)?subject=\(escapedSubject)&body=\(escapedBody)")
     }
 
     /// The whole message as one block, for the hiker to copy when there is no
