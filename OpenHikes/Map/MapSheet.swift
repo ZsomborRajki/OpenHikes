@@ -343,6 +343,14 @@ struct MapSheet: View {
                     appModel.community.refreshAfterBlock()
                     presentation.path.removeAll()
                 },
+                // The gallery goes *over* the preview rather than replacing
+                // it, and that is what keeps the pictures alive: the files
+                // belong to the screen underneath, `remainsPushed` below is
+                // what stops it collecting them while it is pushed over, and
+                // popping the gallery lands back on the hike they are of.
+                onOpenPhoto: { photos, index in
+                    presentation.path.append(.communityPhoto(listing, photos, index))
+                },
                 // Asked while the screen is going, to tell a push over it from
                 // the hiker leaving: the pop has already taken the route out
                 // of the path by then, and a push has not.
@@ -353,6 +361,28 @@ struct MapSheet: View {
                 trailGraphProvider: appModel.trailGraphProvider
             )
         }
+    }
+
+    /// A shared hike's gallery, over the preview that downloaded it.
+    ///
+    /// Its own method for the reason ``communityHikeDestination(_:)`` is one:
+    /// the switch below is already at the length the linter allows, and a
+    /// destination taking four arguments is what pushes it past.
+    ///
+    /// The listing in the route is not read here — it is what identifies the
+    /// screen, which is ``SheetPresentation``'s business and not this view's.
+    private func communityPhotoDestination(
+        _ photos: [CommunityGalleryPhoto],
+        startIndex: Int,
+        route: SheetRoute
+    ) -> some View {
+        CommunityPhotoViewer(
+            photos: photos,
+            startIndex: startIndex,
+            mapController: mapController,
+            onShowOnMap: presentation.collapseWhenFullHeightScreenPops,
+            selection: presentation.communityPhotoSelection(for: route)
+        )
     }
 
     @ViewBuilder
@@ -379,6 +409,8 @@ struct MapSheet: View {
             )
         case let .communityHike(listing):
             communityHikeDestination(listing)
+        case let .communityPhoto(_, photos, startIndex):
+            communityPhotoDestination(photos, startIndex: startIndex, route: route)
         case let .pendingSubmission(pending):
             pendingSubmissionDestination(pending)
         case .recording:

@@ -248,6 +248,58 @@ nonisolated final class CommunityUITests: XCTestCase {
         awaitHikeRow(titled: SeededHike.lakeTitle, in: app)
     }
 
+    /// A stranger's photograph, large.
+    ///
+    /// The strip is 96-point squares, which is enough to count photographs and
+    /// not enough to look at one — so the tiles open
+    /// ``CommunityPhotoViewer``, the same push the hiker's own gallery makes.
+    /// Driven all the way through paging and back out, because the part that
+    /// could break silently is the return: the pictures belong to the preview
+    /// underneath, and a gallery that did not leave it on the stack would have
+    /// its files collected out from under it.
+    @MainActor
+    func testOpeningAPhotographFromThePreviewShowsItLarge() {
+        let app = launchCommunity(scenario: .seeded)
+        selectCommunityTab(in: app)
+        openCommunityHike(titled: SeededHike.ridgeTitle, in: app)
+
+        tapWhenReady(communityPhotoTile(at: 0, in: app))
+
+        XCTAssertTrue(
+            element("community-photo-viewer", in: app)
+                .waitForExistence(timeout: UITestTimeout.existence),
+            "tapping a photograph should open it as large as the sheet allows"
+        )
+        XCTAssertTrue(
+            app.navigationBars["1 of \(SeededHike.ridgePhotoCount)"]
+                .waitForExistence(timeout: UITestTimeout.existence),
+            "the gallery should open on the photograph that was tapped"
+        )
+
+        // By label rather than by identifier, which is how ``PhotoUITests``
+        // reaches the same control on the hiker's own gallery: what matters
+        // about a glyph-only button is the name it answers to.
+        let next = app.buttons["Next photo"]
+        XCTAssertTrue(
+            next.waitForExistence(timeout: UITestTimeout.navigation),
+            "the gallery should offer a way to the next photograph"
+        )
+        next.tap()
+
+        XCTAssertTrue(
+            app.navigationBars["2 of \(SeededHike.ridgePhotoCount)"]
+                .waitForExistence(timeout: UITestTimeout.existence),
+            "the next button should page the gallery"
+        )
+
+        popScreen(in: app)
+
+        XCTAssertTrue(
+            communityPhotoStrip(in: app).waitForExistence(timeout: UITestTimeout.existence),
+            "backing out of the gallery should land on the preview it was opened from"
+        )
+    }
+
     /// Item 6 of the release review, from the outside.
     ///
     /// Backing out of a preview and opening the same listing again used to

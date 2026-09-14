@@ -142,6 +142,10 @@ final class SheetPresentation {
     /// subscribe MapSheet to a destination's interaction state.
     @ObservationIgnored private var hikeInteractions: [UUID: HikeDetailInteraction] = [:]
     @ObservationIgnored private var photoSelections: [SheetRoute: PhotoViewerSelection] = [:]
+    /// The same, for a shared hike's gallery. A second dictionary rather than
+    /// a second field on ``PhotoViewerSelection``, because the two galleries
+    /// identify a page differently — see ``CommunityPhotoSelection``.
+    @ObservationIgnored private var communityPhotoSelections: [SheetRoute: CommunityPhotoSelection] = [:]
 
     func hikeInteraction(for hike: Hike) -> HikeDetailInteraction {
         if let existing = hikeInteractions[hike.id] { return existing }
@@ -280,6 +284,13 @@ final class SheetPresentation {
         return selection
     }
 
+    func communityPhotoSelection(for route: SheetRoute) -> CommunityPhotoSelection {
+        if let existing = communityPhotoSelections[route] { return existing }
+        let selection = CommunityPhotoSelection()
+        communityPhotoSelections[route] = selection
+        return selection
+    }
+
     @ObservationIgnored private var storedPath: [SheetRoute] = []
     @ObservationIgnored private var storedDetent: PresentationDetent
     @ObservationIgnored private var storedLayout: SheetLayout = .bottomSheet
@@ -333,6 +344,7 @@ final class SheetPresentation {
             storedPath.contains { $0.shows(hikeID: id) }
         }
         photoSelections = photoSelections.filter { storedPath.contains($0.key) }
+        communityPhotoSelections = communityPhotoSelections.filter { storedPath.contains($0.key) }
         let recording = storedPath.last == .recording
         if isRecordingPresented != recording { isRecordingPresented = recording }
         let pushed = !storedPath.isEmpty

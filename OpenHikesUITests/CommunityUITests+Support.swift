@@ -240,18 +240,27 @@ extension XCTestCase {
             .firstMatch
     }
 
-    /// The preview's Photos heading, which is the only part of the strip a
-    /// test can see.
+    /// The preview's Photos heading.
     ///
-    /// ``CommunityPhotoTile`` is `accessibilityHidden` on purpose — a
-    /// stranger's unlabelled photographs say nothing to a screen reader that
-    /// the photo count above them has not already said — so the tiles
-    /// themselves are not elements. The heading is drawn only when there are
-    /// files to draw under it, which makes its presence exactly the fact worth
-    /// asserting: the photographs were downloaded and are on screen.
+    /// Drawn only when there are files to draw under it, which makes its
+    /// presence exactly the fact worth asserting: the photographs were
+    /// downloaded and are on screen. The tiles themselves are reachable too —
+    /// see ``communityPhotoTile(at:in:)`` — but the heading is the one that
+    /// answers without naming a particular picture.
     @MainActor
     func communityPhotoStrip(in app: XCUIApplication) -> XCUIElement {
         app.staticTexts["Photos"]
+    }
+
+    /// One picture in the preview's strip, by its place in the submission.
+    ///
+    /// ``CommunityPhotoTile`` is still `accessibilityHidden` — a stranger's
+    /// photograph says nothing to a screen reader that the button around it
+    /// has not already said — so this is the *button*, which carries the name
+    /// and opens ``CommunityPhotoViewer`` at that picture.
+    @MainActor
+    func communityPhotoTile(at index: Int, in app: XCUIApplication) -> XCUIElement {
+        element("community-photo-\(index)", in: app)
     }
 
     /// Opens a published hike and waits for the preview to have finished
