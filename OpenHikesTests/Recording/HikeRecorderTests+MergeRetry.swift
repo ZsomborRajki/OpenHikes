@@ -73,14 +73,10 @@ extension HikeRecorderTests {
         let liveBefore = recorder.stats.pointCount
         let snapshotsBefore = await sharedStore.savedSnapshots().count
 
-        let contention = Task { @MainActor in
-            while !Task.isCancelled {
-                recorder.acceptedFixRevision &+= 1
-                await Task.yield()
-            }
-        }
+        let contention = JournalQueueRevisionBumper(contending: recorder)
         await recorder.mergePendingWidgetFixes(for: sessionID)
-        contention.cancel()
+        contention.stop()
+        await recorder.journalQueue.drain()
         await recorder.sharedStateQueue.drain()
 
         #expect(recorder.stats.pointCount == liveBefore, "the live state kept its pre-merge value")
@@ -108,5 +104,54 @@ extension HikeRecorderTests {
         #expect(recorder.stats.pointCount == liveBefore + 1)
         #expect(recorder.trace.tail.count == liveBefore + 1)
         #expect(await sharedStore.savedSnapshots().count == snapshotsBefore + 1)
+    }
+}
+
+/// Moves ``HikeRecorder/acceptedFixRevision`` from inside the journal queue, so
+/// that a fix lands inside every refresh attempt.
+///
+/// The `Task { @MainActor in while … { bump; await Task.yield() } }` this
+/// replaces had to be *scheduled* into a window it could not see.
+/// ``HikeRecorder/refreshLiveStateAfterJournalMerge(expectedSessionID:journal:)``
+/// snapshots the revision, hops off the main actor three times, and compares on
+/// the way back; a spin on the main actor only counts if the executor happens
+/// to run it in one of those gaps. On an idle machine it always did. On a
+/// loaded CI runner the task had not started by the time the first attempt
+/// finished, the refresh saw the quiet moment this test asserts it never gets,
+/// and adopted the merge — `pointCount → 3` against a `liveBefore` of 2, four
+/// retries running.
+///
+/// The queue is the seam that needs no guessing. Every attempt opens with
+/// `await journalQueue.drain()`, and ``SerialAsyncQueue/drain()`` submits a
+/// barrier *behind whatever is already buffered* — so an operation sitting in
+/// that buffer is guaranteed to run before the drain returns, which is strictly
+/// inside the window being asserted on. Re-arming from inside the operation
+/// keeps exactly one bump buffered at all times, so the guarantee holds for
+/// every attempt rather than only the first, and holds without depending on how
+/// two main-actor tasks interleave.
+private final class JournalQueueRevisionBumper {
+    private let recorder: HikeRecorder
+    private var isRunning = true
+
+    init(contending recorder: HikeRecorder) {
+        self.recorder = recorder
+        enqueueBump()
+    }
+
+    /// Stops re-arming. The operation already buffered runs once more, finds
+    /// the flag down and moves nothing, which leaves the queue empty for the
+    /// uncontended half of the test.
+    func stop() {
+        isRunning = false
+    }
+
+    private func enqueueBump() {
+        recorder.journalQueue.enqueue { [weak self] in
+            await MainActor.run {
+                guard let self, self.isRunning else { return }
+                self.recorder.acceptedFixRevision &+= 1
+                self.enqueueBump()
+            }
+        }
     }
 }
