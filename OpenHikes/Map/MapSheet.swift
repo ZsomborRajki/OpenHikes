@@ -477,21 +477,22 @@ private func select(_ hike: Hike) {
     open(hike)
 }
 
-/// Opens a published hike's preview, so it can be looked at before it is
-/// imported.
+/// Opens a tapped published hike: the hiker's own copy of it when they have
+/// one, and the preview of a stranger's when they do not.
 ///
-/// The search field is left alone, unlike a tapped hike or place: this is a
-/// detour rather than an answer, and a hiker who backs out of a preview should
-/// find the query they typed still there.
+/// The search field is left alone, unlike a tapped hike or place: browsing the
+/// community list is a detour rather than an answer, and a hiker who backs out
+/// of one of these should find the query they typed still there.
 ///
-/// Through ``SheetPresentation/showCommunityHike(_:)`` rather than appending,
-/// so this row and the map's pins push on the same terms. Appending here was
-/// the half that did not check: a second tap on a row before the push commits
-/// put one listing on the stack twice, and a preview whose twin is still on
-/// the stack disposes of nothing when it goes.
-private func select(_ listing: CommunityListing) {
+/// Through ``SheetPresentation/open(_:importedAs:selectedHike:)`` rather than
+/// deciding here, so this row and the map's pins answer the same tap the same
+/// way — and, for the preview half, push on the same terms. Appending was the
+/// half that did not check: a second tap on a row before the push commits put
+/// one listing on the stack twice, and a preview whose twin is still on the
+/// stack disposes of nothing when it goes.
+private func select(_ listing: CommunityListing, importedAs imported: Hike?) {
     searchFocused = false
-    presentation.showCommunityHike(listing)
+    presentation.open(listing, importedAs: imported, selectedHike: &selectedHike)
 }
 
 /// Resolves a tapped suggestion to a place and zooms the map to it.

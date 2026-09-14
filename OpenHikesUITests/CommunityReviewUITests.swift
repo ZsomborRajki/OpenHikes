@@ -178,7 +178,7 @@ nonisolated final class CommunityReviewUITests: XCTestCase {
         let reviewing = launchCommunity(scenario: .reviewing)
         selectCommunityTab(in: reviewing)
         openCommunityHike(titled: SeededHike.ridgeTitle, in: reviewing)
-        element("community-moderation-menu", in: reviewing).tap()
+        element("community-actions-menu", in: reviewing).tap()
         XCTAssertTrue(
             element("community-take-down-button", in: reviewing)
                 .waitForExistence(timeout: UITestTimeout.existence),
@@ -189,7 +189,7 @@ nonisolated final class CommunityReviewUITests: XCTestCase {
         let browsing = launchCommunity(scenario: .seeded)
         selectCommunityTab(in: browsing)
         openCommunityHike(titled: SeededHike.ridgeTitle, in: browsing)
-        element("community-moderation-menu", in: browsing).tap()
+        element("community-actions-menu", in: browsing).tap()
         XCTAssertTrue(
             element("community-report-button", in: browsing)
                 .waitForExistence(timeout: UITestTimeout.existence),

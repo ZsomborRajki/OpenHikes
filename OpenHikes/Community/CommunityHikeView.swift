@@ -10,6 +10,14 @@
 //  about whether a route goes where the hiker wants, and the photographs are
 //  half of why they would want it.
 //
+//  Reached only for a hike this hiker does not have. A row badged *Saved* and
+//  a pin for a trail already imported open that hiker's own copy of it
+//  instead — see ``SheetPresentation/open(_:importedAs:selectedHike:)`` — so
+//  the question this page asks is still open whenever it is asked. What is
+//  left of the answered case is the *Open in My Hikes* state of the button
+//  below: the import that has just landed, and a copy a second device made
+//  while this page was open.
+//
 //  ## The route is on the map, and the rest of the page is here
 //
 //  This screen used to draw the route itself, as an unscaled outline with no
@@ -117,6 +125,11 @@
 //  everybody, a block hides that author on this device and takes nothing down.
 //  See ``CommunityReport`` for where a report goes and ``CommunityBlockList``
 //  for where a block lives.
+//
+//  The import is in that menu too, and is not a third moderation gesture: it
+//  is the page's own action, offered a second time where a hiker who has
+//  already decided can reach it without scrolling the page they decided
+//  without. See ``actionsToolbarItem``.
 //
 
 import SwiftData
@@ -298,7 +311,7 @@ struct CommunityHikeView: View {
         #if os(iOS)
         .navigationBarTitleDisplayMode(.inline)
         #endif
-        .toolbar { moderationToolbarItem }
+        .toolbar { actionsToolbarItem }
         .sheet(isPresented: $isReporting) {
             CommunityReportSheet(listing: listing)
         }
@@ -396,22 +409,34 @@ struct CommunityHikeView: View {
     }
 }
 
-// MARK: - Reporting and blocking
+// MARK: - The toolbar menu
 
 private extension CommunityHikeView {
-    /// Both halves of the Guideline 1.2 affordance, in one place on the screen
-    /// showing the content.
+    /// Adding the hike, reporting it, and blocking its author: everything this
+    /// screen can do that is not scrolling it.
     ///
-    /// A menu now that there are two destinations behind it. While reporting
-    /// was the only one this was a plain destructive button, because a menu in
-    /// front of a single destination is a tap spent on nothing — the same call
-    /// ``MapAttributionView`` makes about its licence links. Two actions that
-    /// a hiker reaches for at the same moment and must not confuse are the
-    /// case a menu is for, and the alternative — two toolbar buttons — spends
-    /// the navigation bar of a screen whose title is a stranger's trail name.
-    @ToolbarContentBuilder var moderationToolbarItem: some ToolbarContent {
+    /// Both halves of the Guideline 1.2 affordance are here because this is
+    /// the screen showing the content. A menu rather than the plain
+    /// destructive button this was while reporting was the only destination:
+    /// a menu in front of a single one is a tap spent on nothing — the same
+    /// call ``MapAttributionView`` makes about its licence links — while
+    /// actions a hiker reaches for at the same moment and must not confuse are
+    /// the case a menu is for, and the alternative, a toolbar button each,
+    /// spends the navigation bar of a screen whose title is a stranger's trail
+    /// name.
+    ///
+    /// The import is first and is deliberately a *second* way to the same
+    /// thing. The button under the page is where a hiker who has read the page
+    /// arrives; this is for one who decided from the row and does not want to
+    /// scroll a chart, a grid, a strip of photographs and two trail sections
+    /// to say so. It draws only once the route is here, because the route is
+    /// what there is to import — before then this page is a spinner, and the
+    /// button below it does not exist either.
+    @ToolbarContentBuilder var actionsToolbarItem: some ToolbarContent {
         ToolbarItem(placement: .primaryAction) {
             Menu {
+                importMenuItem
+
                 Button {
                     isReporting = true
                 } label: {
@@ -428,7 +453,7 @@ private extension CommunityHikeView {
                 .accessibilityHint("Hides their hikes on this device")
                 .accessibilityIdentifier("community-block-button")
 
-                // A third entry only for an account the server has already
+                // A last entry, and only for an account the server has already
                 // let read the queue. Not a permission check — the permission
                 // is on the record type, and this account would be refused the
                 // delete anyway — but an ordinary hiker should not be offered
@@ -450,8 +475,37 @@ private extension CommunityHikeView {
             } label: {
                 Label("More", systemImage: "ellipsis.circle")
             }
-            .accessibilityLabel("Report or block")
-            .accessibilityIdentifier("community-moderation-menu")
+            .accessibilityLabel("Add, report or block")
+            .accessibilityIdentifier("community-actions-menu")
+        }
+    }
+
+    /// The import, at the top of the menu and above a divider of its own.
+    ///
+    /// Its own property rather than four more lines inside the menu, because
+    /// the menu's closure was already at the length the linter allows — and
+    /// because what it draws is conditional on a phase the rest of the menu
+    /// does not care about.
+    ///
+    /// Drawn only once the route is here. The route is what there is to
+    /// import, and an item that could only fail is worse than one that is not
+    /// offered — the same argument ``actionsToolbarItem`` makes about *Take
+    /// Down* for an ordinary hiker.
+    ///
+    /// Title and glyph come from the button under the page rather than being
+    /// written a second time here, so the two ways to one tap cannot end up
+    /// describing it differently. See ``importButtonTitle``.
+    @ViewBuilder var importMenuItem: some View {
+        if case .loaded(let detail) = phase {
+            Button {
+                performImport(detail)
+            } label: {
+                Label(importButtonTitle, systemImage: importGlyph)
+            }
+            .disabled(isImporting)
+            .accessibilityIdentifier("community-import-menu-button")
+
+            Divider()
         }
     }
 
@@ -740,7 +794,7 @@ private extension CommunityHikeView {
                     if isImporting {
                         ProgressView()
                     } else {
-                        Image(systemName: existingHike == nil ? "square.and.arrow.down" : "checkmark")
+                        Image(systemName: importGlyph)
                     }
                     Text(importButtonTitle)
                 }
@@ -764,9 +818,17 @@ private extension CommunityHikeView {
         .padding(.top, 8)
     }
 
+    /// One title for one action, wherever it is offered: the button under the
+    /// page and the first item of the toolbar menu are the same tap, and two
+    /// wordings for it would read as two different things to do.
     var importButtonTitle: String {
         if isImporting { return "Adding…" }
         return existingHike == nil ? "Add to My Hikes" : "Open in My Hikes"
+    }
+
+    /// The glyph beside that title, shared for the same reason.
+    var importGlyph: String {
+        existingHike == nil ? "square.and.arrow.down" : "checkmark"
     }
 }
 
