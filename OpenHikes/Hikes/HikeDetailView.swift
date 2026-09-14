@@ -88,6 +88,9 @@ struct HikeDetailView: View {
     /// repository instructions on why a `.sheet` beside that presentation is
     /// never presented at all.
     @State var isSharingToCommunity = false
+    /// Whether the takedown-request form is up. Here for the reason
+    /// ``isSharingToCommunity`` is, and presented from the same place.
+    @State var isWithdrawingFromCommunity = false
     // swiftlint:enable private_swiftui_state
     /// Owned by the navigation session so changing presentation hosts keeps
     /// the selected section and an unfinished rename. Read only by this screen.

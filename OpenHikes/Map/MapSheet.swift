@@ -59,6 +59,13 @@ struct MapSheet: View {
     @FocusState private var searchFocused: Bool
     @State private var showImporter = false
     @State private var showSettings = false
+    /// The hike whose takedown request is up, offered from the delete dialog.
+    ///
+    /// Held here rather than in ``MapSheetHikes`` because the form has to
+    /// outlive the dialog that offered it: a `confirmationDialog` dismisses
+    /// itself the moment a button is tapped, and a sheet presented from the
+    /// view that dialog belongs to would be torn down with it.
+    @State private var withdrawingHike: Hike?
     @State private var completer = SearchCompleter()
     @State private var searchTask: Task<Void, Never>?
 
@@ -111,6 +118,7 @@ struct MapSheet: View {
                     onSubmitQuery: performSearch,
                     onSelectListing: select,
                     onDelete: delete,
+                    onWithdraw: { withdrawingHike = $0 },
                     onRecord: openRecording,
                     onImport: presentImporter
                 )
@@ -139,6 +147,14 @@ struct MapSheet: View {
             // itself was just fixed for. From the user's side it's the same
             // story as an unreadable file, so it's told the same way.
             case .failure: onImportFailed()
+            }
+        }
+        // Presented from here rather than from the row that offered it, for
+        // the reason ``withdrawingHike`` gives: the dialog is already gone by
+        // the time this opens.
+        .sheet(item: $withdrawingHike) { hike in
+            if let withdrawal = CommunityWithdrawal(hike: hike) {
+                CommunityWithdrawalSheet(withdrawal: withdrawal)
             }
         }
         // Also presented from inside the sheet so it layers above it.
