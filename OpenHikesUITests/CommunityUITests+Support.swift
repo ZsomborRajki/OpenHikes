@@ -36,6 +36,10 @@ nonisolated enum SeededHike {
 nonisolated enum SeededCommunityScenario: String {
     case empty = "empty"
     case failing = "failing"
+    /// ``seeded``, with a reviewer who has said yes — the only way to reach a
+    /// *published* hike from automation, since `publication(of:)` is what
+    /// writes ``Hike/communityListingID`` and nothing else does.
+    case published = "published"
     case seeded = "seeded"
 }
 
