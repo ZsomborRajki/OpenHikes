@@ -24,6 +24,7 @@
 //  same absence behind. See ``CommunityPublicationState``.
 //
 
+import SwiftData
 import SwiftUI
 
 struct CommunityShareSheet: View {
@@ -44,12 +45,19 @@ struct CommunityShareSheet: View {
 
     @Environment(\.dismiss)
     private var dismiss
+    @Environment(\.modelContext)
+    private var modelContext
     @AppStorage(SettingsKey.communityAuthorName)
     private var authorName = ""
     @State private var phase: Phase = .editing
     /// How many photographs this device can send, once the disk has been
     /// asked. `nil` until then — see ``photoCount``.
     @State private var sendablePhotoCount: Int?
+    /// Whether this hike may be published at all, once the library has been
+    /// asked. `nil` until then, and the Share button waits for it: offering a
+    /// send that the answer is about to withdraw is worse than offering it a
+    /// moment late.
+    @State private var eligibility: CommunityPublishingEligibility?
 
     /// Where this hike already is on the way to being published, which decides
     /// whether the form warns about making a second copy of it.
@@ -132,12 +140,23 @@ struct CommunityShareSheet: View {
                 case .sent:
                     sentSection
                 default:
-                    duplicateSection
-                    contentsSection
-                    nameSection
-                    reviewSection
-                    if case .failed(let failure) = phase {
-                        failureSection(failure)
+                    // A refusal replaces the form rather than sitting above
+                    // it. The rest of this screen asks for a display name and
+                    // explains what will be published, and both are questions
+                    // about a send that is not going to happen — leaving them
+                    // drawn and greyed would be the app pretending to still be
+                    // considering it.
+                    if let reason = eligibility?.reason {
+                        refusalSection(reason)
+                        contentsSection
+                    } else {
+                        duplicateSection
+                        contentsSection
+                        nameSection
+                        reviewSection
+                        if case .failed(let failure) = phase {
+                            failureSection(failure)
+                        }
                     }
                 }
             }
@@ -154,6 +173,18 @@ struct CommunityShareSheet: View {
                 sendablePhotoCount = await CommunityPublisher.sendablePhotoCount(
                     of: hike,
                     store: store
+                )
+            }
+            // Asked here as well as on the hike's own screen, and not merely
+            // trusted from there: the button is drawn from the two cheap rules
+            // alone, and the retread check needs a fetch and a pass over every
+            // route this hiker has already sent. This is the screen that can
+            // afford it, and the one where a refusal has room to explain
+            // itself.
+            .task {
+                eligibility = await CommunityPublishingCheck.eligibility(
+                    of: hike,
+                    in: modelContext
                 )
             }
         }
@@ -287,6 +318,18 @@ private extension CommunityShareSheet {
             .font(.footnote)
         } footer: {
             VStack(alignment: .leading, spacing: 6) {
+                // What the list is *for*, said before what it forbids.
+                //
+                // The three rules `CommunityPublishingEligibility` enforces
+                // are the mechanical half of this, and a hiker meets them by
+                // not being refused. This is the half no program can check and
+                // a reviewer decides: that the list reads like somebody local
+                // pointing at walks worth doing, rather than like an export of
+                // everything anybody ever recorded.
+                Text("""
+                Community hikes are walks worth someone else's day out — a whole route, \
+                walked by you, that isn't already on the list.
+                """)
                 Text("""
                 Share only a route, photos and notes that are yours to publish. A hike that \
                 starts at your front door shows where you live.
@@ -331,6 +374,32 @@ private extension CommunityShareSheet {
                 .font(.footnote)
                 .accessibilityIdentifier("community-share-duplicate")
             }
+        }
+    }
+
+    /// Why this hike is not going anywhere, in place of the form.
+    ///
+    /// Warning-shaped rather than error-shaped: nothing has gone wrong, and
+    /// none of the three reasons is the hiker having done something careless.
+    /// Saving somebody else's walk, walking a short loop and walking a trail
+    /// twice are all ordinary things; what the screen has to say is only that
+    /// none of them is a thing to publish, and what they can do instead.
+    func refusalSection(_ reason: CommunityPublishingEligibility.Reason) -> some View {
+        Section {
+            Label {
+                VStack(alignment: .leading, spacing: 4) {
+                    Text(reason.title)
+                        .font(.callout.weight(.medium))
+                    Text(reason.explanation)
+                        .font(.footnote)
+                        .foregroundStyle(.secondary)
+                }
+            } icon: {
+                Image(systemName: "person.2.slash")
+                    .foregroundStyle(.orange)
+            }
+            .accessibilityElement(children: .combine)
+            .accessibilityIdentifier("community-share-refusal")
         }
     }
 
@@ -381,13 +450,16 @@ private extension CommunityShareSheet {
             if phase == .sending {
                 ProgressView()
                     .accessibilityLabel("Sending")
-            } else if phase != .sent {
+            } else if phase != .sent, eligibility?.reason == nil {
                 Button("Share") { share() }
                     .accessibilityIdentifier("community-share-confirm")
                     // The same floor ``CommunityPublisher/share`` refuses
                     // below, so a hike with no route cannot start an upload
-                    // that was always going to come back as a failure.
-                    .disabled(hike.pointCount < 2)
+                    // that was always going to come back as a failure. Also
+                    // held while eligibility is still `nil`, which is the one
+                    // window in which a tap could start a send the next line
+                    // of this screen is about to forbid.
+                    .disabled(hike.pointCount < 2 || eligibility == nil)
             }
         }
     }

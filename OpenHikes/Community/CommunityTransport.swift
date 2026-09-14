@@ -40,6 +40,16 @@ nonisolated enum CommunityFailure: LocalizedError, Equatable, Sendable {
     /// looking at can outlive the submission behind it: a reviewer can take
     /// one down, and the hiker's own copy of the list is a snapshot.
     case noLongerAvailable
+    /// The hike is not this hiker's to publish, is too short to be worth
+    /// publishing, or retraces one they have already sent.
+    ///
+    /// Not a transport failure at all, which is why it carries the reason
+    /// rather than a message: nothing was attempted, and the screen that asks
+    /// for a share is the screen that has to explain. It lives here so that
+    /// ``CommunityPublisher/share(_:authorName:transport:store:save:)`` can
+    /// refuse for the same reason the form does, in the same way it re-checks
+    /// the two-point floor the form's button already holds.
+    case notEligible(CommunityPublishingEligibility.Reason)
     /// The hike has nothing worth publishing — no route.
     case nothingToShare
     /// No Apple Account on the device, or iCloud is switched off for it.
@@ -59,6 +69,8 @@ nonisolated enum CommunityFailure: LocalizedError, Equatable, Sendable {
             "Sharing a hike needs an Apple Account."
         case .unreachable:
             "Couldn't reach iCloud."
+        case .notEligible(let reason):
+            reason.title
         case .nothingToShare:
             "This hike has no route to share."
         case .noLongerAvailable:
@@ -74,6 +86,8 @@ nonisolated enum CommunityFailure: LocalizedError, Equatable, Sendable {
             "Sign in to iCloud in Settings, then try again. Browsing community hikes works without one."
         case .unreachable:
             "Check your connection and try again."
+        case .notEligible(let reason):
+            reason.explanation
         case .nothingToShare:
             "Record or import a route first."
         case .noLongerAvailable:
