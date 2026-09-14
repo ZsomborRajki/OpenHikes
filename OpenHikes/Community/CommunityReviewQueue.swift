@@ -27,8 +27,9 @@
 //  until it is taken. One request per launch rather than one per selection:
 //  almost every launch is a hiker who is not a reviewer, and asking again on
 //  every tap between the two segments would spend a request on the same empty
-//  answer forever. A reviewer who has just acted gets a fresh one, because
-//  acting is the thing that changes the answer.
+//  answer forever. A reviewer who has just acted gets a fresh one on their
+//  next selection of the tab — see ``forget(_:)`` — because acting is the
+//  thing that changes the answer, and it is the only thing that does.
 //
 //  ## Why a failed load says nothing
 //
@@ -85,6 +86,15 @@ final class CommunityReviewQueue {
 
     @ObservationIgnored private let transport: (any CommunityTransporting)?
     @ObservationIgnored private var loadTask: Task<Void, Never>?
+    /// Which request the state belongs to.
+    ///
+    /// A cancelled `Task` still runs to its next suspension point, so the one
+    /// ``refresh()`` supersedes comes back after its replacement has already
+    /// set ``isLoading``. Without this it would clear the flag out from under
+    /// the request in flight, and the guard that keeps two requests from
+    /// overlapping would stop holding — for the reader who wonders why the
+    /// cancel above is not enough on its own.
+    @ObservationIgnored private var loadGeneration = 0
     /// Whether this launch has already asked. See the header for why the
     /// answer is not asked for again on every tab selection.
     @ObservationIgnored private var hasAsked = false
@@ -106,14 +116,16 @@ final class CommunityReviewQueue {
 
     /// Asks again, whatever has been asked before.
     ///
-    /// What an action runs when it has changed the answer, and what a pull on
-    /// the list runs. Never what a tab selection runs.
+    /// What ``startBrowsing()`` runs once a launch, and what it runs again
+    /// after a decision has spent that answer — see ``forget(_:)``.
     func refresh() {
         guard let transport else { return }
         guard !isLoading else { return }
         hasAsked = true
         isLoading = true
         issuedRequests += 1
+        loadGeneration += 1
+        let generation = loadGeneration
         loadTask?.cancel()
         loadTask = Task { [weak self] in
             let result: [CommunityPendingSubmission]
@@ -124,8 +136,9 @@ final class CommunityReviewQueue {
                 // error in any sense a hiker would recognise: they asked for
                 // nothing and are owed nothing. Recorded rather than reported.
                 await MainActor.run {
-                    self?.isReviewer = false
-                    self?.isLoading = false
+                    guard let self, generation == self.loadGeneration else { return }
+                    self.isReviewer = false
+                    self.isLoading = false
                 }
                 return
             } catch {
@@ -141,19 +154,26 @@ final class CommunityReviewQueue {
                     \(error.localizedDescription, privacy: .public)
                     """
                 )
-                await MainActor.run { self?.isLoading = false }
+                await MainActor.run {
+                    guard let self, generation == self.loadGeneration else { return }
+                    self.isLoading = false
+                }
                 return
             }
             guard !Task.isCancelled else {
-                await MainActor.run { self?.isLoading = false }
+                await MainActor.run {
+                    guard let self, generation == self.loadGeneration else { return }
+                    self.isLoading = false
+                }
                 return
             }
             await MainActor.run {
+                guard let self, generation == self.loadGeneration else { return }
                 // The read succeeded, so the account is in the role — however
                 // few rows came back with it.
-                self?.isReviewer = true
-                self?.pending = result
-                self?.isLoading = false
+                self.isReviewer = true
+                self.pending = result
+                self.isLoading = false
             }
         }
     }
@@ -183,5 +203,12 @@ final class CommunityReviewQueue {
     /// it twice.
     func forget(_ submission: CommunityPendingSubmission) {
         pending.removeAll { $0.id == submission.id }
+        // And the launch's one question is spent: acting is the thing that
+        // changes the answer, so the next time the tab is taken this asks
+        // again rather than redrawing a list from before the decision. Not a
+        // request *now* — the reviewer is on their way back to a list this
+        // device has already corrected, and a round trip in front of it would
+        // buy them nothing they cannot see.
+        hasAsked = false
     }
 }

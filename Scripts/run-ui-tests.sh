@@ -21,6 +21,7 @@ suites=(
   PhotoUITests
   SettingsUITests
   CommunityUITests
+  CommunityReviewUITests
   AccessibilityUITests
   AccessibilityLabelUITests
 )

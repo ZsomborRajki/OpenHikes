@@ -72,6 +72,7 @@ nonisolated extension CloudKitCommunityTransport {
             downloadingInto: directory
         )
     }
+
     /// How many notices one look at the queue reads.
     ///
     /// A ceiling rather than a page: the queue is meant to be emptied, and a
@@ -211,7 +212,7 @@ nonisolated extension CloudKitCommunityTransport {
                 .coordinate.longitude ?? 0,
             noticedAt: notice.creationDate ?? .distantPast
         )
-}
+    }
 
     /// Which of `submissionIDs` already have a listing.
     ///

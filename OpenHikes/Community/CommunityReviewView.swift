@@ -87,6 +87,21 @@ struct CommunityReviewView: View {
         CommunityStaging.previewDirectory(of: pending.prospectiveListing, in: previewSession)
     }
 
+    /// Whether the thing being decided about has actually arrived.
+    ///
+    /// Publishing waits on it for two reasons, and each would be enough on its
+    /// own. ``photoCount`` is zero until the photographs land — a queue entry
+    /// cannot know how many it has, see
+    /// ``CommunityPendingSubmission/photoCount`` — so a publish before then
+    /// writes *no photos* onto a listing that has some, which is a row that
+    /// hides a gallery it could have shown. And a screen still loading, or one
+    /// that failed to load, has shown the reviewer a title and nothing else:
+    /// the description and the photographs are what they are here to judge.
+    private var hasLoaded: Bool {
+        if case .loaded = phase { return true }
+        return false
+    }
+
     /// Whether publishing this would produce a listing anybody can see.
     ///
     /// ``CommunityListing/init(record:)`` drops a listing whose `authorID` is
@@ -98,7 +113,7 @@ struct CommunityReviewView: View {
     /// *is not checked* are different things, and this is the one failure
     /// nothing downstream would ever report.
     private var canPublish: Bool {
-        !pending.authorID.isEmpty && !isDeciding
+        hasLoaded && !pending.authorID.isEmpty && !isDeciding
     }
 
     var body: some View {
@@ -285,6 +300,11 @@ struct CommunityReviewView: View {
                     author. It cannot be published.
                     """
                 )
+            } else if !hasLoaded {
+                // The same rule the button is disabled by, said out loud —
+                // see ``hasLoaded``. Declining stays available, because a
+                // submission that will not load is a perfectly good reason to.
+                Text("Publishing waits for the description and photographs to load.")
             } else {
                 Text("Publishing makes this visible to everybody, immediately.")
             }
