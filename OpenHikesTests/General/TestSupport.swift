@@ -630,3 +630,53 @@ nonisolated final class TestGate: Sendable {
         held?.resume()
     }
 }
+
+/// Keeps one operation resident in a ``SerialAsyncQueue``'s buffer, so that
+/// anything submitted afterwards lands *behind* it.
+///
+/// ``TestGate`` holds a queue open at one known point. This is the sustained
+/// form of the same idea, for a subject that drains the queue repeatedly and
+/// has to find it busy every time. ``SerialAsyncQueue/drain()`` submits its
+/// barrier behind whatever is already buffered, so an operation resident in
+/// that buffer is guaranteed to run before the drain returns — and re-arming
+/// from inside the operation keeps that true for every drain rather than only
+/// the first.
+///
+/// Here rather than beside one suite's fixtures for the reason ``TestGate``
+/// gives, and a resident operation rather than a `Task` spinning
+/// `await Task.yield()` beside the subject for the reason
+/// ``settleDelegateHop(until:sourceLocation:condition:)`` gives: a yield buys
+/// an amount of progress that depends on how busy the machine is, and a spin
+/// has to be *scheduled* into a window it cannot see. The queue is a window
+/// the subject itself opens.
+@MainActor
+final class SerialQueueContention {
+    private let queue: SerialAsyncQueue
+    private let body: @MainActor () -> Void
+    private var isRunning = true
+
+    /// Starts at once. `body` runs on the main actor every time the queue
+    /// reaches the resident operation.
+    init(on queue: SerialAsyncQueue, each body: @escaping @MainActor () -> Void) {
+        self.queue = queue
+        self.body = body
+        rearm()
+    }
+
+    /// Stops re-arming. The operation already resident runs once more, does
+    /// nothing, and leaves the queue empty for any uncontended part of the
+    /// test that follows.
+    func stop() {
+        isRunning = false
+    }
+
+    private func rearm() {
+        queue.enqueue { [weak self] in
+            await MainActor.run {
+                guard let self, self.isRunning else { return }
+                self.body()
+                self.rearm()
+            }
+        }
+    }
+}
