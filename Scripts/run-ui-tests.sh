@@ -28,6 +28,47 @@ suites=(
 # Measurement rather than automation, so --all leaves them out: they assert
 # nothing and only cost launches. Naming one explicitly still runs it.
 measurement_tests=(OpenHikesUITests/testLaunchPerformance)
+
+# Tests that lose to a busy machine rather than to a bug, pinned to a run of
+# their own on the one simulator.
+#
+# What put them here is a shape rather than a hunch. In a three-clone `--all`
+# each of these failed on a *timeout* — 30s, 30s and 47.9s against 20.8s, 16.1s
+# and 30.1s for the same tests serially — and every one of them was the first or
+# second test its clone ran, while three simulators were booting, installing and
+# first-launching the app at once. Run on their own they pass; run behind that
+# stampede they wait too long for something and give up.
+#
+# So this list is about *when* a test runs, not about the test being wrong. Two
+# consequences follow, and both matter more than the names below:
+#
+#   - **A test that fails serially does not belong here.** Pinning it would
+#     convert a real failure into a slower real failure, and hide it behind a
+#     mechanism labelled "flaky". Check with
+#     `--suite <class> --test <name>` before adding anything.
+#   - **The list cannot be complete, and chasing completeness is the wrong
+#     instinct.** What flakes is whatever runs while the clones are cold, so a
+#     name taken off the front of the queue is replaced by the next one along.
+#     `--retry` is the general answer and this is the specific one; if a test
+#     keeps failing the parallel pass even with a retry, pin it here.
+#
+# They run after the parallel pass, on the device this script resolved, in one
+# serial `xcodebuild` of their own. Sequential runs against one simulator are
+# fine — it is two *concurrent* ones that install over each other, which is why
+# the fan-out below uses clones.
+#
+# **It is a mitigation and not a guarantee, and one of these has already shown
+# why.** `testBlockedHikersSectionPassesAccessibilityAudit` failed its first
+# attempt inside this very pass and passed on the retry, because the machine is
+# still settling when the clones have only just gone. What actually rescues a
+# run is the retry — a second attempt lands on a warm app and passes in half
+# the time — so read this list as *spend fewer retries*, never as *these are
+# handled*.
+serial_tests=(
+  AccessibilityUITests/testBlockedHikersSectionPassesAccessibilityAudit
+  RecordingUITests/testDiscardingARecordingSavesNothing
+  RecordingUITests/testPausingAndResumingARecording
+)
 default_suite="RecordingUITests"
 default_test="testReviewsSnappedRouteAfterStopping"
 # Three, not "one per core". xcodebuild spreads whole *classes*, so the floor of
@@ -46,6 +87,9 @@ run_all=false
 verbose=false
 dry_run=false
 retry=false
+# Whether the caller said either way, so the default below can tell "not asked"
+# from "asked for off".
+retry_set=false
 result_bundle=""
 parallel_workers=""
 serial=false
@@ -60,6 +104,13 @@ simulated hike, reviews the snapped route, and saves it.
 
 Functional classes: ${suites[*]}
 
+A parallel --all runs in two passes: the classes across simulator clones, then
+the tests in \`serial_tests\` on their own, on this one simulator. They are
+pinned there because they fail on a timeout while the clones are still booting
+and pass when the machine is quiet — see the comment on that list, including
+why a test that fails serially must not be added to it.
+Pinned now: ${serial_tests[*]}
+
 PerformanceUITests lives in the same bundle but is measurement rather than
 automation; run it through Scripts/run-performance-tests.sh instead.
 
@@ -68,7 +119,8 @@ Options:
   --suite <name>          Test class to run (default: $default_suite)
   --test <name>           Test method to run (default: $default_test)
   --all                   Run every functional test in every class
-  --retry                 Re-run a failing test once (for CI)
+  --retry                 Re-run a failing test once (on by default for --all)
+  --no-retry              Turn that off, so a flake fails the run
   --parallel [N]          Override the worker count (needs --all without --suite)
   --serial                Run in one simulator, the way --all used to
   --result-bundle <path>  Write an .xcresult bundle for inspection
@@ -150,8 +202,14 @@ while [[ $# -gt 0 ]]; do
             run_all=true
             shift
             ;;
+        --no-retry)
+            retry=false
+            retry_set=true
+            shift
+            ;;
         --retry)
             retry=true
+            retry_set=true
             shift
             ;;
         --parallel)
@@ -238,6 +296,30 @@ if [[ -z "$parallel_workers" && "$serial" != true ]] \
     parallel_workers="$default_parallel_workers"
 fi
 
+# And the same run retries its failures, for the reason it fans out: three
+# clones booting, installing and first-launching at once make the machine slow
+# enough that a test with a tight wait gives up, and the evidence for that is
+# specific rather than general — in one such run the failures were each clone's
+# first or second test, every one of them on a timeout, and every one passing on
+# its own afterwards.
+#
+# `serial_tests` pins the ones seen doing it; this covers the ones that have not
+# been seen yet, and the difference is why both exist. Pinning three names
+# demonstrably promotes whatever was fourth: the run that first passed with the
+# list in place failed `testRetryingASaveThatFailedOnce` instead — a name that
+# had never failed, at the front of a cold clone, on a timeout, passing on its
+# own. A list of names cannot converge on a problem that is about position in a
+# queue, so the list is the specific answer and this is the general one.
+#
+# It costs nothing on a green run: `-retry-tests-on-failure` re-runs failures
+# and only failures. What it costs on a red one is one extra go at a genuinely
+# broken test, which `--no-retry` turns off. Narrower runs are left alone —
+# nothing is contending for anything, so a retry there would only make a real
+# failure take twice as long to report.
+if [[ "$retry_set" != true && "$run_all" == true && -z "$suite" && "$serial" != true ]]; then
+    retry=true
+fi
+
 command -v xcodebuild >/dev/null 2>&1 || {
     echo "xcodebuild is required. Install Xcode first." >&2
     exit 1
@@ -265,6 +347,9 @@ fi
 # (so, unlike OpenHikes.xctestplan, it does not skip it).
 only_testing=()
 skip_testing=()
+# What the serial pass will run, filled in below. Empty for every invocation
+# that is not a parallel `--all`, which is what makes that pass conditional.
+pinned_testing=()
 if [[ "$run_all" == true ]]; then
     if [[ -n "$suite" ]]; then
         only_testing=(-only-testing:"$bundle/$suite")
@@ -280,6 +365,20 @@ if [[ "$run_all" == true ]]; then
             skip_testing+=(-skip-testing:"$bundle/$entry")
         fi
     done
+    # The pinned ones come out of this pass and go into a serial one after it —
+    # see `serial_tests`. Only when this pass is actually parallel, which is
+    # what `parallel_workers` being set means and is why this reads that rather
+    # than `--serial`: a suite-scoped `--all` is refused parallelism too, and it
+    # is already the quiet run these were pinned for. Splitting it would cost a
+    # second build and launch to buy nothing.
+    if [[ -n "$parallel_workers" ]]; then
+        for entry in "${serial_tests[@]}"; do
+            if [[ -z "$suite" || "${entry%%/*}" == "$suite" ]]; then
+                skip_testing+=(-skip-testing:"$bundle/$entry")
+                pinned_testing+=(-only-testing:"$bundle/$entry")
+            fi
+        done
+    fi
 else
     if [[ -z "$suite" ]]; then
         if ! suite="$(suite_for_test "$test_name")"; then
@@ -297,7 +396,10 @@ else
     only_testing=(-only-testing:"$bundle/$suite/$test_name")
 fi
 
-command=(
+# Everything both passes share. The scoping flags and the fan-out are added
+# per pass below, because that is the entirety of what makes them different
+# runs: same project, same scheme, same device.
+base_command=(
     xcodebuild test
     -project "$project"
     -scheme "$scheme"
@@ -305,12 +407,16 @@ command=(
     # A machine that has not trusted SwiftLintPlugins' fingerprint — any fresh
     # CI runner — cannot build the app target without this.
     -skipPackagePluginValidation
+)
+if [[ "$retry" == true ]]; then
+    base_command+=(-retry-tests-on-failure -test-iterations 2)
+fi
+
+command=(
+    "${base_command[@]}"
     "${only_testing[@]}"
     "${skip_testing[@]+"${skip_testing[@]}"}"
 )
-if [[ "$retry" == true ]]; then
-    command+=(-retry-tests-on-failure -test-iterations 2)
-fi
 # Clones, not a second xcodebuild against the same device. The distinction is
 # the whole reason this is safe: two `xcodebuild test` runs sharing a simulator
 # install the same bundle identifier over each other, which is the failure the
@@ -347,6 +453,12 @@ fi
 if [[ "$dry_run" == true ]]; then
     printf '%q ' "${command[@]}"
     printf '\n'
+    # The second invocation too, because it is a second thing that will run and
+    # a mode whose whole job is to say what will run must not leave it out.
+    if (( ${#pinned_testing[@]} > 0 )); then
+        printf '%q ' "${base_command[@]}" "${pinned_testing[@]}"
+        printf '\n'
+    fi
     exit 0
 fi
 
@@ -361,25 +473,66 @@ fi
 # Scripts/simulate-hike.sh would fight the test for the simulator's position.
 xcrun simctl location "$device_udid" clear >/dev/null 2>&1 || true
 
-status=0
-raw_log_status=0
-if [[ "$verbose" == true ]]; then
-    "${command[@]}" || status=$?
-else
-    # The raw stream is kept because the formatter is allowed to drop lines:
-    # --test testLaunchPerformance reports through `measured [Time, s]`, which
-    # xcbeautify does not emit. See Scripts/lib/xcodebuild-output.sh.
+# The raw stream is kept because the formatter is allowed to drop lines:
+# --test testLaunchPerformance reports through `measured [Time, s]`, which
+# xcbeautify does not emit. See Scripts/lib/xcodebuild-output.sh.
+#
+# Created once and reused by both passes: what it is for is the output of the
+# invocation that just ran, and the second pass has already had the first one's
+# read out of it.
+raw_log=""
+if [[ "$verbose" != true ]]; then
     raw_log="$(mktemp -t openhikes-ui-tests)"
     trap 'rm -f "$raw_log"' EXIT
+fi
+
+# One xcodebuild, formatted or raw.
+#
+# Sets `status` and `raw_log_status` rather than returning them, because they
+# are two different facts — whether the tests passed, and whether the log they
+# passed in survived — and a caller has to be able to tell them apart.
+run_xcodebuild() {
+    local -a invocation=("$@")
+    status=0
+    raw_log_status=0
+    if [[ "$verbose" == true ]]; then
+        "${invocation[@]}" || status=$?
+        return 0
+    fi
 
     set +e
-    "${command[@]}" 2>&1 | format_xcodebuild_stream "$raw_log"
-    statuses=("${PIPESTATUS[@]}")
+    "${invocation[@]}" 2>&1 | format_xcodebuild_stream "$raw_log"
+    local -a statuses=("${PIPESTATUS[@]}")
     set -e
     status="${statuses[0]}"
     raw_log_status="${statuses[1]}"
 
     print_measurement_lines "$raw_log"
+}
+
+status=0
+raw_log_status=0
+run_xcodebuild "${command[@]}"
+
+# The pinned tests, on this one simulator, after the clones have gone — see
+# `serial_tests`. Run even when the pass above failed, and its failure kept:
+# these are a handful of launches against a machine that is now quiet, and
+# skipping them would mean a run that reported one real failure and silently
+# never asked about three more tests.
+if (( ${#pinned_testing[@]} > 0 )); then
+    parallel_status="$status"
+    parallel_raw_log_status="$raw_log_status"
+    echo "Pinned to one simulator: ${pinned_testing[*]#-only-testing:}"
+    run_xcodebuild "${base_command[@]}" "${pinned_testing[@]}"
+    # Both statuses keep the worse of the two passes. A green second pass must
+    # not report over a red first one, and a log that landed the second time
+    # does not bring back the output of the first.
+    if (( parallel_status != 0 )); then
+        status="$parallel_status"
+    fi
+    if (( parallel_raw_log_status != 0 )); then
+        raw_log_status="$parallel_raw_log_status"
+    fi
 fi
 
 if (( status != 0 )); then
