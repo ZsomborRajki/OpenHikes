@@ -104,10 +104,10 @@ struct HikeDetailWorkloadTests {
 
         let expected = [
             "Duration": standalone.duration.map(HikeFormat.duration),
-            "Elevation Gain": standalone.elevationGain.map(HikeFormat.length),
-            "Elevation Loss": standalone.elevationLoss.map(HikeFormat.length),
-            "Max Elevation": standalone.maxElevation.map(HikeFormat.length),
-            "Min Elevation": standalone.minElevation.map(HikeFormat.length),
+            "Elevation Gain": standalone.elevationGain.map { HikeFormat.elevation($0) },
+            "Elevation Loss": standalone.elevationLoss.map { HikeFormat.elevation($0) },
+            "Max Elevation": standalone.maxElevation.map { HikeFormat.elevation($0) },
+            "Min Elevation": standalone.minElevation.map { HikeFormat.elevation($0) },
             "Overall Avg Speed": standalone.averageSpeed.map { HikeFormat.speed($0) },
             "Moving Avg Speed": standalone.movingAverageSpeed.map { HikeFormat.speed($0) },
             "Max Speed": standalone.maxSpeed.map { HikeFormat.speed($0) },

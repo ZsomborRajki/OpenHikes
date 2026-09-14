@@ -148,13 +148,19 @@ struct ElevationChartView: View, Equatable {
                 }
             }
         }
+        // The y axis reads in the reader's own unit, like the x axis two
+        // blocks up. The scale stays in metres — the samples are metres and so
+        // is the scrub — so a US tick lands on 1,640 ft rather than a round
+        // figure. A label in the wrong unit beside an x axis in the right one
+        // is the worse of the two.
         .chartYAxis {
             AxisMarks { value in
                 AxisGridLine()
                 AxisValueLabel {
                     if let meters = value.as(Double.self) {
-                        Text(Measurement(value: meters, unit: UnitLength.meters)
-                            .formatted(.measurement(width: .abbreviated, usage: .asProvided)))
+                        Text(HikeFormat.elevation(
+                            Measurement(value: meters, unit: UnitLength.meters)
+                        ))
                     }
                 }
             }
@@ -302,7 +308,7 @@ struct ElevationChartView: View, Equatable {
 
     private func calloutLabel(_ sample: ElevationSample) -> some View {
         VStack(spacing: 1) {
-            Text(HikeFormat.length(Measurement(value: sample.elevation, unit: .meters)))
+            Text(HikeFormat.elevation(Measurement(value: sample.elevation, unit: .meters)))
                 .font(.caption.weight(.semibold))
                 .foregroundStyle(.primary)
             Text(Measurement(value: sample.distanceMeters, unit: UnitLength.meters)
@@ -360,10 +366,9 @@ struct ElevationChartView: View, Equatable {
         in profile: RouteProfile
     ) -> String {
         guard let sample else { return "No elevation data" }
-        let elevation = Measurement(
-            value: sample.elevation.rounded(),
-            unit: UnitLength.meters
-        ).formatted(.measurement(width: .wide, usage: .asProvided))
+        let elevation = HikeFormat.spokenElevation(
+            Measurement(value: sample.elevation, unit: UnitLength.meters)
+        )
         let distance = Measurement(
             value: sample.distanceMeters,
             unit: UnitLength.meters

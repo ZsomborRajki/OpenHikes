@@ -66,16 +66,16 @@ nonisolated enum HikeDetailPreparation {
                 Stat("Duration", HikeFormat.duration(duration))
             },
             statistics.elevationGain.map { gain in
-                Stat("Elevation Gain", HikeFormat.length(gain))
+                Stat("Elevation Gain", HikeFormat.elevation(gain))
             },
             statistics.elevationLoss.map { loss in
-                Stat("Elevation Loss", HikeFormat.length(loss))
+                Stat("Elevation Loss", HikeFormat.elevation(loss))
             },
             statistics.maxElevation.map { elevation in
-                Stat("Max Elevation", HikeFormat.length(elevation))
+                Stat("Max Elevation", HikeFormat.elevation(elevation))
             },
             statistics.minElevation.map { elevation in
-                Stat("Min Elevation", HikeFormat.length(elevation))
+                Stat("Min Elevation", HikeFormat.elevation(elevation))
             },
             // Two clocks over one distance, named for the clock rather than
             // left as a bare "Avg Speed" that has always been the elapsed one
@@ -99,7 +99,15 @@ nonisolated enum HikeDetailPreparation {
                 // Named for what it is rather than hidden in the distance:
                 // the total already includes it, so the honest thing is to say
                 // how much of that total the app worked out rather than saw.
-                Stat("Inferred Path", HikeFormat.length(inferred))
+                //
+                // A distance, and formatted like the *Distance* row above it
+                // rather than by the elevation formatter — which is what it
+                // used to go through, so a reader looking at "3.1 mi" was told
+                // that 412 m of it was inferred.
+                Stat(
+                    "Inferred Path",
+                    inferred.formatted(.measurement(width: .abbreviated, usage: .road))
+                )
             },
             statistics.startDate.map { date in
                 Stat("Start", formatted(date))

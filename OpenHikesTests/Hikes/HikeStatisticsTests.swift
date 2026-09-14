@@ -360,24 +360,17 @@ struct HikeFormatTests {
         #expect(long.contains("25"))
     }
 
-    /// Elevations are whole metres — a stat tile reading "217.4382 m" is
-    /// false precision on data this noisy.
-    @Test("lengths are rounded to whole units and keep the unit they were given")
-    func length() {
-        let text = HikeFormat.length(Measurement(value: 217.4382, unit: .meters))
-        #expect(text.contains("217"))
-        #expect(!text.contains("."))
-        #expect(!text.contains("218"))
-    }
-
-    /// A route carrying a height that isn't a number can still produce a
-    /// non-finite total, and `Measurement` formats those as "∞ m" and
-    /// "NaN m" — which sit on a stat tile looking exactly like readings.
-    @Test("a length that isn't a number reads as absent", arguments: [
-        Double.infinity, -.infinity, .nan,
-    ])
-    func nonFiniteLength(value: Double) {
-        #expect(HikeFormat.length(Measurement(value: value, unit: .meters)) == "—")
+    /// Elevations are whole units — a stat tile reading "217.4382 m" is false
+    /// precision on data this noisy. Which unit, and the non-finite case, are
+    /// `ElevationFormatTests`' business: they are the region-sensitive half
+    /// and nothing here may read `Locale.current` to decide them.
+    @Test("elevations are rounded to whole units")
+    func elevation() {
+        let text = HikeFormat.elevation(
+            Measurement(value: 217.4382, unit: .meters),
+            locale: Locale(identifier: "de_DE")
+        )
+        #expect(text == "217 m")
     }
 
     /// Speeds arrive in metres per second and are read in km/h — and the
