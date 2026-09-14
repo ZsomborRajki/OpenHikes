@@ -69,8 +69,10 @@ nonisolated final class PerformanceUITests: XCTestCase {
     private static let scrubTapEdgeAllowance: Double = 6
     private static let launchIterations = 3
     /// The watchdog has reported 489–711 ms here since this suite existed.
-    /// A tripwire above the noise, not a target — the target is the launch
-    /// finding in `PERFORMANCE.md`.
+    /// A tripwire above the noise, not a target. The launch finding itself is
+    /// an issue on the tracker rather than a section of `PERFORMANCE.md`,
+    /// which is a live list of what the app costs and not a place open work
+    /// accumulates.
     private static let launchStallCeilingMilliseconds: Double = 1200
     /// What every scenario stalls for without doing anything: the launch
     /// stall, which happens once and is bounded by length rather than by

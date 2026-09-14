@@ -66,36 +66,23 @@ extension OpenHikesModel {
         let syncsToCloud = !AppLaunchEnvironment.isRunningTests
             && CloudSyncCoordinator.isEnabled(in: launchDefaults)
         let load = Self.loadDefaultContainer(syncsToCloud: syncsToCloud)
-        let graphProvider = OverpassTrailGraphProvider()
-        let liveActivities = Self.makeLiveActivityController(defaults: launchDefaults)
-        let reminders = Self.makeMovementReminderController(defaults: launchDefaults)
+
+        let parts = Self.makeDependencies(
+            container: load.container,
+            defaults: launchDefaults
+        )
 
         self.init(
             container: load.container,
-            backgroundTracker: BackgroundTrailTracker(
-                container: load.container,
-                monitor: Self.dormantLocationSource(),
-                defaults: launchDefaults,
-                liveActivityController: liveActivities
-            ),
-            autoSaveController: Self.makeAutoSaveController(defaults: launchDefaults),
-            hikeRecorder: Self.makeRecorder(
-                container: load.container,
-                trailGraphProvider: graphProvider,
-                defaults: launchDefaults,
-                liveActivityController: liveActivities,
-                movementReminders: reminders
-            ),
-            locationManager: LocationManager(manager: Self.dormantLocationSource()),
-            weatherManager: WeatherManager(
-                store: WeatherReadingStore(defaults: launchDefaults)
-            ),
-            significantLocations: SignificantLocationFeed(
-                monitor: Self.dormantLocationSource()
-            ),
-            trailGraphProvider: graphProvider,
-            movementReminders: reminders,
-            communityTransport: Self.makeCommunityTransport(),
+            backgroundTracker: parts.backgroundTracker,
+            autoSaveController: parts.autoSave,
+            hikeRecorder: parts.recorder,
+            locationManager: parts.locationManager,
+            weatherManager: parts.weatherManager,
+            significantLocations: parts.significantLocations,
+            trailGraphProvider: parts.graphProvider,
+            movementReminders: parts.reminders,
+            communityTransport: parts.communityTransport,
             defaults: launchDefaults,
             startupIssue: load.startupIssue,
             isSyncingThisLaunch: syncsToCloud
@@ -109,41 +96,35 @@ extension OpenHikesModel {
             () throws(Swift.Error) in
             try ModelContainer.openHikes(isStoredInMemoryOnly: true)
         }
-        let graphProvider = AppLaunchEnvironment
-            .trailGraphFixtureName
-            .flatMap { name in
-                BundledTrailGraphProvider(fixtureName: name)
-            }
-        let liveActivities = Self.makeLiveActivityController(
+        // Instrumented with the same interval names the shipping path uses.
+        //
+        // Not duplication for its own sake: `PerformanceUITests` launches with
+        // `--ui-testing`, so this is the *only* composition path the
+        // performance harness can measure, and intervals on the shipping one
+        // alone would have left `AppModelInit` exactly as unattributed in a
+        // report as it was before. Verified that way round — the first version
+        // of this change instrumented only the shipping path, and the idle
+        // scenario's report still showed one 88.2 ms `AppModelInit` span with
+        // nothing inside it but `ModelContainerInit`.
+        //
+        // The two paths build different things and the numbers are not
+        // comparable between them: this one takes dormant location sources and
+        // a bundled trail graph. What carries across is the shape — which
+        // dependency dominates, and whether anything here is doing real work
+        // at launch that a name would not suggest.
+        let parts = Self.makeUITestingDependencies(
+            container: testingContainer,
             defaults: uiTestingDefaults
         )
         self.init(
             container: testingContainer,
-            backgroundTracker: BackgroundTrailTracker(
-                container: testingContainer,
-                monitor: Self.dormantLocationSource(),
-                defaults: uiTestingDefaults,
-                liveActivityController: liveActivities
-            ),
-            autoSaveController: Self.makeAutoSaveController(defaults: uiTestingDefaults),
-            hikeRecorder: HikeRecorder(
-                container: testingContainer,
-                saveModelContext: Self.uiTestingSave(),
-                trailGraphProvider: graphProvider,
-                defaults: uiTestingDefaults,
-                liveActivityController: liveActivities,
-                journalDirectory:
-                    AppLaunchEnvironment.recordingJournalDirectory(),
-                automaticallyRecovers: false
-            ),
-            locationManager: LocationManager(manager: Self.dormantLocationSource()),
-            weatherManager: WeatherManager(
-                store: WeatherReadingStore(defaults: uiTestingDefaults)
-            ),
-            significantLocations: SignificantLocationFeed(
-                monitor: Self.dormantLocationSource()
-            ),
-            trailGraphProvider: graphProvider,
+            backgroundTracker: parts.backgroundTracker,
+            autoSaveController: parts.autoSave,
+            hikeRecorder: parts.recorder,
+            locationManager: parts.locationManager,
+            weatherManager: parts.weatherManager,
+            significantLocations: parts.significantLocations,
+            trailGraphProvider: parts.graphProvider,
             // Asked here as well as on the shipping path, which it was not.
             // A UI-test launch still gets `nil` out of this unless it named a
             // scenario — that guard is inside the factory — but until this
@@ -151,7 +132,7 @@ extension OpenHikesModel {
             // would have made any difference, because this initializer never
             // called it. The feature was unreachable from automation by
             // composition rather than by policy.
-            communityTransport: Self.makeCommunityTransport(),
+            communityTransport: parts.communityTransport,
             defaults: uiTestingDefaults
         )
     }
@@ -441,5 +422,183 @@ extension OpenHikesModel {
             }
             try context.save()
         }
+    }
+}
+
+// MARK: - What a launch is made of
+
+private extension OpenHikesModel {
+    /// Every dependency the shipping composition root constructs, each behind
+    /// a signpost interval of its own.
+    ///
+    /// A `struct` and a factory rather than ten locals in `init()`, because
+    /// the linter holds an initializer to sixty lines and ten intervals do not
+    /// fit beside the assembly they feed. It is otherwise the same code in the
+    /// same order — a hoist, not a reordering, which matters because
+    /// `liveActivities` and `reminders` are each shared by two consumers and
+    /// `graphProvider` by three.
+    struct LaunchDependencies {
+        let graphProvider: OverpassTrailGraphProvider
+        let reminders: MovementReminderController?
+        let backgroundTracker: BackgroundTrailTracker
+        let autoSave: AutoSaveController
+        let recorder: HikeRecorder
+        let locationManager: LocationManager
+        let weatherManager: WeatherManager
+        let significantLocations: SignificantLocationFeed
+        let communityTransport: (any CommunityTransporting)?
+    }
+
+    static func makeDependencies(
+        container: ModelContainer,
+        defaults: UserDefaults
+    ) -> LaunchDependencies {
+        // One interval each. Until these existed, `AppModelInit` was a single
+        // 67.8-87.0 ms span with one attributed cause inside it —
+        // `ModelContainerInit`, 42.0-48.1 ms — and roughly 14 ms belonging to
+        // nobody. That remainder was guessed at twice: two synchronously
+        // constructed `CKContainer` default arguments were found and made
+        // lazy, bought about 2 ms of mean, and did not move the first frame at
+        // all. This is `PERFORMANCE.md`'s own next step under *Open findings*
+        // — stop guessing and put a signpost around each dependency the
+        // composition root constructs.
+        //
+        // Cheap by construction: `beginInterval` reads two flags and takes a
+        // clock sample, and records nothing unless a performance log is open
+        // or console logging is on. On a launch nobody is measuring these cost
+        // one `os_signpost` each.
+        let graphProvider = RenderSignpost.interval("TrailGraphProviderInit") {
+            OverpassTrailGraphProvider()
+        }
+        let liveActivities = RenderSignpost.interval("LiveActivityControllerInit") {
+            Self.makeLiveActivityController(defaults: defaults)
+        }
+        let reminders = RenderSignpost.interval("MovementReminderInit") {
+            Self.makeMovementReminderController(defaults: defaults)
+        }
+        let backgroundTracker = RenderSignpost.interval("BackgroundTrackerInit") {
+            BackgroundTrailTracker(
+                container: container,
+                monitor: Self.dormantLocationSource(),
+                defaults: defaults,
+                liveActivityController: liveActivities
+            )
+        }
+        let autoSave = RenderSignpost.interval("AutoSaveControllerInit") {
+            Self.makeAutoSaveController(defaults: defaults)
+        }
+        let recorder = RenderSignpost.interval("RecorderInit") {
+            Self.makeRecorder(
+                container: container,
+                trailGraphProvider: graphProvider,
+                defaults: defaults,
+                liveActivityController: liveActivities,
+                movementReminders: reminders
+            )
+        }
+        let locationManager = RenderSignpost.interval("LocationManagerInit") {
+            LocationManager(manager: Self.dormantLocationSource())
+        }
+        let weatherManager = RenderSignpost.interval("WeatherManagerInit") {
+            WeatherManager(store: WeatherReadingStore(defaults: defaults))
+        }
+        let significantLocations = RenderSignpost.interval("SignificantLocationsInit") {
+            SignificantLocationFeed(monitor: Self.dormantLocationSource())
+        }
+        let communityTransport = RenderSignpost.interval("CommunityTransportInit") {
+            Self.makeCommunityTransport()
+        }
+
+        return LaunchDependencies(
+            graphProvider: graphProvider,
+            reminders: reminders,
+            backgroundTracker: backgroundTracker,
+            autoSave: autoSave,
+            recorder: recorder,
+            locationManager: locationManager,
+            weatherManager: weatherManager,
+            significantLocations: significantLocations,
+            communityTransport: communityTransport
+        )
+    }
+
+    /// The UI-testing path's dependencies, behind the same interval names.
+    ///
+    /// A second factory rather than a parameter on the first, because the two
+    /// paths genuinely differ: the recorder here is constructed directly with
+    /// a test save seam, no automatic recovery and a journal directory the
+    /// launch argument names, and the trail graph is a bundled fixture or
+    /// nothing at all. A shared function taking six flags would be a worse
+    /// description of a launch than two honest ones.
+    static func makeUITestingDependencies(
+        container: ModelContainer,
+        defaults: UserDefaults
+    ) -> UITestingDependencies {
+        let graphProvider = RenderSignpost.interval("TrailGraphProviderInit") {
+            AppLaunchEnvironment
+                .trailGraphFixtureName
+                .flatMap { name in
+                    BundledTrailGraphProvider(fixtureName: name)
+                }
+        }
+        let liveActivities = RenderSignpost.interval("LiveActivityControllerInit") {
+            Self.makeLiveActivityController(defaults: defaults)
+        }
+        let backgroundTracker = RenderSignpost.interval("BackgroundTrackerInit") {
+            BackgroundTrailTracker(
+                container: container,
+                monitor: Self.dormantLocationSource(),
+                defaults: defaults,
+                liveActivityController: liveActivities
+            )
+        }
+        let autoSave = RenderSignpost.interval("AutoSaveControllerInit") {
+            Self.makeAutoSaveController(defaults: defaults)
+        }
+        let recorder = RenderSignpost.interval("RecorderInit") {
+            HikeRecorder(
+                container: container,
+                saveModelContext: Self.uiTestingSave(),
+                trailGraphProvider: graphProvider,
+                defaults: defaults,
+                liveActivityController: liveActivities,
+                journalDirectory: AppLaunchEnvironment.recordingJournalDirectory(),
+                automaticallyRecovers: false
+            )
+        }
+        let locationManager = RenderSignpost.interval("LocationManagerInit") {
+            LocationManager(manager: Self.dormantLocationSource())
+        }
+        let weatherManager = RenderSignpost.interval("WeatherManagerInit") {
+            WeatherManager(store: WeatherReadingStore(defaults: defaults))
+        }
+        let significantLocations = RenderSignpost.interval("SignificantLocationsInit") {
+            SignificantLocationFeed(monitor: Self.dormantLocationSource())
+        }
+        let communityTransport = RenderSignpost.interval("CommunityTransportInit") {
+            Self.makeCommunityTransport()
+        }
+
+        return UITestingDependencies(
+            graphProvider: graphProvider,
+            backgroundTracker: backgroundTracker,
+            autoSave: autoSave,
+            recorder: recorder,
+            locationManager: locationManager,
+            weatherManager: weatherManager,
+            significantLocations: significantLocations,
+            communityTransport: communityTransport
+        )
+    }
+
+    struct UITestingDependencies {
+        let graphProvider: BundledTrailGraphProvider?
+        let backgroundTracker: BackgroundTrailTracker
+        let autoSave: AutoSaveController
+        let recorder: HikeRecorder
+        let locationManager: LocationManager
+        let weatherManager: WeatherManager
+        let significantLocations: SignificantLocationFeed
+        let communityTransport: (any CommunityTransporting)?
     }
 }
