@@ -88,6 +88,29 @@ nonisolated struct CommunityPreviewPhoto: Identifiable, Hashable, Sendable {
     }
 }
 
+/// One photograph of a shared hike, as its gallery pages through them.
+///
+/// The difference from ``CommunityPreviewPhoto`` is which photographs are in
+/// it, and it follows from what each of the two is for. That one is what the
+/// *map* draws, so a picture with nowhere to stand is left out of it; this one
+/// is what the *gallery* pages through, where a picture with no coordinate is
+/// still a picture. So the pin is optional here and the array is never short —
+/// the strip and the viewer show the same photographs in the same order, which
+/// is the whole of what makes tapping the third tile land on the third page.
+nonisolated struct CommunityGalleryPhoto: Identifiable, Hashable, Sendable {
+    /// Which photograph of the hike this is, and its identity — the same index
+    /// ``CommunityPreviewPhoto`` carries, so a map pin and a page agree about
+    /// which picture they are both about.
+    var index: Int
+    /// Where and when it was taken, or `nil` when nothing may claim to know.
+    var pin: CommunityPhotoPin?
+    var fileURL: URL
+
+    var id: Int { index }
+
+    var coordinate: CLLocationCoordinate2D? { pin?.coordinate }
+}
+
 /// The decoded contents of the two asset fields on a submission.
 ///
 /// A struct rather than two loose arrays so the one invariant that matters —
@@ -287,6 +310,25 @@ nonisolated struct CommunityHikeDetail: Sendable {
                 longitude: coordinate.longitude,
                 capturedAt: pair.0.capturedAt,
                 fileURL: pair.1
+            )
+        }
+    }
+
+    /// Every downloaded photograph, in the order the strip draws them.
+    ///
+    /// Unlike ``previewPhotos`` this drops nothing, because the gallery is the
+    /// strip made large: a picture missing from here would make the fourth
+    /// tile open the fifth photograph. What an inconsistent detail loses is
+    /// the *places* rather than the pictures — a pin is a claim about which
+    /// photograph was taken where, pairing by index is the entirety of what
+    /// backs that claim, and a detail that cannot support it makes none.
+    var galleryPhotos: [CommunityGalleryPhoto] {
+        let pinned = isConsistent
+        return photoFileURLs.enumerated().map { index, url in
+            CommunityGalleryPhoto(
+                index: index,
+                pin: pinned ? photoPins[index] : nil,
+                fileURL: url
             )
         }
     }

@@ -175,6 +175,17 @@ struct CommunityHikeView: View {
     /// Called once this author has been blocked, so the caller can pop a
     /// screen that is now showing hidden content.
     let onBlock: () -> Void
+    /// Called with the whole strip and the picture that was tapped, so the
+    /// caller can push the gallery over this screen.
+    ///
+    /// Both halves travel because there is nowhere else to get them: the
+    /// photographs are files in ``downloadDirectory``, which this visit owns,
+    /// and the detail holding them never leaves this view. See
+    /// ``SheetRoute/communityPhoto(_:_:_:)``.
+    ///
+    /// Defaulted to nothing so a preview and a suite can build this screen
+    /// without a navigation stack behind it, exactly as ``remainsPushed`` is.
+    var onOpenPhoto: ([CommunityGalleryPhoto], Int) -> Void = { _, _ in /* no-op default */ }
     /// Whether this screen is still on the navigation stack while it is
     /// disappearing — which is the difference between a push over it and the
     /// hiker leaving.
@@ -768,16 +779,39 @@ private extension CommunityHikeView {
         }
     }
 
+    /// The photographs, each one a way into the gallery.
+    ///
+    /// A tile used to be decoration, and the strip was the only place a
+    /// stranger's pictures could be looked at, at 96 points a side. It is a
+    /// row of buttons now, for the reason the hiker's own strip is one: what
+    /// somebody deciding on a trail is deciding on is partly the pictures, and
+    /// a thumbnail is enough to count them and not to see them. The name is
+    /// handed to the tile rather than put on the button, because a button
+    /// whose whole content is hidden has no accessibility element for the name
+    /// to land on — see ``CommunityPhotoTile/label``.
     func photoStrip(_ detail: CommunityHikeDetail) -> some View {
-        VStack(alignment: .leading, spacing: 12) {
+        let photos = detail.galleryPhotos
+        return VStack(alignment: .leading, spacing: 12) {
             Text("Photos")
                 .font(.headline)
                 .frame(maxWidth: .infinity, alignment: .leading)
                 .accessibilityAddTraits(.isHeader)
             ScrollView(.horizontal, showsIndicators: false) {
                 HStack(spacing: 8) {
-                    ForEach(detail.photoFileURLs, id: \.self) { url in
-                        CommunityPhotoTile(url: url, size: Self.photoTileSize)
+                    ForEach(photos) { photo in
+                        Button {
+                            onOpenPhoto(photos, photo.index)
+                        } label: {
+                            CommunityPhotoTile(
+                                url: photo.fileURL,
+                                size: Self.photoTileSize,
+                                label: String(
+                                    localized: "Photo \(photo.index + 1) of \(photos.count)"
+                                )
+                            )
+                        }
+                        .buttonStyle(.plain)
+                        .accessibilityIdentifier("community-photo-\(photo.index)")
                     }
                 }
             }

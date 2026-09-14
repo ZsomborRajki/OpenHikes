@@ -25,6 +25,18 @@ import UIKit
 struct CommunityPhotoTile: View {
     let url: URL
     let size: CGFloat
+    /// What a screen reader calls this picture, or `nil` where the tile is
+    /// decoration.
+    ///
+    /// Both are real cases and the difference is what the tile is *inside*. On
+    /// the review screen it sits under its own remove button and says nothing
+    /// a reviewer has not already heard from the section header, so it is
+    /// hidden. In the preview's strip it is the label of a button that opens
+    /// the picture, and a button whose entire content is hidden is a button
+    /// with no accessibility element at all — not a silent one, an absent one.
+    /// So the name lives here rather than on the button around it, which is
+    /// the shape ``HikePhotoThumbnail`` already has for the same reason.
+    var label: String?
 
     @State private var image: Image?
 
@@ -45,10 +57,11 @@ struct CommunityPhotoTile: View {
         .frame(width: size, height: size)
         .clipShape(.rect(cornerRadius: 8))
         .task(id: url) { await load() }
-        // The tile carries no information a screen reader can use — the
-        // photographs are unlabelled and the count is already spoken by the
-        // stats above — so it is decoration here rather than content.
-        .accessibilityHidden(true)
+        // One element either way, so a decode that lands does not turn one
+        // tile into two stops. Which of the two it is comes from ``label``.
+        .accessibilityElement()
+        .accessibilityLabel(label ?? "")
+        .accessibilityHidden(label == nil)
     }
 
     private func load() async {
@@ -56,11 +69,20 @@ struct CommunityPhotoTile: View {
         image = await Self.decode(url, maxPixelSize: Int(size * 3))
     }
 
+    /// The decode behind both SwiftUI readers of these files: this tile, and
+    /// the full page ``CommunityPhotoViewer`` opens one at.
+    ///
+    /// Internal rather than private for the reason ``decodeUIImage(_:maxPixelSize:)``
+    /// below is shared with the map: the bound, the orientation transform and
+    /// the off-main hop are decisions about *these* files, and a second copy
+    /// of them is how one reader ends up handling a rotated photograph
+    /// differently from another.
+    ///
     /// `@concurrent` rather than a bare `nonisolated async`: the latter runs
     /// on its caller's executor under `SWIFT_APPROACHABLE_CONCURRENCY`, and
     /// the caller is a SwiftUI `.task` on the main actor.
     @concurrent
-    private static func decode(_ url: URL, maxPixelSize: Int) async -> Image? {
+    static func decode(_ url: URL, maxPixelSize: Int) async -> Image? {
         guard let cgImage = thumbnail(url, maxPixelSize: maxPixelSize) else { return nil }
         return Image(decorative: cgImage, scale: 1)
     }

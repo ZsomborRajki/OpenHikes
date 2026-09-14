@@ -13,6 +13,16 @@ enum SheetRoute: Hashable {
     /// with no model context behind it, so nothing here can be invalidated by
     /// a store the way a pushed `Hike` can.
     case communityHike(CommunityListing)
+    /// A shared hike's gallery, opened at one photograph.
+    ///
+    /// Carries the pictures rather than a way of finding them, because there
+    /// is no way of finding them: they are files in a directory the preview
+    /// underneath this screen owns and deletes, and a ``CommunityHikeDetail``
+    /// never leaves that screen. Which is also what keeps them alive while
+    /// this route is up — the preview stays on the stack under it, so
+    /// ``SheetPresentation/isPresentingCommunityHike(_:)`` goes on answering
+    /// yes and nothing collects the downloads.
+    case communityPhoto(CommunityListing, [CommunityGalleryPhoto], Int)
     case hike(Hike)
     /// A submission waiting for review. Carries the queue entry for the reason
     /// ``communityHike(_:)`` carries a listing — there is no `Hike` and no
@@ -53,10 +63,11 @@ enum SheetRoute: Hashable {
         case let .hike(hike): hike.id == hikeID
         case let .photo(hike, _): hike.id == hikeID
         case let .walk(walk): walk.hikeID == hikeID
-        // Neither shows a `Hike`, so neither is popped by one being deleted.
-        // A community preview is about a hike that is not in the library at
-        // all, which is exactly the state a deletion puts one back into.
-        case .communityHike, .pendingSubmission, .recording: false
+        // None of them shows a `Hike`, so none is popped by one being
+        // deleted. A community preview — and the gallery over it — is about a
+        // hike that is not in the library at all, which is exactly the state a
+        // deletion puts one back into.
+        case .communityHike, .communityPhoto, .pendingSubmission, .recording: false
         }
     }
 
@@ -86,11 +97,14 @@ enum SheetRoute: Hashable {
         return wasSelected
     }
 
-    /// Whether this route wants the whole sheet. The photo viewer does: it
+    /// Whether this route wants the whole sheet. Both photo viewers do: each
     /// draws one picture and nothing else, and a picture in the medium detent
-    /// is a stamp.
+    /// is a stamp. Whose picture it is changes nothing about that.
     var prefersFullHeight: Bool {
-        if case .photo = self { true } else { false }
+        switch self {
+        case .communityPhoto, .photo: true
+        case .communityHike, .hike, .pendingSubmission, .recording, .walk: false
+        }
     }
 
     // Spelled out rather than synthesized, because the compiler cannot see
@@ -105,6 +119,11 @@ enum SheetRoute: Hashable {
         case (.recording, .recording): true
         case let (.walk(left), .walk(right)): left.persistentModelID == right.persistentModelID
         case let (.communityHike(left), .communityHike(right)): left.id == right.id
+        // The listing and the page, and deliberately not the photographs: the
+        // array is the one the strip was showing when it was tapped, and two
+        // pushes of the same picture of the same hike are the same screen.
+        case let (.communityPhoto(left, _, leftIndex), .communityPhoto(right, _, rightIndex)):
+            left.id == right.id && leftIndex == rightIndex
         case let (.pendingSubmission(left), .pendingSubmission(right)): left.id == right.id
         default: false
         }
@@ -130,6 +149,11 @@ enum SheetRoute: Hashable {
             // of a listing is a snapshot of a record a reviewer can edit, and
             // two pushes of the same hike a minute apart are the same screen.
             hasher.combine(listing.id)
+        case let .communityPhoto(listing, _, index):
+            hasher.combine(6)
+            // The two things `==` compares, for the reason it gives.
+            hasher.combine(listing.id)
+            hasher.combine(index)
         case let .pendingSubmission(pending):
             hasher.combine(5)
             // The notice's record name, for the reason above: the fields

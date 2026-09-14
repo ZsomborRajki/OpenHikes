@@ -866,6 +866,9 @@ struct ImportSelectionGate {
         // terms as the photo viewer.
         case .some(.walk(let walk)): .hike(walk.hikeID)
         case .some(.communityHike(let listing)): .communityHike(listing.id)
+        // A shared hike's gallery is that preview's screen one push further
+        // in, on the same terms the photo viewer is the hike's.
+        case .some(.communityPhoto(let listing, _, _)): .communityHike(listing.id)
         case .some(.pendingSubmission(let pending)): .pendingSubmission(pending.id)
         }
     }

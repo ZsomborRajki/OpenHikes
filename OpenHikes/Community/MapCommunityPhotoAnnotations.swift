@@ -87,11 +87,16 @@ final class CommunityPhotoMapAnnotation: NSObject, MKAnnotation {
 ///
 /// A plain view rather than a control, which is the one real difference from
 /// ``PhotoCalloutPreview``: that one opens the hiker's gallery at the photo it
-/// is showing, and there is no gallery to open here. These pictures exist for
-/// as long as the sheet in front of this map, the strip on that sheet is where
-/// they are looked at properly, and a tap that opened a full-screen viewer
-/// over a preview would be a third screen deep into a hike nobody has decided
-/// to keep yet.
+/// is showing, and this one opens nothing.
+///
+/// There *is* a gallery to open now — ``CommunityPhotoViewer``, reached from
+/// the strip on the sheet in front of this map — so this is a deliberate
+/// asymmetry rather than an absence. The strip is where a hike's photographs
+/// are listed in order and is the thing a hiker is reading when they want to
+/// see one properly; this pin's whole job is to answer *where*, and a tap that
+/// opened a full-screen viewer over a preview would be a third screen deep
+/// into a hike nobody has decided to keep yet. Revisit it as a change to what
+/// a map callout is for, not as a gap left by the viewer.
 final class CommunityPhotoCalloutPreview: UIView {
     /// The same 4:3 box ``PhotoCalloutPreview`` uses, for the same reason: wide
     /// enough to read as a photograph, narrow enough that MapKit's callout

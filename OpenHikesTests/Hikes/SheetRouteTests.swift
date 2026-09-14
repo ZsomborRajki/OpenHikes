@@ -119,14 +119,58 @@ struct SheetRouteTests {
         #expect(SheetRoute.recording.shows(hikeID: hike.id) == false)
     }
 
-    @Test("only the photo viewer asks for the whole sheet")
+    /// Both galleries, and whose photographs they are showing changes
+    /// nothing: a picture in the medium detent is a stamp either way.
+    @Test("only a photo viewer asks for the whole sheet")
     func onlyPhotoWantsFullHeight() throws {
         let context = try Fixture.modelContext()
         let hike = Fixture.hike(in: context)
+        let listing = CommunityListing.stub()
 
         #expect(SheetRoute.photo(hike, UUID()).prefersFullHeight)
+        #expect(SheetRoute.communityPhoto(listing, [], 0).prefersFullHeight)
         #expect(SheetRoute.hike(hike).prefersFullHeight == false)
+        #expect(SheetRoute.communityHike(listing).prefersFullHeight == false)
         #expect(SheetRoute.recording.prefersFullHeight == false)
+    }
+
+    /// A shared hike is not in the library, so deleting a hike cannot pop the
+    /// gallery of one — the same answer ``SheetRoute/communityHike(_:)``
+    /// gives, and for the same reason.
+    @Test("a shared hike's gallery is nobody's hike screen")
+    func communityPhotoShowsNoHike() throws {
+        let context = try Fixture.modelContext()
+        let hike = Fixture.hike(in: context)
+        let route = SheetRoute.communityPhoto(.stub(), [], 0)
+
+        #expect(route.shows(hikeID: hike.id) == false)
+    }
+
+    /// Identity is the listing and the page. The photographs travelling beside
+    /// them are the strip as it was when it was tapped, and two pushes of the
+    /// same picture of the same hike are the same screen — which is what lets
+    /// ``SheetPresentation`` key a retained selection on the route.
+    @Test("a shared hike's gallery is identified by its hike and its page")
+    func communityPhotoIdentity() {
+        let listing = CommunityListing.stub()
+        let other = CommunityListing.stub(id: "ridge", submissionID: "submission-2")
+        let photos = [Self.galleryPhoto(0), Self.galleryPhoto(1)]
+
+        #expect(SheetRoute.communityPhoto(listing, photos, 1) == .communityPhoto(listing, [], 1))
+        #expect(SheetRoute.communityPhoto(listing, photos, 1) != .communityPhoto(listing, photos, 0))
+        #expect(SheetRoute.communityPhoto(listing, photos, 1) != .communityPhoto(other, photos, 1))
+        #expect(
+            SheetRoute.communityPhoto(listing, photos, 1).hashValue
+                == SheetRoute.communityPhoto(listing, [], 1).hashValue
+        )
+    }
+
+    private static func galleryPhoto(_ index: Int) -> CommunityGalleryPhoto {
+        CommunityGalleryPhoto(
+            index: index,
+            pin: CommunityPhotoPin(capturedAt: .now, coordinate: nil),
+            fileURL: URL(fileURLWithPath: "/tmp/community-preview/photo-\(index).jpeg")
+        )
     }
 }
 
