@@ -390,7 +390,7 @@ private extension CommunityShareSheet {
                 VStack(alignment: .leading, spacing: 4) {
                     Text(reason.title)
                         .font(.callout.weight(.medium))
-                    Text(reason.explanation)
+                    Text(reason.explanation())
                         .font(.footnote)
                         .foregroundStyle(.secondary)
                 }
