@@ -58,7 +58,7 @@ struct CommunityPublishingEligibilityTests {
     func savedWithoutACredit() {
         #expect(Self.of(listingID: "listing-1") == .refused(.savedFromTheCommunity(author: nil)))
         let explanation = CommunityPublishingEligibility.Reason
-            .savedFromTheCommunity(author: nil).explanation
+            .savedFromTheCommunity(author: nil).explanation()
         #expect(explanation.contains("Another hiker"))
     }
 
@@ -104,25 +104,52 @@ struct CommunityPublishingEligibilityTests {
     func refusalsAreActionable(reason: CommunityPublishingEligibility.Reason) {
         #expect(!reason.title.isEmpty)
         #expect(!reason.shortLabel.isEmpty)
-        #expect(reason.explanation.count > reason.title.count)
+        #expect(reason.explanation().count > reason.title.count)
     }
 
     /// The specifics are what make a refusal checkable: a hiker who is told
     /// "too short" and not how short, or "already shared" and not which one,
     /// has been given a verdict rather than a reason.
-    @Test("a refusal names the hike, the author or the distance")
+    @Test("a refusal names the hike and the author")
     func refusalsCarryTheirSpecifics() {
         #expect(
             CommunityPublishingEligibility.Reason
-                .savedFromTheCommunity(author: "Anna").explanation.contains("Anna")
+                .savedFromTheCommunity(author: "Anna").explanation().contains("Anna")
         )
         #expect(
             CommunityPublishingEligibility.Reason
                 .retreads(title: "Thumsee Ridge Traverse")
-                .explanation.contains("Thumsee Ridge Traverse")
+                .explanation()
+                .contains("Thumsee Ridge Traverse")
         )
-        // The floor and the walk, in the same unit the stat grid above it uses.
-        let tooShort = CommunityPublishingEligibility.Reason.tooShort(meters: 300).explanation
-        #expect(tooShort.contains("1 km") || tooShort.contains("0.6 mi"))
+    }
+
+    /// The other specific, and the one that is regional: the floor and the
+    /// walk, in the same unit as the stat grid the hiker just read.
+    ///
+    /// This was half of the test above, asked of `Locale.current` and pinned
+    /// as `"1 km" || "0.6 mi"`. That passes on a metric machine and fails on
+    /// CI, whose simulator is `en_US` and renders the floor as "0.62 mi" —
+    /// which is neither string. `ElevationFormatTests`' two rules apply here
+    /// for the same reason they do there: nothing regional may be asked of
+    /// `Locale.current`, and each figure is pinned whole rather than as
+    /// "contains mi", so a change to the unit, the rounding or the grouping
+    /// separator has to be argued for rather than discovered.
+    ///
+    /// Both figures per region, because the pair is the point: a floor quoted
+    /// in a different unit from the distance it is being compared against is a
+    /// refusal nobody can check.
+    @Test("the floor and the walk are quoted in the reader's own units", arguments: [
+        ("de_DE", "1 km", "300 m"),
+        ("ja_JP", "1 km", "300 m"),
+        ("en_US", "0.62 mi", "1,000 ft"),
+        ("en_GB", "0.62 mi", "350 yd"),
+    ])
+    func theFloorAndTheWalkAreRegional(identifier: String, floor: String, walked: String) {
+        let explanation = CommunityPublishingEligibility.Reason
+            .tooShort(meters: 300)
+            .explanation(locale: Locale(identifier: identifier))
+        #expect(explanation.contains(floor), "\(identifier) drew \"\(explanation)\"")
+        #expect(explanation.contains(walked), "\(identifier) drew \"\(explanation)\"")
     }
 }

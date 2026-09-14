@@ -127,7 +127,15 @@ nonisolated extension CommunityPublishingEligibility.Reason {
     /// somebody else's hike, walking a short loop and walking a trail twice
     /// are all perfectly good things to have done; none of them is a thing to
     /// publish.
-    var explanation: String {
+    ///
+    /// The `locale` parameter is a test seam, as it is on ``HikeFormat/speed(_:locale:)``
+    /// and ``HikeFormat/elevation(_:locale:)`` and for the same reason: the
+    /// distances below are `usage: .road` and therefore regional, so a suite
+    /// that could only ask about the simulator's own region would assert
+    /// whatever the machine happened to be set to. This one did — it pinned
+    /// the floor as "1 km", which is what a metric machine renders and what a
+    /// US runner does not.
+    func explanation(locale: Locale = .autoupdatingCurrent) -> String {
         switch self {
         case .savedFromTheCommunity(let author):
             let who = author.map { "\($0) shared it" } ?? "Another hiker shared it"
@@ -141,8 +149,8 @@ nonisolated extension CommunityPublishingEligibility.Reason {
             // uses and therefore what the hiker just read on the stat grid
             // above. A floor quoted in a different unit from the figure it is
             // being compared against is a refusal nobody can check.
-            let floor = Self.road(CommunityPublishingEligibility.minimumDistanceMeters)
-            let walked = Self.road(meters)
+            let floor = Self.road(CommunityPublishingEligibility.minimumDistanceMeters, locale)
+            let walked = Self.road(meters, locale)
             return """
             Community hikes start at \(floor); this one is \(walked). Short walks stay \
             in your own list, where they're still yours to keep, export and sync.
@@ -156,9 +164,11 @@ nonisolated extension CommunityPublishingEligibility.Reason {
         }
     }
 
-    private static func road(_ meters: Double) -> String {
+    private static func road(_ meters: Double, _ locale: Locale) -> String {
         Measurement(value: meters, unit: UnitLength.meters)
-            .formatted(.measurement(width: .abbreviated, usage: .road))
+            .formatted(
+                .measurement(width: .abbreviated, usage: .road).locale(locale)
+            )
     }
 
     /// Read out after the glyph on the hike's own screen, where there is no

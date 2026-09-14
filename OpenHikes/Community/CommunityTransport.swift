@@ -87,7 +87,7 @@ nonisolated enum CommunityFailure: LocalizedError, Equatable, Sendable {
         case .unreachable:
             "Check your connection and try again."
         case .notEligible(let reason):
-            reason.explanation
+            reason.explanation()
         case .nothingToShare:
             "Record or import a route first."
         case .noLongerAvailable:
