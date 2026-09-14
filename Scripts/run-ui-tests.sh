@@ -10,9 +10,7 @@ source "$repository_root/Scripts/lib/simulator.sh"
 project="$repository_root/OpenHikes.xcodeproj"
 scheme="OpenHikesUI"
 bundle="OpenHikesUITests"
-# Every functional class in the bundle. PerformanceUITests is deliberately
-# absent: it lives here too, but it is measurement rather than automation and
-# is run through Scripts/run-performance-tests.sh.
+# Every functional class in the bundle.
 suites=(
   OpenHikesUITests
   OrientationUITests
@@ -111,9 +109,6 @@ and pass when the machine is quiet — see the comment on that list, including
 why a test that fails serially must not be added to it.
 Pinned now: ${serial_tests[*]}
 
-PerformanceUITests lives in the same bundle but is measurement rather than
-automation; run it through Scripts/run-performance-tests.sh instead.
-
 Options:
   --device <name|udid>    Simulator name or UDID (default: $device)
   --suite <name>          Test class to run (default: $default_suite)
@@ -160,8 +155,7 @@ list_tests() {
         # it: a suite that outgrows the type-body limit is split into
         # `Suite+Something.swift` extensions, and reading only `$name.swift`
         # made --list under-report and --test reject the name of a test that
-        # exists. Scripts/run-performance-tests.sh reads its own suite the same
-        # way, for the same reason.
+        # exists.
         cat "$repository_root/$bundle/$name"*.swift \
             | sed -nE "s/^[[:space:]]*func (test[A-Za-z0-9_]+)\(\).*/$name\/\1/p" \
             | sort -u
@@ -342,9 +336,8 @@ if ! device_udid="$(resolve_simulator_udid "$device")"; then
     exit 2
 fi
 
-# Scoped to the named classes rather than to the bundle, because the bundle
-# also holds PerformanceUITests and the OpenHikesUI scheme autocreates its plan
-# (so, unlike OpenHikes.xctestplan, it does not skip it).
+# Scoped to the named classes rather than to the bundle, so a class that is in
+# the bundle but not in the list above is never picked up by accident.
 only_testing=()
 skip_testing=()
 # What the serial pass will run, filled in below. Empty for every invocation

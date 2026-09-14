@@ -13,9 +13,9 @@
 //     optional, and every one of them has to answer `notReported` for `nil`
 //     rather than formatting a zero — because "the GPS never dropped to ten
 //     metres" and "this payload carried no location metrics" are opposite
-//     findings, and "0s" is what makes them indistinguishable. It is also the
-//     evidence for the question `PERFORMANCE.md` leaves open under *Blind
-//     spots*, so losing it at the last step loses it entirely.
+//     findings, and "0s" is what makes them indistinguishable. It is the only
+//     evidence for whether the conserving GPS profile is ever reached on a
+//     real walk, so losing it at the last step loses it entirely.
 //  2. **A histogram statistic is an upper bound.** `HistogramSummary` cannot
 //     produce a true median, so every statistic drawn from one keeps its "≤".
 //

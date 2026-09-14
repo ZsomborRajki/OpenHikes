@@ -28,7 +28,6 @@ nonisolated enum AppLaunchEnvironment {
         /// `nil` unless a launch asked for a stand-in public database — see
         /// ``AppLaunchEnvironment/communityScenarioName``.
         let communityScenarioName: String?
-        let performanceLogScenario: String?
         let simulatesOffline: Bool
         let seededPhotoCount: Int
         /// `nil` unless a launch asked for a walk fixture — see
@@ -62,7 +61,6 @@ nonisolated enum AppLaunchEnvironment {
             importedGPXFixtureName = nil
             trailGraphFixtureName = nil
             communityScenarioName = nil
-            performanceLogScenario = nil
             simulatesOffline = false
             seededPhotoCount = 0
             seededWalkFixtureName = nil
@@ -81,7 +79,6 @@ nonisolated enum AppLaunchEnvironment {
         private static let importGPXPrefix = "--ui-test-import-gpx="
         private static let trailGraphPrefix = "--ui-test-trail-graph="
         private static let communityPrefix = "--ui-test-community="
-        private static let performanceLogPrefix = "--ui-test-performance-log="
         private static let offlineArgument = "--ui-test-offline"
         private static let seedPhotosPrefix = "--ui-test-seed-photos="
         private static let seedWalksPrefix = "--ui-test-seed-walks="
@@ -136,11 +133,6 @@ nonisolated enum AppLaunchEnvironment {
             communityScenarioName = Self.fixtureName(
                 in: arguments,
                 prefix: Self.communityPrefix,
-                isUITesting: isUITesting
-            )
-            performanceLogScenario = Self.fixtureName(
-                in: arguments,
-                prefix: Self.performanceLogPrefix,
                 isUITesting: isUITesting
             )
             seededPhotoCount = Self.count(
@@ -298,13 +290,6 @@ nonisolated enum AppLaunchEnvironment {
     /// all — and this is the single, explicit exception a scenario has to
     /// spell out by name. See ``SeededCommunityTransport``.
     static let communityScenarioName = configuration.communityScenarioName
-
-    /// Name of the scenario whose render marks, main-thread stalls and
-    /// resource samples this launch should write to a file — see
-    /// ``PerformanceLog``. `nil` for every launch that is not being measured,
-    /// which is what keeps the diagnostics off an ordinary run.
-    static let performanceLogScenario =
-        configuration.performanceLogScenario
 
     /// How many synthetic photos to attach to the hike a launch imports.
     ///

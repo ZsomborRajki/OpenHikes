@@ -285,20 +285,19 @@ final class RecordingTrace {
     /// prevents it. Only the provisional remainder is compared, because the
     /// prefix cannot have changed without `stableRevision` saying so.
     private func rebuildTail() -> Bool {
-        let changed = RenderSignpost.interval("RecordingTailRebuilt") {
-            guard tailStableRevision == stableRevision else {
-                tail = Array(stableTail)
-                tailStableCount = tail.count
-                tailStableRevision = stableRevision
-                appendProvisionalToTail()
-                return true
-            }
-
+        let changed: Bool
+        if tailStableRevision != stableRevision {
+            tail = Array(stableTail)
+            tailStableCount = tail.count
+            tailStableRevision = stableRevision
+            appendProvisionalToTail()
+            changed = true
+        } else {
             previousProvisional.removeAll(keepingCapacity: true)
             previousProvisional.append(contentsOf: tail[tailStableCount...])
             tail.removeLast(tail.count - tailStableCount)
             appendProvisionalToTail()
-            return !Self.isSame(previousProvisional, tail[tailStableCount...])
+            changed = !Self.isSame(previousProvisional, tail[tailStableCount...])
         }
         if changed {
             tailRevision &+= 1

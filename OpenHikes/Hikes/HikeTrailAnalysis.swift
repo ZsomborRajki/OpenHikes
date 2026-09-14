@@ -46,8 +46,6 @@ nonisolated enum HikeTrailAnalysis {
         guard route.count > 1 else { return .empty }
         // Timed so an open that waits on Overpass can be told apart from one
         // that measured a graph already on disk.
-        let state = RenderSignpost.beginInterval("HikeTrailAnalysis")
-        defer { RenderSignpost.endInterval("HikeTrailAnalysis", state) }
 
         guard let graph = await graph(covering: route, provider: provider) else { return .empty }
         let surface = try? await TrailBreakdownAnalyzer.breakdown(

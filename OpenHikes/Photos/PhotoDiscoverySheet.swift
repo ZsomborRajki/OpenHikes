@@ -34,11 +34,7 @@ struct PhotoDiscoverySheet: View {
         // A tick per ticked box means the selection is an input of the *sheet*
         // rather than of the cell that owns it, which rebuilds every visible
         // tile — and every tile's accessibility label — for one tap.
-        RenderSignpost.mark(
-            "PhotoDiscoveryBody",
-            "\(controller.matches.count) matches"
-        )
-        return NavigationStack {
+        NavigationStack {
             content
                 .navigationTitle("Photos of This Hike")
                 #if os(iOS)

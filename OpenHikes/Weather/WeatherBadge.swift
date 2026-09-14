@@ -92,8 +92,7 @@ struct WeatherBadge: View {
     @State private var isStale = false
 
     var body: some View {
-        RenderSignpost.mark("WeatherBadgeBody")
-        return Button(action: onTap) {
+        Button(action: onTap) {
             HStack(spacing: Self.contentSpacing) {
                 if let name = state.badgeName {
                     Text(name)

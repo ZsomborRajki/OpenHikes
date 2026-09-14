@@ -50,8 +50,7 @@ struct RecordingView: View {
     }
 
     var body: some View {
-        RenderSignpost.mark("RecordingBody")
-        return ScrollView {
+        ScrollView {
             VStack(alignment: .leading, spacing: 20) {
                 RecordingHeader(recorder: recorder)
                 RecordingRecoveryNotice(recorder: recorder)
@@ -141,8 +140,7 @@ private struct RecordingPhotoPins: View {
     var onOpen: (HikePhoto) -> Void
 
     var body: some View {
-        RenderSignpost.mark("RecordingPhotoPinsBody", "\(hike.photos.count) photos")
-        return Color.clear
+        Color.clear
             .frame(width: 0, height: 0)
             .photoMapPins(controller, photos: hike.orderedPhotos) { photoID in
                 guard let photo = hike.photos.first(where: { $0.id == photoID }) else { return }
@@ -329,8 +327,7 @@ private struct RecordingClock: View {
     let readout: String
 
     var body: some View {
-        RenderSignpost.mark("RecordingClockTick")
-        return Text(readout)
+        Text(readout)
             .font(.headline.monospacedDigit())
             .foregroundStyle(.secondary)
     }

@@ -55,20 +55,15 @@ nonisolated enum MainThreadWatchdog {
         /// them, because a report of "a turn happened" that threw away what
         /// the turn found would be a strange thing to hand anyone, and this is
         /// the sole channel through which the stall figure is visible at all —
-        /// the log is write-only from inside the process, and
-        /// `PerformanceLog.shared` is `nil` outside a performance run.
+        /// the log is write-only from inside the process.
         let stall: Duration?
     }
 
     /// An extra sink for every cycle, alongside the log.
     ///
     /// This is measurement infrastructure, and a watchdog that has quietly
-    /// stopped turning scores perfectly against every budget in the
-    /// performance suite — so that it is running at all has to be checkable,
-    /// and it is not observable through either of the sinks this otherwise
-    /// writes to: `Logger` is write-only from inside the process, and
-    /// `PerformanceLog.shared` is a `static let` that is `nil` outside a
-    /// `--ui-test-performance-log` launch.
+    /// stopped turning reports no stalls at all — so that it is running has to
+    /// be checkable, and `Logger` is write-only from inside the process.
     ///
     /// Read from inside the loop on every cycle rather than captured once at
     /// `start()`, because starting is once-only and the app has already done
@@ -136,11 +131,6 @@ nonisolated enum MainThreadWatchdog {
                     }
                     let elapsed = ContinuousClock.now - sentAt
                     stall = elapsed
-                    PerformanceLog.shared?.record(
-                        kind: .stall,
-                        name: "MainThread",
-                        value: milliseconds(elapsed)
-                    )
                     let stallMsg = "Main thread unresponsive for"
                         + " \(elapsed.formatted(.units(allowed: [.seconds], fractionalPart: .show(length: 2))))"
                         + " — something synchronous (disk I/O, a big collection op,"
@@ -165,8 +155,7 @@ nonisolated enum MainThreadWatchdog {
         // additionally buys is the one thing a watchdog cannot afford: it is
         // the band the scheduler is entitled to defer indefinitely, so under
         // load the loop stops turning, and a watchdog that has stopped
-        // turning reports no stalls while scoring perfectly against every
-        // budget in `PerformanceUITests`. Measured by running
+        // turning reports no stalls at all. Measured by running
         // `MainThreadWatchdogTests` against a machine held at load average
         // 124–177: `.utility` finished the suite in 4.1 seconds, `.background`
         // in 58.4 — a fourteenfold difference, and 1.6 seconds inside the
@@ -177,11 +166,5 @@ nonisolated enum MainThreadWatchdog {
         thread.start()
     }
 
-    private static func milliseconds(_ duration: Duration) -> Double {
-        let attosecondsPerMillisecond = 1e15
-        let millisecondsPerSecond = 1000.0
-        return Double(duration.components.seconds) * millisecondsPerSecond
-            + Double(duration.components.attoseconds) / attosecondsPerMillisecond
-    }
 }
 #endif

@@ -228,7 +228,6 @@ struct OpenHikesView: View {
         // than once per significant-change delivery. Compare against the
         // `MapUpdateCalled` mark in MapView and `MapCentered` in
         // MapCoordinator.
-        RenderSignpost.mark("OpenHikesViewBody")
         // The landscape shape of the app's primary surface, beside the map
         // rather than over it — see ``MapSidePanel``. Nothing about it is
         // modal: the map keeps taking touches, and there is nothing to dismiss.
@@ -238,7 +237,7 @@ struct OpenHikesView: View {
         // panel under the Dynamic Island — which in landscape sits on the very
         // edge the panel is against. Here the map ignores the safe area on its
         // own and the panel is laid out inside it.
-        return ZStack(alignment: .leading) {
+        ZStack(alignment: .leading) {
             mapSurface
             if usesSidePanel {
                 MapSidePanel { mapSheet() }
@@ -297,14 +296,7 @@ struct OpenHikesView: View {
         )
             .equatable()
             .accessibilityIdentifier("trail-map")
-            // Reads nothing and draws nothing outside a measured launch; see
-            // ``PerformanceCounterProbe``.
-            .overlay(alignment: .topTrailing) {
-                #if DEBUG
-                PerformanceCounterProbe()
-                #endif
-            }
-            // The map and diagnostic probe fill the window. The weather
+            // The map fills the window. The weather
             // overlay belongs to the safe-area container above so its leading
             // edge agrees with the panel and the map's attribution guide.
             .ignoresSafeArea()
@@ -396,9 +388,9 @@ struct OpenHikesView: View {
             //
             // Written into the flag rather than filtered through a `Binding`
             // built here, because such a binding is a new one on every pass of
-            // this body and re-runs the sheet's content with it — measured, in
-            // the report `Scripts/run-performance-tests.sh` writes, as one or
-            // two extra `MapSheetBody` evaluations per scenario. No `initial:`
+            // this body and re-runs the sheet's content with it — measured as
+            // one or two extra `MapSheetBody` evaluations per scenario. No
+            // `initial:`
             // for the same reason: a portrait launch, which is nearly all of
             // them, then writes nothing at all. A launch straight into
             // landscape is a real change of ``SheetPresentation/layout`` and

@@ -117,16 +117,6 @@ nonisolated enum RecordingEnergyPolicy {
         /// ``RecordingDistanceAccumulator/isStationary`` — a sustained absence
         /// of net displacement, not a single slow fix.
         var isStationary = false
-
-        init(
-            isLowPowerModeEnabled: Bool = false,
-            thermalState: ProcessInfo.ThermalState = .nominal,
-            isStationary: Bool = false
-        ) {
-            self.isLowPowerModeEnabled = isLowPowerModeEnabled
-            self.thermalState = thermalState
-            self.isStationary = isStationary
-        }
     }
 
     /// `.fair` is deliberately not included. A phone in a jacket pocket in

@@ -108,7 +108,6 @@ struct ElevationChartView: View, Equatable {
         // the hiker is moving. That rate is the reference every other body's
         // rate is judged against: anything else moving at it is following
         // location it was supposed to be insulated from.
-        RenderSignpost.mark("ElevationChartBody", "\(profile.samples.count) samples")
         let domain = elevationDomain(profile, plotWidth: plotWidth)
         let trackerSample = profile.sample(atDistance: tracker.trackerDistance)
         let liveSample = tracker.liveTrackerDistance.flatMap { profile.sample(atDistance: $0) }
@@ -212,7 +211,7 @@ struct ElevationChartView: View, Equatable {
     /// That cost is paid on every pass of this body, and the app does not
     /// control how often that is: going to the background, UIKit lays the
     /// hosting view out twice for the app-switcher snapshot, and both passes
-    /// go through here. See P4 in `PERFORMANCE.md`.
+    /// go through here.
     ///
     /// Drawing order is unchanged. Swift Charts groups marks into series
     /// before it draws, so "every area, then every line" and "each sample's

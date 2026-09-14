@@ -369,7 +369,6 @@ extension MapView {
             guard let coordinate, !hasHandledFirstFix else { return }
             hasHandledFirstFix = true
             guard routeID == nil else { return }
-            RenderSignpost.mark("MapCentered")
             let region = MKCoordinateRegion(
                 center: coordinate,
                 latitudinalMeters: Self.initialCenterMeters,
@@ -427,7 +426,6 @@ extension MapView {
             routeTint = tint
             routeWidth = width
             routePattern = pattern
-            RenderSignpost.mark("MapRouteRestyled")
             if let renderer = routeRenderer {
                 applyStyle(to: renderer)
                 renderer.setNeedsDisplay()
@@ -573,10 +571,6 @@ private extension MapView.Coordinator {
         _ trace: RecordingTrace,
         on mapView: MKMapView
     ) {
-        RenderSignpost.mark(
-            "MapRecordingTraceApplied",
-            "chunks=\(trace.committedChunks.count) tail=\(trace.tail.count)"
-        )
         if recordingTraceGeneration != trace.generation {
             mapView.removeOverlays(recordingChunkOverlays)
             if let recordingTailOverlay {

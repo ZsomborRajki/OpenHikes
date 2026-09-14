@@ -5,15 +5,12 @@
 //  The subset of a MetricKit payload this app has an actual question about,
 //  reduced to plain values.
 //
-//  Everything else in `Diagnostics/` measures a *simulator*, in *Debug*, on a
-//  *synthetic* route, before a change is merged. That is the right shape for a
-//  budget you want to fail a pull request, and it is the wrong shape — in
-//  fact it is structurally incapable — for two of the gaps `PERFORMANCE.md`
-//  lists under *Blind spots*:
+//  A Simulator, in Debug, on a synthetic route cannot answer either of these,
+//  and no amount of care in the measuring makes it able to:
 //
-//  * A real hike-length recording's energy. Every energy number that harness
-//    produces extrapolates from a three-fix scenario, and the walk that would
-//    settle whether the per-fix cost is flat has not been taken.
+//  * A real hike-length recording's energy. A three-fix scenario can only
+//    extrapolate, and whether the per-fix cost stays flat over six hours is
+//    exactly what extrapolation cannot say.
 //  * Whether `RecordingEnergyPolicy`'s conserving profile is ever reached. A
 //    simulator's thermal state never leaves `.nominal`, so that profile has
 //    never been exercised outside unit tests.
@@ -153,11 +150,10 @@ nonisolated struct LocationAccuracyBreakdown: Codable, Sendable, Equatable {
 
 /// Why the process went away.
 ///
-/// `PERFORMANCE.md` spends a whole section establishing that the alarming
-/// footprint peak was the automation rather than the app, and closed on the
-/// worry it could not settle: a backgrounded recording that grows toward that
-/// figure is a jetsam candidate, and a recording that gets killed loses the
-/// hike.
+/// The alarming footprint peak measured under UI automation was the
+/// automation rather than the app, which left one worry no Simulator can
+/// settle: a backgrounded recording that grows toward that figure is a jetsam
+/// candidate, and a recording that gets killed loses the hike.
 /// ``backgroundMemoryLimitExits`` and ``backgroundMemoryPressureExits`` settle
 /// it with the only evidence that counts — how often it happened to a real
 /// hiker mid-hike.
@@ -217,10 +213,8 @@ nonisolated struct ExitBreakdown: Codable, Sendable, Equatable {
 ///
 /// The interesting columns are the three the app cannot measure for itself at
 /// all: CPU time, average footprint and logical writes *attributed to a named
-/// span*. `PerformanceLog` samples CPU process-wide at 1 Hz, which cannot say
-/// which feature spent it — the per-scenario CPU table in `PERFORMANCE.md`
-/// carries a warning to exactly that effect. See ``FieldSignpost`` for why
-/// only a handful of spans are emitted this way.
+/// span*. A process-wide CPU sample cannot say which feature spent it. See
+/// ``FieldSignpost`` for why only a handful of spans are emitted this way.
 nonisolated struct SignpostDigest: Codable, Sendable, Equatable, Identifiable {
     var name: String
     var category: String
@@ -263,8 +257,8 @@ nonisolated struct SignpostDigest: Codable, Sendable, Equatable, Identifiable {
 
 /// One MetricKit metric payload, reduced to what this app asks of it.
 ///
-/// Every field maps to an open question in `PERFORMANCE.md` or to a tracked issue.
-/// Nothing is collected because MetricKit happens to offer it.
+/// Every field answers a question somebody actually asked. Nothing is
+/// collected because MetricKit happens to offer it.
 nonisolated struct FieldMetricsDigest: Codable, Sendable, Equatable {
     // Energy — the question the app exists for.
     var foregroundSeconds: Double?
@@ -277,7 +271,7 @@ nonisolated struct FieldMetricsDigest: Codable, Sendable, Equatable {
     var gpuSeconds: Double?
     var locationAccuracy: LocationAccuracyBreakdown?
 
-    // Launch — `PERFORMANCE.md`'s launch finding.
+    // Launch.
     var timeToFirstDraw: HistogramSummary?
     var optimizedTimeToFirstDraw: HistogramSummary?
     /// The span `FieldSignpost` brackets with `extendLaunchMeasurement`: first
@@ -377,9 +371,9 @@ nonisolated struct FieldMetricsDigest: Codable, Sendable, Equatable {
     }
 
     /// The share of the app's lifetime spent in a pocket with the GPS on.
-    /// `PERFORMANCE.md` asserts the backgrounded per-fix cost is the one that
-    /// decides whether the battery lasts "since that is how the app is used
-    /// for all but a few minutes of a walk" — this is that claim, measured.
+    /// The backgrounded per-fix cost is the one that decides whether the
+    /// battery lasts, since that is how the app is used for all but a few
+    /// minutes of a walk — this is that claim, measured.
     ///
     /// Clamped to 1.0, and the clamp is load-bearing rather than cosmetic.
     /// MetricKit accounts `cumulativeBackgroundLocationTime` on a different

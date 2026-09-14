@@ -20,7 +20,7 @@ That is local-first with one deliberate exception. There is no OpenHikes account
 
 ## Requirements
 
-- Xcode 26.5 or later, and iOS 26.0.
+- Xcode 27.0 or later, and iOS 27.0.
 - An Apple development team that can sign the WeatherKit entitlement, the shared App Group, the iCloud container and the push entitlement.
 - iPhone only. Every target sets `TARGETED_DEVICE_FAMILY = 1`.
 
@@ -60,16 +60,16 @@ Scripts/simulate-hike.sh stop           # stop and clear location playback
 
 ```sh
 # Boot the simulator first — the test commands below need it awake
-xcrun simctl boot "iPhone 17 Pro" || true
-xcrun simctl bootstatus "iPhone 17 Pro" -b
+xcrun simctl boot "iPhone 17" || true
+xcrun simctl bootstatus "iPhone 17" -b
 
 # Build the app and its embedded widget
 xcodebuild build -project OpenHikes.xcodeproj -scheme OpenHikes \
-  -destination 'platform=iOS Simulator,name=iPhone 17 Pro'
+  -destination 'platform=iOS Simulator,name=iPhone 17'
 
 # Unit and integration tests, app and widget
 xcodebuild test -project OpenHikes.xcodeproj -scheme OpenHikes \
-  -destination 'platform=iOS Simulator,name=iPhone 17 Pro' \
+  -destination 'platform=iOS Simulator,name=iPhone 17' \
   -only-testing:OpenHikesTests -only-testing:OpenWidgetTests
 
 # The standalone shared-package suite
@@ -78,9 +78,6 @@ swift test --package-path OpenHikesShared
 # Simulator UI automation, across three simulator clones; --serial for one,
 # and --list shows the available tests
 Scripts/run-ui-tests.sh --all
-
-# Render, main-thread and resource measurement; writes a markdown report
-Scripts/run-performance-tests.sh
 
 # Strict SwiftLint, the same one CI runs; --fix applies what it can correct
 Scripts/lint.sh
@@ -92,13 +89,12 @@ Unit and integration tests use Swift Testing; `OpenHikesUITests` uses XCUITest, 
 
 `brew install xcbeautify periphery xcode-build-server` installs the optional tooling. None of it is required: each tool is used if present and skipped if not. `periphery` has to be the version in `.periphery-version` or newer — run it through `Scripts/periphery.sh`, which checks that first, because an older Periphery reads none of `.periphery.yml` and reports a clean scan anyway. `xcode-build-server` is per-machine — run `xcode-build-server config -project OpenHikes.xcodeproj -scheme OpenHikes` locally, and again after adding or renaming a target.
 
-CI runs strict SwiftLint, the shared package suite in both debug and release, the app and widget unit tests with a coverage floor, warning-free debug and release builds, an unsigned device archive, the concurrency suites under Thread Sanitizer, and both accessibility UI classes. CodeQL and a dependency review run beside it. The functional UI automation and the performance suite stay out, because both lean on real gestures and timing-sensitive waits that a shared runner makes slow and flaky — run them locally before a change that touches recording, the map or render isolation.
+CI runs strict SwiftLint, the shared package suite in both debug and release, the app and widget unit tests with a coverage floor, warning-free debug and release builds, an unsigned device archive, the concurrency suites under Thread Sanitizer, and both accessibility UI classes. CodeQL and a dependency review run beside it. The functional UI automation stays out, because it leans on real gestures and timing-sensitive waits that a shared runner makes slow and flaky — run it locally before a change that touches recording, the map or render isolation.
 
 ## Documentation
 
 - [`AGENTS.md`](AGENTS.md) and [`.github/copilot-instructions.md`](.github/copilot-instructions.md) — the architecture, the conventions, the energy policies, and the decisions already settled.
 - [`CONTRIBUTING.md`](CONTRIBUTING.md) — the short version for a first change.
-- [`PERFORMANCE.md`](PERFORMANCE.md) — what the app costs in frames and in battery, and how that was measured.
 - [`SECURITY.md`](SECURITY.md) — how to report a vulnerability privately.
 - [Issues](https://github.com/ZsomborRajki/OpenHikes/issues) — the open work: bugs, missing features, and product decisions that are still open.
 

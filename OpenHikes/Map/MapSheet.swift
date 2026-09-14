@@ -86,8 +86,7 @@ struct MapSheet: View {
         // and a push two screens deep, re-evaluating the search field and the
         // navigation stack. The three flags below are coarse on purpose — see
         // ``SheetPresentation``.
-        RenderSignpost.mark("MapSheetBody")
-        return NavigationStack(path: presentation.pathBinding) {
+        NavigationStack(path: presentation.pathBinding) {
             VStack(spacing: 0) {
                 // One container for the two pieces of chrome side by side:
                 // they sample the map behind them once between them, and the

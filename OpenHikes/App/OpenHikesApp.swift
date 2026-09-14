@@ -27,12 +27,9 @@ struct OpenHikesApp: App {
             LaunchMeasurement.begin()
         }
         #if DEBUG
-        // Ordinary UI automation keeps the watchdog off — its ping loop is one
-        // more thread competing with the runner. A *measured* launch is the
-        // exception: a stall it never reported is a stall the report cannot
-        // contain.
-        if !AppLaunchEnvironment.isUITesting
-            || AppLaunchEnvironment.performanceLogScenario != nil {
+        // UI automation keeps the watchdog off: its ping loop is one more
+        // thread competing with the runner.
+        if !AppLaunchEnvironment.isUITesting {
             MainThreadWatchdog.start()
         }
         #endif
@@ -55,9 +52,7 @@ struct OpenHikesApp: App {
         // has to already be re-armed and delegated by the time this returns,
         // or the relaunch's one pending location event has nothing to deliver
         // to.
-        let appModel = RenderSignpost.interval("AppModelInit") {
-            OpenHikesModel()
-        }
+        let appModel = OpenHikesModel()
         _model = State(initialValue: appModel)
 
         // The system may launch this process purely to run an App Intent, in

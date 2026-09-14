@@ -202,7 +202,6 @@ extension HikeRecorder {
         // between the first and the last is radio energy spent on fixes the
         // app was always going to discard, and the distance filter is what
         // closes it.
-        RenderSignpost.mark("RecordingFixReceived")
         if LocationFixPolicy.accepts(
             location,
             maximumAge: LocationFixPolicy.foregroundMaximumAge,
@@ -218,7 +217,6 @@ extension HikeRecorder {
             motionState: latestMotionState,
             now: clock()
         ) else {
-            RenderSignpost.mark("RecordingFixRejected")
             return
         }
         var point = RecordingPoint(location: location, flags: consumeFlagsForNextPoint())
@@ -274,7 +272,6 @@ extension HikeRecorder {
         if phase != .recording {
             phase = .recording
         }
-        RenderSignpost.mark("LiveFixAccepted")
         // After the accumulator has seen this point, so a hiker who has just
         // stopped moving gets the wider distance filter on the strength of the
         // fix that proved it rather than one fix later.
@@ -512,14 +509,6 @@ extension HikeRecorder: CLLocationManagerDelegate {
     ) {
         let ordered = locations.sorted { $0.timestamp < $1.timestamp }
         // The head of the *recorder's* funnel, marked here rather than left to
-        // `LocationManager`: that one counts the map's manager, and this is a
-        // second `CLLocationManager` with its own duty cycle — the one that
-        // keeps running with the screen off, which is the expensive one. One
-        // mark per fix in the batch, so it compares directly against the
-        // `RecordingFixReceived` below it.
-        for _ in ordered {
-            RenderSignpost.mark("RecordingFixDelivered")
-        }
         // Synchronous on the main actor rather than a task per delivery. The
         // sort above only orders a batch *within itself*; it is `onMainActor`
         // that keeps two consecutive batches from arriving out of order and

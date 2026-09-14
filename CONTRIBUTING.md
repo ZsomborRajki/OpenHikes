@@ -9,8 +9,6 @@ points at it rather than repeating it.
 - [`.github/copilot-instructions.md`](.github/copilot-instructions.md) — the
   architecture rules, the conventions, the energy policies, and the decisions
   that have already been settled and should not be re-opened.
-- [`PERFORMANCE.md`](PERFORMANCE.md) — what the app costs and how that was
-  measured.
 - [GitHub issues](https://github.com/ZsomborRajki/OpenHikes/issues) — the open
   work: bugs, missing features, and product decisions that are still open. A
   good place to find something worth doing.
@@ -28,7 +26,7 @@ a precedent for the next one.
 ## Setting up
 
 See [Requirements](README.md#requirements) and [Setup](README.md#setup). In
-short: Xcode 26.5 or later, iOS 26.0, and an Apple development team that can
+short: Xcode 27.0 or later, iOS 27.0, and an Apple development team that can
 sign the WeatherKit entitlement, the App Group, the iCloud container and push.
 
 `OpenHikes/Secrets.plist` holds the optional Stadia and Thunderforest keys. It
@@ -50,7 +48,7 @@ Scripts/lint.sh
 # this the run CI gates on: the scheme's test plan carries OpenHikesUITests
 # too, and without it this becomes thirteen extra minutes of UI automation.
 xcodebuild test -project OpenHikes.xcodeproj -scheme OpenHikes \
-  -destination 'platform=iOS Simulator,name=iPhone 17 Pro' \
+  -destination 'platform=iOS Simulator,name=iPhone 17' \
   -only-testing:OpenHikesTests -only-testing:OpenWidgetTests
 
 # The standalone shared package
@@ -66,23 +64,15 @@ and none of the commands above touches them:
 ```sh
 # The shell scripts, run for real against stubbed xcrun/xcodebuild/swiftlint
 Scripts/run-script-tests.sh
-
-# The Python — the report generator and the two CI gate programs
-ruff check Scripts
-python3 -m unittest discover --start-directory Scripts/tests
 ```
 
-`ruff` is pinned in `.ruff-version`; install that version, the way CI does, so
-a clean run here is a clean run there.
-
-Two suites stay out of CI because a shared runner makes real gestures and
-timing-sensitive waits slow and unreliable. Run them locally when you touch
-recording, the map, or anything on the render path:
+The functional UI automation stays out of CI because a shared runner makes real
+gestures and timing-sensitive waits slow and unreliable. Run it locally when
+you touch recording, the map, or anything on the render path:
 
 ```sh
 # Spreads its classes across three simulator clones; --serial for one
 Scripts/run-ui-tests.sh --all
-Scripts/run-performance-tests.sh
 ```
 
 ## Writing code here
@@ -117,9 +107,7 @@ linter enforces what it can. The handful that catch people out:
   works. The template asks for exactly that.
 - Documentation is owned by exactly one file each — see the *Documentation*
   section of `.github/copilot-instructions.md` before adding a fact to two
-  places. `PERFORMANCE.md` is a live list, not a log: a finding that has been
-  fixed is deleted, not annotated. Open work belongs in an issue, not in a
-  checked-in list.
+  places. Open work belongs in an issue, not in a checked-in list.
 - Do not commit `OpenHikes/Secrets.plist`, API keys, or anything else that
   belongs to you rather than to the repository.
 

@@ -180,8 +180,7 @@ private struct WalkClock: View {
     let readout: String
 
     var body: some View {
-        RenderSignpost.mark("WalkClockTick")
-        return Text(readout)
+        Text(readout)
             .font(.headline.monospacedDigit())
             .foregroundStyle(.secondary)
     }

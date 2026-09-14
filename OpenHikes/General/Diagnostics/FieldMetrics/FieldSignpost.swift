@@ -4,23 +4,21 @@
 //
 //  Four spans, chosen carefully, that MetricKit aggregates from real walks.
 //
-//  `RenderSignpost` already brackets around forty things, and re-emitting all
-//  of them through MetricKit would be both wrong and useless. Apple is
-//  explicit about why: "To limit on-device overhead, the system will
-//  automatically limit the number of signposts (emitted using the MetricKit
-//  log handle) processed. Avoid losing telemetry by limiting usage of
-//  signposts to critical sections of code." A budget spent on `TrailMatcherWork`
-//  — which fires once per accepted fix, roughly two thousand times a hike —
-//  buys a histogram of a 0.02 ms function and throws away the four spans that
-//  actually answer a question.
+//  Four rather than one per interesting function, and Apple is explicit about
+//  why: "To limit on-device overhead, the system will automatically limit the
+//  number of signposts (emitted using the MetricKit log handle) processed.
+//  Avoid losing telemetry by limiting usage of signposts to critical sections
+//  of code." A budget spent on the trail matcher — which runs once per
+//  accepted fix, roughly two thousand times a hike — buys a histogram of a
+//  0.02 ms function and throws away the four spans that answer a question.
 //
 //  So the selection is by *question*, not by cost, and every span here is
 //  coarse, infrequent, and bounded by a user action:
 //
 //  | Span | The question it answers |
 //  |---|---|
-//  | `RecordingSession` | "Measure a real hike-length recording's energy" — `PERFORMANCE.md`, "Blind spots" |
-//  | `OfflineDownload` | "Auto-save and a maximum-budget offline download" — `PERFORMANCE.md`, "Validating on a device" |
+//  | `RecordingSession` | What a real hike-length recording costs a battery |
+//  | `OfflineDownload` | What auto-save and a maximum-budget download cost |
 //  | `HikeImport` | GPX parse, statistics and first render, end to end |
 //  | `TrailGraphPrefetch` | What reaching Overpass mid-hike costs, radio included |
 //
@@ -28,12 +26,10 @@
 //  What comes back for it is not a duration — the app already knows how long a
 //  recording lasted — but `MXSignpostIntervalData`'s other three columns:
 //  cumulative CPU time, average footprint, and cumulative logical writes,
-//  *attributed to the recording* rather than to the process. `PerformanceLog`
-//  samples all three process-wide at 1 Hz and cannot attribute any of them,
-//  which is why `PERFORMANCE.md`'s per-scenario CPU table carries a warning
-//  that it "says more about how much a scenario queries the accessibility tree
-//  than about the feature it names". This is that table, without the warning,
-//  from a phone in somebody's pocket.
+//  *attributed to the recording* rather than to the process. Nothing else in
+//  the app can attribute any of the three: a process-wide sample says what the
+//  whole app spent, not what the recording did. And this arrives from a phone
+//  in somebody's pocket rather than from a Simulator.
 //
 //  Three caveats it is cheaper to know than to rediscover:
 //
@@ -121,7 +117,7 @@ nonisolated enum FieldSignpost {
 // MARK: - Extended launch
 
 extension MXLaunchTaskID {
-    /// The span `PERFORMANCE.md`'s launch finding measures: from
+    /// The launch span: from
     /// `didFinishLaunchingWithOptions` to the moment SwiftUI asks the map
     /// representable to build its `MKMapView`. Opening the SwiftData store,
     /// building the model and evaluating the view tree down to the map all sit

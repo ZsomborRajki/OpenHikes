@@ -37,8 +37,6 @@ nonisolated enum HikeDetailPreparation {
         // The single route-sized walk behind every number and the elevation
         // chart. Timed so opening a long hike can be told apart from drawing
         // one that was already prepared.
-        let state = RenderSignpost.beginInterval("HikeDetailPrepared")
-        defer { RenderSignpost.endInterval("HikeDetailPrepared", state) }
         var statistics = HikeRouteStatistics.Builder(distanceMeters: distanceMeters)
         let profile = try RouteProfile.cancellable(route: route) { point, segmentMeters in
             statistics.consume(point, segmentMeters: segmentMeters)

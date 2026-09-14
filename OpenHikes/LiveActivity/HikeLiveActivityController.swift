@@ -232,7 +232,6 @@ final class HikeLiveActivityController {
             from: current.state,
             now: now
         ) else { return }
-        RenderSignpost.mark("LiveActivityUpdate", reason.signpostDetail)
         switch reason {
         case .runStateChanged: lastRunStateFlipAt = now
         case .routeStatusChanged: lastRouteFlipAt = now
@@ -344,7 +343,6 @@ final class HikeLiveActivityController {
         guard !kind.matches(current?.attributes.subject) else { return }
         enqueue { [presenter] in
             guard kind.matches(presenter.activeSubject) else { return }
-            RenderSignpost.mark("LiveActivityEnd", "unowned")
             await presenter.endUnowned(kind)
         }
     }
@@ -524,10 +522,6 @@ final class HikeLiveActivityController {
     // MARK: Transitions
 
     private func start(_ request: HikeActivityRequest) {
-        RenderSignpost.mark(
-            "LiveActivityStart",
-            request.attributes.subject.isRecording ? "recording" : "following"
-        )
         let replaced = current
         current = request
         let now = clock()
@@ -554,10 +548,6 @@ final class HikeLiveActivityController {
         finalState: HikeActivityAttributes.ContentState?,
         dismissAfter: TimeInterval?
     ) {
-        RenderSignpost.mark(
-            "LiveActivityEnd",
-            finalState == nil ? "immediate" : "lingering"
-        )
         current = nil
         lastUpdateAt = nil
         lastRunStateFlipAt = nil

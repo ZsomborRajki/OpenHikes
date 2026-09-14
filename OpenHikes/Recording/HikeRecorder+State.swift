@@ -209,10 +209,6 @@ final class SystemRecordingLocationSource: RecordingLocationSource {
         appliedProfile = profile
         manager.desiredAccuracy = profile.desiredAccuracy
         manager.distanceFilter = profile.distanceFilter
-        RenderSignpost.mark(
-            "RecordingEnergyProfileApplied",
-            "\(profile.name) filter=\(profile.distanceFilter)"
-        )
     }
 
     func stopRecordingUpdates() {

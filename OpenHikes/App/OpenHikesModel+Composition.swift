@@ -92,26 +92,12 @@ extension OpenHikesModel {
     private convenience init(
         uiTestingDefaults: UserDefaults
     ) throws {
-        let testingContainer = try RenderSignpost.interval("ModelContainerInit") {
-            () throws(Swift.Error) in
-            try ModelContainer.openHikes(isStoredInMemoryOnly: true)
-        }
-        // Instrumented with the same interval names the shipping path uses.
-        //
-        // Not duplication for its own sake: `PerformanceUITests` launches with
-        // `--ui-testing`, so this is the *only* composition path the
-        // performance harness can measure, and intervals on the shipping one
-        // alone would have left `AppModelInit` exactly as unattributed in a
-        // report as it was before. Verified that way round — the first version
-        // of this change instrumented only the shipping path, and the idle
-        // scenario's report still showed one 88.2 ms `AppModelInit` span with
-        // nothing inside it but `ModelContainerInit`.
-        //
-        // The two paths build different things and the numbers are not
-        // comparable between them: this one takes dormant location sources and
-        // a bundled trail graph. What carries across is the shape — which
-        // dependency dominates, and whether anything here is doing real work
-        // at launch that a name would not suggest.
+        let testingContainer = try ModelContainer.openHikes(isStoredInMemoryOnly: true)
+        // The two paths build different things: this one takes dormant
+        // location sources and a bundled trail graph, so what carries across
+        // is the shape rather than the numbers — which dependency dominates,
+        // and whether anything here is doing real work at launch that a name
+        // would not suggest.
         let parts = Self.makeUITestingDependencies(
             container: testingContainer,
             defaults: uiTestingDefaults
@@ -172,10 +158,7 @@ extension OpenHikesModel {
         do {
             return try loadContainer(
                 persistent: {
-                    try RenderSignpost.interval("ModelContainerInit") {
-                        () throws(Swift.Error) in
-                        try ModelContainer.openHikes(syncsToCloud: syncsToCloud)
-                    }
+                    try ModelContainer.openHikes(syncsToCloud: syncsToCloud)
                 },
                 fallback: {
                     try ModelContainer.openHikes(isStoredInMemoryOnly: true)
@@ -453,61 +436,35 @@ private extension OpenHikesModel {
         container: ModelContainer,
         defaults: UserDefaults
     ) -> LaunchDependencies {
-        // One interval each. Until these existed, `AppModelInit` was a single
-        // 67.8-87.0 ms span with one attributed cause inside it —
-        // `ModelContainerInit`, 42.0-48.1 ms — and roughly 14 ms belonging to
-        // nobody. That remainder was guessed at twice: two synchronously
-        // constructed `CKContainer` default arguments were found and made
-        // lazy, bought about 2 ms of mean, and did not move the first frame at
-        // all. This is `PERFORMANCE.md`'s own next step under *Open findings*
-        // — stop guessing and put a signpost around each dependency the
-        // composition root constructs.
+        // Built one at a time and in this order, and the order is load-bearing
+        // below rather than cosmetic: `liveActivities` and `reminders` are
+        // handed to the recorder, and `graphProvider` to the matcher.
         //
-        // Cheap by construction: `beginInterval` reads two flags and takes a
-        // clock sample, and records nothing unless a performance log is open
-        // or console logging is on. On a launch nobody is measuring these cost
-        // one `os_signpost` each.
-        let graphProvider = RenderSignpost.interval("TrailGraphProviderInit") {
-            OverpassTrailGraphProvider()
-        }
-        let liveActivities = RenderSignpost.interval("LiveActivityControllerInit") {
-            Self.makeLiveActivityController(defaults: defaults)
-        }
-        let reminders = RenderSignpost.interval("MovementReminderInit") {
-            Self.makeMovementReminderController(defaults: defaults)
-        }
-        let backgroundTracker = RenderSignpost.interval("BackgroundTrackerInit") {
-            BackgroundTrailTracker(
-                container: container,
-                monitor: Self.dormantLocationSource(),
-                defaults: defaults,
-                liveActivityController: liveActivities
-            )
-        }
-        let autoSave = RenderSignpost.interval("AutoSaveControllerInit") {
-            Self.makeAutoSaveController(defaults: defaults)
-        }
-        let recorder = RenderSignpost.interval("RecorderInit") {
-            Self.makeRecorder(
-                container: container,
-                trailGraphProvider: graphProvider,
-                defaults: defaults,
-                liveActivityController: liveActivities,
-                movementReminders: reminders
-            )
-        }
-        let locationManager = RenderSignpost.interval("LocationManagerInit") {
-            LocationManager(manager: Self.dormantLocationSource())
-        }
-        let weatherManager = RenderSignpost.interval("WeatherManagerInit") {
-            WeatherManager(store: WeatherReadingStore(defaults: defaults))
-        }
-        let significantLocations = RenderSignpost.interval("SignificantLocationsInit") {
-            SignificantLocationFeed(monitor: Self.dormantLocationSource())
-        }
-        let communityTransport = RenderSignpost.interval("CommunityTransportInit") {
-            Self.makeCommunityTransport()
-        }
+        // Last measured on a Simulator, this whole block was about 100-130 ms
+        // of the main thread at launch, of which opening the SwiftData
+        // container was 50-58 ms and `WeatherManager` 18-27 ms. Nothing here
+        // should be doing work a launch cannot defer.
+        let graphProvider = OverpassTrailGraphProvider()
+        let liveActivities = Self.makeLiveActivityController(defaults: defaults)
+        let reminders = Self.makeMovementReminderController(defaults: defaults)
+        let backgroundTracker = BackgroundTrailTracker(
+            container: container,
+            monitor: Self.dormantLocationSource(),
+            defaults: defaults,
+            liveActivityController: liveActivities
+        )
+        let autoSave = Self.makeAutoSaveController(defaults: defaults)
+        let recorder = Self.makeRecorder(
+            container: container,
+            trailGraphProvider: graphProvider,
+            defaults: defaults,
+            liveActivityController: liveActivities,
+            movementReminders: reminders
+        )
+        let locationManager = LocationManager(manager: Self.dormantLocationSource())
+        let weatherManager = WeatherManager(store: WeatherReadingStore(defaults: defaults))
+        let significantLocations = SignificantLocationFeed(monitor: Self.dormantLocationSource())
+        let communityTransport = Self.makeCommunityTransport()
 
         return LaunchDependencies(
             graphProvider: graphProvider,
@@ -534,50 +491,32 @@ private extension OpenHikesModel {
         container: ModelContainer,
         defaults: UserDefaults
     ) -> UITestingDependencies {
-        let graphProvider = RenderSignpost.interval("TrailGraphProviderInit") {
-            AppLaunchEnvironment
-                .trailGraphFixtureName
-                .flatMap { name in
-                    BundledTrailGraphProvider(fixtureName: name)
-                }
-        }
-        let liveActivities = RenderSignpost.interval("LiveActivityControllerInit") {
-            Self.makeLiveActivityController(defaults: defaults)
-        }
-        let backgroundTracker = RenderSignpost.interval("BackgroundTrackerInit") {
-            BackgroundTrailTracker(
-                container: container,
-                monitor: Self.dormantLocationSource(),
-                defaults: defaults,
-                liveActivityController: liveActivities
-            )
-        }
-        let autoSave = RenderSignpost.interval("AutoSaveControllerInit") {
-            Self.makeAutoSaveController(defaults: defaults)
-        }
-        let recorder = RenderSignpost.interval("RecorderInit") {
-            HikeRecorder(
-                container: container,
-                saveModelContext: Self.uiTestingSave(),
-                trailGraphProvider: graphProvider,
-                defaults: defaults,
-                liveActivityController: liveActivities,
-                journalDirectory: AppLaunchEnvironment.recordingJournalDirectory(),
-                automaticallyRecovers: false
-            )
-        }
-        let locationManager = RenderSignpost.interval("LocationManagerInit") {
-            LocationManager(manager: Self.dormantLocationSource())
-        }
-        let weatherManager = RenderSignpost.interval("WeatherManagerInit") {
-            WeatherManager(store: WeatherReadingStore(defaults: defaults))
-        }
-        let significantLocations = RenderSignpost.interval("SignificantLocationsInit") {
-            SignificantLocationFeed(monitor: Self.dormantLocationSource())
-        }
-        let communityTransport = RenderSignpost.interval("CommunityTransportInit") {
-            Self.makeCommunityTransport()
-        }
+        let graphProvider = AppLaunchEnvironment
+            .trailGraphFixtureName
+            .flatMap { name in
+                BundledTrailGraphProvider(fixtureName: name)
+            }
+        let liveActivities = Self.makeLiveActivityController(defaults: defaults)
+        let backgroundTracker = BackgroundTrailTracker(
+            container: container,
+            monitor: Self.dormantLocationSource(),
+            defaults: defaults,
+            liveActivityController: liveActivities
+        )
+        let autoSave = Self.makeAutoSaveController(defaults: defaults)
+        let recorder = HikeRecorder(
+            container: container,
+            saveModelContext: Self.uiTestingSave(),
+            trailGraphProvider: graphProvider,
+            defaults: defaults,
+            liveActivityController: liveActivities,
+            journalDirectory: AppLaunchEnvironment.recordingJournalDirectory(),
+            automaticallyRecovers: false
+        )
+        let locationManager = LocationManager(manager: Self.dormantLocationSource())
+        let weatherManager = WeatherManager(store: WeatherReadingStore(defaults: defaults))
+        let significantLocations = SignificantLocationFeed(monitor: Self.dormantLocationSource())
+        let communityTransport = Self.makeCommunityTransport()
 
         return UITestingDependencies(
             graphProvider: graphProvider,

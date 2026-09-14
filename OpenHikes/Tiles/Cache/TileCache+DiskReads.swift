@@ -84,7 +84,6 @@ nonisolated extension TileCache {
     ) -> TileImage? {
         guard let image = durableImage(forKey: key) else { return nil }
         guard publishStaleCoverage(image, forKey: key, token: token) else { return nil }
-        RenderSignpost.mark("TileServedStale", "key=\(key) reason=\(reason)")
         #if DEBUG
         Self.logger.debug(
             "Served saved tile \(key, privacy: .public) past its TTL: \(reason, privacy: .public)"
@@ -111,10 +110,6 @@ nonisolated extension TileCache {
         token: MutationToken,
         otherwise: TileLoadResult
     ) -> TileLoadResult {
-        RenderSignpost.mark(
-            "TileFetchSuppressed",
-            "purpose=\(purpose.rawValue) reason=\(reason)"
-        )
         guard hasStaleCoverage,
               let stale = staleCoverage(forKey: key, reason: reason, token: token)
         else { return otherwise }

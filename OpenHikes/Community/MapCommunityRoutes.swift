@@ -131,7 +131,6 @@ extension MapView.Coordinator {
     /// the same lines from removing and re-adding every overlay.
     func applyCommunityRoutes(_ lines: [CommunityRouteLine], on mapView: MKMapView) {
         guard communityRoutes.map(\.line) != lines else { return }
-        RenderSignpost.mark("MapCommunityRoutesRebuilt", "\(lines.count) lines")
         if !communityRoutes.isEmpty {
             mapView.removeOverlays(communityRoutes.map(\.polyline))
             communityRoutes = []

@@ -17,15 +17,13 @@ says which commands to run.
 <!-- Which commands you ran, and what you saw. Delete the lines that do not apply. -->
 
 - [ ] `Scripts/lint.sh` passes
-- [ ] `xcodebuild test -project OpenHikes.xcodeproj -scheme OpenHikes -destination 'platform=iOS Simulator,name=iPhone 17 Pro' -only-testing:OpenHikesTests -only-testing:OpenWidgetTests` passes
+- [ ] `xcodebuild test -project OpenHikes.xcodeproj -scheme OpenHikes -destination 'platform=iOS Simulator,name=iPhone 17' -only-testing:OpenHikesTests -only-testing:OpenWidgetTests` passes
 - [ ] `swift test --package-path OpenHikesShared` passes
 - [ ] `Scripts/run-ui-tests.sh --all` — needed for a change to recording, the map or the sheet
-- [ ] `Scripts/run-performance-tests.sh` — needed for a change on the render path
 - [ ] New behaviour has a test that fails without the change
 
 ## Anything a reviewer should look at first
 
 <!--
-Screenshots for a UI change, before/after numbers for a performance one, or the
-one line you are least sure about.
+Screenshots for a UI change, or the one line you are least sure about.
 -->

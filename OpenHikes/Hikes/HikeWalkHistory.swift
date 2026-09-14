@@ -33,8 +33,7 @@ struct HikeWalkHistory: View {
 
     var body: some View {
         // Where a walk ending lands: this body, and not `HikeDetailBody`.
-        RenderSignpost.mark("HikeWalkHistoryBody", "\(walks.count) walks")
-        return Group {
+        Group {
             if walks.isEmpty {
                 emptyState
             } else {

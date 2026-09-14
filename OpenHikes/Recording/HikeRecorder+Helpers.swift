@@ -110,7 +110,6 @@ extension HikeRecorder {
         }
 
         applyCurrentTrail(match.currentTrail, isCurrent: newerPoints.isEmpty)
-        RenderSignpost.mark("LiveTrailMatchApplied")
         if liveMatchNeedsRun || !newerPoints.isEmpty {
             scheduleLiveMatching()
         }

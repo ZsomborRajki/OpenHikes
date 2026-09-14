@@ -92,12 +92,10 @@ nonisolated enum HikePhotoLoader {
         in store: HikePhotoStore
     ) async -> PhotoDisplay {
         guard !Task.isCancelled else { return .loading }
-        return RenderSignpost.interval("PhotoThumbnailDecoded") {
-            guard let image = store.thumbnail(for: photo) else {
-                return PhotoDisplay.unavailable(unavailability(of: photo, in: store))
-            }
-            return .ready(LoadedPhotoImage(image: image))
+        guard let image = store.thumbnail(for: photo) else {
+            return PhotoDisplay.unavailable(unavailability(of: photo, in: store))
         }
+        return .ready(LoadedPhotoImage(image: image))
     }
 
     /// The viewer's read: the full picture rather than the strip's square.
@@ -111,12 +109,10 @@ nonisolated enum HikePhotoLoader {
         in store: HikePhotoStore
     ) async -> PhotoDisplay {
         guard !Task.isCancelled else { return .loading }
-        return RenderSignpost.interval("PhotoImageDecoded") {
-            guard let image = store.displayImage(for: photo) else {
-                return PhotoDisplay.unavailable(unavailability(of: photo, in: store))
-            }
-            return .ready(LoadedPhotoImage(image: image))
+        guard let image = store.displayImage(for: photo) else {
+            return PhotoDisplay.unavailable(unavailability(of: photo, in: store))
         }
+        return .ready(LoadedPhotoImage(image: image))
     }
 
     /// Which of the two empty answers this is, asked only once a decode has

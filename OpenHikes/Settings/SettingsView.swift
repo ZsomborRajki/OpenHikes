@@ -111,8 +111,7 @@ struct SettingsView: View {
         // auto-save folding tile keys in every couple of seconds — since
         // neither of those is visible by reading the body, which mentions no
         // hike at all.
-        RenderSignpost.mark("SettingsBody")
-        return NavigationStack {
+        NavigationStack {
             Form {
                 CloudSyncSection(sync: cloudSync)
                 mapProviderSection

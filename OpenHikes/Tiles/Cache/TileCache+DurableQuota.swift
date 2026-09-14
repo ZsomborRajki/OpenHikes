@@ -93,9 +93,6 @@ nonisolated extension TileCache {
         let measured = durableProviderBytes.withLock { $0[providerID] != nil }
         guard !measured else { return }
 
-        let interval = RenderSignpost.beginInterval("TileDurableQuotaScan")
-        defer { RenderSignpost.endInterval("TileDurableQuotaScan", interval) }
-
         var total: Int64 = 0
         for file in allTileFiles(in: durableDirectory)
         where Self.providerID(forDiskName: file.lastPathComponent) == providerID {
@@ -108,7 +105,6 @@ nonisolated extension TileCache {
             guard bytes[providerID] == nil else { return }
             bytes[providerID] = total
         }
-        RenderSignpost.mark("TileDurableQuotaMeasured", "provider=\(providerID) bytes=\(total)")
     }
 
     /// Forgets every measured total, so the next reservation re-measures.
@@ -238,7 +234,6 @@ nonisolated extension TileCache {
             ))
         }
 
-        let interval = RenderSignpost.beginInterval("TileDurableReclaim")
         var freed: Int64 = 0
         for tile in candidates.sorted(by: { $0.modified < $1.modified }) {
             guard freed < byteCount else { break }
@@ -264,11 +259,6 @@ nonisolated extension TileCache {
             guard let current = bytes[providerID] else { return }
             bytes[providerID] = max(0, current - freed)
         }
-        RenderSignpost.mark(
-            "TileDurableReclaimed",
-            "provider=\(providerID) requested=\(byteCount) freed=\(freed)"
-        )
-        RenderSignpost.endInterval("TileDurableReclaim", interval)
         return freed
     }
 
@@ -351,12 +341,7 @@ nonisolated extension TileCache {
         let capped = TileProvider.all.filter { $0.durableByteLimit != nil }
         guard !capped.isEmpty else { return 0 }
 
-        let interval = RenderSignpost.beginInterval("TileDurableQuotaEnforce")
         var freed: Int64 = 0
-        defer {
-            RenderSignpost.mark("TileDurableQuotaEnforced", "freed=\(freed)")
-            RenderSignpost.endInterval("TileDurableQuotaEnforce", interval)
-        }
 
         for provider in capped {
             guard let limit = durableByteLimit(forProviderID: provider.id) else { continue }

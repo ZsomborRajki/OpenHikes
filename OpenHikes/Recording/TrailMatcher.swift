@@ -135,9 +135,7 @@ nonisolated enum TrailMatcher {
         // recording schedules, and the question it has to answer is whether a
         // pass still finishes inside the interval before the next fix
         // reschedules it.
-        return RenderSignpost.interval("TrailMatcherWork") {
-            match(points: points, graph: graph, gapDistances: gapDistances)
-        }
+        return match(points: points, graph: graph, gapDistances: gapDistances)
     }
 
     static func match(

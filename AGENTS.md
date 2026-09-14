@@ -5,7 +5,7 @@ Instructions for coding agents working in this repository.
 ## The instructions live in one file
 
 Everything an agent needs — architecture, repository conventions, render
-isolation rules, energy policies, the performance harness, and the decisions
+isolation rules, energy policies, and the decisions
 that have already been settled and must not be re-raised — is in
 [`.github/copilot-instructions.md`](.github/copilot-instructions.md)
 ([view on GitHub](https://github.com/ZsomborRajki/OpenHikes/blob/main/.github/copilot-instructions.md)).
@@ -17,7 +17,6 @@ Supporting documents, each owning its own facts:
 
 - [`README.md`](README.md) — what the app is, what it needs, how to build it, and how it is laid out.
 - [`CONTRIBUTING.md`](CONTRIBUTING.md) — the short version for a first change.
-- [`PERFORMANCE.md`](PERFORMANCE.md) — what the app costs and how that was measured.
 - [Issues](https://github.com/ZsomborRajki/OpenHikes/issues) — the open work. Missing features and undecided product questions are tracked there, not in a checked-in list.
 
 ## Commands
@@ -27,12 +26,12 @@ Supporting documents, each owning its own facts:
 Scripts/lint.sh
 
 # Boot the simulator before any test command below
-xcrun simctl boot "iPhone 17 Pro" || true
-xcrun simctl bootstatus "iPhone 17 Pro" -b
+xcrun simctl boot "iPhone 17" || true
+xcrun simctl bootstatus "iPhone 17" -b
 
 # App and widget unit tests — the two bundles, and nothing else
 xcodebuild test -project OpenHikes.xcodeproj -scheme OpenHikes \
-  -destination 'platform=iOS Simulator,name=iPhone 17 Pro' \
+  -destination 'platform=iOS Simulator,name=iPhone 17' \
   -only-testing:OpenHikesTests -only-testing:OpenWidgetTests
 
 # The standalone shared package
@@ -51,14 +50,13 @@ command, not a refinement of it** — `OpenHikes.xctestplan` also carries
 `OpenHikesUITests`, so dropping it turns a twenty-second gate into thirteen
 minutes of simulator automation and stops the run matching the one CI gates on.
 
-`Scripts/run-ui-tests.sh --all` and `Scripts/run-performance-tests.sh` stay out
-of CI and are run locally for a change to recording, the map, or anything on
+`Scripts/run-ui-tests.sh --all` stays out
+of CI and is run locally for a change to recording, the map, or anything on
 the render path. `--all` spreads its classes across three simulator clones on
 its own — 5m49s against thirteen minutes serial — so the line above is already
 the fast one; `--serial` goes back to a single device and `--parallel N`
 changes the count. Anything narrower than a bare `--all` stays serial, which is
-what keeps CI's `--suite` runs on one simulator. The performance suite has no
-such flag and must not get one.
+what keeps CI's `--suite` runs on one simulator.
 
 Two things guard that fan-out against itself, because three clones booting,
 installing and first-launching at once make the machine slow enough that a test

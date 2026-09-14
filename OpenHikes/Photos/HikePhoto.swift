@@ -147,8 +147,7 @@ extension Hike {
         // computed property is invisible at its call sites: the viewer used to
         // read it six times per body pass without any of them looking like
         // work. A count that outruns `PhotoViewerBody` is the shape to catch.
-        RenderSignpost.mark("PhotoOrderComputed", "\(photos.count) photos")
-        return photos.sorted { lhs, rhs in
+        photos.sorted { lhs, rhs in
             // The timestamps are compared first and the identifiers only on a
             // tie. `UUID.uuidString` allocates a 36-character string, and
             // building the pair up front meant two allocations for *every*
