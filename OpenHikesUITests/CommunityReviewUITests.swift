@@ -69,6 +69,45 @@ nonisolated final class CommunityReviewUITests: XCTestCase {
         }
     }
 
+    /// The section has to survive the hiker looking at their own hikes.
+    ///
+    /// It did not: leaving the tab emptied the queue and coming back declined
+    /// to ask for it again, because the launch had already spent its one
+    /// question — so the *Pending Review* section vanished on the first trip to
+    /// *My Hikes* and did not return until the app was relaunched. Two rules
+    /// that each had a passing test, and a feature that was usable once per
+    /// launch between them.
+    ///
+    /// Asserted through the segments rather than on the queue object, because
+    /// that is where it was found and neither unit test could see it: each one
+    /// was about a single rule.
+    @MainActor
+    func testTheReviewSectionSurvivesATripToMyHikes() {
+        let app = launchCommunity(scenario: .reviewing)
+        selectCommunityTab(in: app)
+        let queued = communityRow(titled: SeededQueuedHike.title, in: app)
+        XCTAssertTrue(
+            queued.waitForExistence(timeout: UITestTimeout.existence),
+            "the queue should have drawn before it can be left"
+        )
+
+        app.buttons["My Hikes"].tap()
+        XCTAssertTrue(
+            waitUntil(timeout: UITestTimeout.existence) { !queued.exists },
+            "the community list should have gone with the segment"
+        )
+        selectCommunityTab(in: app)
+
+        XCTAssertTrue(
+            queued.waitForExistence(timeout: UITestTimeout.existence),
+            "and the review section should come back with it"
+        )
+        XCTAssertTrue(
+            element("community-review-section", in: app).exists,
+            "header included, not just the row"
+        )
+    }
+
     /// What a reviewer is actually deciding about: the hiker's own words and
     /// their photographs, at a size worth looking at.
     @MainActor
