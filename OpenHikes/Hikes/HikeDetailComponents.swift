@@ -112,12 +112,17 @@ struct TrailProgressView: View {
         }
         .accessibilityElement(children: .ignore)
         .accessibilityLabel(title(walking: walked != nil, live: live != nil))
-        // The covered length in whole metres as well as the percentage: a
-        // percentage of a long trail hides a hiker's first few hundred
-        // metres, and this is the value a test waits on to know a fix landed.
+        // The covered length as well as the percentage: a percentage of a long
+        // trail hides a hiker's first few hundred metres, and this is the
+        // value a test waits on to know a fix landed.
+        //
+        // Through the same formatter as the remaining figure beside it. The
+        // word "metres" used to be written into the sentence, so a US hiker
+        // heard a distance in metres followed by one in miles.
         .accessibilityValue(
             walked.map { fraction in
-                "\(percent) percent walked, \(Int(fraction * profile.totalDistanceMeters)) metres covered, "
+                "\(percent) percent walked, "
+                    + "\(Self.length(fraction * profile.totalDistanceMeters)) covered, "
                     + "\(Self.length(remaining)) remaining"
             } ?? "\(percent) percent, \(Self.length(remaining)) remaining"
         )

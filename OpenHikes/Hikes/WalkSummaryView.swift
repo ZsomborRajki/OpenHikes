@@ -133,7 +133,7 @@ struct WalkSummaryView: View {
             if let ascentMeters {
                 StatTile(
                     label: "Trail Ascent",
-                    value: HikeFormat.length(Measurement(value: ascentMeters, unit: UnitLength.meters))
+                    value: HikeFormat.elevation(Measurement(value: ascentMeters, unit: UnitLength.meters))
                 )
             }
             StatTile(label: "Started", value: HikeFormat.timestamp(walk.startedAt))

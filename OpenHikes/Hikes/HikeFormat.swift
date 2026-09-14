@@ -2,7 +2,7 @@
 //  HikeFormat.swift
 //  OpenHikes
 //
-//  Formatting helpers for hike stats (duration, length, speed).
+//  Formatting helpers for hike stats (duration, elevation, speed).
 //
 
 import Foundation
@@ -86,17 +86,81 @@ nonisolated enum HikeFormat {
         date.formatted(timeOfDayStyle)
     }
 
-    /// Whole units, in the unit it was handed — and a dash for a figure that
-    /// isn't a number.
+    /// A height: whole metres, or whole feet where that is the local unit,
+    /// and never promoted to kilometres — a 1,250 m summit is 1,250 m high,
+    /// not "1.2 km" high, which is what `.road` and `.general` would both
+    /// make of it.
     ///
-    /// The same answer ``duration(_:)`` gives, for the same reason: an
-    /// elevation total derived from a route carrying a non-finite height
-    /// formats as "∞ m" or "NaN m", and both read on a stat tile as though
-    /// something had been measured.
-    static func length(_ measurement: Measurement<UnitLength>) -> String {
+    /// This was `length(_:)`, and it formatted `usage: .asProvided` on a
+    /// measurement built in metres, so it rendered metres to every reader in
+    /// the world while the distance beside it used `usage: .road` and adapted.
+    /// A US reader read "3.1 mi" and "1,250 m" in the same `StatGrid` — and
+    /// ``WidgetFormat/elevation(meters:locale:)`` had already been given the
+    /// conversion below, so the app and the widget disagreed about the same
+    /// hike. That is the same bug ``speed(_:locale:)`` and
+    /// `WeatherReadingFormat` were each fixed for; elevation is the row that
+    /// was never given the treatment.
+    ///
+    /// Renamed at the same time, because the old name is what let *Inferred
+    /// Path* — a distance — be formatted by the elevation formatter without
+    /// anyone noticing. A distance uses `usage: .road` directly, the way the
+    /// *Distance* row it sits beneath always has.
+    ///
+    /// A dash for a figure that isn't a number, the same answer
+    /// ``duration(_:)`` gives and for the same reason: an elevation total
+    /// derived from a route carrying a non-finite height formats as "∞ m" or
+    /// "NaN m", and both read on a stat tile as though something had been
+    /// measured.
+    ///
+    /// The `locale` parameter is a test seam, as it is on ``speed(_:locale:)``
+    /// and for the same reason: region is the input this is sensitive to, and
+    /// a suite that could only ask about the simulator's own region would
+    /// assert whatever the machine happened to be set to — which is exactly
+    /// how a formatting bug survives a green test run.
+    static func elevation(
+        _ measurement: Measurement<UnitLength>,
+        locale: Locale = .autoupdatingCurrent
+    ) -> String {
         guard measurement.value.isFinite else { return "—" }
-        let rounded = Measurement(value: measurement.value.rounded(), unit: measurement.unit)
-        return rounded.formatted(.measurement(width: .abbreviated, usage: .asProvided))
+        return converted(measurement, for: locale)
+            .formatted(
+                .measurement(width: .abbreviated, usage: .asProvided)
+                    .locale(locale)
+            )
+    }
+
+    /// The same height, in words, for a sentence that is read aloud.
+    ///
+    /// ``spokenDuration(_:)``'s counterpart, and there for the same reason: a
+    /// speech synthesiser handed "535 m" is being asked to guess. The unit is
+    /// chosen the same way, so a US reader hears "1,755 feet" where the chart
+    /// draws "1,755 ft" — rather than the "535 meters at 0.4 miles" this used
+    /// to say.
+    static func spokenElevation(
+        _ measurement: Measurement<UnitLength>,
+        locale: Locale = .autoupdatingCurrent
+    ) -> String {
+        guard measurement.value.isFinite else { return "—" }
+        return converted(measurement, for: locale)
+            .formatted(
+                .measurement(width: .wide, usage: .asProvided)
+                    .locale(locale)
+            )
+    }
+
+    /// Whole units of whatever the region measures heights in.
+    ///
+    /// `measurementSystem` rather than a language check: `en_GB` is
+    /// `uksystem` and wants feet for a height while wanting metres for very
+    /// little else, and only the locale can say so.
+    private static func converted(
+        _ measurement: Measurement<UnitLength>,
+        for locale: Locale
+    ) -> Measurement<UnitLength> {
+        let converted = locale.measurementSystem == .metric
+            ? measurement.converted(to: .meters)
+            : measurement.converted(to: .feet)
+        return Measurement(value: converted.value.rounded(), unit: converted.unit)
     }
 
     /// One decimal, in whatever unit the reader's region measures speed in.

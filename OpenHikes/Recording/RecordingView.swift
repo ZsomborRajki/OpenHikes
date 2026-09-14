@@ -382,7 +382,7 @@ private struct RecordingStatsGrid: View {
 
     private var elevationGain: String {
         guard let gain = stats.elevationGainMeters else { return "—" }
-        return HikeFormat.length(
+        return HikeFormat.elevation(
             Measurement(value: gain, unit: UnitLength.meters)
         )
     }
@@ -406,10 +406,15 @@ private struct RecordingStatsGrid: View {
         )
     }
 
+    /// A radius, so it is formatted like the distance above it rather than
+    /// hard-coded to metres — which is what it was, and what made this the one
+    /// figure on the recording screen a US hiker could not read.
     private var accuracy: String {
         guard let horizontalAccuracy = stats.horizontalAccuracy else { return "Searching…" }
         guard horizontalAccuracy <= RecordingFixPolicy.maximumHorizontalAccuracy else { return "Weak signal" }
-        return "±\(Int(horizontalAccuracy.rounded())) m"
+        let radius = Measurement(value: horizontalAccuracy, unit: UnitLength.meters)
+            .formatted(.measurement(width: .abbreviated, usage: .road))
+        return "±\(radius)"
     }
 }
 

@@ -15,10 +15,17 @@ import Foundation
 
 /// Number formatting shared by everything the widget draws, so a distance in
 /// the status line cannot be rounded differently from a distance in a chip.
-enum WidgetFormat {
+///
+/// `public` because the app is now held to it as well: `HikeFormat.elevation`
+/// has to give the same answer ``elevation(meters:locale:)`` does, and
+/// `ElevationFormatTests` asserts that against this type rather than against a
+/// restatement of the formula, which would only agree with itself. The app and
+/// the widget drew the same summit as "1,250 m" and "4,101 ft" for exactly as
+/// long as nothing could compare them.
+public enum WidgetFormat {
     /// Trail-length style: locale-aware, and rounded the way a road sign
     /// rounds — "4.2 km", "2.6 mi".
-    static func length(
+    public static func length(
         meters: Double,
         locale: Locale = .current
     ) -> String {
@@ -33,7 +40,7 @@ enum WidgetFormat {
     /// unit, and never promoted to kilometres — a 1,250 m summit is 1,250 m
     /// high, not "1.2 km" high, which is what `.road` and `.general` would
     /// both make of it.
-    static func elevation(
+    public static func elevation(
         meters: Double,
         locale: Locale = .current
     ) -> String {
@@ -57,7 +64,7 @@ enum WidgetFormat {
     /// Only ever the *spoken* and paused forms of a recording's clock: a
     /// running Live Activity draws `Text(timerInterval:)` instead, which the
     /// system ticks without the app spending an update on it.
-    static func duration(seconds: TimeInterval) -> String {
+    public static func duration(seconds: TimeInterval) -> String {
         Duration.seconds(max(0, seconds.rounded()))
             .formatted(.time(pattern: .hourMinuteSecond))
     }
@@ -67,7 +74,7 @@ enum WidgetFormat {
     /// `UnitSpeed` has no locale-aware usage of its own, so the unit is
     /// chosen from the locale's measurement system the way the length
     /// formatter's `.road` usage does it for distances.
-    static func speed(
+    public static func speed(
         metersPerSecond: Double,
         locale: Locale = .current
     ) -> String {
