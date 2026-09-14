@@ -10,12 +10,21 @@
 //
 //  What is here is the only part of this feature the server answers
 //  differently depending on who is asking. Everything in the other file reads
-//  a type `_world` may read or writes one `_icloud` may create; the three
-//  writes below are refused for everybody outside the `reviewer` role, and the
-//  read returns them nothing. That is the whole access control — there is no
-//  check in this file, and nothing about being a reviewer is stored anywhere
-//  on the device. See ``CommunitySchema`` for why the queue is a third record
-//  type rather than an index on the submissions.
+//  a type `_world` may read or writes one `_icloud` may create; the writes
+//  below are refused for everybody outside the `reviewer` role, and the read
+//  returns them nothing. That is the whole access control — there is no check
+//  in this file, and nothing about being a reviewer is stored anywhere on the
+//  device. See ``CommunitySchema`` for why the queue is a third record type
+//  rather than an index on the submissions.
+//
+//  One of those writes edits a submission rather than deleting it —
+//  ``keepOnlyPhotos(_:of:staging:)``, which is how a reviewer takes a single
+//  photograph off a hike they are otherwise happy to publish. It is the only
+//  place in this app that modifies a submission, and ``CommunitySchema``'s
+//  argument for a write-once record is what bounds it: it touches the two
+//  photo fields, it runs before any listing names the record, and it exists
+//  because a picture hidden from a listing is not a picture that has been
+//  removed.
 //
 
 import CloudKit
@@ -253,6 +262,80 @@ nonisolated extension CloudKitCommunityTransport {
                 """
             )
             return []
+        }
+    }
+
+    /// The rewritten pins file's name, inside the review screen's own
+    /// directory.
+    ///
+    /// Deliberately not `photoPins.json`, which is what
+    /// ``CloudKitCommunityTransport/stage(_:)`` writes on the way *up*. These
+    /// two never share a directory today, and a name that says which end of
+    /// the trip it belongs to is what keeps that from mattering if they ever
+    /// do.
+    static var reviewedPinsFilename: String { "reviewedPhotoPins.json" }
+
+    @concurrent
+    func keepOnlyPhotos(
+        _ kept: [CommunityKeptPhoto],
+        of pending: CommunityPendingSubmission,
+        staging: URL
+    ) async throws {
+        let id = CKRecord.ID(recordName: pending.submissionID)
+        let record: CKRecord
+        do {
+            // One cheap text field, never the assets. This fetch exists to get
+            // a record with a current change tag to write against; asking for
+            // the photographs would download every one of them a second time,
+            // when the review screen has them on disk already and the kept
+            // ones are about to go back up from exactly those copies.
+            let fetched = try await database.records(
+                for: [id],
+                desiredKeys: [CommunitySchema.Submission.title]
+            )
+            guard let result = fetched[id] else { throw CommunityFailure.noLongerAvailable }
+            record = try result.get()
+        } catch {
+            throw Self.failure(from: error, while: "reading a submission to edit its photos")
+        }
+
+        do {
+            if kept.isEmpty {
+                // Both fields go, rather than an empty list beside an absent
+                // one: that is the shape ``stage(_:)`` writes for a hike that
+                // never had a photograph, and a submission a reviewer emptied
+                // should be indistinguishable from one that arrived empty.
+                record[CommunitySchema.Submission.photos] = nil
+                record[CommunitySchema.Submission.photoPins] = nil
+            } else {
+                let pins = try Self.writeJSON(
+                    kept.map(\.pin),
+                    named: Self.reviewedPinsFilename,
+                    in: staging
+                )
+                record[CommunitySchema.Submission.photos] = kept.map(\.fileURL)
+                    .map(CKAsset.init(fileURL:))
+                record[CommunitySchema.Submission.photoPins] = CKAsset(fileURL: pins)
+            }
+        } catch {
+            throw Self.failure(from: error, while: "staging a reviewed submission's photos")
+        }
+
+        do {
+            // `.changedKeys`, which is what the one-field fetch above is only
+            // safe because of: the route, the outline, the title and the
+            // description are not on this record, and a policy that sent the
+            // whole of it would send them as absent. What goes is the two
+            // fields set above.
+            let (saved, _) = try await database.modifyRecords(
+                saving: [record],
+                deleting: [],
+                savePolicy: .changedKeys,
+                atomically: true
+            )
+            if let result = saved[id] { _ = try result.get() }
+        } catch {
+            throw Self.failure(from: error, while: "removing photos from a submission")
         }
     }
 

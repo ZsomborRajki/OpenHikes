@@ -372,6 +372,7 @@ struct CommunityHikeView: View {
             // what retires the previous preview's line.
             if case .loaded(let detail) = phase {
                 browser.previewLoaded(detail.route, of: listing)
+                browser.previewPhotosLoaded(detail.previewPhotos, of: listing)
             }
         }
         .onDisappear {
@@ -791,6 +792,11 @@ private extension CommunityHikeView {
             // because it is what the hiker is waiting to see and it costs
             // nothing to compute.
             browser.previewLoaded(detail.route, of: listing)
+            // And where its photographs were taken, which the strip below can
+            // only count — see ``MapCommunityPhotoAnnotations``. Alongside the
+            // line rather than after the analysis, for the same reason: it is
+            // already in hand and costs nothing to hand over.
+            browser.previewPhotosLoaded(detail.previewPhotos, of: listing)
             // Started rather than awaited, so the round trip to Overpass runs
             // alongside the walk of the route below instead of behind it. It
             // is also what a retry re-runs: a first attempt that failed has

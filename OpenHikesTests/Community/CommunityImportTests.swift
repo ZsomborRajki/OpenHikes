@@ -49,7 +49,8 @@ struct CommunityImportTests {
             route: route,
             trackDescription: "A ridge walk",
             photoPins: pins,
-            photoFileURLs: photoURLs
+            photoFileURLs: photoURLs,
+            photosOnRecord: photoURLs.count
         )
     }
 

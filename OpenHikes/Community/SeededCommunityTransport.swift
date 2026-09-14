@@ -197,7 +197,12 @@ nonisolated struct SeededCommunityTransport: CommunityTransporting {
             photoPins: photos.map { _ in
                 CommunityPhotoPin(capturedAt: listing.hikeDate, coordinate: route.first?.clCoordinate)
             },
-            photoFileURLs: photos
+            photoFileURLs: photos,
+            // Every one of them arrived, because this stand-in drew them a
+            // moment ago. A scenario for the partial case would be a scenario
+            // for a download failure, which is not a thing a seeded database
+            // can imitate honestly.
+            photosOnRecord: photos.count
         )
     }
 
@@ -255,7 +260,8 @@ nonisolated struct SeededCommunityTransport: CommunityTransporting {
             photoPins: photos.map { _ in
                 CommunityPhotoPin(capturedAt: pending.hikeDate, coordinate: route.first?.clCoordinate)
             },
-            photoFileURLs: photos
+            photoFileURLs: photos,
+            photosOnRecord: photos.count
         )
     }
 
@@ -264,6 +270,20 @@ nonisolated struct SeededCommunityTransport: CommunityTransporting {
     // stand-in that answered a broken network with *this account can't review
     // submissions* would put the one sentence in front of a reviewer that
     // sends them to the CloudKit Console over a lost signal.
+    @concurrent
+    func keepOnlyPhotos(
+        _ kept: [CommunityKeptPhoto],
+        of pending: CommunityPendingSubmission,
+        staging: URL
+    ) async throws {
+        guard scenario != .failing else { throw CommunityFailure.unreachable }
+        // Nothing is rewritten, because there is no record to rewrite: the
+        // photographs this stand-in hands out are drawn into files by
+        // ``writePhotos(count:into:)`` on the way out of `detail`. What a UI
+        // test can see is the strip and the count the screen carries into
+        // publishing, and both of those are the review screen's own state.
+    }
+
     @concurrent
     func publish(_ pending: CommunityPendingSubmission) async throws -> CommunityListing {
         guard scenario != .failing else { throw CommunityFailure.unreachable }

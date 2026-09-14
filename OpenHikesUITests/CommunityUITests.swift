@@ -101,8 +101,14 @@ nonisolated final class CommunityUITests: XCTestCase {
             empty.waitForExistence(timeout: UITestTimeout.existence),
             "a failed search should report itself where the rows would be"
         )
+        // Waited for through `awaitCommunityAnswer`, because the *retry* is
+        // the half of this screen that only exists once a search has actually
+        // been asked for. The row above is drawn before then too — an idle
+        // browser and a browser that has just failed both put something where
+        // the rows would be — so a machine slow enough that the map settles
+        // twice leaves this test asserting against a state nobody reached.
         XCTAssertTrue(
-            app.buttons["Try Again"].waitForExistence(timeout: UITestTimeout.navigation),
+            awaitCommunityAnswer(app.buttons["Try Again"], in: app),
             "a failure the hiker can do nothing about is a failure with a retry"
         )
     }
@@ -257,6 +263,54 @@ nonisolated final class CommunityUITests: XCTestCase {
             element("community-share-sent", in: app)
                 .waitForExistence(timeout: UITestTimeout.existence),
             "a submitted hike should say it is waiting for review"
+        )
+    }
+
+    /// The one place in this app a hiker can write about a walk.
+    ///
+    /// `Hike.trackDescription` had three sources before this and no screen
+    /// that could fill any of them — a GPX file's `<desc>`, a hike imported
+    /// from one, and a hike saved from somebody else's listing — so every walk
+    /// recorded on a phone reached a reviewer with "Nothing written." against
+    /// it. The fixture GPX carries no description, which is what makes this
+    /// assertion mean something: the box starts empty, and what comes back is
+    /// what was typed.
+    ///
+    /// Asserted across a close and a reopen rather than on the field itself,
+    /// because what is worth proving is that the notes reached the *hike*. A
+    /// value read straight back out of a text field would prove only that the
+    /// keyboard works.
+    @MainActor
+    func testNotesTypedOnTheShareSheetStayWithTheHike() {
+        let app = launchCommunity(
+            scenario: .seeded,
+            extraArguments: ["--ui-test-import-gpx=\(UITestFixture.gpxName)"]
+        )
+        openHikeDetail(in: app)
+        let notes = "Boggy after the second bridge. Good bench at the top."
+
+        tapWhenReady(element("community-share-button", in: app))
+        let field = element("community-share-notes", in: app)
+        XCTAssertTrue(
+            field.waitForExistence(timeout: UITestTimeout.existence),
+            "the share sheet should ask for notes"
+        )
+        field.tap()
+        field.typeText(notes)
+        // Cancelled rather than shared: the notes belong to the walk, so
+        // thinking better of publishing must not throw away what was written.
+        app.buttons["Cancel"].firstMatch.tap()
+
+        tapWhenReady(element("community-share-button", in: app))
+        let reopened = element("community-share-notes", in: app)
+        XCTAssertTrue(
+            reopened.waitForExistence(timeout: UITestTimeout.existence),
+            "the share sheet should have come back"
+        )
+        XCTAssertEqual(
+            reopened.value as? String,
+            notes,
+            "what was typed should have landed on the hike rather than on the sheet"
         )
     }
 

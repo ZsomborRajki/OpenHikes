@@ -179,7 +179,8 @@ struct CommunityPreviewDownloadTests {
                 route: Fixture.ridgeRoute,
                 trackDescription: "A ridge walk",
                 photoPins: [],
-                photoFileURLs: []
+                photoFileURLs: [],
+                photosOnRecord: 0
             )
         )
         // Held open where the production transport is copying photographs,

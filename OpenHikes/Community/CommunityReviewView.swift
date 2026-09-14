@@ -21,11 +21,50 @@
 //  one nobody can see yet would write a ``Hike/importedFromListingID`` naming
 //  a record that does not exist.
 //
+//  ## The two things a reviewer may change, and why only those two
+//
+//  A decision used to be binary: publish this as sent, or delete it. That made
+//  the common case of a good walk with one bad thing on it — a title that says
+//  "Morning walk", a photograph with a stranger's face in it — into a decline,
+//  which is a deletion, of somebody's whole upload, that they are never told
+//  about. So the two things a reviewer can act on without throwing the walk
+//  away are editable here: the **title**, and **which photographs go**.
+//
+//  Each is edited where it lives, and the two are not alike.
+//
+//  The title is the listing's. Nothing reads a submission's title once a hike
+//  is published — see ``CloudKitCommunityTransport/contents(of:downloadingInto:)``,
+//  which takes the route, the description and the photographs off the record
+//  and the name off the listing — so an edited title is written onto
+//  ``CommunityPendingSubmission`` before publishing and the submission is
+//  never touched. What the hiker wrote survives on their own device and on the
+//  record; what everybody else sees is the corrected line.
+//
+//  A photograph is the submission's, and there is no equivalent trick. The
+//  listing carries a count and the pictures are assets on the record it
+//  points at, so a photograph "removed" from a listing is still fetchable by
+//  anybody who opens the hike. Taking one off means writing the record, which
+//  is the one edit in this app that does — see
+//  ``CommunityTransporting/keepOnlyPhotos(_:of:staging:)`` for what that costs
+//  and why it happens before the listing exists rather than after.
+//
+//  Both are corrections rather than authorship. A reviewer who wants to
+//  rewrite the description or redraw the route is looking at a submission to
+//  decline, and neither is offered.
+//
 //  ## The route is drawn on the map behind, as it is for a published hike
 //
 //  Same mechanism, same reason — see ``CommunityHikeView``'s header. It is
 //  handed over through ``CommunityPendingSubmission/prospectiveListing``,
 //  which is what lets a screen with no listing use an API keyed on one.
+//
+//  The photographs go with it, which is more than the published preview
+//  needed and is the point of doing it here: a reviewer deciding whether a
+//  picture belongs in a public list is deciding about a picture *of a place*,
+//  and the strip below can only say how many there are. See
+//  ``MapCommunityPhotoAnnotations``. The pins follow the removals — take a
+//  photograph out and its pin goes — so the map and the strip always describe
+//  the same set.
 //
 //  ## What a failure does here, and why it is the opposite of the queue's
 //
@@ -49,16 +88,44 @@ struct CommunityReviewView: View {
     /// thing being decided about.
     private static let photoTileSize: CGFloat = 220
     private static let routePointsWorthDrawing = 2
+    /// How faint a photograph goes once it has been struck off.
+    ///
+    /// Still legible on purpose. The tile is the only handle for putting it
+    /// back, and a reviewer who removed the wrong one has to be able to see
+    /// which one they removed.
+    private static let removedTileOpacity: Double = 0.3
 
     let pending: CommunityPendingSubmission
     let transport: any CommunityTransporting
     var queue: CommunityReviewQueue
-    /// Written, never read: it is what puts this submission's route on the map
-    /// behind the sheet. See this file's header.
+    /// Written, never read: it is what puts this submission's route and the
+    /// places its photographs were taken on the map behind the sheet. See this
+    /// file's header.
     var browser: CommunityBrowser
     /// Pops the screen. Run after a decision has landed, and after nothing
     /// else — a reviewer who backs out has decided nothing.
     let onFinished: () -> Void
+
+    /// Seeds the title field from the submission.
+    ///
+    /// A hand-written initializer for that one line. The alternative is
+    /// copying the title into the field from `.task`, which runs again on
+    /// every appearance and would quietly undo an edit the reviewer had
+    /// already made.
+    init(
+        pending: CommunityPendingSubmission,
+        transport: any CommunityTransporting,
+        queue: CommunityReviewQueue,
+        browser: CommunityBrowser,
+        onFinished: @escaping () -> Void
+    ) {
+        self.pending = pending
+        self.transport = transport
+        self.queue = queue
+        self.browser = browser
+        self.onFinished = onFinished
+        _titleDraft = State(initialValue: pending.title)
+    }
 
     private enum Phase {
         case loading
@@ -67,17 +134,48 @@ struct CommunityReviewView: View {
     }
 
     @State private var phase: Phase = .loading
-    /// The count that will be written onto the listing.
+    /// How many photographs arrived.
     ///
-    /// Zero until the photographs arrive, because that is the only moment it
-    /// can be known — see ``CommunityPendingSubmission/photoCount``. Held here
-    /// rather than read off the detail at the tap so that what is published is
-    /// a value this screen watched arrive.
+    /// Zero until they do, because that is the only moment it can be known —
+    /// see ``CommunityPendingSubmission/photoCount``. Held here rather than
+    /// read off the detail at the tap so that what is published is a value
+    /// this screen watched arrive.
+    ///
+    /// Not the number written onto the listing any more: that is
+    /// ``keptPhotoCount``, which is this minus whatever the reviewer struck
+    /// off.
     @State private var photoCount = 0
+    /// The title as it will be published, which starts as the one that was
+    /// sent.
+    ///
+    /// Only ever the *listing's* title. The submission keeps what its author
+    /// wrote — see this file's header for why that is both possible and
+    /// deliberate.
+    @State private var titleDraft: String
+    /// Which photographs the reviewer has struck off, by their index in the
+    /// detail.
+    ///
+    /// Indexes rather than files, because the index is what pairs a
+    /// photograph with its pin and with its asset, and it is the one thing
+    /// that survives the set changing. Nothing has happened to any of them
+    /// until Publish: a removal is reversible for exactly as long as the
+    /// decision is.
+    @State private var removedPhotos: Set<Int> = []
     @State private var isDeciding = false
     @State private var isConfirmingDecline = false
     @State private var decisionFailure: CommunityFailure?
     @State private var loadTask: Task<Void, Never>?
+    /// The publish or decline in flight, held for the same reason
+    /// ``loadTask`` is: the downloads are deleted behind whatever is still
+    /// using them.
+    ///
+    /// It matters more here than it reads. A publish that takes photographs
+    /// off the submission uploads the kept ones **from that directory**, so a
+    /// reviewer who swipes back mid-decision would have the files pulled out
+    /// from under the upload. The save is one record and atomic, so the worst
+    /// case was always a failed edit rather than half a hike — but a failed
+    /// edit nobody is on screen to see is worth not arranging.
+    @State private var decisionTask: Task<Void, Never>?
     /// This visit, told apart from any other visit to the same submission —
     /// the same per-visit rule ``CommunityHikeView`` follows, and for the same
     /// reason: two visits must not share a directory that either can delete.
@@ -97,6 +195,10 @@ struct CommunityReviewView: View {
     /// hides a gallery it could have shown. And a screen still loading, or one
     /// that failed to load, has shown the reviewer a title and nothing else:
     /// the description and the photographs are what they are here to judge.
+    ///
+    /// The title is the exception, and deliberately so — it is editable from
+    /// the moment the screen opens, because the queue entry carries it and a
+    /// reviewer can perfectly well fix a name while the pictures arrive.
     private var hasLoaded: Bool {
         if case .loaded = phase { return true }
         return false
@@ -113,7 +215,28 @@ struct CommunityReviewView: View {
     /// *is not checked* are different things, and this is the one failure
     /// nothing downstream would ever report.
     private var canPublish: Bool {
-        hasLoaded && !pending.authorID.isEmpty && !isDeciding
+        hasLoaded && !pending.authorID.isEmpty && !isDeciding && !publishedTitle.isEmpty
+    }
+
+    /// The title this would be published under, bounded the way every other
+    /// piece of free text reaching the public database is.
+    ///
+    /// Bounded here rather than on the field, so the reviewer types against no
+    /// resistance and the ceiling applies to what is written — the same
+    /// division ``HikeTitle`` makes, and the same ``TextBound/title`` the
+    /// queue already bounded the submitted title to.
+    ///
+    /// Empty is possible, by clearing the field, and is refused rather than
+    /// falling back to the submitted title: a reviewer who has emptied the box
+    /// is mid-edit, and quietly publishing the name they just deleted is the
+    /// app deciding something they did not.
+    private var publishedTitle: String {
+        BoundedText.boundedOrEmpty(titleDraft, to: .title)
+    }
+
+    /// How many photographs would go with the hike.
+    private var keptPhotoCount: Int {
+        photoCount - removedPhotos.count
     }
 
     var body: some View {
@@ -141,7 +264,10 @@ struct CommunityReviewView: View {
         .onDisappear {
             browser.previewClosed(pending.prospectiveListing)
             loadTask?.cancel()
-            CommunityHikeView.discardDownloads(at: downloadDirectory, after: [loadTask])
+            CommunityHikeView.discardDownloads(
+                at: downloadDirectory,
+                after: [loadTask, decisionTask]
+            )
         }
         .confirmationDialog(
             "Decline this submission?",
@@ -172,13 +298,23 @@ struct CommunityReviewView: View {
             Text(failure.recoverySuggestion ?? failure.localizedDescription)
         }
     }
+}
 
-    // MARK: - What is being decided
+// MARK: - What is being decided
 
+private extension CommunityReviewView {
     /// The title and credit, which are what a listing is found and read by.
-    private var submissionSection: some View {
+    ///
+    /// The title is a field rather than a label, and it is the only editable
+    /// thing on this screen that is not a photograph — see this file's header.
+    var submissionSection: some View {
         Section {
-            LabeledContent("Title") { Text(pending.title) }
+            LabeledContent("Title") {
+                TextField("Title", text: $titleDraft)
+                    .multilineTextAlignment(.trailing)
+                    .disabled(isDeciding)
+                    .accessibilityIdentifier("review-title-field")
+            }
             LabeledContent("Credit") {
                 // An empty credit is ordinary rather than wrong — the field is
                 // optional on the share form — so it says so rather than
@@ -201,12 +337,23 @@ struct CommunityReviewView: View {
         } header: {
             Text("Submission")
         } footer: {
-            Text("Sent \(pending.noticedAt.formatted(date: .abbreviated, time: .shortened))")
+            VStack(alignment: .leading, spacing: 4) {
+                Text("Sent \(pending.noticedAt.formatted(date: .abbreviated, time: .shortened))")
+                if publishedTitle != pending.title {
+                    // What the hiker called it, kept in front of the reviewer
+                    // rather than replaced by the edit. It is the thing being
+                    // corrected, so it is the thing an edit has to be judged
+                    // against — and a reviewer who has second thoughts should
+                    // not have to leave the screen to recover it.
+                    Text("Sent as “\(pending.title)”")
+                        .accessibilityIdentifier("review-original-title")
+                }
+            }
         }
     }
 
     @ViewBuilder
-    private func contentSections(_ detail: CommunityHikeDetail) -> some View {
+    func contentSections(_ detail: CommunityHikeDetail) -> some View {
         Section("Description") {
             if let description = detail.trackDescription, !description.isEmpty {
                 Text(description)
@@ -222,35 +369,155 @@ struct CommunityReviewView: View {
                     .foregroundStyle(.secondary)
             }
         } else {
-            Section("Photos (\(detail.photoFileURLs.count))") {
-                ScrollView(.horizontal, showsIndicators: false) {
-                    HStack(spacing: 12) {
-                        ForEach(detail.photoFileURLs, id: \.self) { url in
-                            CommunityPhotoTile(url: url, size: Self.photoTileSize)
-                        }
-                    }
-                }
-                .accessibilityIdentifier("review-photos")
-            }
+            photosSection(detail)
         }
 
-        Section {
-            // Nothing is drawn here. The line is on the map under this sheet,
-            // which is where a route is looked at in this app — see the header
-            // — and a second, smaller map would be a worse view of the same
-            // thing plus a second tile budget.
-            Text(
-                detail.route.count >= Self.routePointsWorthDrawing
-                    ? "Drawn on the map behind this sheet."
-                    : "Too short to draw."
-            )
-                .foregroundStyle(.secondary)
-        } header: {
-            Text("Route")
+        // The route gets a section only when there is something to say that
+        // the map cannot say for itself. It is drawn on the map under this
+        // sheet, which is where a route is looked at in this app — see the
+        // header — so a row announcing that was a row spent telling the
+        // reviewer to look at the thing they were already looking at. A route
+        // too short to draw is the opposite: nothing appears, and without this
+        // the absence reads as a map that failed.
+        if detail.route.count < Self.routePointsWorthDrawing {
+            Section("Route") {
+                Text("Too short to draw.")
+                    .foregroundStyle(.secondary)
+                    .accessibilityIdentifier("review-route-undrawable")
+            }
         }
     }
 
-    private func failureSection(_ failure: CommunityFailure) -> some View {
+    /// The photographs, each one removable on its own.
+    ///
+    /// Struck off rather than deleted as they are tapped: nothing leaves the
+    /// submission until Publish, so a reviewer who hits the wrong tile puts it
+    /// back with the same tap. That is also why the removed ones stay in the
+    /// strip, faded — a tile that vanished would take its own undo with it.
+    func photosSection(_ detail: CommunityHikeDetail) -> some View {
+        Section {
+            ScrollView(.horizontal, showsIndicators: false) {
+                HStack(spacing: 12) {
+                    ForEach(Array(detail.photoFileURLs.enumerated()), id: \.offset) { index, url in
+                        photoTile(at: index, url: url, removable: detail.hasEveryPhoto)
+                    }
+                }
+            }
+            .accessibilityIdentifier("review-photos")
+        } header: {
+            // Two numbers only once they differ, so the ordinary case reads
+            // exactly as it did.
+            Text(
+                removedPhotos.isEmpty
+                    ? "Photos (\(detail.photoFileURLs.count))"
+                    : "Photos (\(keptPhotoCount) of \(detail.photoFileURLs.count))"
+            )
+        } footer: {
+            photosFooter(detail)
+        }
+    }
+
+    func photoTile(at index: Int, url: URL, removable: Bool) -> some View {
+        let isRemoved = removedPhotos.contains(index)
+        return CommunityPhotoTile(url: url, size: Self.photoTileSize)
+            .opacity(isRemoved ? Self.removedTileOpacity : 1)
+            .overlay(alignment: .topTrailing) {
+                if removable {
+                    Button {
+                        toggleRemoval(of: index)
+                    } label: {
+                        Image(
+                            systemName: isRemoved
+                                ? "arrow.uturn.backward.circle.fill"
+                                : "xmark.circle.fill"
+                        )
+                        .font(.title2)
+                        .symbolRenderingMode(.palette)
+                        .foregroundStyle(.white, isRemoved ? Color.accentColor : Color.red)
+                    }
+                    // `.borderless` rather than `.plain`: a `Form` row holding
+                    // a single plain button hands the whole row's taps to it,
+                    // and this row is a scrollable strip of several.
+                    .buttonStyle(.borderless)
+                    .padding(8)
+                    .disabled(isDeciding)
+                    .accessibilityLabel(
+                        isRemoved
+                            ? Text("Keep photo \(index + 1)")
+                            : Text("Leave photo \(index + 1) out")
+                    )
+                    .accessibilityIdentifier(
+                        isRemoved ? "review-photo-restore" : "review-photo-remove"
+                    )
+                }
+            }
+    }
+
+    /// What the strip needs saying about it, in the order it matters.
+    @ViewBuilder
+    func photosFooter(_ detail: CommunityHikeDetail) -> some View {
+        if !detail.hasEveryPhoto {
+            // The one state where removal is withheld, and it is withheld
+            // rather than risked: publishing rebuilds the record's photographs
+            // out of the copies on this device, so doing it with one missing
+            // would delete that one as well — a photograph nobody decided
+            // anything about, gone for good. See
+            // ``CommunityHikeDetail/hasEveryPhoto``.
+            Text(Self.incompleteDownload(missing: detail.photosOnRecord - detail.photoFileURLs.count))
+                .accessibilityIdentifier("review-photos-incomplete")
+        } else if removedPhotos.isEmpty {
+            Text("Leave out any photo that shouldn't be published. The hike still goes.")
+        } else {
+            // Said plainly because it is the only irreversible thing on this
+            // screen short of declining, and because the strip above is still
+            // showing the pictures it is about.
+            Text(Self.removalWarning(count: removedPhotos.count))
+                .accessibilityIdentifier("review-photos-removed")
+        }
+    }
+
+    /// Why nothing can be left out, when a download came back short.
+    ///
+    /// Number-neutral after the count, the rule ``CommunityShareDisclosure``
+    /// already follows: one photograph reads as written English rather than as
+    /// a template with a 1 in it.
+    static func incompleteDownload(missing: Int) -> String {
+        missing == 1
+            ? String(
+                localized: """
+                One of this submission's photos didn't download, so none can be \
+                left out here — leaving one out rewrites the whole set from the \
+                copies on this device. Publish it as it is, decline it, or open \
+                it again.
+                """
+            )
+            : String(
+                localized: """
+                \(missing) of this submission's photos didn't download, so none \
+                can be left out here — leaving one out rewrites the whole set \
+                from the copies on this device. Publish it as it is, decline it, \
+                or open it again.
+                """
+            )
+    }
+
+    static func removalWarning(count: Int) -> String {
+        count == 1
+            ? String(
+                localized: """
+                Publishing deletes the faded photo from the submission for good. \
+                The rest go with the hike.
+                """
+            )
+            : String(
+                localized: """
+                Publishing deletes the \(count) faded photos from the submission \
+                for good. The rest go with the hike.
+                """
+            )
+    }
+
+    func failureSection(_ failure: CommunityFailure) -> some View {
         Section {
             VStack(alignment: .leading, spacing: 8) {
                 Text(failure.localizedDescription)
@@ -267,10 +534,12 @@ struct CommunityReviewView: View {
         }
         .accessibilityIdentifier("review-failure")
     }
+}
 
-    // MARK: - Deciding
+// MARK: - Deciding
 
-    private var decisionSection: some View {
+private extension CommunityReviewView {
+    var decisionSection: some View {
         Section {
             Button {
                 publish()
@@ -305,59 +574,122 @@ struct CommunityReviewView: View {
                 // see ``hasLoaded``. Declining stays available, because a
                 // submission that will not load is a perfectly good reason to.
                 Text("Publishing waits for the description and photographs to load.")
+            } else if publishedTitle.isEmpty {
+                // A reviewer mid-edit rather than a submission with a problem,
+                // which is why it says what to do rather than what is wrong.
+                Text("A hike needs a title. Put one back to publish this.")
             } else {
                 Text("Publishing makes this visible to everybody, immediately.")
             }
         }
     }
 
-    private func publish() {
-        guard canPublish else { return }
+    /// Strikes a photograph off, or puts it back.
+    ///
+    /// The map is told either way, so the pins and the strip never describe
+    /// different sets — a reviewer who has just removed the picture of the
+    /// gate should not still see a camera standing at the gate.
+    func toggleRemoval(of index: Int) {
+        if removedPhotos.contains(index) {
+            removedPhotos.remove(index)
+        } else {
+            removedPhotos.insert(index)
+        }
+        guard case .loaded(let detail) = phase else { return }
+        browser.previewPhotosLoaded(keptPreviewPhotos(of: detail), of: pending.prospectiveListing)
+    }
+
+    /// Where the photographs that are still going were taken.
+    func keptPreviewPhotos(of detail: CommunityHikeDetail) -> [CommunityPreviewPhoto] {
+        detail.previewPhotos.filter { !removedPhotos.contains($0.index) }
+    }
+
+    func publish() {
+        guard canPublish, case .loaded(let detail) = phase else { return }
         isDeciding = true
-        Task {
+        decisionTask = Task {
+            // Unreachable with anything in it unless every photograph arrived
+            // — the buttons that fill this are not drawn otherwise — and
+            // checked anyway, because what it would cost is a stranger's
+            // photograph deleted for good by a rule nobody applied. Falling
+            // back to *remove nothing* is the conservative half of a
+            // disagreement that cannot happen.
+            let removing = detail.hasEveryPhoto ? removedPhotos : []
+            if !removing.isEmpty {
+                do {
+                    // Before the listing exists, never after: until one does,
+                    // nothing can reach this submission but the reviewer
+                    // holding its record name. See
+                    // ``CommunityTransporting/keepOnlyPhotos(_:of:staging:)``.
+                    try await transport.keepOnlyPhotos(
+                        detail.keptPhotos(at: Set(detail.photoFileURLs.indices).subtracting(removing)),
+                        of: pending,
+                        staging: downloadDirectory
+                    )
+                } catch {
+                    // Nothing has been published, so this is a failed edit
+                    // rather than a failed publication, and the screen stays
+                    // where it is with every removal still struck off. Trying
+                    // again is the whole of the recovery, and it is safe to:
+                    // the kept set is the same set and the files behind it are
+                    // the same files, so a second attempt writes what the
+                    // first one meant to — including after an edit that
+                    // landed and a publication that did not.
+                    fail(error)
+                    return
+                }
+            }
+
             var decided = pending
-            // The count the photographs actually arrived with, rather than a
-            // number off the record: a listing claiming photographs it has not
-            // got is a row that promises a gallery and opens an empty one.
-            decided.photoCount = photoCount
+            // The reviewer's title, which is the listing's alone — see this
+            // file's header.
+            decided.title = publishedTitle
+            // The count the photographs actually arrived with, less whatever
+            // was just taken off the record: a listing claiming photographs it
+            // has not got is a row that promises a gallery and opens a shorter
+            // one.
+            decided.photoCount = photoCount - removing.count
             do {
                 _ = try await transport.publish(decided)
             } catch {
-                isDeciding = false
-                decisionFailure = error as? CommunityFailure
-                    ?? .unavailable(error.localizedDescription)
+                fail(error)
                 return
             }
             finish()
         }
     }
 
-    private func decline() {
+    func decline() {
         isDeciding = true
-        Task {
+        decisionTask = Task {
             do {
                 try await transport.decline(pending)
             } catch {
-                isDeciding = false
-                decisionFailure = error as? CommunityFailure
-                    ?? .unavailable(error.localizedDescription)
+                fail(error)
                 return
             }
             finish()
         }
+    }
+
+    /// A decision that did not land: say so, and leave everything as it was.
+    func fail(_ error: any Error) {
+        isDeciding = false
+        decisionFailure = error as? CommunityFailure
+            ?? .unavailable(error.localizedDescription)
     }
 
     /// The decision landed: take the row away and go back.
     ///
     /// The queue is told rather than re-asked, for the reason
     /// ``CommunityReviewQueue/forget(_:)`` gives.
-    private func finish() {
+    func finish() {
         isDeciding = false
         queue.forget(pending)
         onFinished()
     }
 
-    private func load() async {
+    func load() async {
         guard case .loading = phase else { return }
         CommunityStaging.sweep()
         do {
@@ -369,6 +701,16 @@ struct CommunityReviewView: View {
             phase = .loaded(detail)
             photoCount = detail.photoFileURLs.count
             browser.previewLoaded(detail.route, of: pending.prospectiveListing)
+            // And where each photograph was taken, which is half of what a
+            // reviewer is judging one by — see this file's header. Filtered
+            // through the removals for the same reason every later republish
+            // is, even though there can be none this early: one expression for
+            // *what the map shows* is one fewer place for the strip and the
+            // pins to drift apart.
+            browser.previewPhotosLoaded(
+                keptPreviewPhotos(of: detail),
+                of: pending.prospectiveListing
+            )
         } catch is CancellationError {
             // The screen has gone. Nothing to report a failure on, and nobody
             // waiting — the same silence ``CommunityHikeView/load()`` keeps.

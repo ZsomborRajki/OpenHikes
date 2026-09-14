@@ -18,6 +18,9 @@
 //
 
 import SwiftUI
+#if canImport(UIKit)
+import UIKit
+#endif
 
 struct CommunityPhotoTile: View {
     let url: URL
@@ -58,18 +61,43 @@ struct CommunityPhotoTile: View {
     /// the caller is a SwiftUI `.task` on the main actor.
     @concurrent
     private static func decode(_ url: URL, maxPixelSize: Int) async -> Image? {
-        guard let source = CGImageSourceCreateWithURL(url as CFURL, nil),
-              let cgImage = CGImageSourceCreateThumbnailAtIndex(
-                  source,
-                  0,
-                  [
-                      kCGImageSourceCreateThumbnailFromImageAlways: true,
-                      kCGImageSourceCreateThumbnailWithTransform: true,
-                      kCGImageSourceShouldCacheImmediately: true,
-                      kCGImageSourceThumbnailMaxPixelSize: maxPixelSize,
-                  ] as CFDictionary
-              )
-        else { return nil }
+        guard let cgImage = thumbnail(url, maxPixelSize: maxPixelSize) else { return nil }
         return Image(decorative: cgImage, scale: 1)
+    }
+
+    #if canImport(UIKit)
+    /// The same decode, for the one place these files are drawn outside
+    /// SwiftUI: the picture in a map pin's callout, which is a `UIImageView`
+    /// inside MapKit's own view. See ``CommunityPhotoMapAnnotation``.
+    ///
+    /// Shared rather than written twice so that a picture which draws in the
+    /// strip draws on the map — the bound, the orientation transform and the
+    /// off-main hop are decisions about *these* files, and two copies of them
+    /// is how one copy ends up handling a rotated photograph differently.
+    @concurrent
+    static func decodeUIImage(_ url: URL, maxPixelSize: Int) async -> UIImage? {
+        guard let cgImage = thumbnail(url, maxPixelSize: maxPixelSize) else { return nil }
+        return UIImage(cgImage: cgImage)
+    }
+    #endif
+
+    /// The decode itself, bounded and orientation-corrected.
+    ///
+    /// Synchronous and `nonisolated`, called only from the two `@concurrent`
+    /// wrappers above: what makes this safe to run is being off the main
+    /// actor, and that is a promise the caller makes rather than something
+    /// this function can enforce.
+    nonisolated private static func thumbnail(_ url: URL, maxPixelSize: Int) -> CGImage? {
+        guard let source = CGImageSourceCreateWithURL(url as CFURL, nil) else { return nil }
+        return CGImageSourceCreateThumbnailAtIndex(
+            source,
+            0,
+            [
+                kCGImageSourceCreateThumbnailFromImageAlways: true,
+                kCGImageSourceCreateThumbnailWithTransform: true,
+                kCGImageSourceShouldCacheImmediately: true,
+                kCGImageSourceThumbnailMaxPixelSize: maxPixelSize,
+            ] as CFDictionary
+        )
     }
 }

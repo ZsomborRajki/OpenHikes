@@ -201,6 +201,117 @@ nonisolated final class CommunityReviewUITests: XCTestCase {
         )
     }
 
+    /// The title a reviewer publishes under is theirs to correct, and the one
+    /// that was sent stays in front of them while they do it.
+    ///
+    /// The submission is never touched by this — only the listing carries the
+    /// edited name — but nothing a UI test can see says so, which is what the
+    /// unit suites and `CommunitySchema`'s permissions are for. What is
+    /// checkable here is that the field is a field, that it takes an edit, and
+    /// that the original is still readable afterwards.
+    @MainActor
+    func testAReviewerCanCorrectTheTitleBeforePublishing() {
+        let app = launchCommunity(scenario: .reviewing)
+        selectCommunityTab(in: app)
+        openQueuedSubmission(titled: SeededQueuedHike.title, in: app)
+
+        let field = element("review-title-field", in: app)
+        XCTAssertTrue(
+            scrollUntilVisible(field, in: app),
+            "the title should be editable on the screen that decides about it"
+        )
+        field.tap()
+        // Cleared a character at a time rather than through the edit menu:
+        // what a reviewer does to a title like "Morning walk" is replace it,
+        // and a long press racing a callout menu is a flake this assertion
+        // does not need.
+        field.typeText(
+            String(repeating: XCUIKeyboardKey.delete.rawValue, count: SeededQueuedHike.title.count)
+        )
+        field.typeText("Karwendelhaus, by the north side")
+
+        XCTAssertTrue(
+            element("review-original-title", in: app).waitForExistence(timeout: UITestTimeout.existence),
+            "what the hiker sent should still be readable beside the correction"
+        )
+        let publish = element("review-publish", in: app)
+        XCTAssertTrue(scrollUntilVisible(publish, in: app), "the decision should still be reachable")
+        XCTAssertTrue(
+            waitUntil(timeout: UITestTimeout.trace) { publish.isEnabled },
+            "a titled submission should be publishable"
+        )
+    }
+
+    /// One bad photograph should cost that photograph, not the hike.
+    ///
+    /// Before this, a reviewer looking at a good walk with one picture that
+    /// could not be published had two options, and both were wrong: publish it
+    /// anyway, or decline — which deletes the hiker's whole upload and never
+    /// tells them. The heading is what a test can see, because the tiles
+    /// themselves are `accessibilityHidden`; it counts what is still going.
+    @MainActor
+    func testAReviewerCanLeaveOnePhotoOut() {
+        let app = launchCommunity(scenario: .reviewing)
+        selectCommunityTab(in: app)
+        openQueuedSubmission(titled: SeededQueuedHike.photographedTitle, in: app)
+
+        let heading = reviewPhotoHeading(in: app)
+        XCTAssertTrue(
+            scrollUntilVisible(heading, in: app),
+            "the photographs should have arrived before any of them can be left out"
+        )
+        XCTAssertEqual(
+            heading.label,
+            "Photos (\(SeededQueuedHike.photoCount))",
+            "the heading should start by counting them all"
+        )
+
+        element("review-photo-remove", in: app).firstMatch.tap()
+
+        XCTAssertTrue(
+            waitUntil(timeout: UITestTimeout.existence) {
+                heading.label == "Photos (\(SeededQueuedHike.photoCount - 1) of \(SeededQueuedHike.photoCount))"
+            },
+            "the heading should say how many are still going, and out of how many"
+        )
+        // Reversible for as long as the decision is: nothing has left the
+        // submission until Publish, so the tile is still there to put back.
+        element("review-photo-restore", in: app).firstMatch.tap()
+        XCTAssertTrue(
+            waitUntil(timeout: UITestTimeout.existence) {
+                heading.label == "Photos (\(SeededQueuedHike.photoCount))"
+            },
+            "putting it back should restore the count"
+        )
+    }
+
+    /// The row that told a reviewer to look at the map is gone, and the map is
+    /// still drawing the route.
+    ///
+    /// It said "Drawn on the map behind this sheet." under a *Route* heading,
+    /// which is a row spent telling somebody to look at the thing they are
+    /// already looking at. What replaces it is nothing — the line itself,
+    /// which was always the point.
+    @MainActor
+    func testTheRouteSectionIsGoneAndTheLineIsNot() {
+        let app = launchCommunity(scenario: .reviewing)
+        selectCommunityTab(in: app)
+        openQueuedSubmission(titled: SeededQueuedHike.title, in: app)
+
+        XCTAssertTrue(
+            scrollUntilVisible(element("review-decline", in: app), in: app),
+            "the whole screen should have been walked before the absence below means anything"
+        )
+        XCTAssertFalse(
+            app.staticTexts["Drawn on the map behind this sheet."].exists,
+            "the route row should be gone"
+        )
+        XCTAssertFalse(
+            element("review-route-undrawable", in: app).exists,
+            "and a seeded submission's route is long enough to draw, so the fallback is absent too"
+        )
+    }
+
     /// The review screen's Photos heading, which carries the count.
     ///
     /// Matched on the prefix rather than spelled out, for the reason
@@ -217,17 +328,14 @@ nonisolated final class CommunityReviewUITests: XCTestCase {
 
     /// Opens a queued submission and waits for its preview to have loaded,
     /// mirroring `openCommunityHike(titled:in:)` — including the re-offered
-    /// *Search this area* pill, since the map can settle twice.
+    /// *Search this area* pill, since the map can settle twice. Both reach for
+    /// that through `awaitCommunityAnswer(_:in:)`, which is where the argument
+    /// for it lives.
     @MainActor
     private func openQueuedSubmission(titled title: String, in app: XCUIApplication) {
         let row = communityRow(titled: title, in: app)
-        let pill = element("community-search-this-area", in: app)
         XCTAssertTrue(
-            waitUntil(timeout: UITestTimeout.trace) {
-                if row.exists { return true }
-                if pill.exists { pill.tap() }
-                return false
-            },
+            awaitCommunityAnswer(row, in: app),
             "\"\(title)\" should be waiting before it can be opened"
         )
         row.tap()

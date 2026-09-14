@@ -12,6 +12,16 @@
 //  So the screen says what goes, says what happens next, and asks for the name
 //  in the same breath.
 //
+//  The notes are the newest thing it asks for, and the one place in this app a
+//  hiker can write about a walk at all. ``Hike/trackDescription`` had exactly
+//  three sources — a GPX file's `<desc>`, a hike imported from one, and a hike
+//  saved from somebody else's community listing — and no screen that could put
+//  anything in it. So a walk recorded on this phone, which is every walk this
+//  feature is for, could only ever be published with nothing written about it,
+//  and the reviewer read "Nothing written." every time. The field was already
+//  here as a read-only row warning about text an imported file had brought
+//  along; it is the same row, now able to answer.
+//
 //  What it must not say is that the hike is now visible. It is not: a
 //  submission waits for a person to review it, and at the moment the upload
 //  lands nothing has happened beyond that. The success state therefore says
@@ -50,6 +60,21 @@ struct CommunityShareSheet: View {
     @AppStorage(SettingsKey.communityAuthorName)
     private var authorName = ""
     @State private var phase: Phase = .editing
+    /// What the hiker has written about this walk, held here and committed to
+    /// the hike rather than bound straight through to it.
+    ///
+    /// A `@Model`'s property is a store write on every keystroke, which is the
+    /// wrong shape for prose; and this is text a hiker is composing rather
+    /// than a setting they are flipping. See ``commitNotes()`` for when it
+    /// lands.
+    @State private var notesDraft = ""
+    /// Whether ``notesDraft`` has been filled from the hike yet.
+    ///
+    /// The seeding happens on appearance rather than in an initializer,
+    /// because this is a sheet and SwiftUI may build its body before it is
+    /// presented; without the flag, a second pass would overwrite what the
+    /// hiker had started typing with what the hike still says.
+    @State private var hasSeededNotes = false
     /// How many photographs this device can send, once the disk has been
     /// asked. `nil` until then — see ``photoCount``.
     @State private var sendablePhotoCount: Int?
@@ -120,17 +145,25 @@ struct CommunityShareSheet: View {
         BoundedText.boundedOrEmpty(authorName, to: .credit)
     }
 
-    /// The hike's description, if it has one worth showing.
+    /// The description this share would publish, as the field currently
+    /// stands.
     ///
-    /// Shown rather than merely mentioned, because this is the field a hiker
-    /// is least likely to remember the contents of: a hike imported from a GPX
-    /// file carries whatever its author wrote in it, which can be personal
-    /// notes nothing in this app has displayed since the import. It goes to
-    /// the public database either way — see ``CommunityPublisher/share``, which
-    /// copies `trackDescription` into the draft — so the only question is
-    /// whether the hiker sees it before or after it is published.
+    /// Read off the draft rather than off the hike, so the disclosure sentence
+    /// below the form describes what is in the box: the promise and the
+    /// payload being written in two places is the failure
+    /// ``CommunityShareDisclosure`` exists to catch, and a footer that only
+    /// noticed notes after they were committed would be a fresh instance of
+    /// it.
+    ///
+    /// Editable rather than merely shown, which is the whole of this row's
+    /// second job. Its first is unchanged and still worth having: a hike
+    /// imported from a GPX file carries whatever its author wrote in it, which
+    /// can be personal notes nothing in this app has displayed since the
+    /// import, and it goes to the public database either way — see
+    /// ``CommunityPublisher/share``, which copies `trackDescription` into the
+    /// draft. The row is where a hiker finds that out in time to delete it.
     private var sharedDescription: String? {
-        CommunityShareDisclosure.notes(from: hike.trackDescription)
+        CommunityShareDisclosure.notes(from: notesDraft)
     }
 
     var body: some View {
@@ -166,6 +199,8 @@ struct CommunityShareSheet: View {
             #endif
             .toolbar { toolbarContent }
             .interactiveDismissDisabled(phase == .sending)
+            .onAppear { seedNotes() }
+            .onDisappear { commitNotes() }
             // Asked once, when the form opens: the answer is about files on
             // this device, and nothing can add one to this hike while this
             // sheet is the screen on top.
@@ -198,15 +233,25 @@ private extension CommunityShareSheet {
         Section {
             LabeledContent("Hike", value: hike.displayTitle)
             LabeledContent("Route", value: hike.subtitle)
-            if let sharedDescription {
-                // Multi-line and not truncated to a line: the point of showing
-                // it is that the hiker can read what is about to be published
-                // under their name, and half of a sentence would not serve
-                // that.
-                LabeledContent("Notes") {
-                    Text(sharedDescription)
-                        .multilineTextAlignment(.trailing)
-                }
+            // Always drawn, where it used to appear only for a hike that
+            // already had a description. An empty box is an invitation and an
+            // absent row is nothing at all — and absent was every hike anybody
+            // recorded in this app, which is the gap this closes. See the
+            // file's header.
+            //
+            // Vertical and multi-line, because the point of the row is the
+            // prose: a hiker writing about a walk in a field that scrolls
+            // sideways one line at a time is a hiker writing one sentence.
+            VStack(alignment: .leading, spacing: 4) {
+                Text("Notes")
+                TextField(
+                    "What was this walk like?",
+                    text: $notesDraft,
+                    axis: .vertical
+                )
+                .lineLimit(3...8)
+                .disabled(phase == .sending)
+                .accessibilityLabel("Notes about this hike")
                 .accessibilityIdentifier("community-share-notes")
             }
             LabeledContent(
@@ -469,6 +514,10 @@ private extension CommunityShareSheet {
 
 private extension CommunityShareSheet {
     func share() {
+        // Before the upload, not after: ``CommunityPublisher/share`` reads
+        // `trackDescription` off the hike, so this is the line that decides
+        // whether what the hiker just typed goes with it.
+        commitNotes()
         phase = .sending
         Task {
             let outcome = await CommunityPublisher.share(
@@ -483,6 +532,40 @@ private extension CommunityShareSheet {
                 phase = .failed(failure)
             }
         }
+    }
+
+    /// Fills the notes field from the hike, once.
+    ///
+    /// A hike imported from a GPX file arrives with its author's words already
+    /// in it, and this is what puts them in front of the person about to
+    /// publish them. Guarded rather than bound, for the reason
+    /// ``hasSeededNotes`` gives.
+    func seedNotes() {
+        guard !hasSeededNotes else { return }
+        hasSeededNotes = true
+        notesDraft = hike.trackDescription ?? ""
+    }
+
+    /// Puts the draft on the hike, bounded the way every other piece of free
+    /// text entering this app is.
+    ///
+    /// ``TextBound/notes`` and ``BoundedText/bounded(_:to:)``, which is what
+    /// makes the answer a `String?`: an absent description and an empty one
+    /// are the same thing, and the optional is what says so once. So clearing
+    /// the box clears the hike's description rather than storing a blank.
+    ///
+    /// Idempotent, which it has to be: ``share()`` calls it before the upload
+    /// reads the hike, and `onDisappear` calls it again on the way out — so
+    /// the notes belong to the walk whether or not the share happened, and a
+    /// hiker who thinks better of publishing keeps what they wrote.
+    func commitNotes() {
+        guard hasSeededNotes else { return }
+        let bounded = BoundedText.bounded(notesDraft, to: .notes)
+        // Compared before assigning, so leaving the sheet untouched is not a
+        // write to the store: SwiftData mirrors this column, and a no-op
+        // change is a sync the hike did not need.
+        guard hike.trackDescription != bounded else { return }
+        hike.trackDescription = bounded
     }
 }
 

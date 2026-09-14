@@ -424,7 +424,11 @@ nonisolated struct CloudKitCommunityTransport: CommunityTransporting {
                 to: .notes
             ),
             photoPins: Self.pins(pins, for: downloaded, of: assets.count, takenOn: listing.hikeDate),
-            photoFileURLs: downloaded.map(\.url)
+            photoFileURLs: downloaded.map(\.url),
+            // The record's count rather than the survivors', deliberately —
+            // see ``CommunityHikeDetail/photosOnRecord``. The two differ
+            // exactly when the log line above was written.
+            photosOnRecord: assets.count
         )
     }
 

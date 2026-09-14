@@ -166,6 +166,20 @@ final class CommunityBrowser {
     /// under it is left drawn in the meantime: a line that vanished on the way
     /// in and came back a second later would read as a glitch.
     private var previewedRoute: CommunityRouteLine?
+    /// Where the open preview's photographs were taken, once they have
+    /// arrived.
+    ///
+    /// Separate from ``previewedRoute`` rather than folded into it, because
+    /// the two are separate answers to separate questions and only one of
+    /// them is ever shared with the rest of the list: every hike in the nearby
+    /// answer has a line, drawn from its outline, and none of them has pins.
+    /// A photograph's place on a trail is in the submission's pins asset,
+    /// which only the screen that opened the hike ever downloads.
+    ///
+    /// Retired by the same two calls that retire the line, which is what keeps
+    /// a pin from outliving the files behind it — see
+    /// ``CommunityPreviewPhoto/fileURL``.
+    private var previewedPhotos: [CommunityPreviewPhoto] = []
     /// Which preview is open, whether or not its route has arrived.
     ///
     /// Separate from ``previewedRoute`` because the two are set at different
@@ -928,6 +942,17 @@ extension CommunityBrowser {
         return lines
     }
 
+    /// The pins the map stands where the open preview's photographs were
+    /// taken.
+    ///
+    /// Only the open preview's, ever. This is the one thing on the map that
+    /// needs a whole submission's pins asset to draw, so a page of results
+    /// could not have it — see ``CommunityListing``, which carries a photo
+    /// *count* precisely because carrying the pictures would not scale.
+    var photoPins: [CommunityPreviewPhoto] {
+        previewedPhotos
+    }
+
     // MARK: - The open preview
 
     /// A published hike's preview is on screen. Called from the screen itself.
@@ -949,6 +974,10 @@ extension CommunityBrowser {
         guard previewedListingID != listing.id else { return }
         previewedListingID = listing.id
         previewedRoute = nil
+        // Retired here for the reason the line is, and with one more of its
+        // own: these pins point at files in the previous screen's download
+        // directory, which that screen deletes on its way out.
+        previewedPhotos = []
     }
 
     /// The open preview has its route. The map draws this one properly.
@@ -971,9 +1000,26 @@ extension CommunityBrowser {
     /// tears a replaced screen down after its replacement appears, so an
     /// unmatched close would take the new preview's line off the map on the
     /// way into it.
+    /// The open preview's photographs know where they were taken. The map
+    /// stands a pin on each.
+    ///
+    /// Its own call rather than an argument to ``previewLoaded(_:of:)``,
+    /// because the two facts do not always arrive together and one of them can
+    /// change while the screen stays put: a reviewer removing a photograph
+    /// republishes the pins against the same route. Matched on the listing for
+    /// the same reason that one is.
+    func previewPhotosLoaded(
+        _ photos: [CommunityPreviewPhoto],
+        of listing: CommunityListing
+    ) {
+        guard previewedListingID == listing.id else { return }
+        previewedPhotos = photos
+    }
+
     func previewClosed(_ listing: CommunityListing) {
         guard previewedListingID == listing.id else { return }
         previewedListingID = nil
         previewedRoute = nil
+        previewedPhotos = []
     }
 }

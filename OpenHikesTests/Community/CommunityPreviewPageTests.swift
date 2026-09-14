@@ -49,7 +49,8 @@ struct CommunityPreviewPageTests {
             route: route,
             trackDescription: "A ridge walk",
             photoPins: [],
-            photoFileURLs: []
+            photoFileURLs: [],
+            photosOnRecord: 0
         )
     }
 

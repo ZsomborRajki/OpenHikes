@@ -56,6 +56,10 @@ nonisolated enum SeededQueuedHike {
     static let title = "Karwendel Hut Approach"
     static let photographedTitle = "Steinerne Rinne"
     static let allTitles = [title, photographedTitle]
+    /// How many photographs ``photographedTitle`` arrives with, once its
+    /// preview has downloaded them. Mirrors
+    /// ``SeededCommunityTransport``'s own constant.
+    static let photoCount = 2
 }
 
 extension XCTestCase {
@@ -177,6 +181,38 @@ extension XCTestCase {
         }
     }
 
+    /// Waits for `target` while re-offering *Search this area*.
+    ///
+    /// The wait every community scenario needs and only one of them used to
+    /// have. The map can settle **twice** — the sheet opens before the
+    /// simulated fix arrives — so the pill can come back after
+    /// ``selectCommunityTab(in:)`` already dealt with one, and anything waited
+    /// for through that is waited for in vain: the browser is not going to
+    /// answer a question nobody asked. A bare `waitForExistence` therefore
+    /// fails on exactly the machine where the second settle is slow, which is
+    /// a machine running three simulator clones.
+    ///
+    /// Both halves matter, and the second is the one that gets left out.
+    /// Raising the timeout alone was tried in ``openCommunityHike(titled:in:)``
+    /// and is recorded there as insufficient — the wait has to *re-offer* the
+    /// gesture, not merely wait longer for its consequences.
+    ///
+    /// Budgeted at launch scale for the reason ``selectCommunityTab(in:)``
+    /// gives. It costs that budget only when nothing happens at all, which is
+    /// a failure either way.
+    @MainActor
+    @discardableResult func awaitCommunityAnswer(
+        _ target: XCUIElement,
+        in app: XCUIApplication
+    ) -> Bool {
+        let pill = element("community-search-this-area", in: app)
+        return waitUntil(timeout: UITestTimeout.trace) {
+            if target.exists { return true }
+            if pill.exists { pill.tap() }
+            return false
+        }
+    }
+
     /// The other half of the picker: the hiker's own hikes.
     @MainActor
     func selectMyHikesTab(in app: XCUIApplication) {
@@ -224,20 +260,8 @@ extension XCTestCase {
     @MainActor
     func openCommunityHike(titled title: String, in app: XCUIApplication) {
         let row = communityRow(titled: title, in: app)
-        let pill = element("community-search-this-area", in: app)
-        // Launch scale rather than existence, and re-offering the gesture
-        // rather than only waiting. The map can settle twice — the sheet opens
-        // before the simulated fix arrives — so the pill can come back after
-        // `selectCommunityTab` already dealt with one, and a row that is
-        // waited for through that is a row that never arrives. Both halves
-        // matter: raising the number alone was tried and is what this run
-        // proved insufficient.
         XCTAssertTrue(
-            waitUntil(timeout: UITestTimeout.trace) {
-                if row.exists { return true }
-                if pill.exists { pill.tap() }
-                return false
-            },
+            awaitCommunityAnswer(row, in: app),
             "\"\(title)\" should be listed before it can be opened"
         )
         row.tap()

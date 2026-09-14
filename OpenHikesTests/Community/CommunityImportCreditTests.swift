@@ -40,7 +40,8 @@ struct CommunityImportCreditTests {
             route: Fixture.ridgeRoute,
             trackDescription: "A ridge walk",
             photoPins: [],
-            photoFileURLs: []
+            photoFileURLs: [],
+            photosOnRecord: 0
         )
         let outcome = await CommunityImport.importHike(detail, into: context)
         return try #require(outcome.hike)
