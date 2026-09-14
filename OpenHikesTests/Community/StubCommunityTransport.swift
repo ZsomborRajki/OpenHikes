@@ -60,6 +60,11 @@ final class StubCommunityTransport: CommunityTransporting, @unchecked Sendable {
         var declined: [CommunityPendingSubmission] = []
         /// The listings taken down, in order.
         var takenDown: [String] = []
+        /// Each photo edit a reviewer made, in order: the submission it was
+        /// about and the photographs they kept. What proves the removal
+        /// reaches the record rather than only the screen, and that it
+        /// happens before the listing exists.
+        var photoEdits: [(submissionID: String, kept: [CommunityKeptPhoto])] = []
     }
 
     /// What each call should do. Set before the call, read inside it.
@@ -85,6 +90,8 @@ final class StubCommunityTransport: CommunityTransporting, @unchecked Sendable {
     /// whatever was handed in, which is what the real transport does.
     var publishResult: Result<CommunityListing, CommunityFailure>?
     var declineResult: Result<Void, CommunityFailure> = .success(())
+    /// What editing a submission's photographs answers.
+    var keepPhotosResult: Result<Void, CommunityFailure> = .success(())
     var takeDownResult: Result<Void, CommunityFailure> = .success(())
     /// Held open so a suite can watch two requests overlap — see
     /// `CommunityBrowserTests`.
@@ -213,6 +220,16 @@ final class StubCommunityTransport: CommunityTransporting, @unchecked Sendable {
             throw CommunityFailure.noLongerAvailable
         }
         return try result.get()
+    }
+
+    @concurrent
+    func keepOnlyPhotos(
+        _ kept: [CommunityKeptPhoto],
+        of pending: CommunityPendingSubmission,
+        staging: URL
+    ) async throws {
+        state.withLock { $0.photoEdits.append((pending.submissionID, kept)) }
+        try keepPhotosResult.get()
     }
 
     @concurrent

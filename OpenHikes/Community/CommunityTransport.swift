@@ -297,12 +297,61 @@ nonisolated protocol CommunityTransporting: Sendable {
         downloadingInto directory: URL
     ) async throws -> CommunityHikeDetail
 
+    /// Rewrites `pending`'s submission so it carries only `kept`, deleting
+    /// every other photograph on it.
+    ///
+    /// What *remove this one* has to mean for a moderation control, and the
+    /// reason it costs an upload. A listing carries only
+    /// ``CommunitySchema/Listing/photoCount``; the pictures themselves live on
+    /// the submission, which a published listing names through a QUERYABLE
+    /// reference. So a photograph merely hidden from the listing is still
+    /// fetchable by anybody who reads the hike it belongs to — which is not a
+    /// photograph that has been removed. It has to come off the record.
+    ///
+    /// CloudKit has no way to drop one element of an asset field, so the kept
+    /// photographs are sent again, from the copies the review screen already
+    /// downloaded. That is the whole of the expense and it is bounded:
+    /// ``CommunityPublisher/maximumPhotos`` of them, re-encoded before they
+    /// were ever uploaded.
+    ///
+    /// **Call this before ``publish(_:)``, never after.** Until a listing
+    /// exists nothing can reach the submission but the reviewer holding its
+    /// record name, so an edit here is invisible and a failure costs nothing
+    /// but the decision. The other order would edit a record the browse path
+    /// is already serving.
+    ///
+    /// A conformance writes the two photo fields and leaves every other one
+    /// alone. The route, the outline, the title and the description are not a
+    /// reviewer's to change, and a save that rewrote the whole record would
+    /// have to carry them — see ``CommunitySchema``, whose case for a
+    /// write-once submission this method is the single documented exception
+    /// to.
+    ///
+    /// Gated by `GRANT WRITE TO reviewer` on
+    /// ``CommunitySchema/submissionType`` — the same grant declining needs,
+    /// and the same one a caller outside the role is refused by.
+    ///
+    /// - Parameters:
+    ///   - kept: The photographs to keep, in the order they should end up in.
+    ///     Empty takes both fields off the record.
+    ///   - staging: A directory the caller owns and deletes, for the rewritten
+    ///     pins file. The same rule ``submit(_:)`` follows: a `CKAsset` is a
+    ///     file, and a failed edit must not leave one behind.
+    @concurrent
+    func keepOnlyPhotos(
+        _ kept: [CommunityKeptPhoto],
+        of pending: CommunityPendingSubmission,
+        staging: URL
+    ) async throws
+
     /// Publishes `pending`, making it visible to everybody, and takes it out
     /// of the queue.
     ///
     /// Writes the fields carried on `pending` and reads nothing back off the
     /// submission first — see ``CommunityPendingSubmission`` for why what was
-    /// reviewed has to be what is published.
+    /// reviewed has to be what is published, and why a reviewer's own
+    /// corrections reach the listing by being written onto `pending` rather
+    /// than applied here.
     ///
     /// Gated by `GRANT CREATE, WRITE TO reviewer` on
     /// ``CommunitySchema/listingType``. A caller outside the role gets

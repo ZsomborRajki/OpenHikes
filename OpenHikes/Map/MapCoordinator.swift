@@ -191,6 +191,11 @@ extension MapView {
         weak var community: CommunityBrowser?
 
         var communityAnnotations: [CommunityMapAnnotation] = []
+        /// The markers standing where the *open preview's* photographs were
+        /// taken — see `MapCommunityPhotoAnnotations.swift`, which owns
+        /// everything that reads this. Empty whenever no preview is up, which
+        /// is almost always.
+        var communityPhotoAnnotations: [CommunityPhotoMapAnnotation] = []
         /// The shared hikes' own lines, drawn faded beneath the hiker's route
         /// — see `MapCommunityRoutes.swift`, which owns everything that reads
         /// this.
@@ -198,6 +203,8 @@ extension MapView {
         /// Guards `observeCommunityPins` the way the photo flags guard theirs —
         /// a second registration can never be cancelled.
         var isObservingCommunityPins = false
+        /// The same, for the previewed hike's photo pins.
+        var isObservingCommunityPhotoPins = false
         /// The same, for the lines.
         var isObservingCommunityRoutes = false
         /// The same, for the *Search this area* pill's visibility.
@@ -654,6 +661,9 @@ extension MapView.Coordinator {
         }
         if let communityAnnotation = annotation as? CommunityMapAnnotation {
             return communityAnnotationView(for: communityAnnotation, on: mapView)
+        }
+        if let communityPhoto = annotation as? CommunityPhotoMapAnnotation {
+            return communityPhotoAnnotationView(for: communityPhoto, on: mapView)
         }
 
         let identifier = "routeHighlight"

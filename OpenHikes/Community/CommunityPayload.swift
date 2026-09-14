@@ -37,6 +37,57 @@ nonisolated struct CommunityPhotoPin: Codable, Hashable, Sendable {
     }
 }
 
+/// One photograph a reviewer kept, on its way back onto the submission.
+///
+/// The pin and the file together, because the two are only meaningful as a
+/// pair: ``CommunitySchema/Submission/photos`` and
+/// ``CommunitySchema/Submission/photoPins`` describe each other by index, so
+/// rewriting one of them without the other is how a photograph ends up
+/// carrying another photograph's coordinate. Removing a picture renumbers
+/// every picture after it, which is exactly when that matters most — so the
+/// two fields are rebuilt from one array rather than filtered separately.
+///
+/// The file is a *downloaded* one, in the directory the review screen owns.
+/// See ``CommunityTransporting/keepOnlyPhotos(_:of:staging:)`` for why the
+/// bytes have to make the trip back up.
+nonisolated struct CommunityKeptPhoto: Hashable, Sendable {
+    var pin: CommunityPhotoPin
+    var fileURL: URL
+}
+
+/// One photograph of the hike whose preview is open, and where on the trail it
+/// was taken.
+///
+/// What the map draws a pin from. A ``CommunityHikeDetail`` carries the same
+/// facts in two arrays paired by index; this is that pairing made into one
+/// value, for the photographs that have somewhere to stand.
+nonisolated struct CommunityPreviewPhoto: Identifiable, Hashable, Sendable {
+    /// Which photograph of the hike this is, counting the unanchored ones.
+    ///
+    /// Also its identity, and that is the reason it is carried rather than
+    /// derived: a hiker photographs the same summit twice, and a coordinate
+    /// cannot tell those two pictures apart. Under a reviewer removing one it
+    /// is also the only thing that stays still — see ``CommunityKeptPhoto``.
+    var index: Int
+    var latitude: Double
+    var longitude: Double
+    var capturedAt: Date
+    /// The downloaded file the callout decodes its thumbnail from.
+    ///
+    /// Owned by the screen that downloaded it and deleted with that screen, so
+    /// a pin outliving its preview is a pin pointing at a file that has gone.
+    /// Nothing here has to defend against that — the pins are retired by the
+    /// same two calls that retire the line; see
+    /// ``CommunityBrowser/previewClosed(_:)``.
+    var fileURL: URL
+
+    var id: Int { index }
+
+    var coordinate: CLLocationCoordinate2D {
+        CLLocationCoordinate2D(latitude: latitude, longitude: longitude)
+    }
+}
+
 /// The decoded contents of the two asset fields on a submission.
 ///
 /// A struct rather than two loose arrays so the one invariant that matters —
@@ -170,6 +221,21 @@ nonisolated struct CommunityHikeDetail: Sendable {
     var photoPins: [CommunityPhotoPin]
     /// Downloaded photographs, in ``photoPins`` order.
     var photoFileURLs: [URL]
+    /// How many photographs the submission actually carries.
+    ///
+    /// Not the same number as ``photoFileURLs``'s count, and the difference is
+    /// the whole reason this is here: a download can lose one, and the
+    /// surviving pictures go on describing themselves correctly because the
+    /// pins pair by index — see ``CloudKitCommunityTransport/pins(_:for:of:takenOn:)``.
+    ///
+    /// A screen *showing* a hike has no use for this; one photograph fewer is
+    /// one tile fewer and nothing else. A screen that **rewrites** the record's
+    /// photographs has every use for it, because the rewrite is built out of
+    /// the copies on this device: doing it while one is missing would delete
+    /// that one too, permanently, without the reviewer having decided anything
+    /// about it. See ``hasEveryPhoto``, which is the question this exists to
+    /// answer.
+    var photosOnRecord: Int
 
     /// Whether the pins and the assets still describe each other.
     ///
@@ -189,5 +255,57 @@ nonisolated struct CommunityHikeDetail: Sendable {
     /// that already walks every photograph.
     var isConsistent: Bool {
         photoPins.count == photoFileURLs.count
+    }
+
+    /// Whether every photograph on the record reached this device.
+    ///
+    /// What ``CommunityTransporting/keepOnlyPhotos(_:of:staging:)`` may only
+    /// be called behind — see ``photosOnRecord``.
+    var hasEveryPhoto: Bool {
+        isConsistent && photoFileURLs.count == photosOnRecord
+    }
+
+    /// The photographs that know where they were taken, ready for the map.
+    ///
+    /// Unanchored ones are left out rather than pinned somewhere plausible,
+    /// which is the rule ``PhotoMapPin`` already follows for the hiker's own
+    /// pictures: a photograph with no coordinate is still part of the hike and
+    /// still in the strip, it just has nowhere to stand.
+    ///
+    /// Empty when the two arrays disagree, for the reason ``isConsistent``
+    /// gives. A pin is a claim about *which* photograph was taken *where*, and
+    /// pairing by index is the entirety of what backs that claim — so a
+    /// detail that cannot support it draws no pins at all rather than pins
+    /// that might each be about the picture next door.
+    var previewPhotos: [CommunityPreviewPhoto] {
+        guard isConsistent else { return [] }
+        return zip(photoPins, photoFileURLs).enumerated().compactMap { index, pair in
+            guard let coordinate = pair.0.coordinate else { return nil }
+            return CommunityPreviewPhoto(
+                index: index,
+                latitude: coordinate.latitude,
+                longitude: coordinate.longitude,
+                capturedAt: pair.0.capturedAt,
+                fileURL: pair.1
+            )
+        }
+    }
+
+    /// The photographs at `indexes`, each with the pin that describes it, in
+    /// the order they arrived in.
+    ///
+    /// The order is load-bearing rather than tidy: what comes back is written
+    /// straight onto the submission as its two photo fields, and those pair by
+    /// position. Sorting by index is what keeps the first picture first after
+    /// the third has been taken out.
+    ///
+    /// Empty when the two arrays disagree — the same refusal ``previewPhotos``
+    /// makes, and a sharper one here, since this answer is uploaded.
+    func keptPhotos(at indexes: Set<Int>) -> [CommunityKeptPhoto] {
+        guard isConsistent else { return [] }
+        return indexes.sorted().compactMap { index in
+            guard photoFileURLs.indices.contains(index) else { return nil }
+            return CommunityKeptPhoto(pin: photoPins[index], fileURL: photoFileURLs[index])
+        }
     }
 }

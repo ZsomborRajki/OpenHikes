@@ -167,6 +167,10 @@ struct MapView: MapViewRepresentable, Equatable {
         // down, so a nearby result landing moves MapKit's annotations and no
         // SwiftUI view.
         coordinator.observeCommunityPins(community, on: mapView)
+        // And where the open preview's photographs were taken, which is the
+        // half of a shared hike's pictures the strip on the sheet cannot say —
+        // see ``MapCommunityPhotoAnnotations``.
+        coordinator.observeCommunityPhotoPins(community, on: mapView)
         // And where they go, which is the half a pin cannot say — see
         // ``MapCommunityRoutes``. The recognizer goes on with them: MapKit
         // hit-tests annotations and never overlays, so without it the lines
