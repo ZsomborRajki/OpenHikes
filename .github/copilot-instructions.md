@@ -6,20 +6,20 @@ The main project requires Xcode 26.5+, the iOS 26.0 platform, and a development 
 
 ```sh
 # Boot the simulator first. Anything below that runs tests needs this.
-xcrun simctl boot "iPhone 17 Pro" || true
-xcrun simctl bootstatus "iPhone 17 Pro" -b
+xcrun simctl boot "iPhone 18 Pro" || true
+xcrun simctl bootstatus "iPhone 18 Pro" -b
 
 # Build the app and its embedded widget target
 xcodebuild build \
   -project OpenHikes.xcodeproj \
   -scheme OpenHikes \
-  -destination 'platform=iOS Simulator,name=iPhone 17 Pro'
+  -destination 'platform=iOS Simulator,name=iPhone 18 Pro'
 
 # Run the two app-hosted unit bundles: the default local gate, ~20 seconds
 xcodebuild test \
   -project OpenHikes.xcodeproj \
   -scheme OpenHikes \
-  -destination 'platform=iOS Simulator,name=iPhone 17 Pro' \
+  -destination 'platform=iOS Simulator,name=iPhone 18 Pro' \
   -only-testing:OpenHikesTests -only-testing:OpenWidgetTests
 
 # Run everything the scheme's plan carries, UI automation included: ~13 minutes.
@@ -29,24 +29,24 @@ xcodebuild test \
 xcodebuild test \
   -project OpenHikes.xcodeproj \
   -scheme OpenHikes \
-  -destination 'platform=iOS Simulator,name=iPhone 17 Pro'
+  -destination 'platform=iOS Simulator,name=iPhone 18 Pro'
 
 # Run one app test suite or one test method
 xcodebuild test -project OpenHikes.xcodeproj -scheme OpenHikes \
-  -destination 'platform=iOS Simulator,name=iPhone 17 Pro' \
+  -destination 'platform=iOS Simulator,name=iPhone 18 Pro' \
   -only-testing:OpenHikesTests/HikeStatisticsTests
 xcodebuild test -project OpenHikes.xcodeproj -scheme OpenHikes \
-  -destination 'platform=iOS Simulator,name=iPhone 17 Pro' \
+  -destination 'platform=iOS Simulator,name=iPhone 18 Pro' \
   -only-testing:OpenHikesTests/HikeStatisticsTests/elevationGainAndLoss\(\)
 
 # Run just the widget bundle
 xcodebuild test -project OpenHikes.xcodeproj -scheme OpenHikes \
-  -destination 'platform=iOS Simulator,name=iPhone 17 Pro' \
+  -destination 'platform=iOS Simulator,name=iPhone 18 Pro' \
   -only-testing:OpenWidgetTests
 
 # Run simulator UI automation and launch performance metrics
 xcodebuild test -project OpenHikes.xcodeproj -scheme OpenHikesUI \
-  -destination 'platform=iOS Simulator,name=iPhone 17 Pro'
+  -destination 'platform=iOS Simulator,name=iPhone 18 Pro'
 
 # Run the standalone shared-package suite
 swift test --package-path OpenHikesShared

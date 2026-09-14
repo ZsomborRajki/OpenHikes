@@ -26,12 +26,12 @@ Supporting documents, each owning its own facts:
 Scripts/lint.sh
 
 # Boot the simulator before any test command below
-xcrun simctl boot "iPhone 17" || true
-xcrun simctl bootstatus "iPhone 17" -b
+xcrun simctl boot "iPhone 18 Pro" || true
+xcrun simctl bootstatus "iPhone 18 Pro" -b
 
 # App and widget unit tests — the two bundles, and nothing else
 xcodebuild test -project OpenHikes.xcodeproj -scheme OpenHikes \
-  -destination 'platform=iOS Simulator,name=iPhone 17' \
+  -destination 'platform=iOS Simulator,name=iPhone 18 Pro' \
   -only-testing:OpenHikesTests -only-testing:OpenWidgetTests
 
 # The standalone shared package

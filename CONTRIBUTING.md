@@ -48,7 +48,7 @@ Scripts/lint.sh
 # this the run CI gates on: the scheme's test plan carries OpenHikesUITests
 # too, and without it this becomes thirteen extra minutes of UI automation.
 xcodebuild test -project OpenHikes.xcodeproj -scheme OpenHikes \
-  -destination 'platform=iOS Simulator,name=iPhone 17' \
+  -destination 'platform=iOS Simulator,name=iPhone 18 Pro' \
   -only-testing:OpenHikesTests -only-testing:OpenWidgetTests
 
 # The standalone shared package
