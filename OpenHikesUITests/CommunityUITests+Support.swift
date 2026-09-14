@@ -60,15 +60,18 @@ extension XCTestCase {
                 "--ui-test-community=\(scenario.rawValue)",
             ] + extraArguments
         )
-        // Deliberately no `resetAuthorizationStatus(for: .location)`. The
-        // recording scenarios reset because they assert on the prompt's own
-        // consequences; these only need the app to know roughly where it is,
-        // and the reset is the call the release review caught hanging for
-        // thirty seconds on a contended runner — the two failures in that
-        // review's full UI run were both this, and both passed on a rerun.
-        // Whatever a clone's last scenario left behind, the monitor below
-        // grants the prompt if one appears and nothing asks for one if it
-        // does not.
+        // Deliberately no `resetAuthorizationStatus(for: .location)`. These
+        // scenarios only need the app to know roughly where it is, and the
+        // reset is the call the release review caught hanging for thirty
+        // seconds on a contended runner. Whatever a clone's last scenario left
+        // behind, the monitor below grants the prompt if one appears and
+        // nothing asks for one if it does not.
+        //
+        // Dropping it from the other three classes was tried against this
+        // run and put back: see the issue this change closes. None of them
+        // asserts on the prompt, but the recording scenarios do depend on
+        // the state the reset produces, and `startRecording`'s opening
+        // `app.tap()` depends on there being an alert for it to be spent on.
         addLocationPermissionMonitor()
         setSimulatedLocation(UITestFixture.trailheadCoordinate)
         addTeardownBlock { @MainActor in XCUIDevice.shared.location = nil }
@@ -111,11 +114,48 @@ extension XCTestCase {
     /// than spending a query on a map that is still moving. A scenario that
     /// skipped this would be asserting against the region the map happened to
     /// start in, which is not where the seeded hikes are.
+    ///
+    /// **This is the wait that was mis-set, and it failed silently.** It was a
+    /// ten-second `waitForExistence` followed by `guard … else { return }`, so
+    /// on a clone that had not drawn the pill within ten seconds the gesture
+    /// was skipped and the run carried on against whatever region the map
+    /// started in — and the failure then arrived, much later and somewhere
+    /// else, as a seeded row that "should be listed". Six of the eight
+    /// failures in a `--all` run on a clean `main` were that sentence.
+    ///
+    /// It now waits for the browser to have *answered*, which is the question
+    /// the caller is really asking. Three things end the wait: the pill, which
+    /// is tapped; a row, which means the search already ran; or the state row,
+    /// which is what an area with nothing in it draws. Budgeted at launch
+    /// scale for the reason ``selectCommunityTab(in:)`` gives — this happens
+    /// within a second or two of `launch()` returning, and on a machine
+    /// running three clones the gap between the app being foregrounded and the
+    /// sheet having settled is seconds. It costs that budget only when nothing
+    /// at all happens, which is a failure either way.
     @MainActor
     func searchThisAreaIfOffered(in app: XCUIApplication) {
         let pill = element("community-search-this-area", in: app)
-        guard pill.waitForExistence(timeout: UITestTimeout.navigation) else { return }
-        pill.tap()
+        let state = element("community-nearby-empty", in: app)
+        let anyRow = app.descendants(matching: .any)
+            .matching(identifier: "community-hike-row")
+            .firstMatch
+        // The pill keeps its original grace period before the state row is
+        // allowed to end the wait, and that ordering is load-bearing rather
+        // than tidy. The state row is what an area with nothing in it draws
+        // *and* what a browser that has not searched yet draws, so returning
+        // on it immediately skips the gesture in exactly the scenario that
+        // needs it most: `.failing` reports through that row, and the failure
+        // and its *Try Again* only exist once a search has been asked for.
+        let grace = Date().addingTimeInterval(UITestTimeout.navigation)
+
+        _ = waitUntil(timeout: UITestTimeout.trace) {
+            if pill.exists {
+                pill.tap()
+                return true
+            }
+            if anyRow.exists { return true }
+            return state.exists && Date() > grace
+        }
     }
 
     /// The other half of the picker: the hiker's own hikes.
@@ -165,8 +205,20 @@ extension XCTestCase {
     @MainActor
     func openCommunityHike(titled title: String, in app: XCUIApplication) {
         let row = communityRow(titled: title, in: app)
+        let pill = element("community-search-this-area", in: app)
+        // Launch scale rather than existence, and re-offering the gesture
+        // rather than only waiting. The map can settle twice — the sheet opens
+        // before the simulated fix arrives — so the pill can come back after
+        // `selectCommunityTab` already dealt with one, and a row that is
+        // waited for through that is a row that never arrives. Both halves
+        // matter: raising the number alone was tried and is what this run
+        // proved insufficient.
         XCTAssertTrue(
-            row.waitForExistence(timeout: UITestTimeout.existence),
+            waitUntil(timeout: UITestTimeout.trace) {
+                if row.exists { return true }
+                if pill.exists { pill.tap() }
+                return false
+            },
             "\"\(title)\" should be listed before it can be opened"
         )
         row.tap()
