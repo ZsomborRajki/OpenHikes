@@ -24,7 +24,7 @@ That is local-first with one deliberate exception. There is no OpenHikes account
 - An Apple development team that can sign the WeatherKit entitlement, the shared App Group, the iCloud container and the push entitlement.
 - iPhone only. Every target sets `TARGETED_DEVICE_FAMILY = 1`.
 
-OpenStreetMap is the keyless default and Apple Maps needs no key either. Stadia and Thunderforest require build-time API keys *and* a paid subscription with each vendor, whose terms forbid using them free of charge in a shipping app — in OpenHikes they sit behind a monthly subscription, OpenHikes Pro, which is what pays for them, along with saving their tiles for offline use. Everything else in the app, the community feature included, is free. A build without keys shows them locked, and OpenStreetMap keeps working.
+OpenStreetMap is the keyless default and Apple Maps needs no key either. Stadia and Thunderforest require build-time API keys *and* a paid subscription with each vendor, whose terms forbid using them free of charge in a shipping app — in OpenHikes they sit behind a monthly subscription, OpenHikes Pro, which is what pays for them, along with saving a whole route's Stadia map for offline use — Thunderforest's licence reserves pre-caching for a plan this app is not on. Everything else in the app, the community feature included, is free. A build without keys shows them locked, and OpenStreetMap keeps working.
 
 ## Setup
 

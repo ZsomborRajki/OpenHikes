@@ -97,16 +97,21 @@ struct TileProviderTests {
 
     /// The copy that depends on there being exactly one.
     ///
-    /// The paywall header, the Thunderforest feature row and the Subscriptions
-    /// section of `docs/terms/index.html` all name Stadia Outdoors in the
-    /// singular as the style a route can be downloaded on. They used to say
-    /// Pro "saves them to your phone", which sold the wrong half of the
-    /// subscription to anybody who bought it for Thunderforest.
+    /// The paywall header, the Thunderforest feature row, the Subscriptions
+    /// section of `docs/terms/index.html`, the subscription's description in
+    /// `OpenHikes.storekit` and the same paragraph in the README all name
+    /// Stadia Outdoors in the singular as the style a route can be downloaded
+    /// on. They used to say Pro "saves them to your phone", which sold the
+    /// wrong half of the subscription to anybody who bought it for
+    /// Thunderforest.
     ///
     /// So this is a copy check wearing a data check's clothes: a source added
     /// with `supportsBulkDownload`, or Thunderforest gaining it under a plan
-    /// this app moved to, makes three sentences wrong in three files, and none
-    /// of those files can notice on their own.
+    /// this app moved to, makes five sentences wrong in five files, and none
+    /// of those files can notice on their own. App Store Connect carries a
+    /// sixth copy that nothing here can read, and it is the one a customer
+    /// sees on the subscription page and in Manage Subscriptions — so a change
+    /// that reaches this assertion has to reach that field by hand.
     @Test("exactly one source may be downloaded ahead of a walk")
     func onlyStadiaMayBeDownloadedAhead() {
         let downloadable = TileProvider.all.filter(\.supportsBulkDownload)

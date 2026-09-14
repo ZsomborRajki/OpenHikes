@@ -76,7 +76,7 @@
           ],
           "localizations" : [
             {
-              "description" : "Unlock the Stadia Outdoors and Thunderforest Outdoors map styles, and save them to your phone for offline use.",
+              "description" : "Unlock the Stadia Outdoors and Thunderforest Outdoors map styles, and save a whole route's Stadia map to your phone for offline use.",
               "displayName" : "OpenHikes Pro",
               "locale" : "en_US"
             }
