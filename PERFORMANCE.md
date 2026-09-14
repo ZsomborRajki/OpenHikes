@@ -214,59 +214,6 @@ duty paid, half a route recorded.
 
 ## Open findings
 
-### P1 — Launch blocks the main thread for ~500 ms
-
-`XCTApplicationLaunchMetric` puts first-responsive-frame at **1.308 s**, and the
-watchdog reports a **428–546 ms** unbroken main-thread stall in *every*
-scenario. That stall begins before `PerformanceLog` itself exists and ends
-between t≈0.38 s and t≈0.50 s on its clock, by which point the map and sheet
-have already drawn. The timeline inside it bisects as:
-
-| Span | Cost |
-|---|---|
-| `ModelContainerInit` (SwiftData) | 42.0–48.1 ms |
-| `AppModelInit` (whole `OpenHikesModel`, includes the above) | 67.8–87.0 ms |
-| Model built → first SwiftUI body, at t≈0.17–0.20 | **146–161 ms** of framework bootstrap |
-| `MapViewCreated` → `MapRecordingTraceApplied` | **41–46 ms** of `MKMapView` construction |
-| First body → main thread free again | **207–322 ms** |
-
-The sheet body runs six to eight times and the hike list four to nine before
-the app settles at t≈0.54–0.62 s. The framework bootstrap is not ours; the rest
-of the first render largely is. **This is also the largest single energy item in
-a short session**: a hiker who opens the app to check where they are, and
-closes it, pays this and almost nothing else.
-
-**Some of the worst is the first launch, not the scenario named.** The suite
-runs alphabetically, so `background-recording` launches into a container the
-build has just replaced, and it holds the top of both init ranges — 48.1 ms and
-87.0 ms, against 42.0–47.9 and 67.8–78.2 across the other nine — in both runs
-this table was built from. The findings list names it as the worst scenario for
-both, and it is, of a cost that belongs to the first launch rather than to
-recording. The stall does not follow that pattern: its worst moved to
-`recording` between the two runs, so read that one as a range and not as a
-scenario's property.
-
-Two things are known about the bisection intervals and neither is fixed.
-`ModelContainerInit` carries three `#Index<Hike>` indexes built at store-open,
-traded for a faster hike list on a large store, with nothing measuring the
-benefit. `AppModelInit` had one attributable cause — two `CKContainer` default
-arguments constructed synchronously and used only from `async` readers, now
-`@autoclosure @escaping` factories behind a `lazy var` — which bought about 2 ms
-of mean and 6 ms of worst case and did not move the first frame at all. Roughly
-14 ms of `AppModelInit` and the whole of the first-frame cost remain
-unattributed.
-
-*Next step:* put a signpost interval around each dependency
-`OpenHikesModel.init` constructs rather than guessing again, and find out how
-much of the sheet hierarchy is genuinely required for the first frame.
-
-The stall is asserted rather than merely recorded: `assertLaunchStall(atMost:in:)`
-fails `testIdleCostsNothing` above a **1200 ms** ceiling — a tripwire set well
-above the observed range, not a target, because the target is to remove the work
-rather than to hold a line around it. It needed a budget shape of its own, since
-launch is over before any measured phase begins, so it reads the watchdog's
-*maximum* out of the counter tally instead of a delta.
-
 ### P2 — Panning still reaches the sheet, sometimes
 
 Four consecutive runs of the browsing phase before the trail-walk feature
