@@ -52,6 +52,11 @@ struct HikePhotoViewer: View {
 
     @State private var currentID: UUID?
     @State private var didRestoreStart = false
+    /// Up while the trash button is waiting for an answer. The same question
+    /// the swipe in *My Hikes* now asks, for the same reason: the file goes
+    /// with the row, and photo pixels stay on the device the photo was added
+    /// on — so this device is the only place they were.
+    @State private var showDeleteConfirmation = false
 
     /// The sorted gallery, read once per body pass and handed down.
     ///
@@ -124,6 +129,17 @@ struct HikePhotoViewer: View {
         // ``DismissButton``. It cost seven passes of this screen, each one
         // re-sorting the gallery, for a single backgrounding.
         .dismiss(when: photos.isEmpty)
+        .confirmationDialog(
+            "Delete this photograph?",
+            isPresented: $showDeleteConfirmation,
+            titleVisibility: .visible,
+            presenting: currentIndex.map { photos[$0] }
+        ) { photo in
+            Button("Delete Photo", role: .destructive) { delete(photo) }
+            Button("Cancel", role: .cancel) { /* intentionally empty */ }
+        } message: { _ in
+            Text("The photograph is deleted from this device for good.")
+        }
     }
 
     // MARK: - Pages
@@ -219,9 +235,9 @@ struct HikePhotoViewer: View {
                     onShowOnMap: onShowOnMap
                 )
             }
-            if let current {
+            if current != nil {
                 Button(role: .destructive) {
-                    delete(current)
+                    showDeleteConfirmation = true
                 } label: {
                     Image(systemName: "trash")
                 }

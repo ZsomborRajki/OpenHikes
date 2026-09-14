@@ -118,6 +118,14 @@ nonisolated final class OpenHikesUITests: XCTestCase {
             "swiping a row should reveal its delete action"
         )
         delete.tap()
+        // The swipe is an offer, not the deletion. A hike's photographs have
+        // no second copy anywhere, so the destructive step is behind a
+        // question — and this is the assertion that it still is.
+        confirmDestructive(
+            "Delete Hike",
+            in: app,
+            failureMessage: "deleting a hike should ask before taking its route and photographs"
+        )
 
         let gone = NSPredicate(format: "exists == false")
         expectation(for: gone, evaluatedWith: row)

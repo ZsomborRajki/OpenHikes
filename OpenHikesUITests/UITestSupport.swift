@@ -690,6 +690,34 @@ extension XCTestCase {
         XCTFail("discarding should ask before throwing a walk away")
     }
 
+    /// Confirms a destructive `confirmationDialog` by the title of its
+    /// confirming button.
+    ///
+    /// Found inside the presentation rather than by title for the reason
+    /// ``confirmDiscard(in:)`` explains: a plain lookup resolves to whichever
+    /// the tree lists first, and the button that raised the dialog is often
+    /// that one. `failureMessage` is what a *missing* dialog reads as, which
+    /// is the assertion that matters here — these tests exist because the
+    /// action used to happen with nothing asked.
+    @MainActor
+    func confirmDestructive(
+        _ title: String,
+        in app: XCUIApplication,
+        failureMessage: String
+    ) {
+        for container in [app.sheets, app.alerts] {
+            let presented = container.firstMatch
+            guard presented.waitForExistence(timeout: UITestTimeout.navigation)
+            else { continue }
+            let confirm = presented.buttons[title]
+            guard confirm.waitForExistence(timeout: UITestTimeout.navigation)
+            else { continue }
+            confirm.tap()
+            return
+        }
+        XCTFail(failureMessage)
+    }
+
     /// Taps whatever the current screen's back button is.
     ///
     /// Addressed by position rather than by title: a back button is labelled
