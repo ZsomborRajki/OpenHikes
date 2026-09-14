@@ -69,7 +69,7 @@ struct ElevationFormatTests {
     /// change to either row that leaves them disagreeing fails here.
     @Test(
         "elevation follows the same system the distance row does",
-        arguments: ["en_US", "en_GB", "de_DE", "ja_JP"]
+        arguments: ["en_US", "en_GB", "de_DE", "ja_JP", "en_LR", "my_MM"]
     )
     func agreesWithTheDistanceRow(identifier: String) {
         let locale = Locale(identifier: identifier)
@@ -91,7 +91,7 @@ struct ElevationFormatTests {
     /// if either side is changed alone.
     @Test(
         "the app and the widget agree about the same height",
-        arguments: ["en_US", "en_GB", "de_DE", "ja_JP"]
+        arguments: ["en_US", "en_GB", "de_DE", "ja_JP", "en_LR", "my_MM"]
     )
     func agreesWithTheWidget(identifier: String) {
         let locale = Locale(identifier: identifier)
@@ -109,7 +109,7 @@ struct ElevationFormatTests {
     /// both make of it — and what makes this the one length in the app that
     /// cannot simply use the distance formatter.
     @Test("a tall summit stays in the base unit", arguments: [
-        "en_US", "en_GB", "de_DE", "ja_JP",
+        "en_US", "en_GB", "de_DE", "ja_JP", "en_LR", "my_MM",
     ])
     func staysInTheBaseUnit(identifier: String) {
         let text = Self.elevation(8848, identifier)
@@ -153,6 +153,26 @@ struct ElevationFormatTests {
                 locale: Locale(identifier: identifier)
             ) == expected
         )
+    }
+
+    /// The eighteen locales where the height row used to contradict the
+    /// distance row directly above it. Both are regions whose measurement
+    /// system is imperial and whose roads are signed in kilometres, so asking
+    /// `measurementSystem` gave them feet while `usage: .road` gave them
+    /// kilometres — `en_LR` drew "5 km" beside "4,101 ft" in one stat grid.
+    ///
+    /// Pinned as whole strings, and with the measurement system asserted
+    /// alongside, so that a future change back to the old question fails here
+    /// with the reason written down rather than with a puzzling diff.
+    @Test("a region with imperial units and metric roads is given metres", arguments: [
+        ("en_LR", 1250.0, "1,250 m"),
+        ("en_LR", 535.0, "535 m"),
+        ("my_MM", 1250.0, "၁,၂၅၀ m"),
+        ("my_MM", 535.0, "၅၃၅ m"),
+    ])
+    func imperialSystemMetricRoads(identifier: String, meters: Double, expected: String) {
+        #expect(Locale(identifier: identifier).measurementSystem != .metric)
+        #expect(Self.elevation(meters, identifier) == expected)
     }
 
     /// The dash survives the wide spelling too.

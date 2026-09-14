@@ -14,6 +14,7 @@
 
 import Foundation
 @testable import OpenHikes
+import OpenHikesShared
 import Testing
 
 @Suite("Speed formatting")
@@ -67,7 +68,7 @@ struct SpeedFormatTests {
     /// change to either row that leaves them disagreeing fails here.
     @Test(
         "speed follows the same system the distance row does",
-        arguments: ["en_US", "en_GB", "de_DE", "ja_JP"]
+        arguments: ["en_US", "en_GB", "de_DE", "ja_JP", "en_LR", "my_MM"]
     )
     func agreesWithTheDistanceRow(identifier: String) {
         let locale = Locale(identifier: identifier)
@@ -107,5 +108,43 @@ struct SpeedFormatTests {
     func nonFiniteSpeed(value: Double) {
         #expect(Self.speed(value, "en_US") == "—")
         #expect(Self.speed(value, "de_DE") == "—")
+    }
+
+    /// The visible half of the bug this pair was filed for: two surfaces
+    /// describing the same walk in two different units. `ElevationFormatTests`
+    /// has had this assertion since the height rows were brought together;
+    /// speed had none, which is how the widget kept converting by measurement
+    /// system for as long as it did.
+    ///
+    /// The four agreeing locales could never have failed it. `en_LR` and
+    /// `my_MM` are the two cheapest that can.
+    @Test(
+        "the app and the widget agree about the same pace",
+        arguments: ["en_US", "en_GB", "de_DE", "ja_JP", "en_LR", "my_MM"]
+    )
+    func agreesWithTheWidget(identifier: String) {
+        let locale = Locale(identifier: identifier)
+        for metersPerSecond in [0.5, 1.0, 1.3888888, 2.5, 10.0] {
+            #expect(
+                Self.speed(metersPerSecond, identifier)
+                    == WidgetFormat.speed(
+                        metersPerSecond: metersPerSecond,
+                        locale: locale
+                    ),
+                "\(identifier) disagreed about \(metersPerSecond) m/s"
+            )
+        }
+    }
+
+    /// The region the divergence was measured in, pinned as whole strings.
+    /// Myanmar is `uksystem` and signs its roads in kilometres, so a hiker in
+    /// Yangon reads km/h — on both surfaces, now.
+    @Test("a region with imperial units and metric roads is given km/h", arguments: [
+        ("en_LR", 1.3888888, "5.0 km/h"),
+        ("my_MM", 1.3888888, "၅.၀ km/h"),
+    ])
+    func imperialSystemMetricRoads(identifier: String, metersPerSecond: Double, expected: String) {
+        #expect(Locale(identifier: identifier).measurementSystem != .metric)
+        #expect(Self.speed(metersPerSecond, identifier) == expected)
     }
 }

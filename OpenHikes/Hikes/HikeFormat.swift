@@ -6,6 +6,7 @@
 //
 
 import Foundation
+import OpenHikesShared
 
 nonisolated enum HikeFormat {
     /// Under an hour the interesting unit is seconds; over it, minutes.
@@ -150,16 +151,27 @@ nonisolated enum HikeFormat {
 
     /// Whole units of whatever the region measures heights in.
     ///
-    /// `measurementSystem` rather than a language check: `en_GB` is
-    /// `uksystem` and wants feet for a height while wanting metres for very
-    /// little else, and only the locale can say so.
+    /// The question is asked by ``OpenHikesShared/WidgetFormat/prefersImperialRoadUnits(in:)``
+    /// rather than by `measurementSystem`, and it is asked in the shared
+    /// package rather than here so that the app and the widget cannot answer
+    /// it differently — which is the failure `ElevationFormatTests` exists to
+    /// catch and this is the other half of.
+    ///
+    /// `measurementSystem` was the previous basis and is a *different*
+    /// question that agrees in most places. It disagrees in eighteen locales,
+    /// all of them regions whose measurement system is imperial and whose
+    /// roads are signed in kilometres, and there the height row contradicted
+    /// the distance row directly above it — `en_LR` drew "5 km" and
+    /// "4,101 ft" in the same stat grid. Height has no usage of its own, so
+    /// the unit still has to be chosen by hand; what changed is which question
+    /// chooses it.
     private static func converted(
         _ measurement: Measurement<UnitLength>,
         for locale: Locale
     ) -> Measurement<UnitLength> {
-        let converted = locale.measurementSystem == .metric
-            ? measurement.converted(to: .meters)
-            : measurement.converted(to: .feet)
+        let converted = WidgetFormat.prefersImperialRoadUnits(in: locale)
+            ? measurement.converted(to: .feet)
+            : measurement.converted(to: .meters)
         return Measurement(value: converted.value.rounded(), unit: converted.unit)
     }
 

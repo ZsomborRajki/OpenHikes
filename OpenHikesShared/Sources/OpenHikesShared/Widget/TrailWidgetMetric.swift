@@ -12,6 +12,7 @@
 //
 
 import Foundation
+import Synchronization
 
 /// Number formatting shared by everything the widget draws, so a distance in
 /// the status line cannot be rounded differently from a distance in a chip.
@@ -39,15 +40,22 @@ public enum WidgetFormat {
     /// Elevation style: whole metres, or whole feet where that is the local
     /// unit, and never promoted to kilometres — a 1,250 m summit is 1,250 m
     /// high, not "1.2 km" high, which is what `.road` and `.general` would
-    /// both make of it.
+    /// both make of it. That is the whole reason this cannot simply be
+    /// ``length(meters:locale:)``, and it is also why the unit has to be
+    /// chosen by hand: there is no usage that means "a height".
+    ///
+    /// Chosen by ``prefersImperialRoadUnits(in:)`` rather than by
+    /// `measurementSystem`, so the height agrees with the distance beside it
+    /// in every locale rather than in most of them. See that helper for the
+    /// eighteen where the two answers part company.
     public static func elevation(
         meters: Double,
         locale: Locale = .current
     ) -> String {
         let measurement = Measurement(value: meters, unit: UnitLength.meters)
-        let converted = locale.measurementSystem == .metric
-            ? measurement
-            : measurement.converted(to: .feet)
+        let converted = prefersImperialRoadUnits(in: locale)
+            ? measurement.converted(to: .feet)
+            : measurement
         return Measurement(
             value: converted.value.rounded(),
             unit: converted.unit
@@ -71,28 +79,92 @@ public enum WidgetFormat {
 
     /// Walking-pace style, to one decimal — "4.3 km/h", "2.7 mph".
     ///
-    /// `UnitSpeed` has no locale-aware usage of its own, so the unit is
-    /// chosen from the locale's measurement system the way the length
-    /// formatter's `.road` usage does it for distances.
+    /// `usage: .general`, and no explicit conversion before it, which is what
+    /// `HikeFormat.speed` was fixed to and this copy was not. Asking the
+    /// locale's measurement system whether to convert is a different question
+    /// from asking ICU what the region measures road speed in, and the two
+    /// part company in the eighteen locales
+    /// ``prefersImperialRoadUnits(in:)`` names: a hiker in Yangon read
+    /// "5.0 km/h" on the recording screen and "3.1 mph" on the Lock Screen
+    /// panel for the same fix.
+    ///
+    /// `numberFormatStyle` is kept for the reason `HikeFormat` gives: without
+    /// it the style rounds to whole units, and "4 km/h" cannot tell a stroll
+    /// from a march.
     public static func speed(
         metersPerSecond: Double,
         locale: Locale = .current
     ) -> String {
-        let measurement = Measurement(
-            value: metersPerSecond,
-            unit: UnitSpeed.metersPerSecond
-        )
-        let converted = locale.measurementSystem == .metric
-            ? measurement.converted(to: .kilometersPerHour)
-            : measurement.converted(to: .milesPerHour)
-        return converted.formatted(
-            .measurement(
-                width: .abbreviated,
-                usage: .asProvided,
-                numberFormatStyle: .number.precision(.fractionLength(1))
+        Measurement(value: metersPerSecond, unit: UnitSpeed.metersPerSecond)
+            .formatted(
+                .measurement(
+                    width: .abbreviated,
+                    usage: .general,
+                    numberFormatStyle: .number.precision(.fractionLength(1))
+                )
+                .locale(locale)
             )
-            .locale(locale)
+    }
+
+    /// Whether this region measures a road distance in miles.
+    ///
+    /// The question ``length(meters:locale:)`` asks by passing `usage: .road`,
+    /// made available to the two formatters that cannot pass a usage: a height
+    /// has no usage of its own, and asking `measurementSystem` instead is a
+    /// *different* question that happens to agree in most places. It disagrees
+    /// in eighteen of the 1,062 identifiers `Locale.availableIdentifiers`
+    /// carries — Liberia is `ussystem`, Myanmar is `uksystem`, and both sign
+    /// their roads in kilometres — which is how the app drew "5 km" beside
+    /// "4,101 ft" in one stat grid for a reader there.
+    ///
+    /// Asked by formatting rather than read from a table, because Foundation
+    /// exposes no answer and a checked-in table would be a copy of CLDR that
+    /// stops matching it. A reference distance is formatted twice, once by
+    /// road usage and once forced to kilometres, and the answer is whether the
+    /// two disagree. Comparing rendered strings rather than looking for "mi"
+    /// is what makes it right in Scottish Gaelic, which abbreviates the mile
+    /// `mì`, and in Lakota, which spells both units as words.
+    ///
+    /// Memoised because it is five times the cost of the formatting it
+    /// decides — 4.9 µs against 1.0 µs, measured over 10,000 calls — and the
+    /// answer is a property of the locale that cannot change while the process
+    /// lives. The map is bounded by the number of distinct identifiers asked
+    /// about, which is one on a device and the whole list only in the suites
+    /// that sweep it.
+    public static func prefersImperialRoadUnits(in locale: Locale) -> Bool {
+        let identifier = locale.identifier
+        if let known = roadUnits.withLock({ $0[identifier] }) { return known }
+        let answer = measureRoadUnits(in: locale)
+        roadUnits.withLock { $0[identifier] = answer }
+        return answer
+    }
+
+    private static let roadUnits = Mutex<[String: Bool]>([:])
+
+    /// Five kilometres: far enough above the metre-to-kilometre threshold that
+    /// no locale renders it in the smaller unit, so the only difference the
+    /// comparison can find is the one being asked about.
+    private static let roadProbeMeters: Double = 5000
+    private static let roadProbe = Measurement(
+        value: roadProbeMeters,
+        unit: UnitLength.meters
+    )
+
+    private static func measureRoadUnits(in locale: Locale) -> Bool {
+        // Whole units on both sides, so a rounding difference between the two
+        // usages cannot be mistaken for a unit difference.
+        let digits = FloatingPointFormatStyle<Double>.number
+            .precision(.fractionLength(0))
+            .grouping(.never)
+        let road = roadProbe.formatted(
+            .measurement(width: .abbreviated, usage: .road, numberFormatStyle: digits)
+                .locale(locale)
         )
+        let metric = roadProbe.converted(to: .kilometers).formatted(
+            .measurement(width: .abbreviated, usage: .asProvided, numberFormatStyle: digits)
+                .locale(locale)
+        )
+        return road != metric
     }
 }
 
