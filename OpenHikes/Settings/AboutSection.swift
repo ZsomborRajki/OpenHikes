@@ -16,8 +16,8 @@
 import SwiftUI
 
 struct AboutSection: View {
-    /// The privacy policy and the project, in the one settings section that is
-    /// drawn unconditionally.
+    /// The privacy policy, the terms, the project, and which build this is —
+    /// in the one settings section that is drawn unconditionally.
     ///
     /// App Review 5.1.1(i) wants the policy linked *inside* the app as well as
     /// in App Store Connect, and until this row existed the only link to it was
@@ -57,12 +57,32 @@ struct AboutSection: View {
                 Label("Project on GitHub", systemImage: "chevron.left.forwardslash.chevron.right")
             }
             .accessibilityIdentifier("project-github-link")
+
+            // Directly under the link that asks people to report an issue,
+            // because it is the first thing the bug report wants and the app
+            // said it nowhere: `Bundle.main` was read for a version in exactly
+            // one place and it was the tile requests' User-Agent.
+            //
+            // The diagnostics screen looks like it answers this and does not
+            // — its "App version" row is `report.appVersion`, off a stored
+            // MetricKit payload, so it says which build *crashed* and shows
+            // nothing at all on a fresh install. This is the running one, in
+            // the spelling that screen uses for a report, so the two read the
+            // same way.
+            //
+            // It is worth a row now rather than later because #340 made a
+            // version map to a commit: an archived build is tagged
+            // `v<marketing>-<build>`, which is only useful to somebody who can
+            // read those two numbers off a device.
+            LabeledContent("Version", value: AppVersion.display)
+                .accessibilityIdentifier("app-version-row")
         } header: {
             Text("About")
         } footer: {
             Text(
                 "The policy and the terms open in your browser, and are the ones the App Store"
-                + " listing links too. Share feedback, suggestions, or report an issue on GitHub."
+                + " listing links too. Share feedback, suggestions, or report an issue on GitHub"
+                + " \u{2014} the version above says which build you're on."
             )
         }
     }

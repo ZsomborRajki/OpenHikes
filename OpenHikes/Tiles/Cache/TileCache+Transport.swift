@@ -25,13 +25,6 @@ nonisolated extension TileCache {
     /// ship inside every binary and could not be revoked once it had.
     static let repositoryURL = "https://github.com/ZsomborRajki/OpenHikes"
 
-    /// `CFBundleShortVersionString`, or a placeholder for a host that has
-    /// none. Xcode generates that key from `MARKETING_VERSION` for every
-    /// target here, so the placeholder is only reachable from a bundle that
-    /// isn't one of them.
-    private static let bundleShortVersion =
-        Bundle.main.object(forInfoDictionaryKey: "CFBundleShortVersionString") as? String ?? "0"
-
     /// What every tile request says about who is asking.
     ///
     /// OSM's tile usage policy asks for a User-Agent that identifies the
@@ -43,10 +36,12 @@ nonisolated extension TileCache {
     /// The version is read from the bundle rather than written out, because a
     /// literal is a second place the version lives and the one nobody
     /// remembers to bump — this header announced `1.0` for as long as it was
-    /// a literal, whatever the app had shipped since. Named so a test can
-    /// assert on the header the app really sends rather than on a copy of the
+    /// a literal, whatever the app had shipped since. Read through
+    /// ``AppVersion``, which is now the one place that asks the bundle, since
+    /// the settings screen needs the same answer. Named so a test can assert
+    /// on the header the app really sends rather than on a copy of the
     /// string.
-    static let userAgent = "OpenHikes/\(bundleShortVersion) (iOS; +\(repositoryURL))"
+    static let userAgent = "OpenHikes/\(AppVersion.marketing) (iOS; +\(repositoryURL))"
 
     static func tileSessionConfiguration(
         from configuration: URLSessionConfiguration? = nil
