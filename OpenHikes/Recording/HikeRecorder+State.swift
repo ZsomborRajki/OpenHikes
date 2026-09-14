@@ -168,7 +168,7 @@ final class SystemRecordingLocationSource: RecordingLocationSource {
         guard manager.accuracyAuthorization == .reducedAccuracy else { return }
         do {
             try await manager.requestTemporaryFullAccuracyAuthorization(
-                withPurposeKey: "RecordHike"
+                withPurposeKey: LocationPurposeKey.recordHike
             )
         } catch {
             Self.logger.error(

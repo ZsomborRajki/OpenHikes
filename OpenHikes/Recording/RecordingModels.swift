@@ -113,6 +113,25 @@ nonisolated struct RecordingPoint: Equatable, Sendable {
     }
 }
 
+/// The purpose keys the app asks Core Location for temporary full accuracy
+/// with.
+///
+/// A matched pair of string literals: the value below is passed to
+/// `requestTemporaryFullAccuracyAuthorization(withPurposeKey:)`, and the same
+/// spelling has to exist as a key inside
+/// `NSLocationTemporaryUsageDescriptionDictionary` in `OpenHikes/Info.plist`.
+/// Rename either alone and the code compiles, the linter is happy, every suite
+/// passes, and a recording quietly never gets full accuracy — the same failure
+/// the *Settled decisions* entry on `MovementReminderKind` calls out for its
+/// own raw values.
+///
+/// Declared here so `InfoPlistContractTests` can assert the plist against the
+/// literal the recorder actually passes, rather than restating it and agreeing
+/// with itself.
+nonisolated enum LocationPurposeKey {
+    static let recordHike = "RecordHike"
+}
+
 nonisolated enum RecordingFixPolicy {
     static let maximumHorizontalAccuracy: CLLocationAccuracy = 50
     static let maximumSpeed: CLLocationSpeed = 8
