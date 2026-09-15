@@ -146,6 +146,18 @@
 			  data, a timed hike is exercise, and what this manifest answers
 			  is what leaves the device rather than which framework it came
 			  from.
+
+			  That same rule is why the Health export adds nothing here, and
+			  it is worth writing down because the export looks like it
+			  should. `HealthKitWorkoutWriter` writes a finished hike into the
+			  hiker's *own* Health store, on their own device, behind a switch
+			  that is off until they turn it on — and `.shareTypes` with no
+			  `.readTypes`, so nothing is read back. Nothing is collected by
+			  the developer, for the same reason iCloud mirroring into the
+			  hiker's private database is not collection: the destination is
+			  theirs. The entry above covers the case that *is* collection,
+			  which is the community submission, and it covered it before
+			  HealthKit existed in this app.
 			-->
 			<key>NSPrivacyCollectedDataType</key>
 			<string>NSPrivacyCollectedDataTypeFitness</string>

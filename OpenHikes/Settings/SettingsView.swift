@@ -75,6 +75,8 @@ struct SettingsView: View {
     private var movementRemindersEnabled = SettingsDefault.movementRemindersEnabled
     @AppStorage(SettingsKey.keepScreenAwake)
     private var keepScreenAwake = SettingsDefault.keepScreenAwake
+    @AppStorage(SettingsKey.savesHikesToHealth)
+    private var savesHikesToHealth = SettingsDefault.savesHikesToHealth
 
     private static let disabledOpacity: Double = 0.55
     private static let badgeHorizontalPadding: CGFloat = 7
@@ -118,6 +120,7 @@ struct SettingsView: View {
                 CloudSyncSection(sync: cloudSync)
                 mapProviderSection
                 photosSection
+                healthSection
                 backgroundTrackingSection
                 liveActivitySection
                 movementReminderSection
@@ -505,6 +508,39 @@ private extension SettingsView {
                 + " for permission the first time one is saved."
             )
         }
+    }
+}
+
+// MARK: - Health
+
+/// The one switch that writes into a store belonging to another app.
+private extension SettingsView {
+    /// Off by default — see ``SettingsDefault/savesHikesToHealth``. Health is
+    /// the hiker's most sensitive store and the app has no business writing to
+    /// it because they recorded a walk.
+    ///
+    /// The footer says three things a hiker deciding this needs, and says them
+    /// because each one is a thing they cannot check from here: what goes,
+    /// that nothing is read back, and when they will be asked. The last is the
+    /// same promise *Also Save to Photos* makes, kept the same way — the
+    /// prompt comes at the first write, not at the flick of this switch.
+    @ViewBuilder var healthSection: some View {
+        #if os(iOS)
+        Section {
+            Toggle("Save Hikes to Health", isOn: $savesHikesToHealth)
+                .accessibilityIdentifier("saves-hikes-to-health-toggle")
+        } header: {
+            Text("Health")
+        } footer: {
+            Text(
+                "Writes each hike you finish recording to the Health app as a hiking"
+                + " workout, with its distance, time, climb and route — so it counts"
+                + " towards your rings and sits beside your other activity. OpenHikes"
+                + " only ever writes to Health and never reads anything from it. You'll"
+                + " be asked for permission the first time a hike is saved."
+            )
+        }
+        #endif
     }
 }
 
