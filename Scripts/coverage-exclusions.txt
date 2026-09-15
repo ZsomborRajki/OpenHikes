@@ -1,0 +1,77 @@
+# Files the coverage floor does not measure.
+#
+# Every path here is a file whose executable lines are SwiftUI body code, and
+# body code is evaluated by exactly one suite: OpenHikesUITests. That suite is
+# deliberately not run in CI — it drives a simulator through real gestures and
+# timing-sensitive waits, which a shared runner makes slow and unreliable; see
+# the note at the foot of .github/workflows/ci.yml. So in the job that measures
+# coverage these files can only ever read as untested, however well tested the
+# screens actually are.
+#
+# Leaving them in the denominator made the gate measure the wrong thing. The
+# number fell as screens were added, whatever the tests did: over the two days
+# before this list was written the app gained 2352 executable lines and 508
+# covered ones, and the percentage dropped 1.87 points while not one suite was
+# deleted or weakened. A gate that goes red for shipping a screen is a gate
+# people learn to lower, which is the one change the floor exists to prevent.
+#
+# What is left after these exclusions is the code the unit suites can actually
+# reach, and it is held to a floor worth having — around 79% when this list was
+# written, against 55% for the whole target. A real fall there is a suite
+# deleted or a domain stubbed out, which is what the gate is for.
+#
+# Two rules keep this list honest:
+#
+#   1. A path that matches no file in the report fails the gate. A screen that
+#      is renamed or deleted has to be spelled here again, so the list cannot
+#      quietly rot into an exemption for code nobody meant to exempt.
+#
+#   2. Nothing here is measured, including a non-view type that later grows
+#      inside one of these files. Several already carry a small one — the
+#      metrics constants in HikeDetailComponents, the segment enum in
+#      HikeDetailView, the disclosure text in CommunityShareSheet — and where
+#      that logic is worth pinning it has its own suite, which goes on running
+#      either way. Logic that grows past a handful of lines belongs in its own
+#      file, where the floor can see it again.
+#
+# The UI suites still exist and still run locally:
+#
+#   Scripts/run-ui-tests.sh --all
+
+OpenHikes/Community/CommunityHikeRow.swift
+OpenHikes/Community/CommunityHikeView.swift
+OpenHikes/Community/CommunityPhotoTile.swift
+OpenHikes/Community/CommunityReportSheet.swift
+OpenHikes/Community/CommunityReviewView.swift
+OpenHikes/Community/CommunityShareSheet.swift
+OpenHikes/Community/CommunityWithdrawalSheet.swift
+OpenHikes/Community/MapSheetCommunitySection.swift
+OpenHikes/General/Dismissal.swift
+OpenHikes/Hikes/ElevationChartView.swift
+OpenHikes/Hikes/HikeDetailComponents.swift
+OpenHikes/Hikes/HikeDetailView+Community.swift
+OpenHikes/Hikes/HikeDetailView.swift
+OpenHikes/Hikes/HikeDifficultySection.swift
+OpenHikes/Hikes/HikeRow.swift
+OpenHikes/Hikes/HikeSurfaceSection.swift
+OpenHikes/Hikes/HikeWalkHistory.swift
+OpenHikes/Hikes/RouteLinePatternPicker.swift
+OpenHikes/Hikes/WalkControls.swift
+OpenHikes/Hikes/WalkRow.swift
+OpenHikes/Hikes/WalkSummaryView.swift
+OpenHikes/Map/MapSheetHikes.swift
+OpenHikes/Map/MapSidePanel.swift
+OpenHikes/Photos/HikePhotoSection.swift
+OpenHikes/Photos/HikePhotoViewer.swift
+OpenHikes/Photos/PhotoDiscoverySheet.swift
+OpenHikes/Purchases/MapPaywallView.swift
+OpenHikes/Recording/RecordingRouteReviewControls.swift
+OpenHikes/Settings/AboutSection.swift
+OpenHikes/Settings/BlockedHikersSection.swift
+OpenHikes/Settings/CloudSyncSection.swift
+OpenHikes/Settings/FieldMetricsSection.swift
+OpenHikes/Settings/SettingsView.swift
+OpenHikes/Tiles/Offline/OfflineStorageAlerts.swift
+OpenHikes/Tiles/TileAttributionView.swift
+OpenHikes/Weather/WeatherBadge.swift
+OpenHikes/Weather/WeatherDetailSheet.swift
