@@ -99,6 +99,10 @@ struct TrailDifficultyBar: View {
             }
         }
         .frame(height: Self.height)
+        // A track under the segments, so a share drawn at a low alpha — the
+        // unmapped one — reads as a light band rather than as a hole with the
+        // map showing through it. See ``Color/contentSurface``.
+        .background(Color.contentSurface)
         .clipShape(.capsule)
         .accessibilityElement()
         .accessibilityLabel("Difficulty breakdown")

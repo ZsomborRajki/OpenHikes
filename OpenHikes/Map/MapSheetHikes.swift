@@ -21,7 +21,12 @@ import SwiftData
 import SwiftUI
 
 struct MapSheetHikes: View, Equatable {
-    private static let selectedHikeHighlightOpacity: Double = 0.15
+    /// How much of the drawn route's colour the row carries.
+    ///
+    /// Raised with the surface it is now laid over — see `hikeRow(_:)`. It is
+    /// a tint on a card rather than a wash over a map, so it can be stronger
+    /// without swallowing the title on top of it.
+    private static let selectedHikeHighlightOpacity: Double = 0.28
     private static let actionGlyphSize: CGFloat = 40
     /// Under the 8pt gap between the two action circles, so they stay separate
     /// targets at rest and their glass still blends at the edges.
@@ -363,10 +368,21 @@ private extension MapSheetHikes {
                 .contentShape(.rect)
         }
         .buttonStyle(.plain)
+        // The drawn route's row is tinted, and the tint needs something to be
+        // a percentage *of*. Fifteen percent of a colour laid straight over
+        // the sheet's clear glass is fifteen percent of the map underneath —
+        // which on one tile is a visible blue wash and on the next is nothing
+        // at all, and "nothing at all" is what a hiker sees most of the time.
+        // The surface makes it the same tint on every tile; it is also the
+        // only layer here that is not transparent, so the selected row reads
+        // as a card among clear ones. See ``Color/contentSurface``.
         .listRowBackground(
-            hike.id == selectedHikeID
-                ? hike.tintOpaque.opacity(Self.selectedHikeHighlightOpacity)
-                : Color.clear
+            Color.contentSurface
+                .overlay(hike.tintOpaque.opacity(Self.selectedHikeHighlightOpacity))
+                // One view rather than a `Color.clear` in the other branch of a
+                // ternary, which would need erasing through `AnyView` for a row
+                // that is rebuilt on every selection change.
+                .opacity(hike.id == selectedHikeID ? 1 : 0)
         )
         .swipeActions(edge: .trailing) {
             if canDeleteFromLibrary(hike) {

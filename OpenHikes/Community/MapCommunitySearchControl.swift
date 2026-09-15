@@ -68,8 +68,8 @@ final class MapAreaSearchView: UIView {
     ///
     /// Above ``CommunityQueryPolicy/maximumRadiusMeters`` there is nothing
     /// worth asking, so the pill dims and stops answering taps while staying
-    /// where it is. `UIButton.Configuration` draws the disabled state itself,
-    /// which is why nothing here touches colours.
+    /// where it is. `UIButton.Configuration` derives the disabled state from
+    /// the base foreground colour itself, which is why nothing here sets one.
     var isEnabled: Bool {
         get { button?.isEnabled ?? false }
         set { button?.isEnabled = newValue }
@@ -90,6 +90,18 @@ final class MapAreaSearchView: UIView {
             )
         )
         configuration.title = String(localized: "Search this area")
+        // The label's own colour rather than the app's tint.
+        //
+        // A `.plain` configuration takes `tintColor`, which here is the app's
+        // green — a trail colour, on a pill that is not about a trail, over map
+        // imagery that is frequently green itself. The other floating controls
+        // on this map draw their labels in the ordinary label colour, and this
+        // is the one that did not.
+        //
+        // Set as the *base* foreground rather than as a colour on the title, so
+        // the disabled state above the zoom ceiling is still derived by
+        // `UIButton.Configuration` rather than hard-coded here.
+        configuration.baseForegroundColor = .label
         configuration.imagePadding = 6
         configuration.contentInsets = NSDirectionalEdgeInsets(
             top: 0,
