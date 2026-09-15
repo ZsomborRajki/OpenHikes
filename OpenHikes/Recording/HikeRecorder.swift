@@ -87,6 +87,10 @@ final class HikeRecorder: NSObject {
     /// has no business reaching ActivityKit, and one built without an opinion
     /// simply doesn't draw an activity.
     @ObservationIgnored let liveActivityController: HikeLiveActivityController?
+    /// Where a finished hike goes if the hiker asked for it in Health, or
+    /// `nil` for a launch that must not reach HealthKit — see
+    /// ``OpenHikesModel/makeWorkoutWriter()``.
+    @ObservationIgnored let workoutWriter: (any HikeWorkoutWriting)?
     /// The reminders a pause can produce, when the app has any. Optional for
     /// the reason ``liveActivityController`` is: a recorder built by a suite
     /// has no business putting a banner on the developer's Lock Screen, and
@@ -311,6 +315,7 @@ final class HikeRecorder: NSObject {
         sharedStateStore: (any RecordingSharedStateStoring)? = nil,
         liveActivityController: HikeLiveActivityController? = nil,
         movementReminders: MovementReminderController? = nil,
+        workoutWriter: (any HikeWorkoutWriting)? = nil,
         journalDirectory: URL? = nil,
         clock: @escaping @Sendable () -> Date = { Date() },
         uptime: @escaping @Sendable () -> TimeInterval = {
@@ -340,6 +345,7 @@ final class HikeRecorder: NSObject {
         self.sharedStateStore = sharedStateStore
         self.liveActivityController = liveActivityController
         self.movementReminders = movementReminders
+        self.workoutWriter = workoutWriter
         journal = resolvedDirectory.map { directory in
             TrackJournal(directory: directory, clock: clock)
         }

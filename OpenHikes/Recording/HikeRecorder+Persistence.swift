@@ -176,13 +176,15 @@ extension HikeRecorder {
         let suggestedTitle = suggestedTitle(forDistance: prepared.distanceMeters)
         if let existing = try existingHike(sessionID: hikeID) {
             guard existing.isRecording else { return existing }
-            return try finalizeDraft(
+            let finalized = try finalizeDraft(
                 existing,
                 session: session,
                 prepared: prepared,
                 customName: customName,
                 suggestedTitle: suggestedTitle
             )
+            exportToHealth(finalized, prepared: prepared)
+            return finalized
         }
 
         let hike = Hike(
@@ -206,12 +208,64 @@ extension HikeRecorder {
         )
         do {
             try saveModelContext(container.mainContext)
+            exportToHealth(hike, prepared: prepared)
             return hike
         } catch {
             discardRecordedWalk(walk)
             container.mainContext.delete(hike)
             throw .save(error.localizedDescription)
         }
+    }
+
+    /// Writes the hike to Health, if the hiker asked for that.
+    ///
+    /// **After** the save, and only after a successful one: Health is a second
+    /// store and it must never hold a walk this app does not. Fire-and-forget
+    /// because the hiker is waiting for their hike to appear and a Health
+    /// round trip is not something to make them wait on — and because there is
+    /// nothing to report. A refused or failed write leaves no workout, no
+    /// route and no half-finished builder behind, so unlike a file written
+    /// outside SwiftData this needs no owner and no sweep.
+    ///
+    /// The ascent comes off the accumulator rather than from the saved line:
+    /// it is barometrically fused where the device had a barometer, and
+    /// re-deriving it from route altitudes would be a second opinion that
+    /// could only disagree with the figure the hike itself shows.
+    private func exportToHealth(_ hike: Hike, prepared: PreparedRecording) {
+        guard let workoutWriter, savesHikesToHealth else { return }
+        let request = HikeWorkoutRequest(
+            hikeID: hike.id,
+            startedAt: prepared.startedAt,
+            endedAt: prepared.startedAt.addingTimeInterval(prepared.recordedSeconds),
+            distanceMeters: prepared.distanceMeters,
+            elevationGainMeters: accumulator.elevationGainMeters,
+            route: prepared.route
+        )
+        Task { [container] in
+            do {
+                let workoutID = try await workoutWriter.write(request)
+                // Filed against the row only once the workout exists, so a
+                // stored identifier always names something — see
+                // ``HikeLocalState/healthWorkoutID``.
+                let state = HikeLocalState.forHike(request.hikeID, in: container.mainContext)
+                state.healthWorkoutID = workoutID
+                try container.mainContext.save()
+            } catch {
+                Self.logger.error(
+                    """
+                    Health export failed for \(request.hikeID, privacy: .private): \
+                    \(error.localizedDescription, privacy: .public)
+                    """
+                )
+            }
+        }
+    }
+
+    /// The hiker's switch, read at save time rather than captured, so turning
+    /// it off between one hike and the next takes effect on the next one.
+    private var savesHikesToHealth: Bool {
+        defaults.object(forKey: SettingsKey.savesHikesToHealth) as? Bool
+            ?? SettingsDefault.savesHikesToHealth
     }
 
     /// Finishes the draft this recording has been writing into, in the one

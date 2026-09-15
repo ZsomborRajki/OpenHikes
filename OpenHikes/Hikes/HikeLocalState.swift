@@ -74,6 +74,23 @@ final class HikeLocalState {
     /// consulted for `isRecording` rows by the abandoned-draft sweep.
     var ownsRecordingDraft: Bool = false
 
+    /// The `HKWorkout` this hike was written to in *this* device's Health
+    /// store, or `nil` if it never was.
+    ///
+    /// Here rather than on ``Hike`` for exactly the reason every other column
+    /// in this file is: it identifies a record in a store that does not leave
+    /// this device. Mirroring it would point a second phone at a workout it
+    /// does not have, and — unlike the tile arrays — there would be no sweep
+    /// that could notice, because a Health store nobody can read cannot be
+    /// reconciled against.
+    ///
+    /// Written after the workout exists, so a row carrying one is a row whose
+    /// export is known to have landed. Nothing reads it yet beyond not
+    /// exporting twice; it is stored because an identifier that is thrown away
+    /// cannot be recovered, and a hiker who later wants the duplicate removed
+    /// has nothing to name without it.
+    var healthWorkoutID: UUID?
+
     init(hikeID: UUID) {
         self.hikeID = hikeID
     }

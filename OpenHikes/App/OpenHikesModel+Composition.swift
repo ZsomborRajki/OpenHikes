@@ -211,7 +211,8 @@ private extension OpenHikesModel {
         trailGraphProvider: any TrailGraphProviding,
         defaults: UserDefaults,
         liveActivityController: HikeLiveActivityController?,
-        movementReminders: MovementReminderController? = nil
+        movementReminders: MovementReminderController? = nil,
+        workoutWriter: (any HikeWorkoutWriting)? = nil
     ) -> HikeRecorder {
         HikeRecorder(
             container: container,
@@ -229,7 +230,8 @@ private extension OpenHikesModel {
             defaults: defaults,
             sharedStateStore: AppGroupRecordingSharedStateStore(),
             liveActivityController: liveActivityController,
-            movementReminders: movementReminders
+            movementReminders: movementReminders,
+            workoutWriter: workoutWriter
         )
     }
 
@@ -286,6 +288,25 @@ private extension OpenHikesModel {
             presenter: SystemHikeActivityPresenter(),
             defaults: defaults
         )
+    }
+
+    /// The Health writer, or `nil` for a launch that must not reach HealthKit.
+    ///
+    /// `isRunningTests` rather than `isHostingTests`, and stricter than the
+    /// Live Activity's rule for the same reason the community transport is:
+    /// an activity on a Lock Screen is part of what a UI test tests, and a
+    /// workout in the developer's own Health store is not — it is a real
+    /// record in a real store with no sandbox behind it, exactly like a
+    /// submission to the public database.
+    ///
+    /// `nil` is not a stub. The export simply does not happen for that launch,
+    /// and everything worth asserting sits above ``HikeWorkoutWriting``, which
+    /// is the whole reason that protocol exists — HealthKit is unavailable in
+    /// a hosted unit test the way ActivityKit and `StoreKitTest` are.
+    static func makeWorkoutWriter() -> (any HikeWorkoutWriting)? {
+        guard !AppLaunchEnvironment.isRunningTests else { return nil }
+        guard HealthKitWorkoutWriter.isAvailable else { return nil }
+        return HealthKitWorkoutWriter()
     }
 
     /// The public-database transport, or `nil` for a launch that must not
@@ -462,7 +483,8 @@ private extension OpenHikesModel {
             trailGraphProvider: graphProvider,
             defaults: defaults,
             liveActivityController: liveActivities,
-            movementReminders: reminders
+            movementReminders: reminders,
+            workoutWriter: Self.makeWorkoutWriter()
         )
         let locationManager = LocationManager(manager: Self.dormantLocationSource())
         let weatherManager = WeatherManager(store: WeatherReadingStore(defaults: defaults))
