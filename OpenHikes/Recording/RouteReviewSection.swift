@@ -8,6 +8,7 @@
 //  matching moved my line — trail or GPS?".
 //
 
+import Algorithms
 import Foundation
 
 nonisolated struct RouteReviewSection: Identifiable, Sendable {
@@ -123,10 +124,11 @@ nonisolated struct RouteReviewSection: Identifiable, Sendable {
 
     private static func distance(of points: [RecordingPoint]) -> Double {
         guard points.count > 1 else { return 0 }
-        return zip(points, points.dropFirst()).reduce(0) { total, pair in
-            total + RouteGeometry.distanceMeters(
-                from: pair.0.coordinate,
-                to: pair.1.coordinate
+        return points.adjacentPairs().reduce(0) { total, pair in
+            let (start, end) = pair
+            return total + RouteGeometry.distanceMeters(
+                from: start.coordinate,
+                to: end.coordinate
             )
         }
     }
