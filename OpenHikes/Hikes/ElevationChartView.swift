@@ -122,7 +122,41 @@ struct ElevationChartView: View, Equatable {
         let domain = elevationDomain(profile, plotWidth: plotWidth)
         let trackerSample = profile.sample(atDistance: tracker.trackerDistance)
         let liveSample = tracker.liveTrackerDistance.flatMap { profile.sample(atDistance: $0) }
-        return Chart {
+        return plot(domain: domain, tracker: trackerSample, live: liveSample)
+            // The graph gets something to be read against.
+            //
+            // It is drawn inside a sheet presented on clear glass over live map
+            // imagery, and on iOS 27 that glass stopped standing between the
+            // two: the grid lines, the axis labels and the area fill were being
+            // read against whatever tiles happened to be underneath, which on a
+            // forest tile is a green line on green. Every alpha in this file was
+            // chosen against a backdrop that no longer exists, and no alpha
+            // works against one that changes as the hiker pans.
+            //
+            // A surface rather than a raised opacity, because the shape of the
+            // problem is the backdrop and not the marks — see
+            // ``Color/contentSurface``. It is the decision the scrub callout
+            // already made for itself, applied to the thing it points at.
+            //
+            // Outside `plot(domain:tracker:live:)` on purpose, and not only for
+            // the compiler's sake: `onGeometryChange` in there measures the
+            // plot, and the vertical exaggeration is computed from that width,
+            // so the padding must not be inside what it reads.
+            .padding(Self.plotPadding)
+            .background(.contentSurface, in: RoundedRectangle(cornerRadius: Self.plotCornerRadius))
+    }
+
+    /// The graph itself, split from ``body`` so each of the two is an
+    /// expression the type-checker can finish.
+    ///
+    /// Not a cosmetic split: adding two modifiers to the chain below took the
+    /// whole of `body` past the solver's budget and failed the build outright.
+    private func plot(
+        domain: ClosedRange<Double>,
+        tracker trackerSample: ElevationSample?,
+        live liveSample: ElevationSample?
+    ) -> some View {
+        Chart {
             routeMarks(domain: domain)
             pauseMarks()
             trackerMarks(sample: trackerSample)
@@ -207,26 +241,6 @@ struct ElevationChartView: View, Equatable {
             guard !touching else { return }
             selectedDistance = nil
         }
-        // The graph gets something to be read against.
-        //
-        // It is drawn inside a sheet presented on clear glass over live map
-        // imagery, and on iOS 27 that glass stopped standing between the two:
-        // the grid lines, the axis labels and the area fill were being read
-        // against whatever tiles happened to be underneath, which on a forest
-        // tile is a green line on green. Every alpha in this file was chosen
-        // against a backdrop that no longer exists, and no alpha works against
-        // one that changes as the hiker pans.
-        //
-        // A surface rather than a raised opacity, because the shape of the
-        // problem is the backdrop and not the marks — see
-        // ``Color/contentSurface``. It is the decision the scrub callout
-        // already made for itself, applied to the thing the callout points at.
-        //
-        // Last in the chain on purpose: `onGeometryChange` above measures the
-        // plot, and the vertical exaggeration is computed from that width, so
-        // the padding must not be inside what it reads.
-        .padding(Self.plotPadding)
-        .background(.contentSurface, in: RoundedRectangle(cornerRadius: Self.plotCornerRadius))
     }
 
     /// The area and the line, as two series rather than one interleaved loop.
