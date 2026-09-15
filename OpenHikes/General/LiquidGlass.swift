@@ -56,6 +56,14 @@ extension Color {
     }()
 }
 
+extension ShapeStyle where Self == Color {
+    /// ``Color/contentSurface`` as a leading-dot shorthand, so `background(_:in:)`
+    /// takes it the way it takes `.regularMaterial` — the shorthand resolves
+    /// against `ShapeStyle` rather than `Color`, which a static on `Color`
+    /// alone does not satisfy.
+    static var contentSurface: Color { Color.contentSurface }
+}
+
 /// How a piece of glass should be drawn, described without naming `Glass`.
 struct GlassSurface: Equatable {
     /// The default surface: adapts to whatever is behind it and stays legible
