@@ -93,9 +93,14 @@ struct SheetPresentationIsolationTests {
         #expect(presentation.hasPushedScreen)
     }
 
-    /// The "show on map" exception: the viewer collapses the sheet on its way
-    /// out, because the user asked to see the very thing the restored height
-    /// would cover.
+    /// The "show on map" exception: the viewer overrides the remembered height
+    /// on its way out, because the user asked to see the very thing the
+    /// restored height would cover.
+    ///
+    /// The middle detent rather than the smallest, which is where this landed
+    /// before. The map frames a photograph's pin into the strip above the
+    /// middle detent, so a sheet that drops past it leaves the pin in the top
+    /// half of a screen whose bottom half is map.
     @Test("show-on-map overrides the remembered height")
     func showOnMapOverridesTheRememberedHeight() throws {
         let context = try Fixture.modelContext()
@@ -104,11 +109,11 @@ struct SheetPresentationIsolationTests {
         presentation.path = [.hike(hike)]
         presentation.path.append(.photo(hike, UUID()))
 
-        presentation.collapseWhenFullHeightScreenPops()
+        presentation.restAtMiddleWhenFullHeightScreenPops()
         presentation.path.removeLast()
 
-        #expect(presentation.detent == SheetPresentation.compactDetent)
-        #expect(presentation.isCompact)
+        #expect(presentation.detent == .medium)
+        #expect(presentation.isCompact == false)
     }
 
     /// The map draws a live recording differently from a saved hike, and reads

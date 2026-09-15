@@ -513,10 +513,20 @@ struct OpenHikesView: View {
         if let recordingHike = appModel.hikeRecorder.currentHike {
             selectedHike = recordingHike
             highlight.move(to: nil)
+            sheet.makeRoomForTheMap()
             return
         }
         guard selectedHike == nil else { return }
         selectedHike = appModel.restoreLastSelectedHike(in: modelContext)
+        // A restored selection draws its route, and drawing a route frames it
+        // against the map that is not behind the sheet — which is only the
+        // right framing if the sheet is where the framing assumes. Launch is
+        // the one place those two could disagree: the sheet starts at its
+        // compact detent, so a route fitted for a middle-detent sheet would
+        // land in the top of the screen with the bottom half empty. Every
+        // other route this app draws is drawn by something that has already
+        // asked for the same room. See ``SheetPresentation/makeRoomForTheMap()``.
+        if selectedHike != nil { sheet.makeRoomForTheMap() }
     }
 
     /// Parses a picked .gpx file, persists it as a `Hike`, and shows it on the map.
@@ -595,7 +605,7 @@ struct OpenHikesView: View {
         ) else { return .imported(importedHike) }
         selectedHike = importedHike
         // The selection draws the imported route; expanding reveals it.
-        withAnimation { sheet.detent = .medium }
+        sheet.makeRoomForTheMap()
         return .imported(importedHike)
     }
 }
@@ -657,7 +667,7 @@ private extension OpenHikesView {
                 in: &sheet.path
             )
             highlight.move(to: nil)
-            withAnimation { sheet.detent = .medium }
+            sheet.makeRoomForTheMap()
         case .hike(let id): openHike(id: id)
         }
     }
@@ -680,7 +690,7 @@ private extension OpenHikesView {
                 in: &sheet.path
             )
             highlight.move(to: nil)
-            withAnimation { sheet.detent = .medium }
+            sheet.makeRoomForTheMap()
             return
         }
 
@@ -691,7 +701,7 @@ private extension OpenHikesView {
         sheet.path = [.hike(hike)]
         // The compact detent is only tall enough for the search field, so a
         // push there would arrive off-screen.
-        withAnimation { sheet.detent = .medium }
+        sheet.makeRoomForTheMap()
     }
 }
 

@@ -380,7 +380,7 @@ struct MapSheet: View {
             photos: photos,
             startIndex: startIndex,
             mapController: mapController,
-            onShowOnMap: presentation.collapseWhenFullHeightScreenPops,
+            onShowOnMap: presentation.restAtMiddleWhenFullHeightScreenPops,
             selection: presentation.communityPhotoSelection(for: route)
         )
     }
@@ -404,7 +404,7 @@ struct MapSheet: View {
                 communityTransport: appModel.communityTransport,
                 onOpenPhoto: { photo in presentation.path.append(.photo(hike, photo.id)) },
                 onOpenWalk: { walk in presentation.path.append(.walk(walk)) },
-                onZoomToRoute: { withAnimation { presentation.detent = .medium } },
+                onZoomToRoute: presentation.makeRoomForTheMap,
                 interaction: presentation.hikeInteraction(for: hike)
             )
         case let .communityHike(listing):
@@ -431,7 +431,7 @@ struct MapSheet: View {
                 startID: photoID,
                 highlight: highlight,
                 mapController: mapController,
-                onShowOnMap: presentation.collapseWhenFullHeightScreenPops,
+                onShowOnMap: presentation.restAtMiddleWhenFullHeightScreenPops,
                 selection: presentation.photoSelection(for: route)
             )
         case let .walk(walk):
@@ -439,7 +439,7 @@ struct MapSheet: View {
                 walk: walk,
                 walkHighlight: walkHighlight,
                 mapController: mapController,
-                onShowOnMap: { withAnimation { presentation.detent = .medium } }
+                onShowOnMap: presentation.makeRoomForTheMap
             )
         }
     }
@@ -590,8 +590,8 @@ private func startSearch(request: MKLocalSearch.Request, fallbackName: String) {
                 name: response.mapItems.first?.name ?? fallbackName
             )
         )
-        // Drop to a partial detent so the zoomed map is visible.
-        withAnimation { presentation.detent = .medium }
+        // Drop to the detent the map framed the result against.
+        presentation.makeRoomForTheMap()
     }
 }
 
@@ -618,7 +618,7 @@ private func openRecording() {
         in: &presentation.path
     )
     highlight.move(to: nil)
-    withAnimation { presentation.detent = .medium }
+    presentation.makeRoomForTheMap()
 }
 
 private func closeRecording() {
@@ -636,7 +636,7 @@ private func closeDiscardedRecording(_ hikeID: UUID?) {
 private func showSavedRecording(_ hike: Hike) {
     selectedHike = hike
     presentation.path = [.hike(hike)]
-    withAnimation { presentation.detent = .medium }
+    presentation.makeRoomForTheMap()
 }
 
 /// A hike a published preview has just added to the library.

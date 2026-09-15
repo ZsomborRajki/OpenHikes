@@ -383,7 +383,11 @@ extension MapCoordinatorTests {
     /// Puts the sheet at rest at the middle detent: a run of reports, then a
     /// gap, then one more. The gap is what identifies the rest — a drag reports
     /// at display rate, so nothing else produces one.
-    private func settle(_ metrics: SheetMetrics, at topY: CGFloat) {
+    ///
+    /// Internal rather than private because the focus-area tests need a
+    /// measured sheet for the same reason these do, and a second copy of this
+    /// would be a second thing to keep agreeing with `SheetMetrics.report`.
+    func settle(_ metrics: SheetMetrics, at topY: CGFloat) {
         metrics.report(topY: topY + 40, atMiddleDetent: true)
         metrics.report(topY: topY, atMiddleDetent: true)
         clock.advance(by: 1)

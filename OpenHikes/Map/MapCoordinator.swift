@@ -311,7 +311,13 @@ extension MapView {
                 Task { @MainActor in
                     guard let coordinator, let map, let model else { return }
                     if let region = model.region {
-                        map.setRegion(map.regionThatFits(region), animated: true)
+                        // Through the coordinator rather than `setRegion`, so a
+                        // searched place and a photograph's pin land in the map
+                        // the hiker can see rather than in the window — see
+                        // `MapCoordinator+RouteFitting.swift`. `setRegion` has no
+                        // edge padding at all, which is what put a result's
+                        // centre behind the sheet.
+                        coordinator.show(region, on: map, animated: true)
                     }
                     coordinator.observeShowRegion(model, on: map)
                 }
@@ -365,6 +371,17 @@ extension MapView {
         /// present, owns the viewport — that fix is spent rather than saved,
         /// so deselecting the route later doesn't let the next fix recentre a
         /// map the user has since panned somewhere else.
+        ///
+        /// **The one camera move that does not go through the focus area**, and
+        /// the exception is the sheet rather than this. Every other move is
+        /// asked for by something that also puts the sheet at its middle detent
+        /// — see ``SheetPresentation/makeRoomForTheMap()`` — which is what makes
+        /// framing against that detent right. A first fix is asked for by
+        /// nobody: the app has just launched, the sheet is at its *compact*
+        /// detent and is eighty points tall, and nothing here should raise it.
+        /// Reserving a middle detent's worth of room against a sheet that small
+        /// would squeeze the hiker's surroundings into the top of the screen and
+        /// leave the bottom half empty.
         private func centerOnUser(_ coordinate: CLLocationCoordinate2D?, on mapView: MKMapView) {
             guard let coordinate, !hasHandledFirstFix else { return }
             hasHandledFirstFix = true

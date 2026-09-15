@@ -37,6 +37,10 @@ extension MapCoordinatorTests {
         static let lineOrigin = 0.02
         static let lineStep = 0.005
         static let linePoints = 9
+        /// How much wider than the searched region a camera has to be for the
+        /// whole of a drawn line to be inside it — see
+        /// `aPreviewFramesARouteThatWasAlreadyVisible`.
+        static let wideningFactor = 4.0
     }
 
     private static func communityRegion() -> MKCoordinateRegion {
@@ -149,6 +153,62 @@ extension MapCoordinatorTests {
         )
         #if os(iOS)
         #expect(renderer.strokeColor?.cgColor.alpha == 1)
+        #endif
+    }
+
+    /// Opening a preview frames its route, and does so even when all of that
+    /// route is already inside the visible rect.
+    ///
+    /// The condition this replaces was "move only if part of it runs off the
+    /// edge", which sounds like restraint and behaved like a bug. "On screen"
+    /// meant on screen *including the part behind the sheet*, so the case it
+    /// fired in most was a short route sitting under the panel the hiker had
+    /// just opened — and what they reported was not "it moved when it need not
+    /// have" but "it never zooms into the new hike's route".
+    ///
+    /// The precondition is what makes this test the old behaviour's opposite
+    /// rather than a repeat of the fit tests: the camera starts wide enough to
+    /// contain the whole line, which is exactly when nothing used to happen.
+    @Test("opening a preview frames a route that was already fully on screen")
+    func aPreviewFramesARouteThatWasAlreadyVisible() async throws {
+        #if os(iOS)
+        let listing = CommunityListing.stub(id: "ridge")
+        let browser = await browserWithLines([listing], outlines: ["ridge": Self.line()])
+        let coordinator = MapView.Coordinator()
+        let map = makeMap(mapView(community: browser), coordinator)
+        defer { detach(map) }
+        await settle(until: "the line to reach the map") {
+            !coordinator.communityRoutes.isEmpty
+        }
+        var wide = Self.communityRegion()
+        wide.span.latitudeDelta *= Area.wideningFactor
+        wide.span.longitudeDelta *= Area.wideningFactor
+        map.setRegion(wide, animated: false)
+        let outline = try #require(coordinator.communityRoutes.first?.polyline)
+        #expect(
+            map.visibleMapRect.contains(outline.boundingMapRect),
+            "precondition: the whole route is on screen before the preview opens"
+        )
+        let before = map.visibleMapRect
+
+        browser.previewOpened(listing)
+        browser.previewLoaded(Self.line(), of: listing)
+        // Waited on the camera rather than on the line, because the line
+        // arriving is what *asks* for the move: a run that checked only for
+        // `isPreviewed` would pass on the old behaviour too.
+        await settle(until: "the map to frame the preview") {
+            coordinator.communityRoutes.first?.line.isPreviewed == true
+                && before.size.height != map.visibleMapRect.size.height
+        }
+
+        let previewed = try #require(coordinator.communityRoutes.first?.polyline)
+        let rect = previewed.boundingMapRect
+        let north = map.convert(MKMapPoint(x: rect.minX, y: rect.minY).coordinate, toPointTo: map)
+        let south = map.convert(MKMapPoint(x: rect.maxX, y: rect.maxY).coordinate, toPointTo: map)
+        let sheetTop = map.bounds.height
+            * (1 - MapView.Coordinator.assumedMiddleDetentShare)
+        #expect(max(north.y, south.y) <= sheetTop, "and frames it into the map the sheet is not over")
+        #expect(min(north.y, south.y) >= 0)
         #endif
     }
 
