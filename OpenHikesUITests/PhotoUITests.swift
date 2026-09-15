@@ -223,17 +223,31 @@ nonisolated final class PhotoUITests: XCTestCase {
             "showing a photo on the map should take the user back to the map"
         )
 
-        // The camera moved to the photo's coordinate, so the sheet has to get
-        // out of the way of it. Returning to the expanded height the viewer
-        // was opened from would put the sheet over the very place the map was
-        // just told to show.
+        // The camera moved to the photo's coordinate, so the sheet has to be
+        // where that move expected to find it. Returning to the expanded
+        // height the viewer was opened from would put the sheet over the very
+        // place the map was just told to show.
+        //
+        // The middle detent rather than the lowest, which is where this landed
+        // before. Collapsing was the only way to keep the pin visible while a
+        // camera move framed into the whole window; the map now frames into the
+        // part of itself the sheet is not over, so the two meet rather than one
+        // getting out of the other's way entirely — see
+        // `MapCoordinator+RouteFitting.swift`.
         XCTAssertTrue(
-            waitForCollapsedSheet(in: app),
-            "showing a photo on the map should drop the sheet to its lowest detent"
+            waitForSheetAtMiddleDetent(in: app),
+            "showing a photo on the map should rest the sheet at its middle detent"
         )
+        // And the assertion the detent was only ever a proxy for.
+        let pin = element("photo-pin", in: app)
         XCTAssertTrue(
-            element("photo-pin", in: app).exists,
+            pin.waitForExistence(timeout: UITestTimeout.navigation),
             "an anchored photo should stand on the map where it was taken"
+        )
+        XCTAssertLessThan(
+            pin.frame.maxY,
+            element("map-sheet", in: app).frame.minY,
+            "and the map should have framed it into the part the sheet is not over"
         )
     }
 
@@ -264,12 +278,22 @@ nonisolated final class PhotoUITests: XCTestCase {
             viewer.waitForExistence(timeout: UITestTimeout.navigation)
         )
         element("photo-show-on-map-button", in: app).tap()
-        XCTAssertTrue(waitForCollapsedSheet(in: app))
+        XCTAssertTrue(waitForSheetAtMiddleDetent(in: app))
 
         let pin = element("photo-pin", in: app)
         XCTAssertTrue(
             pin.waitForExistence(timeout: UITestTimeout.navigation),
             "the photo the map was sent to should be standing on it"
+        )
+        // Above the sheet, which is what the framing is for and what makes the
+        // tap below a test of the callout rather than of the camera. Asserted
+        // as a frame rather than through `isHittable`: an `MKAnnotationView`
+        // reports itself unhittable in states it answers a tap in perfectly
+        // well, so that flag fails here on a pin this test then taps.
+        XCTAssertLessThan(
+            pin.frame.maxY,
+            element("map-sheet", in: app).frame.minY,
+            "the map should have framed the pin into the part the sheet is not over"
         )
         pin.tap()
 
@@ -402,34 +426,5 @@ nonisolated final class PhotoUITests: XCTestCase {
         )
     }
 
-    /// Waits for the sheet to be sitting at its lowest detent.
-    ///
-    /// Measured rather than named, because a detent is not something XCUITest
-    /// can read: the compact height is a small fraction of the screen, so a
-    /// sheet whose top edge is down in the bottom fifth is at it and a sheet
-    /// at any other detent is not.
-    @MainActor
-    private func waitForCollapsedSheet(in app: XCUIApplication) -> Bool {
-        let sheet = element("map-sheet", in: app)
-        guard sheet.waitForExistence(timeout: UITestTimeout.navigation) else {
-            return false
-        }
-        let collapsed = NSPredicate { _, _ in
-            sheet.frame.minY > app.frame.height * Self.collapsedSheetFraction
-        }
-        let settled = expectation(for: collapsed, evaluatedWith: sheet)
-        return XCTWaiter.wait(
-            for: [settled],
-            timeout: UITestTimeout.navigation
-        ) == .completed
-    }
-
-    /// How far down the screen the collapsed sheet's top edge has to be.
-    ///
-    /// The compact detent is 80 points tall against a screen of over 800, so
-    /// anything below four fifths is unambiguously it while leaving room for
-    /// the home indicator and for a taller device.
-    private static let collapsedSheetFraction: CGFloat = 0.8
     private static let shouldAsk = "deleting a photograph should ask first"
-
 }
