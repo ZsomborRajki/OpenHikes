@@ -206,14 +206,14 @@ nonisolated enum GPXImport {
             // opens fine everywhere else, and the damage would only show up
             // later as a straight line across the map and a length nobody
             // walked.
-            case .multipleTracks: "Each track is a separate walk, and joining them would draw a line between "
+            case .multipleTracks: "Each track is a separate hike, and joining them would draw a line between "
                 + "places you never travelled. Split the file so each track imports as its own hike."
             // Deliberately covers "it isn't GPX at all" as well — see the case's
             // own note for why that lands here.
             case .noUsablePoints: "It may not be a GPX file, or its points are missing coordinates or out of range."
             // No number in the copy: the message has to be true of both bounds,
             // and the hiker can act on it without knowing which one was hit.
-            case .tooLarge: "A single walk is a few megabytes at most. A file this size usually holds many tracks, "
+            case .tooLarge: "A single hike is a few megabytes at most. A file this size usually holds many tracks, "
                 + "and splitting it lets them import one at a time."
             case .tooShort: "A hike needs at least two points to have a route."
             case .unreadable: "Check that it's a .gpx file and isn't damaged."

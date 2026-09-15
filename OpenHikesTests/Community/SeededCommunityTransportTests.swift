@@ -53,13 +53,24 @@ struct SeededCommunityTransportTests {
         }
     }
 
-    @Test("three scenarios serve rows, and one of those serves a queue")
+    /// Asserted as exact sets rather than counts, because what each of these
+    /// answers is which *screens* a scenario can reach — and a scenario that
+    /// silently stopped serving rows would leave the suites that name it green
+    /// against an empty list.
+    @Test("four scenarios serve rows, and one each serves a queue and curated trails")
     func scenarioCapabilities() {
         let serving = SeededCommunityTransport.Scenario.allCases.filter(\.servesListings)
-        #expect(Set(serving) == [.seeded, .published, .reviewing])
+        #expect(Set(serving) == [.seeded, .published, .reviewing, .curated])
 
         let queueing = SeededCommunityTransport.Scenario.allCases.filter(\.servesQueue)
         #expect(queueing == [.reviewing])
+
+        // One, and behind the same door as the rest: a launch that does not
+        // name this gets no curated source, so no suite reaches Overpass by
+        // default any more than it reaches CloudKit. See
+        // ``OpenHikesModel/makeCommunityTransport()``.
+        let curating = SeededCommunityTransport.Scenario.allCases.filter(\.servesCuratedTrails)
+        #expect(curating == [.curated])
     }
 
     // MARK: Browsing
@@ -87,7 +98,7 @@ struct SeededCommunityTransportTests {
         )
         #expect(remaining.count == 1)
         #expect(remaining.first?.title == SeededCommunityTransport.lakeTitle)
-        #expect(remaining.first?.authorID == SeededCommunityTransport.otherAuthorID)
+        #expect(remaining.first?.blockableAuthorID == SeededCommunityTransport.otherAuthorID)
     }
 
     /// A typed search proves something only if the query cannot match the

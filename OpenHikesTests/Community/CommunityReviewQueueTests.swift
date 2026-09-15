@@ -310,7 +310,7 @@ struct CommunityPendingSubmissionTests {
         #expect(listing.submissionID == "submission-7")
         #expect(listing.title == "Pilis Ridge")
         #expect(listing.authorName == "Anna")
-        #expect(listing.authorID == "author-7")
+        #expect(listing.blockableAuthorID == "author-7")
         #expect(listing.distanceMeters == 8000)
         #expect(listing.latitude == 47.63)
         #expect(listing.longitude == 12.86)

@@ -60,6 +60,16 @@ nonisolated enum CommunityPublishingEligibility: Equatable, Sendable {
         /// Substantially the same ground as a hike this hiker has already
         /// sent. `title` is that hike's, so the refusal can name it.
         case retreads(title: String)
+        /// Saved from a route OpenStreetMap already had, rather than from
+        /// somebody's upload.
+        ///
+        /// Its own case rather than ``savedFromTheCommunity(author:)`` with a
+        /// `nil` author, because that one's whole argument is about a person —
+        /// "publishing it again would send their route, their notes and their
+        /// photographs under your name" — and there is no *their* here. What
+        /// is true instead is that the trail is already public, and already
+        /// in this list, which is a different sentence and a friendlier one.
+        case savedFromOpenStreetMap
         /// Saved from another hiker's listing. `author` is
         /// ``Hike/importedAuthorName``, absent for a listing shared without a
         /// name.
@@ -91,8 +101,16 @@ nonisolated enum CommunityPublishingEligibility: Equatable, Sendable {
         importedAuthorName: String?,
         distanceMeters: Double
     ) -> Self {
-        if importedFromListingID != nil {
-            return .refused(.savedFromTheCommunity(author: importedAuthorName))
+        if let importedFromListingID {
+            // A curated route is imported with no author name — see
+            // ``CommunityImport/importHike(_:into:store:libraryWriter:saveDate:save:)``
+            // — but the id is what actually settles it, because a hiker *can*
+            // publish without typing a name and that hike still has an author.
+            return .refused(
+                CommunityIdentity.isCurated(importedFromListingID)
+                    ? .savedFromOpenStreetMap
+                    : .savedFromTheCommunity(author: importedAuthorName)
+            )
         }
         if distanceMeters < minimumDistanceMeters {
             return .refused(.tooShort(meters: distanceMeters))
@@ -115,7 +133,8 @@ nonisolated extension CommunityPublishingEligibility.Reason {
     var title: String {
         switch self {
         case .savedFromTheCommunity: "This hike isn't yours to share"
-        case .tooShort: "This walk is too short to share"
+        case .savedFromOpenStreetMap: "This trail is already public"
+        case .tooShort: "This hike is too short to share"
         case .retreads: "You've already shared this trail"
         }
     }
@@ -155,6 +174,13 @@ nonisolated extension CommunityPublishingEligibility.Reason {
             Community hikes start at \(floor); this one is \(walked). Short walks stay \
             in your own list, where they're still yours to keep, export and sync.
             """
+        case .savedFromOpenStreetMap:
+            return """
+            You saved this from OpenStreetMap, where anybody can already find it — \
+            publishing a copy would put the same trail in this list twice. If you walk \
+            it yourself, record that walk and share it: your route, your photographs \
+            and your notes are yours to publish.
+            """
         case .retreads(let title):
             return """
             \(title) covers the same ground, and two listings for one trail make it \
@@ -176,6 +202,7 @@ nonisolated extension CommunityPublishingEligibility.Reason {
     var shortLabel: String {
         switch self {
         case .savedFromTheCommunity: "Saved from the community"
+        case .savedFromOpenStreetMap: "Saved from OpenStreetMap"
         case .tooShort: "Too short to share"
         case .retreads: "Already shared"
         }

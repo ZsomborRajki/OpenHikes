@@ -81,7 +81,7 @@ struct MapPaywallView: View {
         (
             "arrow.down.circle.fill",
             "Offline Stadia Maps",
-            "Save a route's map to your phone for a walk with no signal."
+            "Save a route's map to your phone for a hike with no signal."
         ),
         (
             "heart.fill",
@@ -179,7 +179,7 @@ struct MapPaywallView: View {
             Text(
                 "OpenStreetMap stays free and stays the default. Pro adds two commercial "
                 + "outdoor map styles built for trails, and Stadia Outdoors downloads a "
-                + "whole route to your phone for a walk with no signal."
+                + "whole route to your phone for a hike with no signal."
             )
             .font(.subheadline)
             .foregroundStyle(.secondary)

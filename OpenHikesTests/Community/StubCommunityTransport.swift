@@ -42,6 +42,12 @@ final class StubCommunityTransport: CommunityTransporting, @unchecked Sendable {
         /// proves the browser spends its budget on rows the hiker can see —
         /// see `CommunityTransporting`'s note on why the set is a parameter.
         var exclusions: [Set<String>] = []
+        /// The scope each nearby request carried, in order. What proves the
+        /// *Search this area* tap is the only one that reaches Overpass — see
+        /// `CommunityNearbyScope`, and note that a wrong answer here is
+        /// invisible in a return value, since the rows are the same either
+        /// way.
+        var nearbyScopes: [CommunityNearbyScope] = []
         /// The listings each outline request covered, in order. What proves
         /// the map's lines cost one request per answer rather than one per
         /// row.
@@ -70,6 +76,11 @@ final class StubCommunityTransport: CommunityTransporting, @unchecked Sendable {
     /// What each call should do. Set before the call, read inside it.
     var submissionResult: Result<String, CommunityFailure> = .success("submission-1")
     var listingsResult: Result<[CommunityListing], CommunityFailure> = .success([])
+    /// What the curated half of a nearby answer reports, for a suite driving
+    /// the rate-limit notice. Only ever returned to a
+    /// ``CommunityNearbyScope/withCuratedTrails`` question, since that is the
+    /// only kind that can be refused by OpenStreetMap.
+    var curatedOutage: CuratedTrailOutage?
     var detailResult: Result<CommunityHikeDetail, CommunityFailure>?
     /// What a publication check answers. `nil` — the default — is "no listing
     /// for this submission yet", which is the state a hike spends its whole
@@ -139,14 +150,23 @@ final class StubCommunityTransport: CommunityTransporting, @unchecked Sendable {
         near coordinate: CLLocationCoordinate2D,
         radiusMeters: Double,
         limit: Int,
-        excluding: Set<String>
-    ) async throws -> [CommunityListing] {
+        excluding: Set<String>,
+        scope: CommunityNearbyScope
+    ) async throws -> CommunityNearbyAnswer {
         state.withLock { recording in
             recording.nearbyRequests.append((coordinate: coordinate, radiusMeters: radiusMeters))
             recording.exclusions.append(excluding)
+            recording.nearbyScopes.append(scope)
         }
         await beforeListingsReturn?()
-        return try answer(excluding: excluding)
+        return CommunityNearbyAnswer(
+            listings: try answer(excluding: excluding),
+            // Whatever the case asked for, and reported only to a question
+            // that asked about OpenStreetMap — which is what the real
+            // ``MergedCommunityTransport`` does, and the rule
+            // ``CommunityBrowser`` is held to.
+            curatedOutage: scope == .withCuratedTrails ? curatedOutage : nil
+        )
     }
 
     @concurrent
@@ -170,7 +190,9 @@ final class StubCommunityTransport: CommunityTransporting, @unchecked Sendable {
     private func answer(excluding: Set<String>) throws -> [CommunityListing] {
         let listings = try listingsResult.get()
         guard !excluding.isEmpty else { return listings }
-        return listings.filter { !excluding.contains($0.authorID) }
+        return listings.filter { listing in
+            listing.blockableAuthorID.map { !excluding.contains($0) } ?? true
+        }
     }
 
     /// Answers from ``outlinesResult`` and records which page was asked

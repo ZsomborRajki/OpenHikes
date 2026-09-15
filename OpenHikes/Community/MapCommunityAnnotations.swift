@@ -56,11 +56,24 @@ final class CommunityMapAnnotation: NSObject, MKAnnotation {
         super.init()
     }
 
-    /// "8.0 km · by Anna", with the credit left out rather than rendered
-    /// empty when nobody typed one.
+    /// "8.0 km · by Anna", or "8.0 km · Loop" for a route nobody published,
+    /// with whichever half has nothing to say left out rather than rendered
+    /// empty.
+    ///
+    /// A curated route gets its shape rather than a credit, and the choice is
+    /// about what a callout is for: it is the one line a hiker reads before
+    /// deciding to open the screen, so it should carry the fact that decides
+    /// it. For somebody's hike that is who walked it; for a waymarked trail
+    /// nobody has walked, it is whether they end up back at the car. The
+    /// attribution ODbL requires is not squeezed in here — it is on the screen
+    /// this callout opens, where it can be a link. See
+    /// ``CommunityHikeView/curatedAttribution``.
     private static func calloutSubtitle(for listing: CommunityListing) -> String {
         let distance = Measurement(value: listing.distanceMeters, unit: UnitLength.meters)
             .formatted(.measurement(width: .abbreviated, usage: .road))
+        if let shape = listing.curatedFacts?.shape {
+            return String(localized: "\(distance) · \(shape.displayName)")
+        }
         guard !listing.authorName.isEmpty else { return distance }
         return String(localized: "\(distance) · by \(listing.authorName)")
     }
@@ -116,12 +129,18 @@ extension MapView.Coordinator {
         mapView.addAnnotations(annotations)
     }
 
-    /// A marker in the app's tint with a hiker in it, and the hike's name in
-    /// the callout MapKit draws for it.
+    /// A marker in this listing's own colour with a hiker in it, and the
+    /// hike's name in the callout MapKit draws for it.
     ///
-    /// Deliberately not the route tint the photo pins take: that colour
-    /// belongs to the hiker's own selected hike, which may well be drawn on
-    /// the same screen, and somebody else's published trail is not it.
+    /// The colour is the same one the row and the line carry, which is the
+    /// whole of why it is not the app's tint any more: a valley with twenty
+    /// trails in it used to be twenty identical markers over twenty identical
+    /// lines, and nothing on the screen connected any pin to the row a hiker
+    /// had just read. See ``CommunityListing/tint``.
+    ///
+    /// Still not the hiker's *own* route tint, which is a different thing
+    /// entirely and belongs to the hike they selected. These stay underneath
+    /// it and at half strength — see ``MapCommunityRoutes``.
     func communityAnnotationView(
         for annotation: CommunityMapAnnotation,
         on mapView: MKMapView
@@ -134,7 +153,7 @@ extension MapView.Coordinator {
         view.canShowCallout = true
         #if os(iOS)
         view.glyphImage = UIImage(systemName: "figure.hiking")
-        view.markerTintColor = .tintColor
+        view.markerTintColor = UIColor(annotation.listing.tint)
         view.rightCalloutAccessoryView = Self.calloutDisclosure()
         #endif
         // Allowed to be hidden by a neighbour — see this file's header.

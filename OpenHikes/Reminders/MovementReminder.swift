@@ -98,7 +98,7 @@ nonisolated enum MovementReminderWording {
             title: "Still hiking?",
             body: "Your recording has been paused for \(HikeFormat.duration(pausedFor))"
                 + " and you've moved \(distance(movedMeters)) since."
-                + " Resume to put the rest of the walk on the track."
+                + " Resume to put the rest of the hike on the track."
         )
     }
 
@@ -106,7 +106,7 @@ nonisolated enum MovementReminderWording {
     /// which walk this is; one who has been comparing three does not, and the
     /// title is the only thing on the banner that could tell them.
     static func resumeWalk(trailTitle: String, movedMeters: Double) -> MovementReminder {
-        let subject = trailTitle.isEmpty ? "Your walk" : trailTitle
+        let subject = trailTitle.isEmpty ? "Your hike" : trailTitle
         return MovementReminder(
             kind: .resumeWalk,
             title: "Still on the trail?",

@@ -427,9 +427,15 @@ nonisolated extension CloudKitCommunityTransport {
         } catch {
             throw Self.failure(from: error, while: "taking a hike down")
         }
+        // `MergedCommunityTransport.takeDown(_:)` refuses a curated listing
+        // before it reaches here, and ``CommunityHikeView`` does not offer the
+        // action for one. This is the third guard, and the cheapest: a listing
+        // with no submission has nothing left to delete, and the unlisting
+        // above is the whole of what a takedown could mean for it.
+        guard let submissionID = listing.submissionID else { return }
         do {
             _ = try await database.deleteRecord(
-                withID: CKRecord.ID(recordName: listing.submissionID)
+                withID: CKRecord.ID(recordName: submissionID)
             )
         } catch {
             // Unlisted is the part that was asked for and it has happened.
@@ -438,7 +444,7 @@ nonisolated extension CloudKitCommunityTransport {
             Self.logger.error(
                 """
                 Unlisted a hike but could not delete its submission \
-                \(listing.submissionID, privacy: .public): \
+                \(submissionID, privacy: .public): \
                 \(error.localizedDescription, privacy: .public)
                 """
             )

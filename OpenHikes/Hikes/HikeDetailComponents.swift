@@ -130,7 +130,7 @@ struct TrailProgressView: View {
     }
 
     private func title(walking: Bool, live: Bool) -> String {
-        if walking { return "Walk Progress" }
+        if walking { return "Hike Progress" }
         return live ? "Live Progress" : "Trail Progress"
     }
 

@@ -76,7 +76,12 @@ nonisolated struct CommunityPageBudget {
         // The early return is the ordinary path: most hikers have blocked
         // nobody, and filtering a page against an empty set is a pass over
         // twenty-five rows that can only ever keep all of them.
-        kept += excluded.isEmpty ? page : page.filter { !excluded.contains($0.authorID) }
+        kept += excluded.isEmpty ? page : page.filter { listing in
+            // A listing with no author to exclude is never excluded by an
+            // author set — see ``CommunityOrigin``. The budget still bounds it,
+            // which is the half that matters here.
+            listing.blockableAuthorID.map { !excluded.contains($0) } ?? true
+        }
         return hasMore && kept.count < limit && requestsMade < Self.maxRequests
     }
 

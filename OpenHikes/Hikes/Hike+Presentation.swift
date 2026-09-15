@@ -30,9 +30,6 @@ extension Hike {
         set { routeLinePatternID = newValue.rawValue }
     }
 
-    private static let tintSaturation: Double = 0.65
-    private static let tintBrightness: Double = 0.85
-
     /// The tint a hike has when nothing chose one for it.
     ///
     /// A mirror of the literal on ``Hike/tintHex`` rather than the source of
@@ -42,9 +39,12 @@ extension Hike {
     /// without a `Hike` in hand.
     static let defaultTintHex = "#34C759"
 
-    /// A random, visually distinct route color — fixed saturation/brightness so
-    /// every hue stays legible on the map and in the UI. Used to give each
-    /// newly imported hike its own default tint instead of always green.
+    /// A random, visually distinct route color, so each newly imported hike
+    /// gets its own default tint instead of always green.
+    ///
+    /// The palette it comes out of is ``RouteTint``, which a community listing
+    /// draws from too — by identity rather than by chance, since a listing has
+    /// nowhere to keep the answer.
     static func randomTintHex() -> String {
         var generator = SystemRandomNumberGenerator()
         return randomTintHex(using: &generator)
@@ -54,11 +54,7 @@ extension Hike {
     /// that sweeps generated tints can seed it and reproduce a failure on
     /// exactly the hue that caused it.
     static func randomTintHex<G: RandomNumberGenerator>(using generator: inout G) -> String {
-        Color(
-            hue: .random(in: 0..<1, using: &generator),
-            saturation: Self.tintSaturation,
-            brightness: Self.tintBrightness
-        ).hexRGBA
+        RouteTint.random(using: &generator).hexRGBA
     }
 
     /// Tint forced fully opaque — used everywhere except the map line (graph,

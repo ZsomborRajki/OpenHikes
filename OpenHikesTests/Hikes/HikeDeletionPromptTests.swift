@@ -65,13 +65,13 @@ struct HikeDeletionPromptTests {
         #expect(Self.prompt(photos: 3).message.contains("3 photographs"))
     }
 
-    /// The walk history cascades with the hike, and nothing on screen says so
+    /// The recorded history cascades with the hike, and nothing on screen says so
     /// anywhere else.
-    @Test("walks are named when there are any, and not when there are none")
+    @Test("hikes are named when there are any, and not when there are none")
     func walks() {
-        #expect(Self.prompt(walks: 0).message.contains("walk") == false)
-        #expect(Self.prompt(walks: 1).message.contains("1 walk"))
-        #expect(Self.prompt(walks: 4).message.contains("4 walks"))
+        #expect(Self.prompt(walks: 0).message.contains("hike") == false)
+        #expect(Self.prompt(walks: 1).message.contains("1 hike"))
+        #expect(Self.prompt(walks: 4).message.contains("4 hikes"))
     }
 
     /// Both, in the order of what cannot come back.
@@ -79,7 +79,7 @@ struct HikeDeletionPromptTests {
     func bothNamedPhotographsFirst() throws {
         let message = Self.prompt(photos: 2, walks: 3).message
         let photographs = try #require(message.range(of: "2 photographs"))
-        let walks = try #require(message.range(of: "3 walks"))
+        let walks = try #require(message.range(of: "3 hikes"))
         #expect(photographs.lowerBound < walks.lowerBound)
     }
 

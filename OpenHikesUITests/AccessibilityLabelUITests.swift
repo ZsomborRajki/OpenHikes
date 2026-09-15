@@ -115,7 +115,7 @@ nonisolated final class AccessibilityLabelUITests: XCTestCase {
 
         row.tap()
         XCTAssertTrue(
-            app.navigationBars["Walk Summary"].waitForExistence(timeout: UITestTimeout.navigation)
+            app.navigationBars["Hike Summary"].waitForExistence(timeout: UITestTimeout.navigation)
         )
         let completion = element("walk-completion", in: app)
         XCTAssertTrue(completion.waitForExistence(timeout: UITestTimeout.existence))

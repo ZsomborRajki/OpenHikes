@@ -67,6 +67,26 @@ struct CommunityImportTests {
         #expect(hike.trackDescription == "A ridge walk")
     }
 
+    /// The hike that appears in the library is the one the hiker was just
+    /// looking at, colour included.
+    ///
+    /// A file import picks at random, because nothing has been on screen to
+    /// disagree with. This one has: the listing was a coloured row, a pin, a
+    /// line across the map and the graph on the screen the hiker pressed the
+    /// button on. Landing it as the green ``Hike`` defaults to is the version
+    /// of this that shipped, and it made every saved trail identical in the
+    /// list they were saved into.
+    @Test("an imported hike keeps the colour its listing was drawn in")
+    func importKeepsTheListingColour() async throws {
+        let context = try Fixture.modelContext()
+        let listing = CommunityListing.stub()
+        let outcome = await CommunityImport.importHike(Self.detail(listing: listing), into: context)
+
+        let hike = try #require(outcome.hike)
+        #expect(hike.tintHex == listing.tintHex)
+        #expect(hike.tintHex != Hike.defaultTintHex, "the default green is what this test exists to rule out")
+    }
+
     /// The listing's figures are typed by a reviewer in the CloudKit Console;
     /// the route is what was actually uploaded and is what draws the line on
     /// the map. A hike whose stated length disagreed with its own polyline

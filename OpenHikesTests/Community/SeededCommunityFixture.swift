@@ -47,8 +47,13 @@ nonisolated enum SeededCommunityFixture {
             near: anywhere,
             radiusMeters: searchRadiusMeters,
             limit: pageLimit,
-            excluding: excluding
-        )
+            excluding: excluding,
+            // The widest question, because a seeded scenario's curated half is
+            // a stand-in that reaches nothing: a narrower scope here would
+            // leave `SeededCuratedTrailSource`'s rows out of every fixture
+            // that asks for a mixed list.
+            scope: .withCuratedTrails
+        ).listings
     }
 
     /// A directory per case, deleted by the case — the same contract the
