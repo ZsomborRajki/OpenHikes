@@ -111,7 +111,13 @@ struct WeatherDetailView: View {
                 }
                 attributionSection
             }
-            .navigationTitle("Weather")
+            // The place the reading is about when there is one, and the
+            // generic word only when it is simply here. `Text` rather than
+            // `placeName ?? "Weather"`, which types the whole expression as
+            // `String` and so takes the non-localized overload — quietly
+            // costing the fallback its `LocalizedStringKey` in order to offer
+            // a city name a translation it was never going to be given.
+            .navigationTitle(placeName.map { Text(verbatim: $0) } ?? Text("Weather"))
             #if os(iOS)
             .navigationBarTitleDisplayMode(.inline)
             #endif
@@ -155,11 +161,6 @@ struct WeatherDetailView: View {
             .accessibilityLabel(placeName.map { "Conditions in \($0)" } ?? "Current conditions")
             .accessibilityValue("\(snapshot.spokenTemperature()), \(snapshot.conditionDescription)")
             .accessibilityIdentifier("weather-detail-conditions")
-        } header: {
-            if let placeName {
-                Text(placeName)
-                    .accessibilityIdentifier("weather-detail-place")
-            }
         }
     }
 
