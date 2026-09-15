@@ -460,7 +460,20 @@ nonisolated struct CloudKitCommunityTransport: CommunityTransporting {
         return downloaded.map { pins[$0.index] }
     }
 
-    private static func decodePins(in record: CKRecord) -> [CommunityPhotoPin] {
+    /// The pins a submission carries, or none at all.
+    ///
+    /// Every step is optional because every step describes a record somebody
+    /// else wrote: a submission published before photographs carried pins has
+    /// no asset, and one whose asset CloudKit has not cached has no file. None
+    /// of those is an error — a hike whose photographs sit in the list rather
+    /// than on the map is the older shape of the same hike — so the empty
+    /// answer is the honest one, and it is what ``pins(_:for:of:takenOn:)``
+    /// reads as *this record has no pins* rather than *these pins are wrong*.
+    ///
+    /// Internal rather than private for the reason ``stage(_:)`` and
+    /// ``pins(_:for:of:takenOn:)`` are: what it decides is invisible in the
+    /// result, and a suite can reach it without the public database.
+    static func decodePins(in record: CKRecord) -> [CommunityPhotoPin] {
         guard let asset = record[CommunitySchema.Submission.photoPins] as? CKAsset,
               let url = asset.fileURL,
               let data = try? Data(contentsOf: url),
@@ -480,7 +493,12 @@ nonisolated struct CloudKitCommunityTransport: CommunityTransporting {
     /// so a failure in the middle does not silently renumber the ones after
     /// it — the index is what pairs a photograph with its pin. See
     /// ``pins(_:for:of:takenOn:)``.
-    private static func copyPhotos(
+    ///
+    /// Internal rather than private for the reason ``decodePins(in:)`` above
+    /// is: the index it keeps across a file that would not copy is the whole
+    /// contract, and nothing downstream can tell a renumbered list from a
+    /// correct one.
+    static func copyPhotos(
         _ assets: [CKAsset],
         into directory: URL
     ) -> [(index: Int, url: URL)] {
