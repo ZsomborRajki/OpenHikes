@@ -67,29 +67,76 @@ nonisolated struct WeatherSnapshot: Equatable, Sendable {
     /// and is re-fetched within seconds of launch. That is the reset policy
     /// rather than an oversight: see ``WeatherReadingStore``.
     let conditions: WeatherConditions
+    /// The next few hours, from the same response — see
+    /// ``WeatherHourSummary``.
+    ///
+    /// Empty rather than optional, and defaulted, because empty is a thing
+    /// that genuinely happens: a reading restored from a blob written before
+    /// this field existed, and a provider that answered `.current` but had no
+    /// hourly data for the point. Both mean the same thing to the sheet, which
+    /// is to draw no strip. Unlike ``conditions``, an absent strip does not
+    /// make the reading wrong, so it does not fail the decode.
+    let hourly: [WeatherHourSummary]
 
     init(
         symbolName: String,
         temperature: Measurement<UnitTemperature>,
         conditionDescription: String,
         capturedAt: Date,
-        conditions: WeatherConditions
+        conditions: WeatherConditions,
+        hourly: [WeatherHourSummary] = []
     ) {
         self.symbolName = symbolName
         self.temperature = temperature
         self.conditionDescription = conditionDescription
         self.capturedAt = capturedAt
         self.conditions = conditions
+        self.hourly = hourly
     }
 
-    init(_ weather: CurrentWeather) {
+    init(_ weather: CurrentWeather, hourly: [WeatherHourSummary] = []) {
         self.init(
             symbolName: weather.symbolName,
             temperature: weather.temperature,
             conditionDescription: weather.condition.description,
             capturedAt: weather.metadata.date,
-            conditions: WeatherConditions(weather)
+            conditions: WeatherConditions(weather),
+            hourly: hourly
         )
+    }
+}
+
+extension WeatherHourSummary {
+    /// The one place WeatherKit's hourly shape is read.
+    ///
+    /// `nonisolated` for the reason ``WeatherConditions``' own mapping is: the
+    /// caller is a nonisolated initializer on a value that has to be able to
+    /// cross actors.
+    ///
+    /// Trimmed to ``WeatherHourlyPolicy/horizon`` here rather than at the
+    /// screen, because everything downstream of this stores what it is given:
+    /// `.hourly` answers with days of data and all of it would otherwise be
+    /// written to `UserDefaults` on every successful fetch.
+    nonisolated static func summaries(
+        from forecast: Forecast<HourWeather>,
+        notBefore start: Date
+    ) -> [Self] {
+        forecast
+            // WeatherKit's hourly forecast begins at the top of the current
+            // hour, so the hour in progress is included and the ones already
+            // gone are not. Anchored to the reading's own timestamp rather
+            // than to `Date.now` for the reason ``WeatherSnapshot/capturedAt``
+            // gives: a cached payload is not necessarily a reading taken now.
+            .filter { $0.date.addingTimeInterval(WeatherHourlyPolicy.hourSeconds) > start }
+            .prefix(WeatherHourlyPolicy.horizon)
+            .map { hour in
+                Self(
+                    date: hour.date,
+                    symbolName: hour.symbolName,
+                    temperature: hour.temperature,
+                    precipitationChance: hour.precipitationChance
+                )
+            }
     }
 }
 
@@ -305,8 +352,21 @@ final class WeatherManager {
         // keeps it rare is a constant nobody would notice regressing. The
         // count per hike is the check.
         do {
+            // One round trip, two datasets. `weather(for:including:)` is
+            // variadic and answers both from the same request, so the strip
+            // costs what the badge was already spending — see
+            // ``WeatherHourSummary``.
+            let (reading, forecast) = try await service.weather(
+                for: location,
+                including: .current,
+                .hourly
+            )
             let snapshot = WeatherSnapshot(
-                try await service.weather(for: location, including: .current)
+                reading,
+                hourly: WeatherHourSummary.summaries(
+                    from: forecast,
+                    notBefore: reading.metadata.date
+                )
             )
             remember(snapshot, for: subject)
             state = .reading(snapshot, subject: subject)
@@ -382,7 +442,8 @@ extension WeatherSnapshot {
             temperature: Measurement(value: 12, unit: UnitTemperature.celsius),
             conditionDescription: "Partly Cloudy",
             capturedAt: .now,
-            conditions: .preview
+            conditions: .preview,
+            hourly: WeatherHourSummary.previewStrip
         )
     }
 }

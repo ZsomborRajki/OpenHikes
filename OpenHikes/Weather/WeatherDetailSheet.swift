@@ -88,6 +88,17 @@ private struct WeatherDetailSheetModifier: ViewModifier {
 struct WeatherDetailView: View {
     private static let markHeight: CGFloat = 18
     private static let headerSpacing: CGFloat = 12
+    /// The hourly strip's own measurements, named rather than spelled inline
+    /// for the reason every other constant in this file is.
+    private enum HourStrip {
+        static let columnSpacing: CGFloat = 18
+        static let columnWidth: CGFloat = 44
+        static let rowSpacing: CGFloat = 6
+        /// Below this the chance of rain is not worth a row of its own: it
+        /// rounds to nothing, and a column of "0%" under every dry hour is
+        /// noise where the point of the strip is to make a wet hour visible.
+        static let precipitationFloor = 0.05
+    }
 
     let weather: WeatherManager
 
@@ -104,6 +115,7 @@ struct WeatherDetailView: View {
             List {
                 if let snapshot = weather.current {
                     conditionsSection(snapshot)
+                    hourlySection(snapshot.hourly)
                     readingsSection(snapshot.conditions)
                     freshnessSection(snapshot)
                 } else if case .unavailable = weather.state {
@@ -162,6 +174,75 @@ struct WeatherDetailView: View {
             .accessibilityValue("\(snapshot.spokenTemperature()), \(snapshot.conditionDescription)")
             .accessibilityIdentifier("weather-detail-conditions")
         }
+    }
+
+    /// The next few hours, which is the half of the reading a hiker at a
+    /// trailhead is actually deciding on — see ``WeatherHourSummary``.
+    ///
+    /// Drawn above the readings because it answers the sooner question, and
+    /// `@ViewBuilder` rather than `some View` so an empty strip costs a
+    /// section rather than an empty one: a reading restored from a blob
+    /// written before this existed, and a provider with no hourly data for the
+    /// point, both arrive here as `[]`.
+    ///
+    /// One accessibility element per hour rather than per glyph, the same
+    /// shape ``conditionsSection(_:)`` takes: a time, a sky and a temperature
+    /// are one fact about one hour.
+    @ViewBuilder
+    private func hourlySection(_ hours: [WeatherHourSummary]) -> some View {
+        if !hours.isEmpty {
+            Section("Next hours") {
+                ScrollView(.horizontal) {
+                    HStack(alignment: .top, spacing: Self.HourStrip.columnSpacing) {
+                        ForEach(hours) { hour in
+                            hourColumn(hour)
+                        }
+                    }
+                    .padding(.vertical, Self.HourStrip.rowSpacing)
+                }
+                .scrollIndicators(.hidden)
+                .accessibilityIdentifier("weather-detail-hourly")
+            }
+        }
+    }
+
+    private func hourColumn(_ hour: WeatherHourSummary) -> some View {
+        VStack(spacing: Self.HourStrip.rowSpacing) {
+            Text(hour.date, format: .dateTime.hour())
+                .font(.caption)
+                .foregroundStyle(.secondary)
+            Image(systemName: hour.symbolName)
+                .symbolRenderingMode(.multicolor)
+                .font(.title3)
+            Text(
+                WeatherReadingFormat.temperature(hour.temperature, width: .narrow)
+            )
+            .font(.subheadline.weight(.medium))
+            // Drawn only where there is something to say, and reserved
+            // either way so the glyphs above stay on one line across the
+            // strip — see ``HourStrip/precipitationFloor``.
+            Text(
+                hour.precipitationChance >= Self.HourStrip.precipitationFloor
+                    ? WeatherReadingFormat.percentage(hour.precipitationChance)
+                    : " "
+            )
+            .font(.caption2)
+            .foregroundStyle(.tint)
+        }
+        .frame(width: Self.HourStrip.columnWidth)
+        .accessibilityElement(children: .ignore)
+        .accessibilityLabel(Text(hour.date, format: .dateTime.hour()))
+        .accessibilityValue(Self.spokenHour(hour))
+    }
+
+    /// What one hour says out loud. The chance of rain is spoken whenever the
+    /// strip draws it, and left out entirely when it does not — a reader
+    /// hearing "zero percent" for every dry hour learns nothing twelve times.
+    private static func spokenHour(_ hour: WeatherHourSummary) -> String {
+        let temperature = WeatherReadingFormat.temperature(hour.temperature, width: .wide)
+        guard hour.precipitationChance >= HourStrip.precipitationFloor else { return temperature }
+        let chance = WeatherReadingFormat.percentage(hour.precipitationChance)
+        return String(localized: "\(temperature), \(chance) chance of precipitation")
     }
 
     /// The rest of the reading, one row each.
