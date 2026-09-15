@@ -279,26 +279,38 @@ jobs:
       # pressing ⌘U in Xcode getting the same report the gate reads, rather
       # than an empty coverage tab and a surprise on the pull request.
       #
-      # The floor is a floor, not a target. `OpenHikes.app` measured 57.42%
-      # line coverage when this gate was added; 55% sits far enough below that
-      # adding one uncovered SwiftUI screen does not turn the build red on its
-      # own, and close enough that a real fall — a suite deleted, a domain
-      # stubbed out — does. Raise it when the measured number rises. Lowering
-      # it to make a run pass is the one change this step exists to prevent.
+      # The floor is a floor, not a target. What it measures read 78.60% when
+      # the floor was last moved; 76% sits far enough below that one ordinary
+      # pull request does not turn the build red on its own, and close enough
+      # that a real fall — a suite deleted, a domain stubbed out — does. Raise
+      # it when the measured number rises. Lowering it to make a run pass is
+      # the one change this step exists to prevent.
       #
-      # The published line names its *selection*, because the number describes
-      # this job's configuration as much as it describes the code: the test
-      # action above excludes `OpenHikesUITests`, which is the only suite that
-      # evaluates SwiftUI view bodies, so the ten largest apparently-untested
-      # files are tested by a bundle whose results never reach this gate. The
-      # gap to the full plan is roughly 25 points. Raising the floor to match
-      # the full plan would make the gate depend on a suite CI does not run —
-      # the fix is to say which selection produced the number, not to move it.
+      # What it measures is the app *minus* the files in COVERAGE_EXCLUSIONS,
+      # and that list is the correction to a gate which used to ask the wrong
+      # question. The test action above excludes `OpenHikesUITests`, the only
+      # suite that evaluates SwiftUI view bodies, so a screen this job cannot
+      # execute a line of counted against it exactly as if nobody had tested
+      # it. The number therefore fell as the app grew, whatever the tests did:
+      # over the two days before this changed, the app gained 2352 executable
+      # lines and 508 covered ones, and the percentage dropped 1.87 points —
+      # through the 55% floor — while not one suite was deleted or weakened.
+      #
+      # A gate that goes red for shipping a screen is a gate people learn to
+      # lower, so the fix is to stop measuring what this job cannot reach. What
+      # is left is the code the unit suites are actually responsible for, held
+      # to a floor worth having. The whole-target figure is still published on
+      # the job summary beside it, because that is the number that says how
+      # much of the app leans on a suite CI does not run.
+      #
+      # The argument for each excluded path, and the two rules that stop the
+      # list rotting into a general exemption, are in the list itself.
       - name: Check coverage against its floor
         env:
-          COVERAGE_FLOOR: "55.0"
+          COVERAGE_FLOOR: "76.0"
           COVERAGE_TARGET: OpenHikes.app
           COVERAGE_SELECTION: OpenHikesTests + OpenWidgetTests (no UI suite)
+          COVERAGE_EXCLUSIONS: Scripts/coverage-exclusions.txt
         run: |
           set -o pipefail
           xcrun xccov view --report TestResults/UnitTests.xcresult

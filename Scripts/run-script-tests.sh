@@ -560,6 +560,97 @@ if expect_status 0 \
     pass
 fi
 
+# The exclusion list, which is the difference between measuring the code this
+# job can reach and measuring the whole app. Four files at numbers chosen to
+# put the two answers far apart: the views drag the whole target to 45%, and
+# what is left without them reads 83%.
+cat > "$gate_work/files.json" <<'FIXTURE'
+{"targets":[{"name":"OpenHikes.app","lineCoverage":0.4545,"coveredLines":500,"executableLines":1100,"files":[
+  {"name":"SettingsView.swift","path":"/Users/runner/work/OpenHikes/OpenHikes/Settings/SettingsView.swift","coveredLines":0,"executableLines":400},
+  {"name":"HikeRow.swift","path":"/Users/runner/work/OpenHikes/OpenHikes/Hikes/HikeRow.swift","coveredLines":0,"executableLines":100},
+  {"name":"HikeRecorder.swift","path":"/Users/runner/work/OpenHikes/OpenHikes/Recording/HikeRecorder.swift","coveredLines":400,"executableLines":500},
+  {"name":"TileStore.swift","path":"/Users/runner/work/OpenHikes/OpenHikes/Tiles/TileStore.swift","coveredLines":100,"executableLines":100}]}]}
+FIXTURE
+
+run_coverage_excluding() {
+    local description="$1" report="$2" list="$3" floor="${4:-80.0}"
+    run_script "$description" env \
+        COVERAGE_TARGET=OpenHikes.app \
+        COVERAGE_FLOOR="$floor" \
+        COVERAGE_SELECTION=OpenHikesTests \
+        COVERAGE_EXCLUSIONS="$list" \
+        "$coverage_gate" "$report"
+}
+
+# Blank lines and comments are stripped, because the list is a file people have
+# to be willing to read before adding to and that means prose in it.
+cat > "$gate_work/exclusions.txt" <<'FIXTURE'
+# The screens only the UI suite evaluates.
+
+OpenHikes/Settings/SettingsView.swift
+
+OpenHikes/Hikes/HikeRow.swift
+FIXTURE
+
+run_coverage_excluding "check-coverage-floor measures what is left after the exclusions" \
+    "$gate_work/files.json" "$gate_work/exclusions.txt"
+if expect_status 0 \
+    && expect_contains "$output" \
+        'line coverage **83.33%**, at or above the 80.00% floor (500/600 lines)' \
+        "the gated number" \
+    && expect_contains "$output" \
+        'Excludes 2 view files and the 500 lines in them; the whole target reads **45.45%** (500/1100).' \
+        "the whole-target figure"; then
+    pass
+fi
+
+# The floor is about the filtered number, so a fall in the code this job can
+# actually reach still fails — which is the whole point of filtering.
+run_coverage_excluding "check-coverage-floor still fails on a fall in what it does measure" \
+    "$gate_work/files.json" "$gate_work/exclusions.txt" 90.0
+if expect_status 1 \
+    && expect_contains "$output" "::error::Coverage fell to 83.33%" "the annotation"; then
+    pass
+fi
+
+# A path naming no file is the list rotting into an exemption nobody granted.
+cat > "$gate_work/stale.txt" <<'FIXTURE'
+OpenHikes/Settings/SettingsView.swift
+OpenHikes/Settings/SettingsScreen.swift
+FIXTURE
+run_coverage_excluding "check-coverage-floor refuses an exclusion that matches nothing" \
+    "$gate_work/files.json" "$gate_work/stale.txt"
+if expect_status 1 \
+    && expect_contains "$output" "OpenHikes/Settings/SettingsScreen.swift" "the annotation" \
+    && expect_absent "$output" "OpenHikes/Settings/SettingsView.swift" "the annotation"; then
+    pass
+fi
+
+# Filtering needs the per-file breakdown. A report without one is refused
+# rather than quietly measured whole, which would read as a pass at the wrong
+# number.
+run_coverage_excluding "check-coverage-floor refuses to filter a report with no files" \
+    "$gate_work/above.json" "$gate_work/exclusions.txt"
+if expect_status 1 && expect_contains "$output" "no per-file breakdown" "the annotation"; then
+    pass
+fi
+
+run_coverage_excluding "check-coverage-floor says so when the exclusion list is missing" \
+    "$gate_work/files.json" "$gate_work/never-written.txt"
+if expect_status 2 && expect_contains "$output" "No exclusion list at" "the annotation"; then
+    pass
+fi
+
+# Unset is the old behaviour exactly: the target's own totals, and no second
+# sentence about files nobody excluded.
+run_coverage "check-coverage-floor measures the whole target when nothing is excluded" \
+    "$gate_work/files.json" 45.0
+if expect_status 0 \
+    && expect_contains "$output" "line coverage **45.45%**" "the published line" \
+    && expect_absent "$output" "Excludes" "the published line"; then
+    pass
+fi
+
 echo "Sanitized selection gate"
 
 # `xcodebuild` never validates an `-only-testing:` identifier: one that
