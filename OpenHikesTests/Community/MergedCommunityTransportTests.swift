@@ -279,6 +279,56 @@ extension MergedCommunityTransportTests {
         #expect(rows.filter { !$0.isCurated }.count == publishedCount)
     }
 
+    /// The cost of the rule, and the reason the source's two passes are two.
+    /// A full page of published hikes leaves the curated half no room at all —
+    /// and the geometry it would have been asked for is 420 KB to 1.4 MB, per
+    /// search, thrown away by the limit before a row is drawn.
+    @Test("a full page of published hikes buys no geometry at all")
+    func afullPageSkipsTheGeometryPass() async throws {
+        let step = 50.0
+        let merged = Self.merged(
+            published: (0..<Self.page).map { index in
+                Self.published("listing-\(index)", metresNorth: Double(index) * step)
+            },
+            curated: (0..<Self.page).map { index in
+                Self.trail(Relation.base + Int64(index), named: "Weg \(index)", metresNorth: 10)
+            }
+        )
+
+        _ = try await Self.nearby(merged)
+
+        #expect(
+            merged.overpass.recording.areaRequests.count == 1,
+            "the cheap pass still runs, beside CloudKit"
+        )
+        #expect(merged.overpass.recording.completionSizes.isEmpty)
+    }
+
+    /// The general case: geometry is bought for the rows there is room to
+    /// draw, and not one more. Asking for the full page and truncating
+    /// afterwards is the version this replaces, and it is invisible in the
+    /// rows — every assertion about the answer passes either way.
+    @Test("geometry is fetched for the rows that fit, not for the page")
+    func geometryIsFetchedOnlyForTheRoomLeft() async throws {
+        let publishedCount = 20
+        let offered = Self.page + 5
+        let merged = Self.merged(
+            published: (0..<publishedCount).map { index in
+                Self.published("listing-\(index)", metresNorth: Offset.farthest)
+            },
+            curated: (0..<offered).map { index in
+                Self.trail(Relation.base + Int64(index), named: "Weg \(index)", metresNorth: Offset.nearest)
+            }
+        )
+
+        _ = try await Self.nearby(merged)
+
+        #expect(
+            merged.overpass.recording.completionSizes == [Self.page - publishedCount],
+            "five rows of room, five lines fetched"
+        )
+    }
+
     /// A typed search is where the split is legible, because there is no
     /// centre to sort by and nothing re-orders the answer afterwards: what
     /// comes back *is* the order the limit was spent in.
@@ -561,6 +611,29 @@ extension MergedCommunityTransportTests {
         #expect(outlines[listing.id]?.count == trail.route.count)
     }
 
+    /// The comment above used to say the curated half *needs no request at
+    /// all*, and a loop of single lookups made that true only while every line
+    /// happened to be cached. A long browse evicts entries and a saved link
+    /// arrives with no search before it — and then a page of pins was one
+    /// Overpass round trip each, at up to thirty seconds of server timeout
+    /// apiece, from a path documented as a cache read.
+    @Test("a page of curated pins is one question, not one per pin")
+    func curatedOutlinesAreAskedInOneGo() async throws {
+        let trails = (0..<Self.page).map { index in
+            Self.trail(Relation.base + Int64(index), named: "Weg \(index)", metresNorth: Offset.near)
+        }
+        let merged = Self.merged(curated: trails)
+        let listings = trails.map { CommunityListing(curated: $0, editedAt: .now) }
+
+        let outlines = try await merged.transport.outlines(for: listings)
+
+        #expect(outlines.count == Self.page)
+        #expect(
+            merged.overpass.recording.trailRequests == trails.map(\.relationID),
+            "every relation, asked once, in one call"
+        )
+    }
+
     /// Partial by contract on both sides, which is what keeps one half's
     /// failure from clearing the other's lines off the map.
     @Test("CloudKit failing costs its own lines and not the curated ones")
@@ -657,11 +730,16 @@ private final class StubCuratedTrailSource: CuratedTrailSourcing, @unchecked Sen
         /// The relations a per-route request asked about, in order. What
         /// proves a CloudKit record name never arrives here.
         var trailRequests: [Int64] = []
+        /// How many routes each geometry pass was asked to complete. The
+        /// expensive half of a search, and the one the published rows are
+        /// supposed to have already spent the limit on.
+        var completionSizes: [Int] = []
 
         /// Whether this source was asked nothing at all — the assertion every
         /// published-only path in this file ends on.
         var isQuiet: Bool {
             areaRequests.isEmpty && titleQueries.isEmpty && trailRequests.isEmpty
+                && completionSizes.isEmpty
         }
     }
 
@@ -690,11 +768,22 @@ private final class StubCuratedTrailSource: CuratedTrailSourcing, @unchecked Sen
     /// ``CuratedTrailQuery/geometryBatchLimit`` — and the merge's own split has
     /// to be shown doing its work on top of that rather than instead of it.
     @concurrent
-    func trails(near area: CommunitySearchArea, limit: Int) async throws -> [CuratedTrail] {
+    func listings(near area: CommunitySearchArea, limit: Int) async throws -> [CuratedTrail] {
         state.withLock { $0.areaRequests.append((area: area, limit: limit)) }
         await Task.yield()
         let answer = try nearbyResult.get()
         return Array(answer.prefix(max(0, limit)))
+    }
+
+    /// Records how many rows the expensive pass was asked about, which is the
+    /// whole point of the pass being separate. The rows come back unchanged:
+    /// the stub's trails already carry their lines, and what is under test
+    /// here is the size of the question rather than the answer to it.
+    @concurrent
+    func completed(_ listed: [CuratedTrail]) async -> [CuratedTrail] {
+        state.withLock { $0.completionSizes.append(listed.count) }
+        await Task.yield()
+        return listed
     }
 
     /// Filters by name the way the real source does, so a query written in a
@@ -714,9 +803,9 @@ private final class StubCuratedTrailSource: CuratedTrailSourcing, @unchecked Sen
     }
 
     @concurrent
-    func trail(of relationID: Int64) async -> CuratedTrail? {
-        state.withLock { $0.trailRequests.append(relationID) }
+    func trails(of relationIDs: [Int64]) async -> [Int64: CuratedTrail] {
+        state.withLock { $0.trailRequests.append(contentsOf: relationIDs) }
         await Task.yield()
-        return known[relationID]
+        return known.filter { relationIDs.contains($0.key) }
     }
 }

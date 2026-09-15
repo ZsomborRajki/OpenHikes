@@ -106,7 +106,9 @@ nonisolated extension CuratedTrailQuery {
     private static let metresPerDegreeLatitude: Double = 111_320
     /// Where `cos(latitude)` stops being a usable divisor. Beyond it the
     /// longitude span of a fixed distance runs away to the whole world, and
-    /// the box is clamped to it instead.
+    /// there is no box — a search a few hundred metres from the pole would
+    /// otherwise ask about everything, and there is no hiking up there to
+    /// miss.
     private static let polarLatitudeLimit: Double = 89
 
     /// The box that circumscribes `area`, or `nil` when the area is too wide
@@ -118,7 +120,13 @@ nonisolated extension CuratedTrailQuery {
     /// corners bring in a little more than the circle, which is the harmless
     /// direction — a route just outside the radius is still somewhere the
     /// hiker can see.
-    static func boundingBox(for area: CommunitySearchArea) -> BoundingBox? {
+    ///
+    /// **Longitude here is continuous, not wrapped**: a search near the date
+    /// line answers with a `west` below −180 or an `east` above 180, which is
+    /// a true statement about the circle and not a box Overpass will take.
+    /// ``searchBoxes(for:)`` is what turns it into one, and it is what every
+    /// caller outside this file wants.
+    static func circumscribingBox(for area: CommunitySearchArea) -> BoundingBox? {
         guard area.radiusMeters > 0, area.radiusMeters <= maximumRadiusMeters else {
             return nil
         }
@@ -130,12 +138,56 @@ nonisolated extension CuratedTrailQuery {
             / (metresPerDegreeLatitude * cos(latitude * .pi / 180))
         guard latitudeSpan.isFinite, longitudeSpan.isFinite else { return nil }
 
+        let longitude = wrapped(area.longitude)
         return BoundingBox(
             south: max(-90, latitude - latitudeSpan),
-            west: max(-180, area.longitude - longitudeSpan),
+            west: longitude - longitudeSpan,
             north: min(90, latitude + latitudeSpan),
-            east: min(180, area.longitude + longitudeSpan)
+            east: longitude + longitudeSpan
         )
+    }
+
+    /// The boxes a search of `area` asks Overpass about: one, or **two** where
+    /// the circle crosses the antimeridian, or none where there is nothing to
+    /// ask.
+    ///
+    /// Two rather than a clamp, which is what this used to do and which lost
+    /// half the search silently. At 60°N a 40 km radius is 0.72° of longitude,
+    /// so a hiker at 179.8° had everything from 180° east to −179.48° dropped
+    /// from a list that said it described what was around them — while the
+    /// published half, which reaches CloudKit through `distanceToLocation:`,
+    /// has no such seam and answered about the whole circle. Two halves
+    /// describing different areas is the one thing a merged list may not do.
+    ///
+    /// Still **one request**: Overpass takes a union of filters, so the two
+    /// boxes cost the same round trip as one — see ``listingQuery(in:)``.
+    static func searchBoxes(for area: CommunitySearchArea) -> [BoundingBox] {
+        guard let box = circumscribingBox(for: area) else { return [] }
+        if box.west < -180 {
+            return [
+                BoundingBox(south: box.south, west: box.west + 360, north: box.north, east: 180),
+                BoundingBox(south: box.south, west: -180, north: box.north, east: box.east),
+            ]
+        }
+        if box.east > 180 {
+            return [
+                BoundingBox(south: box.south, west: box.west, north: box.north, east: 180),
+                BoundingBox(south: box.south, west: -180, north: box.north, east: box.east - 360),
+            ]
+        }
+        return [box]
+    }
+
+    /// `longitude` brought into −180...180.
+    ///
+    /// A map can hand back a longitude that has wrapped several times over
+    /// while the hiker dragged east, and 540° is a real value meaning 180°.
+    /// Normalised before the span is applied rather than after, so the split
+    /// below has only the one seam to look for.
+    private static func wrapped(_ longitude: Double) -> Double {
+        guard longitude.isFinite else { return longitude }
+        let shifted = (longitude + 180).truncatingRemainder(dividingBy: 360)
+        return (shifted < 0 ? shifted + 360 : shifted) - 180
     }
 }
 
@@ -154,10 +206,22 @@ nonisolated extension CuratedTrailQuery {
     /// file header. Note it is `bb` and not `center`: the centre alone would
     /// place a pin, and the *box* is what decides whether a route is a day
     /// hike at all.
-    static func listingQuery(in box: BoundingBox) -> String {
-        """
+    ///
+    /// A union of filters, and a union even when there is one box, because
+    /// that is what lets an antimeridian search be a single request rather
+    /// than two — see ``searchBoxes(for:)``. A union of one is exactly the
+    /// query it encloses. `nil` for no boxes at all: a caller with nothing to
+    /// ask about should not be making a request.
+    static func listingQuery(in boxes: [BoundingBox]) -> String? {
+        guard !boxes.isEmpty else { return nil }
+        let filters = boxes
+            .map { "  rel[\"route\"=\"hiking\"][\"name\"](\($0.overpassLiteral));" }
+            .joined(separator: "\n")
+        return """
         [out:json][timeout:\(listingTimeoutSeconds)];
-        rel["route"="hiking"]["name"](\(box.overpassLiteral));
+        (
+        \(filters)
+        );
         out tags bb;
         """
     }

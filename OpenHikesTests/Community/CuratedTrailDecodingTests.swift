@@ -129,6 +129,19 @@ struct CuratedTrailDecodingTests {
         from start: CLLocationCoordinate2D,
         to end: CLLocationCoordinate2D
     ) -> String {
+        way(from: start, to: end, role: "")
+    }
+
+    /// The same way, under a role.
+    ///
+    /// Separate from the call above so the dozens of existing fixtures keep
+    /// reading as geometry rather than as geometry-and-a-role, and the ones
+    /// that *are* about roles say so at the call site.
+    private static func way(
+        from start: CLLocationCoordinate2D,
+        to end: CLLocationCoordinate2D,
+        role: String
+    ) -> String {
         let middle = point(
             (start.latitude + end.latitude) / 2,
             (start.longitude + end.longitude) / 2
@@ -136,7 +149,7 @@ struct CuratedTrailDecodingTests {
         let geometry = [start, middle, end]
             .map { #"{"lat": \#($0.latitude), "lon": \#($0.longitude)}"# }
             .joined(separator: ", ")
-        return #"{"type": "way", "ref": 55500, "role": "", "geometry": [\#(geometry)]}"#
+        return #"{"type": "way", "ref": 55500, "role": "\#(role)", "geometry": [\#(geometry)]}"#
     }
 
     /// A guidepost standing where the path leaves the road.
@@ -536,6 +549,98 @@ extension CuratedTrailDecodingTests {
         #expect(trail.facts.journey == "Marktschellenberg to Ettenberg")
         #expect(trail.facts.shape == .pointToPoint, "ends 4.4 km apart, which the geometry answers and no tag does")
         #expect(!trail.route.isEmpty)
+    }
+
+    // MARK: - The geometry pass: which members are the route
+
+    /// The correction endpoint matching cannot make on its own. These ways are
+    /// all real, all at real coordinates, and the `alternative` joins the main
+    /// path at the meadow — so a matcher that only asks *does this touch here*
+    /// follows it, and the line drawn under the route's name, with its
+    /// distance measured from it, is a walk nobody tagged.
+    @Test("a variant hanging off the route is not walked into the line")
+    func anAlternativeIsNotTheRoute() throws {
+        let data = Self.geometryResponse(members: [
+            Self.way(from: Self.trailhead, to: Self.bridge),
+            Self.way(from: Self.bridge, to: Self.meadow),
+            Self.way(from: Self.meadow, to: Self.hut),
+            // Leaves the route at the meadow and climbs somewhere else.
+            Self.way(from: Self.meadow, to: Self.summit, role: "alternative"),
+        ])
+        let trails = try CuratedTrailDecoding.trails(fromGeometry: data)
+        let trail = try #require(trails[Self.relationID])
+        let line = Self.northwards(trail.route)
+        let start = try #require(line.first)
+        let end = try #require(line.last)
+
+        #expect(line.count == Self.threeWayPoints)
+        #expect(Self.isSame(start, as: Self.trailhead))
+        #expect(Self.isSame(end, as: Self.hut), "the hut, not the summit the variant reaches")
+        #expect(abs(trail.distanceMeters - Self.legMeters * 3) < Self.lengthTolerance)
+    }
+
+    /// The other half of the cost, and the quieter one. Two `approach` spurs
+    /// from two car parks are disconnected from each other, so each becomes
+    /// its own run and each swells the denominator
+    /// ``CuratedTrailDecoding/minimumConnectedShare`` is measured against —
+    /// until a route that is a single unbroken walk is dropped as too
+    /// fragmented to draw.
+    @Test("approach spurs do not make a connected route look fragmented")
+    func approachesDoNotFragmentTheRoute() throws {
+        let data = Self.geometryResponse(members: [
+            Self.way(from: Self.trailhead, to: Self.bridge),
+            Self.way(from: Self.bridge, to: Self.meadow),
+            Self.way(from: Self.meadow, to: Self.summit, role: "approach"),
+            Self.way(from: Self.hut, to: Self.summit, role: "approach"),
+        ])
+        let trails = try CuratedTrailDecoding.trails(fromGeometry: data)
+        let trail = try #require(trails[Self.relationID])
+        let line = Self.northwards(trail.route)
+
+        #expect(
+            Self.isSame(try #require(line.first), as: Self.trailhead),
+            "two disconnected approaches used to be two thirds of the measured total"
+        )
+        #expect(Self.isSame(try #require(line.last), as: Self.meadow))
+    }
+
+    /// `forward` and `backward` are the main route, not a branch off it: they
+    /// are how a mapper spells the two halves of a path that splits around an
+    /// obstacle and rejoins. A filter that kept only the empty role would
+    /// throw away a route that is entirely tagged.
+    @Test("forward and backward are the route, not a branch")
+    func directionalRolesAreTheRoute() throws {
+        let data = Self.geometryResponse(members: [
+            Self.way(from: Self.trailhead, to: Self.bridge, role: "forward"),
+            Self.way(from: Self.bridge, to: Self.meadow, role: "main"),
+            Self.way(from: Self.meadow, to: Self.hut, role: "backward"),
+        ])
+        let trails = try CuratedTrailDecoding.trails(fromGeometry: data)
+        let trail = try #require(trails[Self.relationID])
+        let line = Self.northwards(trail.route)
+
+        #expect(line.count == Self.threeWayPoints)
+        #expect(Self.isSame(try #require(line.first), as: Self.trailhead))
+        #expect(Self.isSame(try #require(line.last), as: Self.hut))
+    }
+
+    /// The safety valve. The allowlist is drawn from the roles this feature
+    /// was measured against, and a region tagged in a convention nobody here
+    /// has seen would otherwise assemble to nothing and lose its line —
+    /// dropping a trail that is named, waymarked and perfectly walkable.
+    /// Drawing one assembled from unfamiliar roles is the smaller wrong.
+    @Test("a relation with no member in a known role keeps its line")
+    func unknownRolesFallBackToEveryWay() throws {
+        let data = Self.geometryResponse(members: [
+            Self.way(from: Self.trailhead, to: Self.bridge, role: "hauptweg"),
+            Self.way(from: Self.bridge, to: Self.meadow, role: "hauptweg"),
+            Self.way(from: Self.meadow, to: Self.hut, role: "hauptweg"),
+        ])
+        let trails = try CuratedTrailDecoding.trails(fromGeometry: data)
+        let trail = try #require(trails[Self.relationID])
+
+        #expect(Self.northwards(trail.route).count == Self.threeWayPoints)
+        #expect(abs(trail.distanceMeters - Self.legMeters * 3) < Self.lengthTolerance)
     }
 
     // MARK: - What an overloaded server sends

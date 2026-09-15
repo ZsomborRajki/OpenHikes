@@ -170,11 +170,20 @@ nonisolated struct CommunityReport: Equatable, Sendable {
         // it: if one ever arrived, the reviewer gets a report that says what it
         // is about instead of two record names that name nothing.
         guard let submissionID = listing.submissionID else {
+            // Parsed rather than cut. `submissionID == nil` is a fact about
+            // ``CommunityOrigin`` and not about the id string, so dropping a
+            // fixed number of characters off the front of it is only right for
+            // as long as those two happen to agree — and when they stop, a
+            // reviewer is handed an openstreetmap.org link with six characters
+            // chopped off the relation id and no sign anything went wrong.
+            let upstream = CommunityIdentity.relationID(of: listing.id)
+                .map { "https://www.openstreetmap.org/relation/\($0)" }
+                ?? "(this listing names no OpenStreetMap relation: \(listing.id))"
             lines.append(contentsOf: [
                 "",
                 "This hike came from OpenStreetMap and was not published by anyone.",
                 "There is no record to remove. Corrections belong upstream, at",
-                "https://www.openstreetmap.org/relation/\(listing.id.dropFirst(CommunityIdentity.curatedPrefix.count))",
+                upstream,
             ])
             return lines.joined(separator: "\n")
         }

@@ -155,9 +155,7 @@ actor OverpassTrailGraphProvider: TrailGraphProviding {
         )
         .first?
         .appendingPathComponent("TrailGraphs", isDirectory: true),
-        endpoint: URL = URL(
-            string: "https://overpass-api.de/api/interpreter"
-        )!,
+        endpoint: URL = OverpassRequest.defaultEndpoint,
         clock: @escaping @Sendable () -> Date = { Date() },
         transport: Transport? = nil
     ) {

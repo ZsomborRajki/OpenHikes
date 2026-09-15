@@ -353,16 +353,27 @@ extension MapSheetHikes {
                 .foregroundStyle(.secondary)
                 .textCase(nil)
         }
-        // Drawn only when a curated route is actually in the list, which is
-        // what makes it a credit rather than boilerplate: a list of hikes
-        // people published owes OpenStreetMap nothing. The *linked* form of
-        // the obligation is on the screen a row opens — see
-        // ``CommunityHikeView/curatedAttribution`` and ``TileAttribution``,
-        // which owns the argument for the whole app — because a footer under
-        // a scrolling list is not somewhere a link can be relied on to be
-        // seen, and the credit has to be reachable from the content it is
-        // about.
-        if community.nearbyListings.contains(where: \.isCurated) {
+        curatedCredit(for: community.nearbyListings)
+    }
+
+    /// The ODbL credit, drawn only when `listings` actually holds a curated
+    /// route.
+    ///
+    /// Conditional is what makes it a credit rather than boilerplate: a list
+    /// of hikes people published owes OpenStreetMap nothing. The *linked* form
+    /// of the obligation is on the screen a row opens — see
+    /// ``CommunityHikeView/curatedAttribution`` and ``TileAttribution``, which
+    /// owns the argument for the whole app — because a footer under a
+    /// scrolling list is not somewhere a link can be relied on to be seen, and
+    /// the credit has to be reachable from the content it is about.
+    ///
+    /// Taken as a parameter rather than read off ``nearbyListings``, because
+    /// the Community tab is not the only place a curated row appears: typing a
+    /// name puts one in ``matchingListings``, and the credit is owed wherever
+    /// the data is drawn rather than wherever the feature was introduced.
+    @ViewBuilder
+    func curatedCredit(for listings: [CommunityListing]) -> some View {
+        if listings.contains(where: \.isCurated) {
             Text("Trail routes from OpenStreetMap contributors.")
                 .font(.footnote)
                 .foregroundStyle(.secondary)
@@ -380,7 +391,7 @@ extension MapSheetHikes {
     @ViewBuilder
     func communitySuggestionsSection() -> some View {
         if !community.matchingListings.isEmpty {
-            Section("Community Hikes") {
+            Section {
                 ForEach(community.matchingListings) { listing in
                     Button { openListing(listing) } label: {
                         CommunityHikeRow(
@@ -391,6 +402,10 @@ extension MapSheetHikes {
                     }
                     .buttonStyle(.plain)
                 }
+            } header: {
+                Text("Community Hikes")
+            } footer: {
+                curatedCredit(for: community.matchingListings)
             }
         }
     }
@@ -405,7 +420,7 @@ extension MapSheetHikes {
     /// map behind it.
     @ViewBuilder var nearbySuggestionsSection: some View {
         if community.isBrowsing, !community.nearbyListings.isEmpty {
-            Section("Near Here") {
+            Section {
                 ForEach(community.nearbyListings) { listing in
                     Button { openListing(listing) } label: {
                         CommunityHikeRow(
@@ -416,6 +431,10 @@ extension MapSheetHikes {
                     }
                     .buttonStyle(.plain)
                 }
+            } header: {
+                Text("Near Here")
+            } footer: {
+                curatedCredit(for: community.nearbyListings)
             }
         }
     }

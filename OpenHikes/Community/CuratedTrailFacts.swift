@@ -131,7 +131,7 @@ nonisolated struct TrailWaymark: Hashable, Sendable {
 /// The single most decision-relevant fact about a trail after its length, and
 /// the one this data set can always answer — `roundtrip=yes` where somebody
 /// tagged it, and the geometry itself where nobody did. See
-/// ``CuratedTrailFacts/shape(roundtrip:route:)``.
+/// ``CuratedTrailFacts/trailShape(roundtrip:route:)``.
 nonisolated enum TrailShape: Hashable, Sendable {
     /// Ends where it began.
     case loop
@@ -217,12 +217,7 @@ nonisolated extension CuratedTrailFacts {
     /// stopped drawing, so a circuit around a lake routinely begins and ends
     /// on opposite sides of the same car park. Generous enough to call that a
     /// loop, tight enough that an out-and-back along a ridge is not one.
-    static let loopToleranceMeters: Double = loopToleranceMetres
-
-    /// The figure behind ``loopToleranceMeters``, spelled here so the number
-    /// is read beside the paragraph that argues for it rather than as a
-    /// literal in an expression.
-    private static let loopToleranceMetres: Double = 150
+    static let loopToleranceMeters: Double = 150
 
     /// The shape `roundtrip` claims, or the one the geometry shows.
     ///
@@ -236,6 +231,11 @@ nonisolated extension CuratedTrailFacts {
     /// listing pass: a row in the list says nothing about shape until its line
     /// has arrived.
     ///
+    /// Two points is a route to measure, which is why the guard is `> 1` and
+    /// not `> 2`: a single unbroken way is a real relation and its two ends
+    /// are exactly the ends of the walk. ``CuratedTrailDecoding/assemble(_:)``
+    /// never answers with fewer, so there is no shorter case to exclude.
+    ///
     /// Named `trailShape` rather than `shape` because the property it feeds is
     /// called that, and a static member sharing a stored property's name is
     /// unreachable through `Self.` from inside the initialiser that sets it.
@@ -245,7 +245,7 @@ nonisolated extension CuratedTrailFacts {
         case "no": return .pointToPoint
         default: break
         }
-        guard let first = route.first, let last = route.last, route.count > 2 else {
+        guard let first = route.first, let last = route.last, route.count > 1 else {
             return nil
         }
         let gap = RouteGeometry.distanceMeters(

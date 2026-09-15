@@ -133,7 +133,7 @@ nonisolated enum CommunityImport {
     /// same fact rather than two readings of it.
     ///
     /// Two hikes carrying one listing id is a state the import refuses to
-    /// create — see ``importHike(_:into:store:libraryWriter:save:)`` — but a
+    /// create — see ``importHike(_:into:store:libraryWriter:saveDate:save:)`` — but a
     /// mirrored store can deliver one from another device, so the first wins
     /// rather than the last. The lists are sorted newest first, which makes
     /// that the copy the hiker made most recently.

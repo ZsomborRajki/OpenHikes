@@ -108,13 +108,13 @@ struct CuratedTrailQueryTests {
     /// then throw away.
     @Test("an area wider than the ceiling is not asked about at all")
     func continentalAreaHasNoBox() {
-        #expect(CuratedTrailQuery.boundingBox(
+        #expect(CuratedTrailQuery.circumscribingBox(
             for: Self.area(radiusMeters: CuratedTrailQuery.maximumRadiusMeters + 1)
         ) == nil)
-        #expect(CuratedTrailQuery.boundingBox(for: Self.area(radiusMeters: 150_000)) == nil)
+        #expect(CuratedTrailQuery.circumscribingBox(for: Self.area(radiusMeters: 150_000)) == nil)
         // Inclusive at the line, because the constant is documented as the
         // widest search this will ask about rather than the first it will not.
-        #expect(CuratedTrailQuery.boundingBox(
+        #expect(CuratedTrailQuery.circumscribingBox(
             for: Self.area(radiusMeters: CuratedTrailQuery.maximumRadiusMeters)
         ) != nil)
     }
@@ -125,8 +125,8 @@ struct CuratedTrailQueryTests {
     /// so neither becomes a request.
     @Test("an area with no width is not a question")
     func emptyAreaHasNoBox() {
-        #expect(CuratedTrailQuery.boundingBox(for: Self.area(radiusMeters: 0)) == nil)
-        #expect(CuratedTrailQuery.boundingBox(for: Self.area(radiusMeters: -1)) == nil)
+        #expect(CuratedTrailQuery.circumscribingBox(for: Self.area(radiusMeters: 0)) == nil)
+        #expect(CuratedTrailQuery.circumscribingBox(for: Self.area(radiusMeters: -1)) == nil)
     }
 
     /// `cos(latitude)` is the divisor that turns metres into degrees of
@@ -136,11 +136,11 @@ struct CuratedTrailQueryTests {
     /// a clamped one that quietly asks about everything.
     @Test("near the poles there is no box to draw")
     func polarAreaHasNoBox() {
-        #expect(CuratedTrailQuery.boundingBox(for: Self.area(latitude: 89.5)) == nil)
-        #expect(CuratedTrailQuery.boundingBox(for: Self.area(latitude: -89.5)) == nil)
-        #expect(CuratedTrailQuery.boundingBox(for: Self.area(latitude: 89)) == nil)
+        #expect(CuratedTrailQuery.circumscribingBox(for: Self.area(latitude: 89.5)) == nil)
+        #expect(CuratedTrailQuery.circumscribingBox(for: Self.area(latitude: -89.5)) == nil)
+        #expect(CuratedTrailQuery.circumscribingBox(for: Self.area(latitude: 89)) == nil)
         // Svalbard is still a place somebody walks, and it is inside the line.
-        #expect(CuratedTrailQuery.boundingBox(for: Self.area(latitude: 78)) != nil)
+        #expect(CuratedTrailQuery.circumscribingBox(for: Self.area(latitude: 78)) != nil)
     }
 
     /// The choice that keeps the list honest about what it claims to describe.
@@ -151,7 +151,7 @@ struct CuratedTrailQueryTests {
     @Test("the box circumscribes the search circle rather than fitting inside it")
     func boxCircumscribesTheCircle() {
         let area = Self.area()
-        guard let box = CuratedTrailQuery.boundingBox(for: area) else {
+        guard let box = CuratedTrailQuery.circumscribingBox(for: area) else {
             Issue.record("a ten-kilometre search is well inside the ceiling")
             return
         }
@@ -184,8 +184,8 @@ struct CuratedTrailQueryTests {
     /// and the Norwegian hiker would be handed half the area they asked for.
     @Test("the same radius is a wider box in longitude the further north it is")
     func longitudeSpanWidensWithLatitude() {
-        guard let equator = CuratedTrailQuery.boundingBox(for: Self.area(latitude: 0, longitude: 0)),
-              let nordic = CuratedTrailQuery.boundingBox(for: Self.area(latitude: 60, longitude: 0))
+        guard let equator = CuratedTrailQuery.circumscribingBox(for: Self.area(latitude: 0, longitude: 0)),
+              let nordic = CuratedTrailQuery.circumscribingBox(for: Self.area(latitude: 60, longitude: 0))
         else {
             Issue.record("both of these are ordinary ten-kilometre searches")
             return
@@ -279,10 +279,10 @@ struct CuratedTrailQueryTests {
     /// grows a `geom` is a browse that downloads seven megabytes before it
     /// draws a row.
     @Test("the listing pass asks for tags and a box, never for geometry")
-    func listingQueryIsTheCheapPass() {
-        let query = CuratedTrailQuery.listingQuery(
-            in: CuratedTrailQuery.BoundingBox(south: 47, west: 12, north: 48, east: 13)
-        )
+    func listingQueryIsTheCheapPass() throws {
+        let query = try #require(CuratedTrailQuery.listingQuery(
+            in: [CuratedTrailQuery.BoundingBox(south: 47, west: 12, north: 48, east: 13)]
+        ))
         #expect(query.contains("out tags bb"))
         #expect(!query.contains("out geom"))
         // `bb` and not `center`: a centre would place a pin, and the box is
@@ -299,11 +299,102 @@ struct CuratedTrailQueryTests {
     /// Getting it wrong does not fail: it asks about a different, usually
     /// empty, part of the world and the list simply comes back short.
     @Test("the bounding box reaches Overpass in south, west, north, east order")
-    func listingQuerySpellsTheBoxInOverpassOrder() {
-        let query = CuratedTrailQuery.listingQuery(
-            in: CuratedTrailQuery.BoundingBox(south: 47, west: 12, north: 48, east: 13)
-        )
+    func listingQuerySpellsTheBoxInOverpassOrder() throws {
+        let query = try #require(CuratedTrailQuery.listingQuery(
+            in: [CuratedTrailQuery.BoundingBox(south: 47, west: 12, north: 48, east: 13)]
+        ))
         #expect(query.contains("(47.0,12.0,48.0,13.0)"))
+    }
+
+    // MARK: - The date line
+
+    /// The seam a clamp used to swallow. At 60°N a 40 km radius is 0.72° of
+    /// longitude, so a hiker at 179.8° had everything from 180° to −179.48°
+    /// dropped — while the published half, which reaches CloudKit through
+    /// `distanceToLocation:`, answered about the whole circle. Two halves of
+    /// one list describing two different areas is the one thing a merge may
+    /// not do.
+    @Test("a search crossing the date line eastwards asks about both sides")
+    func eastwardCrossingSplitsIntoTwoBoxes() throws {
+        let boxes = CuratedTrailQuery.searchBoxes(
+            for: Self.area(latitude: 60, longitude: 179.8, radiusMeters: 40_000)
+        )
+
+        #expect(boxes.count == 2)
+        let east = try #require(boxes.first)
+        let west = try #require(boxes.last)
+        #expect(east.west > 179 && east.east == 180)
+        #expect(west.west == -180 && west.east < -179)
+        // No degrees are lost and none are asked about twice: the two spans
+        // add up to the one span the circle actually covers.
+        let span = (east.east - east.west) + (west.east - west.west)
+        let whole = try #require(CuratedTrailQuery.circumscribingBox(
+            for: Self.area(latitude: 60, longitude: 179.8, radiusMeters: 40_000)
+        ))
+        #expect(Self.isClose(span, whole.east - whole.west, within: 1e-9))
+    }
+
+    @Test("a search crossing the date line westwards asks about both sides")
+    func westwardCrossingSplitsIntoTwoBoxes() throws {
+        let boxes = CuratedTrailQuery.searchBoxes(
+            for: Self.area(latitude: 60, longitude: -179.8, radiusMeters: 40_000)
+        )
+
+        #expect(boxes.count == 2)
+        let east = try #require(boxes.first)
+        let west = try #require(boxes.last)
+        #expect(east.west > 179 && east.east == 180)
+        #expect(west.west == -180 && west.east < -179)
+    }
+
+    /// The overwhelmingly common case stays one box, because a split that
+    /// happened everywhere would double the filters in every query for a
+    /// seam almost nobody stands on.
+    @Test("an ordinary search is still one box")
+    func anOrdinarySearchIsOneBox() {
+        #expect(CuratedTrailQuery.searchBoxes(for: Self.area()).count == 1)
+        #expect(CuratedTrailQuery.searchBoxes(
+            for: Self.area(radiusMeters: CuratedTrailQuery.maximumRadiusMeters * 2)
+        ).isEmpty)
+    }
+
+    /// A map hands back whatever longitude the hiker dragged to, and dragging
+    /// east three times round the world is a real thing a finger does. 540° is
+    /// 180°, and a box built from the raw figure would ask Overpass about a
+    /// place that does not exist.
+    @Test("a longitude that has wrapped round the world is brought back")
+    func awrappedLongitudeIsNormalised() throws {
+        let wrapped = try #require(CuratedTrailQuery.circumscribingBox(
+            for: Self.area(latitude: 47.63, longitude: 12.98 + 360)
+        ))
+        let plain = try #require(CuratedTrailQuery.circumscribingBox(
+            for: Self.area(latitude: 47.63, longitude: 12.98)
+        ))
+
+        #expect(Self.isClose(wrapped.west, plain.west, within: 1e-9))
+        #expect(Self.isClose(wrapped.east, plain.east, within: 1e-9))
+    }
+
+    /// Two boxes, and still **one** request: Overpass takes a union of
+    /// filters, so the seam costs a second filter rather than a second round
+    /// trip to a volunteer-run API.
+    @Test("both sides of the date line go in one query")
+    func bothSidesShareOneQuery() throws {
+        let boxes = CuratedTrailQuery.searchBoxes(
+            for: Self.area(latitude: 60, longitude: 179.8, radiusMeters: 40_000)
+        )
+        let query = try #require(CuratedTrailQuery.listingQuery(in: boxes))
+
+        #expect(query.components(separatedBy: "out tags bb").count == 2, "one output statement")
+        #expect(query.components(separatedBy: #"["route"="hiking"]"#).count == 3, "two filters")
+        for box in boxes {
+            #expect(query.contains(box.overpassLiteral))
+        }
+    }
+
+    @Test("no box is no query at all")
+    func noBoxesIsNoQuery() {
+        #expect(CuratedTrailQuery.listingQuery(in: []) == nil)
     }
 
     /// A request for nothing is still a round trip to a volunteer-run API, and

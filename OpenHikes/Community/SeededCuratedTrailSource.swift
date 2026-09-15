@@ -62,7 +62,7 @@ nonisolated struct SeededCuratedTrailSource: CuratedTrailSourcing {
         (0, 0), (2, 1), (4, 2), (6, 3),
     ]
 
-    func trails(near area: CommunitySearchArea, limit: Int) -> [CuratedTrail] {
+    func listings(near area: CommunitySearchArea, limit: Int) -> [CuratedTrail] {
         // The area is deliberately ignored, exactly as the seeded published
         // transport ignores it: what a scenario is asking is what the list
         // does with these rows, and making that depend on where the
@@ -70,6 +70,16 @@ nonisolated struct SeededCuratedTrailSource: CuratedTrailSourcing {
         // assertion — the failure being an empty list with nothing to say
         // about why.
         Array(Self.seededTrails.prefix(max(0, limit)))
+    }
+
+    /// Already complete, because these two never went over a wire.
+    ///
+    /// The split between listing and geometry is about what a request costs,
+    /// and nothing here makes one. What a scenario still exercises is the
+    /// *shape* of the split — the real ``MergedCommunityTransport`` decides
+    /// how many rows to ask about and this answers about exactly those.
+    func completed(_ listed: [CuratedTrail]) -> [CuratedTrail] {
+        listed
     }
 
     func trails(matching query: String, limit: Int) -> [CuratedTrail] {
@@ -84,8 +94,13 @@ nonisolated struct SeededCuratedTrailSource: CuratedTrailSourcing {
         )
     }
 
-    func trail(of relationID: Int64) -> CuratedTrail? {
-        Self.seededTrails.first { $0.relationID == relationID }
+    func trails(of relationIDs: [Int64]) -> [Int64: CuratedTrail] {
+        let wanted = Set(relationIDs)
+        return Dictionary(
+            uniqueKeysWithValues: Self.seededTrails
+                .filter { wanted.contains($0.relationID) }
+                .map { ($0.relationID, $0) }
+        )
     }
 }
 

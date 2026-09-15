@@ -276,9 +276,15 @@ nonisolated extension CommunityListing {
     ///
     /// Everything a published hike gets from a person is absent by
     /// construction: no author to credit, no date anybody walked it, and no
-    /// photographs. `publishedAt` carries the relation's own last-edit time
-    /// where OSM reports one, so a merged list has a defensible order rather
-    /// than sinking every curated row beneath every published one.
+    /// photographs.
+    ///
+    /// `editedAt` is **not** OSM's last-edit time, and nothing here can make
+    /// it one: the listing pass asks `out tags bb` rather than `out meta`,
+    /// because a timestamp nothing draws is not worth doubling the size of
+    /// every search for. It is the moment the row was fetched — see
+    /// ``MergedCommunityTransport``, which passes `.now`. That gives a merged
+    /// list something defensible to order by when there is no distance to use,
+    /// and it is never shown.
     init(curated trail: CuratedTrail, editedAt: Date) {
         self.init(
             id: CommunityIdentity.curated(relationID: trail.relationID),

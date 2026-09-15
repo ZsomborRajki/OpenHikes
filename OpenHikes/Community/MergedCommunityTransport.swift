@@ -72,13 +72,25 @@ extension MergedCommunityTransport {
             coordinate: coordinate,
             radiusMeters: radiusMeters
         )
-        async let curatedRows = attemptCurated {
-            try await curated.trails(near: area, limit: limit)
+        // The cheap pass only, and it runs beside CloudKit rather than after
+        // it. Which of these rows are worth a line is not known until the
+        // published half has answered — see ``merge(published:curated:limit:)``
+        // — and a line costs 420 KB to 1.4 MB a page. Asking for geometry here
+        // would be spending all of that on rows the limit then throws away.
+        async let curatedListed = attemptCurated {
+            try await curated.listings(near: area, limit: limit)
+        }
+
+        let publishedAnswer = await publishedRows
+        let listed = await curatedListed
+        let room = max(0, limit - publishedAnswer.rows.count)
+        let curatedRows = room == 0 ? [] : await attemptCurated {
+            try await curated.completed(Array(listed.prefix(room)))
         }
 
         let (rows, failure) = merge(
-            published: await publishedRows,
-            curated: await curatedRows,
+            published: publishedAnswer,
+            curated: curatedRows,
             limit: limit
         )
         if let failure { throw failure }
@@ -130,15 +142,20 @@ extension MergedCommunityTransport {
             ? [:]
             : published.outlines(for: publishedListings)
 
-        // The curated half needs no request at all: a curated listing only
-        // exists because its line was already fetched and cached — see
-        // ``CuratedTrailSource/completed(_:)``, which drops a route it could
-        // not draw rather than offering it. So this is a cache read shaped
-        // like the same contract.
+        // Usually a cache read: a curated listing that came from a search
+        // already has its line, because ``CuratedTrailSourcing/completed(_:)``
+        // drops a route it could not draw rather than offering it. But
+        // *usually* is not *always* — a long browse can evict an entry, and a
+        // listing can arrive from a saved link that no search preceded — so
+        // this is asked as one question about every relation at once. A loop
+        // of single lookups would turn a miss into one Overpass round trip per
+        // pin, at up to 30 seconds of server timeout each.
         var outlines: [String: [RouteCoordinate]] = [:]
+        let relationIDs = curatedListings.compactMap { CommunityIdentity.relationID(of: $0.id) }
+        let trails = (try? await curated.trails(of: relationIDs)) ?? [:]
         for listing in curatedListings {
             guard let relationID = CommunityIdentity.relationID(of: listing.id),
-                  let trail = try? await curated.trail(of: relationID)
+                  let trail = trails[relationID]
             else { continue }
             outlines[listing.id] = CommunityRouteOutline
                 .simplified(trail.route)
@@ -308,6 +325,11 @@ private extension MergedCommunityTransport {
     /// Returns the failure rather than throwing it so the caller decides —
     /// see the file header. A curated row is only admitted while the limit has
     /// room left after every published row has taken its place.
+    ///
+    /// `prefix(room)` here is belt to the caller's braces: ``listings(near:…)``
+    /// already asks for lines only for the rows that fit, and this keeps the
+    /// rule true for ``listings(matching:…)``, whose curated half comes out of
+    /// the last search's rows rather than out of a fresh request.
     func merge(
         published: (rows: [CommunityListing], failure: CommunityFailure?),
         curated: [CuratedTrail],

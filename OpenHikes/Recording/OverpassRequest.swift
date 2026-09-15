@@ -23,6 +23,15 @@ import Foundation
 /// The shape of every Overpass request this app makes, and the reading of
 /// every response.
 nonisolated enum OverpassRequest {
+    /// The public Overpass instance both callers ask by default.
+    ///
+    /// Here rather than spelled at each `init` for the reason the rest of this
+    /// file is here: two copies of a host name is the drift nobody notices.
+    /// Changing mirrors by editing one of two literals leaves the other
+    /// pointed at the old one, and nothing fails a test or a build until a
+    /// hiker's request 404s.
+    static let defaultEndpoint = URL(string: "https://overpass-api.de/api/interpreter")!
+
     /// How long the client waits before giving up, in seconds.
     ///
     /// Above the `[timeout:]` each query carries, so the server's own limit is

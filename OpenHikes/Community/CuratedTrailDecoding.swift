@@ -20,6 +20,11 @@
 //  member order is not usable and endpoint matching is, which is the whole
 //  design below.
 //
+//  What member order *does* carry is a `role`, and that one is not optional
+//  reading: a relation holds the variants, the approaches and the summit
+//  excursions alongside the path, and endpoint matching cannot tell them
+//  apart. See ``CuratedTrailDecoding/mainRoles``.
+//
 //  ## Why the largest run, and why some routes are dropped
 //
 //  What survives is the longest connected run and nothing else, because
@@ -104,6 +109,29 @@ nonisolated enum CuratedTrailDecoding {
     /// lookup becomes a dictionary hit rather than a scan of every remaining
     /// way, which is what keeps a 133-way relation from being quadratic.
     static let coordinatePlaces: Double = 1e7
+
+    /// The member roles that are the route itself rather than something
+    /// hanging off it.
+    ///
+    /// A `route=hiking` relation does not only hold the path: it also holds
+    /// the `alternative` that rejoins it two valleys later, the `approach`
+    /// from the car park, the `excursion` up to the summit and back. Those
+    /// are real ways at real coordinates, and a matcher that only looks at
+    /// endpoints cannot tell them from the route — it will happily follow a
+    /// variant, and then the drawn line and the ``CuratedTrail/distanceMeters``
+    /// measured from it describe a walk nobody tagged.
+    ///
+    /// They cost the fragmented ones too. Several disconnected `approach`
+    /// spurs each become their own run, inflating the denominator in
+    /// ``assemble(_:)`` until a perfectly connected route falls under
+    /// ``minimumConnectedShare`` and is dropped as too broken to draw.
+    ///
+    /// An allowlist rather than a list of branch roles to reject, because the
+    /// vocabulary of things that hang off a route is open and the vocabulary
+    /// of things that *are* one is not: empty is the overwhelming majority,
+    /// `forward` and `backward` are the one-way halves of a route that splits
+    /// around an obstacle, and `main` is the explicit spelling of empty.
+    static let mainRoles: Set<String> = ["", "forward", "backward", "main"]
 }
 
 // MARK: - The listing pass
@@ -168,19 +196,7 @@ nonisolated extension CuratedTrailDecoding {
             guard let bounds = element.bounds,
                   let name = BoundedText.bounded(element.tags["name"], to: .title)
             else { continue }
-            let ways = element.members
-                .filter { $0.type == "way" }
-                .map { member in
-                    member.geometry.compactMap { point -> CLLocationCoordinate2D? in
-                        guard Mercator.isRepresentable(
-                            latitude: point.lat,
-                            longitude: point.lon
-                        ) else { return nil }
-                        return CLLocationCoordinate2D(latitude: point.lat, longitude: point.lon)
-                    }
-                }
-                .filter { $0.count > 1 }
-            let line = assemble(ways)
+            let line = assemble(routeWays(of: element))
             guard line.count > 1 else { continue }
             trails[element.id] = CuratedTrail(
                 relationID: element.id,
@@ -196,6 +212,34 @@ nonisolated extension CuratedTrailDecoding {
             )
         }
         return trails
+    }
+
+    /// The member ways of `element` that make up the route itself.
+    ///
+    /// Roled first — see ``mainRoles`` — and only then reduced to
+    /// coordinates, because a branch way is indistinguishable from the route
+    /// once it is a bag of points.
+    ///
+    /// **Falls back to every way when no member carries a main role.** The
+    /// allowlist is drawn from the roles this feature was measured against,
+    /// and a region tagged in a convention nobody here has seen would
+    /// otherwise lose its line entirely. Drawing a route assembled from
+    /// unfamiliar roles is a smaller wrong than dropping a trail that is
+    /// tagged, named and waymarked.
+    static func routeWays(of element: Element) -> [[CLLocationCoordinate2D]] {
+        let ways = element.members.filter { $0.type == "way" }
+        let main = ways.filter { mainRoles.contains($0.role) }
+        return (main.isEmpty ? ways : main)
+            .map { member in
+                member.geometry.compactMap { point -> CLLocationCoordinate2D? in
+                    guard Mercator.isRepresentable(
+                        latitude: point.lat,
+                        longitude: point.lon
+                    ) else { return nil }
+                    return CLLocationCoordinate2D(latitude: point.lat, longitude: point.lon)
+                }
+            }
+            .filter { $0.count > 1 }
     }
 
     /// The longest connected run through `ways`, or **empty** when no run is a
@@ -342,18 +386,25 @@ nonisolated extension CuratedTrailDecoding {
     /// A relation member. Unlike ``OverpassTrailGraphProvider/OverpassMember``
     /// this carries `geometry`, which is what `out geom` puts inline and what
     /// makes the second pass one request rather than three.
+    ///
+    /// It also carries `role`, which is not decoration: see
+    /// ``CuratedTrailDecoding/mainRoles`` for what a route relation uses it
+    /// to say and why ignoring it draws a walk nobody tagged.
     struct Member: Decodable {
         let type: String
+        let role: String
         let geometry: [GeometryPoint]
 
         init(from decoder: Decoder) throws {
             let container = try decoder.container(keyedBy: CodingKeys.self)
             type = try container.decodeIfPresent(String.self, forKey: .type) ?? ""
+            role = try container.decodeIfPresent(String.self, forKey: .role) ?? ""
             geometry = try container.decodeIfPresent([GeometryPoint].self, forKey: .geometry) ?? []
         }
 
         enum CodingKeys: String, CodingKey {
             case type = "type"
+            case role = "role"
             case geometry = "geometry"
         }
     }

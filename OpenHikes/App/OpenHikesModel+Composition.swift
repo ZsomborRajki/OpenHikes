@@ -309,8 +309,16 @@ private extension OpenHikesModel {
         return HealthKitWorkoutWriter()
     }
 
-    /// The public-database transport, or `nil` for a launch that must not
-    /// reach CloudKit at all.
+    /// The community list's backend: the public database, the curated routes,
+    /// or neither.
+    ///
+    /// The two sources are behind **one** guard rather than two, and that is
+    /// deliberate. Overpass is the safer of the pair — it is a read against a
+    /// public API, where CloudKit is a write into a database every user of this
+    /// app can see — but the repository's rule is that a suite reaches no
+    /// network at all, and a volunteer-run service is the last one to make an
+    /// exception for. A launch that is running tests gets `nil`, exactly as it
+    /// did before this feature existed, and the picker stays absent.
     ///
     /// `isRunningTests` rather than `isHostingTests`, which is the stricter of
     /// the two and is the right one here: UI automation keeps its Live
@@ -332,21 +340,10 @@ private extension OpenHikesModel {
     /// return: ``SeededCommunityTransport``, a debug-only stand-in a scenario
     /// selects by name. Nothing reaches it by default, and no shipping build
     /// contains it.
-    /// The community list's backend: the public database, the curated routes,
-    /// or neither.
     ///
-    /// The two sources are behind **one** guard rather than two, and that is
-    /// deliberate. Overpass is the safer of the pair — it is a read against a
-    /// public API, where CloudKit is a write into a database every user of this
-    /// app can see — but the repository's rule is that a suite reaches no
-    /// network at all, and a volunteer-run service is the last one to make an
-    /// exception for. A launch that is running tests gets `nil`, exactly as it
-    /// did before this feature existed, and the picker stays absent.
-    ///
-    /// ``SeededCommunityTransport`` remains the one way past it, and it now
-    /// covers both halves: a scenario that wants curated rows gets them from a
-    /// stand-in rather than from Overpass. See
-    /// ``SeededCuratedTrailSource``.
+    /// It remains the one way past the guard, and it now covers both halves:
+    /// a scenario that wants curated rows gets them from a stand-in rather
+    /// than from Overpass. See ``SeededCuratedTrailSource``.
     static func makeCommunityTransport() -> (any CommunityTransporting)? {
         #if DEBUG
         // Asked for by name, and the only way past the guard below. A launch

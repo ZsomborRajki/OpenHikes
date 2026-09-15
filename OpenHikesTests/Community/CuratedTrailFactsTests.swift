@@ -340,18 +340,30 @@ struct CuratedTrailFactsTests {
         #expect(Self.facts().shape == nil)
     }
 
-    /// A relation whose stitched line came out as two points is a pair of
-    /// endpoints rather than a walk, and the gap between them describes
-    /// nothing about what the route does in between. It is left unanswered
-    /// for the same reason the listing pass is.
-    @Test("a line of two points is not a shape")
-    func aTwoPointLineIsNotAShape() {
-        let ends = [
+    /// A relation that is one unbroken way arrives as two points, and they are
+    /// not "a pair of endpoints rather than a walk" — they are exactly the two
+    /// ends of the walk, which is the only thing this reads. Refusing them
+    /// would drop the shape from the row's subtitle, the map callout and the
+    /// *On the Trail* section for a trail that plainly has one.
+    ///
+    /// Two is also the shortest line that can arrive: ``CuratedTrailDecoding``
+    /// keeps a member way only while it has more than one point, and
+    /// ``CuratedTrailDecoding/assemble(_:)`` answers empty for a set whose
+    /// total length is zero. So there is no degenerate shorter case below this
+    /// to exclude.
+    @Test("a line of two points has a shape, because two ends are all this reads")
+    func aTwoPointLineIsAShape() {
+        let gapDegrees = (CuratedTrailFacts.loopToleranceMeters + Self.toleranceMargin)
+            / Self.metersPerDegreeLatitude
+        let open = [
             RouteCoordinate(latitude: Self.startLatitude, longitude: Self.startLongitude),
-            RouteCoordinate(latitude: Self.startLatitude, longitude: Self.startLongitude),
+            RouteCoordinate(
+                latitude: Self.startLatitude + gapDegrees,
+                longitude: Self.startLongitude
+            ),
         ]
 
-        #expect(CuratedTrailFacts.trailShape(roundtrip: nil, route: ends) == nil)
+        #expect(CuratedTrailFacts.trailShape(roundtrip: nil, route: open) == .pointToPoint)
     }
 
     /// The two words the rows are drawn with, and the reason the distinction
