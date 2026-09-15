@@ -95,9 +95,29 @@ final class WidgetFeedBudgetTests {
     /// sample that sets the budget would raise it, and this is the side that
     /// must not be generous.
     private func routeRebuildMilliseconds() -> Double {
-        (0..<3)
-            .map { _ in milliseconds { _ = RouteProfile(route: Self.longRoute) } }
-            .min() ?? .infinity
+        bestOfThree { _ = RouteProfile(route: Self.longRoute) }
+    }
+
+    /// The cheapest of three runs of `work`.
+    ///
+    /// The budget above has always been a best-of-three, and the measurements
+    /// it is compared against were single samples — which left the tightest
+    /// possible budget facing the least defended measurement. A shared runner
+    /// descheduling the thread for a few milliseconds mid-sample is then a red
+    /// build with nothing wrong: this failed CI at 13.2 ms against 9.7 ms for
+    /// work the header above measures at 0.4–1.4 ms, and passed on the same
+    /// commit either side of it.
+    ///
+    /// It costs the test nothing that is worth keeping. What these guard is
+    /// route-sized work done synchronously before the hop off the main actor,
+    /// and that work is in *every* sample rather than one of them — the two
+    /// regressions the header cites measured 8.0 ms against 6.2 and 36.3
+    /// against 6.2, and neither has a cheap run to be rescued by. Only where
+    /// `work` may be repeated without changing what is measured; a publish
+    /// that stores the trail takes a cheaper branch the second time, so those
+    /// stay single samples.
+    private func bestOfThree(_ work: () -> Void) -> Double {
+        (0..<3).map { _ in milliseconds(work) }.min() ?? .infinity
     }
 
     // MARK: Reload budget
@@ -296,7 +316,10 @@ final class WidgetFeedBudgetTests {
         let hike = Fixture.hike(in: context, title: "Five hours", route: Self.longRoute)
 
         let budget = routeRebuildMilliseconds()
-        let elapsed = milliseconds { tracker.hikeSelectionChanged(to: hike) }
+        // Repeatable: selecting the hike already selected runs the same
+        // main-actor path — snapshot the values, cancel the outstanding
+        // publication, schedule another — so three samples measure one thing.
+        let elapsed = bestOfThree { tracker.hikeSelectionChanged(to: hike) }
         #expect(
             elapsed < budget,
             """
