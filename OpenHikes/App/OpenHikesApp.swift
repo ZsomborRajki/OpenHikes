@@ -77,6 +77,11 @@ struct OpenHikesApp: App {
             AppDependencyManager.shared.add(dependency: coordinator)
             let recordingControl: any HikeRecordingControlHandling = coordinator
             AppDependencyManager.shared.add(dependency: recordingControl)
+            // The Live Activity's own buttons, registered the same way and for
+            // the same reason: the intent type is compiled into the widget
+            // extension and performed here.
+            let activityControl: any HikeActivityControlHandling = coordinator
+            AppDependencyManager.shared.add(dependency: activityControl)
         }
     }
 
