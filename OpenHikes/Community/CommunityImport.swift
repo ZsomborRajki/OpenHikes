@@ -85,6 +85,22 @@ nonisolated enum CommunityImport {
             trackDescription: detail.trackDescription
         )
         hike.importedFromListingID = listing.id
+        // The colour the hiker has been looking at, rather than the green
+        // ``Hike`` defaults to.
+        //
+        // A file import picks at random for this reason — a library of
+        // identical lines tells a hiker nothing — and a community import had
+        // been landing every trail in the default green instead. It need not
+        // pick at random, because this hike has been on screen for a while
+        // already: it was a coloured row, a pin, a line on the map and the
+        // graph on the screen the hiker pressed *Add to My Hikes* on. Keeping
+        // that colour is what makes the hike that appears in the library the
+        // one they were just deciding about. See ``CommunityListing/tint``,
+        // which is derived from the same id ``importedFromListingID`` holds,
+        // so the two agree by construction.
+        //
+        // Theirs to change from here, like any other hike's.
+        hike.tintHex = listing.tintHex
         // Left `nil` for a curated route, which nobody shared. It is what
         // ``CommunityPublishingEligibility`` reads to tell a stranger's hike
         // from a trail OpenStreetMap already had — see

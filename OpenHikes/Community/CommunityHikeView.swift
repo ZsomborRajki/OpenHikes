@@ -48,9 +48,10 @@
 //  hike somebody owns: no route colour, no line pattern, no auto-follow, no
 //  offline tiles, no walk. This is not their hike yet, and the two controls
 //  that would be lying about that are the ones this screen must not offer. The
-//  chart is drawn in the app's own tint for the same reason the lines and the
-//  pins are — it is the colour the map behind is already drawing this very
-//  route in.
+//  chart is drawn in the listing's own colour for the same reason the lines
+//  and the pins are — it is the colour the map behind is already drawing this
+//  very route in — and that colour is the listing's identity rather than
+//  anything the hiker picked. See ``CommunityListing/tint``.
 //
 //  ## OpenStreetMap is asked on open, and the answer is not kept
 //
@@ -717,31 +718,38 @@ private extension CommunityHikeView {
     /// everything that needs a hike — the route tint, the map pin, the live
     /// dot — so the callbacks end at ``tracker`` and go no further.
     ///
-    /// Nothing at all until the route has been walked, and the placeholder
-    /// only once it has: *no elevation data* is an answer, and a screen that
-    /// is still loading has not got one.
+    /// Absent entirely when there are no heights to draw, rather than replaced
+    /// by a card saying so.
+    ///
+    /// This screen's rule everywhere else — a section with nothing in it is
+    /// not drawn, see ``trailFactsSection`` — and the curated routes are what
+    /// made it matter here. OpenStreetMap carries no elevation on a hiking
+    /// relation: measured over one Berchtesgaden box, `ele` was on **zero** of
+    /// 1,725 geometry nodes, so *every* curated trail took the empty state.
+    /// That turned it from a rare admission about one person's upload into a
+    /// permanent grey card on most of the screens this feature opens, sitting
+    /// where a hiker looks first and saying only that there is nothing to look
+    /// at. A section that is simply not there says the same thing and takes up
+    /// none of the page.
+    ///
+    /// A hike in the library keeps its placeholder — see
+    /// ``HikeElevationPlaceholder``. The difference is what the hiker can do
+    /// about it: that file is theirs, so *no elevation data in this file* tells
+    /// them something true about a thing they chose to import.
     @ViewBuilder var elevationSection: some View {
-        if let profile = prepared?.profile {
-            if profile.samples.count > 1 {
-                ElevationChartView(
-                    profile: profile,
-                    // The app's tint rather than a hike's, exactly as the
-                    // lines and the markers on the map are: the map behind
-                    // this screen is drawing this very route in it, and the
-                    // route tints belong to hikes the hiker owns.
-                    tint: .accentColor,
-                    tracker: tracker,
-                    onScrub: { tracker.trackerDistance = $0 }
-                )
-                .equatable()
-            } else {
-                ElevationPlaceholderView(
-                    tint: .accentColor,
-                    // Not "in this file": what the hiker is looking at is
-                    // somebody's upload, and they have never seen a file.
-                    message: "No elevation data in this hike"
-                )
-            }
+        if let profile = prepared?.profile, profile.samples.count > 1 {
+            ElevationChartView(
+                profile: profile,
+                // The listing's own colour, exactly as the line and the marker
+                // on the map behind this screen are: the map is drawing this
+                // very route in it. Still not a `Hike`'s route tint, which
+                // belongs to hikes the hiker owns — see
+                // ``CommunityListing/tint``.
+                tint: listing.tint,
+                tracker: tracker,
+                onScrub: { tracker.trackerDistance = $0 }
+            )
+            .equatable()
         }
     }
 

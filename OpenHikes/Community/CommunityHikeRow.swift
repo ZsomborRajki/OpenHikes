@@ -42,7 +42,11 @@ struct CommunityHikeRow: View {
                 .font(.system(size: 16, weight: .semibold))
                 .foregroundStyle(.white)
                 .frame(width: Self.symbolFrameSize, height: Self.symbolFrameSize)
-                .background(.tint, in: Circle())
+                // This listing's own colour rather than the app's, so a page
+                // of results is not a column of identical circles and so the
+                // row matches the line and the pin the map is drawing for the
+                // same trail. See ``CommunityListing/tint``.
+                .background(listing.tint, in: Circle())
                 .accessibilityHidden(true)
 
             VStack(alignment: .leading, spacing: 2) {
@@ -51,12 +55,16 @@ struct CommunityHikeRow: View {
                     .foregroundStyle(.primary)
                 HStack(spacing: 6) {
                     if isImported {
+                        // The listing's colour here too, which is what
+                        // ``HikeRow`` does with its own status capsule: the
+                        // badge belongs to the row it is in, and a row whose
+                        // circle and capsule disagree reads as two things.
                         Text("Saved")
                             .font(.caption.weight(.semibold))
-                            .foregroundStyle(.tint)
+                            .foregroundStyle(listing.tint)
                             .padding(.horizontal, 6)
                             .padding(.vertical, 2)
-                            .background(.tint.opacity(Self.badgeOpacity), in: Capsule())
+                            .background(listing.tint.opacity(Self.badgeOpacity), in: Capsule())
                     }
                     Text(subtitle)
                         .font(.subheadline)
