@@ -2,6 +2,8 @@
 <!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
 <plist version="1.0">
 <dict>
+	<key>CFBundleDevelopmentRegion</key>
+	<string>$(DEVELOPMENT_LANGUAGE)</string>
 	<key>CFBundleDocumentTypes</key>
 	<array>
 		<dict>
@@ -9,9 +11,6 @@
 			<string>GPS Exchange File</string>
 			<key>CFBundleTypeRole</key>
 			<string>Viewer</string>
-			<!-- Alternate, not Owner: a .gpx file belongs to whichever mapping
-			     app the user prefers, and claiming ownership would make
-			     OpenHikes the default for files it only reads. -->
 			<key>LSHandlerRank</key>
 			<string>Alternate</string>
 			<key>LSItemContentTypes</key>
@@ -20,59 +19,78 @@
 			</array>
 		</dict>
 	</array>
-	<!-- Lets Files hand over the original file with a security scope instead
-	     of copying it into Documents/Inbox; see `GPXInbox` for the copies the
-	     delivery methods that can't do this still leave behind. -->
+	<key>CFBundleExecutable</key>
+	<string>$(EXECUTABLE_NAME)</string>
+	<key>CFBundleIdentifier</key>
+	<string>$(PRODUCT_BUNDLE_IDENTIFIER)</string>
+	<key>CFBundleInfoDictionaryVersion</key>
+	<string>6.0</string>
+	<key>CFBundleName</key>
+	<string>$(PRODUCT_NAME)</string>
+	<key>CFBundlePackageType</key>
+	<string>$(PRODUCT_BUNDLE_PACKAGE_TYPE)</string>
+	<key>CFBundleShortVersionString</key>
+	<string>$(MARKETING_VERSION)</string>
+	<key>CFBundleVersion</key>
+	<string>$(CURRENT_PROJECT_VERSION)</string>
+	<key>ITSAppUsesNonExemptEncryption</key>
+	<false/>
+	<key>LSApplicationCategoryType</key>
+	<string>public.app-category.navigation</string>
+	<key>LSRequiresIPhoneOS</key>
+	<true/>
 	<key>LSSupportsOpeningDocumentsInPlace</key>
 	<true/>
 	<key>NSCameraUsageDescription</key>
 	<string>OpenHikes uses the camera so you can photograph a hike as you walk it. Photos are kept with that hike, and pinned to the point on the trail you had selected.</string>
+	<key>NSLocationAlwaysAndWhenInUseUsageDescription</key>
+	<string>OpenHikes uses Always location, only when you turn on Background Trail Tracking in Settings, to keep your Home Screen widget showing your progress along the trail while the app isn't open.</string>
 	<key>NSLocationTemporaryUsageDescriptionDictionary</key>
 	<dict>
 		<key>RecordHike</key>
 		<string>OpenHikes needs your precise location to record the trail you walk.</string>
 	</dict>
+	<key>NSLocationWhenInUseUsageDescription</key>
+	<string>OpenHikes uses your location to show where you are on the map and record hikes you choose to start.</string>
 	<key>NSMotionUsageDescription</key>
 	<string>OpenHikes uses motion sensors to improve recorded elevation and infer the trail walked through GPS gaps.</string>
-	<!-- Without this the whole feature is silently absent: ActivityKit reports
-	     activities disabled and `Activity.request` throws, with nothing in the
-	     UI to say why. `NSSupportsLiveActivitiesFrequentUpdates` is
-	     deliberately *not* set — the app updates roughly every twenty seconds
-	     on its own throttle and asking for the frequent-update allowance would
-	     be claiming a budget it does not use. See
-	     ``HikeLiveActivityController``. -->
-	<key>NSSupportsLiveActivities</key>
-	<true/>
-	<!-- Add-only, deliberately: the copy this key covers is a one-way write
-	     into Recents, and nothing about it reads. The separate read grant
-	     below is asked for by a different feature at a different moment, and
-	     the two are kept apart so declining one does not disable the other.
-	     Importing an existing picture goes through PhotosPicker, which runs
-	     out of process and needs no permission at all. -->
 	<key>NSPhotoLibraryAddUsageDescription</key>
 	<string>Turn on “Also Save to Photos” to keep a copy of each hike photo in your photo library, stamped with when and where it was taken.</string>
-	<!-- Read access, asked for at the moment "Find Photos of This Hike" is
-	     tapped and at no other time. The scan asks the library only for assets
-	     created between the first and last point of the hike being viewed; it
-	     never browses, never uploads, and never leaves the device. Limited
-	     access works exactly as well, which is often the right answer here. -->
 	<key>NSPhotoLibraryUsageDescription</key>
 	<string>OpenHikes looks through your photo library for pictures you took while walking a hike, so it can pin each one to the point on the trail you were standing on. It only reads photos taken during that hike.</string>
-	<!-- Declares that the app uses no non-exempt encryption, so App Store
-	     Connect does not prompt for an export compliance questionnaire on
-	     every TestFlight or App Store upload. -->
-	<key>ITSAppUsesNonExemptEncryption</key>
-	<false/>
+	<key>NSSupportsLiveActivities</key>
+	<true/>
+	<key>UIApplicationSceneManifest</key>
+	<dict>
+		<key>UIApplicationSupportsMultipleScenes</key>
+		<true/>
+		<key>UISceneConfigurations</key>
+		<dict/>
+	</dict>
+	<key>UIApplicationSupportsIndirectInputEvents</key>
+	<true/>
 	<key>UIBackgroundModes</key>
 	<array>
 		<string>location</string>
 		<string>remote-notification</string>
 	</array>
-	<!-- GPX has no system-declared type, so the app imports topografix's.
-	     Imported rather than exported because OpenHikes reads the format but
-	     doesn't define it. Declaring it is what puts the app in the Files
-	     app's "Open With" list, and what makes `UTType(filenameExtension:)`
-	     resolve .gpx instead of falling through to public.xml. -->
+	<key>UILaunchScreen</key>
+	<dict/>
+	<key>UIStatusBarStyle</key>
+	<string>UIStatusBarStyleDefault</string>
+	<key>UISupportedInterfaceOrientations~ipad</key>
+	<array>
+		<string>UIInterfaceOrientationPortrait</string>
+		<string>UIInterfaceOrientationPortraitUpsideDown</string>
+		<string>UIInterfaceOrientationLandscapeLeft</string>
+		<string>UIInterfaceOrientationLandscapeRight</string>
+	</array>
+	<key>UISupportedInterfaceOrientations~iphone</key>
+	<array>
+		<string>UIInterfaceOrientationPortrait</string>
+		<string>UIInterfaceOrientationLandscapeLeft</string>
+		<string>UIInterfaceOrientationLandscapeRight</string>
+	</array>
 	<key>UTImportedTypeDeclarations</key>
 	<array>
 		<dict>

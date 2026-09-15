@@ -575,10 +575,7 @@ struct OpenHikesView: View {
         guard !didProcessLaunchFixture,
               let name = AppLaunchEnvironment.importedGPXFixtureName else { return }
         didProcessLaunchFixture = true
-        guard let url = Bundle.main.url(
-            forResource: name,
-            withExtension: "gpx"
-        ) else {
+        guard let url = Bundle.main.url(forResource: name, withExtension: "gpx") else {
             importFailure = .file(.unreadable)
             return
         }
