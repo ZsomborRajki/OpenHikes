@@ -109,9 +109,17 @@ nonisolated struct HikePhotoTimeline: Sendable {
         // fixes sharing a second would make the interpolation below divide by
         // zero, and a GPX writer that rounds to whole seconds produces them
         // routinely.
+        //
+        // `chunked(by:)` rather than `uniqued(on:)` because the sort above has
+        // already put equal timestamps next to each other, so taking the first
+        // of each run needs no memory of the runs before it. `uniqued` would
+        // hash every timestamp into a `Set` to rediscover that, on a route
+        // that can carry tens of thousands of them.
         fixes = stamped
             .sorted(by: { $0.timestamp < $1.timestamp })
-            .uniqued(on: \.timestamp)
+            .lazy
+            .chunked(by: { $0.timestamp == $1.timestamp })
+            .compactMap(\.first)
     }
 
     /// Where the hiker was at `date`, or `nil` when the walk cannot say.
