@@ -24,10 +24,56 @@ final class SearchCompleter: NSObject, MKLocalSearchCompleterDelegate {
     /// Whether the next query is worth asking. See ``SearchQueryPolicy``.
     @ObservationIgnored private var policy = SearchQueryPolicy()
 
+    /// Where the map came to rest, for the typed-Return search to bias itself
+    /// to as well — see ``MapSheet/performSearch()``.
+    ///
+    /// `@ObservationIgnored`, and read only from a search that a tap or a
+    /// Return started. Nothing observes it, for the same render-isolation
+    /// reason ``CommunityBrowser`` keeps its own region off every SwiftUI
+    /// body: it is written on every settle, which is as often as a hiker can
+    /// stop panning.
+    @ObservationIgnored private(set) var region: MKCoordinateRegion?
+
     override init() {
         super.init()
         completer.delegate = self
         completer.resultTypes = [.address, .pointOfInterest]
+        // `.default` rather than `.required`: a hiker searching for a trail
+        // they are about to drive to should still be able to reach it, so this
+        // ranks the visible map up rather than fencing the answer inside it.
+        completer.regionPriority = .default
+    }
+
+    /// The map came to rest. Called from `MapView.Coordinator`, never from a
+    /// SwiftUI body — the same hand-over, from the same call site, that
+    /// ``CommunityBrowser/regionDidSettle(_:)`` takes.
+    ///
+    /// Without it both halves of place search are answered globally, and a
+    /// common name typed on a trail in Bavaria — "Blue Lake", "Bergsee",
+    /// "Ridge Trail" — can fly the camera, and the weather badge with it, to
+    /// the other side of the planet.
+    func regionDidSettle(_ region: MKCoordinateRegion) {
+        self.region = region
+        // Assigning `region` while a query fragment is outstanding makes
+        // MapKit answer it again, so a settle that did not move the map is
+        // worth not forwarding. A pan during typing is rare; a redundant
+        // settle is not.
+        guard !Self.isEquivalent(completer.region, region) else { return }
+        completer.region = region
+    }
+
+    /// Whether two regions are close enough that re-asking would return the
+    /// same suggestions. Exact `==` is not available on `MKCoordinateRegion`,
+    /// and floating-point drift in the last decimal places is not a move.
+    private static func isEquivalent(
+        _ lhs: MKCoordinateRegion,
+        _ rhs: MKCoordinateRegion
+    ) -> Bool {
+        let tolerance = 1e-6
+        return abs(lhs.center.latitude - rhs.center.latitude) < tolerance
+            && abs(lhs.center.longitude - rhs.center.longitude) < tolerance
+            && abs(lhs.span.latitudeDelta - rhs.span.latitudeDelta) < tolerance
+            && abs(lhs.span.longitudeDelta - rhs.span.longitudeDelta) < tolerance
     }
 
     /// Feeds the latest query to the completer, or clears results when empty.

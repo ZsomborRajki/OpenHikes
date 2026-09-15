@@ -91,6 +91,13 @@ struct MapView: MapViewRepresentable, Equatable {
     /// stored property write and a comparison while browsing is off.
     var community: CommunityBrowser
 
+    /// Told where the map came to rest, so the search field's suggestions and
+    /// a typed Return are both answered near the map rather than globally.
+    ///
+    /// Handed over rather than observed, in this direction only, for the same
+    /// reason ``community`` is — see ``SearchCompleter/regionDidSettle(_:)``.
+    var searchCompleter: SearchCompleter
+
     /// How far the landscape side panel reaches in from the leading edge, or
     /// zero in portrait where there is no panel and the sheet is over the map
     /// instead.
@@ -130,6 +137,7 @@ struct MapView: MapViewRepresentable, Equatable {
             && lhs.photoCapture === rhs.photoCapture
             && lhs.photoPins === rhs.photoPins
             && lhs.community === rhs.community
+            && lhs.searchCompleter === rhs.searchCompleter
             && lhs.sidePanelInset == rhs.sidePanelInset
     }
 
@@ -161,6 +169,7 @@ struct MapView: MapViewRepresentable, Equatable {
         coordinator.observeRouteStyle(routeStyle, on: mapView)
         coordinator.observePhotoPins(photoPins, on: mapView)
         coordinator.community = community
+        coordinator.searchCompleter = searchCompleter
         // The map asks the community question and now draws its answer too —
         // see ``MapCommunityAnnotations``. Observed here rather than handed
         // down, so a nearby result landing moves MapKit's annotations and no
