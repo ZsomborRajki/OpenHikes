@@ -109,13 +109,9 @@ nonisolated struct HikePhotoTimeline: Sendable {
         // fixes sharing a second would make the interpolation below divide by
         // zero, and a GPX writer that rounds to whole seconds produces them
         // routinely.
-        var ordered: [Fix] = []
-        ordered.reserveCapacity(stamped.count)
-        for fix in stamped.sorted(by: { $0.timestamp < $1.timestamp }) {
-            guard ordered.last?.timestamp != fix.timestamp else { continue }
-            ordered.append(fix)
-        }
-        fixes = ordered
+        fixes = stamped
+            .sorted(by: { $0.timestamp < $1.timestamp })
+            .uniqued(on: \.timestamp)
     }
 
     /// Where the hiker was at `date`, or `nil` when the walk cannot say.

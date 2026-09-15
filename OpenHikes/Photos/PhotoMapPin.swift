@@ -25,6 +25,7 @@
 import CoreLocation
 import Foundation
 import Observation
+import OrderedCollections
 import SwiftUI
 
 /// One place on the trail that has photographs of it.
@@ -50,9 +51,7 @@ nonisolated struct PhotoMapPin: Hashable, Identifiable, Sendable {
     /// a photo with no place on the trail is still a photo of the walk, and
     /// ``PhotoTrailAnchor`` is where that distinction is argued.
     static func pins(for photos: [HikePhoto]) -> [Self] {
-        var order: [CoordinateKey] = []
-        var leaders: [CoordinateKey: HikePhoto] = [:]
-        var counts: [CoordinateKey: Int] = [:]
+        var grouped: OrderedDictionary<CoordinateKey, (photo: HikePhoto, count: Int)> = [:]
 
         for candidate in photos {
             guard let anchor = candidate.coordinate,
@@ -61,20 +60,17 @@ nonisolated struct PhotoMapPin: Hashable, Identifiable, Sendable {
                 latitude: anchor.latitude,
                 longitude: anchor.longitude
             )
-            if let seen = counts[key] {
-                counts[key] = seen + 1
+            if let existing = grouped[key] {
+                grouped[key] = (existing.photo, existing.count + 1)
             } else {
-                counts[key] = 1
-                leaders[key] = candidate
-                order.append(key)
+                grouped[key] = (candidate, 1)
             }
         }
 
-        return order.compactMap { key in
-            guard let leader = leaders[key], let total = counts[key] else { return nil }
-            return Self(
-                photo: leader,
-                count: total,
+        return grouped.map { key, value in
+            Self(
+                photo: value.photo,
+                count: value.count,
                 latitude: key.latitude,
                 longitude: key.longitude
             )
