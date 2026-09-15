@@ -233,6 +233,11 @@ extension WeatherBadgeState {
     }
 }
 
+// The fixtures below are `WeatherConditions.preview`, which is `#if DEBUG` on
+// purpose — see the note on that extension. `#Preview` compiles in every
+// configuration, so previews written against a debug-only fixture have to be
+// guarded too, or a Release build fails on a screen nobody ships.
+#if DEBUG
 #Preview("Fresh, here") {
     WeatherBadge(
         state: .reading(
@@ -294,3 +299,4 @@ extension WeatherBadgeState {
         onTap: { /* preview */ }
     )
 }
+#endif
