@@ -337,6 +337,65 @@ extension HikeIntentCoordinator {
     /// The answer is the same one: `HikeRouteStatistics` takes its duration
     /// between the first and last *stamped* points, which is what these two
     /// searches find, and calls it `nil` unless the clock actually ran.
+    /// Every finished hike, newest first, as reports.
+    ///
+    /// The whole store rather than a page of it. A hiker's library is tens or
+    /// hundreds of rows, Spotlight wants all of them, and the entity query's
+    /// name match reads a folded title per row either way — so paging would
+    /// buy a second code path and no work saved.
+    func finishedHikes() throws(HikeIntentFailure) -> [FinishedHikeReport] {
+        let descriptor = FetchDescriptor<Hike>(
+            predicate: #Predicate { !$0.isRecording },
+            sortBy: [SortDescriptor(\.date, order: .reverse)]
+        )
+        return try fetch(descriptor).map(Self.report(for:))
+    }
+
+    /// The named hikes, in the order asked for, skipping any that are gone.
+    ///
+    /// Silent about a missing one on purpose: an entity identifier can outlive
+    /// the hike it names — a shortcut built last month, a Spotlight result for
+    /// a deleted walk — and the right answer to "resolve these" is the ones
+    /// that still exist rather than a failure about the ones that do not.
+    func finishedHikes(withIDs ids: [UUID]) throws(HikeIntentFailure) -> [FinishedHikeReport] {
+        let descriptor = FetchDescriptor<Hike>(
+            predicate: #Predicate { hike in
+                !hike.isRecording && ids.contains(hike.id)
+            }
+        )
+        let byID = Dictionary(
+            try fetch(descriptor).map { ($0.id, Self.report(for: $0)) },
+            uniquingKeysWith: { first, _ in first }
+        )
+        return ids.compactMap { byID[$0] }
+    }
+
+    /// The finished hikes whose name answers `query`, best match first.
+    ///
+    /// Ranked by ``HikeNameMatch``, which is the same rule the sheet's search
+    /// field uses — so a trail findable by typing is findable by saying it.
+    /// The predicate cannot do this work: the match folds case, diacritics and
+    /// width, and it is ``Hike/displayTitle`` rather than a stored column,
+    /// since a renamed hike keeps its imported `title` and the hiker has only
+    /// ever seen the new name.
+    func finishedHikes(matchingName query: String) throws(HikeIntentFailure) -> [FinishedHikeReport] {
+        let trimmed = query.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !trimmed.isEmpty else { return [] }
+        let hikes = try finishedHikes()
+        return HikeNameMatch
+            .rankedIndices(of: hikes.map(\.title), matching: trimmed)
+            .map { hikes[$0] }
+    }
+
+    /// One named hike, or the failure that says it is gone.
+    ///
+    /// Unlike ``finishedHikes(withIDs:)`` this is answering a hiker who asked
+    /// about a specific walk, and silence would be the wrong answer.
+    func finishedHike(withID id: UUID) throws(HikeIntentFailure) -> FinishedHikeReport {
+        guard let report = try finishedHikes(withIDs: [id]).first else { throw .noHikesYet }
+        return report
+    }
+
     private static func report(for hike: Hike) -> FinishedHikeReport {
         let route = hike.route
         let first = route.first { $0.timestamp != nil }?.timestamp

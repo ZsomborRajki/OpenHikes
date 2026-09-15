@@ -77,6 +77,11 @@ struct OpenHikesApp: App {
             AppDependencyManager.shared.add(dependency: coordinator)
             let recordingControl: any HikeRecordingControlHandling = coordinator
             AppDependencyManager.shared.add(dependency: recordingControl)
+            // Spotlight, which is the half of ``HikeEntity`` a hiker gets
+            // without having to say anything. Here beside the registration
+            // because it wants the same coordinator, and off the main actor
+            // because it is a whole-library fetch nothing on screen waits for.
+            HikeSpotlightIndex.donate(from: coordinator)
         }
     }
 
