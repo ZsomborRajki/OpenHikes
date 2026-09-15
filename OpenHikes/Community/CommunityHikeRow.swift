@@ -19,7 +19,9 @@ import SwiftUI
 
 struct CommunityHikeRow: View {
     private static let symbolFrameSize: CGFloat = 38
-    private static let badgeOpacity: Double = 0.12
+    /// Behind the badge's label. Raised alongside ``HikeRow``'s, which is
+    /// the same capsule on the hiker's own rows.
+    private static let badgeOpacity: Double = 0.22
 
     let listing: CommunityListing
     /// True when this hike has already been imported. Drawn rather than

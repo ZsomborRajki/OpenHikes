@@ -42,6 +42,12 @@ struct ElevationChartView: View, Equatable {
     @State private var plotWidth: CGFloat = 0
 
     private static let chartHeight: CGFloat = 200
+    /// How far the plot sits in from the edge of the surface behind it, so
+    /// the axis labels have the surface under them rather than hanging off it.
+    private static let plotPadding: CGFloat = 8
+    /// The surface's corner radius. Matches ``ElevationPlaceholderView``,
+    /// which stands in for this graph and has to be the same shape.
+    private static let plotCornerRadius: CGFloat = 16
     /// How many times steeper the chart renders a slope than it truly is —
     /// the standard cartographic "vertical exaggeration" used on elevation
     /// profiles, so trails read as hilly without a small bump looking like a
@@ -54,9 +60,14 @@ struct ElevationChartView: View, Equatable {
     /// pushes the axis down into implausible (even negative) elevations.
     private static let maxSpanMultiplier: Double = 4
 
-    /// Opacity for the area-fill gradient: top (opaque-ish) and bottom (near-clear).
+    /// Opacity for the area-fill gradient: top (opaque-ish) and bottom (faint).
+    ///
+    /// The bottom stop used to be 0.05, which is a fade to nothing rather than
+    /// a fade to a baseline — readable while the sheet's glass supplied a
+    /// backdrop of its own and invisible once it stopped. It fades towards the
+    /// surface the chart now carries instead. See ``Color/contentSurface``.
     private static let areaGradientTopOpacity: Double = 0.45
-    private static let areaGradientBottomOpacity: Double = 0.05
+    private static let areaGradientBottomOpacity: Double = 0.14
     /// Opacity for the scrub rule line.
     private static let ruleOpacity: Double = 0.4
     /// Opacity for the pause rules. Fainter than the scrub line: the scrub
@@ -196,6 +207,26 @@ struct ElevationChartView: View, Equatable {
             guard !touching else { return }
             selectedDistance = nil
         }
+        // The graph gets something to be read against.
+        //
+        // It is drawn inside a sheet presented on clear glass over live map
+        // imagery, and on iOS 27 that glass stopped standing between the two:
+        // the grid lines, the axis labels and the area fill were being read
+        // against whatever tiles happened to be underneath, which on a forest
+        // tile is a green line on green. Every alpha in this file was chosen
+        // against a backdrop that no longer exists, and no alpha works against
+        // one that changes as the hiker pans.
+        //
+        // A surface rather than a raised opacity, because the shape of the
+        // problem is the backdrop and not the marks — see
+        // ``Color/contentSurface``. It is the decision the scrub callout
+        // already made for itself, applied to the thing the callout points at.
+        //
+        // Last in the chain on purpose: `onGeometryChange` above measures the
+        // plot, and the vertical exaggeration is computed from that width, so
+        // the padding must not be inside what it reads.
+        .padding(Self.plotPadding)
+        .background(.contentSurface, in: RoundedRectangle(cornerRadius: Self.plotCornerRadius))
     }
 
     /// The area and the line, as two series rather than one interleaved loop.
@@ -321,20 +352,15 @@ struct ElevationChartView: View, Equatable {
         // it, and deliberately not `glassSurface` either: a Chart annotation
         // gives Liquid Glass no backdrop worth sampling, so over the near-white
         // plot area the surface and its text both wash out to the point of
-        // being unreadable. Verified on device — this is the one control in the
-        // app that has to stay a solid card.
-        .background(Self.calloutBackground, in: RoundedRectangle(cornerRadius: 8))
+        // being unreadable. Verified on device.
+        //
+        // The same surface the plot area itself now carries, one layer up, so
+        // the callout reads as a card lifted off the graph rather than as a
+        // second colour — see ``Color/contentSurface``, where the argument this
+        // comment used to make on its own now lives.
+        .background(.contentSurface, in: RoundedRectangle(cornerRadius: 8))
         .shadow(color: .black.opacity(Self.shadowOpacity), radius: 3, y: 1)
     }
-
-    /// Solid, mode-adaptive callout background.
-    private static let calloutBackground: Color = {
-        #if os(macOS)
-        Color(nsColor: .windowBackgroundColor)
-        #else
-        Color(uiColor: .secondarySystemBackground)
-        #endif
-    }()
 
     // MARK: Accessibility
 
@@ -434,13 +460,23 @@ struct ElevationChartView: View, Equatable {
 struct ElevationPlaceholderView: View {
     private static let tintOpacity = 0.12
     private static let height: CGFloat = 180
+    /// The same shape the graph this replaces carries — see
+    /// ``ElevationChartView``'s `plotCornerRadius`.
+    private static let cornerRadius: CGFloat = 16
 
     let tint: Color
     let message: LocalizedStringKey
 
     var body: some View {
         ZStack {
-            RoundedRectangle(cornerRadius: 16)
+            // The surface first and the tint over it, rather than the tint
+            // alone. A twelve-percent wash was a tinted card while the sheet's
+            // glass stood behind it and is a tinted *map* now — see
+            // ``Color/contentSurface``. The tint's own opacity is unchanged:
+            // what it needed was something to be twelve percent of.
+            RoundedRectangle(cornerRadius: Self.cornerRadius)
+                .fill(Color.contentSurface)
+            RoundedRectangle(cornerRadius: Self.cornerRadius)
                 .fill(tint.opacity(Self.tintOpacity))
             VStack(spacing: 8) {
                 Image(systemName: "chart.xyaxis.line")

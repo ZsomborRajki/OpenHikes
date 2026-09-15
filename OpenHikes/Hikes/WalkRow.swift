@@ -10,7 +10,12 @@ import SwiftUI
 struct WalkRow: View {
     private static let ringSize: CGFloat = 38
     private static let ringWidth: CGFloat = 4
-    private static let ringTrackOpacity = 0.2
+    /// The unwalked part of the coverage ring.
+    ///
+    /// It is the half of the ring that says what the walked part is a
+    /// fraction *of*, so a track that disappears into the sheet leaves an arc
+    /// with nothing to read it against — see ``Color/contentSurface``.
+    private static let ringTrackOpacity = 0.3
 
     let walk: HikeWalk
     let tint: Color

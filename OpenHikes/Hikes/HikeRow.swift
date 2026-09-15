@@ -9,7 +9,13 @@ import SwiftUI
 
 struct HikeRow: View {
     private static let symbolFrameSize: CGFloat = 38
-    private static let statusBadgeOpacity: Double = 0.12
+    /// How much colour the status capsule carries behind its label.
+    ///
+    /// Raised with everything else that was drawn at an alpha chosen against
+    /// the sheet's old glass — see ``Color/contentSurface``. The capsule is
+    /// decoration rather than the signal (the label inside it is the tint at
+    /// full strength), so this only has to be visible, not legible.
+    private static let statusBadgeOpacity: Double = 0.22
 
     struct Status {
         let title: String

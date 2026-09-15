@@ -79,7 +79,9 @@ struct SettingsView: View {
     private static let disabledOpacity: Double = 0.55
     private static let badgeHorizontalPadding: CGFloat = 7
     private static let badgeVerticalPadding: CGFloat = 3
-    private static let badgeTintOpacity: Double = 0.15
+    /// Behind a settings badge's label. Raised for the reason ``HikeRow``'s
+    /// is: Settings is pushed into the same glass sheet.
+    private static let badgeTintOpacity: Double = 0.25
 
     /// Tile bytes on disk, split into offline coverage and browsing residue;
     /// `nil` until measured.
