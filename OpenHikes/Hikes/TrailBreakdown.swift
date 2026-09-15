@@ -18,6 +18,7 @@
 //  all" is called, and what order the results read best in.
 //
 
+import Algorithms
 import CoreLocation
 import Foundation
 
@@ -194,7 +195,7 @@ nonisolated enum TrailBreakdownAnalyzer {
         var previousWayID: Int64?
         var samplesTaken = 0
 
-        for (start, end) in zip(route, route.dropFirst()) {
+        for (start, end) in route.adjacentPairs() {
             let from = start.clCoordinate
             let to = end.clCoordinate
             let segmentMeters = RouteGeometry.distanceMeters(from: from, to: to)

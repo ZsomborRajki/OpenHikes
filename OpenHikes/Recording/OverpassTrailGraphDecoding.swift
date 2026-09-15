@@ -8,6 +8,7 @@
 //  state, which is what makes the split free.
 //
 
+import Algorithms
 import CoreLocation
 import Foundation
 import OpenHikesShared
@@ -109,9 +110,7 @@ extension OverpassTrailGraphProvider {
                   permitsWalking(element.tags) else { continue }
 
             let nodeIDs = element.nodes
-            for index in 0..<(nodeIDs.count - 1) {
-                let fromID = nodeIDs[index]
-                let toID = nodeIDs[index + 1]
+            for (index, (fromID, toID)) in nodeIDs.adjacentPairs().enumerated() {
                 guard fromID != toID,
                       let from = nodeCoordinates[fromID],
                       let to = nodeCoordinates[toID] else { continue }
