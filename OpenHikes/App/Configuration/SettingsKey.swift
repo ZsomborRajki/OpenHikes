@@ -84,6 +84,18 @@ nonisolated enum SettingsKey {
     /// three answers that have to agree, the others being a live subject and
     /// a foreground app.
     static let keepScreenAwake = "settings.keepScreenAwake"
+    /// Whether a finished recording is also written to Health as a hiking
+    /// workout.
+    ///
+    /// Off until a hiker turns it on, and the *turning on* is what asks
+    /// HealthKit for permission — see ``HikeWorkoutWriting``. Health is the
+    /// hiker's most sensitive store and the app has no business writing to it
+    /// because they recorded a walk.
+    ///
+    /// Deliberately not synced through ``SyncedSettings``: authorization is
+    /// per-device, and a second phone that has never been granted Health
+    /// access would show the switch on and write nothing.
+    static let savesHikesToHealth = "settings.savesHikesToHealth"
     /// The name a hiker's shared hikes are published under, as they last
     /// typed it.
     ///
@@ -144,4 +156,8 @@ nonisolated enum SettingsDefault {
     /// it exists for is narrow and real enough to be worth a switch, and
     /// narrow enough not to be worth assuming: see ``ScreenWakePolicy``.
     static let keepScreenAwake = false
+    /// Off. Everything this app writes elsewhere is the hiker's own library;
+    /// Health is somebody else's, and an app that helped itself to it because
+    /// a walk finished would be taking a decision that is theirs.
+    static let savesHikesToHealth = false
 }

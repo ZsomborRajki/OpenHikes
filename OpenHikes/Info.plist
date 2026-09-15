@@ -60,6 +60,8 @@
 	<string>OpenHikes looks through your photo library for pictures you took while walking a hike, so it can pin each one to the point on the trail you were standing on. It only reads photos taken during that hike.</string>
 	<key>NSSupportsLiveActivities</key>
 	<true/>
+	<key>NSHealthUpdateUsageDescription</key>
+	<string>OpenHikes saves your finished hikes to Health as hiking workouts, so they count towards your rings and appear beside your other activity. This is off until you turn it on, and OpenHikes never reads anything from Health.</string>
 	<key>UIApplicationSceneManifest</key>
 	<dict>
 		<key>UIApplicationSupportsMultipleScenes</key>
@@ -78,13 +80,6 @@
 	<dict/>
 	<key>UIStatusBarStyle</key>
 	<string>UIStatusBarStyleDefault</string>
-	<key>UISupportedInterfaceOrientations~ipad</key>
-	<array>
-		<string>UIInterfaceOrientationPortrait</string>
-		<string>UIInterfaceOrientationPortraitUpsideDown</string>
-		<string>UIInterfaceOrientationLandscapeLeft</string>
-		<string>UIInterfaceOrientationLandscapeRight</string>
-	</array>
 	<key>UISupportedInterfaceOrientations~iphone</key>
 	<array>
 		<string>UIInterfaceOrientationPortrait</string>

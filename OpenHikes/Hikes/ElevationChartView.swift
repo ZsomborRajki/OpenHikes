@@ -42,12 +42,6 @@ struct ElevationChartView: View, Equatable {
     @State private var plotWidth: CGFloat = 0
 
     private static let chartHeight: CGFloat = 200
-    /// How far the plot sits in from the edge of the surface behind it, so
-    /// the axis labels have the surface under them rather than hanging off it.
-    private static let plotPadding: CGFloat = 8
-    /// The surface's corner radius. Matches ``ElevationPlaceholderView``,
-    /// which stands in for this graph and has to be the same shape.
-    private static let plotCornerRadius: CGFloat = 16
     /// How many times steeper the chart renders a slope than it truly is —
     /// the standard cartographic "vertical exaggeration" used on elevation
     /// profiles, so trails read as hilly without a small bump looking like a
@@ -62,10 +56,12 @@ struct ElevationChartView: View, Equatable {
 
     /// Opacity for the area-fill gradient: top (opaque-ish) and bottom (faint).
     ///
-    /// The bottom stop used to be 0.05, which is a fade to nothing rather than
-    /// a fade to a baseline — readable while the sheet's glass supplied a
-    /// backdrop of its own and invisible once it stopped. It fades towards the
-    /// surface the chart now carries instead. See ``Color/contentSurface``.
+    /// The bottom stop was 0.05 until #382: a fade to *nothing* rather than to
+    /// a baseline, which read while the sheet's glass supplied a backdrop of
+    /// its own and stopped reading on iOS 27 when it thinned. #411 took the
+    /// surface #382 added back out, and this stop stays where #382 put it —
+    /// it is the half of that change the graph still needs, since a fade to a
+    /// baseline is legible over map tiles and a fade to nothing is not.
     private static let areaGradientTopOpacity: Double = 0.45
     private static let areaGradientBottomOpacity: Double = 0.14
     /// Opacity for the scrub rule line.
@@ -122,28 +118,19 @@ struct ElevationChartView: View, Equatable {
         let domain = elevationDomain(profile, plotWidth: plotWidth)
         let trackerSample = profile.sample(atDistance: tracker.trackerDistance)
         let liveSample = tracker.liveTrackerDistance.flatMap { profile.sample(atDistance: $0) }
+        // No surface behind the plot, deliberately. #382 put one here so the
+        // grid lines and axis labels had something to be read against on
+        // iOS 27's thinner glass; #411 took it back out, because a card in the
+        // middle of a sheet that is otherwise glass reads as a panel stuck on
+        // top of the page rather than as part of it. The graph is glass.
+        //
+        // What stays from #382 is the half that does not need a card: the area
+        // fill ends at a baseline rather than fading to nothing — see
+        // ``areaGradientBottomOpacity`` — which is legible over map tiles
+        // whatever is behind it. The scrub callout keeps its own surface, as it
+        // always had one: a `Chart` annotation gives Liquid Glass no backdrop
+        // worth sampling, and that is a different problem from this one.
         return plot(domain: domain, tracker: trackerSample, live: liveSample)
-            // The graph gets something to be read against.
-            //
-            // It is drawn inside a sheet presented on clear glass over live map
-            // imagery, and on iOS 27 that glass stopped standing between the
-            // two: the grid lines, the axis labels and the area fill were being
-            // read against whatever tiles happened to be underneath, which on a
-            // forest tile is a green line on green. Every alpha in this file was
-            // chosen against a backdrop that no longer exists, and no alpha
-            // works against one that changes as the hiker pans.
-            //
-            // A surface rather than a raised opacity, because the shape of the
-            // problem is the backdrop and not the marks — see
-            // ``Color/contentSurface``. It is the decision the scrub callout
-            // already made for itself, applied to the thing it points at.
-            //
-            // Outside `plot(domain:tracker:live:)` on purpose, and not only for
-            // the compiler's sake: `onGeometryChange` in there measures the
-            // plot, and the vertical exaggeration is computed from that width,
-            // so the padding must not be inside what it reads.
-            .padding(Self.plotPadding)
-            .background(.contentSurface, in: RoundedRectangle(cornerRadius: Self.plotCornerRadius))
     }
 
     /// The graph itself, split from ``body`` so each of the two is an

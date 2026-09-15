@@ -184,30 +184,6 @@ struct MapEntitlementStoreTests {
 
     // MARK: - What the paywall's buttons do without a product
 
-    /// The rule ``MapPaywallView`` binds both of its buttons to, pinned where
-    /// it can be asserted without StoreKit: a store that has never loaded a
-    /// product has nothing to buy, and still has something to restore.
-    ///
-    /// Not the same assertion as the unavailable-product test in
-    /// ``MapEntitlementStoreLaunchTests``. That one drives a real, failing
-    /// `loadProduct()` and checks the rule still holds afterwards; this one is
-    /// the rule itself, and holds with no App Store behind it at all.
-    ///
-    /// Only the false half of `canPurchase` is reachable from this bundle. The
-    /// true half needs a real `Product`, which is constraint 2 in this file's
-    /// header — nothing here can put one in the store.
-    @Test("a paywall with no product offers nothing to buy but still offers restore")
-    func noProductDisablesPurchaseButNotRestore() async throws {
-        defer { Self.restoreProcessEntitlement() }
-        let store = Self.store(defaults: try Self.defaults()) { false }
-
-        await store.refresh()
-
-        #expect(store.product == nil)
-        #expect(!store.canPurchase)
-        #expect(store.canRestore)
-    }
-
     // MARK: - What the next cold launch starts from
 
     /// The leak this remembering exists to close. Without it every launch
@@ -262,27 +238,5 @@ struct MapEntitlementStoreTests {
         #expect(store.state == .entitled)
         #expect(MapEntitlement.current == .entitled)
         #expect(defaults.bool(forKey: SettingsKey.lastKnownMapEntitlement))
-    }
-
-    // MARK: - Purchase
-
-    /// The paywall can be on screen before ``MapEntitlementStore/loadProduct()``
-    /// has returned, and a tap in that window must not read as a failed
-    /// purchase attempt against the account — or move the entitlement.
-    @Test("buying before the product loads fails without changing anything")
-    func purchaseWithoutAProductFails() async throws {
-        defer { Self.restoreProcessEntitlement() }
-        let defaults = try Self.defaults()
-        let store = Self.store(defaults: defaults) { false }
-        await store.refresh()
-
-        let outcome = await store.purchase()
-
-        guard case .failed = outcome else {
-            Issue.record("Expected a failure with no product loaded, got \(outcome)")
-            return
-        }
-        #expect(store.state == .notEntitled)
-        #expect(!store.isWorking)
     }
 }

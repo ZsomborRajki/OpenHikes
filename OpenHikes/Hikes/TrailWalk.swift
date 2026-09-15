@@ -12,6 +12,7 @@
 //  ``TrailWalkSession``; nothing in this file knows it exists.
 //
 
+import Algorithms
 import Foundation
 
 /// The four numbers a walk is decided by. Proposals pinned by
@@ -113,13 +114,33 @@ nonisolated struct TrailWalkCoverage: Codable, Equatable, Sendable {
         // The memberwise initialiser is private, since the union is.
     }
 
+    /// The flat storage read as `(start, end)` pairs, dropping a trailing
+    /// element with no partner rather than trapping on it.
+    ///
+    /// That rule is what the three readers below all need, and what
+    /// `stride(from: 0, to: intervals.count - 1, by: 2)` used to encode as an
+    /// off-by-one: the `- 1` is the whole of what kept an odd-length array off
+    /// `intervals[pair + 1]` and an empty one out of `0..<(-1)`. Load-bearing,
+    /// non-obvious, and previously restated at each site. Stated once here.
+    ///
+    /// Lazy, because ``insert(_:_:)`` runs per on-route match while a walk is
+    /// being recorded and should not allocate to read its own storage.
+    private static func pairs(
+        of intervals: [Double]
+    ) -> some Sequence<(start: Double, end: Double)> {
+        intervals.chunks(ofCount: 2).lazy.compactMap { chunk -> (start: Double, end: Double)? in
+            guard chunk.count == 2, let start = chunk.first, let end = chunk.last else { return nil }
+            return (start: start, end: end)
+        }
+    }
+
     /// The same union, from stored pairs. Pairs are trusted to be merged —
     /// they were written by ``record(distance:)`` — but re-merged anyway, so
     /// a row edited by hand still reads as a union.
     init(intervals: [Double], furthestDistanceMeters: Double) {
         var built = Self()
-        for pair in stride(from: 0, to: intervals.count - 1, by: 2) {
-            built.insert(min(intervals[pair], intervals[pair + 1]), max(intervals[pair], intervals[pair + 1]))
+        for (start, end) in Self.pairs(of: intervals) {
+            built.insert(min(start, end), max(start, end))
         }
         // A row whose furthest point was never written still reached the end
         // of its last pair.
@@ -159,9 +180,7 @@ nonisolated struct TrailWalkCoverage: Codable, Equatable, Sendable {
     }
 
     var ranges: [ClosedRange<Double>] {
-        stride(from: 0, to: intervals.count - 1, by: 2).map { pair in
-            intervals[pair]...intervals[pair + 1]
-        }
+        Self.pairs(of: intervals).map { $0.start...$0.end }
     }
 
     /// Covered length over the route's, clamped to 0…1 with the same
@@ -186,9 +205,7 @@ nonisolated struct TrailWalkCoverage: Codable, Equatable, Sendable {
         var kept: [Double] = []
         kept.reserveCapacity(intervals.count + 2)
         var placed = false
-        for pair in stride(from: 0, to: intervals.count - 1, by: 2) {
-            let lower = intervals[pair]
-            let upper = intervals[pair + 1]
+        for (lower, upper) in Self.pairs(of: intervals) {
             if upper < mergedStart {
                 kept.append(contentsOf: [lower, upper])
             } else if lower > mergedEnd {

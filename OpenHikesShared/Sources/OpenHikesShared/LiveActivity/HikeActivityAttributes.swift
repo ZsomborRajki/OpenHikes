@@ -159,6 +159,17 @@ public struct HikeActivityAttributes: Codable, Hashable, Sendable {
         /// without the two drifting apart. See ``timerStart``.
         public var elapsedSeconds: TimeInterval
         public var updatedAt: Date
+        /// What the last tap on one of the panel's buttons could not do.
+        ///
+        /// Here rather than swallowed because a `LiveActivityIntent` has
+        /// nowhere else to put it: there is no dialog on a Lock Screen and no
+        /// `continueInForeground(_:)` to fall back on, so a refusal either
+        /// reaches the panel or reaches nobody — see
+        /// ``HikeActivityControlRefusal``.
+        ///
+        /// Cleared by the next update that changes ``runState``, which is the
+        /// update that proves the thing the hiker asked for has happened.
+        public var controlRefusal: HikeActivityControlRefusal?
 
         public init(
             distanceMeters: Double,
@@ -170,7 +181,8 @@ public struct HikeActivityAttributes: Codable, Hashable, Sendable {
             coveredFractionComplete: Double? = nil,
             runState: RunState = .running,
             elapsedSeconds: TimeInterval = 0,
-            updatedAt: Date = .now
+            updatedAt: Date = .now,
+            controlRefusal: HikeActivityControlRefusal? = nil
         ) {
             self.distanceMeters = distanceMeters
             self.elevationGainMeters = elevationGainMeters
@@ -182,6 +194,7 @@ public struct HikeActivityAttributes: Codable, Hashable, Sendable {
             self.runState = runState
             self.elapsedSeconds = elapsedSeconds
             self.updatedAt = updatedAt
+            self.controlRefusal = controlRefusal
         }
 
         /// The instant a live timer should count from to read

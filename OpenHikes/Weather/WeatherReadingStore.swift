@@ -149,6 +149,35 @@ final class WeatherReadingStore {
             }
         }
 
+        /// One hour of the strip, in fixed units for the reason
+        /// ``Conditions`` is: these bytes are read back by a later build.
+        ///
+        /// Bounded by ``WeatherHourlyPolicy/horizon`` before it ever reaches
+        /// here — `.hourly` answers with days of data, and this is
+        /// `UserDefaults`.
+        struct Hour: Codable {
+            var date: Date
+            var symbolName: String
+            var celsius: Double
+            var precipitationChance: Double
+
+            var restored: WeatherHourSummary {
+                WeatherHourSummary(
+                    date: date,
+                    symbolName: symbolName,
+                    temperature: Measurement(value: celsius, unit: UnitTemperature.celsius),
+                    precipitationChance: precipitationChance
+                )
+            }
+
+            init(_ hour: WeatherHourSummary) {
+                date = hour.date
+                symbolName = hour.symbolName
+                celsius = hour.temperature.converted(to: .celsius).value
+                precipitationChance = hour.precipitationChance
+            }
+        }
+
         var symbolName: String
         var celsius: Double
         var conditionDescription: String
@@ -163,6 +192,12 @@ final class WeatherReadingStore {
         /// existed fail to decode — see this file's header for why that is the
         /// intended outcome and not a hazard.
         var conditions: Conditions
+        /// Non-optional for the same reason ``conditions`` is, and with the
+        /// same consequence: the blob written by the build before this field
+        /// existed fails to decode once and is replaced by the next successful
+        /// fetch, seconds after launch. An *empty* array is still a valid
+        /// value, and means the provider had no hourly data for the point.
+        var hourly: [Hour]
     }
 
     private let defaults: UserDefaults
@@ -184,7 +219,8 @@ final class WeatherReadingStore {
             temperature: Measurement(value: payload.celsius, unit: UnitTemperature.celsius),
             conditionDescription: payload.conditionDescription,
             capturedAt: payload.capturedAt,
-            conditions: payload.conditions.restored
+            conditions: payload.conditions.restored,
+            hourly: payload.hourly.map(\.restored)
         )
         let subject: WeatherSubject
         switch payload.subjectKind {
@@ -225,7 +261,8 @@ final class WeatherReadingStore {
             placeName: subject.placeName,
             subjectKind: subjectKind,
             hikeID: hikeID,
-            conditions: Payload.Conditions(snapshot.conditions)
+            conditions: Payload.Conditions(snapshot.conditions),
+            hourly: snapshot.hourly.map(Payload.Hour.init)
         )
         guard let data = try? JSONEncoder().encode(payload) else { return }
         defaults.set(data, forKey: SettingsKey.lastWeatherReading)

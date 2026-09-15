@@ -66,8 +66,14 @@ struct MapSheet: View {
     /// itself the moment a button is tapped, and a sheet presented from the
     /// view that dialog belongs to would be torn down with it.
     @State private var withdrawingHike: Hike?
-    @State private var completer = SearchCompleter()
     @State private var searchTask: Task<Void, Never>?
+
+    /// Autocomplete for the search field. Owned by the model rather than held
+    /// here, because the map is what tells it where the hiker is looking —
+    /// see ``SearchCompleter/regionDidSettle(_:)``.
+    private var completer: SearchCompleter {
+        appModel.searchCompleter
+    }
 
     private var autoSave: AutoSaveController {
         appModel.autoSaveController
@@ -544,6 +550,15 @@ private func performSearch() {
     searchFocused = false
     let request = MKLocalSearch.Request()
     request.naturalLanguageQuery = query
+    // The same bias the completer's suggestions already carry. Without it a
+    // typed Return is answered globally while the suggestions above it are
+    // answered locally, so the two halves of one search field disagree.
+    if let region = completer.region {
+        request.region = region
+        // `.default` for the reason ``SearchCompleter`` gives: a distant exact
+        // match stays reachable.
+        request.regionPriority = .default
+    }
     startSearch(request: request, fallbackName: query)
 }
 

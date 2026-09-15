@@ -82,6 +82,11 @@ struct OpenHikesApp: App {
             // because it wants the same coordinator, and off the main actor
             // because it is a whole-library fetch nothing on screen waits for.
             HikeSpotlightIndex.donate(from: coordinator)
+            // The Live Activity's own buttons, registered the same way and for
+            // the same reason: the intent type is compiled into the widget
+            // extension and performed here.
+            let activityControl: any HikeActivityControlHandling = coordinator
+            AppDependencyManager.shared.add(dependency: activityControl)
         }
     }
 
