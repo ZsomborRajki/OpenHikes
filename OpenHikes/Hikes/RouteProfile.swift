@@ -253,12 +253,13 @@ nonisolated struct RouteProfile: Sendable {
     /// Elevation min…max across the plotted samples, if any.
     ///
     /// Heights that aren't numbers are stepped over rather than compared.
-    /// `minAndMax()` would hand back a leading NaN, because every
-    /// comparison against one is false, so a single poisoned sample would make
-    /// both bounds NaN — and `nan...nan` is a `ClosedRange` precondition
-    /// failure the moment the chart asks for its y-domain, not an axis that
-    /// merely looks wrong. ``GPXImport`` refuses such a height at the door;
-    /// this is what covers a hike that was stored before it did.
+    /// Every comparison against a NaN is false, so `minAndMax()` never
+    /// displaces a bound it has already seeded with one: a NaN *first* comes
+    /// back as the min, a NaN *last* as the max. Either way the range is
+    /// built from a bound that isn't ordered, and `ClosedRange` traps on that
+    /// the moment the chart asks for its y-domain rather than drawing an axis
+    /// that merely looks wrong. ``GPXImport`` refuses such a height at the
+    /// door; this is what covers a hike that was stored before it did.
     var elevationRange: ClosedRange<Double>? {
         guard let bounds = samples.lazy.map(\.elevation).filter(\.isFinite).minAndMax() else {
             return nil

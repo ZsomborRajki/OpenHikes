@@ -51,7 +51,7 @@ nonisolated struct PhotoMapPin: Hashable, Identifiable, Sendable {
     /// a photo with no place on the trail is still a photo of the walk, and
     /// ``PhotoTrailAnchor`` is where that distinction is argued.
     static func pins(for photos: [HikePhoto]) -> [Self] {
-        var grouped: OrderedDictionary<CoordinateKey, (photo: HikePhoto, count: Int)> = [:]
+        var grouped: OrderedDictionary<CoordinateKey, Group> = [:]
 
         for candidate in photos {
             guard let anchor = candidate.coordinate,
@@ -60,17 +60,15 @@ nonisolated struct PhotoMapPin: Hashable, Identifiable, Sendable {
                 latitude: anchor.latitude,
                 longitude: anchor.longitude
             )
-            if let existing = grouped[key] {
-                grouped[key] = (existing.photo, existing.count + 1)
-            } else {
-                grouped[key] = (candidate, 1)
-            }
+            // `candidate` is the seed only when the key is absent, so the
+            // first photo anchored here stays the one the pin previews.
+            grouped[key, default: Group(photo: candidate, count: 0)].count += 1
         }
 
-        return grouped.map { key, value in
+        return grouped.map { key, group in
             Self(
-                photo: value.photo,
-                count: value.count,
+                photo: group.photo,
+                count: group.count,
                 latitude: key.latitude,
                 longitude: key.longitude
             )
@@ -83,6 +81,15 @@ nonisolated struct PhotoMapPin: Hashable, Identifiable, Sendable {
     private struct CoordinateKey: Hashable {
         let latitude: Double
         let longitude: Double
+    }
+
+    /// What one map point has accumulated while ``pins(for:)`` walks the
+    /// gallery. Named rather than an anonymous tuple so it matches the other
+    /// `OrderedDictionary` values in the app and can grow a field without
+    /// every use site changing shape.
+    private struct Group {
+        let photo: HikePhoto
+        var count: Int
     }
 }
 
