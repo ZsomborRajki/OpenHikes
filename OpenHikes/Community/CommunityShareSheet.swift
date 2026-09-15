@@ -46,6 +46,16 @@ struct CommunityShareSheet: View {
         case sent
     }
 
+    /// The strip's metrics. The same 76-point tile the hike's own gallery
+    /// draws — this is the same row of the same photographs, and two sizes
+    /// would be two answers to one question.
+    private static let photoTileSize: CGFloat = 76
+    private static let photoTileSpacing: CGFloat = 8
+    private static let photoTileCornerRadius: CGFloat = 12
+    /// How far a struck-off picture fades. Faded rather than removed, so the
+    /// tap that took it out is the tap that puts it back.
+    private static let excludedTileOpacity: Double = 0.4
+
     let hike: Hike
     let transport: any CommunityTransporting
     /// Where the photo files are, so the form can ask which of this hike's
@@ -75,6 +85,24 @@ struct CommunityShareSheet: View {
     /// presented; without the flag, a second pass would overwrite what the
     /// hiker had started typing with what the hike still says.
     @State private var hasSeededNotes = false
+    /// What the hike will be called, held here and committed for the reason
+    /// ``notesDraft`` is: a `@Model`'s property is a store write per
+    /// keystroke.
+    ///
+    /// This one renames the hike itself rather than only the copy that goes
+    /// public — see ``commitTitle()``. A hiker who is about to publish
+    /// "Morning walk" is looking at the name for the first time in a while and
+    /// is the most likely person in the world to fix it, and a correction that
+    /// only the strangers saw would leave their own library still wrong.
+    @State private var titleDraft = ""
+    @State private var hasSeededTitle = false
+    /// The photographs struck off the strip, by id.
+    ///
+    /// Held by id rather than by index, because the list is re-derived on
+    /// every pass and an index would follow whatever moved into that slot.
+    /// Empty is the starting state and the ordinary one: sharing a hike shares
+    /// its pictures, and this is the exception the hiker reaches for.
+    @State private var excludedPhotoIDs: Set<UUID> = []
     /// How many photographs this device can send, once the disk has been
     /// asked. `nil` until then — see ``photoCount``.
     @State private var sendablePhotoCount: Int?
@@ -104,14 +132,20 @@ struct CommunityShareSheet: View {
     /// the best guess available; after that this is the number that will
     /// really go.
     private var photoCount: Int {
-        sendablePhotoCount ?? min(hike.photos.count, CommunityPublisher.maximumPhotos)
+        sendablePhotoCount ?? min(includedPhotoCount, CommunityPublisher.maximumPhotos)
+    }
+
+    /// How many of this hike's photographs are still ticked, before the disk
+    /// and the cap have had their say.
+    private var includedPhotoCount: Int {
+        hike.photos.count(where: { !excludedPhotoIDs.contains($0.id) })
     }
 
     /// How many of this hike's pictures are on another device, and so are not
     /// going anywhere from here.
     private var unsendablePhotoCount: Int {
         guard let sendablePhotoCount else { return 0 }
-        return min(hike.photos.count, CommunityPublisher.maximumPhotos) - sendablePhotoCount
+        return min(includedPhotoCount, CommunityPublisher.maximumPhotos) - sendablePhotoCount
     }
 
     /// What to say about the pictures that are staying behind.
@@ -166,47 +200,65 @@ struct CommunityShareSheet: View {
         CommunityShareDisclosure.notes(from: notesDraft)
     }
 
-    var body: some View {
-        NavigationStack {
-            Form {
-                switch phase {
-                case .sent:
-                    sentSection
-                default:
-                    // A refusal replaces the form rather than sitting above
-                    // it. The rest of this screen asks for a display name and
-                    // explains what will be published, and both are questions
-                    // about a send that is not going to happen — leaving them
-                    // drawn and greyed would be the app pretending to still be
-                    // considering it.
-                    if let reason = eligibility?.reason {
-                        refusalSection(reason)
-                        contentsSection
-                    } else {
-                        duplicateSection
-                        contentsSection
-                        nameSection
-                        reviewSection
-                        if case .failed(let failure) = phase {
-                            failureSection(failure)
-                        }
-                    }
+    /// Which sections are up, which is entirely a question about ``phase`` and
+    /// ``eligibility``.
+    ///
+    /// Extracted from `body` rather than written inline, because the form grew
+    /// a title field and a photo strip and the `NavigationStack` closure
+    /// around it went past what the linter allows. The seam is a good one
+    /// anyway: what this screen *is* and what it *does when it appears* are
+    /// two different lists to read.
+    @ViewBuilder private var formContent: some View {
+        switch phase {
+        case .sent:
+            sentSection
+        default:
+            // A refusal replaces the form rather than sitting above it. The
+            // rest of this screen asks for a display name and explains what
+            // will be published, and both are questions about a send that is
+            // not going to happen — leaving them drawn and greyed would be the
+            // app pretending to still be considering it.
+            if let reason = eligibility?.reason {
+                refusalSection(reason)
+                contentsSection
+            } else {
+                duplicateSection
+                contentsSection
+                nameSection
+                reviewSection
+                if case .failed(let failure) = phase {
+                    failureSection(failure)
                 }
             }
+        }
+    }
+
+    var body: some View {
+        NavigationStack {
+            Form { formContent }
             .navigationTitle("Share Hike")
             #if os(iOS)
             .navigationBarTitleDisplayMode(.inline)
             #endif
             .toolbar { toolbarContent }
             .interactiveDismissDisabled(phase == .sending)
-            .onAppear { seedNotes() }
-            .onDisappear { commitNotes() }
-            // Asked once, when the form opens: the answer is about files on
-            // this device, and nothing can add one to this hike while this
-            // sheet is the screen on top.
-            .task {
+            .onAppear {
+                seedNotes()
+                seedTitle()
+            }
+            .onDisappear {
+                commitNotes()
+                commitTitle()
+            }
+            // Re-asked whenever the hiker strikes a photograph off or puts
+            // one back, because the answer is about a particular set of files:
+            // the count under the strip has to be what will really go, and the
+            // cap means taking one out can let another in. Nothing else can
+            // change it while this sheet is the screen on top.
+            .task(id: excludedPhotoIDs) {
                 sendablePhotoCount = await CommunityPublisher.sendablePhotoCount(
                     of: hike,
+                    excludingPhotos: excludedPhotoIDs,
                     store: store
                 )
             }
@@ -231,7 +283,20 @@ struct CommunityShareSheet: View {
 private extension CommunityShareSheet {
     var contentsSection: some View {
         Section {
-            LabeledContent("Hike", value: hike.displayTitle)
+            // Editable, where it used to be a `LabeledContent` reporting the
+            // name back. A hiker about to publish is looking at their hike's
+            // name for the first time in a while and is the likeliest person
+            // to want it fixed — and a walk called "Morning walk" used to cost
+            // a reviewer the choice between publishing that and declining the
+            // whole upload. See ``CommunityReviewView``, which can still
+            // correct a title and now has fewer reasons to.
+            VStack(alignment: .leading, spacing: 4) {
+                Text("Title")
+                TextField("What was this walk?", text: $titleDraft)
+                    .disabled(phase == .sending)
+                    .accessibilityLabel("Hike title")
+                    .accessibilityIdentifier("community-share-title")
+            }
             LabeledContent("Route", value: hike.subtitle)
             // Always drawn, where it used to appear only for a hike that
             // already had a description. An empty box is an invitation and an
@@ -258,6 +323,17 @@ private extension CommunityShareSheet {
                 "Photos",
                 value: photoCount == 0 ? "None" : "\(photoCount)"
             )
+            // One element with an explicit value, rather than the pair
+            // `LabeledContent` composes on its own. An identifier on a
+            // container is pushed down onto every descendant, so without this
+            // the name matches the "Photos" caption first and a reader asking
+            // for the row's value gets nothing — see ``CommunityPhotoViewer``
+            // for where that lesson was learned.
+            .accessibilityElement(children: .ignore)
+            .accessibilityLabel("Photos")
+            .accessibilityValue(photoCount == 0 ? "None" : "\(photoCount)")
+            .accessibilityIdentifier("community-share-photo-count")
+            photoPicker
             if unsendablePhotoCount > 0 {
                 // Said here rather than left to the footer, because it is
                 // about the row directly above it: the number there is
@@ -299,6 +375,81 @@ private extension CommunityShareSheet {
                 )
             )
         }
+    }
+
+    /// The hike's photographs, each one a tap away from being left out.
+    ///
+    /// Struck off rather than removed from the strip, and put back by the same
+    /// tap. A tile that vanished would take its own undo with it — the
+    /// argument ``CommunityReviewView``'s photo section already makes about
+    /// the reviewer's half of this, and the two screens are deliberately the
+    /// same gesture: what a hiker does before sending and what a reviewer does
+    /// before publishing should not be two different interactions with two
+    /// different meanings.
+    ///
+    /// Everything is included to begin with, because sharing a hike shares the
+    /// walk — the pictures are most of what makes a shared trail worth
+    /// somebody's day out, and a strip that started empty would publish hikes
+    /// with no photographs every time somebody did not notice it.
+    ///
+    /// Drawn in ``CommunityPublisher/shareablePhotos(of:)``'s order rather
+    /// than the gallery's, so the tiles are in the order the upload will take
+    /// them and the twelve that fit are the first twelve here.
+    @ViewBuilder var photoPicker: some View {
+        let photos = CommunityPublisher.shareablePhotos(of: hike)
+        if !photos.isEmpty {
+            ScrollView(.horizontal, showsIndicators: false) {
+                HStack(spacing: Self.photoTileSpacing) {
+                    ForEach(photos) { photo in
+                        photoTile(photo, among: photos.count)
+                    }
+                }
+                .padding(.vertical, 2)
+            }
+            .scrollIndicators(.hidden)
+            .disabled(phase == .sending)
+        }
+    }
+
+    func photoTile(_ photo: HikePhoto, among total: Int) -> some View {
+        let isExcluded = excludedPhotoIDs.contains(photo.id)
+        return Button {
+            toggle(photo)
+        } label: {
+            HikePhotoThumbnail(
+                photo: photo,
+                store: store,
+                size: Self.photoTileSize,
+                cornerRadius: Self.photoTileCornerRadius,
+                label: Self.photoLabel(for: photo, isExcluded: isExcluded, among: total)
+            )
+            .opacity(isExcluded ? Self.excludedTileOpacity : 1)
+            .overlay(alignment: .topTrailing) {
+                Image(systemName: isExcluded ? "circle" : "checkmark.circle.fill")
+                    .font(.title3)
+                    .symbolRenderingMode(.palette)
+                    .foregroundStyle(.white, isExcluded ? Color.secondary : Color.accentColor)
+                    .padding(4)
+                    // The tick is what the label already says, so it is
+                    // decoration rather than a second thing to hear.
+                    .accessibilityHidden(true)
+            }
+        }
+        .buttonStyle(.plain)
+        // `-tile-` rather than bare `-photo-`: the count row above answers to
+        // `community-share-photo-count`, and a test reaching for "the first
+        // tile" by prefix would otherwise find the number instead.
+        .accessibilityIdentifier("community-share-photo-tile-\(photo.id.uuidString)")
+    }
+
+    /// What a tile is called, which has to carry the state as well as the
+    /// place: the difference between included and struck off is drawn as a
+    /// glyph and an opacity, and neither is a thing a screen reader can see.
+    static func photoLabel(for photo: HikePhoto, isExcluded: Bool, among total: Int) -> String {
+        let place = String(localized: "Photo, \(total) in this hike")
+        return isExcluded
+            ? String(localized: "\(place), not shared")
+            : String(localized: "\(place), shared")
     }
 
     /// What the hike is credited to, asked for as the display name it is.
@@ -379,8 +530,17 @@ private extension CommunityShareSheet {
                 Share only a route, photos and notes that are yours to publish. A hike that \
                 starts at your front door shows where you live.
                 """)
+                // The frame is what makes it line up. A `Link`'s label is
+                // sized to its own text and centred inside whatever width it
+                // is given, while the two paragraphs above fill the footer —
+                // so the one line that is shorter than the column sat in the
+                // middle of it, out of step with everything around it (#389).
+                // Filling the width and aligning leading puts it back on the
+                // same edge as the sentences it belongs to.
                 Link(destination: MapPurchaseLinks.termsAndConditions) {
                     Text("By sharing, you agree to the Terms & Conditions.")
+                        .frame(maxWidth: .infinity, alignment: .leading)
+                        .multilineTextAlignment(.leading)
                 }
                 .accessibilityIdentifier("community-terms-link")
             }
@@ -488,8 +648,19 @@ private extension CommunityShareSheet {
 
     @ToolbarContentBuilder var toolbarContent: some ToolbarContent {
         ToolbarItem(placement: .cancellationAction) {
-            Button(phase == .sent ? "Done" : "Cancel") { dismiss() }
-                .disabled(phase == .sending)
+            // Committed here as well as in `onDisappear`, and this is the one
+            // that can be relied on. A sheet's content is not guaranteed to be
+            // torn down when it is dismissed — SwiftUI may keep the view
+            // around — so `onDisappear` is a hook that sometimes runs rather
+            // than a commit point. Both calls are idempotent, so the pair
+            // costs nothing and closes the case where neither the title nor
+            // the notes reach the hike because the screen never went away.
+            Button(phase == .sent ? "Done" : "Cancel") {
+                commitNotes()
+                commitTitle()
+                dismiss()
+            }
+            .disabled(phase == .sending)
         }
         ToolbarItem(placement: .confirmationAction) {
             if phase == .sending {
@@ -518,12 +689,17 @@ private extension CommunityShareSheet {
         // `trackDescription` off the hike, so this is the line that decides
         // whether what the hiker just typed goes with it.
         commitNotes()
+        // And the title, for the same reason and in the same breath:
+        // ``CommunityPublisher/share`` reads `displayTitle` off the hike, so
+        // this is the line that decides whether the correction goes with it.
+        commitTitle()
         phase = .sending
         Task {
             let outcome = await CommunityPublisher.share(
                 hike,
                 authorName: boundedAuthorName,
-                transport: transport
+                transport: transport,
+                excludingPhotos: excludedPhotoIDs
             )
             switch outcome {
             case .submitted:
@@ -544,6 +720,43 @@ private extension CommunityShareSheet {
         guard !hasSeededNotes else { return }
         hasSeededNotes = true
         notesDraft = hike.trackDescription ?? ""
+    }
+
+    /// Fills the title field from the hike, once, for the reason
+    /// ``seedNotes()`` is guarded.
+    func seedTitle() {
+        guard !hasSeededTitle else { return }
+        hasSeededTitle = true
+        titleDraft = hike.displayTitle
+    }
+
+    /// Renames the hike, if the field says something the hike does not.
+    ///
+    /// The whole rule is ``HikeTitleEdit``, which is where it can be tested —
+    /// a `View` is not somewhere a suite can ask whether leaving a field alone
+    /// writes to the store. The two cases it separates both matter here:
+    /// untouched text must not turn a hike's own title into a custom name that
+    /// merely matches it, and an emptied field means "go back to what this was
+    /// called" rather than "call it nothing".
+    ///
+    /// Idempotent, like ``commitNotes()``, and called in the same two places:
+    /// before the upload reads ``Hike/displayTitle``, and on the way out — so
+    /// a hiker who fixes the name and then thinks better of publishing still
+    /// keeps the name.
+    func commitTitle() {
+        guard hasSeededTitle else { return }
+        guard case .renamed(let name) = HikeTitleEdit.of(titleDraft, against: hike.displayTitle)
+        else { return }
+        hike.customName = name
+    }
+
+    /// Strikes a photograph off the share, or puts it back.
+    func toggle(_ photo: HikePhoto) {
+        if excludedPhotoIDs.contains(photo.id) {
+            excludedPhotoIDs.remove(photo.id)
+        } else {
+            excludedPhotoIDs.insert(photo.id)
+        }
     }
 
     /// Puts the draft on the hike, bounded the way every other piece of free
