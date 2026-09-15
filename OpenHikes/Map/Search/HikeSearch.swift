@@ -43,10 +43,6 @@ final class HikeSearch {
     /// what pins it in tests.
     private(set) var rankingPasses = 0
 
-    private static let foldingOptions: String.CompareOptions = [
-        .caseInsensitive, .diacriticInsensitive, .widthInsensitive
-    ]
-
     func rankedHikes(matching searchText: String, in hikes: [Hike]) -> [Hike] {
         let trimmedQuery = searchText.trimmingCharacters(in: .whitespacesAndNewlines)
         // No query, no results — and no reason to keep holding the last set of
@@ -92,19 +88,9 @@ final class HikeSearch {
     /// The ranking itself, over indices into the caller's array so the cached
     /// key and the cached result are built from one pass over the names.
     private static func rank(_ inputs: [(id: UUID, displayTitle: String)], matching query: String) -> [Int] {
-        let locale = Locale.current
-        let queryKey = query.folding(options: foldingOptions, locale: locale)
-
-        return inputs.indices
-            .compactMap { index -> (index: Int, prefixRank: Int, titleKey: String)? in
-                let titleKey = inputs[index].displayTitle.folding(options: foldingOptions, locale: locale)
-                guard titleKey.contains(queryKey) else { return nil }
-                return (index, titleKey.hasPrefix(queryKey) ? 0 : 1, titleKey)
-            }
-            .sorted { lhs, rhs in
-                if lhs.prefixRank != rhs.prefixRank { return lhs.prefixRank < rhs.prefixRank }
-                return lhs.titleKey < rhs.titleKey
-            }
-            .map(\.index)
+        // The rule itself lives in ``HikeNameMatch``, because Siri and
+        // Spotlight ask the same question of the same names through
+        // ``HikeEntityQuery`` and the two must not drift.
+        HikeNameMatch.rankedIndices(of: inputs.map(\.displayTitle), matching: query)
     }
 }

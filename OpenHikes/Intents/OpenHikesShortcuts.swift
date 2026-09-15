@@ -10,10 +10,12 @@
 //  actually say are not the ones an intent is titled: "start a hike" and
 //  "record a hike" are the same request.
 //
-//  Ten is the system's ceiling on shortcuts per app, and the sixth through
-//  tenth slots are worth spending on intents that do not exist yet, so the
-//  seven below are deliberately the whole recording loop plus the two
-//  questions. See the issue tracker for what is queued behind them.
+//  Ten is the system's ceiling on shortcuts per app. The eight below are the
+//  whole recording loop, the three questions, and the one that takes a
+//  parameter — `HikeDurationIntent`, which is what ``HikeEntity`` was built
+//  for. Two slots are deliberately unspent; what is queued for them is on the
+//  issue tracker, which is where an unbuilt intent belongs rather than in a
+//  comment here.
 //
 
 import AppIntents
@@ -75,6 +77,16 @@ nonisolated struct OpenHikesShortcuts: AppShortcutsProvider {
             ],
             shortTitle: "Distance Today",
             systemImageName: "sum"
+        )
+        AppShortcut(
+            intent: HikeDurationIntent(),
+            phrases: [
+                "How long was my hike in \(.applicationName)",
+                "How far was my hike in \(.applicationName)",
+                "Summarise a hike in \(.applicationName)",
+            ],
+            shortTitle: "Hike Summary",
+            systemImageName: "figure.hiking.circle"
         )
         AppShortcut(
             intent: LastHikeIntent(),
