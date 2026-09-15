@@ -143,6 +143,11 @@ final class SheetMetrics {
     /// used to tell "the sheet is sitting still" from "the sheet is moving".
     private static let restGap: TimeInterval = 0.2
 
+    /// Whether the reading now standing in ``topY`` was taken while the sheet
+    /// was committed to the middle detent — which is what makes it a candidate
+    /// resting place for that detent rather than for some other height.
+    @ObservationIgnored private var lastReportWasAtMiddleDetent = false
+
     init(clock: @escaping @Sendable () -> Date = { Date() }) {
         self.clock = clock
     }
@@ -157,16 +162,31 @@ final class SheetMetrics {
     /// answer this on its own: it stays on the middle detent for the whole
     /// drag towards the large one and only changes when the drag is released.
     ///
+    /// **"If it stopped while committed to the middle detent" is a claim about
+    /// the reading being recorded, not about the one that reveals the gap** —
+    /// and that is the half that was missing. The value learned here is the one
+    /// already standing in ``topY``, so what has to be true of the middle
+    /// detent is true of *that* report, not of the report arriving now.
+    ///
+    /// Without the distinction, any height the sheet sat at in silence became a
+    /// candidate the moment the detent flipped. The case that found it: a
+    /// full-height photo viewer reports its geometry once and then says nothing
+    /// until it is dismissed, and dismissing it sends the sheet to its middle
+    /// detent — so the first frame of that animation arrived seconds after the
+    /// last report, with the detent already committed, and recorded the full
+    /// height being left behind as the middle detent's resting place.
+    ///
     /// Learned once per visit, so a hand pausing mid-drag isn't mistaken for
     /// the sheet resting.
     func report(topY: CGFloat, atMiddleDetent: Bool) {
         let now = clock()
         defer {
             lastReportAt = now
+            lastReportWasAtMiddleDetent = atMiddleDetent
             self.topY = topY
         }
-        guard atMiddleDetent, awaitingMiddleRest, let lastReportAt else { return }
-        guard now.timeIntervalSince(lastReportAt) > Self.restGap else { return }
+        guard atMiddleDetent, awaitingMiddleRest, lastReportWasAtMiddleDetent else { return }
+        guard let lastReportAt, now.timeIntervalSince(lastReportAt) > Self.restGap else { return }
         middleRestY = self.topY
         awaitingMiddleRest = false
     }
@@ -190,6 +210,7 @@ final class SheetMetrics {
     /// resting height is measured again on the way back to portrait.
     func withdraw() {
         lastReportAt = nil
+        lastReportWasAtMiddleDetent = false
         awaitingMiddleRest = true
         if middleRestY != nil { middleRestY = nil }
         if topY != 0 { topY = 0 }

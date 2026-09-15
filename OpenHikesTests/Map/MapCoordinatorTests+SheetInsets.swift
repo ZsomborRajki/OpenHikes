@@ -355,6 +355,47 @@ extension MapCoordinatorTests {
         #expect(metrics.middleRestY == 400)
     }
 
+    /// A height the sheet sat at while it was *not* at the middle detent is
+    /// not that detent's resting place, however long it sat there.
+    ///
+    /// The case this comes from: a full-height photo viewer reports its
+    /// geometry once and then says nothing for as long as it is open. Showing
+    /// the photograph on the map pops it and sends the sheet to its middle
+    /// detent, so the first frame of that animation arrives seconds after the
+    /// last report with the detent already committed — and the value standing
+    /// in `topY` is the full height being left behind. Recorded, it told the
+    /// map the sheet rests seventy points from the top, and every camera move
+    /// then framed its subject into the sliver above that.
+    @Test("a height left behind at another detent is not the middle one's")
+    func aHeightHeldAtAnotherDetentIsNotLearned() {
+        let metrics = SheetMetrics(clock: clock.read)
+
+        // The full-height viewer: reported once, then left alone.
+        metrics.report(topY: 72, atMiddleDetent: false)
+        metrics.detentCommitted(toMiddle: true)
+        clock.advance(by: 4)
+
+        // The animation down to the middle detent, starting after that silence.
+        metrics.report(topY: 96, atMiddleDetent: true)
+        #expect(
+            metrics.middleRestY == nil,
+            "the height it is leaving is not the height it is going to"
+        )
+        for topY in stride(from: 140.0, through: 400.0, by: 44.0) {
+            clock.advance(by: 0.016)
+            metrics.report(topY: topY, atMiddleDetent: true)
+        }
+        clock.advance(by: 0.016)
+        metrics.report(topY: 400, atMiddleDetent: true)
+        #expect(metrics.middleRestY == nil, "still moving")
+
+        // It sits there, and then the next drag begins — the same shape the
+        // ordinary case above is learned from.
+        clock.advance(by: 1)
+        metrics.report(topY: 390, atMiddleDetent: true)
+        #expect(metrics.middleRestY == 400)
+    }
+
     /// A pause at any other detent says nothing about where the middle one is.
     @Test("only the middle detent's resting place is learned")
     func otherDetentsAreNotLearned() {
