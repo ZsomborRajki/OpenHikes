@@ -27,6 +27,17 @@ nonisolated final class OrientationUITests: XCTestCase {
     /// to catch a sheet that has taken the window, not to pin a width.
     private static let maximumSheetWidthShare: CGFloat = 0.5
 
+    /// How far below the panel's top edge the weather badge may sit before it
+    /// has stopped being at the top of the map. Generous — the badge asks for
+    /// the panel's own margin — and its job is to catch a portrait-sized drop,
+    /// not to pin a padding.
+    private static let maximumBadgeDropBelowThePanel: CGFloat = 40
+
+    /// How far above the bottom of the window the credit line may sit in
+    /// landscape. Room for the line's own height and its spacing, and nothing
+    /// like the height of the sheet it used to leave space for.
+    private static let maximumCreditLineLift: CGFloat = 80
+
     /// Landscape puts the map beside the sheet's contents rather than behind
     /// them, and portrait puts the sheet back over it.
     @MainActor
@@ -194,7 +205,66 @@ nonisolated final class OrientationUITests: XCTestCase {
             XCTAssertGreaterThanOrEqual(badge.frame.minX, panel.frame.maxX)
             XCTAssertLessThanOrEqual(badge.frame.maxX, app.frame.maxX)
             XCTAssertTrue(badge.isHittable)
+
+            // And at the top of the map, level with the panel beside it.
+            //
+            // The badge's own top padding is a Dynamic Island's height, which
+            // is the right number in portrait and a quarter of the screen here
+            // — it left the reading floating in the middle of the map. Held
+            // against the panel rather than against a figure, because the
+            // margin that decides both belongs to the app and this bundle runs
+            // out of process: what is asserted is that they line up.
+            XCTAssertGreaterThanOrEqual(
+                badge.frame.minY,
+                panel.frame.minY,
+                "the badge should not climb above the panel it sits beside"
+            )
+            XCTAssertLessThan(
+                badge.frame.minY - panel.frame.minY,
+                Self.maximumBadgeDropBelowThePanel,
+                "in landscape the badge belongs at the top, not a notch's height down the map"
+            )
         }
+    }
+
+    /// The other three things a rotation used to get wrong, and the one
+    /// argument they share: landscape has no sheet.
+    ///
+    /// ``MapSidePanel`` takes a leading edge and leaves the bottom of the map
+    /// clear, but ``SheetMetrics`` reports nothing there — so the map's own
+    /// leading-edge stack fell back on the guess it makes before a sheet has
+    /// reported, and parked the credit line and the camera pill a sheet's
+    /// height above a sheet that was not there.
+    ///
+    /// Measured against the map rather than named, the way the panel's width
+    /// is above: what went wrong was a frame.
+    @MainActor
+    func testLandscapePutsTheCreditLineAtTheBottom() {
+        addTeardownBlock {
+            await MainActor.run { XCUIDevice.shared.orientation = .portrait }
+        }
+        let app = launchUpright()
+        let credit = element("map-attribution", in: app)
+        XCTAssertTrue(
+            credit.waitForExistence(timeout: UITestTimeout.navigation),
+            "the credit line should be up before the device is turned"
+        )
+        let panel = element("map-side-panel", in: app)
+
+        XCUIDevice.shared.orientation = .landscapeLeft
+        XCTAssertTrue(waitForLandscape(app))
+        XCTAssertTrue(panel.waitForExistence(timeout: UITestTimeout.navigation))
+
+        XCTAssertGreaterThan(
+            credit.frame.maxY,
+            app.frame.maxY - Self.maximumCreditLineLift,
+            "nothing is under the credit line in landscape, so it belongs at the bottom"
+        )
+        XCTAssertGreaterThanOrEqual(
+            credit.frame.minX,
+            panel.frame.maxX,
+            "and beside the panel rather than behind it"
+        )
     }
 
     // MARK: - Turning the device

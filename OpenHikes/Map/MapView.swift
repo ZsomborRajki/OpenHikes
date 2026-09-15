@@ -434,7 +434,12 @@ struct MapView: MapViewRepresentable, Equatable {
     #endif
 
     /// How far the map's floating controls sit in from its safe area.
-    private static let controlInset: CGFloat = 12
+    ///
+    /// Spent on MapKit's own compass and scale as well — see
+    /// ``applyBuiltInControlMargins(to:)`` — so the controls this file adds
+    /// and the ones the framework draws read as one set rather than two.
+    /// Internal for that call and for the test that measures it.
+    static let controlInset: CGFloat = 12
 
     #if os(iOS)
     /// The gap between the camera pill and the credit line under it.
@@ -566,12 +571,57 @@ struct MapView: MapViewRepresentable, Equatable {
         #endif
     }
 
+    #if os(iOS)
+    /// Where MapKit's *own* controls — the compass and the scale — are allowed
+    /// to sit.
+    ///
+    /// They are not subviews this file adds and cannot be constrained; MapKit
+    /// lays them out against the map's layout margins, which default to the
+    /// system's 8 points on a view that fills the window. That put the scale
+    /// hard against the top edge, and in landscape behind ``MapSidePanel`` as
+    /// well — where the panel starts at the leading edge the scale is drawn on.
+    ///
+    /// The scale is the one control here with no second chance to be noticed:
+    /// `showsScale` is adaptive, so it appears only while the hiker is
+    /// pinching and fades again, and a reference distance that is only ever
+    /// drawn under a panel is a reference distance the map does not have.
+    ///
+    /// `insetsLayoutMarginsFromSafeArea` stays on, so what is set here is a
+    /// floor rather than a position: the effective margin on each edge is this
+    /// or the device's own safe area, whichever is larger. That is why the top
+    /// is a small gap rather than a guess at a notch — portrait keeps the safe
+    /// area it already had, and landscape, where the top inset is nothing,
+    /// gains the gap.
+    ///
+    /// The leading margin carries the panel for the same reason
+    /// ``makeControlsGuide(in:_:)`` does. It is spent without the safe area
+    /// added on top, unlike ``MapView/Coordinator/fit(_:on:animated:)``, because
+    /// this one is a floor and the panel's width is already wider than any
+    /// device's side inset.
+    private func applyBuiltInControlMargins(to mapView: MKMapView) {
+        let margins = NSDirectionalEdgeInsets(
+            top: Self.controlInset,
+            leading: sidePanelInset + Self.controlInset,
+            bottom: Self.controlInset,
+            trailing: Self.controlInset
+        )
+        // Written only when it changes: a margin write invalidates the map's
+        // layout, and this runs from `update` — the one view here that cannot
+        // afford a free layout pass.
+        guard mapView.directionalLayoutMargins != margins else { return }
+        mapView.directionalLayoutMargins = margins
+    }
+    #endif
+
     func update(_ mapView: MKMapView, _ coordinator: Coordinator) {
         // Fires on every SwiftUI-driven update pass, whether or not any of the
         // steps below actually change anything — compare its rate against the
         // "Rebuilt"/"Centered"/"Restyled" marks to see how much of that is
         // real work vs. free no-ops.
         applySidePanelInset(coordinator)
+        #if os(iOS)
+        applyBuiltInControlMargins(to: mapView)
+        #endif
         applyTileSource(to: mapView, coordinator)
         updateRoute(mapView, coordinator)
         // Restyling the line is deliberately absent: `observeRouteStyle` applies

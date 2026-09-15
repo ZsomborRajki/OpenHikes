@@ -119,8 +119,18 @@ extension MapView.Coordinator {
     /// other space, and the compact detent is a better guess than a button
     /// parked off screen. That is also the state on the first frames of a
     /// launch, before the sheet has reported anything.
+    ///
+    /// **Landscape has no sheet at all**, and that is not the same as a sheet
+    /// that has not reported yet. The contents move into ``MapSidePanel``,
+    /// which takes a leading edge and leaves the bottom of the map clear —
+    /// and ``SheetMetrics/withdraw()`` zeroes the reading on the way, so
+    /// without this the fallback above parked the whole leading-edge stack
+    /// 92 points above a sheet that is not there, with nothing underneath it.
+    /// The panel's own inset is what tells the two apart: it is non-zero for
+    /// exactly as long as there is a panel instead of a sheet.
     private func sheetTop(in mapView: MKMapView) -> CGFloat {
         let height = mapView.bounds.height
+        guard sidePanelInset == 0 else { return height - mapView.safeAreaInsets.bottom }
         let reported = sheetMetrics?.topY ?? 0
         guard reported > 0, reported <= height else { return height - Self.sheetFallbackOffset }
         return reported
