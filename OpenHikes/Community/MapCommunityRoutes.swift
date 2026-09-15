@@ -212,27 +212,27 @@ extension MapView.Coordinator {
         return renderer
     }
 
-    /// Moves the map to the open preview's route, unless the whole of it is
-    /// already on screen.
+    /// Moves the map to the open preview's route.
     ///
-    /// The condition is the whole of it. A hiker who opened a short hike by
-    /// tapping its line was looking straight at all of it, and a camera that
-    /// jumped anyway would take away the context they chose it with. A hiker
-    /// who opened one from a typed search may be looking at another country,
-    /// and a preview that draws its route on a map showing somewhere else is
-    /// the caricature back again in a worse form. A route that runs off the
-    /// edge is the case in between, and it is fitted: the screen showing it
-    /// draws no route of its own, so this is the only place the hiker can see
-    /// the whole of what they are deciding about.
+    /// **Every time a preview opens**, which is the change from what this used
+    /// to do. It used to skip the move when the whole route was already inside
+    /// the visible rect, on the argument that a hiker who opened a short hike
+    /// by tapping its line was already looking at all of it and a camera that
+    /// jumped anyway would take away the context they chose it with.
     ///
-    /// The padding is the route padding and not the sheet's height, which is
-    /// the same thing ``fitToCurrentRoute(_:animated:)`` does for the hiker's
-    /// own route. Being wrong the same way in both places is worth more here
-    /// than being right in one.
+    /// That argument was answered by what the condition actually did. "Already
+    /// on screen" meant on screen *including the part behind the sheet*, so the
+    /// case it fired in most was a short route sitting under the panel the
+    /// hiker had just opened — and the hiker's report was not "it moved when it
+    /// need not have" but "it never zooms into the new hike's route". A rule
+    /// that holds sometimes reads as a bug rather than as restraint; opening a
+    /// preview now always frames its route, and the framing is the focus area,
+    /// so the route lands in the map that is visible rather than in the window.
     ///
-    /// Once per preview, tracked by listing, so a later rebuild — a block, a
-    /// new page of results — does not re-fit a route the hiker has since
-    /// panned away from.
+    /// Still once per preview, tracked by listing, so a later rebuild — a
+    /// block, a new page of results — does not re-fit a route the hiker has
+    /// since panned away from. Reopening the same listing is a new preview and
+    /// frames again, because the memo is cleared when the preview closes.
     private func bringPreviewedRouteIntoView(on mapView: MKMapView) {
         guard let previewed = communityRoutes.first(where: \.line.isPreviewed) else {
             fittedPreviewListingID = nil
@@ -240,9 +240,7 @@ extension MapView.Coordinator {
         }
         guard fittedPreviewListingID != previewed.line.id else { return }
         fittedPreviewListingID = previewed.line.id
-        let rect = previewed.polyline.boundingMapRect
-        guard !mapView.visibleMapRect.contains(rect) else { return }
-        fit(rect, on: mapView, animated: true)
+        fit(previewed.polyline.boundingMapRect, on: mapView, animated: true)
     }
 }
 

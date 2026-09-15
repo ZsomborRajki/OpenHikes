@@ -184,9 +184,14 @@ final class SheetPresentation {
         // reason opening a recording moves the sheet. Before either branch,
         // since a preview popped back to is as unreadable down there as one
         // pushed: the hiker can have dragged the sheet down over it.
-        if isCompact {
-            withAnimation { detent = .medium }
-        }
+        //
+        // Unconditional rather than only from compact. Opening a preview puts
+        // somebody else's line on the map and frames it, and the framing aims
+        // at the strip above the middle detent — so arriving at `.large`
+        // means the map moved to show a route under a sheet that covers it.
+        // The detent a reader chose is worth less than the thing they opened
+        // the screen to look at.
+        makeRoomForTheMap()
         if let open = path.firstIndex(of: route) {
             path.removeSubrange((open + 1)...)
         } else {
@@ -225,11 +230,10 @@ final class SheetPresentation {
             return
         }
         // Before the push, for the reason ``showCommunityHike(_:)`` gives: the
-        // compact detent is only tall enough for the search field, and a map
-        // pin can be tapped with the sheet dragged down over it.
-        if isCompact {
-            withAnimation { detent = .medium }
-        }
+        // compact detent is only tall enough for the search field, a map pin
+        // can be tapped with the sheet dragged down over it, and selecting the
+        // imported hike draws its route and frames it above the sheet.
+        makeRoomForTheMap()
         selectedHike = imported
         // Assigned rather than appended, exactly as `MapSheet.open` assigns:
         // this is a jump to one trail rather than a step deeper into the
@@ -326,7 +330,33 @@ final class SheetPresentation {
         Binding(get: { self.detent }, set: { self.detent = $0 })
     }
 
-    /// Sends the sheet to its smallest detent when the full-height screen pops,
+    /// Puts the sheet where the map's framing expects to find it.
+    ///
+    /// **The one rule every camera move in this app shares.** A zoom decides
+    /// what to show by measuring the map that is *not* behind the sheet — see
+    /// ``MapView/Coordinator/obstructionInsets(in:)`` — and that measurement
+    /// is taken against the middle detent, because the middle detent is where
+    /// the sheet is about to be. Anywhere the two disagree, the hiker gets a
+    /// camera move aimed at a strip of screen that is not the strip they can
+    /// see: too far down and half the route is under the sheet, too far up and
+    /// it is squeezed into the top third for no reason.
+    ///
+    /// Called by everything that asks the map to move and reaches this type —
+    /// a search, a preview, an imported hike, the hike screen's *Zoom*, a
+    /// walk's *Show on Map*. The photo viewer takes the same decision through
+    /// ``restAtMiddleWhenFullHeightScreenPops()``, because it has to survive a
+    /// pop rather than apply now.
+    ///
+    /// Unconditional, and that is the change rather than an oversight: this
+    /// used to move only a *compact* sheet, which left `.large` — a height a
+    /// reader chose, and one that covers the whole map — to swallow the thing
+    /// they had just asked to be shown.
+    func makeRoomForTheMap() {
+        guard detent != .medium else { return }
+        withAnimation { detent = .medium }
+    }
+
+    /// Sends the sheet to its middle detent when the full-height screen pops,
     /// rather than back to the height the hike was being read at.
     ///
     /// Called by the photo viewer's "show on map" button and by nothing else.
@@ -335,8 +365,17 @@ final class SheetPresentation {
     /// `.large` is put back there — would answer by covering the very thing
     /// they asked to see. Overwriting the remembered height is enough: the pop
     /// runs the same restore and finds the decision already made.
-    func collapseWhenFullHeightScreenPops() {
-        detentBeforeFullHeight = Self.compactDetent
+    ///
+    /// The middle detent rather than the smallest, which is what this did
+    /// before. Every camera move in this app now frames what it is aiming at
+    /// into the map *above* the sheet at that height — see
+    /// ``MapView/Coordinator/obstructionInsets(in:)`` — so a sheet that drops
+    /// further than the framing assumed leaves the photograph's pin sitting in
+    /// the top half of a screen whose bottom half is map. Landing where the
+    /// framing expects is what makes "show me where this was taken" put the
+    /// pin in the middle of what is visible.
+    func restAtMiddleWhenFullHeightScreenPops() {
+        detentBeforeFullHeight = .medium
     }
 
     private func pathDidChange() {
