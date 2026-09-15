@@ -89,11 +89,17 @@ nonisolated enum CommunityPublisher {
     /// unreviewed route off other people's screens is the schema — see
     /// ``CommunitySchema`` — which a client-side check of any kind could only
     /// ever have agreed with.
+    /// - Parameter excludingPhotos: The photographs the hiker struck off on
+    ///   the share form, by id. Applied *before* the cap, deliberately: taking
+    ///   a picture out should let the next one in rather than simply shorten
+    ///   the upload, which is the difference between choosing twelve and
+    ///   getting whichever eleven were left over.
     @MainActor
     static func share(
         _ hike: Hike,
         authorName: String,
         transport: any CommunityTransporting,
+        excludingPhotos excluded: Set<UUID> = [],
         store: HikePhotoStore = .shared,
         save: (ModelContext) throws -> Void = { try $0.save() }
     ) async -> CommunityShareOutcome {
@@ -124,7 +130,7 @@ nonisolated enum CommunityPublisher {
             distanceMeters: hike.distanceMeters,
             route: hike.route
         )
-        let photos = selectedPhotos(of: hike)
+        let photos = selectedPhotos(of: hike, excluding: excluded)
 
         // One directory per *attempt*, not per hike, and under the parent a
         // sweep can reach — see ``CommunityStaging``. The `defer` below is the
@@ -209,9 +215,13 @@ nonisolated enum CommunityPublisher {
     @MainActor
     static func sendablePhotoCount(
         of hike: Hike,
+        excludingPhotos excluded: Set<UUID> = [],
         store: HikePhotoStore = .shared
     ) async -> Int {
-        await reachablePhotoCount(of: selectedPhotos(of: hike), store: store)
+        await reachablePhotoCount(
+            of: selectedPhotos(of: hike, excluding: excluded),
+            store: store
+        )
     }
 
     /// `@concurrent` for the reason ``prepare(_:photos:in:store:)`` is, and
@@ -232,12 +242,29 @@ nonisolated enum CommunityPublisher {
     /// carrying pictures with a shared trail is that they sit on the map where
     /// they were taken. Within that, chronological — the order the walk
     /// produced them in, which is the order the gallery pages through.
+    /// Struck-off pictures are dropped *before* the cap, which is what makes
+    /// the share form's strip a choice rather than a subtraction: a hiker with
+    /// twenty photographs who strikes off the first can have the thirteenth,
+    /// where filtering afterwards would simply have sent eleven.
+    ///
+    /// Internal rather than private so the form can draw the same list in the
+    /// same order the upload will use. A screen that built its own order would
+    /// eventually disagree with this one about which twelve go.
     @MainActor
-    private static func selectedPhotos(of hike: Hike) -> [HikePhoto] {
-        let ordered = hike.orderedPhotos
+    static func selectedPhotos(of hike: Hike, excluding excluded: Set<UUID> = []) -> [HikePhoto] {
+        let ordered = hike.orderedPhotos.filter { !excluded.contains($0.id) }
         let anchored = ordered.filter(\.isAnchored)
         let unanchored = ordered.filter { !$0.isAnchored }
         return Array((anchored + unanchored).prefix(maximumPhotos))
+    }
+
+    /// Every photograph the form offers, in the order the upload would take
+    /// them — including the ones struck off, which still have to be drawn so
+    /// they can be put back.
+    @MainActor
+    static func shareablePhotos(of hike: Hike) -> [HikePhoto] {
+        let ordered = hike.orderedPhotos
+        return ordered.filter(\.isAnchored) + ordered.filter { !$0.isAnchored }
     }
 
     /// Re-encodes the photographs and assembles the draft, entirely off the

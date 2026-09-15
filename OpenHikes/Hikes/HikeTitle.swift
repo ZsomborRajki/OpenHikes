@@ -83,3 +83,36 @@ nonisolated enum HikeTitle {
             ?? ""
     }
 }
+
+/// What a name typed into a field means for the hike behind it.
+///
+/// Its own type, and a small one, because the rule is easy to get subtly wrong
+/// in three separate ways and a `View` is not a place a suite can ask about
+/// any of them.
+///
+/// *Unchanged* is not the same as *empty*. ``Hike/displayTitle`` falls back to
+/// ``Hike/title`` when there is no custom name, so a field seeded with the
+/// displayed name and left alone would, written back naively, turn a hike's
+/// own title into a custom name that happens to match it — a mirrored write
+/// that changes nothing anybody can see and costs a sync.
+///
+/// *Cleared* is not the same as *unchanged* either. Emptying the field means
+/// "go back to what this hike was called", which is `customName = nil` rather
+/// than `customName = ""`, and is the one case that has to write a `nil` on
+/// purpose.
+///
+/// Both go through ``HikeTitle/bounded(_:)``, so a name entered here is
+/// bounded where every other name entering this app is — see that type for why
+/// both bounds are load-bearing.
+nonisolated enum HikeTitleEdit: Equatable {
+    /// Put this on the hike as its custom name, or `nil` to take the custom
+    /// name off and fall back to the original title.
+    case renamed(String?)
+    /// The field says what the hike already says. Write nothing.
+    case unchanged
+
+    static func of(_ draft: String, against displayTitle: String) -> Self {
+        let bounded = HikeTitle.bounded(draft)
+        return (bounded ?? "") == displayTitle ? .unchanged : .renamed(bounded)
+    }
+}
