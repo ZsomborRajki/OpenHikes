@@ -353,6 +353,22 @@ extension MapSheetHikes {
                 .foregroundStyle(.secondary)
                 .textCase(nil)
         }
+        // Drawn only when a curated route is actually in the list, which is
+        // what makes it a credit rather than boilerplate: a list of hikes
+        // people published owes OpenStreetMap nothing. The *linked* form of
+        // the obligation is on the screen a row opens — see
+        // ``CommunityHikeView/curatedAttribution`` and ``TileAttribution``,
+        // which owns the argument for the whole app — because a footer under
+        // a scrolling list is not somewhere a link can be relied on to be
+        // seen, and the credit has to be reachable from the content it is
+        // about.
+        if community.nearbyListings.contains(where: \.isCurated) {
+            Text("Trail routes from OpenStreetMap contributors.")
+                .font(.footnote)
+                .foregroundStyle(.secondary)
+                .textCase(nil)
+                .accessibilityIdentifier("community-osm-credit")
+        }
     }
 
     /// Community matches in the search results, between the hiker's own hikes

@@ -56,11 +56,24 @@ final class CommunityMapAnnotation: NSObject, MKAnnotation {
         super.init()
     }
 
-    /// "8.0 km · by Anna", with the credit left out rather than rendered
-    /// empty when nobody typed one.
+    /// "8.0 km · by Anna", or "8.0 km · Loop" for a route nobody published,
+    /// with whichever half has nothing to say left out rather than rendered
+    /// empty.
+    ///
+    /// A curated route gets its shape rather than a credit, and the choice is
+    /// about what a callout is for: it is the one line a hiker reads before
+    /// deciding to open the screen, so it should carry the fact that decides
+    /// it. For somebody's hike that is who walked it; for a waymarked trail
+    /// nobody has walked, it is whether they end up back at the car. The
+    /// attribution ODbL requires is not squeezed in here — it is on the screen
+    /// this callout opens, where it can be a link. See
+    /// ``CommunityHikeView/curatedAttribution``.
     private static func calloutSubtitle(for listing: CommunityListing) -> String {
         let distance = Measurement(value: listing.distanceMeters, unit: UnitLength.meters)
             .formatted(.measurement(width: .abbreviated, usage: .road))
+        if let shape = listing.curatedFacts?.shape {
+            return String(localized: "\(distance) · \(shape.displayName)")
+        }
         guard !listing.authorName.isEmpty else { return distance }
         return String(localized: "\(distance) · by \(listing.authorName)")
     }

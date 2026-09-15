@@ -343,8 +343,14 @@ nonisolated struct CloudKitCommunityTransport: CommunityTransporting {
             // a submission* in ``CommunitySchema``. And `_world` may read it,
             // which is what makes this work on the signed-out phone the
             // account-free browse flow promises.
+            // `MergedCommunityTransport` routes a curated listing to
+            // Overpass and never here, so this is the guard behind that:
+            // a listing with no submission has no record to open.
+            guard let submissionID = listing.submissionID else {
+                throw CommunityFailure.noLongerAvailable
+            }
             record = try await database.record(
-                for: CKRecord.ID(recordName: listing.submissionID)
+                for: CKRecord.ID(recordName: submissionID)
             )
         } catch {
             throw Self.failure(from: error, while: "opening a community hike")
@@ -423,7 +429,15 @@ nonisolated struct CloudKitCommunityTransport: CommunityTransporting {
                 record[CommunitySchema.Submission.trackDescription] as? String,
                 to: .notes
             ),
-            photoPins: Self.pins(pins, for: downloaded, of: assets.count, takenOn: listing.hikeDate),
+            photoPins: Self.pins(
+                pins,
+                for: downloaded,
+                of: assets.count,
+                // A published listing always carries a date — see
+                // ``CommunityListing/init(record:)``, which falls back rather
+                // than admitting `nil`.
+                takenOn: listing.hikeDate ?? .distantPast
+            ),
             photoFileURLs: downloaded.map(\.url),
             // The record's count rather than the survivors', deliberately —
             // see ``CommunityHikeDetail/photosOnRecord``. The two differ
@@ -555,11 +569,27 @@ nonisolated extension CommunityListing {
               let location = record[CommunitySchema.Listing.location] as? CLLocation,
               let authorID = (record[CommunitySchema.Listing.authorID] as? String)
               .map({ $0.trimmingCharacters(in: .whitespacesAndNewlines) }),
-              !authorID.isEmpty
+              !authorID.isEmpty,
+              // A record name that looks like a curated route's is refused for
+              // the same reason a missing author is, and it is the same kind
+              // of reason: one column carries both sources' identities — see
+              // ``CommunityIdentity`` — and ``Hike/importedFromListingID``,
+              // the *Saved* badge and the block list all key on it. CloudKit
+              // mints record names itself and cannot produce this shape, but a
+              // reviewer typing one into the Console can, and a listing able
+              // to impersonate the other source is worse than a missing row.
+              !CommunityIdentity.isCurated(record.recordID.recordName)
         else { return nil }
 
         id = record.recordID.recordName
-        submissionID = reference.recordID.recordName
+        // Both halves of the origin at once, which is the whole point of it
+        // being one value — see ``CommunityOrigin``. Every listing this
+        // conformance produces is `.published` by construction; there is no
+        // path here that could make any other kind.
+        origin = .published(
+            submissionID: reference.recordID.recordName,
+            authorID: authorID
+        )
         // Bounded on the way in, which is the same suspicion
         // ``CommunityRouteOutline/decoded(_:)`` applies to the field beside
         // this one and for the same reason: what is being read is text off a
@@ -570,11 +600,14 @@ nonisolated extension CommunityListing {
         // than refusing, because unlike a corrupt outline an over-long title
         // still says which hike this is.
         self.title = BoundedText.boundedOrEmpty(title, to: .title)
-        self.authorID = authorID
         authorName = BoundedText.boundedOrEmpty(
             record[CommunitySchema.Listing.authorName] as? String,
             to: .credit
         )
+        // Still a fallback rather than `nil`: a *published* hike was walked on
+        // a day, and a record missing the field is a record somebody built by
+        // hand and got wrong. `nil` means "nobody walked this", which is only
+        // ever true of a curated route.
         hikeDate = record[CommunitySchema.Listing.hikeDate] as? Date ?? .distantPast
         distanceMeters = record[CommunitySchema.Listing.distanceMeters] as? Double ?? 0
         photoCount = Int(record[CommunitySchema.Listing.photoCount] as? Int64 ?? 0)
@@ -727,7 +760,17 @@ nonisolated extension CloudKitCommunityTransport {
     func outlines(
         for listings: [CommunityListing]
     ) async throws -> [String: [RouteCoordinate]] {
-        let listingsBySubmission = Dictionary(grouping: listings, by: \.submissionID)
+        // `compactMap` rather than a grouping on the optional key: a listing
+        // with no submission is a curated route, which this conformance never
+        // sees and could not fetch anyway. Dropping it here keeps the key a
+        // `String` and the contract partial, which is what it already is.
+        let listingsBySubmission = Dictionary(
+            grouping: listings.compactMap { listing in
+                listing.submissionID.map { (submissionID: $0, listing: listing) }
+            },
+            by: \.submissionID
+        )
+        .mapValues { $0.map(\.listing) }
         guard !listingsBySubmission.isEmpty else { return [:] }
         let ids = listingsBySubmission.keys.map(CKRecord.ID.init(recordName:))
 

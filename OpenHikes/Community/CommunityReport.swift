@@ -160,12 +160,29 @@ nonisolated struct CommunityReport: Equatable, Sendable {
             "The hike",
             "Title: \(listing.title)",
             "Shared by: \(listing.authorName.isEmpty ? "(no name given)" : listing.authorName)",
-            "Walked: \(Self.reviewerDate.string(from: listing.hikeDate))",
+            "Walked: \(listing.hikeDate.map(Self.reviewerDate.string(from:)) ?? "(not recorded)")",
             "Published: \(Self.reviewerDate.string(from: listing.publishedAt))",
+        ])
+        // A report is only ever composed about a hike somebody published —
+        // ``CommunityHikeView`` does not offer the action for a curated route,
+        // because there is no record for a reviewer to delete and no author to
+        // answer for it. This is the guard behind that rather than instead of
+        // it: if one ever arrived, the reviewer gets a report that says what it
+        // is about instead of two record names that name nothing.
+        guard let submissionID = listing.submissionID else {
+            lines.append(contentsOf: [
+                "",
+                "This hike came from OpenStreetMap and was not published by anyone.",
+                "There is no record to remove. Corrections belong upstream, at",
+                "https://www.openstreetmap.org/relation/\(listing.id.dropFirst(CommunityIdentity.curatedPrefix.count))",
+            ])
+            return lines.joined(separator: "\n")
+        }
+        lines.append(contentsOf: [
             "",
             "Records to review",
             "CommunityHike: \(listing.id)",
-            "CommunityHikeSubmission: \(listing.submissionID)",
+            "CommunityHikeSubmission: \(submissionID)",
             "",
             "Deleting the CommunityHike record unlists the hike; deleting the",
             "CommunityHikeSubmission record removes the route and photographs behind it.",

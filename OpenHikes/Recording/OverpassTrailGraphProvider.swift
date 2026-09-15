@@ -116,10 +116,10 @@ actor OverpassTrailGraphProvider: TrailGraphProviding {
     private static let cacheZoom = 12
     private static let cacheLifetime: TimeInterval = 30 * 24 * 60 * 60
     private static let maximumCacheFiles = 64
-    private static let requestTimeoutInterval: TimeInterval = 35
-    private static let defaultRetryDelay: TimeInterval = 60
-    private static let httpSuccessRange = 200..<300
-    private static let httpRateLimitCode = 429
+    // The request's shape, its client timeout and the reading of a 429 live in
+    // ``OverpassRequest``, which this and ``CuratedTrailSource`` share. See
+    // that file for why manners against a volunteer-run API are not a thing to
+    // write twice.
 
     private struct CachedGraph: Codable, Sendable {
         let fetchedAt: Date
@@ -180,15 +180,10 @@ actor OverpassTrailGraphProvider: TrailGraphProviding {
             guard let httpResponse = urlResponse as? HTTPURLResponse else {
                 throw TrailGraphProviderError.invalidResponse
             }
-            var headers: [String: String] = [:]
-            for (key, value) in httpResponse.allHeaderFields {
-                headers[String(describing: key).lowercased()]
-                    = String(describing: value)
-            }
             return OverpassHTTPResponse(
                 data: data,
                 statusCode: httpResponse.statusCode,
-                headers: headers
+                headers: OverpassRequest.headers(of: httpResponse)
             )
         }
     }
@@ -508,30 +503,9 @@ private extension OverpassTrailGraphProvider {
             north: SlippyTileMath.lat(y: key.y, z: key.zoom),
             east: SlippyTileMath.lon(x: key.x + 1, z: key.zoom)
         )
-        var request = URLRequest(url: endpoint)
-        request.httpMethod = "POST"
-        request.timeoutInterval = requestTimeoutInterval
-        request.setValue(
-            "application/x-www-form-urlencoded; charset=utf-8",
-            forHTTPHeaderField: "Content-Type"
-        )
-        request.setValue("application/json", forHTTPHeaderField: "Accept")
-        request.setValue(TileCache.userAgent, forHTTPHeaderField: "User-Agent")
-        var components = URLComponents()
-        components.queryItems = [
-            URLQueryItem(name: "data", value: query(for: box))
-        ]
-        request.httpBody = components.percentEncodedQuery?.data(using: .utf8)
-
+        let request = OverpassRequest.post(query(for: box), to: endpoint)
         let response = try await transport(request)
-        switch response.statusCode {
-        case httpSuccessRange: return try decodeGraph(from: response.data)
-        case httpRateLimitCode:
-            let delay = response.headers["retry-after"]
-                .flatMap(TimeInterval.init) ?? defaultRetryDelay
-            throw TrailGraphProviderError.rateLimited(retryAfter: delay)
-        default: throw TrailGraphProviderError.server(statusCode: response.statusCode)
-        }
+        return try decodeGraph(from: OverpassRequest.body(of: response))
     }
 
     nonisolated private static func query(for box: BoundingBox) -> String {

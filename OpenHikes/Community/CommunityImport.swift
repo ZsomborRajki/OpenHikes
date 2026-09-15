@@ -63,6 +63,7 @@ nonisolated enum CommunityImport {
         into context: ModelContext,
         store: HikePhotoStore = .shared,
         libraryWriter: any PhotoLibraryWriting = PhotoLibraryWriter(),
+        saveDate: Date = .now,
         save: (ModelContext) throws -> Void = { try $0.save() }
     ) async -> CommunityImportOutcome {
         guard detail.route.count >= 2 else { return .refused(.nothingToShare) }
@@ -74,11 +75,20 @@ nonisolated enum CommunityImport {
         let hike = Hike(
             title: listing.title,
             distanceMeters: routeLength(of: detail.route),
-            date: listing.hikeDate,
+            // A curated route carries no date, because nobody walked it. The
+            // day it was saved is the only honest value: ``Hike/date`` means
+            // *when this walk happened*, and the hikes list is sorted by it, so
+            // a distant-past sentinel would file a trail the hiker just added
+            // at the bottom of everything they have ever done.
+            date: listing.hikeDate ?? saveDate,
             route: detail.route,
             trackDescription: detail.trackDescription
         )
         hike.importedFromListingID = listing.id
+        // Left `nil` for a curated route, which nobody shared. It is what
+        // ``CommunityPublishingEligibility`` reads to tell a stranger's hike
+        // from a trail OpenStreetMap already had — see
+        // ``CommunityPublishingEligibility/Reason/savedFromOpenStreetMap``.
         hike.importedAuthorName = listing.authorName.isEmpty ? nil : listing.authorName
         context.insert(hike)
 

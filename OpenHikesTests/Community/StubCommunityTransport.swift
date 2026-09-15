@@ -170,7 +170,9 @@ final class StubCommunityTransport: CommunityTransporting, @unchecked Sendable {
     private func answer(excluding: Set<String>) throws -> [CommunityListing] {
         let listings = try listingsResult.get()
         guard !excluding.isEmpty else { return listings }
-        return listings.filter { !excluding.contains($0.authorID) }
+        return listings.filter { listing in
+            listing.blockableAuthorID.map { !excluding.contains($0) } ?? true
+        }
     }
 
     /// Answers from ``outlinesResult`` and records which page was asked

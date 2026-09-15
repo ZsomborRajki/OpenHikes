@@ -109,8 +109,14 @@ final class CommunityBlockList {
 
     // MARK: - Asking
 
+    /// Whether this hike is from an author the hiker has blocked.
+    ///
+    /// Always `false` for a curated route, and that is an answer rather than a
+    /// gap: nobody published it, so there is nobody it could be hidden on
+    /// behalf of. See ``CommunityOrigin``.
     func isBlocked(_ listing: CommunityListing) -> Bool {
-        authorsByID.keys.contains(listing.authorID)
+        guard let authorID = listing.blockableAuthorID else { return false }
+        return authorsByID.keys.contains(authorID)
     }
 
     /// `listings` without anything from a blocked author.
@@ -120,7 +126,10 @@ final class CommunityBlockList {
     /// rather than a pass over every row of every draw.
     func excludingBlocked(_ listings: [CommunityListing]) -> [CommunityListing] {
         guard !authorsByID.isEmpty else { return listings }
-        return listings.filter { !authorsByID.keys.contains($0.authorID) }
+        return listings.filter { listing in
+            guard let authorID = listing.blockableAuthorID else { return true }
+            return !authorsByID.keys.contains(authorID)
+        }
     }
 
     // MARK: - Changing
@@ -136,16 +145,22 @@ final class CommunityBlockList {
         // one ever did, adding it would block every *other* listing that was
         // also missing the field, which is the one failure a block list must
         // not have.
-        guard !listing.authorID.isEmpty else {
+        //
+        // A curated route reaches here by a different road and gets the same
+        // refusal: ``CommunityOrigin/openStreetMap(relationID:)`` has no author
+        // to name, so ``CommunityListing/blockableAuthorID`` is `nil`. The
+        // screen does not offer the action at all — see ``CommunityHikeView``
+        // — and this is the guard behind that rather than instead of it.
+        guard let authorID = listing.blockableAuthorID, !authorID.isEmpty else {
             Self.logger.error(
                 "Refused to block listing \(listing.id, privacy: .public): it names no author."
             )
             return
         }
-        guard !authorsByID.keys.contains(listing.authorID) else { return }
+        guard !authorsByID.keys.contains(authorID) else { return }
         authorsByID.updateValue(
-            BlockedAuthor(id: listing.authorID, name: listing.authorName, blockedAt: date),
-            forKey: listing.authorID,
+            BlockedAuthor(id: authorID, name: listing.authorName, blockedAt: date),
+            forKey: authorID,
             insertingAt: 0
         )
         save()

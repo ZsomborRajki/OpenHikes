@@ -70,6 +70,16 @@ nonisolated struct SeededCommunityTransport: CommunityTransporting {
     /// screen that has never been seen empty or broken is a screen whose empty
     /// and broken states were written blind.
     enum Scenario: String, CaseIterable {
+        /// ``seeded``, plus curated routes from OpenStreetMap.
+        ///
+        /// The only way to reach a *mixed* list from automation, which is the
+        /// one the shipping app draws: a published hike and a curated route in
+        /// one list, where the second has no author to block, no record to
+        /// report and no photographs. Everything those two rows differ in is
+        /// invisible unless both are on screen at once — the row glyph, the
+        /// subtitle's parts, and the three menu items that are absent rather
+        /// than disabled.
+        case curated = "curated"
         /// Nothing published anywhere near here, which is the ordinary answer
         /// for most of the world and the one the empty row is for.
         case empty = "empty"
@@ -103,7 +113,16 @@ nonisolated struct SeededCommunityTransport: CommunityTransporting {
         /// ``publication(of:)`` says.
         var servesListings: Bool {
             self == .seeded || self == .published || self == .reviewing
+                || self == .curated
         }
+
+        /// Whether OpenStreetMap's half of the list has anything in it.
+        ///
+        /// One scenario, and behind the same door as the rest: a launch that
+        /// does not name this gets no curated source at all, so no suite
+        /// reaches Overpass by default any more than it reaches CloudKit. See
+        /// ``OpenHikesModel/makeCommunityTransport()``.
+        var servesCuratedTrails: Bool { self == .curated }
 
         /// Whether a reviewer's queue has anything in it. One scenario, for
         /// the reason ``reviewing`` gives.
@@ -134,7 +153,11 @@ nonisolated struct SeededCommunityTransport: CommunityTransporting {
         // making that depend on where the simulator's map happened to settle
         // would turn a UI assertion into a geography assertion — the failure
         // being an empty list with nothing to say about why.
-        try answer(Self.seededListings.filter { !excluding.contains($0.authorID) })
+        try answer(
+            Self.seededListings.filter { listing in
+                listing.blockableAuthorID.map { !excluding.contains($0) } ?? true
+            }
+        )
     }
 
     @concurrent
@@ -146,7 +169,7 @@ nonisolated struct SeededCommunityTransport: CommunityTransporting {
         let trimmed = query.trimmingCharacters(in: .whitespacesAndNewlines)
         return try answer(
             Self.seededListings.filter { listing in
-                !excluding.contains(listing.authorID)
+                (listing.blockableAuthorID.map { !excluding.contains($0) } ?? true)
                     && listing.title.localizedCaseInsensitiveContains(trimmed)
             }
         )
@@ -195,7 +218,13 @@ nonisolated struct SeededCommunityTransport: CommunityTransporting {
             // invariant ``CommunityHikeDetail/isConsistent`` asks about holds
             // here for the reason it holds in production rather than by luck.
             photoPins: photos.map { _ in
-                CommunityPhotoPin(capturedAt: listing.hikeDate, coordinate: route.first?.clCoordinate)
+                CommunityPhotoPin(
+                    // Every seeded listing carries a date; the fallback is
+                    // here because the field is optional for a curated route,
+                    // and this stand-in serves only published ones.
+                    capturedAt: listing.hikeDate ?? Self.hikeDate,
+                    coordinate: route.first?.clCoordinate
+                )
             },
             photoFileURLs: photos,
             // Every one of them arrived, because this stand-in drew them a
@@ -346,7 +375,7 @@ nonisolated struct SeededCommunityTransport: CommunityTransporting {
     /// put under a test.
     private func answer(_ listings: [CommunityListing]) throws -> [CommunityListing] {
         switch scenario {
-        case .seeded, .published, .reviewing: listings
+        case .seeded, .published, .reviewing, .curated: listings
         case .empty: []
         case .failing: throw CommunityFailure.unreachable
         }
@@ -531,14 +560,19 @@ nonisolated private extension SeededCommunityTransport {
     /// asserting on a page the real one never shows.
     static func route(of listing: CommunityListing) -> [RouteCoordinate] {
         let offset = Double(abs(listing.id.hashValue % 5)) * stepLatitude
+        // Hoisted out of the closure below rather than written inline: with
+        // the optional unwrap in place the whole `RouteCoordinate` expression
+        // stopped type-checking in reasonable time. Every seeded listing is a
+        // published one and carries a date; the fallback is here because the
+        // field is optional for a curated route.
+        let start: Date = listing.hikeDate ?? hikeDate
         return (0..<pointCount).map { step in
-            RouteCoordinate(
-                latitude: startLatitude + offset + Double(step) * stepLatitude,
-                longitude: startLongitude + Double(step) * stepLongitude,
-                elevation: baseElevation + Double(step) * elevationStep,
-                timestamp: listing.hikeDate.addingTimeInterval(
-                    Double(step) * secondsPerPoint
-                )
+            let elapsed = Double(step)
+            return RouteCoordinate(
+                latitude: startLatitude + offset + elapsed * stepLatitude,
+                longitude: startLongitude + elapsed * stepLongitude,
+                elevation: baseElevation + elapsed * elevationStep,
+                timestamp: start.addingTimeInterval(elapsed * secondsPerPoint)
             )
         }
     }
