@@ -172,9 +172,21 @@ nonisolated final class AccessibilityUITests: XCTestCase {
         tapWhenReady(element("community-actions-menu", in: app))
         tapWhenReady(element("community-block-button", in: app))
         tapWhenReady(element("community-block-confirm", in: app))
+        // Bern's hike is half of this wait, and it is the half that makes the
+        // other half mean anything. A row's *absence* is also what the screen
+        // looks like from behind the detail sheet the block is taken from —
+        // the list is not in the hierarchy at all there — so waiting on the
+        // ridge alone passes the instant the sheet is tapped, before the block
+        // has landed and before the pop that would apply it. The rest of the
+        // test then audits a Settings screen with no Blocked section in it and
+        // reports a missing section, which is exactly what this failed as on a
+        // busy machine. The lake row is the one a block on Anna leaves behind:
+        // waiting for it says the list is back, and only then does the ridge
+        // being gone say a block was applied to it.
         XCTAssertTrue(
             waitUntil(timeout: UITestTimeout.existence) {
-                !communityRow(titled: SeededHike.ridgeTitle, in: app).exists
+                communityRow(titled: SeededHike.lakeTitle, in: app).exists
+                    && !communityRow(titled: SeededHike.ridgeTitle, in: app).exists
             },
             "the section is drawn from a block, so the block has to have landed"
         )
