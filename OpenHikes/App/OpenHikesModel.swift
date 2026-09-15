@@ -71,6 +71,14 @@ final class OpenHikesModel {
     /// sheet draws its results. A `@State` in either would be rebuilt by the
     /// other's navigation.
     let community: CommunityBrowser
+    /// Autocomplete for the map sheet's search field.
+    ///
+    /// Owned here for the same reason ``community`` is, and it is the same two
+    /// screens: the map reports a settled region to it so suggestions are
+    /// answered near the map, and the sheet drives the query and draws the
+    /// results. A `@State` in either would be rebuilt by the other's
+    /// navigation — see ``SearchCompleter/regionDidSettle(_:)``.
+    let searchCompleter = SearchCompleter()
     /// Submissions waiting for a person, which is an empty list for everybody
     /// who is not a reviewer.
     ///

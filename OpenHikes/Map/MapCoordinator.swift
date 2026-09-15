@@ -189,6 +189,11 @@ extension MapView {
         /// reference here would be the map keeping a model alive rather than
         /// the other way round.
         weak var community: CommunityBrowser?
+        /// Told where the map came to rest so place search is asked about the
+        /// map the hiker is looking at. Weak for the same reason
+        /// ``community`` is: the coordinator outlives nothing and owns
+        /// nothing.
+        weak var searchCompleter: SearchCompleter?
 
         var communityAnnotations: [CommunityMapAnnotation] = []
         /// The markers standing where the *open preview's* photographs were
@@ -752,6 +757,9 @@ extension MapView.Coordinator {
         // ``CommunityQueryPolicy`` before anything reaches the network, and
         // costs a comparison while browsing is off.
         community?.regionDidSettle(mapView.region)
+        // And place search, which asked the one location question in the app
+        // that was never told where the hiker was.
+        searchCompleter?.regionDidSettle(mapView.region)
     }
 
     func mapView(_ mapView: MKMapView, rendererFor overlay: MKOverlay) -> MKOverlayRenderer {

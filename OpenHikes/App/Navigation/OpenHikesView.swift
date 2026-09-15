@@ -309,6 +309,7 @@ struct OpenHikesView: View {
             photoCapture: photoCapture,
             photoPins: photoPins,
             community: appModel.community,
+            searchCompleter: appModel.searchCompleter,
             // Keeps the credit line and the camera pill beside the landscape
             // panel instead of behind it.
             sidePanelInset: usesSidePanel ? MapSidePanelLayout.mapInset : 0
@@ -559,7 +560,14 @@ struct OpenHikesView: View {
         // asked for the same room. See ``SheetPresentation/makeRoomForTheMap()``.
         if selectedHike != nil { sheet.makeRoomForTheMap() }
     }
+}
 
+// MARK: - GPX import
+
+/// Importing, and the selection it competes for, kept out of the view's own
+/// body so `type_body_length` measures the screen rather than the plumbing.
+/// Same file, so these still reach the view's `private` state.
+extension OpenHikesView {
     /// Parses a picked .gpx file, persists it as a `Hike`, and shows it on the map.
     /// A file that can't become a hike raises ``importFailure`` rather than
     /// leaving the user looking at an unchanged screen.

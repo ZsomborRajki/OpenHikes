@@ -73,7 +73,8 @@ struct MapCoordinatorTests {
         route: DisplayedRoute? = nil,
         tileSource: ActiveTileSource? = osm,
         sidePanelInset: CGFloat = 0,
-        community: CommunityBrowser = CommunityBrowser(transport: nil, blockList: .scratch())
+        community: CommunityBrowser = CommunityBrowser(transport: nil, blockList: .scratch()),
+        searchCompleter: SearchCompleter = SearchCompleter()
     ) -> MapView {
         MapView(
             locationManager: locationManager,
@@ -88,6 +89,7 @@ struct MapCoordinatorTests {
             photoCapture: photoCapture,
             photoPins: photoPins,
             community: community,
+            searchCompleter: searchCompleter,
             sidePanelInset: sidePanelInset
         )
     }
