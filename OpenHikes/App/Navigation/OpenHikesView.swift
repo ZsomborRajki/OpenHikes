@@ -257,9 +257,28 @@ struct OpenHikesView: View {
                             WeatherBadge.leadingPadding
                                 + (usesSidePanel ? MapSidePanelLayout.mapInset : 0)
                         )
-                        .padding(.top, WeatherBadge.topPadding)
+                        // And at the top of the map in landscape rather than a
+                        // Dynamic Island's height down it.
+                        //
+                        // ``WeatherBadge/topPadding`` is measured from the
+                        // screen's own edge and is what clears the island in
+                        // *portrait*, where the island is at the top. Turned
+                        // sideways the island is on a side edge, the status bar
+                        // is gone, and 96 points is a quarter of the height the
+                        // badge is supposed to be at the top of — so the reading
+                        // ended up floating in the middle of the map.
+                        //
+                        // So landscape stays inside the safe area and takes
+                        // ``MapSidePanel``'s own margin, which is what puts the
+                        // badge's top edge level with the panel's rather than at
+                        // a number of its own. Portrait keeps measuring from the
+                        // screen edge, which is what `topPadding` is for.
+                        .padding(
+                            .top,
+                            usesSidePanel ? MapSidePanelLayout.margin : WeatherBadge.topPadding
+                        )
                         .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
-                        .ignoresSafeArea(.container, edges: .vertical)
+                        .ignoresSafeArea(.container, edges: usesSidePanel ? [] : .vertical)
                 }
             }
             // Draws nothing. It is where the vertical size class is read —
