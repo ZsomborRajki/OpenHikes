@@ -134,7 +134,7 @@ nonisolated extension CommunityPublishingEligibility.Reason {
         switch self {
         case .savedFromTheCommunity: "This hike isn't yours to share"
         case .savedFromOpenStreetMap: "This trail is already public"
-        case .tooShort: "This walk is too short to share"
+        case .tooShort: "This hike is too short to share"
         case .retreads: "You've already shared this trail"
         }
     }

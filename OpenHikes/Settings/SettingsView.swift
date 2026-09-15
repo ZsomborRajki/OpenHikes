@@ -603,7 +603,7 @@ private extension SettingsView {
                 + " It also offers to pause a recording you have not moved on for"
                 + " fifteen minutes. A paused recording is watched either way: with"
                 + " Always location access that costs nothing, and without it the"
-                + " pause keeps a coarse location feed running. A paused walk along a"
+                 + " pause keeps a coarse location feed running. A paused hike along a"
                 + " trail starts no feed of its own — it is watched while OpenHikes is"
                 + " open, and behind it only with Background Trail Tracking on, so a"
                 + " pocketed phone may not be reminded."
@@ -622,8 +622,8 @@ private extension SettingsView {
     /// names the scope in full because the scope is what makes the switch
     /// affordable: it holds the display only on the screens where a live hike
     /// is being read, only while that hike is live, and only while the app is
-    /// in front. A hiker who reads "keep the screen on" as "for the whole
-    /// walk" would decline something they would in fact want.
+                 /// in front. A hiker who reads "keep the screen on" as "for the whole
+    /// hike" would decline something they would in fact want.
     @ViewBuilder var displaySection: some View {
         #if os(iOS)
         Section {

@@ -213,13 +213,25 @@ private extension MergedCommunityTransportTests {
         )
     }
 
-    static func nearby(_ merged: Merged, limit: Int = page) async throws -> [CommunityListing] {
+    /// One nearby question, answered. Defaults to the scope a tap on *Search
+    /// this area* asks with, because that is the one both halves take part in
+    /// and every rule in this file is about the merge.
+    static func answer(
+        _ merged: Merged,
+        limit: Int = page,
+        scope: CommunityNearbyScope = .withCuratedTrails
+    ) async throws -> CommunityNearbyAnswer {
         try await merged.transport.listings(
             near: centre,
             radiusMeters: radiusMeters,
             limit: limit,
-            excluding: []
+            excluding: [],
+            scope: scope
         )
+    }
+
+    static func nearby(_ merged: Merged, limit: Int = page) async throws -> [CommunityListing] {
+        try await answer(merged, limit: limit).listings
     }
 }
 
@@ -703,6 +715,98 @@ extension MergedCommunityTransportTests {
         #expect(merged.cloudKit.recording.publicationChecks == [submissionID])
         #expect(publication == nil, "nothing is published until a reviewer publishes it")
         #expect(merged.overpass.recording.isQuiet)
+    }
+}
+
+// MARK: - Overpass is asked only when the question asks for it
+
+extension MergedCommunityTransportTests {
+    /// The rule this scope exists for, asserted where it is decided. It cannot
+    /// be seen in the rows — a published-only answer and a curated one with
+    /// nothing near the centre are the same list — so the claim is that the
+    /// source was never spoken to at all.
+    @Test("a published-only question never reaches Overpass")
+    func publishedOnlyLeavesTheCuratedSourceQuiet() async throws {
+        let merged = Self.merged(
+            published: [Self.published("listing-a", metresNorth: Offset.near)],
+            curated: [Self.trail(Relation.wimbach, named: "Wimbachgries", metresNorth: Offset.nearest)]
+        )
+
+        let answer = try await Self.answer(merged, scope: .publishedOnly)
+
+        #expect(answer.listings.map(\.id) == ["listing-a"])
+        #expect(answer.curatedOutage == nil, "nothing was asked, so there is nothing to report")
+        #expect(merged.overpass.recording.isQuiet)
+        #expect(merged.cloudKit.recording.nearbyRequests.count == 1)
+    }
+
+    /// The same question with the scope the button asks with, so the test
+    /// above is about the scope rather than about a fixture that had nothing
+    /// in it.
+    @Test("the curated question reaches both halves")
+    func curatedScopeAsksBoth() async throws {
+        let merged = Self.merged(
+            published: [Self.published("listing-a", metresNorth: Offset.near)],
+            curated: [Self.trail(Relation.wimbach, named: "Wimbachgries", metresNorth: Offset.nearest)]
+        )
+
+        let answer = try await Self.answer(merged, scope: .withCuratedTrails)
+
+        #expect(answer.listings.count == 2)
+        #expect(!merged.overpass.recording.isQuiet)
+    }
+}
+
+// MARK: - A refused curated half is reported, not thrown
+
+extension MergedCommunityTransportTests {
+    /// The failure this reporting exists against: a `429` used to reach the
+    /// log and nowhere else, so a rate-limited hiker saw a list with no trails
+    /// in it and nothing to tell that apart from an area with none.
+    @Test("a rate-limited listing pass is carried back beside the rows")
+    func aRateLimitedListingPassIsReported() async throws {
+        let merged = Self.merged(
+            published: [Self.published("listing-a", metresNorth: Offset.near)]
+        )
+        merged.overpass.nearbyResult = .failure(.rateLimited(retryAfter: 60))
+
+        let answer = try await Self.answer(merged)
+
+        #expect(answer.curatedOutage == .rateLimited(retryAfter: 60))
+        #expect(
+            answer.listings.map(\.id) == ["listing-a"],
+            "one source failing is still not the answer failing"
+        )
+    }
+
+    /// Everything else Overpass can do, which is the state a hiker with no
+    /// signal is in. Still not a failure of the request: the published half
+    /// answered.
+    @Test("any other curated failure is reported as unavailable")
+    func anotherCuratedFailureIsReported() async throws {
+        let merged = Self.merged(
+            published: [Self.published("listing-a", metresNorth: Offset.near)]
+        )
+        merged.overpass.nearbyResult = .failure(.server(statusCode: 504))
+
+        let answer = try await Self.answer(merged)
+
+        #expect(answer.curatedOutage == .unavailable)
+        #expect(answer.listings.map(\.id) == ["listing-a"])
+    }
+
+    /// The happy answer says nothing, including for an area that genuinely has
+    /// no waymarked routes in it — which is most of the world, and is not
+    /// something to caption a button with.
+    @Test("a curated half that answered reports no outage")
+    func aGoodCuratedHalfReportsNothing() async throws {
+        let merged = Self.merged(
+            published: [Self.published("listing-a", metresNorth: Offset.near)]
+        )
+
+        let answer = try await Self.answer(merged)
+
+        #expect(answer.curatedOutage == nil)
     }
 }
 

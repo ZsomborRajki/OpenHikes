@@ -114,13 +114,18 @@ nonisolated struct CloudKitCommunityTransport: CommunityTransporting {
 
     // MARK: - Browsing
 
+    /// The scope is deliberately ignored, and this is the conformance where
+    /// that is a statement rather than an omission: there is one source here,
+    /// and it is the one every scope includes. What decides anything with it
+    /// is ``MergedCommunityTransport``, the only type that holds two.
     @concurrent
     func listings(
         near coordinate: CLLocationCoordinate2D,
         radiusMeters: Double,
         limit: Int,
-        excluding: Set<String>
-    ) async throws -> [CommunityListing] {
+        excluding: Set<String>,
+        scope _: CommunityNearbyScope
+    ) async throws -> CommunityNearbyAnswer {
         let origin = CLLocation(latitude: coordinate.latitude, longitude: coordinate.longitude)
         // CloudKit's own distance operator, which is the only one it has: a
         // bounding box would need four comparisons against two fields and
@@ -141,11 +146,13 @@ nonisolated struct CloudKitCommunityTransport: CommunityTransporting {
                 relativeLocation: origin
             ),
         ]
-        return try await run(
-            query,
-            limit: limit,
-            excluding: excluding,
-            reason: "a nearby search"
+        return CommunityNearbyAnswer(
+            listings: try await run(
+                query,
+                limit: limit,
+                excluding: excluding,
+                reason: "a nearby search"
+            )
         )
     }
 

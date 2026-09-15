@@ -49,7 +49,7 @@ struct WalkControls: View {
                     controls(for: phase)
                 }
             } else if session.walkedHikeID != nil {
-                Text("A walk is in progress on \(session.walkedHikeTitle). End it there to walk this trail.")
+                Text("A hike is in progress on \(session.walkedHikeTitle). End it there to walk this trail.")
                     .font(.caption)
                     .foregroundStyle(.secondary)
                     .frame(maxWidth: .infinity, alignment: .leading)
@@ -57,11 +57,11 @@ struct WalkControls: View {
             }
         }
         .confirmationDialog(
-            "End this walk?",
+            "End this hike?",
             isPresented: $showEndConfirmation,
             titleVisibility: .visible
         ) {
-            Button("End Walk", role: .destructive) {
+            Button("End Hike", role: .destructive) {
                 switch session.end() {
                 case let .kept(walk): onOpenWalk(walk)
                 case .discarded: break
@@ -70,20 +70,20 @@ struct WalkControls: View {
             }
             Button("Cancel", role: .cancel) { /* no-op */ }
         } message: {
-            Text("What it covered so far is kept as a record. A walk under 100 m is not.")
+            Text("What it covered so far is kept as a record. A hike under 100 m is not.")
         }
-        .alert("Could not end this walk", isPresented: $showEndRefusal) {
+        .alert("Could not end this hike", isPresented: $showEndRefusal) {
             Button("OK", role: .cancel) { /* no-op */ }
         } message: {
-            Text("Its record could not be saved, so the walk is still under way. Try ending it again.")
+            Text("Its record could not be saved, so the hike is still under way. Try ending it again.")
         }
-        .alert("Could not change this walk", isPresented: $showPhaseRefusal) {
+        .alert("Could not change this hike", isPresented: $showPhaseRefusal) {
             Button("OK", role: .cancel) { /* no-op */ }
         } message: {
             Text(
                 refusedPhase == .paused
-                    ? "Pausing it could not be saved, so the walk is still under way. Try pausing it again."
-                    : "Resuming it could not be saved, so the walk is still paused. Try resuming it again."
+                    ? "Pausing it could not be saved, so the hike is still under way. Try pausing it again."
+                    : "Resuming it could not be saved, so the hike is still paused. Try resuming it again."
             )
         }
         // A walk that reached the end on its own has no tap to push its
@@ -103,18 +103,18 @@ struct WalkControls: View {
             HStack {
                 switch phase {
                 case .following:
-                    Button("Pause Walk", systemImage: "pause.fill") {
+                    Button("Pause Hike", systemImage: "pause.fill") {
                         refuse(.paused, unless: session.pause())
                     }
                     .glassButtonStyle()
                 case .paused:
-                    Button("Resume Walk", systemImage: "play.fill") {
+                    Button("Resume Hike", systemImage: "play.fill") {
                         refuse(.following, unless: session.resume())
                     }
                     .glassButtonStyle()
                 }
 
-                Button("End Walk", systemImage: "stop.fill") {
+                Button("End Hike", systemImage: "stop.fill") {
                     showEndConfirmation = true
                 }
                 .glassButtonStyle()
@@ -157,7 +157,7 @@ private struct WalkPhaseRow: View {
                 .fill(phase == .following ? tint : Color.secondary)
                 .frame(width: 10, height: 10)
                 .accessibilityHidden(true)
-            Text(phase == .following ? "Walk Active" : "Walk Paused")
+            Text(phase == .following ? "Hike Active" : "Hike Paused")
                 .font(.headline)
             Spacer()
             if phase == .following, scenePhase == .active {

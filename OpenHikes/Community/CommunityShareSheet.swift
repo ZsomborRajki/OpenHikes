@@ -292,7 +292,7 @@ private extension CommunityShareSheet {
             // correct a title and now has fewer reasons to.
             VStack(alignment: .leading, spacing: 4) {
                 Text("Title")
-                TextField("What was this walk?", text: $titleDraft)
+                TextField("What was this hike?", text: $titleDraft)
                     .disabled(phase == .sending)
                     .accessibilityLabel("Hike title")
                     .accessibilityIdentifier("community-share-title")
@@ -310,7 +310,7 @@ private extension CommunityShareSheet {
             VStack(alignment: .leading, spacing: 4) {
                 Text("Notes")
                 TextField(
-                    "What was this walk like?",
+                    "What was this hike like?",
                     text: $notesDraft,
                     axis: .vertical
                 )

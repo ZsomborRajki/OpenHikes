@@ -57,12 +57,14 @@ struct SheetCommunityPushTests {
     /// And the one it did not: pin A, pin B, pin A. The hiker asked to see A,
     /// so A is what they get — the copy already on the stack, with the answer
     /// it has already loaded, rather than a second one underneath it.
+    ///
+    /// Built by hand rather than by three taps: a second listing now replaces
+    /// the first, so three taps never leave both on the stack to pop between.
     @Test("returning to a preview already on the stack pops back to it")
     func returningPopsBackRatherThanPushingAgain() {
         let presentation = SheetPresentation(detent: .medium)
 
-        presentation.showCommunityHike(Self.first)
-        presentation.showCommunityHike(Self.second)
+        presentation.path = [.communityHike(Self.first), .communityHike(Self.second)]
         presentation.showCommunityHike(Self.first)
 
         #expect(presentation.path == [.communityHike(Self.first)])
@@ -120,20 +122,50 @@ struct SheetCommunityPushTests {
         #expect(!presentation.isCompact, "there is a page to read down there")
     }
 
-    /// Two different hikes are two screens, and stacking them is the gesture
-    /// ``SheetPresentation/isPresentingCommunityHike(_:)`` exists for. Nothing
-    /// here may collapse that.
-    @Test("a different shared hike is still pushed over the open one")
-    func aDifferentHikeStacks() {
+    /// Two different hikes are one screen, not two: tapping B over A's preview
+    /// replaces it, so Back lands on the list rather than on A — where it
+    /// refit the map to A's route. A tap is a jump to one trail, exactly as
+    /// ``MapSheet/open(_:)`` assigns for the hiker's own hikes.
+    @Test("a different shared hike replaces the open one")
+    func aDifferentHikeReplaces() {
         let presentation = SheetPresentation(detent: .medium)
 
         presentation.showCommunityHike(Self.first)
         presentation.showCommunityHike(Self.second)
 
-        #expect(presentation.path == [.communityHike(Self.first), .communityHike(Self.second)])
+        #expect(presentation.path == [.communityHike(Self.second)])
         #expect(
-            presentation.isPresentingCommunityHike(Self.first),
-            "the hiker is one Back from this screen, with its answer intact"
+            !presentation.isPresentingCommunityHike(Self.first),
+            "Back goes to the list, not to the trail just left"
         )
+    }
+
+    /// The gallery goes with the preview it belongs to: its files live in the
+    /// screen underneath's download directory.
+    @Test("a different shared hike takes the gallery with the preview it replaces")
+    func aDifferentHikeReplacesGalleryToo() {
+        let presentation = SheetPresentation(detent: .medium)
+
+        presentation.path = [
+            .communityHike(Self.first),
+            .communityPhoto(Self.first, [], 0),
+        ]
+        presentation.showCommunityHike(Self.second)
+
+        #expect(presentation.path == [.communityHike(Self.second)])
+    }
+
+    /// Anything that is not a stranger's preview stays: an owned hike under
+    /// the preview is still there when the next one replaces it.
+    @Test("replacing a preview keeps what was underneath it")
+    func replacingKeepsWhatWasUnderneath() throws {
+        let context = try Fixture.modelContext()
+        let hike = Fixture.hike(in: context)
+        let presentation = SheetPresentation(detent: .medium)
+
+        presentation.path = [.hike(hike), .communityHike(Self.first)]
+        presentation.showCommunityHike(Self.second)
+
+        #expect(presentation.path == [.hike(hike), .communityHike(Self.second)])
     }
 }

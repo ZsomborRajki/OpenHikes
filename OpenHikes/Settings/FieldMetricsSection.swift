@@ -175,7 +175,7 @@ struct FieldMetricsReportView: View {
         } footer: {
             Text(
                 "\"Background with GPS\" is the part of a hike spent with the screen off and"
-                + " the recording running, which is where nearly all of a walk's battery goes."
+                + " the recording running, which is where nearly all of a hike's battery goes."
                 + " \"Time in a pocket\" compares it against the app's whole lifetime and is"
                 + " capped at 100%: a location session that spans a suspension is charged in"
                 + " full, while foreground and background time advance only while the app is"

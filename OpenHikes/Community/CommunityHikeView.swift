@@ -402,11 +402,11 @@ struct CommunityHikeView: View {
         }
         .onDisappear {
             // A screen pushed over this one is not the hiker leaving it, and
-            // both look identical from here — a map pin can push another
-            // preview over an open one. Disposing on the first would take the
-            // line off the map and delete the photographs out from under a
-            // screen the hiker is one Back from returning to, with its own
-            // cached detail still pointing at the deleted files.
+            // both look identical from here — its gallery pushes over it.
+            // Disposing on the first would take the line off the map and
+            // delete the photographs out from under a screen the hiker is
+            // one Back from returning to, with its own cached detail still
+            // pointing at the deleted files.
             guard !remainsPushed() else { return }
             // Before the discard, so a download still running is told to stop
             // rather than raced to the directory it is writing into.

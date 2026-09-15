@@ -141,22 +141,30 @@ nonisolated struct SeededCommunityTransport: CommunityTransporting {
 
     // MARK: - Reading
 
+    /// The scope is ignored here for the reason the coordinate is, and for one
+    /// of its own: this transport has a single source, and the curated half a
+    /// `curated` launch gets is ``SeededCuratedTrailSource`` behind the real
+    /// ``MergedCommunityTransport``, which is what the scope decides anything
+    /// in.
     @concurrent
     func listings(
         near coordinate: CLLocationCoordinate2D,
         radiusMeters: Double,
         limit: Int,
-        excluding: Set<String>
-    ) async throws -> [CommunityListing] {
+        excluding: Set<String>,
+        scope _: CommunityNearbyScope
+    ) async throws -> CommunityNearbyAnswer {
         // The coordinate and the radius are deliberately ignored. What a
         // scenario is asking is "what does the list do with these rows", and
         // making that depend on where the simulator's map happened to settle
         // would turn a UI assertion into a geography assertion — the failure
         // being an empty list with nothing to say about why.
-        try answer(
-            Self.seededListings.filter { listing in
-                listing.blockableAuthorID.map { !excluding.contains($0) } ?? true
-            }
+        CommunityNearbyAnswer(
+            listings: try answer(
+                Self.seededListings.filter { listing in
+                    listing.blockableAuthorID.map { !excluding.contains($0) } ?? true
+                }
+            )
         )
     }
 

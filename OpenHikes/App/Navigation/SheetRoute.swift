@@ -97,6 +97,18 @@ enum SheetRoute: Hashable {
         return wasSelected
     }
 
+    /// Whether this route belongs to a stranger's preview: the preview itself
+    /// and the gallery over it, whose files the preview underneath owns.
+    /// What ``SheetPresentation/showCommunityHike(_:)`` clears when a
+    /// different trail is tapped, so one preview replaces the last rather
+    /// than stacking onto it.
+    var isCommunityPreview: Bool {
+        switch self {
+        case .communityHike, .communityPhoto: true
+        case .hike, .photo, .pendingSubmission, .recording, .walk: false
+        }
+    }
+
     /// Whether this route wants the whole sheet. Both photo viewers do: each
     /// draws one picture and nothing else, and a picture in the medium detent
     /// is a stamp. Whose picture it is changes nothing about that.

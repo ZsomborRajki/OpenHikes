@@ -29,6 +29,23 @@
 //  returned. Only both halves failing throws, and then the CloudKit failure is
 //  the one reported — it is the one the hiker's own published hike depends on.
 //
+//  That used to be the end of it, and the end of it was too quiet: a curated
+//  failure went to the log and nowhere else, so a hiker whose address had been
+//  rate-limited saw a list with no trails in it and nothing to tell that apart
+//  from an area with no trails in it. The failure is now *reported beside the
+//  rows* as a ``CuratedTrailOutage`` on the answer — still never thrown, still
+//  never the request's own failure — and the *Search this area* button is what
+//  draws it. See ``CommunityNearbyAnswer``.
+//
+//  **Overpass is asked only when the question asks for it.** Every nearby
+//  request used to reach both sources, which meant selecting the *Community*
+//  tab, retrying a failed search and refilling the list after a block each
+//  spent two Overpass round trips the hiker had not asked for — against a
+//  volunteer-run API with a handful of slots per address, from a list that
+//  re-asks whenever the map has moved. ``CommunityNearbyScope`` is the
+//  question's own answer to which sources it covers, and only a tap on
+//  *Search this area* asks for both.
+//
 //  **A curated id must never reach CloudKit.** Every per-listing method routes
 //  on ``CommunityIdentity``, and the write paths refuse a curated listing
 //  outright rather than forwarding it. `takeDown(_:)` is the one that matters:
@@ -58,15 +75,23 @@ extension MergedCommunityTransport {
         near coordinate: CLLocationCoordinate2D,
         radiusMeters: Double,
         limit: Int,
-        excluding: Set<String>
-    ) async throws -> [CommunityListing] {
+        excluding: Set<String>,
+        scope: CommunityNearbyScope
+    ) async throws -> CommunityNearbyAnswer {
         async let publishedRows = attempt {
+            // `.publishedOnly` is what this call *is*, whatever the question
+            // was: the half being asked here is CloudKit, and the curated half
+            // of the same question is the `async let` below. A conformance
+            // with one source ignores the scope, and passing the caller's
+            // through would be handing a second source's instruction to a
+            // transport that has none.
             try await published.listings(
                 near: coordinate,
                 radiusMeters: radiusMeters,
                 limit: limit,
-                excluding: excluding
-            )
+                excluding: excluding,
+                scope: .publishedOnly
+            ).listings
         }
         let area = CommunitySearchArea(
             coordinate: coordinate,
@@ -77,30 +102,42 @@ extension MergedCommunityTransport {
         // published half has answered — see ``merge(published:curated:limit:)``
         // — and a line costs 420 KB to 1.4 MB a page. Asking for geometry here
         // would be spending all of that on rows the limit then throws away.
-        async let curatedListed = attemptCurated {
-            try await curated.listings(near: area, limit: limit)
-        }
+        //
+        // For a ``CommunityNearbyScope/publishedOnly`` question it is not a
+        // pass at all: `listCurated` returns without touching the source, so
+        // the whole request is the one CloudKit query beside it.
+        async let curatedListed = listCurated(near: area, limit: limit, for: scope)
 
         let publishedAnswer = await publishedRows
         let listed = await curatedListed
         let room = max(0, limit - publishedAnswer.rows.count)
-        let curatedRows = room == 0 ? [] : await attemptCurated {
-            try await curated.completed(Array(listed.prefix(room)))
-        }
+        // Nothing to complete when the question did not ask, and nothing worth
+        // completing when the published half has already spent the page.
+        let curatedRows = scope == .publishedOnly || room == 0
+            ? CuratedAttempt.notAsked
+            : await attemptCurated {
+                try await curated.completed(Array(listed.trails.prefix(room)))
+            }
 
         let (rows, failure) = merge(
             published: publishedAnswer,
-            curated: curatedRows,
+            curated: curatedRows.trails,
             limit: limit
         )
         if let failure { throw failure }
         // Nearest first across both halves, so the list reads as one answer to
         // one question rather than two answers stacked. Both sources already
         // sort this way; what this settles is the interleave between them.
-        return rows.sorted { lhs, rhs in
-            RouteGeometry.distanceMeters(from: coordinate, to: lhs.coordinate)
-                < RouteGeometry.distanceMeters(from: coordinate, to: rhs.coordinate)
-        }
+        return CommunityNearbyAnswer(
+            listings: rows.sorted { lhs, rhs in
+                RouteGeometry.distanceMeters(from: coordinate, to: lhs.coordinate)
+                    < RouteGeometry.distanceMeters(from: coordinate, to: rhs.coordinate)
+            },
+            // The listing pass first: it is the one that decides whether there
+            // was anything to complete, so its refusal is the one that
+            // explains an answer with no trails in it.
+            curatedOutage: listed.outage ?? curatedRows.outage
+        )
     }
 
     @concurrent
@@ -116,12 +153,16 @@ extension MergedCommunityTransport {
                 excluding: excluding
             )
         }
+        // No outage to report from here, and none to report *about*: this
+        // half is a filter over the rows the last area search already brought
+        // back, so it reaches no network and cannot be rate-limited. See
+        // ``CuratedTrailSourcing/trails(matching:limit:)``.
         async let curatedRows = attemptCurated {
             await curated.trails(matching: query, limit: limit)
         }
         let (rows, failure) = merge(
             published: await publishedRows,
-            curated: await curatedRows,
+            curated: await curatedRows.trails,
             limit: limit
         )
         if let failure { throw failure }
@@ -299,24 +340,58 @@ private extension MergedCommunityTransport {
         }
     }
 
-    /// The curated half, which is allowed to fail quietly.
+    /// What one pass at Overpass came back with, and why it did not.
     ///
-    /// Logged rather than reported, and never the failure a merged answer
-    /// throws: Overpass being busy is an ordinary condition — it answers an
-    /// overloaded server with an HTML page carrying HTTP 200 — and it is not
-    /// something the hiker asked about or can act on. What they asked about is
-    /// the community list, and the community list still has its published
-    /// half.
+    /// Two fields rather than a `Result` because the two are not exclusive in
+    /// principle and the caller treats them separately: the rows are merged,
+    /// the outage is carried out to the button that spent the request.
+    struct CuratedAttempt {
+        var trails: [CuratedTrail]
+        var outage: CuratedTrailOutage?
+
+        /// A pass that was never made. What a
+        /// ``CommunityNearbyScope/publishedOnly`` question gets, and it is not
+        /// an outage: nothing was asked, so there is nothing to say.
+        static let notAsked = Self(trails: [], outage: nil)
+    }
+
+    /// The listing pass, or nothing at all for a question that did not ask for
+    /// one.
+    ///
+    /// The guard is here rather than at the call site so the `async let` above
+    /// stays one expression, and so the rule — *Overpass is asked only when
+    /// the question asks for it* — is a thing one function decides.
+    func listCurated(
+        near area: CommunitySearchArea,
+        limit: Int,
+        for scope: CommunityNearbyScope
+    ) async -> CuratedAttempt {
+        guard scope == .withCuratedTrails else { return .notAsked }
+        return await attemptCurated {
+            try await curated.listings(near: area, limit: limit)
+        }
+    }
+
+    /// The curated half, which is allowed to fail without ending the request.
+    ///
+    /// Never the failure a merged answer throws: Overpass being busy is an
+    /// ordinary condition — it answers an overloaded server with an HTML page
+    /// carrying HTTP 200 — and the community list still has its published
+    /// half. What changed is that it is no longer *only* logged. The reason is
+    /// carried back as a ``CuratedTrailOutage`` so the control that spent the
+    /// request can say the trails are missing, which is the difference between
+    /// an area with no waymarked routes in it and an address that has been
+    /// asked to stop for a minute.
     func attemptCurated(
         _ work: () async throws -> [CuratedTrail]
-    ) async -> [CuratedTrail] {
+    ) async -> CuratedAttempt {
         do {
-            return try await work()
+            return CuratedAttempt(trails: try await work(), outage: nil)
         } catch {
             Self.logger.error(
                 "Curated trails unavailable: \(error.localizedDescription, privacy: .public)"
             )
-            return []
+            return CuratedAttempt(trails: [], outage: CuratedTrailOutage(error))
         }
     }
 

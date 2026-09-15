@@ -176,6 +176,12 @@ final class SheetPresentation {
     /// Popping back to the open copy rather than refusing, because the two are
     /// the same answer to *show me this hike* and only one of them moves: a
     /// hiker who taps A's pin over B's preview asked to see A.
+    ///
+    /// A *different* listing replaces rather than stacks. Tapping B over A's
+    /// preview left `[A, B]`, where Back refit the map to A's route — a camera
+    /// move for a screen the hiker had already left. A tap is a jump to one
+    /// trail rather than a step deeper, exactly as ``MapSheet/open(_:)``
+    /// assigns for the hiker's own hikes.
     func showCommunityHike(_ listing: CommunityListing) {
         let route = SheetRoute.communityHike(listing)
         guard path.last != route else { return }
@@ -195,6 +201,12 @@ final class SheetPresentation {
         if let open = path.firstIndex(of: route) {
             path.removeSubrange((open + 1)...)
         } else {
+            // The gallery goes with its preview: its files belong to the
+            // screen underneath, so leaving it would orphan it over the new
+            // hike. Anything else on the stack — an owned hike, the recorder —
+            // stays, and Back from the new preview lands there rather than on
+            // the trail just left.
+            path.removeAll { $0.isCommunityPreview }
             path.append(route)
         }
     }
@@ -267,8 +279,8 @@ final class SheetPresentation {
     /// exactly as it takes a popped one out, and a community preview treated
     /// both as the hiker leaving: it retired its line from the map and
     /// deleted the stranger's photographs it had downloaded, while the screen
-    /// itself was still on the stack with its answer intact. A map pin can
-    /// push a second preview over an open one, so this is a gesture away.
+    /// itself was still on the stack with its answer intact. Its gallery
+    /// pushes over it, so this is a tap away.
     ///
     /// Membership rather than the top of the stack, because that is precisely
     /// what separates a push over this screen from this screen being popped.
