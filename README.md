@@ -20,7 +20,8 @@ That is local-first with one deliberate exception. There is no OpenHikes account
 
 ## Requirements
 
-- Xcode 27.0 or later, and iOS 27.0.
+- Xcode 26.5 or later. Every target deploys to iOS 26.0, which is also what
+  `OpenHikesShared/Package.swift` declares; CI builds on Xcode 26.6.
 - An Apple development team that can sign the WeatherKit entitlement, the shared App Group, the iCloud container and the push entitlement.
 - iPhone only. Every target sets `TARGETED_DEVICE_FAMILY = 1`.
 

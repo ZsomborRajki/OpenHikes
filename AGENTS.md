@@ -45,10 +45,14 @@ nearly six minutes of a red run that says nothing about the code, against
 eighteen seconds of a green one. CI boots as its own step for the same reason;
 see *Build and test* in the instructions file.
 
-Those three are what CI gates on. **The `-only-testing:` scoping is part of the
-command, not a refinement of it** — `OpenHikes.xctestplan` also carries
-`OpenHikesUITests`, so dropping it turns a twenty-second gate into thirteen
-minutes of simulator automation and stops the run matching the one CI gates on.
+Those three are the gates CI runs, on a different device. **The
+`-only-testing:` scoping is part of the command, not a refinement of it** —
+`OpenHikes.xctestplan` also carries `OpenHikesUITests`, so dropping it turns a
+twenty-second gate into thirteen minutes of simulator automation and stops the
+run matching the one CI gates on. The *device* deliberately differs: CI pins
+`iPhone 17 Pro` on its `Xcode_26.6` runner image and the commands above name
+`iPhone 18 Pro`, which is what an iOS 27 install ships; see *Build and test* in
+the instructions file for why those two cannot be the same name.
 
 `Scripts/run-ui-tests.sh --all` stays out
 of CI and is run locally for a change to recording, the map, or anything on
