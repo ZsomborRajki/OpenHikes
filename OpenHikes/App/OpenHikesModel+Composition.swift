@@ -443,7 +443,10 @@ private extension OpenHikesModel {
         // Last measured on a Simulator, this whole block was about 100-130 ms
         // of the main thread at launch, of which opening the SwiftData
         // container was 50-58 ms and `WeatherManager` 18-27 ms. Nothing here
-        // should be doing work a launch cannot defer.
+        // should be doing work a launch cannot defer — and the weather half of
+        // that figure no longer happens here at all: the stored reading is
+        // restored after the first frame instead, from `OpenHikesView`. See
+        // ``WeatherManager/restoreLastReading()``.
         let graphProvider = OverpassTrailGraphProvider()
         let liveActivities = Self.makeLiveActivityController(defaults: defaults)
         let reminders = Self.makeMovementReminderController(defaults: defaults)

@@ -350,6 +350,18 @@ struct OpenHikesView: View {
                     appModel.reclaimOrphanedLocalStates(in: modelContext)
                 }
             }
+            // Last night's reading, put back after the first frame rather
+            // than during app composition. It used to happen inside
+            // ``WeatherManager``'s initializer, which put a JSON decode on the
+            // main thread before anything was on screen — for a badge that has
+            // nothing to draw against until a location fix arrives. See
+            // ``WeatherManager/restoreLastReading()`` for why it is eager here
+            // rather than lazy on the first focus.
+            //
+            // Unguarded by the test flags below it, because this is the launch
+            // path working rather than a fixture: whichever of these tasks
+            // runs first, the restore only claims a badge nothing else has.
+            .task { appModel.weatherManager.restoreLastReading() }
             .task {
                 if !AppLaunchEnvironment.isRunningTests {
                     await appModel.pollWeather()

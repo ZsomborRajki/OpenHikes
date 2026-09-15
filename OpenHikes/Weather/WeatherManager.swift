@@ -215,17 +215,60 @@ final class WeatherManager {
     @ObservationIgnored private let service = WeatherService.shared
     @ObservationIgnored private let store: WeatherReadingStore?
 
+    /// Whether ``restoreLastReading()`` has already run.
+    ///
+    /// The restore is eager and happens exactly once. Guarding on `state`
+    /// alone would not be enough: a launch whose first focus lands before the
+    /// restore leaves the badge non-idle, and without this flag the restore
+    /// would still be sitting there waiting to fire on the next call.
+    @ObservationIgnored private var hasRestored = false
+
+    /// Builds the manager. **Reads nothing**, which is the point.
+    ///
+    /// This runs during app composition, before the first frame, and the
+    /// restore it used to do here cost 18-27 ms of the main thread — a decode
+    /// for a badge that has nothing to draw against until a location fix
+    /// arrives. See ``restoreLastReading()`` for where it went and why the
+    /// time is *relocated* rather than saved.
     init(store: WeatherReadingStore? = nil) {
         self.store = store
-        // A cold launch used to show nothing until a fix arrived and a network
-        // round trip came back — half a minute of a feature that looks absent.
-        // The restored reading is almost always old enough to be drawn dimmed,
-        // which is exactly what it is: last night's weather, labelled as such
-        // by the same staleness rule a live reading is held to.
-        if let restored = store?.load() {
-            cache[restored.subject.key] = restored.snapshot
-            state = .reading(restored.snapshot, subject: restored.subject)
-        }
+    }
+
+    /// Puts the stored reading back on the badge, once, after the first frame.
+    ///
+    /// The restore itself is not decoration. Without it a cold launch shows
+    /// nothing until a fix arrives *and* a network round trip comes back —
+    /// half a minute in which the weather feature looks absent. The restored
+    /// reading is almost always old enough to be drawn dimmed, which is
+    /// exactly what it is: last night's weather, labelled as such by the same
+    /// staleness rule a live reading is held to.
+    ///
+    /// What moved is *when*. It used to run inside `init`, on the composition
+    /// path, where it was the only part of launch that was both this app's and
+    /// deferrable — opening the SwiftData container is larger and the app
+    /// cannot start without it. The payload is one small JSON object out of
+    /// `UserDefaults`, so most of that time is first-touch of Foundation's
+    /// decoding machinery in the process rather than the bytes: **this pushes
+    /// the cost past the first frame rather than deleting it**, which is the
+    /// right trade for time-to-first-frame and is not a saving to claim.
+    ///
+    /// Eager rather than lazy inside ``focus(on:willRequest:)``. Lazy-on-focus
+    /// reads tidier and is wrong: `focus` is driven by the poll loop, which
+    /// needs a subject, which needs a location fix — so it would reintroduce
+    /// the exact gap the restore exists to close.
+    ///
+    /// The cache is seeded whatever the badge is showing, so a subject the
+    /// hiker returns to is answered from the restore rather than fetched
+    /// again. The *state* is only taken when nothing has claimed the badge
+    /// yet: a launch that has already focused somewhere — or published the
+    /// UI-test fixture — must not have last night's reading put over it.
+    func restoreLastReading() {
+        guard !hasRestored else { return }
+        hasRestored = true
+        guard let restored = store?.load() else { return }
+        cache[restored.subject.key] = restored.snapshot
+        guard state == .idle else { return }
+        state = .reading(restored.snapshot, subject: restored.subject)
     }
 
     /// Points the badge at `subject`, before anything is fetched for it.

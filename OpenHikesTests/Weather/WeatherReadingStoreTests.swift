@@ -127,11 +127,11 @@ struct WeatherReadingStoreTests {
         #expect(restored.subject.placeName == nil)
     }
 
-    /// A manager built on a store that has something restores straight into a
-    /// reading, which is the whole point: the badge is on screen before the
-    /// first network call rather than half a minute after it.
-    @Test("a manager restores its badge from the store at launch")
-    func managerRestoresAtLaunch() throws {
+    /// A manager asked to restore puts the stored reading on the badge, which
+    /// is the whole point: the badge is on screen before the first network
+    /// call rather than half a minute after it.
+    @Test("a manager restores its badge from the store")
+    func managerRestoresOnRequest() throws {
         let defaults = try makeDefaults()
         let saved = snapshot(celsius: 4)
         WeatherReadingStore(defaults: defaults).save(
@@ -140,7 +140,103 @@ struct WeatherReadingStoreTests {
         )
 
         let manager = WeatherManager(store: WeatherReadingStore(defaults: defaults))
+        manager.restoreLastReading()
         #expect(manager.state == .reading(saved, subject: .place(budapest, name: "Budapest")))
+    }
+
+    /// Building the manager reads nothing.
+    ///
+    /// The assertion that keeps the decode off the composition path, which is
+    /// where it cost 18-27 ms of the main thread before the first frame. A
+    /// restore moved back into `init` fails here rather than silently putting
+    /// the time back.
+    @Test("building a manager does not touch the store")
+    func buildingDoesNotRestore() throws {
+        let defaults = try makeDefaults()
+        WeatherReadingStore(defaults: defaults).save(
+            snapshot: snapshot(celsius: 4),
+            subject: .place(budapest, name: "Budapest")
+        )
+
+        let manager = WeatherManager(store: WeatherReadingStore(defaults: defaults))
+        #expect(manager.state == .idle)
+    }
+
+    /// The restore is a floor under an empty badge, not something that
+    /// overwrites what is already on it.
+    ///
+    /// The deferral opened a race the old initializer could not have: the
+    /// restore now runs after the first frame, so a focus — or the UI-test
+    /// fixture — can beat it to the badge. Last night's reading must not land
+    /// on top of one that arrived since.
+    @Test("a restore never displaces a reading already on the badge")
+    func restoreYieldsToWhatIsAlreadyShowing() throws {
+        let defaults = try makeDefaults()
+        let stored = snapshot(celsius: 4)
+        WeatherReadingStore(defaults: defaults).save(
+            snapshot: stored,
+            subject: .place(budapest, name: "Budapest")
+        )
+        let manager = WeatherManager(store: WeatherReadingStore(defaults: defaults))
+        let france = WeatherSubject.place(
+            CLLocationCoordinate2D(latitude: 45.8326, longitude: 6.8652),
+            name: "Chamonix"
+        )
+        manager.focus(on: france, willRequest: true)
+
+        manager.restoreLastReading()
+
+        #expect(manager.state == .loading(france))
+    }
+
+    /// And it seeds the cache whether or not it took the badge, so going back
+    /// to the restored subject answers from memory rather than from the
+    /// network.
+    @Test("a restore that yielded still primes the subject it was for")
+    func restoreSeedsTheCacheEvenWhenItYields() throws {
+        let defaults = try makeDefaults()
+        let stored = snapshot(celsius: 4)
+        let budapestSubject = WeatherSubject.place(budapest, name: "Budapest")
+        WeatherReadingStore(defaults: defaults).save(
+            snapshot: stored,
+            subject: budapestSubject
+        )
+        let manager = WeatherManager(store: WeatherReadingStore(defaults: defaults))
+        manager.focus(
+            on: .place(
+                CLLocationCoordinate2D(latitude: 45.8326, longitude: 6.8652),
+                name: "Chamonix"
+            ),
+            willRequest: true
+        )
+        manager.restoreLastReading()
+
+        // `willRequest: false` is what makes this an assertion about the
+        // cache: without a cached reading this subject would draw as
+        // unavailable rather than as a reading.
+        manager.focus(on: budapestSubject, willRequest: false)
+
+        #expect(manager.state == .reading(stored, subject: budapestSubject))
+    }
+
+    /// Once, and only once.
+    ///
+    /// A second call after the hiker has moved on must not drag last night's
+    /// reading back over a current one.
+    @Test("the restore happens once")
+    func restoreHappensOnce() throws {
+        let defaults = try makeDefaults()
+        let store = WeatherReadingStore(defaults: defaults)
+        let budapestSubject = WeatherSubject.place(budapest, name: "Budapest")
+        store.save(snapshot: snapshot(celsius: 4), subject: budapestSubject)
+        let manager = WeatherManager(store: WeatherReadingStore(defaults: defaults))
+        manager.restoreLastReading()
+        #expect(manager.state == .reading(snapshot(celsius: 4), subject: budapestSubject))
+
+        manager.focus(on: nil, willRequest: false)
+        manager.restoreLastReading()
+
+        #expect(manager.state == .idle)
     }
 
     /// Every one of the nine, across a launch.
