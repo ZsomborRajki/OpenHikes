@@ -2,7 +2,7 @@
 //  MapEntitlementStore.swift
 //  OpenHikes
 //
-//  The StoreKit half of the Pro unlock: loads the product, resolves the
+//  The StoreKit half of the Pro unlock: resolves the
 //  current entitlement, listens for changes, and publishes each answer to
 //  ``MapEntitlement`` so the off-main tile code sees the same one.
 //
@@ -51,15 +51,6 @@ final class MapEntitlementStore {
     /// ``MapPaywallView``'s title, which says "OpenHikes Pro".
     static let productID = "tappium.com.OpenHikes.pro.maps.monthly"
 
-    enum PurchaseOutcome: Equatable {
-        case purchased
-        case cancelled
-        /// Ask-to-buy, or a payment awaiting approval. The entitlement will
-        /// arrive through ``updates`` if it is ever approved.
-        case pending
-        case failed(String)
-    }
-
     /// What a tap on **Restore Purchases** turned out to be.
     ///
     /// A `Bool` cannot say this, and saying it wrongly is expensive. Restoring
@@ -88,49 +79,12 @@ final class MapEntitlementStore {
         case failed(String)
     }
 
-    /// Where the product query has got to, from a screen's point of view.
-    ///
-    /// Three states rather than the presence of a `Product`, because "we are
-    /// still asking" and "we asked and there is nothing to sell" are different
-    /// things to a customer and only one of them is worth offering a retry
-    /// for. Before the first attempt this reads `.loading`, which is what the
-    /// paywall's own query is about to make true.
-    enum ProductAvailability: Equatable {
-        case available
-        case loading
-        case unavailable
-    }
-
     private(set) var state: MapEntitlementState = .unknown
-    private(set) var product: Product?
-    /// The offer in the words the paywall shows, or `nil` until the product
-    /// has loaded. Built once per load, since intro-offer eligibility is an
-    /// `await` and a SwiftUI body cannot make one.
-    private(set) var terms: MapSubscriptionTerms?
     /// Set while a purchase or restore is in flight, so the paywall can
     /// disable its buttons rather than let a second tap start a second one.
     private(set) var isWorking = false
 
     var isEntitled: Bool { state == .entitled }
-
-    /// What the paywall draws while there is no price to show.
-    var productAvailability: ProductAvailability {
-        if product != nil { return .available }
-        return isLoadingProduct || !hasAttemptedProductLoad ? .loading : .unavailable
-    }
-
-    /// Whether the paywall's purchase button is live, and the one place that
-    /// rule is written down.
-    ///
-    /// Two ways it is not, and they fail differently. `isWorking` is a
-    /// purchase or a restore already running, where a second tap would only
-    /// start a second one. A missing `product` is the App Store having
-    /// answered with nothing — offline, or a product not configured yet — and
-    /// there ``purchase()`` has nothing to buy and returns `.failed` without
-    /// reaching StoreKit, so an enabled button could only produce an error the
-    /// user never asked for. The screen says "not yet" instead, and goes on
-    /// describing the unlock without a price; see ``loadProduct()``.
-    var canPurchase: Bool { product != nil && !isWorking }
 
     /// Whether the paywall's Restore button is live.
     ///
@@ -140,15 +94,6 @@ final class MapEntitlementStore {
     /// subscriber whose product query just failed is exactly the person who
     /// needs the button, so a failed load must not take it away.
     var canRestore: Bool { !isWorking }
-
-    /// Whether a product query is in flight, and whether one has ever
-    /// finished. Together they are ``productAvailability``.
-    private(set) var isLoadingProduct = false
-    private var hasAttemptedProductLoad = false
-    /// The query in flight, so a second caller joins it rather than starting
-    /// another. Two are ordinary now that the lookup is retried: the paywall
-    /// asks on presentation and the foreground asks again.
-    private var productLoadTask: Task<Void, Never>?
 
     /// Never cancelled: the store is created once by ``OpenHikesModel`` and
     /// lives as long as the process, and a `deinit` cannot touch a main-actor
@@ -180,17 +125,6 @@ final class MapEntitlementStore {
     /// have revealed is whatever `currentEntitlements` is set to answer next.
     private let syncPurchases: @Sendable () async throws -> Void
     /// The third seam, for the same reason and one of its own.
-    ///
-    /// `Product.products(for:)` answers differently on different machines, and
-    /// not for any reason a test controls: the scheme attaches
-    /// `OpenHikes.storekit` to its *launch* action, and running the app once
-    /// leaves that configuration synced to that simulator for good — so the
-    /// product resolves there and comes back empty on a simulator nothing has
-    /// ever been launched on, such as a fresh CI runner. A suite asserting what
-    /// the paywall does when the App Store offers nothing was therefore
-    /// asserting which machine it was running on. Behind this closure it asks
-    /// the question it means: an empty answer, or a throw.
-    private let loadProducts: @Sendable ([String]) async throws -> [Product]
     /// Where the last resolved answer is remembered across launches.
     private let defaults: UserDefaults
 
@@ -223,15 +157,11 @@ final class MapEntitlementStore {
         },
         syncPurchases: @escaping @Sendable () async throws -> Void = {
             try await AppStore.sync()
-        },
-        loadProducts: @escaping @Sendable ([String]) async throws -> [Product] = { identifiers in
-            try await Product.products(for: identifiers)
         }
     ) {
         self.defaults = defaults
         self.currentEntitlements = currentEntitlements
         self.syncPurchases = syncPurchases
-        self.loadProducts = loadProducts
         if defaults.object(forKey: SettingsKey.lastKnownMapEntitlement) != nil,
            !defaults.bool(forKey: SettingsKey.lastKnownMapEntitlement) {
             publish(.notEntitled)
@@ -260,7 +190,6 @@ final class MapEntitlementStore {
             }
         }
         Task { await refresh() }
-        Task { await loadProduct() }
     }
 
     /// Re-resolves on every foreground.
@@ -272,14 +201,6 @@ final class MapEntitlementStore {
     /// back. It is a cheap local query and does not prompt for a password.
     func sceneDidBecomeActive() {
         Task { await refresh() }
-        // And ask again for a price there still isn't one for. A lookup that
-        // failed at launch — no signal on the walk out of the door — used to
-        // stay failed for the life of the process, so the subscription could
-        // not be bought again until the app was force-quit. Only while there
-        // is nothing: a product already loaded is not re-queried on every
-        // foreground.
-        guard product == nil else { return }
-        Task { await loadProduct() }
     }
 
     /// Re-reads the entitlement and publishes it.
@@ -288,91 +209,6 @@ final class MapEntitlementStore {
         publish(entitled ? .entitled : .notEntitled)
     }
 
-    /// Asks the App Store what the subscription costs.
-    ///
-    /// Retryable, and coalesced rather than guarded off: `start()` fires one
-    /// at launch, the paywall asks on every presentation, and a foreground
-    /// asks again — so the ordinary case is several callers wanting the same
-    /// answer at once, and what they must not produce is several queries. A
-    /// caller arriving while one is in flight joins it; a caller arriving
-    /// after one succeeded returns at once, since the price does not change
-    /// inside a process.
-    func loadProduct() async {
-        if let productLoadTask {
-            await productLoadTask.value
-            return
-        }
-        guard product == nil else { return }
-        let task = Task { [weak self] in
-            guard let self else { return }
-            await performProductLoad()
-        }
-        productLoadTask = task
-        await task.value
-    }
-
-    private func performProductLoad() async {
-        isLoadingProduct = true
-        // In a `defer` so the bookkeeping is done before any caller waiting on
-        // this task resumes — otherwise a retry could find the finished query
-        // still parked in `productLoadTask` and join a task that is over.
-        defer {
-            isLoadingProduct = false
-            hasAttemptedProductLoad = true
-            productLoadTask = nil
-        }
-        do {
-            let loaded = try await loadProducts([Self.productID]).first
-            product = loaded
-            terms = await Self.terms(for: loaded)
-        } catch {
-            // Not fatal and not surfaced: the paywall falls back to describing
-            // the unlock without a price rather than showing an error for a
-            // screen the user may only be browsing.
-            Self.logger.error(
-                "Couldn't load the Pro product: \(error.localizedDescription, privacy: .public)"
-            )
-        }
-    }
-
-    func purchase() async -> PurchaseOutcome {
-        guard let product else { return .failed("The store is unavailable right now.") }
-        guard !isWorking else { return .cancelled }
-        isWorking = true
-        defer { isWorking = false }
-
-        do {
-            switch try await product.purchase() {
-            case .success(let verification):
-                guard let transaction = Self.verified(verification) else {
-                    return .failed("That purchase couldn’t be verified.")
-                }
-                await transaction.finish()
-                publish(.entitled)
-                return .purchased
-            case .userCancelled:
-                return .cancelled
-            case .pending:
-                return .pending
-            @unknown default:
-                return .failed("That purchase couldn’t be completed.")
-            }
-        } catch {
-            return .failed(error.localizedDescription)
-        }
-    }
-
-    /// Restores on a new device. `AppStore.sync()` prompts for a password, so
-    /// it belongs behind an explicit button and not on launch — the launch
-    /// path reads `currentEntitlements`, which needs no authentication.
-    ///
-    /// A failed sync returns *before* the re-read, and that ordering is the
-    /// point. `currentEntitlements` is a local query that answers "no" for a
-    /// device whose receipt has not arrived yet, so refreshing on the failure
-    /// path would take the entitlement away from the returning subscriber the
-    /// button exists to serve — on the strength of the one query that could
-    /// not be completed. Nothing asked, nothing changed; ``RestoreOutcome``
-    /// carries the reason to the paywall instead.
     func restore() async -> RestoreOutcome {
         guard !isWorking else { return .cancelled }
         isWorking = true
@@ -435,54 +271,4 @@ final class MapEntitlementStore {
         return false
     }
 
-    /// Translates the loaded product into the sentences the paywall shows.
-    ///
-    /// Returns `nil` for a product with no subscription info, which in a
-    /// correct build means the App Store served something that is not this
-    /// subscription. The paywall then describes the unlock without quoting a
-    /// price, rather than inventing one.
-    private static func terms(for product: Product?) async -> MapSubscriptionTerms? {
-        guard let product, let subscription = product.subscription else { return nil }
-        guard let unit = SubscriptionPeriodUnit(subscription.subscriptionPeriod.unit) else {
-            return nil
-        }
-        return MapSubscriptionTerms(
-            price: product.displayPrice,
-            period: MapSubscriptionTerms.periodNoun(
-                unit: unit,
-                count: subscription.subscriptionPeriod.value
-            ),
-            freeTrial: await freeTrial(in: subscription)
-        )
-    }
-
-    /// The trial's length, or `nil` when this account cannot have it.
-    ///
-    /// `isEligibleForIntroOffer` is the whole point of the check: eligibility
-    /// is spent once per subscription group per Apple Account and never comes
-    /// back, so a lapsed subscriber returning to this screen would otherwise
-    /// be offered a free week that the App Store will refuse to give them.
-    private static func freeTrial(in subscription: Product.SubscriptionInfo) async -> String? {
-        guard let offer = subscription.introductoryOffer,
-              offer.paymentMode == .freeTrial,
-              let unit = SubscriptionPeriodUnit(offer.period.unit),
-              await subscription.isEligibleForIntroOffer
-        else { return nil }
-        return MapSubscriptionTerms.durationPhrase(unit: unit, count: offer.period.value)
-    }
-}
-
-private extension SubscriptionPeriodUnit {
-    /// Fails only on a unit added to StoreKit after this was written, which
-    /// the caller turns into "describe the unlock without a period" rather
-    /// than a guess.
-    init?(_ unit: Product.SubscriptionPeriod.Unit) {
-        switch unit {
-        case .day: self = .day
-        case .month: self = .month
-        case .week: self = .week
-        case .year: self = .year
-        @unknown default: return nil
-        }
-    }
 }

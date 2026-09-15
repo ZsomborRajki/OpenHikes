@@ -18,6 +18,40 @@
 //  the reason a feature gated anywhere else in the app adds a row to the list
 //  below in the same change.
 //
+//  ## Why `SubscriptionStoreView` rather than a layout of our own
+//
+//  This screen used to build its own price row, buy button, trial wording and
+//  disclosure. Every one of those was an English sentence assembled by hand —
+//  `"Renews automatically at \(price) per \(period) until cancelled."` — with
+//  the plural formed by appending an `s`, sitting next to a `displayPrice`
+//  that was already localized and storefront-correct. A storefront serving
+//  `1 299 Ft` read *"Renews automatically at 1 299 Ft per month"*, and this is
+//  the one screen where that mismatch is visible to a reviewer rather than
+//  only to a user, because it is the 3.1.2(a) text.
+//
+//  `SubscriptionStoreView` formats all four in the buyer's own language,
+//  including plural rules that cannot be expressed by appending `s` in most
+//  languages. It also answers introductory-offer *eligibility*, which was
+//  hand-rolled through `isEligibleForIntroOffer`, and it can show promotional
+//  and win-back offers this screen previously could not show at all.
+//
+//  What it does not take away is the copy, which is the load-bearing part: the
+//  marketing-content closure takes arbitrary SwiftUI, so the header, the
+//  feature list and *Keeps OpenStreetMap Free* are the same words they were.
+//
+//  ## What is still ours
+//
+//  ``MapEntitlementStore`` keeps owning the entitlement. `.subscriptionStatusTask`
+//  is the declarative form of its `statusTask`, and is deliberately not adopted:
+//  the store has to answer before any view exists, for the `.notEntitled`
+//  seeding in *Remember only the negative entitlement answer*.
+//
+//  Restore is ours too, and that is a decision rather than an oversight.
+//  Apple's own restore button reports success or failure; ``MapEntitlementStore/restore()``
+//  distinguishes a restore that reached the App Store and was told this account
+//  owns nothing from one that never got an answer — and those two want
+//  opposite things said to a customer who may already be paying.
+//
 
 import StoreKit
 import SwiftUI
@@ -64,26 +98,32 @@ struct MapPaywallView: View {
 
     var body: some View {
         NavigationStack {
-            ScrollView {
-                VStack(alignment: .leading, spacing: Self.sectionSpacing) {
-                    header
-                    VStack(alignment: .leading, spacing: Self.featureSpacing) {
-                        ForEach(Self.features, id: \.title) { feature in
-                            featureRow(feature)
-                        }
-                    }
-                    if let message {
-                        Text(message)
-                            .font(.footnote)
-                            .foregroundStyle(.red)
-                            .frame(maxWidth: .infinity, alignment: .leading)
-                            .accessibilityIdentifier("paywall-message")
-                    }
-                    actions
-                    disclosure
-                }
-                .padding(20)
+            SubscriptionStoreView(productIDs: [MapEntitlementStore.productID]) {
+                marketingContent
             }
+            // The picker is for a group with more than one tier to choose
+            // between; there is one product here, so a button is the whole
+            // decision — and it is Apple's button, carrying Apple's price,
+            // period and trial wording in the buyer's own language.
+            .subscriptionStoreControlStyle(.prominentPicker)
+            // App Review 3.1.2(a) wants the terms and the privacy policy on
+            // the screen that takes the money, and a missing link here is one
+            // of the more common in-app-purchase rejections. These are the
+            // same two URLs the hand-built disclosure linked — see
+            // ``MapPurchaseLinks``.
+            .subscriptionStorePolicyDestination(
+                url: MapPurchaseLinks.termsOfUse,
+                for: .termsOfService
+            )
+            .subscriptionStorePolicyDestination(
+                url: MapPurchaseLinks.privacyPolicy,
+                for: .privacyPolicy
+            )
+            .storeButton(.visible, for: .policies)
+            // Ours rather than `.storeButton(.visible, for: .restorePurchases)`
+            // — see this file's header for why the distinction matters.
+            .storeButton(.hidden, for: .restorePurchases)
+            .safeAreaInset(edge: .bottom) { restoreRow }
             // The product's own name, as App Store Connect and
             // `OpenHikes.storekit` spell it, rather than a description of
             // what it currently unlocks: a customer reads this beside a
@@ -100,14 +140,24 @@ struct MapPaywallView: View {
                 }
             }
             .dismiss(when: store.isEntitled)
-            // Asked here as well as at launch, because this is the screen the
-            // answer is for: a lookup that failed on a train has no other way
-            // back short of force-quitting the app. Coalesced in the store, so
-            // arriving while the launch query is still running joins it rather
-            // than asking twice.
-            .task { await store.loadProduct() }
         }
         .accessibilityIdentifier("map-paywall")
+    }
+
+    /// The argument, unchanged. `SubscriptionStoreView`'s marketing-content
+    /// closure takes arbitrary SwiftUI, so nothing here had to be surrendered
+    /// to adopt it — which was the objection this screen would otherwise have
+    /// raised, and the right one.
+    private var marketingContent: some View {
+        VStack(alignment: .leading, spacing: Self.sectionSpacing) {
+            header
+            VStack(alignment: .leading, spacing: Self.featureSpacing) {
+                ForEach(Self.features, id: \.title) { feature in
+                    featureRow(feature)
+                }
+            }
+        }
+        .padding(20)
     }
 
     private var header: some View {
@@ -160,62 +210,35 @@ struct MapPaywallView: View {
         .accessibilityValue(feature.detail)
     }
 
-    @ViewBuilder private var actions: some View {
-        VStack(spacing: 12) {
-            Button {
-                Task { await buy() }
-            } label: {
-                Group {
-                    // A price still on its way looks like work in progress,
-                    // because it is. What it must not look like is a button
-                    // that has decided there is nothing to sell — that is the
-                    // row below, and it is the one with a way out.
-                    if store.isWorking || store.productAvailability == .loading {
-                        ProgressView().controlSize(.small)
-                    } else {
-                        Text(store.terms?.callToAction ?? "Unlock OpenHikes Pro")
-                    }
-                }
-                .frame(maxWidth: .infinity)
+    /// Restore, and whatever a restore had to say. Both are ours — see this
+    /// file's header.
+    ///
+    /// The unlock-everywhere line sits here because it is the sentence a
+    /// customer looks for next to *Restore*, and because Apple's own layout
+    /// has no place for it.
+    private var restoreRow: some View {
+        VStack(spacing: 6) {
+            if let message {
+                Text(message)
+                    .font(.footnote)
+                    .foregroundStyle(.red)
+                    .multilineTextAlignment(.center)
+                    .accessibilityIdentifier("paywall-message")
             }
-            .buttonStyle(.borderedProminent)
-            .controlSize(.large)
-            // The store may still be loading, or unreachable. A tap that could
-            // only fail is worse than a button that says "not yet" — the rule
-            // and its reasoning live on ``MapEntitlementStore/canPurchase``.
-            .disabled(!store.canPurchase)
-            .accessibilityIdentifier("paywall-purchase-button")
-
-            if store.productAvailability == .unavailable {
-                // The App Store answered with nothing — offline, or a product
-                // that is not configured yet. Said plainly and with the retry
-                // beside it: the query used to be fired once at launch and
-                // never again, so a customer whose signal came back had no way
-                // to buy the thing short of force-quitting the app.
-                VStack(spacing: 4) {
-                    Text("The App Store couldn't be reached, so there's no price to show yet.")
-                        .font(.footnote)
-                        .foregroundStyle(.secondary)
-                        .multilineTextAlignment(.center)
-                        .accessibilityIdentifier("paywall-product-unavailable")
-                    Button("Try Again") {
-                        Task { await store.loadProduct() }
-                    }
-                    .font(.subheadline)
-                    .accessibilityIdentifier("paywall-retry-button")
-                }
-                .frame(maxWidth: .infinity)
-            }
-
             Button("Restore Purchases") {
                 Task { await restore() }
             }
             .font(.subheadline)
-            // Unlike the button above, this one survives a product that never
-            // loaded: restoring does not need one.
             .disabled(!store.canRestore)
             .accessibilityIdentifier("paywall-restore-button")
+            Text("Unlocks on every device signed in to your Apple Account.")
+                .font(.caption)
+                .foregroundStyle(.secondary)
         }
+        .padding(.horizontal, 20)
+        .padding(.bottom, 8)
+        .frame(maxWidth: .infinity)
+        .background(.bar)
         .alert("Nothing to Restore", isPresented: $showNothingToRestore) {
             Button("OK", role: .cancel) { /* dismiss */ }
         } message: {
@@ -223,48 +246,6 @@ struct MapPaywallView: View {
                 "No previous purchase was found for this Apple Account. If you bought Pro "
                 + "with a different account, sign in to that one and try again."
             )
-        }
-    }
-
-    /// Everything App Review 3.1.2(a) requires on the screen that takes the
-    /// money: what it costs, how long a period lasts, that it renews by
-    /// itself, and working links to the terms and the privacy policy. A
-    /// missing link here is one of the more common in-app-purchase
-    /// rejections, and none of it may be hidden behind a disclosure arrow.
-    private var disclosure: some View {
-        VStack(alignment: .leading, spacing: 8) {
-            Text(
-                store.terms?.disclosure
-                ?? "A subscription that renews automatically until cancelled."
-            )
-            .accessibilityIdentifier("paywall-disclosure")
-            Text("Unlocks on every device signed in to your Apple Account.")
-            HStack(spacing: 6) {
-                Link("Terms of Use", destination: MapPurchaseLinks.termsOfUse)
-                    .accessibilityIdentifier("paywall-terms-link")
-                Text(verbatim: "·")
-                    .accessibilityHidden(true)
-                Link("Privacy Policy", destination: MapPurchaseLinks.privacyPolicy)
-                    .accessibilityIdentifier("paywall-privacy-link")
-            }
-        }
-        .font(.caption)
-        .foregroundStyle(.secondary)
-        .frame(maxWidth: .infinity, alignment: .leading)
-    }
-
-    private func buy() async {
-        message = nil
-        switch await store.purchase() {
-        case .purchased, .cancelled:
-            // `.purchased` dismisses through `onChange`; a cancel says nothing,
-            // because the user already knows what they just did.
-            break
-        case .pending:
-            message = "That purchase is waiting for approval. Pro unlocks as soon as it goes "
-                + "through — you don't need to buy it again."
-        case .failed(let reason):
-            message = reason
         }
     }
 

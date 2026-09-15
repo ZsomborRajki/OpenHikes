@@ -2,14 +2,13 @@
 //  MapEntitlementStoreLaunchTests.swift
 //  OpenHikesTests
 //
-//  What ``MapEntitlementStore/start()`` does the one time it is called, and
-//  what the paywall is left holding when the App Store answers with nothing.
+//  What ``MapEntitlementStore/start()`` does the one time it is called.
 //
 //  ``MapEntitlementStoreTests`` drives `refresh()` directly and explains, in
 //  its header, which parts of the store are unreachable from a hosted unit
 //  bundle and why. This file covers the launch entry point that wraps it — the
 //  listener guard that keeps a second `start()` from opening a second pair of
-//  subscriptions, and the product load whose failure is deliberately swallowed.
+//  subscriptions.
 //
 //  ## Why every test here carries a time limit
 //
@@ -24,9 +23,6 @@
 //  actually take: it is a backstop against a hang, not an assertion about
 //  latency.
 //
-//  The product lookup itself is no longer among them, and that is the point of
-//  the `loadProducts` seam — see below.
-//
 //  This suite was once reported as having crashed the host. It had not: the
 //  same bundle was measured restarting just as often with this file deleted
 //  outright, and the restarts were traced to several test hosts contending for
@@ -39,10 +35,10 @@
 //  `start()` opens a `Transaction.updates` and a
 //  `Product.SubscriptionInfo.Status.updates` iterator that are deliberately
 //  never cancelled — the store is a process-lifetime object owned by
-//  ``OpenHikesModel`` and documents that choice — and it also fires an
-//  unawaited `loadProduct()`. So a test that calls it leaves two parked
-//  iterators and one in-flight product query behind for whatever suite runs
-//  next. Nothing here can prevent that; covering `start()` at all means
+//  ``OpenHikesModel`` and documents that choice. So a test that calls it
+//  leaves two parked iterators behind for whatever suite runs next — there is
+//  no longer a product query among them, since `SubscriptionStoreView` loads
+//  its own. Nothing here can prevent that; covering `start()` at all means
 //  accepting it. It is recorded rather than hidden so that a future
 //  investigation into cross-suite state starts with this file already ruled in.
 //
@@ -73,12 +69,7 @@ struct MapEntitlementStoreLaunchTests {
         let defaults = try Self.defaults()
         let store = MapEntitlementStore(
             defaults: defaults,
-            currentEntitlements: { true },
-            // `start()` fires an unawaited `loadProduct()`. Stubbed so this
-            // test's subject is the resolve and nothing else — and so what it
-            // leaves running behind it, which this file's header records, is
-            // not also a product query.
-            loadProducts: { _ in [] }
+            currentEntitlements: { true }
         )
         #expect(store.state == .unknown)
 
@@ -110,8 +101,7 @@ struct MapEntitlementStoreLaunchTests {
             currentEntitlements: {
                 resolves.withLock { $0 += 1 }
                 return true
-            },
-            loadProducts: { _ in [] }
+            }
         )
 
         store.start()
@@ -122,67 +112,5 @@ struct MapEntitlementStoreLaunchTests {
         await store.refresh()
 
         #expect(resolves.withLock { $0 } == 2)
-    }
-
-    /// An App Store that answers with nothing leaves the paywall describing the
-    /// unlock without a price, rather than inventing one or showing an error
-    /// for a screen the user may only be browsing.
-    ///
-    /// The empty answer is *injected* rather than arranged for, and it has to
-    /// be. This test used to rely on the simulator having no StoreKit
-    /// configuration synced to it, which is true of a fresh CI runner and false
-    /// of every machine the app has been launched on once — the scheme attaches
-    /// `OpenHikes.storekit` to its launch action and the simulator keeps it. So
-    /// it passed in CI, failed on a developer's machine with a real $4.99
-    /// product loaded, and asserted the environment rather than the behaviour.
-    ///
-    /// The swallowed failure is asserted through the two properties the
-    /// paywall's buttons are actually bound to, rather than through `isWorking`
-    /// alone: it must not move the entitlement, and it must leave Restore
-    /// pressable even though there is nothing left to buy. Failing to load a
-    /// product is precisely the case where a returning subscriber needs it.
-    @Test("a product the App Store cannot serve leaves the paywall with nothing to buy")
-    func loadProductWithNoStoreLeavesTermsUnset() async throws {
-        defer { Self.restoreProcessEntitlement() }
-        let store = MapEntitlementStore(
-            defaults: try Self.defaults(),
-            currentEntitlements: { false },
-            loadProducts: { _ in [] }
-        )
-        await store.refresh()
-
-        await store.loadProduct()
-
-        #expect(store.product == nil)
-        #expect(store.terms == nil)
-        #expect(store.state == .notEntitled)
-        #expect(!store.isWorking)
-        #expect(!store.canPurchase)
-        #expect(store.canRestore)
-    }
-
-    /// The other way the lookup fails, which the environment could never
-    /// produce on demand: a thrown error is logged and goes no further.
-    ///
-    /// Same end state as the empty answer on purpose — the paywall has one
-    /// behaviour for "no price to show", not two — and it is worth pinning
-    /// separately because it is the branch that `catch` swallows.
-    @Test("a product lookup that throws is swallowed, not surfaced")
-    func loadProductThatThrowsLeavesThePaywallUsable() async throws {
-        defer { Self.restoreProcessEntitlement() }
-        let store = MapEntitlementStore(
-            defaults: try Self.defaults(),
-            currentEntitlements: { false },
-            loadProducts: { _ in throw CocoaError(.fileNoSuchFile) }
-        )
-        await store.refresh()
-
-        await store.loadProduct()
-
-        #expect(store.product == nil)
-        #expect(store.terms == nil)
-        #expect(store.state == .notEntitled)
-        #expect(!store.canPurchase)
-        #expect(store.canRestore)
     }
 }
