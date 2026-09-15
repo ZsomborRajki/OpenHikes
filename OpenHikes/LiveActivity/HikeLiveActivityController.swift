@@ -64,6 +64,19 @@ import UIKit
 struct HikeActivityRequest {
     let attributes: HikeActivityAttributes
     let state: HikeActivityAttributes.ContentState
+
+    /// The same request, carrying what the panel should say about the last
+    /// tap on one of its buttons.
+    ///
+    /// The refusal belongs to the *controller* rather than to whichever
+    /// subsystem built the request — the recorder does not know a button was
+    /// pressed — so it is applied here on the way out rather than plumbed
+    /// through every caller.
+    func carrying(_ refusal: HikeActivityControlRefusal?) -> Self {
+        var state = state
+        state.controlRefusal = refusal
+        return Self(attributes: attributes, state: state)
+    }
 }
 
 @MainActor
@@ -137,6 +150,9 @@ final class HikeLiveActivityController {
     /// and sharing a floor let either starve the other.
     @ObservationIgnored private var lastRunStateFlipAt: Date?
     @ObservationIgnored private var lastRouteFlipAt: Date?
+    /// What the panel should be saying about the last button tap, carried
+    /// onto every push until the run state proves it is no longer true.
+    @ObservationIgnored private var pendingRefusal: HikeActivityControlRefusal?
 
     /// Chains the framework calls so they land in the order they were asked
     /// for. ActivityKit's `update` and `end` are `async`, and two of them
@@ -233,7 +249,12 @@ final class HikeLiveActivityController {
             now: now
         ) else { return }
         switch reason {
-        case .runStateChanged: lastRunStateFlipAt = now
+        case .runStateChanged:
+            lastRunStateFlipAt = now
+            // The run state changing *is* the proof that whatever a panel
+            // button asked for has happened, so the refusal it may have been
+            // showing has stopped being true.
+            pendingRefusal = nil
         case .routeStatusChanged: lastRouteFlipAt = now
         case .intervalElapsed: break
         }
@@ -241,7 +262,37 @@ final class HikeLiveActivityController {
         // The attributes are carried across too: a trail renamed mid-walk
         // keeps its running activity — ActivityKit cannot deliver new
         // attributes — but this process should stop believing the old name.
-        self.current = request
+        let outgoing = request.carrying(pendingRefusal)
+        self.current = outgoing
+        enqueue { [presenter] in
+            await presenter.update(
+                outgoing.state,
+                staleAfter: Self.staleAfter(for: outgoing.attributes.subject)
+            )
+        }
+    }
+
+    /// A panel button could not do what it said, so say so on the panel.
+    ///
+    /// The only way a `LiveActivityIntent` has of reporting anything: there is
+    /// no dialog on a Lock Screen and no `continueInForeground(_:)` — see
+    /// ``HikeActivityControlRefusal``.
+    ///
+    /// Pushed immediately rather than waiting for the next fix. This is a
+    /// status flip in the sense ``minimumFlipInterval`` exists for — the hiker
+    /// just touched the panel and is looking at it — so it bypasses the
+    /// twenty-second update floor exactly as a pause does, and pays the
+    /// ten-second one instead.
+    func noteControlRefusal(_ refusal: HikeActivityControlRefusal) {
+        pendingRefusal = refusal
+        guard isEnabled, let showing = current else { return }
+        let now = clock()
+        guard elapsed(since: lastRunStateFlipAt, now: now, atLeast: Self.minimumFlipInterval)
+        else { return }
+        lastRunStateFlipAt = now
+        lastUpdateAt = now
+        let request = showing.carrying(refusal)
+        current = request
         enqueue { [presenter] in
             await presenter.update(
                 request.state,

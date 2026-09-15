@@ -12,15 +12,18 @@
 //  division the widget keeps, and it is what lets the activity stay correct
 //  while the app is suspended: the system holds the last content it was given.
 //
-//  There are no buttons. A `LiveActivityIntent` runs in the *app's* process,
-//  so its type has to be compiled into both the app and this extension — and
-//  `OpenHikes/` and `OpenWidget/` are file-system-synchronized groups
-//  belonging to different targets, which leaves the shared package as the only
-//  place both can see. AppIntents metadata extraction from a SwiftPM library
-//  is not something this project has anywhere else, and a pause button that
-//  silently does nothing is worse than no pause button: the Lock Screen and
-//  Dynamic Island are tap targets that open the recording screen, where the
-//  controls already are and already work.
+//  There is one button, and it pauses or resumes. A `LiveActivityIntent` runs
+//  in the *app's* process, so its type has to be compiled into both the app
+//  and this extension — and `OpenHikes/` and `OpenWidget/` are file-system
+//  -synchronized groups belonging to different targets, which leaves the
+//  shared package as the only place both can see. That used to be the
+//  objection; `ToggleHikeRecordingIntent` has since proved the same extraction
+//  for the Control Center control, so the mechanism is no longer unbuilt —
+//  see ``PauseHikeActivityIntent``, which also gives the argument for why Stop
+//  is not there beside it.
+//
+//  A tap anywhere else still opens the recording screen, which is where the
+//  rest of the controls are.
 //
 
 import ActivityKit
@@ -68,6 +71,9 @@ struct HikeLiveActivity: Widget {
             }
             DynamicIslandExpandedRegion(.trailing) {
                 expandedTrailing(presentation)
+            }
+            DynamicIslandExpandedRegion(.center) {
+                expandedCenter(for: context)
             }
             DynamicIslandExpandedRegion(.bottom) {
                 expandedBottom(presentation, tint: tint)
@@ -135,5 +141,19 @@ struct HikeLiveActivity: Widget {
         .accessibilityElement(children: .ignore)
         .accessibilityLabel(presentation.accessibilityLabel)
         .accessibilityValue(presentation.accessibilityValue)
+    }
+
+    /// The same control the Lock Screen draws, in the one expanded region with
+    /// width to spare. Outside ``expandedBottom(_:tint:)`` deliberately: that
+    /// region is a single combined element, and a button inside one cannot be
+    /// pressed by VoiceOver.
+    private func expandedCenter(
+        for context: ActivityViewContext<HikeActivityAttributes>
+    ) -> some View {
+        HikeActivityControls(
+            subject: context.attributes.subject,
+            state: context.state,
+            tint: Color(hex: context.attributes.tintHex) ?? .green
+        )
     }
 }

@@ -14,6 +14,7 @@
 //  test can reach it — only how to lay it out.
 //
 
+import AppIntents
 import OpenHikesShared
 import SwiftUI
 import WidgetKit
@@ -130,6 +131,71 @@ struct HikeActivityFigure: View {
 
 /// The full-width Lock Screen banner, and what the Dynamic Island falls back
 /// to on a device that doesn't have one.
+/// The panel's own pause and resume, and whatever the last tap could not do.
+///
+/// Its own view, and deliberately *outside* the combined accessibility element
+/// the figures above it form: that block is one tap target and reads as one
+/// sentence, but a button has to be reachable on its own or VoiceOver cannot
+/// press it.
+///
+/// Drawn only for a recording that is still going. A followed trail has no
+/// pause worth putting here — the walk is the hiker's, not the app's — and a
+/// `.finished` panel is a result rather than something still waiting for them.
+///
+/// Stop is deliberately absent; ``PauseHikeActivityIntent``'s header gives the
+/// argument.
+struct HikeActivityControls: View {
+    let subject: HikeActivityAttributes.Subject
+    let state: HikeActivityAttributes.ContentState
+    let tint: Color
+
+    private var isDrawn: Bool {
+        subject.isRecording && state.runState != .finished
+    }
+
+    var body: some View {
+        if isDrawn {
+            VStack(alignment: .leading, spacing: 4) {
+                control
+                if let refusal = state.controlRefusal {
+                    Text(Self.wording(for: refusal))
+                        .font(.caption2)
+                        .foregroundStyle(.secondary)
+                }
+            }
+        }
+    }
+
+    @ViewBuilder private var control: some View {
+        if state.isPaused {
+            Button(intent: ResumeHikeActivityIntent()) {
+                Label("Resume", systemImage: "play.fill")
+            }
+            .tint(tint)
+        } else {
+            Button(intent: PauseHikeActivityIntent()) {
+                Label("Pause", systemImage: "pause.fill")
+            }
+            .tint(tint)
+        }
+    }
+
+    /// What a refusal says out loud, spelled here rather than in the shared
+    /// package because a sentence would have to cross the wire on every
+    /// update and the panel has a 4 KB budget — the payload carries the case.
+    ///
+    /// `.needsPreciseLocation` is the one that matters, and it says what to do
+    /// rather than what went wrong, matching `RecordingFailure`'s own recovery
+    /// wording on the recording screen.
+    static func wording(for refusal: HikeActivityControlRefusal) -> LocalizedStringKey {
+        switch refusal {
+        case .needsPreciseLocation: "Turn on Precise Location in Settings to carry on."
+        case .notRecording: "That hike isn't recording any more."
+        case .failed: "OpenHikes couldn't do that."
+        }
+    }
+}
+
 struct HikeActivityLockScreenView: View {
     let attributes: HikeActivityAttributes
     let state: HikeActivityAttributes.ContentState
@@ -148,6 +214,24 @@ struct HikeActivityLockScreenView: View {
 
     var body: some View {
         let presentation = resolved
+        HStack(alignment: .bottom, spacing: 12) {
+            figures(presentation)
+            HikeActivityControls(
+                subject: attributes.subject,
+                state: state,
+                tint: tint
+            )
+        }
+        .padding(.horizontal, 4)
+    }
+
+    /// Everything the panel says, as one element.
+    ///
+    /// Split out of ``body`` so the accessibility grouping lands on the
+    /// figures alone: this block is one tap target and reads as one sentence,
+    /// but a button inside a combined element is a button VoiceOver cannot
+    /// press, so the control sits beside it rather than within it.
+    private func figures(_ presentation: HikeActivityPresentation) -> some View {
         VStack(alignment: .leading, spacing: 8) {
             HikeActivityHeader(presentation: presentation, tint: tint)
 
@@ -171,7 +255,6 @@ struct HikeActivityLockScreenView: View {
 
             TrailWidgetMetricRow(metrics: presentation.metrics, onMap: false)
         }
-        .padding(.horizontal, 4)
         // One tap target, so one element — the same rule the widget bodies
         // follow, and for the same reason: a row of unlabelled glyphs read out
         // one at a time says nothing.

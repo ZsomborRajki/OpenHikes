@@ -355,3 +355,48 @@ extension HikeIntentCoordinator {
         )
     }
 }
+
+// MARK: - The panel's own buttons
+
+/// What a tap on the Live Activity does, which is the same pause and resume
+/// every other entry point already delegates here for.
+///
+/// Separate from ``HikeRecordingControlHandling`` because the two answer
+/// different questions with different escape routes: a Control Center tap can
+/// `continueInForeground(_:)` and ask Core Location for what it needs, and a
+/// Lock Screen tap cannot — so this one never throws and reports a refusal the
+/// panel can draw instead. See ``HikeActivityControlRefusal``.
+extension HikeIntentCoordinator: HikeActivityControlHandling {
+    func performHikeActivityControl(
+        _ action: HikeActivityControlAction
+    ) async -> HikeActivityControlOutcome {
+        do {
+            switch action {
+            case .pause: _ = try await pauseRecording()
+            case .resume: _ = try await resumeRecording()
+            }
+            return .completed
+        } catch {
+            let refusal = Self.refusal(for: error)
+            // Said on the panel, because there is nowhere else to say it. The
+            // controller decides whether it is cheap enough to push now.
+            recorder.liveActivityController?.noteControlRefusal(refusal)
+            return .refused(refusal)
+        }
+    }
+
+    /// The failure, in the words the panel has room for.
+    ///
+    /// `.preciseLocationRequired` is the one that matters and the reason this
+    /// mapping exists: `resume()` calls `requestTemporaryFullAccuracy()`, that
+    /// prompt cannot be shown from the background, and a tap that did nothing
+    /// and said nothing is the failure mode this app eliminated in the tile
+    /// pipeline.
+    private static func refusal(for failure: HikeIntentFailure) -> HikeActivityControlRefusal {
+        switch failure {
+        case .recording(.preciseLocationRequired): .needsPreciseLocation
+        case .noActiveRecording, .notPaused, .alreadyRecording: .notRecording
+        default: .failed
+        }
+    }
+}
