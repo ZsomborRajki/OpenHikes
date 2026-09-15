@@ -25,6 +25,7 @@
 import CoreLocation
 import Foundation
 import Observation
+import OrderedCollections
 import SwiftUI
 
 /// One place on the trail that has photographs of it.
@@ -50,9 +51,7 @@ nonisolated struct PhotoMapPin: Hashable, Identifiable, Sendable {
     /// a photo with no place on the trail is still a photo of the walk, and
     /// ``PhotoTrailAnchor`` is where that distinction is argued.
     static func pins(for photos: [HikePhoto]) -> [Self] {
-        var order: [CoordinateKey] = []
-        var leaders: [CoordinateKey: HikePhoto] = [:]
-        var counts: [CoordinateKey: Int] = [:]
+        var grouped: OrderedDictionary<CoordinateKey, Group> = [:]
 
         for candidate in photos {
             guard let anchor = candidate.coordinate,
@@ -61,20 +60,15 @@ nonisolated struct PhotoMapPin: Hashable, Identifiable, Sendable {
                 latitude: anchor.latitude,
                 longitude: anchor.longitude
             )
-            if let seen = counts[key] {
-                counts[key] = seen + 1
-            } else {
-                counts[key] = 1
-                leaders[key] = candidate
-                order.append(key)
-            }
+            // `candidate` is the seed only when the key is absent, so the
+            // first photo anchored here stays the one the pin previews.
+            grouped[key, default: Group(photo: candidate, count: 0)].count += 1
         }
 
-        return order.compactMap { key in
-            guard let leader = leaders[key], let total = counts[key] else { return nil }
-            return Self(
-                photo: leader,
-                count: total,
+        return grouped.map { key, group in
+            Self(
+                photo: group.photo,
+                count: group.count,
                 latitude: key.latitude,
                 longitude: key.longitude
             )
@@ -87,6 +81,15 @@ nonisolated struct PhotoMapPin: Hashable, Identifiable, Sendable {
     private struct CoordinateKey: Hashable {
         let latitude: Double
         let longitude: Double
+    }
+
+    /// What one map point has accumulated while ``pins(for:)`` walks the
+    /// gallery. Named rather than an anonymous tuple so it matches the other
+    /// `OrderedDictionary` values in the app and can grow a field without
+    /// every use site changing shape.
+    private struct Group {
+        let photo: HikePhoto
+        var count: Int
     }
 }
 

@@ -30,27 +30,25 @@ struct RouteProfileElevationTests {
         }
     }
 
-    /// Why the old implementation trapped rather than merely drew badly, and
-    /// why the *first* sample is the one that matters: `min()` and `max()`
-    /// both seed themselves with the first element and keep it unless a later
-    /// one compares smaller (or larger), and every comparison against a NaN is
-    /// false. So both bounds come back NaN, and `nan <= nan` is false — which
-    /// is the precondition `ClosedRange` checks.
+    /// Why the range would trap rather than merely draw badly, and which
+    /// positions matter. `minAndMax()` seeds both bounds from the front of
+    /// the sequence and displaces one only when a later element compares
+    /// smaller (or larger); every comparison against a NaN is false, so a
+    /// bound seeded with one is never displaced. A NaN *first* survives as
+    /// the min and a NaN *last* as the max, and `ClosedRange` checks
+    /// `lower <= upper`, which fails either way.
     ///
-    /// Asserted on the stdlib primitives rather than by building the range,
-    /// because a test that genuinely traps takes the whole bundle down with
-    /// it and reports nothing about anything else.
-    @Test("a leading NaN survives both min and max, which is what made the range trap")
-    func nanPropagatesThroughMinAndMax() {
-        let poisoned: [Double] = [.nan, 600, 700]
-        #expect(poisoned.min()?.isNaN == true)
-        #expect(poisoned.max()?.isNaN == true)
+    /// The trailing end is the one the stdlib `min()`/`max()` this replaced
+    /// did not punish, and so the one no fixture here used to cover. Delete
+    /// the `.filter(\.isFinite)` in `elevationRange` and this is the case
+    /// that catches it — by trapping, like the leading one above, which is
+    /// why neither builds the range itself in an `#expect`.
+    @Test("a route whose last height is not a number still yields a usable range")
+    func trailingNonFiniteHeightIsSteppedOver() throws {
+        let profile = RouteProfile(route: Self.route([600, 700, 650, .nan]))
+        let range = try #require(profile.elevationRange)
 
-        // The same NaN anywhere but first is harmless, which is why this went
-        // unnoticed: most files that carry one carry it in the middle.
-        let survivable: [Double] = [600, .nan, 700]
-        #expect(survivable.min() == 600)
-        #expect(survivable.max() == 700)
+        #expect(range == 600...700)
     }
 
     @Test("a route whose first height is not a number still yields a usable range")
