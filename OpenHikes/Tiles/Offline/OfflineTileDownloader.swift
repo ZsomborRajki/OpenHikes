@@ -107,6 +107,13 @@ final class OfflineTileDownloader {
     /// until the first download, which is the only state in which a finished
     /// run has nothing to claim to.
     private var claim: Claim?
+    /// What a previous run already saved and claimed for this hike, so this
+    /// one neither re-fetches it nor forgets it. Empty for a first attempt.
+    private var resumedKeys: Set<String> = []
+    /// Keys saved by this run and already committed, so a batch claim sends
+    /// only what is new. The merge would union them anyway — this is about not
+    /// handing a four-thousand-element array to the store thirty-two times.
+    private var claimedKeys: Set<String> = []
     let quota: QuotaBroker
     /// A plan waiting on the space confirmation. Cleared by every path that
     /// leaves ``Phase/needsSpace(_:)``.
@@ -127,9 +134,31 @@ final class OfflineTileDownloader {
     /// ready to go the moment a slot frees.
     nonisolated static let inFlightWindow = 5
 
+    /// How many newly saved tiles are claimed at a time.
+    ///
+    /// **This is the number that decides what a killed run keeps.** A run's
+    /// tiles used to be claimed once, at the end, so a process evicted at 90%
+    /// of four thousand tiles kept none of them — the next launch trim
+    /// reclaims every durable tile no hike claims, and nothing had claimed
+    /// these. Claiming as they land caps that loss at this many tiles instead
+    /// of the whole run.
+    ///
+    /// Not smaller, because each claim is a SwiftData `save()` on the main
+    /// actor: per tile it would be four thousand commits in a run, which is
+    /// the hiker's scrolling paying for the download's durability. Not larger,
+    /// because the point is bounding the loss. At 4000 tiles this is at most
+    /// 32 commits, and at most 125 tiles lost to a kill.
+    nonisolated static let defaultClaimBatchSize = 125
+
     /// Where this run asks not to be suspended halfway through — see
     /// ``BackgroundTimeReservation``.
     private let backgroundTime: BackgroundTimeReservation
+    /// Injectable for the reason the gate and the transport are: a suite
+    /// asserting that a run claims *mid-flight* needs a plan with several
+    /// batches in it, and the fixture routes plan far fewer tiles than a real
+    /// one. Raising the route's size instead would make every such test a
+    /// thousand injected saves to watch two commits.
+    let claimBatchSize: Int
     /// The grant currently held, so the run can give it back exactly once.
     /// `nil` between runs and for a run the system refused — the same state
     /// as far as `releaseBackgroundTime()` is concerned.
@@ -141,6 +170,7 @@ final class OfflineTileDownloader {
         quota: QuotaBroker = .standard,
         registry: OfflineDownloadRegistry = .shared,
         backgroundTime: BackgroundTimeReservation = .system,
+        claimBatchSize: Int = defaultClaimBatchSize,
         saveTile: @escaping @Sendable (String, URL) async -> Bool = { key, url in
             await TileCache.shared.saveTileDurably(forKey: key, url: url)
         }
@@ -150,6 +180,7 @@ final class OfflineTileDownloader {
         self.quota = quota
         self.registry = registry
         self.backgroundTime = backgroundTime
+        self.claimBatchSize = max(1, claimBatchSize)
         self.saveTile = saveTile
     }
 
@@ -169,6 +200,7 @@ final class OfflineTileDownloader {
     func start(
         route: [RouteCoordinate],
         source: ActiveTileSource,
+        alreadySaved: Set<String> = [],
         claim: @escaping Claim
     ) {
         guard phase != .downloading else { return }
@@ -187,7 +219,13 @@ final class OfflineTileDownloader {
 
         generation += 1
         let currentGeneration = generation
-        completed = 0
+        resumedKeys = alreadySaved
+        // Seeded rather than started at zero, so the bar measures the map
+        // rather than this attempt at it. A resumed run that fetches the last
+        // thousand tiles of four thousand has saved four thousand as far as
+        // the hiker is concerned, and a progress bar that restarted at zero
+        // for the final quarter would be the app forgetting what it kept.
+        completed = alreadySaved.count
         total = 0
         completedRecord = nil
         pendingRun = nil
@@ -253,8 +291,24 @@ final class OfflineTileDownloader {
             finishPlanning()
             return
         }
-        total = tiles.count
+        // **The gap, not the plan.** The whole grid is what the map needs and
+        // is what `total` counts; what this run has to *fetch* is whatever a
+        // previous run did not already put on disk and claim. Filtered after
+        // planning rather than instead of it, because the plan is what says
+        // how big the map is — a resumed run that measured itself against the
+        // gap would report a four-thousand-tile map as a thousand-tile one.
+        let plannedCount = tiles.count
+        let outstanding = tiles.filter { !resumedKeys.contains($0.cacheKey(providerID: source.providerID)) }
+        total = plannedCount
         finishPlanning()
+
+        guard !outstanding.isEmpty else {
+            // Everything this run was asked for is already on disk and already
+            // claimed, which is a finished download rather than an empty one.
+            // Reachable when a run was killed on its last batch.
+            phase = .finished
+            return
+        }
 
         // A provider whose terms cap durable storage may not have room for
         // this. Asked before a single tile is fetched, so a user who declines
@@ -272,7 +326,7 @@ final class OfflineTileDownloader {
         }
 
         await run(
-            tiles: tiles,
+            tiles: outstanding,
             source: source,
             generation: generation
         )
@@ -320,6 +374,7 @@ final class OfflineTileDownloader {
         let saveTileCallback = saveTile
         let loadGate = gate
         var savedKeys = Set<String>()
+        claimedKeys = []
 
         await withTaskGroup(of: SaveResult.self) { group in
             var pending = tiles.makeIterator()
@@ -353,7 +408,20 @@ final class OfflineTileDownloader {
                 // Kept in step with `savedKeys` rather than counted separately,
                 // so the bar and the "Saved N of M" message can't disagree.
                 if result.saved, savedKeys.insert(result.key).inserted {
-                    completed = savedKeys.count
+                    completed = resumedKeys.count + savedKeys.count
+                }
+                // Claimed as they land, which is the whole of this change: a
+                // process evicted between here and `finalize` used to cost the
+                // hiker every tile the run had fetched.
+                if savedKeys.count - claimedKeys.count >= claimBatchSize {
+                    guard claimBatch(of: savedKeys, source: source) else {
+                        // The store refused. Carrying on would spend the
+                        // hiker's connection on tiles nothing can claim — and
+                        // the next launch trim deletes exactly those — so the
+                        // run stops here rather than at the end.
+                        group.cancelAll()
+                        break
+                    }
                 }
                 if Task.isCancelled {
                     group.cancelAll()
@@ -366,41 +434,6 @@ final class OfflineTileDownloader {
         await finalize(savedKeys: savedKeys, tiles: tiles, source: source, generation: generation)
     }
 
-    /// One tile, fetched straight into durable storage. `nonisolated static`
-    /// because it is the body of a task-group child: it runs off the main
-    /// actor, and taking everything it needs as parameters is what keeps it
-    /// from capturing the observable downloader along with them.
-    nonisolated private static func save(
-        _ tile: Tile,
-        from source: ActiveTileSource,
-        through gate: TileLoadGate,
-        using saveTile: @Sendable (String, URL) async -> Bool
-    ) async -> SaveResult {
-        let key = tile.cacheKey(providerID: source.providerID)
-        guard let url = tile.url(from: source.urlTemplate) else { return SaveResult(key: key, saved: false) }
-        // Shared with the map's own tile loads, at `.background`: nobody minds
-        // a download taking a minute longer, and everybody minds the map
-        // stalling while it runs.
-        await gate.acquire(.background)
-        // Re-checked on the far side of the gate, which is where a tile can
-        // sit for a while behind the map: a download the user stopped in the
-        // meantime must not still put its queued requests on the wire.
-        var saved = false
-        if !Task.isCancelled {
-            // Durably, not through `loadTile`: the point of a download is that
-            // the tiles are still there when the user is out of signal, which
-            // rules out the OS-reclaimable cache.
-            saved = await saveTile(key, url)
-        }
-        await gate.release(.background)
-        #if DEBUG
-        if saved {
-            Self.logger.debug("Bulk-saved tile \(key, privacy: .public)")
-        }
-        #endif
-        return SaveResult(key: key, saved: saved)
-    }
-
     /// Publishes what the run produced, and commits who it belongs to first.
     ///
     /// The order is the point: every tile counted here is already on durable
@@ -408,6 +441,21 @@ final class OfflineTileDownloader {
     /// phase saying the map was saved, published ahead of the claim, is a
     /// promise a refused commit — or a hike deleted while this ran — has
     /// already broken. See ``OfflineDownloadClaim``.
+    ///
+    /// **This is no longer the only claim a run makes** — see
+    /// ``claimBatch(of:source:)`` — but it is still the only one that
+    /// *promises* anything, and it is the only one that can produce the
+    /// complete record. Two consequences worth knowing:
+    ///
+    /// - `tiles` is the outstanding gap rather than the whole plan, so
+    ///   `isComplete` asks whether this run closed the gap. Gap closed plus
+    ///   whatever a previous run claimed is the whole route, which is why the
+    ///   complete record — the one that re-derives the grid and supersedes
+    ///   every partial — is still correct to write here.
+    /// - A cancelled run claims nothing *further*. What its batches already
+    ///   committed stays committed, because those tiles are genuinely on disk
+    ///   and a resumed run should not pay for them twice. The most a cancel
+    ///   can strand is one batch.
     private func finalize(
         savedKeys: Set<String>,
         tiles: [Tile],
@@ -479,6 +527,84 @@ final class OfflineTileDownloader {
     }
 }
 
+// MARK: - Claiming coverage as it lands
+
+/// The batch claim, in a same-file extension.
+///
+/// `OfflineTileDownloader` is at SwiftLint's `type_body_length` limit — PR
+/// #484 moved `cancel()` out for the same reason — and this is the member that
+/// tipped it over again. Same file rather than a neighbouring one because
+/// `private` is file-scoped: an extension elsewhere could not reach
+/// `claimedKeys` or `claim`.
+extension OfflineTileDownloader {
+    /// Commits the keys saved since the last batch, and says whether it stuck.
+    ///
+    /// **The phase is untouched, and that is the invariant surviving the
+    /// change.** "A phase saying the map was saved is published after the
+    /// claim" used to be a statement about the one claim a run made; there are
+    /// now many, and restating it per batch would have each batch announcing
+    /// something. It does not: during a run the phase is ``Phase/downloading``,
+    /// which promises nothing, and the only promise — ``Phase/finished`` — is
+    /// still made once, in `finalize`, after the last claim. What the batches
+    /// change is *durability*, not what the hiker is told.
+    ///
+    /// Partial by construction: a batch lists exact keys, so it can never be
+    /// mistaken for the complete record that re-derives the whole grid. The
+    /// complete one, when the run earns it, replaces the partials through
+    /// ``Hike/mergeOfflineDownload(_:)``.
+    private func claimBatch(of savedKeys: Set<String>, source: ActiveTileSource) -> Bool {
+        let pending = savedKeys.subtracting(claimedKeys)
+        guard !pending.isEmpty, let claim else { return true }
+        let record = OfflineDownloadRecord(
+            providerID: source.providerID,
+            maxZoom: source.maximumZ,
+            savedTileKeys: pending.sorted()
+        )
+        do {
+            try claim(record)
+        } catch {
+            return false
+        }
+        claimedKeys.formUnion(pending)
+        return true
+    }
+
+    /// One tile, fetched straight into durable storage. `nonisolated static`
+    /// because it is the body of a task-group child: it runs off the main
+    /// actor, and taking everything it needs as parameters is what keeps it
+    /// from capturing the observable downloader along with them.
+    nonisolated private static func save(
+        _ tile: Tile,
+        from source: ActiveTileSource,
+        through gate: TileLoadGate,
+        using saveTile: @Sendable (String, URL) async -> Bool
+    ) async -> SaveResult {
+        let key = tile.cacheKey(providerID: source.providerID)
+        guard let url = tile.url(from: source.urlTemplate) else { return SaveResult(key: key, saved: false) }
+        // Shared with the map's own tile loads, at `.background`: nobody minds
+        // a download taking a minute longer, and everybody minds the map
+        // stalling while it runs.
+        await gate.acquire(.background)
+        // Re-checked on the far side of the gate, which is where a tile can
+        // sit for a while behind the map: a download the user stopped in the
+        // meantime must not still put its queued requests on the wire.
+        var saved = false
+        if !Task.isCancelled {
+            // Durably, not through `loadTile`: the point of a download is that
+            // the tiles are still there when the user is out of signal, which
+            // rules out the OS-reclaimable cache.
+            saved = await saveTile(key, url)
+        }
+        await gate.release(.background)
+        #if DEBUG
+        if saved {
+            Self.logger.debug("Bulk-saved tile \(key, privacy: .public)")
+        }
+        #endif
+        return SaveResult(key: key, saved: saved)
+    }
+}
+
 // MARK: - Stopping, and the background time a run holds
 
 // An extension rather than more of the class above, which is at its
@@ -497,6 +623,12 @@ extension OfflineTileDownloader {
         total = 0
         completedRecord = nil
         pendingRun = nil
+        // Forgotten, not undone. The batches this run already committed stay
+        // committed — those tiles are on disk and a later run should not pay
+        // for them twice — but this downloader is no longer mid-run, so the
+        // next `start()` is told afresh what the hike already has.
+        resumedKeys = []
+        claimedKeys = []
         // Given back here as well as in the task's tail: a cancelled task's
         // tail is not guaranteed to run promptly and the system is counting.
         // Both paths are idempotent.
