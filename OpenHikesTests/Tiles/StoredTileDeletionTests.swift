@@ -219,6 +219,74 @@ struct StoredTileDeletionTests {
         #expect(sandbox.isSaved(Self.corridorKey))
     }
 
+    // MARK: The hike that is not the one being deleted
+
+    /// The survivor's own drain window. Auto-save runs for whatever is on
+    /// screen, which when a *map* is deleted from a hike's detail is usually
+    /// that hike — but the list's delete, and a second window, both reach
+    /// this with another hike buffering. Its keys live only in
+    /// ``AutoSaveTileStore``'s pending set for a couple of seconds, and a
+    /// survivor set read from manifests alone does not have them: the plan
+    /// then frees tiles the surviving hike's manifest claims a moment later.
+    /// Nothing detects that — the claim looks satisfied — and the hiker finds
+    /// the hole where there is no signal.
+    ///
+    /// `standDown(for:)` cannot cover it: it stands down the *doomed* hike,
+    /// and here the doomed hike is not the one auto-saving.
+    @Test("a tile the surviving hike has only just saved is not freed")
+    func survivorsPendingKeysAreNotFreed() async throws {
+        let controller = AutoSaveController(store: sandbox.store, drainInterval: nil)
+        let deleting = Fixture.hike(in: context, title: "Deleting its map")
+        let survivor = Fixture.hike(in: context, title: "Being browsed") { $0.autoSaveTilesEnabled = true }
+        // The doomed hike claims the tile outright, so it is in the plan
+        // unless the survivor's claim takes it back out.
+        deleting.autoSavedTileKeys = [Self.corridorKey]
+        try context.save()
+        controller.hikeSelectionChanged(to: survivor)
+        await controller.waitForActivation()
+
+        try sandbox.browse(key: Self.corridorKey)
+        let store = sandbox.store
+        await offMain {
+            store.considerPersisting(
+                key: Self.corridorKey,
+                z: Self.corridorTile.z,
+                x: Self.corridorTile.x,
+                y: Self.corridorTile.y
+            )
+        }
+        try #require(sandbox.isSaved(Self.corridorKey), "precondition: the tile is durable")
+        try #require(
+            survivor.autoSavedTileKeys.isEmpty,
+            "precondition: and claimed by nothing but the store's pending set"
+        )
+
+        let outcome = StoredTileDeletion.delete(
+            storedTilesOf: deleting,
+            autoSave: controller,
+            downloads: downloads,
+            fetchingHikes: { [deleting, survivor] }
+        )
+
+        guard case let .committed(deletionPlan) = outcome else {
+            Issue.record("the deletion was refused")
+            return
+        }
+        #expect(
+            survivor.autoSavedTileKeys == [Self.corridorKey],
+            "the fold is what puts the survivor's newest tiles into the set the plan is read against"
+        )
+        // Off the main actor, which the enumeration asserts: it is
+        // O(tile budget) trigonometry per download record.
+        let freed = try await offMain { try deletionPlan.exclusiveTileKeys() }
+        #expect(freed.isEmpty, "so the plan frees nothing")
+        await deletionPlan.removeExclusiveTiles(from: sandbox.cache)
+        #expect(
+            sandbox.isSaved(Self.corridorKey),
+            "a tile the surviving hike saved seconds ago, and goes on claiming, is still on the device"
+        )
+    }
+
     // MARK: A download the hiker overtook
 
     /// The run this button has to stand down is not the one on screen.

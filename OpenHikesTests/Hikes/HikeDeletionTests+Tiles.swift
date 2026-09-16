@@ -30,6 +30,10 @@ extension HikeDeletionTests {
     /// The tile both hikes claim, and the one only the doomed hike does.
     nonisolated private static let sharedTileKey = "osm/14/8723/5685@2.0-shared"
     nonisolated private static let exclusiveTileKey = "osm/14/8724/5685@2.0-exclusive"
+    /// A tile inside the ridge fixture's own corridor, so the auto-save store
+    /// claims it the way it does in the app.
+    nonisolated private static let corridorTileKey = "osm/14/2638/6357@2.0"
+    nonisolated private static let corridorTile = (z: 14, x: 2638, y: 6357)
 
     /// Two saved hikes over the same ground, claiming by auto-saved key so the
     /// claim is exactly the tiles on disk rather than a recomputed route grid.
@@ -84,6 +88,61 @@ extension HikeDeletionTests {
             "the surviving hike downloaded this one too; deleting it would strip a map nothing re-downloads"
         )
         #expect(survivor.autoSavedTileKeys == [Self.sharedTileKey])
+    }
+
+    /// The same hole `StoredTileDeletionTests` pins on the sheet's Delete
+    /// button, reached the ordinary way: the hiker swipes a hike out of the
+    /// list while the map on screen belongs to another one. That hike's last
+    /// couple of seconds of auto-saves are on disk and in nothing else, so a
+    /// survivor set read from manifests alone leaves them out and the plan
+    /// frees them — durable tiles the surviving hike claims a moment later,
+    /// with no re-download and no sweep that can tell.
+    ///
+    /// `standDown(for:)` stands down the *doomed* hike, which is not the one
+    /// buffering here.
+    @Test("a tile the surviving hike has only just saved survives another hike's deletion")
+    func survivorsPendingTilesSurviveADeletion() async throws {
+        let sandbox = TileSandbox()
+        let photos = HikePhotoImportTests.Sandbox()
+        let context = try Fixture.modelContext()
+        let controller = AutoSaveController(store: sandbox.store, drainInterval: nil)
+        let doomed = Fixture.hike(in: context, title: "On its way out")
+        let survivor = Fixture.hike(in: context, title: "Being browsed") { $0.autoSaveTilesEnabled = true }
+        doomed.autoSavedTileKeys = [Self.corridorTileKey]
+        try context.save()
+        controller.hikeSelectionChanged(to: survivor)
+        await controller.waitForActivation()
+
+        try sandbox.browse(key: Self.corridorTileKey)
+        let store = sandbox.store
+        await offMain {
+            store.considerPersisting(
+                key: Self.corridorTileKey,
+                z: Self.corridorTile.z,
+                x: Self.corridorTile.x,
+                y: Self.corridorTile.y
+            )
+        }
+        try #require(sandbox.isSaved(Self.corridorTileKey), "precondition: the tile is durable")
+        try #require(survivor.autoSavedTileKeys.isEmpty, "precondition: claimed only by the pending set")
+
+        let outcome = HikeDeletion.delete(
+            doomed,
+            among: [doomed, survivor],
+            autoSave: controller,
+            store: photos.store
+        )
+
+        guard case let .committed(plan) = outcome, let deletionPlan = plan else {
+            Issue.record("a hike holding tiles must be deleted with a plan to free them")
+            return
+        }
+        #expect(survivor.autoSavedTileKeys == [Self.corridorTileKey], "the fold reaches the claim set")
+        await deletionPlan.removeExclusiveTiles(from: sandbox.cache)
+        #expect(
+            sandbox.isSaved(Self.corridorTileKey),
+            "a tile the surviving hike saved seconds ago is not the deleted hike's to take with it"
+        )
     }
 
     @Test("a refused deletion frees no tiles at all")
