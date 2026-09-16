@@ -367,7 +367,12 @@ struct OfflineDownloadClaimTests {
 /// run is made, which is the one moment the answer is knowable: whatever held
 /// them belonged to a process that has since gone. It also leaves a failed
 /// test's store on disk to look at.
-private final class StoreSandbox {
+/// Internal rather than `private` because a second suite needs it:
+/// `OfflineDownloadResumeTests` asks the same question of a run that never
+/// finished, and the whole point of this harness is that the store is on disk
+/// and opened fresh. Duplicating it there would be duplicating the one thing
+/// in it that is subtle — when the container is allowed to go.
+final class StoreSandbox {
     /// The parent every sandbox lives in, emptied on first use per run.
     private static let root: URL = {
         let parent = FileManager.default.temporaryDirectory

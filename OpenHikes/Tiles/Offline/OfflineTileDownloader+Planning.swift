@@ -61,6 +61,39 @@ nonisolated extension OfflineTileDownloader {
         return result
     }
 
+    /// What a previous run of the same download already saved and claimed.
+    ///
+    /// Read straight off the hike's partial records rather than re-derived
+    /// from the route, which is what makes it cheap enough to ask on the main
+    /// actor at the moment of the tap: a partial record lists its exact keys,
+    /// and a *complete* one for this provider and depth means there is nothing
+    /// left to fetch at all — reported here as the full grid being outstanding
+    /// of nothing, since `plannedTiles` will then filter every tile away and
+    /// the run finishes without a request.
+    ///
+    /// Matched on provider **and** depth, because neither alone is the same
+    /// download: tiles are namespaced by provider, and a shallower previous
+    /// run saved none of the deeper levels this one wants.
+    static func resumableKeys(
+        from records: [OfflineDownloadRecord],
+        source: ActiveTileSource
+    ) -> Set<String> {
+        var keys = Set<String>()
+        for record in records
+        where record.providerID == source.providerID && record.maxZoom == source.maximumZ {
+            guard !record.savedTileKeys.isEmpty else {
+                // A complete record. Re-deriving its grid here would be the
+                // O(tileBudget) trig work this function exists to avoid, and
+                // it is not needed: the button that starts a download is not
+                // offered for a map that is already whole, and a run started
+                // anyway plans the grid and finds every tile present.
+                continue
+            }
+            keys.formUnion(record.savedTileKeys)
+        }
+        return keys
+    }
+
     /// The cache keys every tile a download of `route` would produce for the
     /// given provider and depth — so stored tiles can be measured and removed
     /// after the fact. Deterministic: recomputing yields exactly the saved set.

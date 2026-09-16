@@ -360,6 +360,14 @@ private extension HikeDetailView {
                         downloader.start(
                             route: hike.route,
                             source: source,
+                            // What a previous run already put on disk and
+                            // claimed, so a download killed at 90% resumes
+                            // rather than starting over — see
+                            // ``OfflineTileDownloader/defaultClaimBatchSize``.
+                            alreadySaved: OfflineTileDownloader.resumableKeys(
+                                from: hike.offlineDownloads,
+                                source: source
+                            ),
                             claim: offlineDownloadClaim
                         )
                     }
