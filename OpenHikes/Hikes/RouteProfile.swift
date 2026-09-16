@@ -164,7 +164,21 @@ nonisolated struct RouteProfile: Sendable {
                 routePauseDistances.append(cumulative)
             }
             elevations.record(point.elevation)
-            if let pointElevation = point.elevation {
+            // `isFinite`, and here rather than in each consumer: a height that
+            // is not a number is not a height, and admitted into `samples` it
+            // goes wrong differently in every place that reads them. The
+            // downsampling buckets below seed their bounds with the bucket's
+            // first sample and displace them by comparison, and every
+            // comparison against a NaN is false — so a poisoned first sample
+            // keeps both bounds and the bucket contributes it *instead of* the
+            // summit that was walked. `ElevationChartView`'s `==` compares the
+            // sample arrays to decide whether to rebuild its body, and
+            // `nan != nan`, so for such a hike it can never hold and the body
+            // is rebuilt at drag frequency for a picture that has not changed.
+            // The accumulator above already refuses the same value, for the
+            // same reason; `GPXImport` refuses it at the door, and this is
+            // what covers hikes stored before it did.
+            if let pointElevation = point.elevation, pointElevation.isFinite {
                 routeSamples.append(ElevationSample(distanceMeters: cumulative, elevation: pointElevation))
             }
             onPoint(point, segment)
@@ -252,14 +266,15 @@ nonisolated struct RouteProfile: Sendable {
 
     /// Elevation min…max across the plotted samples, if any.
     ///
-    /// Heights that aren't numbers are stepped over rather than compared.
-    /// Every comparison against a NaN is false, so `minAndMax()` never
-    /// displaces a bound it has already seeded with one: a NaN *first* comes
-    /// back as the min, a NaN *last* as the max. Either way the range is
-    /// built from a bound that isn't ordered, and `ClosedRange` traps on that
-    /// the moment the chart asks for its y-domain rather than drawing an axis
-    /// that merely looks wrong. ``GPXImport`` refuses such a height at the
-    /// door; this is what covers a hike that was stored before it did.
+    /// The filter is a backstop now rather than the guard it used to be:
+    /// ``build(route:onPoint:shouldContinue:)`` no longer admits a non-finite
+    /// height into ``samples`` at all. It stays because of what its absence
+    /// would cost if some future path did. Every comparison against a NaN is
+    /// false, so `minAndMax()` never displaces a bound it has already seeded
+    /// with one: a NaN *first* comes back as the min, a NaN *last* as the max.
+    /// Either way the range is built from a bound that isn't ordered, and
+    /// `ClosedRange` traps on that the moment the chart asks for its y-domain
+    /// — a crash, rather than an axis that merely looks wrong.
     var elevationRange: ClosedRange<Double>? {
         guard let bounds = samples.lazy.map(\.elevation).filter(\.isFinite).minAndMax() else {
             return nil
