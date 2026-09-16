@@ -80,6 +80,44 @@ nonisolated enum MovementReminderPolicy {
     /// might genuinely rather have out of their moving average.
     static let stillFor: TimeInterval = 15 * 60
 
+    /// How far off the line counts as having left the trail, for the purpose
+    /// of *telling* the hiker.
+    ///
+    /// **Its own number rather than `BackgroundTrailTracker`'s, and the
+    /// difference is what the two are for.** `offRouteExitMeters` is 112 m —
+    /// the follow threshold plus hysteresis — and it is tuned for a *display*
+    /// status, where being wrong costs a word on a Lock Screen flickering.
+    /// Being wrong here costs a banner in somebody's pocket, and a hiker who
+    /// stops trusting those stops reading the one that mattered.
+    ///
+    /// 150 m because that is past what the terrain explains. A switchback
+    /// stacks legs 20–60 m apart, a forest road running parallel to a path
+    /// sits within about a hundred, and a GPS fix under tree cover or against
+    /// a rock face is routinely off by fifty. At 150 m none of those is the
+    /// explanation any more.
+    static let offTrailMeters = 150.0
+
+    /// How long that has to hold before the hiker is told.
+    ///
+    /// The other half, and the half a distance alone cannot do: a single fix
+    /// at 200 m is as likely to be a bad fix as a wrong turn. Two minutes is
+    /// long enough that a walker covers 150–200 m of *committed* movement
+    /// away from the line, and short enough to still be useful — a hiker
+    /// three minutes down the wrong path can walk back up it, which is the
+    /// entire point of saying anything.
+    static let offTrailDwell: TimeInterval = 120
+
+    /// How far back onto the line counts as having rejoined it, which is what
+    /// re-arms the reminder.
+    ///
+    /// The plain follow threshold rather than ``offTrailMeters``, so coming
+    /// back is judged as promptly as the rest of the app judges it — the same
+    /// asymmetry `BackgroundTrailTracker` applies for the display, and for
+    /// the same reason. Between the two is a band where the hiker is neither
+    /// told again nor considered to have returned, which is exactly the
+    /// state a walker picking their way back along a faint path is in.
+    static let onTrailAgainMeters = RouteProfile.followMatchThresholdMeters
+
     /// The loosest fix the watch will measure a displacement with.
     ///
     /// A significant-location-change delivery can report accuracy in the

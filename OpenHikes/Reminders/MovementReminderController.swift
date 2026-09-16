@@ -107,6 +107,10 @@ final class MovementReminderController {
     private var pausedRecording: PausedRecording?
     private var pausedWalk: PausedWalk?
     private var stillness = StillnessWatch()
+    /// Whether the followed trail is currently being walked away from — see
+    /// ``OffTrailWatch``. Not per-subject the way the pauses above are:
+    /// exactly one trail is followed at a time.
+    private var offTrail = OffTrailWatch()
 
     /// What to do when a pause stops being watched for a reason the recorder
     /// has not heard about — today, the hiker turning the switch off with a
@@ -352,6 +356,55 @@ extension MovementReminderController {
     func walkDidResumeOrEnd() {
         pausedWalk = nil
         withdraw(.resumeWalk)
+    }
+
+    /// A matched fix while the walk is *running*, and how far off the line it
+    /// fell.
+    ///
+    /// The counterpart to ``walkObserved(distanceAlongRoute:at:)``, which
+    /// watches a walk that is paused. This one watches a walk that is under
+    /// way, which is the only state in which leaving the trail means
+    /// anything: a paused walk's hiker is somewhere else on purpose.
+    ///
+    /// - Parameter offRouteMeters: `nil` for a fix that could not be matched.
+    ///   That is absence of evidence rather than evidence of absence — see
+    ///   ``OffTrailWatch/observed(offRouteMeters:at:)`` — and leaves the watch
+    ///   untouched.
+    func walkObserved(
+        offRouteMeters: Double?,
+        trailTitle: String,
+        at date: Date
+    ) {
+        guard isEnabled else { return }
+        // A hiker recording their own track is not following somebody else's
+        // line, and the recording's own reminders are the ones they can act
+        // on. The same precedence this type applies everywhere else, and for
+        // the reason its header gives: two banners about one walk is the app
+        // arguing with itself in a pocket.
+        guard !hasActiveRecording() else { return }
+        let wasOffTrail = offTrail.isOffTrail
+        let shouldRemind = offTrail.observed(offRouteMeters: offRouteMeters, at: date)
+        // Rejoining takes the banner back down. A standing "Off the trail" is
+        // a claim about *now*, and a hiker who has walked back onto the route
+        // should not find it on the Lock Screen when they next look.
+        if wasOffTrail, !offTrail.isOffTrail { withdraw(.leftTheTrail) }
+        guard shouldRemind, let offRouteMeters else { return }
+        post(
+            MovementReminderWording.leftTheTrail(
+                trailTitle: trailTitle,
+                offRouteMeters: offRouteMeters
+            )
+        )
+    }
+
+    /// The walk is over, or the hiker is no longer following anything.
+    ///
+    /// Separate from ``walkDidResumeOrEnd()`` because the two are about
+    /// different walks: that one ends a *pause*, and a pause ending is when
+    /// this watch starts mattering rather than when it stops.
+    func walkDidStopFollowing() {
+        offTrail.reset()
+        withdraw(.leftTheTrail)
     }
 }
 
