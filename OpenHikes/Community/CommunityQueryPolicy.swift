@@ -120,9 +120,11 @@ struct CommunityQueryPolicy {
     private static let zoomFactor: Double = 2
 
     /// Whether the hiker has asked for community hikes at all. Nothing is
-    /// offered or requested while this is false, and turning it off forgets
-    /// the last query so turning it back on asks again rather than showing a
-    /// list from wherever the map used to be.
+    /// offered or requested while this is false — ``action(for:)`` answers
+    /// ``CommunityQueryAction/ignore`` to every settle — and the last
+    /// committed query survives being turned off, so coming back to an
+    /// unmoved map is recognised as the same question. See
+    /// ``startBrowsing()``.
     private(set) var isBrowsing = false
     private var committed: CommunitySearchArea?
 
@@ -131,14 +133,30 @@ struct CommunityQueryPolicy {
     /// is what pins it in tests.
     private(set) var issuedQueries = 0
 
+    /// The tab was selected. Keeps the last committed query, so a hiker who
+    /// comes back to a map they have not moved is asking the same question.
+    ///
+    /// Both of these used to forget it, so that turning the section back on
+    /// asked again rather than showing a list from wherever the map used to
+    /// be. The list is no longer from wherever the map used to be:
+    /// ``CommunityBrowser/stopBrowsing()`` now keeps its rows and the area
+    /// they answer, so forgetting here would make the returning region look
+    /// like a new question and spend a request replacing rows that are already
+    /// right — and, worse, replacing them with a
+    /// ``CommunityNearbyScope/publishedOnly`` answer that has no OpenStreetMap
+    /// trails in it at all.
+    ///
+    /// The browser forgets explicitly on the one path where this memory is of
+    /// a question that never answered — see ``forgetLastQuery()``.
     mutating func startBrowsing() {
         isBrowsing = true
-        forgetLastQuery()
     }
 
+    /// The tab was left. Keeps the last committed query for the same reason
+    /// ``startBrowsing()`` does; ``isBrowsing`` alone is what stops anything
+    /// being offered in the meantime.
     mutating func stopBrowsing() {
         isBrowsing = false
-        forgetLastQuery()
     }
 
     /// What the map settling on `region` means.

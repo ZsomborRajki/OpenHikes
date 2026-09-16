@@ -115,10 +115,20 @@ struct CommunityAreaNameTests {
         #expect(names.asked.count == 1)
     }
 
-    /// Hiding the section takes the heading with it, so asking for it again
-    /// does not open on a place from another session.
-    @Test("hiding the section forgets the name")
-    func hidingForgetsTheName() async {
+    /// The heading stays with the rows it heads.
+    ///
+    /// This used to assert that hiding the section forgot the name, so that
+    /// asking for it again did not open on a place from another session. There
+    /// is no other session to open on any more: ``CommunityBrowser`` keeps the
+    /// rows and the ``CommunitySearchArea`` they answer about across the tab,
+    /// and a name is only ever published over rows it describes — see
+    /// ``CommunityBrowser/nameArea(_:)``, which will not publish one for an
+    /// area that is not ``CommunityBrowser``'s `resultsArea`. Forgetting the
+    /// name alone would have brought the list back under *Nearby* with
+    /// Esztergom's hikes in it, which is the one thing the heading exists to
+    /// prevent.
+    @Test("the heading comes back with the rows it describes")
+    func theNameSurvivesTheTab() async {
         let names = StubAreaNames(answer: "Esztergom")
         let browser = CommunityBrowser(
             transport: StubCommunityTransport(),
@@ -130,7 +140,11 @@ struct CommunityAreaNameTests {
         await settle(browser)
 
         browser.stopBrowsing()
-        #expect(browser.areaName == nil)
+        browser.startBrowsing()
+        await settle(browser)
+
+        #expect(browser.areaName == "Esztergom")
+        #expect(names.asked.count == 1, "coming back re-geocodes nothing")
     }
 
     /// A launch that must not reach CloudKit must not reach MapKit's geocoder

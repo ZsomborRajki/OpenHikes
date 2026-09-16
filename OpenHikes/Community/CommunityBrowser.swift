@@ -41,8 +41,14 @@
 //  The one request the hiker does not have to confirm is the first: selecting
 //  the *Community* tab is itself the confirmation, and asking twice for one
 //  intention would be a worse bargain than the automatic re-query ever was.
-//  Leaving the tab calls ``stopBrowsing()``, so the session lasts exactly as
-//  long as the list that is showing it.
+//
+//  Leaving the tab calls ``stopBrowsing()``, which takes the list off the map
+//  and stops anything being offered — but **keeps the rows**, so coming back
+//  is not a first request and does not make one. The session outlasts the tab
+//  by exactly as much as the map allows: the rows stand under the area they
+//  answered about, and a map that moved in the meantime raises the ordinary
+//  *Search this area* offer over them rather than silently replacing them.
+//  See ``stopBrowsing()`` for what that fixed.
 //
 //  ## Where blocked authors are taken out
 //
@@ -125,7 +131,18 @@ final class CommunityBrowser {
     /// answer now outlives the other question entirely.
     ///
     /// Computed, with blocked authors taken out — see ``nearbyResults``.
-    var nearbyListings: [CommunityListing] { blockList.excludingBlocked(nearbyResults) }
+    ///
+    /// **Empty while the tab is away, over rows that are still held.** The
+    /// rows outlive ``stopBrowsing()`` so that coming back costs nothing; what
+    /// must not outlive it is the *drawing* of them, because the map reads
+    /// this and has no other signal. ``MapCommunityAnnotations`` and
+    /// ``MapCommunityRoutes`` observe it directly, so pins and lines for a
+    /// list nobody is looking at would otherwise sit over *My Hikes* until the
+    /// hiker came back. Retained and hidden, exactly the way a blocked
+    /// author's hike is.
+    var nearbyListings: [CommunityListing] {
+        isBrowsing ? blockList.excludingBlocked(nearbyResults) : []
+    }
     /// What the search results draw: published hikes whose title matches what
     /// the hiker typed. Nothing the map does touches this.
     var matchingListings: [CommunityListing] { blockList.excludingBlocked(matchingResults) }
@@ -390,6 +407,30 @@ final class CommunityBrowser {
             commit(area, from: .publishedOnly)
             return
         }
+        offer(action)
+        // A deferred opt-in whose first region turns out to be above the
+        // ceiling. Nothing was asked and nothing is coming until the hiker
+        // zooms in, so the spinner ``startBrowsing()`` put up has to come
+        // down: `.loading` means a request exists, and the header draws it
+        // as a promise of an answer. This is the resting state
+        // ``startBrowsing()`` already reaches for itself when the map had
+        // settled somewhere too wide before the tab was selected — the two
+        // paths express one intention and must agree about it.
+        //
+        // `wantsFirstRegion` deliberately stays set. The tap that opted in
+        // is still the confirmation, so the first region that *does* clear
+        // the ceiling is asked about rather than offered.
+        if action == .tooFarOut, wantsFirstRegion { state = .loaded }
+    }
+
+    /// Puts `action` on screen: which area the pill is offering, if any.
+    ///
+    /// The whole of what a settle is allowed to do, and now shared with
+    /// ``startBrowsing()``'s return visit, which has the same three answers to
+    /// draw and had grown its own copy of them. Deliberately says nothing
+    /// about ``state``: an offer is about the map, and the two callers differ
+    /// on what the *list* is doing while one is up.
+    private func offer(_ action: CommunityQueryAction) {
         switch action {
         case .ignore:
             offeredArea = nil
@@ -400,19 +441,6 @@ final class CommunityBrowser {
         case .tooFarOut:
             offeredArea = nil
             areaPrompt = .zoomIn
-            // A deferred opt-in whose first region turns out to be above the
-            // ceiling. Nothing was asked and nothing is coming until the hiker
-            // zooms in, so the spinner ``startBrowsing()`` put up has to come
-            // down: `.loading` means a request exists, and the header draws it
-            // as a promise of an answer. This is the resting state
-            // ``startBrowsing()`` already reaches for itself when the map had
-            // settled somewhere too wide before the tab was selected — the two
-            // paths express one intention and must agree about it.
-            //
-            // `wantsFirstRegion` deliberately stays set. The tap that opted in
-            // is still the confirmation, so the first region that *does* clear
-            // the ceiling is asked about rather than offered.
-            if wantsFirstRegion { state = .loaded }
         }
     }
 
@@ -458,10 +486,35 @@ final class CommunityBrowser {
     ///
     /// The one request nobody has to confirm — the tab selection that gets
     /// here *is* the confirmation. See this file's header.
+    ///
+    /// **Unless the last visit's rows are still here**, which is the case that
+    /// used to lose the OpenStreetMap half of a list. That unconfirmed request
+    /// exists so the tab is never opened onto nothing; with rows kept there is
+    /// no nothing to open onto, and asking anyway would replace a merged list
+    /// with a ``CommunityNearbyScope/publishedOnly`` one — the curated routes
+    /// gone from an area the hiker had just searched, for a request they did
+    /// not make. So a return visit asks for nothing and only re-reads the map:
+    /// the rows stand under the area name they arrived with, and if the map
+    /// moved while they were away the pill offers the new area the ordinary
+    /// way.
     func startBrowsing() {
         guard !isBrowsing else { return }
         policy.startBrowsing()
         isBrowsing = true
+        if resultsArea != nil {
+            // Held rows — see ``stopBrowsing()``. `resultsArea` rather than a
+            // non-empty `nearbyResults`, because an area that genuinely has no
+            // hikes in it is an answer too, and re-asking for it on every tab
+            // switch is the same unrequested request in a quieter form.
+            state = .loaded
+            if let latestRegion { offer(policy.action(for: latestRegion)) }
+            return
+        }
+        // Nothing to come back to, so whatever the policy still remembers is a
+        // question that never answered — a request cancelled on the way out of
+        // the tab. Forgetting it is what keeps the region below a question
+        // rather than a repeat, and what keeps `.ignore` unreachable here.
+        policy.forgetLastQuery()
         guard let latestRegion else {
             // The map has not reported a region yet — a sheet opened before
             // the first `regionDidChangeAnimated`. Nothing to ask about, so
@@ -500,27 +553,50 @@ final class CommunityBrowser {
     /// Takes the map's answer with it and leaves the typed one alone:
     /// somebody who searched for a trail by name asked for it by name — see
     /// ``search(matching:)``.
+    ///
+    /// ## The rows stay
+    ///
+    /// This used to empty ``nearbyResults`` and forget ``resultsArea``, and
+    /// that is what made a searched area come back blank: ``startBrowsing()``
+    /// then re-asked as ``CommunityNearbyScope/publishedOnly``, which skips
+    /// ``CuratedTrailSource`` entirely — see ``MergedCommunityTransport``'s
+    /// `listCurated`, which returns before the cache is read. So the curated
+    /// half of a list the hiker had just paid two Overpass round trips for
+    /// disappeared on a tab switch, and no amount of caching could have
+    /// answered it, because nothing asked.
+    ///
+    /// Keeping them is cheaper than every alternative — no request, no new
+    /// cache, nothing to invalidate — and the objection recorded in
+    /// ``CommunityReviewQueue/stopBrowsing()`` is already answered by machinery
+    /// that exists. That objection is that these rows are an answer about *an
+    /// area of the map*, and the map moves while the list is away. It does,
+    /// and ``resultsArea`` is precisely the record of which area they answer,
+    /// ``areaName`` says so in the header, and ``CommunityAreaPrompt/search``
+    /// is the existing way to offer a hiker the area they have moved to. The
+    /// rows are never passed off as describing somewhere they do not.
+    ///
+    /// What does not stay is the *drawing* of them — see ``nearbyListings``,
+    /// which goes empty with the tab so the pins and lines come off the map.
     func stopBrowsing() {
         policy.stopBrowsing()
         isBrowsing = false
         nearbyTask?.cancel()
-        nearbyTask = nil
         nameTask?.cancel()
-        nameTask = nil
         outlineTask?.cancel()
+        nearbyTask = nil
+        nameTask = nil
         outlineTask = nil
-        nearbyResults = []
-        // The lines go with the pins. The open preview's own line does not —
-        // it belongs to a screen that is still up, and hiding the section
-        // from underneath it must not blank the trail it is showing.
-        nearbyOutlines = [:]
+        // ``nearbyResults``, ``nearbyOutlines``, ``resultsArea`` and
+        // ``areaName`` deliberately survive — see above. The lines go with the
+        // pins by way of ``nearbyListings``, and the open preview's own line
+        // does not go at all: it belongs to a screen that is still up, and
+        // hiding the section from underneath it must not blank the trail it is
+        // showing.
         offeredArea = nil
-        resultsArea = nil
         pendingArea = nil
         pendingName = nil
         wantsFirstRegion = false
         areaPrompt = .settled
-        areaName = nil
         // The notice goes with the tab that drew it. A limit that is still
         // running will say so again on the next tap — ``CuratedTrailSource``
         // refuses one without a round trip — and a caption left standing over
