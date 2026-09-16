@@ -29,9 +29,15 @@
 //
 //  - *waiting for review* has exactly one thing to do, and opens the request
 //    form directly.
-//  - *published* has two — share again, or ask for removal — and is a `Menu`,
-//    which is the shape for a control that genuinely offers a choice. The
-//    warning about a second copy is still the share form's own business.
+//  - *published* is a `Menu`, which is the shape for a control that genuinely
+//    offers a choice. What it offers is **not** a second copy of the hike: it
+//    used to lead with *Share Again*, and since a submission cannot be
+//    amended, that made a second listing of the same walk and left the first
+//    one live. The hiker who comes back to a published hike is almost always
+//    carrying photographs they did not have on the day, so the item is now
+//    *Add Photos to This Trail* — a contribution onto the listing that already
+//    exists — beside the two ways to ask for something back. See
+//    ``publishedMenuItems(_:)``.
 //
 //  ## And the state that used to be a dead end
 //
@@ -203,19 +209,69 @@ extension HikeDetailView {
             .buttonStyle(.plain)
         case .published:
             Menu {
-                Button("Share Again", systemImage: "person.2.badge.plus") {
-                    isSharingToCommunity = true
-                }
-                Button("Ask for Removal", systemImage: "envelope", role: .destructive) {
-                    isWithdrawingFromCommunity = true
-                }
-                .accessibilityIdentifier("community-withdraw-button")
+                publishedMenuItems(contribution)
             } label: {
                 Self.shareButtonGlyph(publication, eligibility, contribution)
             }
             .menuStyle(.button)
             .buttonStyle(.plain)
         }
+    }
+
+    /// What a hike that is already live offers, which is no longer a second
+    /// copy of itself.
+    ///
+    /// *Share Again* used to be the first item here, and it was the duplicate
+    /// this whole gate exists to refuse — dressed as an amendment. A
+    /// submission cannot be amended, by ``CommunitySchema``'s design, so
+    /// sharing again made a **second** listing of the same walk and pointed
+    /// this device at it: the original stayed live, stayed findable, and was
+    /// now the copy the hiker could no longer see. The one thing a hiker
+    /// actually comes back here to do — add the photographs they got off the
+    /// camera after the walk went up — went to the wrong place entirely.
+    ///
+    /// So the item is the contribution: the pictures go onto the listing that
+    /// already exists, which is the only shape this schema has for adding
+    /// anything to a published hike. See
+    /// ``CommunityPhotoTarget/published(listingID:title:)``.
+    ///
+    /// The three photo states are the same three ``contributionControl``
+    /// draws, and the middle one is missing on purpose rather than by
+    /// oversight: a set waiting for review must not be joined by a second set,
+    /// because neither can be withdrawn from here and the reviewer would be
+    /// looking at the same photographs twice. What that state offers instead
+    /// is the way to ask for them back.
+    ///
+    /// An amended *route* has no item any more, and that is a real loss stated
+    /// plainly: the walk that is live is the walk that was sent. Sending a
+    /// corrected one is a takedown of the first followed by a fresh share,
+    /// which is what the removal request is for and what it always had to be —
+    /// what changed is that the app no longer offers a shortcut that quietly
+    /// skips the takedown.
+    @ViewBuilder
+    private func publishedMenuItems(_ contribution: CommunityContributionState) -> some View {
+        if let target = CommunityPhotoTarget.published(
+            listingID: hike.communityListingID,
+            title: hike.displayTitle
+        ), contribution != .awaitingReview {
+            Button(
+                contribution == .published ? "Add More Photos" : "Add Photos to This Trail",
+                systemImage: "photo.badge.plus"
+            ) {
+                contributionTarget = target
+            }
+            .accessibilityIdentifier("community-add-photos-button")
+        }
+        if contribution != .notShared {
+            Button("Ask for Photo Removal", systemImage: "photo.badge.exclamationmark") {
+                isWithdrawingPhotosFromCommunity = true
+            }
+            .accessibilityIdentifier("community-photo-withdraw-button")
+        }
+        Button("Ask for Removal", systemImage: "envelope", role: .destructive) {
+            isWithdrawingFromCommunity = true
+        }
+        .accessibilityIdentifier("community-withdraw-button")
     }
 
     /// The same three-state shape, about the photographs rather than the
@@ -282,10 +338,13 @@ extension HikeDetailView {
     /// The photograph glyphs are a second journey through the same three
     /// states, and only their two ends are drawn differently. *Waiting for a
     /// person* is the same fact whichever was sent, so it is the same
-    /// `hourglass` — and the two can never apply to one hike at once, since a
-    /// hike with a contribution target is by construction one this app refused
-    /// to publish. What tells them apart where it matters is the label and the
-    /// hint below, which say which thing is waiting.
+    /// `hourglass`, and the route's answer wins wherever both apply: a hike
+    /// that is live and has photographs in the queue draws `person.2.fill`,
+    /// because *published* is the older and larger fact about it. Since
+    /// ``CommunityPhotoTarget/published(listingID:title:)`` a hike can be in
+    /// both conversations at once, which is why that precedence is stated
+    /// rather than assumed. What tells them apart where it matters is the
+    /// label and the hint below, which say which thing is waiting.
     private static func shareButtonSymbol(
         _ publication: CommunityPublicationState,
         _ eligibility: CommunityPublishingEligibility,
@@ -347,7 +406,30 @@ extension HikeDetailView {
                 """
             )
         case .published:
-            return String(localized: "Share it again, or ask for it to be taken down.")
+            return Self.publishedHint(contribution)
+        }
+    }
+
+    /// What a live hike's menu holds, which depends on where its photographs
+    /// are rather than on the hike — the hike is published and stays that way.
+    private static func publishedHint(_ contribution: CommunityContributionState) -> String {
+        switch contribution {
+        case .notShared:
+            String(
+                localized: """
+                Live for other hikers. Add photos you've taken since, or ask \
+                for the hike to be taken down.
+                """
+            )
+        case .awaitingReview:
+            String(
+                localized: """
+                Live, and the photos you added are waiting for a person to \
+                check them. Opens a request to withdraw them, or the hike.
+                """
+            )
+        case .published:
+            String(localized: "Add more photos, or ask for them, or the hike, to be taken down.")
         }
     }
 

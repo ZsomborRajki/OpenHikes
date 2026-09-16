@@ -71,10 +71,41 @@ struct CommunityPhotoShareSheet: View {
     private var authorName = ""
     @State private var phase: Phase = .editing
     /// The photographs struck off the strip, by id.
-    @State private var excludedPhotoIDs: Set<UUID> = []
+    ///
+    /// Seeded rather than empty, which is this form's one departure from the
+    /// rule ``CommunitySharePhotoStrip`` states — *everything is included to
+    /// begin with*. That rule is about a hike being sent for the first time,
+    /// where a strip that started empty would silently publish walks with no
+    /// pictures. Here the picture that is already up there is the one nobody
+    /// wants sent again: neither this app nor a reviewer can replace a
+    /// submission, so a second copy is a second copy in the same gallery,
+    /// forever, beside the first. The ones already sent therefore start struck
+    /// off and say so — see ``HikePhoto/sentToCommunityAt`` — and a hiker who
+    /// really does want one again can put it back with the same tap that takes
+    /// any other out.
+    @State private var excludedPhotoIDs: Set<UUID>
     /// How many photographs this device can send, once the disk has been
     /// asked. `nil` until then — see ``photoCount``.
     @State private var sendablePhotoCount: Int?
+
+    /// - Parameter hike: The walk the photographs came from, and the only
+    ///   thing this screen reads a `@Model` for.
+    init(
+        hike: Hike,
+        target: CommunityPhotoTarget,
+        transport: any CommunityTransporting,
+        store: HikePhotoStore = .shared
+    ) {
+        self.hike = hike
+        self.target = target
+        self.transport = transport
+        self.store = store
+        // Read here rather than in a `.task`, so the strip is drawn right the
+        // first time: a form that opened with everything ticked and corrected
+        // itself a frame later would be telling the hiker, briefly, that it
+        // was about to send the lot.
+        _excludedPhotoIDs = State(initialValue: CommunityPublisher.alreadySentPhotoIDs(of: hike))
+    }
 
     /// Where these photographs already are on the way to being published,
     /// which decides whether the form warns about adding a second set.
@@ -102,6 +133,32 @@ struct CommunityPhotoShareSheet: View {
     private var includedPhotoCount: Int {
         CommunityPublisher.ownPhotos(of: hike)
             .count(where: { !excludedPhotoIDs.contains($0.id) })
+    }
+
+    /// Whether the trail these are joining is *this* hike's own listing.
+    ///
+    /// Narrower than ``CommunityPhotoTarget/isYours``, and the difference is
+    /// the retread: walking a published route a second time produces a target
+    /// the hiker owns, aimed at the **earlier** hike's listing, while this
+    /// walk has never been published at all. Both are `isYours`; only one of
+    /// them can be told *you've already published this walk*, which is what
+    /// ``publishedExplanation`` says. The retread's own footer is the
+    /// ``CommunityPublishingEligibility/Reason`` the screen behind it quotes.
+    private var isOwnListing: Bool {
+        target.isYours && hike.communityListingID == target.listingID
+    }
+
+    /// How many of this hike's pictures are being left out because a copy of
+    /// them is already in the public database.
+    ///
+    /// Counted over what is *currently* struck off rather than over what was
+    /// sent, so the sentence under the strip stops as soon as the hiker puts
+    /// the last one back: it explains a state of the form, and a form that
+    /// went on explaining a state it is no longer in would be describing a
+    /// decision the hiker has already reversed.
+    private var alreadySentPhotoCount: Int {
+        CommunityPublisher.ownPhotos(of: hike)
+            .count { $0.hasBeenSentToCommunity && excludedPhotoIDs.contains($0.id) }
     }
 
     /// How many of this hike's pictures are on another device.
@@ -199,6 +256,9 @@ private extension CommunityPhotoShareSheet {
             if let reason = Self.reason(for: hike) {
                 Text(reason.explanation())
                     .accessibilityIdentifier("community-photos-reason")
+            } else if isOwnListing {
+                Text(Self.publishedExplanation)
+                    .accessibilityIdentifier("community-photos-reason")
             }
         }
     }
@@ -225,6 +285,12 @@ private extension CommunityPhotoShareSheet {
                 store: store,
                 isSending: phase == .sending
             )
+            if alreadySentPhotoCount > 0 {
+                Text(Self.alreadySent(count: alreadySentPhotoCount))
+                    .font(.footnote)
+                    .foregroundStyle(.secondary)
+                    .accessibilityIdentifier("community-photos-already-sent")
+            }
             if unsendablePhotoCount > 0 {
                 Text(Self.photosOnAnotherDevice(count: unsendablePhotoCount))
                     .font(.footnote)
@@ -425,10 +491,52 @@ private extension CommunityPhotoShareSheet {
         if target.isCurated {
             return String(localized: "A trail from OpenStreetMap, which has no photos of its own.")
         }
+        if target.isYours {
+            return String(localized: "Your own hike, already live for other hikers.")
+        }
         guard let author = target.authorName else {
             return String(localized: "A trail already in the community list.")
         }
         return String(localized: "Shared by \(author).")
+    }
+
+    /// Why the walk itself is staying put, for the one target that has no
+    /// ``CommunityPublishingEligibility/Reason`` behind it.
+    ///
+    /// A hike the hiker published is *eligible* — it passed this gate once,
+    /// which is how it came to be live — so there is no refusal to quote and
+    /// the footer would otherwise be empty on the screen that most needs it.
+    /// What it has to say is not a rule but a consequence: the listing is
+    /// already there and cannot be amended, so this is an addition to it.
+    static var publishedExplanation: String {
+        String(
+            localized: """
+            You've already published this walk, and a published hike can't be \
+            amended — so its route, its name and its notes stay exactly as they \
+            are, and these photos go on as an addition to it.
+            """
+        )
+    }
+
+    /// What to say about the pictures a previous send already carried.
+    ///
+    /// Number-neutral after the count, like every other sentence here, and it
+    /// names the undo: the tap that put them out is the tap that puts them
+    /// back, and a hiker who genuinely wants a second copy is allowed one.
+    static func alreadySent(count: Int) -> String {
+        count == 1
+            ? String(
+                localized: """
+                One photo has already been sent from this hike, so it's left \
+                out. Tap it to send it again anyway.
+                """
+            )
+            : String(
+                localized: """
+                \(count) photos have already been sent from this hike, so they're \
+                left out. Tap one to send it again anyway.
+                """
+            )
     }
 
     /// Why the route is staying behind, read off the hike the same way the

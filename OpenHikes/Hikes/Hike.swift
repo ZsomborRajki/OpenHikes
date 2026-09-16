@@ -154,12 +154,21 @@ final class Hike {
     /// as, or `nil` if they never have been.
     ///
     /// The contribution half of the two columns above, and it is deliberately
-    /// a *second pair* rather than a reuse of the first. A hike can be in only
-    /// one of the two conversations — a hike whose route was published is not
-    /// a hike whose photographs were contributed to somebody else's — but the
-    /// two states are read by different controls and mean different things,
-    /// and one pair of columns holding either would make *sent for review*
-    /// ambiguous about what had been sent.
+    /// a *second pair* rather than a reuse of the first. The two states are
+    /// read by different controls and mean different things, and one pair of
+    /// columns holding either would make *sent for review* ambiguous about
+    /// what had been sent.
+    ///
+    /// **Both pairs can be set at once, and that is the ordinary case for a
+    /// hike somebody keeps adding to.** This used to say a hike could be in
+    /// only one of the two conversations, on the reasoning that a hike whose
+    /// route was published is not a hike whose photographs went onto somebody
+    /// else's. What that missed is the hiker who publishes a walk and then
+    /// comes home with the pictures: the trail they want to add to is their
+    /// own, already live, and a submission cannot be amended — so the
+    /// photographs go on as a contribution to it, and this pair is where that
+    /// contribution is remembered. See
+    /// ``CommunityPhotoTarget/published(listingID:title:)``.
     ///
     /// Written only once CloudKit has accepted the upload, the ordering
     /// ``CommunityPhotoPublisher/contribute(_:to:authorName:transport:excludingPhotos:store:save:)``
