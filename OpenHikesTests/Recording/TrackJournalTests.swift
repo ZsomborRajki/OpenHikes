@@ -37,6 +37,41 @@ struct TrackJournalTests {
         )
     }
 
+    /// The file stores a NaN for *absent* and the reader turned that back into
+    /// `nil`. An infinity — a glitched barometer, a hand-edited journal, a
+    /// recording mirrored from a build without the import guards — was not
+    /// absent and not a height either: it survived into `Hike.route`, where
+    /// the statistics accumulator drops it but the elevation chart's
+    /// downsampling and the GPX export do not.
+    @Test("a non-finite height, course or speed reads back as absent")
+    func nonFiniteFieldsAreAbsent() async throws {
+        let directory = try sandbox()
+        defer { try? FileManager.default.removeItem(at: directory) }
+        let journal = TrackJournal(directory: directory, clock: TestClock(start).read)
+
+        try await journal.start(sessionID: UUID(), startedAt: start)
+        try await journal.append(
+            RecordingPoint(
+                latitude: 47.63,
+                longitude: 12.86,
+                timestamp: start,
+                horizontalAccuracy: 8,
+                elevation: .infinity,
+                course: -.infinity,
+                speed: .infinity,
+                flags: []
+            )
+        )
+        try await journal.flush()
+
+        let session = try #require(try await journal.loadSession())
+        let point = try #require(session.points.first)
+        #expect(point.elevation == nil, "an infinite height is not a height")
+        #expect(point.course == nil)
+        #expect(point.speed == nil)
+        #expect(point.latitude == 47.63, "and the fix it arrived on is still a fix")
+    }
+
     @Test("points and metadata round-trip through the fixed-width file")
     func roundTrip() async throws {
         let directory = try sandbox()
