@@ -128,6 +128,19 @@ nonisolated enum StoredTileDeletion {
         // manifest that stayed full.
         guard hike.isAttached, let context = hike.modelContext else { return .refused(.notSaved) }
 
+        // Before the survivors are read, because the hike auto-save is
+        // buffering for is usually *not* this one: browse hike B, delete hike
+        // A's map inside B's drain window, and B's last couple of seconds of
+        // saves are on disk with nothing in any manifest pointing at them.
+        // They are then missing from the survivor set, and the plan frees
+        // durable tiles B's own manifest goes on to claim — discovered
+        // offline, with no re-download. The launch trim flushes here for this
+        // exact reason (``OpenHikesModel/trimTileCache(in:)``); `standDown`
+        // below only covers the case where the doomed hike is the one
+        // auto-saving. A suspended scene needs nothing: `sceneWillResignActive`
+        // has already folded and saved what the store held.
+        autoSave.flushPendingKeys()
+
         let survivors: [TileOwnership]
         do {
             let hikes = try fetch()
