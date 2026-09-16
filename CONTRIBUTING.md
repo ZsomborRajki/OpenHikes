@@ -28,7 +28,7 @@ a precedent for the next one.
 See [Requirements](README.md#requirements) and [Setup](README.md#setup). In
 short: Xcode 26.5 or later, an iOS 26.0 deployment target, and an Apple
 development team that can sign the WeatherKit entitlement, the App Group, the
-iCloud container and push.
+iCloud container, push and HealthKit.
 
 `OpenHikes/Secrets.plist` holds the optional Stadia and Thunderforest keys. It
 is gitignored and **must never be committed** — `cp Secrets.example.plist

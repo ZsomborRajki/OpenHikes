@@ -12,6 +12,11 @@ import Testing
 import UIKit
 #endif
 
+/// The failure a `ModelContext` cannot be made to produce on demand — a fetch
+/// against a schema it does not know returns an empty result rather than an
+/// error — which is why the has-it-already read is a closure.
+private struct LibraryReadFailure: Error {}
+
 /// Turning somebody else's published hike into one of this hiker's own.
 @MainActor
 @Suite("Community import")
@@ -222,6 +227,30 @@ struct CommunityImportTests {
 
         let hike = try #require(outcome.hike)
         #expect(hike.photos.isEmpty, "a pairing that cannot be trusted must cost the photographs")
+    }
+
+    /// A library that cannot be asked whether it already has this listing is
+    /// not a library saying no. Read as *not imported* — which is what a
+    /// `try?` did — the insert goes ahead and one listing ends up with two
+    /// rows claiming it: duplicate entries, and a Saved badge and an
+    /// open-destination that disagree from then on. A store under stress is
+    /// exactly when that costs most.
+    @Test("a fetch that fails refuses the import rather than inserting a second copy")
+    func unreadableLibraryRefusesTheImport() async throws {
+        let context = try Fixture.modelContext()
+
+        let outcome = await CommunityImport.importHike(
+            Self.detail(),
+            into: context,
+            alreadyImported: { _, _ in throw LibraryReadFailure() }
+        )
+
+        guard case .refused(.unavailable) = outcome else {
+            Issue.record("an unreadable library must refuse rather than import")
+            return
+        }
+        let hikes = try context.fetch(FetchDescriptor<Hike>())
+        #expect(hikes.isEmpty, "nothing may be inserted on the strength of a question nobody answered")
     }
 
     /// And it costs the photographs rather than the walk. The route committed

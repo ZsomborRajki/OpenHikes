@@ -159,12 +159,15 @@ jobs:
 
       # Parsing is not behaviour. Scripts/run-ui-tests.sh decides which
       # simulator a run lands on and which tests it selects, and no suite in
-      # this repository can cover it — it is what runs the suites. The two CI
-      # gate scripts are covered for a plainer reason: one of them can fail a
-      # merge, and the other is the only thing that would notice a sanitized
-      # suite silently not running. These cases run them for real against a
-      # stubbed xcrun and xcodebuild, so nothing is built and no simulator is
-      # touched.
+      # this repository can cover it — it is what runs the suites.
+      # Scripts/simulate-hike.sh is the other program here that drives a
+      # simulator, and the step above is the only thing that had ever read it:
+      # its validators are what stand between a typo and a playback loop that
+      # divides by zero. The two CI gate scripts are covered for a plainer
+      # reason: one of them can fail a merge, and the other is the only thing
+      # that would notice a sanitized suite silently not running. These cases
+      # run them for real against a stubbed xcrun and xcodebuild, so nothing is
+      # built and no simulator is touched.
       - name: Run script smoke tests
         run: Scripts/run-script-tests.sh
 
@@ -536,13 +539,26 @@ jobs:
       #      `CloudSyncCoordinator`'s off-main seam, and the cross-process
       #      App Group writes behind `WidgetFeedSuites`.
       #
+      # The Community block is the newest concurrent code in the app and was
+      # absent from this list entirely — `CommunityBrowser`'s paging and
+      # debounced search, `CommunityPageBudget`, the `@concurrent` transport
+      # protocol and `SeededCommunityTransport` behind it, the preview
+      # downloads, the staging directory and the review queue. The rule for
+      # which Community suites are here is *the ones with `async` tests*, plus
+      # `CommunityPageBudgetTests` for the `@concurrent` type it covers; the
+      # rest of the domain — `CommunityListingTextTests`,
+      # `CommunityQueryPolicyTests`, `CommunityRouteOverlapTests` and the other
+      # pure value-type suites — is synchronous, so a sanitizer has no second
+      # thread to watch. Measured at 664 tests in 62 suites in 9.8 seconds
+      # locally, with no race reported.
+      #
       # A mistyped identifier here is silently ignored rather than rejected, so
       # a suite added to this list and never run looks exactly like one that
       # passes. Nested suites need their enclosing type — hence
       # `WidgetFeedSuites`, which is where `BackgroundDeliveryTests` lives and
-      # which is why 32 entries resolve to 39 suites rather than 32.
+      # which is why 55 entries resolve to 62 suites rather than 55.
       #
-      # 39 is the guard, and the step after the run is what enforces it: an
+      # 62 is the guard, and the step after the run is what enforces it: an
       # identifier that resolves to nothing changes nothing about the exit
       # status, so the count has to be read out of the result bundle or it is
       # not a guard at all. Deliberately not the *test* count, which rises
@@ -620,6 +636,29 @@ jobs:
               -only-testing:OpenHikesTests/LocationFixStreamTests \
               -only-testing:OpenHikesTests/BackgroundTrackingAuthorizationTests \
               -only-testing:OpenHikesTests/WidgetFeedSuites \
+              -only-testing:OpenHikesTests/CommunityBrowserTests \
+              -only-testing:OpenHikesTests/CommunityBrowserBlockingTests \
+              -only-testing:OpenHikesTests/CommunityBrowserOptInTests \
+              -only-testing:OpenHikesTests/CommunityBrowserPhotoPinsTests \
+              -only-testing:OpenHikesTests/CommunityBrowserRouteLinesTests \
+              -only-testing:OpenHikesTests/CommunityTitleSearchTests \
+              -only-testing:OpenHikesTests/CommunityPageBudgetTests \
+              -only-testing:OpenHikesTests/CommunityAreaNameTests \
+              -only-testing:OpenHikesTests/SeededCommunityTransportTests \
+              -only-testing:OpenHikesTests/SeededCommunityReviewingTests \
+              -only-testing:OpenHikesTests/CommunityReviewQueueTests \
+              -only-testing:OpenHikesTests/CommunityPublisherTests \
+              -only-testing:OpenHikesTests/CommunityPublicationCheckTests \
+              -only-testing:OpenHikesTests/CommunityPublishingCheckTests \
+              -only-testing:OpenHikesTests/CommunityPreviewDownloadTests \
+              -only-testing:OpenHikesTests/CommunityPreviewPageTests \
+              -only-testing:OpenHikesTests/CommunityStagingTests \
+              -only-testing:OpenHikesTests/CommunityImportTests \
+              -only-testing:OpenHikesTests/CommunityImportCreditTests \
+              -only-testing:OpenHikesTests/CommunityTakeDownTests \
+              -only-testing:OpenHikesTests/CommunityShareDisclosureTests \
+              -only-testing:OpenHikesTests/CommunitySharePhotoChoiceTests \
+              -only-testing:OpenHikesTests/CommunitySharePhotoCountTests \
               -only-testing:OpenHikesTests/SuitePreconditionTests \
               -enableThreadSanitizer YES \
               -parallel-testing-enabled NO \
@@ -663,16 +702,16 @@ jobs:
       # next fall would then be measured against a stale pin.
       #
       # WidgetFeedSuites includes the nested Trail walk end boundary suite;
-      # selecting that parent now runs 39 suites in total.
+      # selecting that parent now runs 62 suites in total.
       #
-      # Tests are a floor for the reason the comment above gives: 444 run
-      # today, and 418 sits far enough below that removing a test does not
+      # Tests are a floor for the reason the comment above gives: 664 run
+      # today, and 625 sits far enough below that removing a test does not
       # turn the build red on its own, while a suite emptied out under a name
       # that still resolves does. Raise it when the measured number rises.
       - name: Check the sanitized selection actually ran
         env:
-          EXPECTED_SUITES: "39"
-          TEST_FLOOR: "418"
+          EXPECTED_SUITES: "62"
+          TEST_FLOOR: "625"
         run: |
           set -o pipefail
           xcrun xcresulttool get test-results tests \

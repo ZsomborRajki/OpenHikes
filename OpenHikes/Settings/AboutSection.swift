@@ -64,7 +64,7 @@ struct AboutSection: View {
             //
             // So the row is here, in the section that is drawn unconditionally
             // and reads nothing that can fail to resolve, for the same reason
-            // the policy link is. `Scripts/check-release-secrets.py` covers
+            // the policy link is. `Scripts/check-release-secrets.sh` covers
             // the other half — a keyless archive can now sell the
             // subscription, but still cannot draw the styles it sells.
             if let showPro {

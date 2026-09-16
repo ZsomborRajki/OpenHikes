@@ -382,7 +382,11 @@ struct CommunityHikeView: View {
             await task.value
         }
         .onAppear {
-            existingHike = CommunityImport.existingImport(of: listing.id, in: context)
+            // `try?`, deliberately: this decides which button the screen
+            // draws, and a store that cannot answer should offer *Save* and
+            // let the import refuse — which it now does — rather than claim
+            // the hike is already saved.
+            existingHike = try? CommunityImport.existingImport(of: listing.id, in: context)
             // Before the route exists, deliberately: this only says which hike
             // the map is now about, so that a fetch landing after the hiker
             // backed out is ignored rather than drawn.
