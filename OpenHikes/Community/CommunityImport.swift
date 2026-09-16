@@ -55,6 +55,14 @@ nonisolated enum CommunityImport {
 
     /// Adds `detail` to the library, committing before it reports success.
     ///
+    /// - Parameter alreadyImported: The has-it-already read, handed in so the
+    ///   branch below can be reached at all. Closure-driven for the reason
+    ///   ``StoredTileDeletionPlan/init(doomedClaim:survivingClaims:)`` is:
+    ///   nothing makes a `ModelContext` throw on demand — a fetch against a
+    ///   schema it does not know comes back empty rather than failing — so
+    ///   without the seam the refusal could be rewritten as `try?` and every
+    ///   test in the bundle would still pass, while a store under stress grew
+    ///   a second row for one listing.
     /// - Parameter save: The commit seam, the same shape ``HikeImport`` takes
     ///   its own in.
     @MainActor
@@ -63,11 +71,26 @@ nonisolated enum CommunityImport {
         into context: ModelContext,
         store: HikePhotoStore = .shared,
         libraryWriter: any PhotoLibraryWriting = PhotoLibraryWriter(),
+        alreadyImported: (String, ModelContext) throws -> Hike? = { try existingImport(of: $0, in: $1) },
         save: (ModelContext) throws -> Void = { try $0.save() }
     ) async -> CommunityImportOutcome {
         guard detail.route.count >= 2 else { return .refused(.nothingToShare) }
-        if let existing = existingImport(of: detail.listing.id, in: context) {
-            return .alreadyImported(existing)
+        do {
+            if let existing = try alreadyImported(detail.listing.id, context) {
+                return .alreadyImported(existing)
+            }
+        } catch {
+            // A store that cannot answer *is this already here* is not a store
+            // that says no. Reading the failure as "not imported" is how one
+            // listing ends up with two rows claiming it — the invariant this
+            // fetch exists to hold — and a store under stress is exactly when
+            // that costs most: the Saved badge and the open-destination then
+            // disagree with each other for good. ``HikeImport/imported(_:into:)``
+            // refuses the same way for the same reason.
+            logger.error(
+                "A community hike was not imported: the library could not be asked whether it already has it."
+            )
+            return .refused(.unavailable(error.localizedDescription))
         }
 
         let listing = detail.listing
@@ -103,13 +126,20 @@ nonisolated enum CommunityImport {
     ///
     /// By listing rather than by title: two different hikers can publish the
     /// same ridge under the same name, and they are two hikes.
+    ///
+    /// Throws rather than answering `nil` when the fetch itself fails, because
+    /// the two answers are not interchangeable for every caller: *no* means go
+    /// ahead and insert one, and a migration, a corrupt store or a mirror
+    /// conflict must not be read as that. A caller for which the distinction
+    /// does not matter — a badge, a destination — writes `try?` and gets the
+    /// old behaviour, visibly.
     @MainActor
-    static func existingImport(of listingID: String, in context: ModelContext) -> Hike? {
+    static func existingImport(of listingID: String, in context: ModelContext) throws -> Hike? {
         var descriptor = FetchDescriptor<Hike>(
             predicate: #Predicate { $0.importedFromListingID == listingID }
         )
         descriptor.fetchLimit = 1
-        return try? context.fetch(descriptor).first
+        return try context.fetch(descriptor).first
     }
 
     /// The hiker's own copies of published hikes, keyed by the listing each
