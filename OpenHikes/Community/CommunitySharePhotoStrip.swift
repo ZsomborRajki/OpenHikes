@@ -17,7 +17,12 @@
 //
 //  - everything is included to begin with, since sending a walk sends its
 //    pictures and a strip that started empty would quietly publish hikes with
-//    no photographs every time somebody did not notice it;
+//    no photographs every time somebody did not notice it — with one
+//    exception, which is the picture a previous send already carried. The
+//    contribution form starts those struck off, because neither this app nor a
+//    reviewer can replace a submission and a second copy would sit beside the
+//    first for good. The strip's job is to *say which they are*, so the state
+//    is legible rather than mysterious: see ``HikePhoto/sentToCommunityAt``;
 //  - a struck-off tile stays in the strip, faded, because a tile that vanished
 //    would take its own undo with it — the same gesture
 //    ``CommunityReviewView``'s photo section gives a reviewer, deliberately,
@@ -96,12 +101,30 @@ struct CommunitySharePhotoStrip: View {
                     // decoration rather than a second thing to hear.
                     .accessibilityHidden(true)
             }
+            // A fact about the photograph rather than about the choice, so it
+            // is drawn whichever way the tick is pointing: a copy of this one
+            // is already in the public database, and a hiker who deliberately
+            // puts it back should still be able to see that.
+            .overlay(alignment: .bottomLeading) {
+                if photo.hasBeenSentToCommunity {
+                    Image(systemName: "arrow.up.circle.fill")
+                        .font(.footnote)
+                        .symbolRenderingMode(.palette)
+                        .foregroundStyle(.white, Color.secondary)
+                        .padding(4)
+                        .accessibilityHidden(true)
+                }
+            }
         }
         .buttonStyle(.plain)
         // `-tile-` rather than bare `-photo-`: the count row above answers to
         // `community-share-photo-count`, and a test reaching for "the first
         // tile" by prefix would otherwise find the number instead.
-        .accessibilityIdentifier("community-share-photo-tile-\(photo.id.uuidString)")
+        .accessibilityIdentifier(
+            photo.hasBeenSentToCommunity
+                ? "community-share-photo-tile-sent-\(photo.id.uuidString)"
+                : "community-share-photo-tile-\(photo.id.uuidString)"
+        )
     }
 
     /// Strikes a photograph off, or puts it back.
@@ -118,6 +141,15 @@ struct CommunitySharePhotoStrip: View {
     /// glyph and an opacity, and neither is a thing a screen reader can see.
     static func label(for photo: HikePhoto, isExcluded: Bool, among total: Int) -> String {
         let place = String(localized: "Photo, \(total) in this hike")
+        guard !photo.hasBeenSentToCommunity else {
+            // The state and the reason for it, because a tile struck off by
+            // the form and a tile struck off by the hiker look identical and
+            // mean different things — and only one of them is a thing the
+            // hiker did.
+            return isExcluded
+                ? String(localized: "\(place), already sent, not shared again")
+                : String(localized: "\(place), already sent, shared again")
+        }
         return isExcluded
             ? String(localized: "\(place), not shared")
             : String(localized: "\(place), shared")

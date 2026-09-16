@@ -64,6 +64,17 @@ nonisolated struct ContributedPhotoDetails: Sendable {
     var takenOn: Date
 }
 
+/// A contribution draft, and which of the hike's photographs went into it.
+///
+/// ``StagedSubmission``'s counterpart, kept apart from it for the reason the
+/// two details types are kept apart: they wrap different drafts, and one type
+/// carrying either would be a field that is sometimes there.
+nonisolated struct StagedContribution: Sendable {
+    var draft: CommunityPhotoDraft
+    /// In upload order, and only the pictures a file was written for.
+    var photoIDs: [UUID]
+}
+
 nonisolated enum CommunityPhotoPublisher {
     private static let logger = Logger(subsystem: "OpenHikes", category: "Community")
 
@@ -111,16 +122,16 @@ nonisolated enum CommunityPhotoPublisher {
         CommunityStaging.sweep()
         defer { discard(workingDirectory) }
 
-        let draft = await prepare(details, photos: photos, in: workingDirectory, store: store)
+        let staged = await prepare(details, photos: photos, in: workingDirectory, store: store)
         // Every row this device holds a file for failed to encode, or held no
         // file at all. Refused rather than sent: an upload of nothing is a
         // record in a public database, a row in a reviewer's queue, and a
         // hiker told their pictures are waiting when none of them left.
-        guard !draft.photoFileURLs.isEmpty else { return .refused(.noPhotosToShare) }
+        guard !staged.draft.photoFileURLs.isEmpty else { return .refused(.noPhotosToShare) }
 
         let submissionID: String
         do {
-            submissionID = try await transport.submitPhotos(draft)
+            submissionID = try await transport.submitPhotos(staged.draft)
         } catch {
             let failure = error as? CommunityFailure ?? .unavailable(error.localizedDescription)
             logger.error(
@@ -141,6 +152,11 @@ nonisolated enum CommunityPhotoPublisher {
         // the new submission forever because the old answer is still sitting
         // there.
         hike.communityPhotoContributionID = nil
+        // And with them, which pictures are now up there — in this same
+        // commit, for the reason the pair above are written in one. A top-up
+        // opens on what this leaves behind: the photographs already sent,
+        // struck off, and whatever has been added since, ticked.
+        CommunityPublisher.markSent(staged.photoIDs, on: hike)
         if let context = hike.modelContext {
             do {
                 try save(context)
@@ -172,7 +188,7 @@ nonisolated enum CommunityPhotoPublisher {
         photos: [HikePhoto],
         in directory: URL,
         store: HikePhotoStore
-    ) async -> CommunityPhotoDraft {
+    ) async -> StagedContribution {
         try? FileManager.default.createDirectory(
             at: directory,
             withIntermediateDirectories: true
@@ -180,6 +196,7 @@ nonisolated enum CommunityPhotoPublisher {
 
         var pins: [CommunityPhotoPin] = []
         var urls: [URL] = []
+        var sent: [UUID] = []
         for (index, photo) in photos.enumerated() {
             // A photo that will not encode — or whose file is on the device it
             // was added on — is dropped rather than failing the contribution,
@@ -196,9 +213,13 @@ nonisolated enum CommunityPhotoPublisher {
             pins.append(
                 CommunityPhotoPin(capturedAt: photo.capturedAt, coordinate: photo.coordinate)
             )
+            // Beside the file, never beside the row: this is the list that
+            // gets stamped as sent, and a picture that would not encode did
+            // not go. See ``HikePhoto/sentToCommunityAt``.
+            sent.append(photo.id)
         }
 
-        return CommunityPhotoDraft(
+        let draft = CommunityPhotoDraft(
             target: details.target,
             hikeID: details.hikeID,
             authorName: details.authorName,
@@ -207,6 +228,7 @@ nonisolated enum CommunityPhotoPublisher {
             photoFileURLs: urls,
             stagingDirectory: directory
         )
+        return StagedContribution(draft: draft, photoIDs: sent)
     }
 
     /// Removes everything the attempt staged, whatever happened.

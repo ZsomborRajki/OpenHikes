@@ -118,6 +118,35 @@ nonisolated struct HikePhoto: Codable, Hashable, Identifiable, Sendable {
     /// is what lets them decode unchanged. See ``isOwn``.
     var importedFromListingID: String?
 
+    /// When this picture was last sent to the community, or `nil` for one that
+    /// never has been.
+    ///
+    /// Recorded so that a second send can leave it out. A hike's photographs
+    /// can reach the public database twice over — with the walk itself, and
+    /// again as a contribution onto a trail that is already there, which is
+    /// now how a photograph added after publication gets on. Neither path can
+    /// *amend* what it sent, by ``CommunitySchema``'s design, so a picture
+    /// offered a second time is a second copy of it in the same gallery rather
+    /// than a replacement. This is what lets the form open with the ones
+    /// already up struck off and say which they are.
+    ///
+    /// It says *sent*, not *published*, and the distinction is the same one
+    /// ``Hike/communitySubmissionID`` draws: a reviewer may not have looked
+    /// yet, and may say no. Either way the copy is uploaded and sending it
+    /// again would duplicate it, so the stamp goes on when CloudKit accepts
+    /// the upload and never moves afterwards.
+    ///
+    /// Stamped by ``CommunityPublisher/markSent(_:on:at:)``, and only over the
+    /// pictures whose files really left this device — a row whose pixels live
+    /// on another device is dropped by the encode and is not sent, so it must
+    /// not be marked as though it were.
+    ///
+    /// A new key in a blob written by every earlier version, which decodes as
+    /// `nil` because it is optional: a photograph shared before this existed
+    /// reads as never sent, which costs a hiker a duplicate they can strike
+    /// off by hand and costs nothing else.
+    var sentToCommunityAt: Date?
+
     init(
         id: UUID = UUID(),
         capturedAt: Date = .now,
@@ -173,6 +202,13 @@ nonisolated struct HikePhoto: Codable, Hashable, Identifiable, Sendable {
 
     /// Whether this photo can point at a place on the map.
     var isAnchored: Bool { coordinate != nil }
+
+    /// Whether a copy of this picture is already in the public database.
+    ///
+    /// See ``sentToCommunityAt``, whose *absence* is the whole of the answer:
+    /// what matters to a form deciding what to offer is that a copy went, not
+    /// when it went or whether anybody has approved it yet.
+    var hasBeenSentToCommunity: Bool { sentToCommunityAt != nil }
 
     /// The file the pixels are stored under, relative to the photo directory.
     var fileName: String { "\(id.uuidString).\(pathExtension)" }

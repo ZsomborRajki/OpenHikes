@@ -79,6 +79,23 @@ nonisolated struct CommunityPhotoTarget: Equatable, Hashable, Identifiable, Send
     /// there is no other person to mention.
     var authorName: String?
 
+    /// Whether the trail these are joining is this hiker's own publication.
+    ///
+    /// Stored rather than derived, because it is the one fact about a target
+    /// that cannot be read off the identity: a listing record name looks the
+    /// same whoever published it, and ``authorName`` is `nil` for a hiker's
+    /// own hike *and* for an OpenStreetMap route *and* for somebody who shared
+    /// without a name. Three different absences, one of which changes what the
+    /// form says.
+    ///
+    /// Two paths set it. A **retread** — walking a trail this hiker published
+    /// earlier — and the hike that *is* the publication, which is how a
+    /// photograph added after a hike went live reaches the listing it belongs
+    /// on. Both end at the same place: the route is already there, under this
+    /// hiker's own name, and a second upload of it would be the duplicate
+    /// listing this whole gate exists to prevent.
+    var isYours = false
+
     /// Whether the trail came from OpenStreetMap rather than from a hiker.
     ///
     /// Derived rather than stored, so it cannot disagree with ``listingID`` —
@@ -87,6 +104,38 @@ nonisolated struct CommunityPhotoTarget: Equatable, Hashable, Identifiable, Send
 }
 
 nonisolated extension CommunityPhotoTarget {
+    /// The hike's *own* listing, for a walk this hiker published and has since
+    /// added photographs to.
+    ///
+    /// The case this type was missing, and the one a hiker hits most: they
+    /// shared a walk, came home, added the pictures off the camera, and tapped
+    /// the same button again. What that button used to offer was *Share
+    /// Again*, which cannot amend a submission — by ``CommunitySchema``'s
+    /// design, since an amendable submission is an approved record that can be
+    /// swapped after approval — so it made a **second** listing of the same
+    /// trail and pointed the hike at it, leaving the first one live and
+    /// findable. Two rows for one walk, and the first of them the one with the
+    /// reviews.
+    ///
+    /// So the photographs go on as a contribution to the listing that is
+    /// already there, which is the one shape this schema has for adding
+    /// anything to a published hike. It reads a little oddly from the inside —
+    /// the hiker is credited on their own trail — and that is the honest
+    /// account of what happened: the walk was published in June and these
+    /// pictures arrived in September, which is exactly what a contribution
+    /// records.
+    ///
+    /// - Parameter listingID: ``Hike/communityListingID``, which is non-`nil`
+    ///   exactly when ``CommunityPublicationState/published`` is the answer.
+    ///   `nil` here means the hike is not published, and there is nothing to
+    ///   add to.
+    static func published(listingID: String?, title: String) -> Self? {
+        guard let listingID else { return nil }
+        // No author name, for the reason the retread path passes none: naming
+        // the hiker back to themselves reads as a stranger.
+        return Self(listingID: listingID, title: title, authorName: nil, isYours: true)
+    }
+
     /// The target a hike saved from the community points at, or `nil` for a
     /// hike nobody saved from anywhere.
     ///

@@ -379,7 +379,12 @@ enum CommunityPublishingCheck {
             // pictures are joining and the name the hiker will recognise on
             // the community list. No author: it is their own hike, and naming
             // them back to themselves would read as a stranger.
-            CommunityPhotoTarget(listingID: listingID, title: retread.title, authorName: nil),
+            CommunityPhotoTarget(
+                listingID: listingID,
+                title: retread.title,
+                authorName: nil,
+                isYours: true
+            ),
             because: reason
         )
     }

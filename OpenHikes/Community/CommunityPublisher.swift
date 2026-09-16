@@ -57,6 +57,26 @@ nonisolated struct SharedHikeDetails: Sendable {
     var route: [RouteCoordinate]
 }
 
+/// A draft, and which of the hike's photographs actually went into it.
+///
+/// The two are returned together because the second cannot be worked out from
+/// the first. A draft carries files and pins and no identity at all — by
+/// design, since what reaches CloudKit is bytes — while the stamp that stops a
+/// picture being offered twice is keyed on ``HikePhoto/id``. Asking the disk a
+/// second time afterwards would be a different question with a different
+/// answer: the encode is what decides, and it drops a row whose pixels are on
+/// another device or whose file will not read.
+///
+/// ``ContributedPhotoDetails``'s counterpart wraps ``CommunityPhotoDraft`` the
+/// same way, and both stay out of the draft types themselves: those are the
+/// payload, and every field on one is a field
+/// ``CommunityShareDisclosure`` has to account for.
+nonisolated struct StagedSubmission: Sendable {
+    var draft: CommunitySubmissionDraft
+    /// In upload order, and only the pictures a file was written for.
+    var photoIDs: [UUID]
+}
+
 nonisolated enum CommunityPublisher {
     private static let logger = Logger(subsystem: "OpenHikes", category: "Community")
 
@@ -160,7 +180,7 @@ nonisolated enum CommunityPublisher {
         CommunityStaging.sweep()
         defer { discard(workingDirectory) }
 
-        let draft = await prepare(
+        let staged = await prepare(
             details,
             photos: photos,
             in: workingDirectory,
@@ -169,7 +189,7 @@ nonisolated enum CommunityPublisher {
 
         let submissionID: String
         do {
-            submissionID = try await transport.submit(draft)
+            submissionID = try await transport.submit(staged.draft)
         } catch {
             let failure = error as? CommunityFailure ?? .unavailable(error.localizedDescription)
             logger.error(
@@ -198,6 +218,12 @@ nonisolated enum CommunityPublisher {
         // record of it, which is what the share form promises when it says the
         // published copy stays as it is.
         hike.communityListingID = nil
+        // In the same commit as the two columns above, and for a version of
+        // their reason: these stamps say which pictures are now in the public
+        // database, and a hike whose submission was recorded without them
+        // would offer every one of them again as though it were new. See
+        // ``HikePhoto/sentToCommunityAt``.
+        markSent(staged.photoIDs, on: hike)
         if let context = hike.modelContext {
             do {
                 try save(context)
@@ -280,6 +306,57 @@ nonisolated enum CommunityPublisher {
         return Array((anchored + unanchored).prefix(maximumPhotos))
     }
 
+    /// The pictures a form must open with struck off: the ones a copy of
+    /// which is already up there.
+    ///
+    /// Here rather than inside the form for the reason ``selectedPhotos(of:excluding:)``
+    /// is here: what goes and what stays is the publisher's rule, and a screen
+    /// that worked it out for itself would eventually disagree with the send
+    /// it is describing. It is also the half of that rule a suite can reach —
+    /// a `View`'s `init` is not.
+    @MainActor
+    static func alreadySentPhotoIDs(of hike: Hike) -> Set<UUID> {
+        // Over ``ownPhotos(of:)`` rather than over every row, so this set and
+        // the strip are two readings of one list. A photograph that came with
+        // somebody else's hike can never have been sent from here anyway —
+        // that gate is in front of both senders — so the filter changes no
+        // answer today. It is here because the day it does change one, the
+        // form would be striking off a tile it is not drawing.
+        Set(ownPhotos(of: hike).filter(\.hasBeenSentToCommunity).map(\.id))
+    }
+
+    /// Writes down that these pictures are now in the public database.
+    ///
+    /// Called by both senders — the hike share and the photo contribution —
+    /// because a copy is a copy however it got there, and the forms that offer
+    /// photographs ask only whether one already went. It does not save; the
+    /// caller does, in the same commit as the record names it is writing
+    /// beside, so a hike can never be seen remembering a submission it has no
+    /// stamps for or stamps for a submission it has forgotten.
+    ///
+    /// Idempotent in the way that matters: a picture sent twice keeps the
+    /// *first* stamp, because what the forms read is whether one exists at
+    /// all, and moving it would be a claim nobody makes use of.
+    @MainActor
+    static func markSent(_ photoIDs: [UUID], on hike: Hike, at date: Date = .now) {
+        guard !photoIDs.isEmpty else { return }
+        let sent = Set(photoIDs)
+        // Read out, stamped, and written back once. Mutating through
+        // ``Hike/photos`` in place would send every element assignment
+        // through the model's accessor and copy the whole array again for
+        // each one, which is a dozen rewrites of a blob to change a dozen
+        // dates in it.
+        var photos = hike.photos
+        var stampedAny = false
+        for index in photos.indices
+        where sent.contains(photos[index].id) && !photos[index].hasBeenSentToCommunity {
+            photos[index].sentToCommunityAt = date
+            stampedAny = true
+        }
+        guard stampedAny else { return }
+        hike.photos = photos
+    }
+
     /// Every photograph the form offers, in the order the upload would take
     /// them — including the ones struck off, which still have to be drawn so
     /// they can be put back.
@@ -324,7 +401,7 @@ nonisolated enum CommunityPublisher {
         photos: [HikePhoto],
         in directory: URL,
         store: HikePhotoStore
-    ) async -> CommunitySubmissionDraft {
+    ) async -> StagedSubmission {
         try? FileManager.default.createDirectory(
             at: directory,
             withIntermediateDirectories: true
@@ -332,6 +409,7 @@ nonisolated enum CommunityPublisher {
 
         var pins: [CommunityPhotoPin] = []
         var urls: [URL] = []
+        var sent: [UUID] = []
         for (index, photo) in photos.enumerated() {
             // A photo that will not encode is dropped rather than failing the
             // share. One unreadable file should cost its own picture and not
@@ -349,9 +427,13 @@ nonisolated enum CommunityPublisher {
             pins.append(
                 CommunityPhotoPin(capturedAt: photo.capturedAt, coordinate: photo.coordinate)
             )
+            // Alongside the file rather than alongside the row, for the same
+            // reason the pin is: this list is what gets stamped as sent, and a
+            // picture that would not encode did not go.
+            sent.append(photo.id)
         }
 
-        return CommunitySubmissionDraft(
+        let draft = CommunitySubmissionDraft(
             hikeID: details.hikeID,
             title: details.title,
             authorName: details.authorName,
@@ -363,6 +445,7 @@ nonisolated enum CommunityPublisher {
             photoFileURLs: urls,
             stagingDirectory: directory
         )
+        return StagedSubmission(draft: draft, photoIDs: sent)
     }
 
     /// Removes everything the attempt staged, whatever happened.
