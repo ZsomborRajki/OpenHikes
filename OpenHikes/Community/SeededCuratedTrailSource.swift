@@ -186,4 +186,28 @@ private extension SeededCuratedTrailSource {
     }
 }
 
+/// Heights for the two seeded routes, so the profile a curated hike now draws
+/// is reachable from automation.
+///
+/// Behind the same door and for the same reason as the source above: the
+/// shape of the answer is real — one height per point asked about, in order —
+/// and only the network is not. A run that opens a seeded curated hike draws
+/// the real ``ElevationChartView`` from a real ``RouteProfile`` built by the
+/// real ``CuratedElevationSourcing/filled(_:)``.
+nonisolated struct SeededElevationSource: CuratedElevationSourcing {
+    /// A valley at 600 m with a 120 m climb over the route, which is enough
+    /// relief for a chart to have a shape and for a scrub to read differently
+    /// at either end.
+    private static let baseMeters = 600.0
+    private static let climbMeters = 120.0
+
+    @concurrent
+    func heights(at coordinates: [CLLocationCoordinate2D]) async -> [Double] {
+        let last = Double(max(coordinates.count - 1, 1))
+        return coordinates.indices.map { index in
+            Self.baseMeters + Self.climbMeters * sin(Double(index) / last * .pi)
+        }
+    }
+}
+
 #endif

@@ -206,13 +206,21 @@ extension MergedCommunityTransportTests {
 
     static func merged(
         published rows: [CommunityListing] = [],
-        curated trails: [CuratedTrail] = []
+        curated trails: [CuratedTrail] = [],
+        elevation: any CuratedElevationSourcing = DormantElevationSource()
     ) -> Merged {
         let cloudKit = StubCommunityTransport()
         cloudKit.listingsResult = .success(rows)
         let overpass = StubCuratedTrailSource(trails: trails)
         return Merged(
-            transport: MergedCommunityTransport(published: cloudKit, curated: overpass),
+            // The elevation source defaults to the one that answers nothing,
+            // which is also what the composite itself defaults to: a case that
+            // has not asked for heights must not be able to reach a vendor.
+            transport: MergedCommunityTransport(
+                published: cloudKit,
+                curated: overpass,
+                elevation: elevation
+            ),
             cloudKit: cloudKit,
             overpass: overpass
         )

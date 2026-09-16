@@ -144,6 +144,56 @@ nonisolated final class CommunityCuratedUITests: XCTestCase {
         )
     }
 
+    // MARK: - The profile OpenStreetMap cannot supply
+
+    /// A curated route draws an elevation chart, and credits whoever the
+    /// heights came from.
+    ///
+    /// OpenStreetMap carries no `ele` on a hiking relation — zero of 1,725
+    /// nodes, measured — so until the heights were fetched this screen drew no
+    /// chart at all, which is the whole of #428. The seeded source answers the
+    /// way the real one does, through the real
+    /// ``CuratedElevationSourcing/filled(_:)`` and the real `RouteProfile`, so
+    /// what this proves is the wiring rather than the fixture.
+    ///
+    /// The credit is asserted beside it because it is owed *by* the chart: a
+    /// profile drawn with no sentence under it is a vendor used and not named.
+    @MainActor
+    func testACuratedRouteDrawsAProfileAndSaysWhereItCameFrom() {
+        let app = launchCommunity(scenario: .curated)
+        selectCommunityTab(in: app)
+        openCommunityHike(titled: SeededCuratedTrail.loopTitle, in: app)
+
+        let chart = element("elevation-chart", in: app)
+        XCTAssertTrue(
+            scrollUntilVisible(chart, in: app),
+            "a curated route should draw the profile its heights were fetched for"
+        )
+        let credit = element("community-elevation-attribution", in: app)
+        XCTAssertTrue(
+            scrollUntilVisible(credit, in: app),
+            "the heights are not OpenStreetMap's, so the screen has to say whose they are"
+        )
+    }
+
+    /// And a published hike's chart carries no such line: those heights came
+    /// from the hiker who walked it.
+    @MainActor
+    func testAPublishedHikeCreditsNobodyForItsHeights() {
+        let app = launchCommunity(scenario: .curated)
+        selectCommunityTab(in: app)
+        openCommunityHike(titled: SeededHike.ridgeTitle, in: app)
+
+        XCTAssertTrue(
+            scrollUntilVisible(element("elevation-chart", in: app), in: app),
+            "precondition: the published hike draws a chart of its own"
+        )
+        XCTAssertFalse(
+            element("community-elevation-attribution", in: app).exists,
+            "nobody was asked for these heights, so nobody is credited for them"
+        )
+    }
+
     // MARK: - What the screen offers, and what it does not
 
     /// Opening a curated route says where the data came from, with a link, and

@@ -742,18 +742,35 @@ private extension CommunityHikeView {
     /// them something true about a thing they chose to import.
     @ViewBuilder var elevationSection: some View {
         if let profile = prepared?.profile, profile.samples.count > 1 {
-            ElevationChartView(
-                profile: profile,
-                // The listing's own colour, exactly as the line and the marker
-                // on the map behind this screen are: the map is drawing this
-                // very route in it. Still not a `Hike`'s route tint, which
-                // belongs to hikes the hiker owns — see
-                // ``CommunityListing/tint``.
-                tint: listing.tint,
-                tracker: tracker,
-                onScrub: { tracker.trackerDistance = $0 }
-            )
-            .equatable()
+            VStack(alignment: .leading, spacing: 6) {
+                ElevationChartView(
+                    profile: profile,
+                    // The listing's own colour, exactly as the line and the
+                    // marker on the map behind this screen are: the map is
+                    // drawing this very route in it. Still not a `Hike`'s route
+                    // tint, which belongs to hikes the hiker owns — see
+                    // ``CommunityListing/tint``.
+                    tint: listing.tint,
+                    tracker: tracker,
+                    onScrub: { tracker.trackerDistance = $0 }
+                )
+                .equatable()
+                // The credit for the heights, and only where it is owed. A
+                // published hike's profile came from the hiker who walked it;
+                // a curated route's came from Stadia, fetched when this screen
+                // opened, because OpenStreetMap carries none — see
+                // ``CuratedElevation``. Under the chart rather than beside the
+                // ODbL credit below, so the sentence sits with the thing it is
+                // about, and drawn only when a chart is: a credit for a chart
+                // nobody could draw credits nothing.
+                if listing.isCurated {
+                    Text("Elevation from \(TileAttribution.Credit.stadiaMaps.title).")
+                        .font(.footnote)
+                        .foregroundStyle(.secondary)
+                        .frame(maxWidth: .infinity, alignment: .leading)
+                        .accessibilityIdentifier("community-elevation-attribution")
+                }
+            }
         }
     }
 

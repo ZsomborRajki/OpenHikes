@@ -83,6 +83,14 @@ nonisolated struct MergedCommunityTransport: CommunityTransporting {
 
     let published: any CommunityTransporting
     let curated: any CuratedTrailSourcing
+    /// Where a curated route's heights come from, asked once when one is
+    /// opened — see ``CuratedElevation``.
+    ///
+    /// Defaulted to the source that answers nothing rather than to the real
+    /// one, so a caller that has not thought about it cannot spend a billable
+    /// call or reach the network from a suite. The composition root opts in;
+    /// see ``OpenHikesModel/makeCommunityTransport()``.
+    var elevation: any CuratedElevationSourcing = DormantElevationSource()
 }
 
 // MARK: - Browsing
@@ -268,9 +276,15 @@ nonisolated extension MergedCommunityTransport {
         guard let trail = try await curated.trail(of: relationID) else {
             throw CommunityFailure.noLongerAvailable
         }
+        // The heights OpenStreetMap does not have, on the route that is about
+        // to be drawn. Here rather than on the list for the reason the surface
+        // analysis is: a page offers twenty-five routes and a hiker opens one.
+        // A failure leaves the route exactly as it came and the hike opens
+        // without a chart — see ``CuratedElevationSourcing/filled(_:)``.
+        let route = await elevation.filled(trail.route)
         return CommunityHikeDetail(
             listing: CommunityListing(curated: trail, editedAt: listing.publishedAt),
-            route: trail.route,
+            route: route,
             // OSM's `description` on a route relation is characteristically a
             // list of the places it passes — "Wimbachgrieshütte - Trischübel -
             // Ingolstädter Haus" — which is exactly what the hike screen's
