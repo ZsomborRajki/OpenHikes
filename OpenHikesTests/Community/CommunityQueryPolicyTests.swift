@@ -91,18 +91,34 @@ struct CommunityQueryPolicyTests {
         #expect(first == second)
     }
 
-    /// The one that keeps the feature inside its quota: CloudKit resolves
-    /// distance at around ten kilometres, so a small pan asks the same
-    /// question and would get the same rows back — a button offering to re-ask
-    /// it would change nothing.
-    @Test("a pan smaller than a quarter of the radius offers nothing")
+    /// The one that keeps the feature inside its quota. It used to be a
+    /// quarter of the radius, which is where *CloudKit's* answer starts to
+    /// differ; it is half now, because taking an offer also spends an Overpass
+    /// listing pass against a volunteer-run API — see
+    /// ``CommunityQueryPolicy/recentreFraction``. The hiker loses nothing by
+    /// it: the pill is permanent, and a tap with no offer standing re-asks.
+    @Test("a pan smaller than half the radius offers nothing")
     func smallPanIsRefused() {
         var policy = CommunityQueryPolicy()
         policy.startBrowsing()
         Self.commit(Self.region(), to: &policy)
-        // 20 km across is a 10 km radius, so the threshold is 2.5 km. This is
+        // 20 km across is a 10 km radius, so the threshold is 5 km. This is
         // roughly 1.1 km north.
         #expect(policy.action(for: Self.region(latitude: 47.64)) == .ignore)
+    }
+
+    /// The figure that moved, pinned from the other side: a pan that clears a
+    /// quarter of the radius and not half of it is refused now, where it used
+    /// to be offered. Without this the threshold could be lowered back to a
+    /// quarter and every other case in this file would still pass.
+    @Test("a pan of a third of the radius is not enough any more")
+    func aQuarterPanIsRefused() {
+        var policy = CommunityQueryPolicy()
+        policy.startBrowsing()
+        Self.commit(Self.region(), to: &policy)
+        // 10 km radius, so roughly 3.3 km north: past the old 2.5 km
+        // threshold and short of the new 5 km one.
+        #expect(policy.action(for: Self.region(latitude: 47.66)) == .ignore)
     }
 
     @Test("a pan past the threshold is a new question")
@@ -110,7 +126,7 @@ struct CommunityQueryPolicyTests {
         var policy = CommunityQueryPolicy()
         policy.startBrowsing()
         Self.commit(Self.region(), to: &policy)
-        // Roughly 44 km north, comfortably past a 2.5 km threshold.
+        // Roughly 44 km north, comfortably past a 5 km threshold.
         guard case .offer = policy.action(for: Self.region(latitude: 48.03)) else {
             Issue.record("a pan of tens of kilometres is a different question")
             return
@@ -124,9 +140,31 @@ struct CommunityQueryPolicyTests {
     func zoomIsOffered() {
         var policy = CommunityQueryPolicy()
         policy.startBrowsing()
-        Self.commit(Self.region(spanMeters: 100_000), to: &policy)
+        // Both spans are inside the ceiling, which is 40 km of *radius* — an
+        // 80 km one. The wider of the two used to be 100 km across and is not
+        // a question this policy takes any more; see
+        // ``CommunityQueryPolicy/maximumRadiusMeters``.
+        Self.commit(Self.region(spanMeters: 60_000), to: &policy)
         guard case .offer = policy.action(for: Self.region(spanMeters: 20_000)) else {
-            Issue.record("a fivefold zoom is a different question")
+            Issue.record("a threefold zoom is a different question")
+            return
+        }
+    }
+
+    /// The band that used to sit between the two ceilings, asserted from the
+    /// inside. A 50 km radius was offered, spent a CloudKit query, and came
+    /// back with no curated trails and nothing on screen saying why.
+    @Test("a radius past the curated ceiling is too far out")
+    func theCuratedCeilingIsThePolicysCeiling() {
+        var policy = CommunityQueryPolicy()
+        policy.startBrowsing()
+        let pastIt = CuratedTrailQuery.maximumRadiusMeters * 2 + 1
+
+        #expect(policy.action(for: Self.region(spanMeters: pastIt)) == .tooFarOut)
+        guard case .offer = policy.action(
+            for: Self.region(spanMeters: CuratedTrailQuery.maximumRadiusMeters * 2)
+        ) else {
+            Issue.record("the ceiling itself is still a question worth asking")
             return
         }
     }

@@ -296,7 +296,15 @@ extension MapSheetHikes {
             if community.areaPrompt == .zoomIn {
                 Text("Zoom in to look here")
                     .font(.subheadline.weight(.medium))
-                Text("A whole country is too wide to search.")
+                // Not *a whole country* any more, and deliberately not a
+                // figure either. The old sentence described the old 150 km
+                // ceiling; this one is OpenStreetMap's 40 km — see
+                // ``CommunityQueryPolicy/maximumRadiusMeters`` — which a
+                // regional view reaches long before a country does. Spelling
+                // the distance instead would put a number in a string beside
+                // a constant that owns it, and would owe the hiker their own
+                // units on top.
+                Text("This is wider than a search reaches.")
                     .font(.subheadline)
                     .foregroundStyle(.secondary)
             } else {

@@ -130,6 +130,50 @@ extension CommunityCuratedScopeTests {
     }
 }
 
+// MARK: - While both halves are out
+
+extension CommunityCuratedScopeTests {
+    /// The state the pill draws as a spinner. One flag for both halves,
+    /// because there is one request: the merge asks CloudKit and Overpass
+    /// side by side and comes back when both have answered or failed.
+    @Test("a search is in flight until both halves have come back")
+    func searchingSpansBothHalves() async {
+        let transport = StubCommunityTransport()
+        let held = AsyncGate()
+        let browser = await browsing(transport)
+        #expect(!browser.isSearching)
+
+        transport.beforeListingsReturn = { await held.wait() }
+        browser.searchVisibleArea()
+        #expect(browser.isSearching, "the question is open until it is answered")
+
+        await held.open()
+        await settle(browser)
+        #expect(!browser.isSearching)
+    }
+
+    /// A tap while one is out cannot answer sooner — `perform` awaits the task
+    /// it supersedes before starting — so it can only queue a second listing
+    /// pass against a shared quota. The pill is dimmed and spinning while this
+    /// is true; this is the guard behind that rather than instead of it.
+    @Test("a tap while a search is out spends nothing")
+    func aTapDuringASearchIsRefused() async {
+        let transport = StubCommunityTransport()
+        let held = AsyncGate()
+        let browser = await browsing(transport)
+        transport.beforeListingsReturn = { await held.wait() }
+        browser.searchVisibleArea()
+        let issued = browser.issuedRequests
+
+        browser.searchVisibleArea()
+        browser.retry()
+
+        #expect(browser.issuedRequests == issued)
+        await held.open()
+        await settle(browser)
+    }
+}
+
 // MARK: - What a refusal says
 
 extension CommunityCuratedScopeTests {

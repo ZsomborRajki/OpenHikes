@@ -13,22 +13,26 @@
 //  without a network, and the rate-limit back-off is only observable against a
 //  clock somebody else is holding.
 //
-//  ## Why the cache is in memory and keyed by relation
+//  ## Why the cache is keyed by relation, and why there are two of them
 //
-//  ``OverpassTrailGraphProvider``'s z12-tile files on disk are the right shape
-//  for its question and the wrong shape for this one, and the difference is
-//  two orders of magnitude. A z12 tile is 6.9 km across at 47°N; a community
-//  search is 10–40 km of *radius*, so the smallest search this feature allows
-//  already spans about 25 tiles and the largest about 400 — against a cache
-//  that holds 64 files and a prefetch ceiling of 24 regions. One pan would
-//  evict the lot.
+//  ``OverpassTrailGraphProvider``'s z12-tile files are the right shape for its
+//  question and the wrong shape for this one, and the difference is two orders
+//  of magnitude. A z12 tile is 6.9 km across at 47°N; a community search is
+//  10–40 km of *radius*, so the smallest search this feature allows already
+//  spans about 25 tiles and the largest about 400 — against a cache that holds
+//  64 files. One pan would evict the lot.
 //
 //  So the unit here is the **relation**, which is what is actually re-asked
-//  for: panning back to an area, or opening a hike whose line the list
-//  already fetched. Those are hits, and they are the two that happen. The
-//  cache does not survive a launch, which is the honest bargain — OSM data
-//  changes under it, a browse session is minutes long, and the alternative is
-//  a second on-disk cache to keep coherent for a gain nobody measured.
+//  for: panning back to an area, or opening a hike whose line the list already
+//  fetched. Those are hits, and they are the two that happen.
+//
+//  The memory cache below is the first of the two, and it answers within a
+//  session. ``CuratedTrailStore`` is the second and answers across launches —
+//  see that file for why the bargain changed, which is that a miss against a
+//  volunteer-run API is priced in `429`s rather than in round trips. Reads go
+//  memory, then disk, then Overpass; a fetch writes both. The memory one stays
+//  because it is what keeps a browse from touching the file system on every
+//  pin, and because it is the only one that can hold ``CachedTrail/absent``.
 //
 
 import Algorithms
@@ -98,9 +102,34 @@ nonisolated protocol CuratedTrailSourcing: Sendable {
     /// stable but not permanent, so routes are split, merged and deleted.
     @concurrent
     func trails(of relationIDs: [Int64]) async throws -> [Int64: CuratedTrail]
+
+    /// Routes already on this device whose pin stands in `area`, nearest
+    /// first, asking nothing of Overpass.
+    ///
+    /// **What a refused search draws instead of nothing.** It makes no claim
+    /// to be the area's trails — nothing records which areas have been listed
+    /// — so it is only ever used where the alternative is an empty half and
+    /// the hiker has already been told the half is degraded: see
+    /// ``MergedCommunityTransport`` and ``CuratedTrailOutage``.
+    ///
+    /// Never throws. A cache with nothing in it is an answer, and this is
+    /// reached on a path where something has already failed.
+    @concurrent
+    func cachedTrails(near area: CommunitySearchArea, limit: Int) async -> [CuratedTrail]
 }
 
 nonisolated extension CuratedTrailSourcing {
+    /// Nothing, for a source that keeps nothing.
+    ///
+    /// A default rather than a requirement every conformance restates: the
+    /// stand-ins a suite or a UI scenario runs against reach no network, so
+    /// there is nothing for them to have failed to reach and nothing for them
+    /// to fall back to.
+    @concurrent
+    func cachedTrails(near area: CommunitySearchArea, limit: Int) async -> [CuratedTrail] {
+        []
+    }
+
     /// One route, complete, from the cache or from Overpass.
     ///
     /// `nil` for a relation that is gone or too fragmented to draw. Spelled
@@ -149,9 +178,18 @@ actor CuratedTrailSource: CuratedTrailSourcing {
     private let endpoint: URL
     private let transport: Transport
     private let clock: @Sendable () -> Date
+    /// The routes this device already has, across launches. `nil` for a launch
+    /// with nowhere to put them — a directory that cannot be created is a
+    /// cache that is simply absent, which costs round trips and breaks
+    /// nothing.
+    private let store: CuratedTrailStore?
 
-    /// What is known about each relation, with an eviction order whose oldest
-    /// end is the **least recently used** rather than the first inserted.
+    /// What is known about each relation *this session*, with an eviction
+    /// order whose oldest end is the **least recently used** rather than the
+    /// first inserted.
+    ///
+    /// In front of ``store``, not instead of it: an eviction here costs a file
+    /// read rather than a round trip.
     ///
     /// Least recently used and not first inserted, because the two differ
     /// exactly where it matters. A search that lists twenty-five routes of
@@ -184,13 +222,19 @@ actor CuratedTrailSource: CuratedTrailSourcing {
     /// limit into a block.
     private var retryAfter: Date?
 
+    /// - Parameter directory: Where downloaded routes are kept between
+    ///   launches. A suite passes one of its own — see *Deliberate test seams*
+    ///   in the repository instructions — and must, since the default is the
+    ///   app's own `Caches`.
     init(
         endpoint: URL = OverpassRequest.defaultEndpoint,
+        directory: URL? = CuratedTrailStore.defaultDirectory(),
         clock: @escaping @Sendable () -> Date = { Date() },
         transport: Transport? = nil
     ) {
         self.endpoint = endpoint
         self.clock = clock
+        store = directory.map { CuratedTrailStore(directory: $0, clock: clock) }
         self.transport = transport ?? { request in
             let (data, urlResponse) = try await URLSession.shared.data(for: request)
             guard let httpResponse = urlResponse as? HTTPURLResponse else {
@@ -293,6 +337,17 @@ extension CuratedTrailSource {
         return answer
     }
 
+    /// `@concurrent` rather than actor-isolated like everything around it, and
+    /// for two reasons that agree. It reads every file in the cache directory,
+    /// which is not work to do on the executor a search is waiting on — and it
+    /// is what the requirement asks for, so an actor-isolated version would be
+    /// witnessed by the protocol extension's `[]` instead and this would
+    /// quietly never run. It touches no mutable state: ``store`` is a `let`.
+    @concurrent
+    func cachedTrails(near area: CommunitySearchArea, limit: Int) async -> [CuratedTrail] {
+        store?.trails(near: area, limit: limit) ?? []
+    }
+
     func trails(matching query: String, limit: Int) -> [CuratedTrail] {
         let needle = query
             .trimmingCharacters(in: .whitespacesAndNewlines)
@@ -316,11 +371,30 @@ extension CuratedTrailSource {
             case .absent:
                 touch(relationID)
             case nil:
-                missing.append(relationID)
+                // Disk before the network, and promoted into memory on the way
+                // past so a map full of pins reads each file once. A stored
+                // route is not re-stated as `.absent` when it is missing —
+                // that is what the request below is for.
+                guard let stored = store?.trail(of: relationID) else {
+                    missing.append(relationID)
+                    continue
+                }
+                answer[relationID] = stored
+                cache(.trail(stored), for: relationID)
             }
         }
         guard !missing.isEmpty else { return answer }
-        try checkRateLimit()
+        do {
+            try checkRateLimit()
+        } catch {
+            // Partial rather than nothing, when there is something to be
+            // partial with. A geometry pass refused after the listing pass
+            // got through would otherwise throw away every line this device
+            // already had — and ``completed(_:)`` is partial by contract, so
+            // a short answer is one its caller already knows how to draw.
+            guard answer.isEmpty else { return answer }
+            throw error
+        }
 
         // Chunked because ``CuratedTrailQuery/geometryQuery(ids:)`` answers
         // about at most a batch at a time and drops the rest silently, and a
@@ -328,17 +402,26 @@ extension CuratedTrailSource {
         for chunk in missing.chunks(ofCount: CuratedTrailQuery.geometryBatchLimit) {
             guard let query = CuratedTrailQuery.geometryQuery(ids: Array(chunk)) else { continue }
             let decoded = try CuratedTrailDecoding.trails(fromGeometry: try await send(query))
+            // Collected and written once at the end of the chunk rather than
+            // one at a time: a per-route write re-enumerates the cache
+            // directory per route — see ``CuratedTrailStore/save(_:)-([CuratedTrail])``.
+            var fetched: [CuratedTrail] = []
             for relationID in chunk {
                 // An id the response did not carry is one Overpass has nothing
                 // to draw for — deleted, or too fragmented to assemble. That is
                 // an answer, and it is cached as one.
                 guard let trail = decoded[relationID] else {
+                    // In memory only, deliberately: see ``CuratedTrailStore``
+                    // on why *nothing here* is not a thing to write down for
+                    // thirty days.
                     cache(.absent, for: relationID)
                     continue
                 }
                 answer[relationID] = trail
                 cache(.trail(trail), for: relationID)
+                fetched.append(trail)
             }
+            store?.save(fetched)
         }
         return answer
     }

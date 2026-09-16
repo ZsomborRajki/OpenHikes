@@ -158,13 +158,34 @@ struct CuratedTrailSourceTests {
         )
     }
 
+    /// A directory per case, so no case can read what another one wrote.
+    ///
+    /// Under the system's temporary directory and never the app's `Caches`,
+    /// which is what the real source defaults to: a suite that left the
+    /// default alone would write into the developer's own cache and then
+    /// answer the *next* run's assertions out of it — a request count that is
+    /// right once and wrong for good. See *Deliberate test seams* in the
+    /// repository instructions.
+    private static func scratchDirectory() -> URL {
+        FileManager.default.temporaryDirectory
+            .appendingPathComponent("curated-trails-\(UUID().uuidString)")
+    }
+
+    /// - Parameter directory: Where this source keeps routes between launches.
+    ///   **`nil` — the default — is a source with no disk half at all**, which
+    ///   is what most of this suite wants: the two things it counts are
+    ///   requests and memory evictions, and a disk cache turns an eviction
+    ///   into a file read rather than the round trip the assertion is written
+    ///   against. The cases that are about the disk pass one.
     private static func makeSource(
         _ responses: [OverpassHTTPResponse],
-        clock: TestClock = TestClock()
+        clock: TestClock = TestClock(),
+        directory: URL? = nil
     ) -> (CuratedTrailSource, CuratedTransportStub) {
         let stub = CuratedTransportStub(responses: responses)
         let source = CuratedTrailSource(
             endpoint: URL(string: "https://overpass.invalid/api/interpreter")!,
+            directory: directory,
             // ``TestClock/read`` rather than a closure of our own: the whole
             // point of the seam is that no suite waits on wall time, and the
             // bundle already has the clock that makes that true.
@@ -487,6 +508,11 @@ extension CuratedTrailSourceTests {
     /// Touching an entry on every read is the fix, and this is the shape of
     /// the bug in miniature: one route re-read, one not, and a browse long
     /// enough to evict exactly one of them.
+    ///
+    /// No disk half here, deliberately — see ``makeSource(_:clock:directory:)``.
+    /// What this counts is requests, and with a disk cache behind it a memory
+    /// eviction costs a file read instead, which would make the assertion
+    /// below true whether or not the memory order was right.
     @Test("the route a hiker just looked at is not the first one evicted")
     func readingAnEntryKeepsItOutOfTheEvictionWindow() async throws {
         let flood = Self.cacheCapacity - 1
@@ -520,6 +546,90 @@ extension CuratedTrailSourceTests {
         let trails = try await source.trails(of: Self.crowdIDs(asked))
 
         #expect(trails.count == asked)
+    }
+
+    // MARK: - What survives a launch
+
+    /// The point of the disk half: a second launch is not a second download.
+    /// Two sources over one directory are what a relaunch looks like from
+    /// here — the memory cache goes with the first one, the files do not.
+    @Test("a route downloaded once is not downloaded again after a relaunch")
+    func aStoredRouteOutlivesTheSource() async throws {
+        let directory = Self.scratchDirectory()
+        defer { try? FileManager.default.removeItem(at: directory) }
+        let (first, _) = Self.makeSource(
+            [Self.ok(Self.listingBody), Self.ok(Self.geometryBody)],
+            directory: directory
+        )
+        _ = try await Self.search(first)
+
+        // A source with nothing in memory and no response left to give: the
+        // only way this can answer is off the disk.
+        let (second, relaunched) = Self.makeSource([], directory: directory)
+        let trail = try await second.trail(of: 11)
+
+        #expect(trail?.name == "Near Loop")
+        #expect(await relaunched.requestCount == 0, "a relaunch spends no round trip")
+    }
+
+    /// What a hiker who has been rate-limited is shown instead of nothing —
+    /// see ``MergedCommunityTransport``, which is what asks for this. Bounded
+    /// by the area, because a cache full of the Alps must not answer a search
+    /// in Scotland.
+    @Test("routes already on the device answer for the area they are in")
+    func storedRoutesAnswerAnAreaWithoutAsking() async throws {
+        let directory = Self.scratchDirectory()
+        defer { try? FileManager.default.removeItem(at: directory) }
+        let (first, _) = Self.makeSource(
+            [Self.ok(Self.listingBody), Self.ok(Self.geometryBody)],
+            directory: directory
+        )
+        _ = try await Self.search(first)
+
+        let (second, relaunched) = Self.makeSource([], directory: directory)
+        let near = await second.cachedTrails(near: Self.area, limit: 25)
+        let elsewhere = await second.cachedTrails(
+            near: CommunitySearchArea(
+                coordinate: CLLocationCoordinate2D(latitude: 57.0, longitude: -4.0),
+                radiusMeters: 20_000
+            ),
+            limit: 25
+        )
+
+        #expect(!near.isEmpty)
+        #expect(elsewhere.isEmpty, "the Alps are not an answer about the Highlands")
+        #expect(await relaunched.requestCount == 0)
+    }
+
+    /// A geometry pass refused after the listing pass got through used to
+    /// throw away every line this device already had. `completed(_:)` is
+    /// partial by contract, so a short answer is one its caller already draws.
+    @Test("a rate limit does not discard the lines already in hand")
+    func aRateLimitKeepsWhatIsAlreadyCached() async throws {
+        let clock = TestClock()
+        let (source, stub) = Self.makeSource(
+            [
+                Self.ok(Self.listingBody),
+                Self.ok(Self.geometryBody),
+                OverpassHTTPResponse(
+                    data: Data(),
+                    statusCode: Self.httpRateLimited,
+                    headers: ["retry-after": "120"]
+                ),
+            ],
+            clock: clock
+        )
+        _ = try await Self.search(source)
+
+        // One cached relation and one that would need a request, with the
+        // limit now running against the second.
+        await #expect(throws: TrailGraphProviderError.self) {
+            _ = try await source.trails(of: [99])
+        }
+        let known = try await source.trails(of: [11, 99])
+
+        #expect(known.keys.sorted() == [11])
+        #expect(await stub.requestCount == 3, "the refusal costs no further round trip")
     }
 
     // MARK: - Rate limiting

@@ -197,6 +197,24 @@ final class CommunityBrowser {
     /// rows and is logged; it must not put an error over a nearby list that
     /// is perfectly good.
     private(set) var state: CommunityBrowseState = .idle
+    /// Whether a nearby answer is on its way.
+    ///
+    /// Derived rather than stored, for the reason ``nearbyListings`` is: one
+    /// source for each fact. ``state`` already knows, and a second flag could
+    /// only disagree with it about whether the map's question is still open.
+    ///
+    /// It covers **both** halves of that question and could not cover one:
+    /// ``MergedCommunityTransport`` asks CloudKit and Overpass side by side
+    /// and returns when both have answered or failed, so there is a single
+    /// request here and this is its whole life. The outlines that follow an
+    /// answer are deliberately outside it — the rows and pins are already up
+    /// by then, and a control that kept spinning for the lines would be
+    /// reporting work the hiker is not waiting on.
+    ///
+    /// Read by the *Search this area* pill, which draws it as a spinner in
+    /// place of its glyph and stops answering taps while it is true. See
+    /// ``MapCommunitySearchControl``.
+    var isSearching: Bool { state == .loading || state == .refreshing }
     /// Whether the hiker has asked for shared hikes at all.
     ///
     /// Also *which list the sheet is showing*: the ``MapSheetList`` picker is
@@ -209,8 +227,8 @@ final class CommunityBrowser {
     /// Whether the map has moved somewhere the list does not describe.
     ///
     /// Coarse by construction: ``CommunityQueryPolicy`` refuses everything
-    /// smaller than a quarter of the search radius, so this moves a handful of
-    /// times in a browsing session and never at gesture frequency. `Equatable`
+    /// smaller than half the search radius, so this moves a handful of times
+    /// in a browsing session and never at gesture frequency. `Equatable`
     /// so `@Observable` filters the same-value writes a run of settles
     /// produces — see *Render isolation, in practice*.
     private(set) var areaPrompt: CommunityAreaPrompt = .settled
@@ -420,7 +438,13 @@ final class CommunityBrowser {
     /// — see ``CommunityNearbyScope`` for what that costs and why the
     /// distinction is the question's rather than the transport's.
     func searchVisibleArea() {
-        guard isBrowsing else { return }
+        // A second question while the first is unanswered buys nothing and
+        // costs an Overpass listing pass: ``perform(_:describing:about:matching:from:)``
+        // awaits the task it supersedes before starting, so a tap during a
+        // search cannot arrive sooner — it can only queue another one. The
+        // pill is dimmed and spinning while this is true, so a tap that gets
+        // here at all is a race rather than an instruction.
+        guard isBrowsing, !isSearching else { return }
         if let offeredArea {
             commit(offeredArea, from: .withCuratedTrails)
         } else {
@@ -514,7 +538,7 @@ final class CommunityBrowser {
     /// back. Above the ceiling it still asks nothing — a region that means
     /// "this continent" is not a question however many times it is put.
     func retry() {
-        guard isBrowsing, let latestRegion else { return }
+        guard isBrowsing, !isSearching, let latestRegion else { return }
         policy.forgetLastQuery()
         guard case .offer(let area) = policy.action(for: latestRegion) else { return }
         // Both halves, because every caller is a hiker's tap: *Try Again* in

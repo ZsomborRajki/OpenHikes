@@ -27,6 +27,21 @@
 //  that vanished at a zoom level would be back to reporting policy by
 //  absence.
 //
+//  ## While it is answering
+//
+//  The glyph becomes a spinner and the pill stops taking taps until *both*
+//  halves of the question have come back. That is one request rather than two
+//  kept in step — ``MergedCommunityTransport`` asks CloudKit and Overpass side
+//  by side and returns when both have answered or failed — so there is no
+//  state here in which the control could claim one half was done.
+//
+//  Refusing the tap is the point rather than a side effect.
+//  ``CommunityBrowser``'s `perform` awaits the task it supersedes before
+//  starting, so a second tap during a search cannot produce an answer sooner;
+//  it can only queue another listing pass against an API that allows a handful
+//  of slots per address. A spinner that still accepted taps would be inviting
+//  exactly the thing the rest of this feature was rearranged to avoid.
+//
 //  ## The caption under it
 //
 //  This is also the tap that asks OpenStreetMap — the only one, now that every
@@ -105,6 +120,34 @@ final class MapAreaSearchView: UIView {
     var isEnabled: Bool {
         get { button?.isEnabled ?? false }
         set { button?.isEnabled = newValue }
+    }
+
+    /// Whether a search is in flight, drawn as a spinner in place of the
+    /// glyph.
+    ///
+    /// `UIButton.Configuration.showsActivityIndicator` rather than a
+    /// `UIActivityIndicatorView` of our own: it puts the indicator exactly
+    /// where the image was, keeps the title beside it, and leaves the metrics
+    /// to UIKit — a hand-placed one would have to reproduce the image's
+    /// padding and would change the pill's width as it came and went.
+    ///
+    /// It says *both* halves are still out. The nearby request asks CloudKit
+    /// and Overpass side by side and comes back when both have answered or
+    /// failed — see ``CommunityBrowser/isSearching`` — so there is nothing
+    /// here that could report one half without the other.
+    var isSearching = false {
+        didSet {
+            guard isSearching != oldValue else { return }
+            button?.configuration?.showsActivityIndicator = isSearching
+            // The glyph is gone while this is true, so the state has to be
+            // said rather than shown. A value rather than a replacement label,
+            // because what the control *does* has not changed and a button
+            // that renamed itself mid-press would be read out as a different
+            // control.
+            button?.accessibilityValue = isSearching
+                ? String(localized: "Searching")
+                : nil
+        }
     }
 
     /// One line under the pill, or `nil` for none.
@@ -290,18 +333,20 @@ extension MapView.Coordinator {
     private static let areaSearchFadeDuration: TimeInterval = 0.25
 
     /// Observes which list the sheet is showing, what the map has to offer
-    /// about the region on screen and whether OpenStreetMap refused the last
-    /// search, and shows, hides, dims or captions the pill — the same
-    /// imperative arrangement ``observePhotoControls(_:)`` uses, so panning
-    /// and tab switches never re-render anything in SwiftUI.
+    /// about the region on screen, whether a search is in flight and whether
+    /// OpenStreetMap refused the last one, and shows, hides, dims, spins or
+    /// captions the pill — the same imperative arrangement
+    /// ``observePhotoControls(_:)`` uses, so panning and tab switches never
+    /// re-render anything in SwiftUI.
     ///
-    /// All three are read in one tracking closure because they answer three
+    /// All four are read in one tracking closure because they answer four
     /// parts of one question: `isBrowsing` decides whether the control is
-    /// there at all, `areaPrompt` whether it can answer, and `curatedOutage`
-    /// what it has to say about the answer it gave. All three are coarse — a
-    /// tab is selected by hand, the policy refuses everything under a quarter
-    /// of the search radius, and an outage changes only when a search lands —
-    /// so this fires a handful of times in a browsing session.
+    /// there at all, `areaPrompt` whether it can answer, `isSearching` whether
+    /// it is busy answering, and `curatedOutage` what it has to say about the
+    /// answer it gave. All four are coarse — a tab is selected by hand, the
+    /// policy refuses everything under half the search radius, and the other
+    /// two move only when a search starts or lands — so this fires a handful
+    /// of times in a browsing session.
     ///
     /// Idempotent, like every other registration here: a second would leave
     /// two observers running overlapping fades against one view, and
@@ -327,6 +372,7 @@ extension MapView.Coordinator {
             _ = browser.isBrowsing
             _ = browser.areaPrompt
             _ = browser.curatedOutage
+            _ = browser.isSearching
         } onChange: { [weak self, weak browser] in
             let coordinator = self
             let model = browser
@@ -350,7 +396,14 @@ extension MapView.Coordinator {
         // something to say and nothing to do; the list's footer says it, and
         // a pill that disappeared at a zoom level would be reporting policy by
         // absence again — the thing this control exists to stop.
-        areaSearchControl.isEnabled = community?.areaPrompt != .zoomIn
+        // Busy and disabled are different states and only one of them is a
+        // policy: the ceiling means *this question is not worth asking*, and a
+        // search in flight means *it is being asked*. They share `isEnabled`
+        // because a control can only be tapped or not, and the spinner is what
+        // tells the two apart on screen.
+        let searching = community?.isSearching == true
+        areaSearchControl.isSearching = searching
+        areaSearchControl.isEnabled = community?.areaPrompt != .zoomIn && !searching
         // What OpenStreetMap said about the last search that asked it, and
         // nothing about whether the control works — see this file's header.
         // Cleared along with the pill when the tab goes, so the caption never

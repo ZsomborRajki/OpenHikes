@@ -439,18 +439,23 @@ struct CuratedTrailQueryTests {
 
     // MARK: - How the two ceilings relate
 
-    /// The two are about different things and must not be collapsed into one.
-    /// ``CommunityQueryPolicy``'s ceiling is about whether *near here* still
-    /// means anything; this one is about what a single Overpass request should
-    /// cost. Between them sits a band where the published half of a merged
-    /// answer arrives and the curated half is empty — which is the intended
-    /// behaviour, not a gap to close.
-    @Test("a curated search never reaches as far as a published one")
-    func curatedCeilingSitsUnderThePublishedOne() {
-        #expect(CuratedTrailQuery.maximumRadiusMeters < CommunityQueryPolicy.maximumRadiusMeters)
-        // And the floor every map query is clamped up to is inside the curated
-        // ceiling, or a zoomed-right-in search would return no curated rows
-        // even though it is the smallest question the map can ask.
+    /// They used to be two numbers, 40 km here and 150 km there, and the band
+    /// between them was written down as intended behaviour. It was a gap: the
+    /// pill was enabled inside it, a tap spent a CloudKit query, and the
+    /// curated half answered `[]` with no failure to report — so a hiker
+    /// looking at 100 km of map got no trails and nothing saying that zooming
+    /// in was the answer.
+    ///
+    /// One number now, and this is the one, because Overpass is the source
+    /// that minds being asked. The assertion is worth keeping in this
+    /// direction: it is this file's figure that the map's ceiling follows, and
+    /// a change here is meant to move both.
+    @Test("the map's ceiling is the curated one")
+    func theTwoCeilingsAreOne() {
+        #expect(CommunityQueryPolicy.maximumRadiusMeters == CuratedTrailQuery.maximumRadiusMeters)
+        // And the floor every map query is clamped up to is inside it, or a
+        // zoomed-right-in search would return no curated rows even though it
+        // is the smallest question the map can ask.
         #expect(CommunityQueryPolicy.minimumRadiusMeters <= CuratedTrailQuery.maximumRadiusMeters)
     }
 }

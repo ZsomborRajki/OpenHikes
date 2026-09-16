@@ -54,7 +54,9 @@ import OpenHikesShared
 /// The listing pass and the geometry pass fill different halves of this and
 /// are deliberately separable: the tags and the box arrive for every route in
 /// the area, and the line arrives only for the few that survive the filter.
-nonisolated struct CuratedTrail: Hashable, Sendable {
+/// `Codable` because it is written to disk between launches — see
+/// ``CuratedTrailStore``, which is the only thing that encodes one.
+nonisolated struct CuratedTrail: Codable, Hashable, Sendable {
     var relationID: Int64
     var name: String
     var tags: [String: String]

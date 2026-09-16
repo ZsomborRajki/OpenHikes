@@ -37,6 +37,12 @@
 //  never the request's own failure — and the *Search this area* button is what
 //  draws it. See ``CommunityNearbyAnswer``.
 //
+//  A refusal is also not the end of the curated half. What this device has
+//  already downloaded near the searched area is drawn in its place — see
+//  ``listCurated(near:limit:for:)`` — and the outage is reported anyway,
+//  because those rows are what happens to be on the device rather than an
+//  answer to the question.
+//
 //  **Overpass is asked only when the question asks for it.** Every nearby
 //  request used to reach both sources, which meant selecting the *Community*
 //  tab, retrying a failed search and refilling the list after a block each
@@ -109,6 +115,8 @@ extension MergedCommunityTransport {
         async let curatedListed = listCurated(near: area, limit: limit, for: scope)
 
         let publishedAnswer = await publishedRows
+        // What Overpass had to say, or — when it refused — what this device
+        // already had about the same area. See ``listCurated(near:limit:for:)``.
         let listed = await curatedListed
         let room = max(0, limit - publishedAnswer.rows.count)
         // Nothing to complete when the question did not ask, and nothing worth
@@ -356,20 +364,37 @@ private extension MergedCommunityTransport {
     }
 
     /// The listing pass, or nothing at all for a question that did not ask for
-    /// one.
+    /// one, or what is already on the device when Overpass refused.
     ///
     /// The guard is here rather than at the call site so the `async let` above
     /// stays one expression, and so the rule — *Overpass is asked only when
     /// the question asks for it* — is a thing one function decides.
+    ///
+    /// **The fall-back keeps the outage.** It is not a recovery and must not
+    /// read as one: the rows it returns are whatever this device happens to
+    /// have downloaded near there, with no record of whether that is the
+    /// area's trails or four of them, so the caption under *Search this area*
+    /// still says the half was refused. Drawing the four is better than
+    /// drawing nothing, and claiming they are the answer would be worse than
+    /// either. See ``CuratedTrailStore/trails(near:limit:)``.
     func listCurated(
         near area: CommunitySearchArea,
         limit: Int,
         for scope: CommunityNearbyScope
     ) async -> CuratedAttempt {
         guard scope == .withCuratedTrails else { return .notAsked }
-        return await attemptCurated {
+        let attempt = await attemptCurated {
             try await curated.listings(near: area, limit: limit)
         }
+        guard let outage = attempt.outage else { return attempt }
+        let stored = await curated.cachedTrails(near: area, limit: limit)
+        Self.logger.notice(
+            """
+            Overpass refused a curated search; drawing \(stored.count, privacy: .public) \
+            trails already on this device.
+            """
+        )
+        return CuratedAttempt(trails: stored, outage: outage)
     }
 
     /// The curated half, which is allowed to fail without ending the request.

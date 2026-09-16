@@ -87,7 +87,11 @@ nonisolated enum CuratedTrailQuery {
     static let geometryTimeoutSeconds = 30
 
     /// A south/west/north/east box, in degrees, as Overpass spells one.
-    struct BoundingBox: Hashable, Sendable {
+    ///
+    /// `Codable` for the reason ``CuratedTrail`` is: the box is what decides
+    /// where a curated pin stands, so a stored route is not a route without
+    /// it.
+    struct BoundingBox: Codable, Hashable, Sendable {
         var south: Double
         var west: Double
         var north: Double

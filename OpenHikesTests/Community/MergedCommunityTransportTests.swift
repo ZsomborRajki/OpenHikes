@@ -65,7 +65,10 @@ struct MergedCommunityTransportTests {
     /// Four distances from ``centre``, handed out alternately to the two
     /// halves so that a correct interleave is one the expected array states
     /// outright rather than one the reader has to compute.
-    private enum Offset {
+    ///
+    /// Internal rather than private, so `MergedCommunityTransportTests+Curated`
+    /// can place its own fixtures by the same four distances.
+    enum Offset {
         static let nearest: Double = 1000
         static let near: Double = 2000
         static let far: Double = 3000
@@ -77,7 +80,7 @@ struct MergedCommunityTransportTests {
     /// something too small to be convincing as the thing
     /// ``Hike/importedFromListingID`` has to hold beside a CloudKit record
     /// name.
-    private enum Relation {
+    enum Relation {
         static let wimbach: Int64 = 4_811_001
         static let almbach: Int64 = 4_811_002
         static let soleleitung: Int64 = 4_811_003
@@ -93,7 +96,9 @@ struct MergedCommunityTransportTests {
 
 // MARK: - Fixtures
 
-private extension MergedCommunityTransportTests {
+// Internal for the reason `Offset` is: the curated half's suite is in the file
+// beside this one and builds the same routes.
+extension MergedCommunityTransportTests {
     /// The tags a well-mapped Alpine route carries, spelled as Overpass
     /// returns them.
     ///
@@ -715,201 +720,5 @@ extension MergedCommunityTransportTests {
         #expect(merged.cloudKit.recording.publicationChecks == [submissionID])
         #expect(publication == nil, "nothing is published until a reviewer publishes it")
         #expect(merged.overpass.recording.isQuiet)
-    }
-}
-
-// MARK: - Overpass is asked only when the question asks for it
-
-extension MergedCommunityTransportTests {
-    /// The rule this scope exists for, asserted where it is decided. It cannot
-    /// be seen in the rows — a published-only answer and a curated one with
-    /// nothing near the centre are the same list — so the claim is that the
-    /// source was never spoken to at all.
-    @Test("a published-only question never reaches Overpass")
-    func publishedOnlyLeavesTheCuratedSourceQuiet() async throws {
-        let merged = Self.merged(
-            published: [Self.published("listing-a", metresNorth: Offset.near)],
-            curated: [Self.trail(Relation.wimbach, named: "Wimbachgries", metresNorth: Offset.nearest)]
-        )
-
-        let answer = try await Self.answer(merged, scope: .publishedOnly)
-
-        #expect(answer.listings.map(\.id) == ["listing-a"])
-        #expect(answer.curatedOutage == nil, "nothing was asked, so there is nothing to report")
-        #expect(merged.overpass.recording.isQuiet)
-        #expect(merged.cloudKit.recording.nearbyRequests.count == 1)
-    }
-
-    /// The same question with the scope the button asks with, so the test
-    /// above is about the scope rather than about a fixture that had nothing
-    /// in it.
-    @Test("the curated question reaches both halves")
-    func curatedScopeAsksBoth() async throws {
-        let merged = Self.merged(
-            published: [Self.published("listing-a", metresNorth: Offset.near)],
-            curated: [Self.trail(Relation.wimbach, named: "Wimbachgries", metresNorth: Offset.nearest)]
-        )
-
-        let answer = try await Self.answer(merged, scope: .withCuratedTrails)
-
-        #expect(answer.listings.count == 2)
-        #expect(!merged.overpass.recording.isQuiet)
-    }
-}
-
-// MARK: - A refused curated half is reported, not thrown
-
-extension MergedCommunityTransportTests {
-    /// The failure this reporting exists against: a `429` used to reach the
-    /// log and nowhere else, so a rate-limited hiker saw a list with no trails
-    /// in it and nothing to tell that apart from an area with none.
-    @Test("a rate-limited listing pass is carried back beside the rows")
-    func aRateLimitedListingPassIsReported() async throws {
-        let merged = Self.merged(
-            published: [Self.published("listing-a", metresNorth: Offset.near)]
-        )
-        merged.overpass.nearbyResult = .failure(.rateLimited(retryAfter: 60))
-
-        let answer = try await Self.answer(merged)
-
-        #expect(answer.curatedOutage == .rateLimited(retryAfter: 60))
-        #expect(
-            answer.listings.map(\.id) == ["listing-a"],
-            "one source failing is still not the answer failing"
-        )
-    }
-
-    /// Everything else Overpass can do, which is the state a hiker with no
-    /// signal is in. Still not a failure of the request: the published half
-    /// answered.
-    @Test("any other curated failure is reported as unavailable")
-    func anotherCuratedFailureIsReported() async throws {
-        let merged = Self.merged(
-            published: [Self.published("listing-a", metresNorth: Offset.near)]
-        )
-        merged.overpass.nearbyResult = .failure(.server(statusCode: 504))
-
-        let answer = try await Self.answer(merged)
-
-        #expect(answer.curatedOutage == .unavailable)
-        #expect(answer.listings.map(\.id) == ["listing-a"])
-    }
-
-    /// The happy answer says nothing, including for an area that genuinely has
-    /// no waymarked routes in it — which is most of the world, and is not
-    /// something to caption a button with.
-    @Test("a curated half that answered reports no outage")
-    func aGoodCuratedHalfReportsNothing() async throws {
-        let merged = Self.merged(
-            published: [Self.published("listing-a", metresNorth: Offset.near)]
-        )
-
-        let answer = try await Self.answer(merged)
-
-        #expect(answer.curatedOutage == nil)
-    }
-}
-
-// MARK: - The curated half's stand-in
-
-/// What the curated half answers instead of Overpass.
-///
-/// A stub for the reason ``StubCommunityTransport`` is one, and a sharper one:
-/// the real conformance reaches a **volunteer-run** public API on a quota
-/// shared by every copy of this app, over which a test suite has no claim at
-/// all. See ``CuratedTrailSourcing``.
-///
-/// `final class` behind a `Mutex` rather than an actor, for the same reason
-/// the published stub is one: the protocol's requirements are `@concurrent`,
-/// so calls genuinely arrive off the main actor, and an actor would turn every
-/// recording read in a test into a suspension point the next request could
-/// overtake.
-private final class StubCuratedTrailSource: CuratedTrailSourcing, @unchecked Sendable {
-    struct Recording: Sendable {
-        /// The areas a nearby search asked about and the limit each carried.
-        /// What proves the composite hands this half the same question it
-        /// hands CloudKit rather than one of its own devising.
-        var areaRequests: [(area: CommunitySearchArea, limit: Int)] = []
-        var titleQueries: [String] = []
-        /// The relations a per-route request asked about, in order. What
-        /// proves a CloudKit record name never arrives here.
-        var trailRequests: [Int64] = []
-        /// How many routes each geometry pass was asked to complete. The
-        /// expensive half of a search, and the one the published rows are
-        /// supposed to have already spent the limit on.
-        var completionSizes: [Int] = []
-
-        /// Whether this source was asked nothing at all — the assertion every
-        /// published-only path in this file ends on.
-        var isQuiet: Bool {
-            areaRequests.isEmpty && titleQueries.isEmpty && trailRequests.isEmpty
-                && completionSizes.isEmpty
-        }
-    }
-
-    /// What an area search answers. A failure is Overpass refusing — a `429`,
-    /// or an overloaded server's HTML page — which is the ordinary condition
-    /// the merge is built to survive rather than an exotic one.
-    var nearbyResult: Result<[CuratedTrail], TrailGraphProviderError> = .success([])
-
-    /// Every route this source knows, by relation. A relation absent from here
-    /// is one OSM no longer has, which is a real and unremarkable state: ids
-    /// are stable but not permanent.
-    private var known: [Int64: CuratedTrail] = [:]
-    private let trails: [CuratedTrail]
-    private let state = Mutex(Recording())
-
-    var recording: Recording { state.withLock { $0 } }
-
-    init(trails: [CuratedTrail] = []) {
-        self.trails = trails
-        nearbyResult = .success(trails)
-        known = Dictionary(uniqueKeysWithValues: trails.map { ($0.relationID, $0) })
-    }
-
-    /// Honours `limit` rather than merely recording it, because the real
-    /// source does — it never asks for geometry beyond
-    /// ``CuratedTrailQuery/geometryBatchLimit`` — and the merge's own split has
-    /// to be shown doing its work on top of that rather than instead of it.
-    @concurrent
-    func listings(near area: CommunitySearchArea, limit: Int) async throws -> [CuratedTrail] {
-        state.withLock { $0.areaRequests.append((area: area, limit: limit)) }
-        await Task.yield()
-        let answer = try nearbyResult.get()
-        return Array(answer.prefix(max(0, limit)))
-    }
-
-    /// Records how many rows the expensive pass was asked about, which is the
-    /// whole point of the pass being separate. The rows come back unchanged:
-    /// the stub's trails already carry their lines, and what is under test
-    /// here is the size of the question rather than the answer to it.
-    @concurrent
-    func completed(_ listed: [CuratedTrail]) async -> [CuratedTrail] {
-        state.withLock { $0.completionSizes.append(listed.count) }
-        await Task.yield()
-        return listed
-    }
-
-    /// Filters by name the way the real source does, so a query written in a
-    /// test has to be one that could actually match — a stub that answered
-    /// everything would let a merge that never passed the query along look
-    /// correct.
-    @concurrent
-    func trails(matching query: String, limit: Int) async -> [CuratedTrail] {
-        state.withLock { $0.titleQueries.append(query) }
-        await Task.yield()
-        let needle = query
-            .trimmingCharacters(in: .whitespacesAndNewlines)
-            .localizedLowercase
-        guard !needle.isEmpty, limit > 0 else { return [] }
-        let hits = trails.filter { $0.name.localizedLowercase.contains(needle) }
-        return Array(hits.prefix(limit))
-    }
-
-    @concurrent
-    func trails(of relationIDs: [Int64]) async -> [Int64: CuratedTrail] {
-        state.withLock { $0.trailRequests.append(contentsOf: relationIDs) }
-        await Task.yield()
-        return known.filter { relationIDs.contains($0.key) }
     }
 }
