@@ -280,6 +280,40 @@ final class WeatherManager {
 
     @ObservationIgnored private let service = WeatherService.shared
     @ObservationIgnored private let store: WeatherReadingStore?
+    /// `nil` for a launch that must not reach the network — see
+    /// ``WeatherPlaceNaming``. The sheet is then headed exactly as it was
+    /// before that file existed.
+    @ObservationIgnored private let placeNames: (any WeatherPlaceNaming)?
+
+    /// The city a subject's forecast turned out to be for, keyed by
+    /// ``WeatherSubject/key``.
+    ///
+    /// The same key and the same limit as ``cache``, so a hiker going back to
+    /// a trail gets its title back for free alongside its reading. A city is a
+    /// property of the anchor rather than of the weather, so unlike a snapshot
+    /// it never goes stale: nothing here expires.
+    @ObservationIgnored private var cities: OrderedDictionary<String, String> = [:]
+
+    /// The city name the detail sheet heads itself with, and which subject it
+    /// belongs to.
+    ///
+    /// Observed, because the title is drawn before the geocode lands and has
+    /// to be redrawn when it does. Carries the key rather than only the name
+    /// so that an answer arriving after the hiker has moved on is discarded by
+    /// ``cityName`` rather than published over a different trail — the same
+    /// rule ``CommunityBrowser``'s `areaName` follows, and for the same
+    /// reason.
+    private var resolvedCity: (key: String, name: String)?
+
+    /// What to call the place the current reading is for, or `nil` to fall
+    /// back to whatever the subject calls itself.
+    ///
+    /// Computed against the live subject, so it answers `nil` the instant the
+    /// badge moves on rather than leaving a stale city over a new trail.
+    var cityName: String? {
+        guard let resolvedCity, resolvedCity.key == state.subject?.key else { return nil }
+        return resolvedCity.name
+    }
 
     /// Whether ``restoreLastReading()`` has already run.
     ///
@@ -296,8 +330,43 @@ final class WeatherManager {
     /// for a badge that has nothing to draw against until a location fix
     /// arrives. See ``restoreLastReading()`` for where it went and why the
     /// time is *relocated* rather than saved.
-    init(store: WeatherReadingStore? = nil) {
+    init(store: WeatherReadingStore? = nil, placeNames: (any WeatherPlaceNaming)? = nil) {
         self.store = store
+        self.placeNames = placeNames
+    }
+
+    /// Looks up the city the current subject's forecast is for, if it is the
+    /// kind of subject that borrows one.
+    ///
+    /// **Called when the detail sheet opens, not when the subject changes.**
+    /// Only the sheet draws the name, and a hiker who selects six trails
+    /// looking for the right one should not spend six geocodes on titles
+    /// nobody asked to see — the same bargain
+    /// ``CommunityNearbyScope/publishedOnly`` strikes for Overpass.
+    ///
+    /// Idempotent and cheap on the second call: a cached city is published
+    /// without a round trip, so reopening the sheet costs nothing.
+    func resolveCityName() async {
+        // A trail only. ``WeatherSubject/place`` is already a place the hiker
+        // named by searching for it, and replacing what they typed with its
+        // administrative parent would be answering a question nobody asked;
+        // ``WeatherSubject/me`` is *here*, which the sheet says by saying
+        // "Weather".
+        guard let subject = state.subject, case .trail = subject else { return }
+        let key = subject.key
+        if let known = cities[key] {
+            resolvedCity = (key, known)
+            return
+        }
+        guard let placeNames, let city = await placeNames.cityName(at: subject.coordinate) else {
+            return
+        }
+        cities[key] = city
+        cities.move(keys: CollectionOfOne(key), to: cities.count)
+        if cities.count > WeatherRequestState.trackedSubjectLimit {
+            cities.removeFirst()
+        }
+        resolvedCity = (key, city)
     }
 
     /// Puts the stored reading back on the badge, once, after the first frame.

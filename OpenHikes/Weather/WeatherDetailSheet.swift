@@ -165,6 +165,12 @@ struct WeatherDetailView: View {
             }
         }
         .task { marks = await AppleWeatherAttribution.marks() }
+        // Separate from the credits' task rather than sequenced behind it:
+        // the two are independent round trips, and a title should not wait on
+        // Apple Weather's legal marks to appear. See
+        // ``WeatherManager/resolveCityName()`` for why the lookup happens on
+        // the sheet opening rather than when the subject changes.
+        .task { await weather.resolveCityName() }
     }
 
     /// Which place the reading is for, or `nil` when it is simply here.
@@ -172,8 +178,18 @@ struct WeatherDetailView: View {
     /// The badge can now be pointed at a searched city or a selected trail, so
     /// "Current conditions" on its own is no longer always true — see
     /// ``WeatherSubject``.
+    ///
+    /// **The geocoded city first, and the subject's own name only as a
+    /// fallback.** For a selected route the subject's name is the *hike's*
+    /// title, which names the thing the hiker tapped rather than the place the
+    /// forecast describes — see ``WeatherPlaceNaming``. The fallback is what
+    /// stands when there is no city to be had: no network, no namer on this
+    /// launch, or an anchor out on open hillside that belongs to no
+    /// settlement. Falling back to the hike's name rather than to *Weather* is
+    /// deliberate; it is the behaviour this screen already had, and losing the
+    /// title altogether would be a worse answer than an imprecise one.
     private var placeName: String? {
-        weather.state.subject?.placeName
+        weather.cityName ?? weather.state.subject?.placeName
     }
 
     private func conditionsSection(_ snapshot: WeatherSnapshot) -> some View {
