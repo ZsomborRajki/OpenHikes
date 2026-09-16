@@ -135,21 +135,67 @@ public extension HikeActivityAttributes.ContentState {
     /// Whether this differs from `other` by enough to be worth an update.
     ///
     /// ActivityKit throttles an app that updates too often, and the budget is
-    /// shared with everything else the app puts on the Lock Screen. Distance
+    /// shared with everything else the app puts on the Lock Screen. A change
     /// under the threshold is invisible at the width these numbers are drawn
     /// at, so an update carrying only that is spent budget and nothing else —
     /// whereas pausing, resuming, or stepping off the trail changes what the
     /// activity *says* and must never be throttled away.
     ///
+    /// **Every figure the panel draws is compared, not only the distance.**
+    /// A recording up a steep pitch gains fifty metres against ten of
+    /// ground: distance alone said nothing had happened while two of the
+    /// three chips on screen were wrong. So the ascent chip and the current-
+    /// elevation chip carry their own threshold, and a chip that appears or
+    /// disappears is an update outright — that is the most visible change
+    /// there is.
+    ///
+    /// **``offRouteMeters`` is compared for its nil-ness and deliberately not
+    /// for its size.** It looks like an omission and is not: the panel reads
+    /// it as a flag — `HikeActivityPresentation` asks only `!= nil`, for the
+    /// *Off trail* status and for whether a percentage can be shown at all —
+    /// and nothing anywhere draws the number. Spending an update on a hiker
+    /// drifting from 100 m off-route to 800 m would redraw a panel that says
+    /// exactly what it said before. It is also unreachable through today's
+    /// publisher, which nils the whole fix rather than reporting a large
+    /// deviation (`BackgroundTrailTracker.publishLiveFix`). If the panel ever
+    /// starts drawing the figure, this is the line that has to change with it.
+    ///
     /// The elapsed clock is deliberately not a reason: it ticks by itself
     /// through ``timerStart``.
     func warrantsUpdate(
         comparedTo other: Self,
-        distanceThresholdMeters: Double = 25
+        distanceThresholdMeters: Double = 25,
+        elevationThresholdMeters: Double = 10
     ) -> Bool {
         if runState != other.runState { return true }
         if (offRouteMeters == nil) != (other.offRouteMeters == nil) { return true }
+        if Self.differs(
+            elevationGainMeters,
+            from: other.elevationGainMeters,
+            byAtLeast: elevationThresholdMeters
+        ) { return true }
+        if Self.differs(
+            currentElevationMeters,
+            from: other.currentElevationMeters,
+            byAtLeast: elevationThresholdMeters
+        ) { return true }
         return abs(distanceMeters - other.distanceMeters) >= distanceThresholdMeters
+    }
+
+    /// Whether an optional figure changed by enough to be worth redrawing.
+    ///
+    /// One of the two being absent is always worth it: that is a chip
+    /// appearing or vanishing rather than a number moving.
+    private static func differs(
+        _ value: Double?,
+        from other: Double?,
+        byAtLeast threshold: Double
+    ) -> Bool {
+        switch (value, other) {
+        case (nil, nil): false
+        case let (value?, other?): abs(value - other) >= threshold
+        default: true
+        }
     }
 
     /// The same figures, marked as a walk that has ended.
