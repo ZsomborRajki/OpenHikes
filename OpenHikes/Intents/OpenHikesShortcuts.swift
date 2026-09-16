@@ -13,9 +13,19 @@
 //  Ten is the system's ceiling on shortcuts per app. The eight below are the
 //  whole recording loop, the three questions, and the one that takes a
 //  parameter — `HikeDurationIntent`, which is what ``HikeEntity`` was built
-//  for. Two slots are deliberately unspent; what is queued for them is on the
-//  issue tracker, which is where an unbuilt intent belongs rather than in a
-//  comment here.
+//  for. Two slots are deliberately unspent, and what is queued for them is
+//  #480 and #481 — an unbuilt intent belongs on the issue tracker rather than
+//  in a comment here, and the argument for each is there rather than repeated
+//  below.
+//
+//  Neither is blocked on plumbing. #480 is blocked on navigation:
+//  `OpenHikesView` is at its `type_body_length` limit and an intent runs in
+//  the app process but outside the view tree, so the honest version routes a
+//  ``HikeEntity`` through the deep link the widget already uses rather than
+//  opening a second way in. #481 is blocked on a product decision: starting a
+//  recording *and* naming a trail to follow is the one gesture that asks for
+//  both at once, and *a live recording outranks the selected trail* means the
+//  trail the hiker just said out loud is the thing that leaves the widget.
 //
 
 import AppIntents
