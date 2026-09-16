@@ -20,7 +20,11 @@ Usage: Scripts/simulate-hike.sh [start|stop] [options]
 Starts or stops a simulated hiking route on an iOS Simulator.
 
 Options:
-  --device <udid|booted>  Simulator destination (default: booted)
+  --device <udid|booted>  Simulator destination (default: $OPENHIKES_SIMULATOR,
+                          or booted). A device *name* is not accepted here:
+                          simctl takes a UDID or `booted`. Scripts/run-ui-tests.sh
+                          is the script that resolves names, and it reads
+                          OPENHIKES_SIMULATOR_NAME instead.
   --route <file.gpx>      GPX track to replay
   --speed <meters/sec>    Playback speed (default: 12)
   --interval <seconds>    Location update interval (default: 1)
