@@ -188,7 +188,7 @@ nonisolated extension CuratedTrailStore {
         else { return [] }
 
         let centre = area.coordinate
-        let within = files.compactMap { url -> (trail: CuratedTrail, distance: Double)? in
+        let within = files.compactMap { url -> (url: URL, trail: CuratedTrail, distance: Double)? in
             guard let data = try? Data(contentsOf: url),
                   let stored = try? JSONDecoder().decode(StoredTrail.self, from: data),
                   clock().timeIntervalSince(stored.fetchedAt) <= Self.lifetime
@@ -202,12 +202,21 @@ nonisolated extension CuratedTrailStore {
                 to: stored.trail.coordinate
             )
             guard distance <= area.radiusMeters else { return nil }
-            return (stored.trail, distance)
+            return (url: url, trail: stored.trail, distance: distance)
         }
-        return within
-            .sorted { $0.distance < $1.distance }
-            .prefix(limit)
-            .map(\.trail)
+        // `min(count:)` rather than a full sort and a `prefix`, which is the
+        // same question ``trim()`` asks four lines down and is worth asking
+        // the same way: two hundred files are read to keep twenty-five.
+        let nearest = within.min(count: limit) { $0.distance < $1.distance }
+        // Re-stamped, for the reason ``trail(of:)`` re-stamps a hit. These are
+        // the rows the hiker is looking at, and without this they keep
+        // whatever age they had — so the fall-back a refused search draws is
+        // made of exactly the files the next ``trim()`` is most likely to
+        // take. The ones that were read and not offered are left alone: a file
+        // this opened and rejected for being in another valley is not a route
+        // anybody used.
+        for entry in nearest { touch(entry.url) }
+        return nearest.map(\.trail)
     }
 }
 

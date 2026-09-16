@@ -548,6 +548,30 @@ extension CuratedTrailSourceTests {
         #expect(trails.count == asked)
     }
 
+    /// *Partial rather than nothing* has to hold inside the loop as well as
+    /// before it. The rate-limit check runs once, up front; a map with more
+    /// pins on it than one batch holds routes asks in several, and a refusal
+    /// arriving at the second used to throw away the twenty-five lines the
+    /// first had already brought back — which are cached, so the answer was
+    /// free and was discarded anyway.
+    @Test("a refused chunk keeps the lines the chunks before it fetched")
+    func aRefusedChunkKeepsTheOnesBeforeIt() async throws {
+        let batch = CuratedTrailQuery.geometryBatchLimit
+        let (source, stub) = Self.makeSource([
+            Self.ok(Self.crowd(of: batch)),
+            OverpassHTTPResponse(
+                data: Data(),
+                statusCode: Self.httpRateLimited,
+                headers: ["retry-after": "120"]
+            ),
+        ])
+
+        let trails = try await source.trails(of: Self.crowdIDs(batch + 1))
+
+        #expect(trails.count == batch, "the batch that arrived is the answer")
+        #expect(await stub.requestCount == 2, "the second chunk was asked for and refused")
+    }
+
     // MARK: - What survives a launch
 
     /// The point of the disk half: a second launch is not a second download.

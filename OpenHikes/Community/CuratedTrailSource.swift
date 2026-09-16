@@ -38,6 +38,7 @@
 import Algorithms
 import CoreLocation
 import Foundation
+import OrderedCollections
 import os
 
 /// Where the community list's curated hikes come from.
@@ -199,8 +200,15 @@ actor CuratedTrailSource: CuratedTrailSourcing {
     /// rows where it listed twenty-five, saying nothing about the five it
     /// dropped. Touching an entry on every read is what keeps the rows a
     /// hiker is looking at out of the eviction window.
-    private var cachedTrails: [Int64: CachedTrail] = [:]
-    private var trailOrder: [Int64] = []
+    ///
+    /// One ``OrderedDictionary`` rather than a dictionary beside an array of
+    /// keys, which is what this was and which is two structures that can
+    /// disagree — a `removeValue` without its matching `remove(at:)` leaves
+    /// the order naming a relation the cache no longer holds. The order *is*
+    /// the storage here: the oldest end is `first`, ``touch(_:)`` is a move to
+    /// the back rather than a linear scan, and eviction is `removeFirst()`.
+    /// ``WeatherRequestState`` keeps its own recency list exactly this way.
+    private var cachedTrails: OrderedDictionary<Int64, CachedTrail> = [:]
 
     /// What the last area search answered, for ``trails(matching:limit:)``.
     private var lastAnswer: [CuratedTrail] = []
@@ -250,25 +258,29 @@ actor CuratedTrailSource: CuratedTrailSourcing {
 
     // MARK: - The cache
 
+    /// Writes `cached` down and marks it the most recently used, evicting the
+    /// least recent ones if that puts the cache over its limit.
+    ///
+    /// Two separate things, said separately: the value is written where it
+    /// sits, and *then* moved to the back. A key not seen before is appended
+    /// by the subscript, so the move that follows finds it already last and
+    /// does nothing.
     private func cache(_ cached: CachedTrail, for relationID: Int64) {
-        if cachedTrails.updateValue(cached, forKey: relationID) == nil {
-            trailOrder.append(relationID)
-        } else {
-            touch(relationID)
-        }
-        while trailOrder.count > Self.maximumCachedTrails {
-            cachedTrails.removeValue(forKey: trailOrder.removeFirst())
+        cachedTrails[relationID] = cached
+        touch(relationID)
+        while cachedTrails.count > Self.maximumCachedTrails {
+            cachedTrails.removeFirst()
         }
     }
 
     /// Moves `relationID` to the newest end of the eviction order.
     ///
-    /// A linear scan of a hundred ids, on a path that is already a network
-    /// decision — a linked list to make it constant would be more moving parts
-    /// than the thing it speeds up.
+    /// Silent about a relation the cache does not hold, because the callers
+    /// are reads: ``trails(of:)`` touches what it found, and there is nothing
+    /// to reorder for what it did not.
     private func touch(_ relationID: Int64) {
-        guard let index = trailOrder.firstIndex(of: relationID) else { return }
-        trailOrder.append(trailOrder.remove(at: index))
+        guard cachedTrails[relationID] != nil else { return }
+        cachedTrails.move(keys: CollectionOfOne(relationID), to: cachedTrails.count)
     }
 
     /// Drops the memory of what the last area search answered.
@@ -304,15 +316,21 @@ extension CuratedTrailSource {
         // Nearest first, by the same measure the published half is sorted by,
         // so a merged list is ordered by one rule rather than by two that
         // happen to agree near the centre.
+        //
+        // Measured once per relation and then ordered, rather than measured
+        // inside a comparator: a full sort with a haversine on both sides runs
+        // the trigonometry about fourteen hundred times over the hundred-odd
+        // relations one Alpine box answers with, to keep twenty-five of them.
+        // `min(count:)` is the shape ``CuratedTrailStore/trim()`` already uses
+        // for the same question — *the k smallest, in order* — and it is what
+        // `sorted().prefix()` was spelling the long way.
         let centre = area.coordinate
         let nearest = listed
-            .sorted { lhs, rhs in
-                RouteGeometry.distanceMeters(from: centre, to: lhs.coordinate)
-                    < RouteGeometry.distanceMeters(from: centre, to: rhs.coordinate)
-            }
-            .prefix(min(limit, CuratedTrailQuery.geometryBatchLimit))
+            .map { (trail: $0, distance: RouteGeometry.distanceMeters(from: centre, to: $0.coordinate)) }
+            .min(count: min(limit, CuratedTrailQuery.geometryBatchLimit)) { $0.distance < $1.distance }
+            .map(\.trail)
         lastArea = area
-        return Array(nearest)
+        return nearest
     }
 
     /// Fills in each listed route's line, dropping the ones that have none.
@@ -400,30 +418,54 @@ extension CuratedTrailSource {
         // about at most a batch at a time and drops the rest silently, and a
         // map can hold more curated pins than one batch holds routes.
         for chunk in missing.chunks(ofCount: CuratedTrailQuery.geometryBatchLimit) {
-            guard let query = CuratedTrailQuery.geometryQuery(ids: Array(chunk)) else { continue }
-            let decoded = try CuratedTrailDecoding.trails(fromGeometry: try await send(query))
-            // Collected and written once at the end of the chunk rather than
-            // one at a time: a per-route write re-enumerates the cache
-            // directory per route — see ``CuratedTrailStore/save(_:)-([CuratedTrail])``.
-            var fetched: [CuratedTrail] = []
-            for relationID in chunk {
-                // An id the response did not carry is one Overpass has nothing
-                // to draw for — deleted, or too fragmented to assemble. That is
-                // an answer, and it is cached as one.
-                guard let trail = decoded[relationID] else {
-                    // In memory only, deliberately: see ``CuratedTrailStore``
-                    // on why *nothing here* is not a thing to write down for
-                    // thirty days.
-                    cache(.absent, for: relationID)
-                    continue
-                }
-                answer[relationID] = trail
-                cache(.trail(trail), for: relationID)
-                fetched.append(trail)
+            do {
+                answer.merge(try await fetch(Array(chunk))) { _, fetched in fetched }
+            } catch {
+                // The same rule the rate-limit check above follows, and it has
+                // to be stated here too rather than only up front: a second
+                // chunk refused must not throw away the first one's lines.
+                // Without this the twenty-sixth pin on a map could cost the
+                // twenty-five that had already arrived — and they are cached,
+                // so the answer is free.
+                guard answer.isEmpty else { return answer }
+                throw error
             }
-            store?.save(fetched)
         }
         return answer
+    }
+
+    /// One geometry pass over `ids`, cached in memory and written to disk.
+    ///
+    /// Split from ``trails(of:)`` so that the loop above is about *what a
+    /// refusal costs* and this is about what one answer holds. Answers only
+    /// what Overpass drew, which is what keeps the caller's own dictionary
+    /// built from the fetch rather than read back out of a cache this may
+    /// already have evicted from.
+    private func fetch(_ ids: [Int64]) async throws -> [Int64: CuratedTrail] {
+        guard let query = CuratedTrailQuery.geometryQuery(ids: ids) else { return [:] }
+        let decoded = try CuratedTrailDecoding.trails(fromGeometry: try await send(query))
+        var found: [Int64: CuratedTrail] = [:]
+        // Collected and written once at the end rather than one at a time: a
+        // per-route write re-enumerates the cache directory per route — see
+        // ``CuratedTrailStore/save(_:)-([CuratedTrail])``.
+        var fetched: [CuratedTrail] = []
+        for relationID in ids {
+            // An id the response did not carry is one Overpass has nothing to
+            // draw for — deleted, or too fragmented to assemble. That is an
+            // answer, and it is cached as one.
+            guard let trail = decoded[relationID] else {
+                // In memory only, deliberately: see ``CuratedTrailStore`` on
+                // why *nothing here* is not a thing to write down for thirty
+                // days.
+                cache(.absent, for: relationID)
+                continue
+            }
+            found[relationID] = trail
+            cache(.trail(trail), for: relationID)
+            fetched.append(trail)
+        }
+        store?.save(fetched)
+        return found
     }
 }
 

@@ -252,4 +252,62 @@ extension CuratedTrailStoreTests {
 
         #expect(store.trails(near: Self.area(radiusMeters: 20_000), limit: 25).isEmpty)
     }
+
+    /// The same claim ``readingKeepsARouteAlive`` makes about opening one
+    /// route, on the path that answers a whole refused search. These rows are
+    /// what the hiker is looking at; without the re-stamp the fall-back is
+    /// made of exactly the files the next trim is most likely to take.
+    @Test("a route drawn by a refused search is not the first one evicted")
+    func offeringARouteKeepsItAlive() {
+        let directory = Self.scratch()
+        defer { try? FileManager.default.removeItem(at: directory) }
+        let clock = TestClock()
+        let store = CuratedTrailStore(directory: directory, clock: clock.read)
+        let favourite: Int64 = 4_811_001
+        store.save(Self.trail(favourite, metresNorth: 0))
+        for index in 1..<CuratedTrailStore.maximumFiles {
+            clock.advance(by: 1)
+            // Far enough out that only the favourite answers the search below,
+            // so the re-stamp under test is the one this is about.
+            store.save(Self.trail(Int64(4_811_001 + index), metresNorth: 90_000))
+        }
+
+        clock.advance(by: 1)
+        let offered = store.trails(near: Self.area(radiusMeters: 20_000), limit: 25)
+        #expect(offered.map(\.relationID) == [favourite])
+
+        for index in 0..<5 {
+            clock.advance(by: 1)
+            store.save(Self.trail(Int64(4_812_001 + index), metresNorth: 90_000))
+        }
+
+        #expect(store.trail(of: favourite) != nil)
+    }
+
+    /// A file this read and rejected for being in another valley is not a
+    /// route anybody used, and must not be kept alive by having been looked
+    /// at. Otherwise every refused search would re-stamp the whole directory
+    /// and the eviction order would mean nothing at all.
+    @Test("a route read and left out keeps the age it had")
+    func rejectedRoutesAreNotKeptAlive() {
+        let directory = Self.scratch()
+        defer { try? FileManager.default.removeItem(at: directory) }
+        let clock = TestClock()
+        let store = CuratedTrailStore(directory: directory, clock: clock.read)
+        let distant: Int64 = 4_811_001
+        store.save(Self.trail(distant, metresNorth: 90_000))
+        for index in 1..<CuratedTrailStore.maximumFiles {
+            clock.advance(by: 1)
+            store.save(Self.trail(Int64(4_811_001 + index), metresNorth: 0))
+        }
+
+        clock.advance(by: 1)
+        #expect(!store.trails(near: Self.area(radiusMeters: 20_000), limit: 25)
+            .contains { $0.relationID == distant })
+
+        clock.advance(by: 1)
+        store.save(Self.trail(4_812_001, metresNorth: 0))
+
+        #expect(store.trail(of: distant) == nil, "the oldest file is still the oldest")
+    }
 }
