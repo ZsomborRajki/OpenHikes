@@ -86,7 +86,8 @@ a crashed test host and still print a green summary.
   including from helper `func`s, computed `var`s and `.toolbar` / `.overlay` /
   `.safeAreaInset` closures, all of which are inlined into the declaring body.
 - **One test class or `@Suite` per file,** and tests use Swift Testing except in
-  `OpenHikesUITests`.
+  `OpenHikesUITests`. Both halves are enforced: `single_test_class` for
+  `XCTestCase`, and the `one_suite_per_file` custom rule for `@Suite`.
 - **No fixed sleeps as barriers.** Wait on the effect, never on a duration.
 - **Documentation is owned by exactly one file each.** Before adding a fact to a
   second place, read the *Documentation* section of the instructions file.

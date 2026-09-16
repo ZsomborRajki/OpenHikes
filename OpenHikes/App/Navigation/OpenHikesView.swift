@@ -343,7 +343,7 @@ struct OpenHikesView: View {
                         // `@Query` they are already drawn from: a pin is one
                         // tap and one listing, and there is no list in front
                         // of it to derive it from.
-                        importedAs: CommunityImport.existingImport(of: listing.id, in: context),
+                        importedAs: try? CommunityImport.existingImport(of: listing.id, in: context),
                         selectedHike: &selection.wrappedValue
                     )
                 }

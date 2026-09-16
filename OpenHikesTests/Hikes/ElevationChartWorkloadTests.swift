@@ -87,6 +87,64 @@ struct ElevationChartWorkloadTests {
         #expect(abs(range.upperBound - trueHigh) < 1)
     }
 
+    /// The same guarantee for the population it was not holding for: a hike
+    /// stored before `GPXImport` refused a non-finite `<ele>`, or synced from
+    /// a device on an older build.
+    ///
+    /// The buckets seed both bounds with their first sample and displace them
+    /// by comparison, and every comparison against a NaN is false — so a
+    /// bucket whose first sample was poisoned kept it and dropped the summit
+    /// that was actually walked, on a chart whose y-scale is derived from what
+    /// survives. `elevationRange` then filtered the NaN back out, so the
+    /// number on screen came from a series the peak was no longer in and
+    /// nothing looked wrong.
+    @Test("a non-finite height does not cost its bucket the summit")
+    func nonFiniteHeightsDoNotDisplaceExtremes() throws {
+        // Every 500th point, which puts one at or near the head of a bucket
+        // whichever way the interior divides.
+        var poisoned = Self.longRoute
+        for index in stride(from: 0, to: poisoned.count, by: 500) {
+            poisoned[index].elevation = index.isMultiple(of: 1000) ? .nan : .infinity
+        }
+        let profile = RouteProfile(route: poisoned)
+        let trueElevations = poisoned.compactMap(\.elevation).filter(\.isFinite)
+        let trueLow = try #require(trueElevations.min())
+        let trueHigh = try #require(trueElevations.max())
+
+        // Bound first: a key path handed to `allSatisfy` reads as throwing
+        // inside an `#expect` expansion.
+        let everySampleIsFinite = profile.samples.allSatisfy(\.elevation.isFinite)
+        #expect(everySampleIsFinite, "none of them reach the chart")
+        let range = try #require(profile.elevationRange)
+        #expect(abs(range.lowerBound - trueLow) < 1)
+        #expect(abs(range.upperBound - trueHigh) < 1, "the summit is still in the series the axis is built from")
+    }
+
+    /// `ElevationChartView.==` exists so the body stops re-evaluating when
+    /// nothing it draws has changed, and the file documents that body as
+    /// rebuilt at drag frequency during a scrub. `ElevationSample` is a
+    /// synthesized `Equatable` over two `Double`s and `nan != nan`, so for a
+    /// hike carrying one the comparison could never hold — the guard returned
+    /// `false` on every pass, on the one screen it was written to protect.
+    @Test("the chart's equality holds for a hike that carried a non-finite height")
+    func equalityHoldsForARouteWithNonFiniteHeights() {
+        let tracker = TrackerState()
+        let route = [
+            RouteCoordinate(latitude: 47.63, longitude: 12.86, elevation: 600),
+            RouteCoordinate(latitude: 47.64, longitude: 12.86, elevation: .nan),
+            RouteCoordinate(latitude: 47.65, longitude: 12.86, elevation: 700),
+        ]
+        let profile = RouteProfile(route: route)
+        let first = ElevationChartView(profile: profile, tint: .green, tracker: tracker) { _ in /* no-op */ }
+        let second = ElevationChartView(
+            profile: RouteProfile(route: route),
+            tint: .green,
+            tracker: tracker
+        ) { _ in /* no-op */ }
+
+        #expect(first == second, "an identical chart must compare equal, or the body is rebuilt for nothing")
+    }
+
     /// The x-scale runs `0...samples.last.distanceMeters`, while the tracker
     /// and the live position are placed using `profile.distances`, which
     /// always covers the whole route. If the last plotted sample stops short,

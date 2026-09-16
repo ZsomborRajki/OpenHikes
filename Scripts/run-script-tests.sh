@@ -11,7 +11,10 @@
 # reports "clean" about a lint it never configured the way it was asked to.
 # Scripts/periphery.sh is the third, and for the same reason: a Periphery that
 # read none of .periphery.yml scans on anyway and prints a result, and on this
-# project the result it prints is a clean one.
+# project the result it prints is a clean one. Scripts/simulate-hike.sh is the
+# fourth: it is the other program that drives a simulator, CI only parse-checks
+# it, and its validators are what stand between a typo and a playback loop that
+# divides by zero — an untested flag rots into a no-op that still exits 0.
 #
 # The two CI gate programs are here for a plainer reason. Scripts/
 # check-coverage-floor.sh can fail a merge, and Scripts/
@@ -102,6 +105,15 @@ case "${1:-}" in
             exit 1
         fi
         printf '%s\n' "$STUB_CONTAINER"
+        ;;
+    location)
+        # The playback form ends in a lone `-` and has its waypoints piped in.
+        # Read them: a stub that exits without draining leaves the `printf`
+        # upstream to take a SIGPIPE, which `set -o pipefail` would report as
+        # simulate-hike.sh having failed.
+        if [[ "${!#}" == "-" ]]; then
+            cat > /dev/null
+        fi
         ;;
 esac
 STUB
@@ -230,6 +242,12 @@ expect_absent() {
 }
 
 ui_tests="$repository_root/Scripts/run-ui-tests.sh"
+ui_bundle="OpenHikesUITests"
+# One real test, and deliberately one of the three run-ui-tests.sh pins to its
+# serial pass: the cases below use it for both the selection checks and the
+# second pass, so a rename breaks them together rather than one at a time.
+pinned_test="RecordingUITests/testDiscardingARecordingSavesNothing"
+recording_test="${pinned_test#*/}"
 
 echo "Simulator resolution"
 
@@ -1036,6 +1054,275 @@ run_script "periphery rejects an unknown option after --exclude-tests" \
 if expect_status 2 \
     && expect_contains "$output" "unknown option '--not-a-real-option'" "the error" \
     && expect_absent "$calls" "periphery scan" "the recorded calls"; then
+    pass
+fi
+
+echo "Selection rejections"
+
+# The two rejections nothing covered. A name that does not exist has to be
+# refused with the list rather than handed to xcodebuild, which would drop an
+# `-only-testing:` identifier that resolves to nothing and still exit 0 — the
+# same silent pass `Scripts/check-sanitized-selection.sh` exists for over in
+# the sanitizer job.
+run_script "run-ui-tests rejects a test method no class declares" \
+    "$ui_tests" --device "iPhone 17 Pro" --test testThisWasNeverWritten --dry-run
+if expect_status 2 \
+    && expect_contains "$output" "Unknown test: testThisWasNeverWritten" "the error" \
+    && expect_contains "$output" "Available tests:" "the error" \
+    && expect_absent "$calls" "xcodebuild" "the recorded calls"; then
+    pass
+fi
+
+run_script "run-ui-tests rejects a class the functional list does not carry" \
+    "$ui_tests" --device "iPhone 17 Pro" --suite LaunchPerformanceUITests --dry-run
+if expect_status 2 \
+    && expect_contains "$output" "Unknown suite: LaunchPerformanceUITests" "the error" \
+    && expect_contains "$output" "Available suites:" "the error"; then
+    pass
+fi
+
+# A real class and a real method, but the method belongs to another class. The
+# pair is checked rather than each half, or `--suite SettingsUITests --test
+# testDiscardingARecordingSavesNothing` would run nothing and say nothing.
+run_script "run-ui-tests rejects a test that belongs to another class" \
+    "$ui_tests" --device "iPhone 17 Pro" --suite SettingsUITests --test "$recording_test" --dry-run
+if expect_status 2 \
+    && expect_contains "$output" "Unknown test: SettingsUITests/$recording_test" "the error"; then
+    pass
+fi
+
+echo "Listing"
+
+# --list is how a contributor finds a name to pass to --test, so it has to
+# answer from the same reader --test is checked against. Both read every
+# `Suite+Something.swift` extension, not just `Suite.swift`.
+run_script "run-ui-tests --list names tests without running anything" \
+    "$ui_tests" --list
+if expect_status 0 \
+    && expect_contains "$output" "RecordingUITests/$recording_test" "the listing" \
+    && expect_contains "$output" "SettingsUITests/" "the listing" \
+    && expect_absent "$calls" "xcodebuild" "the recorded calls"; then
+    pass
+fi
+
+run_script "run-ui-tests --list after --suite lists that class alone" \
+    "$ui_tests" --suite SettingsUITests --list
+if expect_status 0 \
+    && expect_contains "$output" "SettingsUITests/" "the listing" \
+    && expect_absent "$output" "RecordingUITests/" "the listing"; then
+    pass
+fi
+
+echo "Second pass and verbose"
+
+# A parallel --all runs twice: the classes across clones, then the pinned
+# tests on this one simulator. --dry-run is the mode whose whole job is to say
+# what will run, so the second invocation has to be printed too — and it is
+# the one that carries the pinned names.
+run_script "run-ui-tests --dry-run prints the pinned second pass as well" \
+    "$ui_tests" --device "iPhone 17 Pro" --all --dry-run
+if expect_status 0 \
+    && expect_contains "$output" "-only-testing:$ui_bundle/$pinned_test" "the second invocation" \
+    && expect_contains "$output" "-skip-testing:$ui_bundle/$pinned_test" "the first invocation"; then
+    printed_invocations="$(printf '%s\n' "$output" | grep -c -- "-retry-tests-on-failure" || true)"
+    if [[ "$printed_invocations" == "2" ]]; then
+        pass
+    else
+        fail "printed $printed_invocations invocations, expected 2" "$output"
+    fi
+fi
+
+# And a serial --all has no second pass to print: the pinned list exists
+# because three clones make the machine slow, so with one simulator those
+# tests run in the ordinary pass and must not be run twice.
+run_script "run-ui-tests --serial --all prints one invocation" \
+    "$ui_tests" --device "iPhone 17 Pro" --all --serial --dry-run
+if expect_status 0 \
+    && expect_absent "$output" "-skip-testing:$ui_bundle/$pinned_test" "the printed invocation" \
+    && expect_absent "$output" "-only-testing:$ui_bundle/$pinned_test" "the printed invocation"; then
+    pass
+fi
+
+# --verbose is what a contributor is told to re-run with when a run fails, so
+# what it has to do is let xcodebuild's own output through: the default path
+# pipes it into the formatter and keeps the unformatted copy in a temporary
+# file nobody is shown.
+run_script "run-ui-tests --verbose passes xcodebuild's own output through" \
+    "$ui_tests" --device "iPhone 17 Pro" --verbose
+if expect_status 0 \
+    && expect_contains "$output" "Test Suite 'All tests' passed" "the run output" \
+    && expect_contains "$output" "UI tests passed." "the run output"; then
+    pass
+fi
+
+# The failure path's advice has to be true of the run that failed, not of a
+# hypothetical one: a red run says "Re-run with --verbose", and that is only
+# advice worth printing if the status it reports is xcodebuild's own.
+STUB_XCODEBUILD_STATUS=65 \
+    run_script "run-ui-tests --verbose keeps xcodebuild's failing status" \
+        "$ui_tests" --device "iPhone 17 Pro" --verbose
+if expect_status 65 && expect_contains "$output" "UI tests failed." "the error"; then
+    pass
+fi
+
+echo "Simulated hike playback"
+
+# Scripts/simulate-hike.sh is the other program that drives a simulator, and
+# the only one CI never runs: `ci.yml` parse-checks it and stops there. Its
+# validators are what stand between a typo and a playback loop that divides by
+# zero, and its `--dry-run` is what a contributor is told to trust before
+# touching a device.
+simulate_hike="$repository_root/Scripts/simulate-hike.sh"
+# Its own route rather than the app's, so these cases do not change answer when
+# the bundled GPX is re-recorded. Four points, which is enough to be limited by
+# --points and to survive the two-point floor.
+route_gpx="$work/route.gpx"
+cat > "$route_gpx" <<'GPX'
+<?xml version="1.0" encoding="UTF-8"?>
+<gpx version="1.1" creator="script-tests">
+  <trk><trkseg>
+    <trkpt lat="47.718420" lon="12.831774"><ele>533.50</ele></trkpt>
+    <trkpt lat="47.718500" lon="12.831900"><ele>534.00</ele></trkpt>
+    <trkpt lat="47.718600" lon="12.832100"><ele>535.00</ele></trkpt>
+    <trkpt lat="47.718700" lon="12.832400"><ele>536.00</ele></trkpt>
+  </trkseg></trk>
+</gpx>
+GPX
+one_point_gpx="$work/one-point.gpx"
+cat > "$one_point_gpx" <<'GPX'
+<?xml version="1.0" encoding="UTF-8"?>
+<gpx version="1.1" creator="script-tests">
+  <trk><trkseg>
+    <trkpt lat="47.718420" lon="12.831774"><ele>533.50</ele></trkpt>
+  </trkseg></trk>
+</gpx>
+GPX
+
+run_script "simulate-hike --dry-run summarises without moving the device" \
+    "$simulate_hike" start --device "$pro_udid" --route "$route_gpx" --dry-run
+if expect_status 0 \
+    && expect_contains "$output" "Waypoints: 4" "the summary" \
+    && expect_contains "$output" "Playback: 12 m/s, updates every 1 s" "the summary" \
+    && expect_absent "$calls" "xcrun simctl location" "the recorded calls"; then
+    pass
+fi
+
+run_script "simulate-hike --points replays only the first points" \
+    "$simulate_hike" start --device "$pro_udid" --route "$route_gpx" --points 2 --dry-run
+if expect_status 0 && expect_contains "$output" "Waypoints: 2" "the summary"; then
+    pass
+fi
+
+# --full is `--points 0`, and the distinction matters: 0 is the only value that
+# means the whole track, since 1 is refused and everything else is a ceiling.
+run_script "simulate-hike --full replays the whole track" \
+    "$simulate_hike" start --device "$pro_udid" --route "$route_gpx" --points 2 --full --dry-run
+if expect_status 0 && expect_contains "$output" "Waypoints: 4" "the summary"; then
+    pass
+fi
+
+run_script "simulate-hike hands the waypoints and the playback options to simctl" \
+    "$simulate_hike" start --device "$pro_udid" --route "$route_gpx" --speed 4 --interval 2
+if expect_status 0 \
+    && expect_contains "$calls" "xcrun simctl location $pro_udid start --speed=4 --interval=2 -" \
+        "the recorded calls"; then
+    pass
+fi
+
+# The zero tests are numeric on purpose: a textual comparison lets "0.0" and
+# "00" through, and both divide by zero when the playback loop derives its step.
+run_script "simulate-hike refuses a speed of zero" \
+    "$simulate_hike" start --device "$pro_udid" --route "$route_gpx" --speed 0.0
+if expect_status 2 \
+    && expect_contains "$output" "--speed must be a positive number" "the error" \
+    && expect_absent "$calls" "xcrun simctl location" "the recorded calls"; then
+    pass
+fi
+
+run_script "simulate-hike refuses a speed that is not a number" \
+    "$simulate_hike" start --device "$pro_udid" --route "$route_gpx" --speed fast
+if expect_status 2 && expect_contains "$output" "--speed must be a positive number" "the error"; then
+    pass
+fi
+
+run_script "simulate-hike refuses an interval of zero" \
+    "$simulate_hike" start --device "$pro_udid" --route "$route_gpx" --interval 00
+if expect_status 2 && expect_contains "$output" "--interval must be a positive number" "the error"; then
+    pass
+fi
+
+# One point is the value that reads like a request and cannot be served: the
+# floor below is two, and 0 is the whole route.
+run_script "simulate-hike refuses a single-point replay" \
+    "$simulate_hike" start --device "$pro_udid" --route "$route_gpx" --points 1
+if expect_status 2 && expect_contains "$output" "at least 2" "the error"; then
+    pass
+fi
+
+run_script "simulate-hike refuses a fractional point count" \
+    "$simulate_hike" start --device "$pro_udid" --route "$route_gpx" --points 2.5
+if expect_status 2 && expect_contains "$output" "--points must be an integer" "the error"; then
+    pass
+fi
+
+run_script "simulate-hike refuses an option with no value" \
+    "$simulate_hike" start --device
+if expect_status 2 && expect_contains "$output" "Missing value for --device" "the error"; then
+    pass
+fi
+
+run_script "simulate-hike refuses an unknown option" \
+    "$simulate_hike" start --device "$pro_udid" --backwards
+if expect_status 2 && expect_contains "$output" "Unknown option: --backwards" "the error"; then
+    pass
+fi
+
+run_script "simulate-hike refuses an action it does not have" \
+    "$simulate_hike" rewind --device "$pro_udid"
+if expect_status 2 && expect_contains "$output" "Unknown action: rewind" "the error"; then
+    pass
+fi
+
+run_script "simulate-hike reports a route file that is not there" \
+    "$simulate_hike" start --device "$pro_udid" --route "$work/no-such-route.gpx"
+if expect_status 1 && expect_contains "$output" "GPX route not found" "the error"; then
+    pass
+fi
+
+# A track with one point parses, summarises and would then ask simctl to
+# interpolate between a place and itself.
+run_script "simulate-hike refuses a track with one point" \
+    "$simulate_hike" start --device "$pro_udid" --route "$one_point_gpx" --dry-run
+if expect_status 1 \
+    && expect_contains "$output" "at least two track points" "the error" \
+    && expect_absent "$calls" "xcrun simctl location" "the recorded calls"; then
+    pass
+fi
+
+run_script "simulate-hike stop clears the simulated location" \
+    "$simulate_hike" stop --device "$pro_udid"
+if expect_status 0 \
+    && expect_contains "$calls" "xcrun simctl location $pro_udid clear" "the recorded calls" \
+    && expect_contains "$output" "Cleared simulated location" "the output"; then
+    pass
+fi
+
+# The stop path has its own --dry-run branch, above every check the start path
+# makes, so it is the one case where a dry run must still say what it would do
+# to a device it was never going to touch.
+run_script "simulate-hike stop --dry-run touches nothing" \
+    "$simulate_hike" stop --device "$pro_udid" --dry-run
+if expect_status 0 \
+    && expect_contains "$output" "Would clear simulated location on $pro_udid" "the output" \
+    && expect_absent "$calls" "xcrun simctl location" "the recorded calls"; then
+    pass
+fi
+
+run_script "simulate-hike --help prints the usage without touching a device" \
+    "$simulate_hike" --help
+if expect_status 0 \
+    && expect_contains "$output" "Usage: Scripts/simulate-hike.sh" "the help" \
+    && expect_absent "$calls" "xcrun simctl location" "the recorded calls"; then
     pass
 fi
 

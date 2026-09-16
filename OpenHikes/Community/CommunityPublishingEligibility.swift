@@ -103,7 +103,7 @@ nonisolated enum CommunityPublishingEligibility: Equatable, Sendable {
     ) -> Self {
         if let importedFromListingID {
             // A curated route is imported with no author name — see
-            // ``CommunityImport/importHike(_:into:store:libraryWriter:saveDate:save:)``
+            // ``CommunityImport/importHike(_:into:store:libraryWriter:saveDate:alreadyImported:save:)``
             // — but the id is what actually settles it, because a hiker *can*
             // publish without typing a name and that hike still has an author.
             return .refused(

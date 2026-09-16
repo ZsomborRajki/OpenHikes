@@ -29,10 +29,11 @@
 #   2. Nothing here is measured, including a non-view type that later grows
 #      inside one of these files. Several already carry a small one — the
 #      metrics constants in HikeDetailComponents, the segment enum in
-#      HikeDetailView, the disclosure text in CommunityShareSheet — and where
-#      that logic is worth pinning it has its own suite, which goes on running
-#      either way. Logic that grows past a handful of lines belongs in its own
-#      file, where the floor can see it again.
+#      HikeDetailView, the disclosure text in CommunityShareSheet, the resting
+#      page index in CommunityPhotoViewer — and where that logic is worth
+#      pinning it has its own suite, which goes on running either way. Logic
+#      that grows past a handful of lines belongs in its own file, where the
+#      floor can see it again.
 #
 # The UI suites still exist and still run locally:
 #
@@ -41,6 +42,7 @@
 OpenHikes/Community/CommunityHikeRow.swift
 OpenHikes/Community/CommunityHikeView.swift
 OpenHikes/Community/CommunityPhotoTile.swift
+OpenHikes/Community/CommunityPhotoViewer.swift
 OpenHikes/Community/CommunityReportSheet.swift
 OpenHikes/Community/CommunityReviewView.swift
 OpenHikes/Community/CommunityShareSheet.swift

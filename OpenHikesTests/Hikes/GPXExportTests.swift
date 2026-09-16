@@ -94,6 +94,31 @@ struct GPXExportTests {
         }
     }
 
+    /// `inf` and `nan` are not `xsd:decimal`. Written out, a strict reader
+    /// rejects the whole document — a hike the hiker asked for and cannot open
+    /// anywhere else — and this app's own importer drops the height silently
+    /// on the way back in. So the height is dropped here instead, which is
+    /// what `GPXImport` and `CommunityRoutePayload` already do at the door.
+    @Test("a non-finite height is left out rather than written as inf")
+    func nonFiniteElevationIsOmitted() throws {
+        let broken = [
+            RouteCoordinate(latitude: 47.63, longitude: 12.86, elevation: .infinity, timestamp: Self.date),
+            RouteCoordinate(latitude: 47.64, longitude: 12.87, elevation: .nan, timestamp: Self.date),
+            RouteCoordinate(latitude: 47.65, longitude: 12.88, elevation: 612, timestamp: Self.date),
+        ]
+
+        let document = GPXExport.xml(for: track(route: broken))
+
+        #expect(!document.contains("inf"), "an infinity in an <ele> is not a decimal a reader will take")
+        #expect(!document.lowercased().contains("<ele>nan"))
+        #expect(document.contains("<ele>612.00</ele>"), "and a real height is still written")
+        // The points themselves are not dropped: a fix without a height is
+        // still where the hiker was.
+        let imported = try reimported(track(route: broken))
+        #expect(imported.route.count == broken.count)
+        #expect(imported.route.map(\.elevation) == [nil, nil, 612])
+    }
+
     /// Seven decimals is ~1.1 cm, so nothing a GPS produced is lost — but the
     /// rounding is real, and this is the test that would catch it being
     /// tightened or loosened by accident.

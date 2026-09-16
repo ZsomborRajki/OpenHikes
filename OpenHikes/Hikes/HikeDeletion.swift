@@ -80,6 +80,13 @@ nonisolated enum HikeDeletion {
         save: (ModelContext) throws -> Void = { try $0.save() }
     ) -> Outcome {
         let standDown = autoSave.standDown(for: hike)
+        // And the same fold for whichever hike is auto-saving when it is not
+        // this one — deleting a hike from the list while browsing another is
+        // the ordinary way that happens. `standDown` covers only the doomed
+        // hike, so without this the surviving hike's newest tiles are missing
+        // from the claim set the plan is built from, and the plan frees them.
+        // See ``StoredTileDeletion/delete(storedTilesOf:autoSave:downloads:fetchingHikes:save:)``.
+        autoSave.flushPendingKeys()
         let plan = hike.hasStoredTiles
             ? StoredTileDeletionPlan(removing: hike, among: hikes)
             : nil
