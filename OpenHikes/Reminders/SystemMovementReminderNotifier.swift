@@ -121,18 +121,26 @@ final class SystemMovementReminderNotifier: MovementReminderNotifying {
         let categories = MovementReminderKind.allCases.map { kind in
             UNNotificationCategory(
                 identifier: kind.categoryIdentifier,
-                actions: [
-                    UNNotificationAction(
-                        identifier: kind.action.rawValue,
-                        title: kind.action.title,
-                        // No `.foreground`, deliberately. The system runs the
-                        // action in this process without bringing the app to
-                        // the front, which is the difference between a hiker
-                        // tapping Resume with gloves on and one unlocking a
-                        // phone to find the recording screen.
-                        options: []
-                    ),
-                ],
+                // A kind with no verb registers a category with no actions,
+                // which is a banner and nothing else — see
+                // ``MovementReminderKind/action``. Still a category of its
+                // own rather than none, because the identifier is what
+                // ``withdraw(_:)`` takes a delivered banner back down by.
+                actions: kind.action.map { action in
+                    [
+                        UNNotificationAction(
+                            identifier: action.rawValue,
+                            title: action.title,
+                            // No `.foreground`, deliberately. The system runs
+                            // the action in this process without bringing the
+                            // app to the front, which is the difference
+                            // between a hiker tapping Resume with gloves on
+                            // and one unlocking a phone to find the recording
+                            // screen.
+                            options: []
+                        ),
+                    ]
+                } ?? [],
                 intentIdentifiers: [],
                 options: []
             )

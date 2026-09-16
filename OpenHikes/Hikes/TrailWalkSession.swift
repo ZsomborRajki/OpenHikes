@@ -242,6 +242,26 @@ final class TrailWalkSession {
         rearmStart(hikeID: hikeID)
     }
 
+    /// How far an accepted fix fell from the route, whether or not it matched.
+    ///
+    /// Fed by both feeds — the foreground poll and the significant-change
+    /// deliveries that carry on in a pocket — and forwarded only while a walk
+    /// is actually *following*. A paused walk's hiker is somewhere else on
+    /// purpose, and a walk that has ended is not a trail anybody is on.
+    ///
+    /// Separate from ``recordOffRoute(hikeID:)`` rather than folded into it,
+    /// because that one is about coverage continuity and fires only when a
+    /// fix failed to match. This one wants every fix, including the ones that
+    /// matched — being *back* on the line is what re-arms the reminder.
+    func recordRouteDistance(hikeID: UUID, offRouteMeters: Double?, at date: Date) {
+        guard let record, record.hikeID == hikeID, record.phase == .following else { return }
+        reminders?.walkObserved(
+            offRouteMeters: offRouteMeters,
+            trailTitle: walkedHikeTitle,
+            at: date
+        )
+    }
+
     /// Lets `hikeID` start a walk again after one was ended along it.
     private func rearmStart(hikeID: UUID) {
         guard endedHikeID == hikeID else { return }
@@ -457,6 +477,11 @@ final class TrailWalkSession {
     /// the caller either says so or tries again on the next fix.
     @discardableResult private func finish(reason: TrailWalkEndReason, at now: Date) -> TrailWalkEnd {
         guard let closing = record else { return .discarded }
+        // Nobody is following anything any more, so a standing "Off the trail"
+        // is a claim about a walk that is over. Here rather than in
+        // `walkDidResumeOrEnd()`, which is about a *pause* ending — a pause
+        // ending is when this watch starts mattering, not when it stops.
+        reminders?.walkDidStopFollowing()
         // An abandonment is noticed long after it happened — six hours later
         // at best, and at the next launch for a walk found stale — so `now` is
         // when nobody was walking any more, not when the walk ended.

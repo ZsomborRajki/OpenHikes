@@ -26,6 +26,15 @@ import Foundation
 /// the Lock Screen rather than stacking a third one under it. That is the
 /// whole reason the identifier is derived rather than made unique per post.
 nonisolated enum MovementReminderKind: String, CaseIterable, Sendable {
+    /// The walk is under way and the hiker is no longer on the route.
+    ///
+    /// The odd one out of the four, and deliberately. The other three are
+    /// bookkeeping — the app and the hiker disagree about whether a walk is
+    /// happening, and a button settles it. This one is not a disagreement at
+    /// all: the app is telling the hiker something about the ground they are
+    /// standing on, at the moment it is worth the most, which is a fork taken
+    /// wrong in fog with the phone in a pocket.
+    case leftTheTrail = "leftTheTrail"
     /// The recording is running and the hiker has not moved in a while.
     case pauseRecording = "pauseRecording"
     /// The recording is paused and the hiker is plainly walking.
@@ -38,9 +47,21 @@ nonisolated enum MovementReminderKind: String, CaseIterable, Sendable {
     var categoryIdentifier: String { "openhikes.category.\(rawValue)" }
 
     /// The button the banner offers, which is the reason the hiker does not
-    /// have to unlock the phone at all.
-    var action: MovementReminderAction {
+    /// have to unlock the phone at all — or `nil` for a reminder that has no
+    /// verb to offer.
+    ///
+    /// **Optional because leaving the trail has no button that would settle
+    /// anything.** Pause and Resume each end the disagreement they are about,
+    /// in the app's own process, without the phone coming out of a pocket.
+    /// There is no equivalent for being off the route: the app cannot put the
+    /// hiker back on it, *Open the map* is a foreground action where both
+    /// existing ones are deliberately `background`, and a button that only
+    /// silenced the banner would be offering to stop saying the one thing
+    /// this reminder exists to say. So the banner is the whole of it, and
+    /// tapping it opens the app the way any notification does.
+    var action: MovementReminderAction? {
         switch self {
+        case .leftTheTrail: nil
         case .pauseRecording: .pause
         case .resumeRecording, .resumeWalk: .resume
         }
@@ -112,6 +133,23 @@ nonisolated enum MovementReminderWording {
             title: "Still on the trail?",
             body: "\(subject) is paused, but you've covered \(distance(movedMeters))"
                 + " of it since. Resume to keep your progress."
+        )
+    }
+
+    /// Named for the same reason ``resumeWalk(trailTitle:movedMeters:)`` is,
+    /// and the distance is the one the app actually measured — how far the
+    /// fix was from the line, not a guess at how far there is to walk back.
+    ///
+    /// No instruction in the body. The other three end in one, because each
+    /// has a button that carries it out; this one would be telling a hiker in
+    /// fog what to do about terrain the app cannot see. What it owes them is
+    /// the fact, at the moment they can still act on it.
+    static func leftTheTrail(trailTitle: String, offRouteMeters: Double) -> MovementReminder {
+        let subject = trailTitle.isEmpty ? "the trail" : trailTitle
+        return MovementReminder(
+            kind: .leftTheTrail,
+            title: "Off the trail",
+            body: "You're about \(distance(offRouteMeters)) from \(subject)."
         )
     }
 

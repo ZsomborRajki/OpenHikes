@@ -468,6 +468,7 @@ final class BackgroundTrailTracker: NSObject {
             if flipAllowed { lastStatusFlipPublish = now }
         }
         lastForegroundPublish = (now, isOnRoute)
+        reportRouteDistance(hikeID: hike.id, offRouteMeters: match?.offRouteMeters, at: now)
 
         // Values, taken here because a `Hike` belongs to its context and
         // cannot leave the main actor. Everything the write path does with
@@ -587,6 +588,15 @@ final class BackgroundTrailTracker: NSObject {
                 // matched and found off it rather than no usable evidence.
                 walkSession?.recordOffRoute(hikeID: hikeID)
             }
+            // Both branches, because being back on the line is what re-arms
+            // the off-trail reminder — see ``OffTrailWatch``. This is the feed
+            // that carries on with the phone in a pocket, which is exactly
+            // where a wrong turn is worth hearing about.
+            reportRouteDistance(
+                hikeID: hikeID,
+                offRouteMeters: matched.offRouteMeters,
+                at: timestamp
+            )
             // A paused walk neither extends the union nor publishes: the
             // widget already says Paused, and a moving dot would contradict it.
             guard walkSession?.publishes(hikeID: hikeID) ?? true else { return }
@@ -956,6 +966,32 @@ extension BackgroundTrailTracker {
             awaitedWrite = fixPublishSequence
             await task.value
         }
+    }
+}
+
+// MARK: - Telling the walk how far off the line a fix fell
+
+// An extension because the class above is at its `type_body_length` limit;
+// same file, so nothing had to be opened up to reach its members.
+private extension BackgroundTrailTracker {
+    /// Hands one fix's distance from the route to the walk session, which is
+    /// where the off-trail reminder's state machine lives.
+    ///
+    /// Called from **both** feeds and on every fix, matched or not: a fix
+    /// back on the line is what re-arms the reminder, so reporting only the
+    /// misses would tell a hiker once and never again. `nil` means the fix
+    /// could not be matched at all, which is absence of evidence rather than
+    /// evidence of absence — see ``OffTrailWatch``.
+    func reportRouteDistance(
+        hikeID: UUID,
+        offRouteMeters: Double?,
+        at date: Date
+    ) {
+        walkSession?.recordRouteDistance(
+            hikeID: hikeID,
+            offRouteMeters: offRouteMeters,
+            at: date
+        )
     }
 }
 

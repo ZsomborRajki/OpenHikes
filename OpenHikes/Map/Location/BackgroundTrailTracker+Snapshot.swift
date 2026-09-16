@@ -63,6 +63,18 @@ extension BackgroundTrailTracker {
         /// Where matching should continue from next time, or `nil` to keep the
         /// existing reference.
         let matchedDistance: Double?
+        /// How far the fix fell from the line, whether or not that was close
+        /// enough to count as a match.
+        ///
+        /// **Kept for the unmatched case, which is the whole reason it is
+        /// here.** ``matchedDistance`` and ``fix`` are both `nil` past the
+        /// follow threshold, which used to throw the measurement away — and
+        /// this is the feed that works while the phone is in a pocket, so it
+        /// is the one that knows how far off the trail a hiker has walked.
+        /// `nil` only when there was no nearest point at all, which is a
+        /// route with nothing to measure against rather than a hiker who has
+        /// left it.
+        let offRouteMeters: Double?
     }
 
     /// The one hop this type makes off the main actor, and the only place its
@@ -117,14 +129,25 @@ extension BackgroundTrailTracker {
         guard let hike = (try? context.fetch(descriptor))?.first, hike.pointCount > 1 else { return nil }
         let input = SnapshotInput(hike: hike)
         let profile = RouteProfile(route: input.route)
-        guard let match = profile.nearestPoint(
-                to: coordinate,
-                near: referenceDistance,
-                heading: heading
-              ),
+        // Taken once and read twice: the match decides whether there is a fix
+        // to publish, and its distance from the line is worth reporting even
+        // when there is not.
+        let nearest = profile.nearestPoint(
+            to: coordinate,
+            near: referenceDistance,
+            heading: heading
+        )
+        guard let match = nearest,
               match.offRouteMeters <= RouteProfile.followMatchThresholdMeters,
               let matched = profile.coordinate(atDistance: match.distanceAlongRoute) else {
-            return BackgroundMatch(input: input, elevation: profile.elevation, fix: nil, matchedDistance: nil)
+            return BackgroundMatch(
+                input: input,
+                elevation: profile.elevation,
+                fix: nil,
+                matchedDistance: nil,
+                // The one thing this branch does know, and now says.
+                offRouteMeters: nearest?.offRouteMeters
+            )
         }
         return BackgroundMatch(
             input: input,
@@ -136,7 +159,8 @@ extension BackgroundTrailTracker {
                 timestamp: timestamp,
                 elevationMeters: profile.sample(atDistance: match.distanceAlongRoute)?.elevation
             ),
-            matchedDistance: match.distanceAlongRoute
+            matchedDistance: match.distanceAlongRoute,
+            offRouteMeters: match.offRouteMeters
         )
     }
 
