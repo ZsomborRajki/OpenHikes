@@ -126,7 +126,12 @@ nonisolated enum HikePhotoLoader {
         of photo: HikePhoto,
         in store: HikePhotoStore
     ) -> PhotoUnavailability {
-        store.hasImage(for: photo) ? .unreadable : .notOnThisDevice
+        // Asked first and answered from the row alone. A place-only row has
+        // no file and never had one, so the `fileExists` below would say
+        // ``notOnThisDevice`` — which is the one wrong answer available: it
+        // sends the hiker to look for the picture on another device.
+        if photo.recordsPlaceOnly { return .placeOnly }
+        return store.hasImage(for: photo) ? .unreadable : .notOnThisDevice
     }
 }
 
@@ -145,6 +150,15 @@ nonisolated enum PhotoUnavailability: Sendable {
     /// only copy, whatever took the picture — and what a file deleted
     /// underneath the app looks like anywhere.
     case notOnThisDevice
+    /// The row was never a picture: it came out of a `<wpt>` in an imported
+    /// `.gpx`, which records where a photograph was taken and cannot carry
+    /// the photograph. See ``HikePhoto/isPlaceOnly``.
+    ///
+    /// Told apart from ``notOnThisDevice`` because the two are opposite
+    /// promises. That one says the picture exists and is somewhere else, which
+    /// invites the hiker to go and find it; this one says there is nothing to
+    /// find, on any device, ever.
+    case placeOnly
     /// A file is there and could not be decoded — bytes still arriving from a
     /// restore, a volume that wasn't mounted, a truncated write. The one of
     /// the two that is worth asking about again.

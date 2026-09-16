@@ -129,6 +129,85 @@ struct HikeImportTests {
         #expect(reopened.first?.route.count == 3)
     }
 
+    // MARK: Photo waypoints
+
+    /// A file this app wrote, carrying both a track and photo waypoints. The
+    /// waypoint sits well off the track's line so a coordinate that ended up
+    /// in the wrong place is visible rather than lost in a rounding error.
+    private static let photographedGPX = """
+    <?xml version="1.0" encoding="UTF-8"?>
+    <gpx version="1.1" creator="OpenHikesTests" xmlns="http://www.topografix.com/GPX/1/1">
+        <wpt lat="47.7100" lon="12.9100">
+        <time>2026-06-01T08:10:00Z</time>
+        <name>Photo</name><sym>Photo</sym>
+        </wpt>
+        <trk><name>Thumsee Loop</name><trkseg>
+        <trkpt lat="47.6300" lon="12.8600"/>
+        <trkpt lat="47.6310" lon="12.8600"/>
+        <trkpt lat="47.6320" lon="12.8600"/>
+        </trkseg></trk>
+    </gpx>
+    """
+
+    /// The round trip closing, checked where it counts: on a hike read back
+    /// out of a store opened fresh, rather than on the parse result. A row
+    /// that only exists in the importing context is not a photo position the
+    /// hiker keeps.
+    @Test("a photo waypoint becomes a place-only photo on the saved hike")
+    func photoWaypointBecomesAPlaceOnlyPhoto() async throws {
+        let sandbox = try makeSandbox()
+        defer { try? FileManager.default.removeItem(at: sandbox) }
+        let file = try writeGPX(Self.photographedGPX, in: sandbox)
+
+        let id: UUID
+        do {
+            let context = try openStore(in: sandbox)
+            id = try await HikeImport.hike(from: file, into: context).id
+        }
+
+        let reopened = try openStore(in: sandbox).fetch(
+            FetchDescriptor<Hike>(predicate: #Predicate { $0.id == id })
+        )
+        let hike = try #require(reopened.first)
+        #expect(hike.photos.count == 1)
+        let photo = try #require(hike.photos.first)
+        #expect(photo.recordsPlaceOnly)
+        #expect(photo.isAnchored)
+        #expect(photo.latitude.map { abs($0 - 47.71) < 1e-9 } == true)
+        #expect(photo.longitude.map { abs($0 - 12.91) < 1e-9 } == true)
+    }
+
+    /// Nothing is written to ``HikePhotoStore`` for such a row, because there
+    /// are no bytes to write. The flag is what tells the gallery so; a file
+    /// appearing under the row's name would mean something had invented one.
+    @Test("a place-only photo has no file written for it")
+    func photoWaypointWritesNoFile() async throws {
+        let sandbox = try makeSandbox()
+        defer { try? FileManager.default.removeItem(at: sandbox) }
+        let file = try writeGPX(Self.photographedGPX, in: sandbox)
+        let context = try openStore(in: sandbox)
+
+        let hike = try await HikeImport.hike(from: file, into: context)
+
+        let photo = try #require(hike.photos.first)
+        let store = HikePhotoStore(storageRoot: sandbox)
+        #expect(await offMain { !store.hasImage(for: photo) })
+    }
+
+    /// The ordinary file, which is every file this app did not write, still
+    /// imports with an empty gallery rather than a placeholder in it.
+    @Test("a file with no photo waypoints imports no photos")
+    func plainFileImportsNoPhotos() async throws {
+        let sandbox = try makeSandbox()
+        defer { try? FileManager.default.removeItem(at: sandbox) }
+        let file = try writeGPX(Self.ridgeGPX, in: sandbox)
+        let context = try openStore(in: sandbox)
+
+        let hike = try await HikeImport.hike(from: file, into: context)
+
+        #expect(hike.photos.isEmpty)
+    }
+
     // MARK: A store that says no
 
     @Test("a refused save is reported as a storage failure")

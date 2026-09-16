@@ -125,6 +125,38 @@ struct HikePhotoDisplayTests {
         #expect(Self.unavailability(display) == .unreadable)
     }
 
+    /// The third empty answer, and the one that must not be confused with the
+    /// first. A row read out of a `<wpt>` has no file for the same reason it
+    /// never will: GPX cannot carry pixels. Reporting ``notOnThisDevice`` for
+    /// it would tell the hiker to go and look on a phone where it has never
+    /// been.
+    @Test("a row that was never a picture says so, rather than blaming the device")
+    func displayReportsPlaceOnly() async throws {
+        let sandbox = Sandbox()
+        let photo = HikePhoto(isPlaceOnly: true)
+        try #require(
+            !FileManager.default.fileExists(
+                atPath: sandbox.store.url(for: photo).path
+            )
+        )
+
+        let display = await HikePhotoLoader.display(for: photo, in: sandbox.store)
+
+        #expect(Self.unavailability(display) == .placeOnly)
+    }
+
+    /// The strip reads through the same decision, so the tile cannot disagree
+    /// with the page it opens.
+    @Test("the strip's tile says the same about a row that was never a picture")
+    func thumbnailReportsPlaceOnly() async {
+        let sandbox = Sandbox()
+        let photo = HikePhoto(isPlaceOnly: true)
+
+        let display = await HikePhotoLoader.thumbnail(for: photo, in: sandbox.store)
+
+        #expect(Self.unavailability(display) == .placeOnly)
+    }
+
     @Test("a photo whose file is there decodes to an image")
     func displayReturnsTheImage() async throws {
         let sandbox = Sandbox()

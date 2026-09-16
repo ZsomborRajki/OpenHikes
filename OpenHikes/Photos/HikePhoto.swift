@@ -147,6 +147,36 @@ nonisolated struct HikePhoto: Codable, Hashable, Identifiable, Sendable {
     /// off by hand and costs nothing else.
     var sentToCommunityAt: Date?
 
+    /// This row records *that a photograph was taken here* and carries no
+    /// picture, because there was never one to carry.
+    ///
+    /// Exactly one thing produces it: a `<wpt>` in an imported `.gpx`. GPX
+    /// carries a place and a time and cannot carry pixels — see
+    /// ``GPXExport/appendPhotographs(_:to:)``, which writes no `<link>` for
+    /// the same reason — so reading one back gives a position on the trail
+    /// and nothing to draw.
+    ///
+    /// It exists because the alternative is a lie. Without it such a row is
+    /// indistinguishable from a photograph whose file is on the hiker's other
+    /// device, and ``PhotoUnavailability/notOnThisDevice`` would tell them to
+    /// go and look on a phone where it has never been. See
+    /// ``PhotoUnavailability/placeOnly``.
+    ///
+    /// Optional for the reason ``sentToCommunityAt`` is: it is a new key in a
+    /// blob every earlier version wrote, and `nil` reading as "an ordinary
+    /// photograph" is right for every row that came before it.
+    ///
+    /// The linter would rather this were a plain `Bool`, and a plain `Bool`
+    /// cannot be what it is. The synthesized decode has no defaults: a
+    /// non-optional key absent from the blob throws `keyNotFound`, and because
+    /// these rows decode as one array, one such throw loses **every**
+    /// photograph on the hike rather than this field. Same shape as the
+    /// `discouraged_optional_collection` exemption on ``Hike/walks``, where
+    /// the optional is likewise the storage layer's requirement rather than a
+    /// choice. Read through ``recordsPlaceOnly`` so no caller handles the
+    /// three-way optional itself.
+    var isPlaceOnly: Bool? // swiftlint:disable:this discouraged_optional_boolean
+
     init(
         id: UUID = UUID(),
         capturedAt: Date = .now,
@@ -154,7 +184,8 @@ nonisolated struct HikePhoto: Codable, Hashable, Identifiable, Sendable {
         coordinate: CLLocationCoordinate2D? = nil,
         assetLocalIdentifier: String? = nil,
         matchEvidence: PhotoMatchEvidence? = nil,
-        importedFromListingID: String? = nil
+        importedFromListingID: String? = nil,
+        isPlaceOnly: Bool? = nil // swiftlint:disable:this discouraged_optional_boolean
     ) {
         self.id = id
         self.capturedAt = capturedAt
@@ -164,6 +195,7 @@ nonisolated struct HikePhoto: Codable, Hashable, Identifiable, Sendable {
         self.assetLocalIdentifier = assetLocalIdentifier
         self.matchEvidence = matchEvidence
         self.importedFromListingID = importedFromListingID
+        self.isPlaceOnly = isPlaceOnly
     }
 
     /// Whether this photograph is the hiker's own to publish.
@@ -172,6 +204,12 @@ nonisolated struct HikePhoto: Codable, Hashable, Identifiable, Sendable {
     /// to remember which way the optional runs. See
     /// ``importedFromListingID``.
     var isOwn: Bool { importedFromListingID == nil }
+
+    /// Whether this row is a place on the trail rather than a picture.
+    ///
+    /// Written once so no caller has to remember which way the optional runs,
+    /// exactly as ``isOwn`` is. See ``isPlaceOnly``.
+    var recordsPlaceOnly: Bool { isPlaceOnly == true }
 
     /// Where a photograph came from, as against where it sits on the trail.
     ///
