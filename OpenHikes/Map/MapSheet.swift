@@ -376,10 +376,12 @@ struct MapSheet: View {
                     listing: listing,
                     blockList: appModel.communityBlocks,
                     transport: transport,
-                    // Whether this account may take a contribution down, which
-                    // is a fact about the account rather than about the
-                    // photograph. See ``CommunityReviewQueue/isReviewer``.
-                    isReviewer: appModel.communityReview.isReviewer
+                    // Whether this account may take a contribution down —
+                    // a fact about the account rather than about the
+                    // photograph — and where a takedown is recorded so the
+                    // trail behind this gallery stops drawing it. See
+                    // ``CommunityReviewQueue``.
+                    review: appModel.communityReview
                 )
             },
             // Back one screen, to the trail. Deliberately one and not all the

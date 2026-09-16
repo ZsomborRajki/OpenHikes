@@ -188,6 +188,37 @@ struct CommunityImportTests {
         #expect(photo.coordinate?.longitude == pinned.longitude)
     }
 
+    /// And they are stamped with whose they are, which is the one thing that
+    /// keeps them out of a contribution back to the same trail: this saved
+    /// hike is exactly the one the *Add Photos* form opens on. See
+    /// `CommunityImportedPhotoGuardTests`.
+    @Test("downloaded photos are marked as the listing author's, not the hiker's")
+    func photosCarryTheListingTheyCameFrom() async throws {
+        let context = try Fixture.modelContext()
+        let directory = FileManager.default.temporaryDirectory
+            .appendingPathComponent("CommunityImportTests-\(UUID().uuidString)", isDirectory: true)
+        try FileManager.default.createDirectory(at: directory, withIntermediateDirectories: true)
+        defer { try? FileManager.default.removeItem(at: directory) }
+
+        let url = directory.appendingPathComponent("photo-0.jpeg", isDirectory: false)
+        try Self.sampleJPEG().write(to: url)
+
+        let outcome = await CommunityImport.importHike(
+            Self.detail(
+                pins: [CommunityPhotoPin(capturedAt: .now, coordinate: nil)],
+                photoURLs: [url]
+            ),
+            into: context,
+            libraryWriter: StubPhotoLibraryWriter()
+        )
+
+        let hike = try #require(outcome.hike)
+        let photo = try #require(hike.photos.first)
+        #expect(photo.importedFromListingID == hike.importedFromListingID)
+        #expect(!photo.isOwn)
+        #expect(CommunityPublisher.ownPhotos(of: hike).isEmpty)
+    }
+
     /// Somebody else's photographs must never be filed into the hiker's own
     /// photo library — the opt-in is for pictures they took.
     @Test("imported photos never reach the hiker's photo library")

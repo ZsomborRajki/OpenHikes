@@ -201,7 +201,7 @@ nonisolated struct CommunitySubmissionDraft: Sendable {
 /// has gone. Copying each one to keep it would mean a file write per row of a
 /// list nobody asked to keep, so the row draws a symbol and a photo count and
 /// the pictures arrive with the hike itself.
-nonisolated struct CommunityListing: Identifiable, Hashable, Sendable {
+nonisolated struct CommunityListing: CommunityBlockableRow, Identifiable, Hashable, Sendable {
     /// This hike's identity across the whole app, including
     /// ``Hike/importedFromListingID``.
     ///
@@ -245,6 +245,10 @@ nonisolated struct CommunityListing: Identifiable, Hashable, Sendable {
     var submissionID: String? { origin.submissionID }
 
     /// Who may be blocked over this hike, or `nil` when there is nobody.
+    ///
+    /// ``CommunityBlockableRow``'s one requirement, which is how a page of
+    /// these is filtered before the budget counts it — see
+    /// ``CommunityPageBudget``.
     var blockableAuthorID: String? { origin.blockableAuthorID }
 
     /// Whether this came from OpenStreetMap rather than from a hiker.
@@ -399,6 +403,44 @@ nonisolated struct CommunityHikeDetail: Sendable {
     /// download that failed leaves none, and nothing about the screen changes
     /// when there are none.
     var contributions: [CommunityPhotoContribution] = []
+
+    /// This detail with the contributed sets a hiker may no longer see taken
+    /// out.
+    ///
+    /// Two things can hide a set after it has been downloaded, and neither can
+    /// reach the request that fetched it: blocking its contributor, and — for
+    /// a reviewer — taking it down. Both are decided in the gallery pushed
+    /// over the trail, and coming back from that gallery is a pop rather than
+    /// a fetch, so the filter has to be on the draw. See
+    /// ``CommunityHikeView/visible(_:)``, which is the only caller and the
+    /// place the two sets come from.
+    ///
+    /// A whole detail rather than a filtered array, because the offsets are
+    /// shared: ``galleryPhotos`` and ``previewPhotos`` number the same
+    /// pictures the same way, and a map pin that opened the page beside the
+    /// one it was about would be the bug that arithmetic exists to prevent.
+    /// The submission's own four fields are untouched — a block is about a
+    /// contributor and a takedown is about a contribution, and neither has
+    /// anything to say about the hike's author.
+    ///
+    /// - Parameters:
+    ///   - authors: Blocked contributors, by
+    ///     ``CommunityPhotoContribution/authorID``.
+    ///   - removed: Contributions taken down this launch, by record name.
+    func excluding(
+        authors: Set<String>,
+        contributions removed: Set<String>
+    ) -> Self {
+        // The ordinary path, and worth the check: most hikers have blocked
+        // nobody and almost nobody is a reviewer, so this is a pass over a
+        // handful of sets that could only ever keep all of them.
+        guard !authors.isEmpty || !removed.isEmpty else { return self }
+        var visible = self
+        visible.contributions = contributions.filter { contribution in
+            !authors.contains(contribution.authorID) && !removed.contains(contribution.id)
+        }
+        return visible
+    }
 
     /// Whether the pins and the assets still describe each other.
     ///

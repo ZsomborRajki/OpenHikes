@@ -244,7 +244,7 @@ nonisolated struct CloudKitCommunityTransport: CommunityTransporting {
         excluding: Set<String>,
         reason: String
     ) async throws -> [CommunityListing] {
-        var budget = CommunityPageBudget(limit: limit, excluding: excluding)
+        var budget = CommunityPageBudget<CommunityListing>(limit: limit, excluding: excluding)
         var cursor: CKQueryOperation.Cursor?
         var wantsMore = true
         while wantsMore {

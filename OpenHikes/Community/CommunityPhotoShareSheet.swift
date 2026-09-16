@@ -95,8 +95,13 @@ struct CommunityPhotoShareSheet: View {
         sendablePhotoCount ?? min(includedPhotoCount, CommunityPublisher.maximumPhotos)
     }
 
+    /// Counted over the hiker's *own* photographs, the same list the strip
+    /// draws and the upload takes: a hike saved from the community carries its
+    /// author's pictures too, and none of those is going anywhere. See
+    /// ``CommunityPublisher/ownPhotos(of:)``.
     private var includedPhotoCount: Int {
-        hike.photos.count(where: { !excludedPhotoIDs.contains($0.id) })
+        CommunityPublisher.ownPhotos(of: hike)
+            .count(where: { !excludedPhotoIDs.contains($0.id) })
     }
 
     /// How many of this hike's pictures are on another device.

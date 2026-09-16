@@ -33,9 +33,16 @@
 //  Two consequences follow and both are deliberate. Nothing cascades: taking
 //  down the hike does not take down its contributions, so a reviewer removing
 //  a listing leaves photographs that are unreachable rather than dangling,
-//  which is the same end state declining already produces. And the query is a
-//  string equality on a QUERYABLE field, which is the only predicate either of
-//  these types ever serves.
+//  which is the same end state declining already produces. And the browse
+//  query is a string equality on a QUERYABLE field rather than a reference
+//  match.
+//
+//  ``contributionType`` carries a second queryable field beside it —
+//  ``CommunitySchema/Contribution/photoSubmission``, which
+//  ``contribution(of:)`` asks *has mine been published yet* on. Both indexes
+//  are named in ``CommunitySchema``'s header, and a deployment that imports
+//  only the first leaves that question failing with `invalidArguments` and a
+//  contributor's own screen saying *waiting for review* for good.
 //
 
 import CloudKit
@@ -158,7 +165,10 @@ nonisolated extension CloudKitCommunityTransport {
     /// How many published sets one hike's query may return.
     ///
     /// A ceiling rather than a page, for the reason the review queue has one:
-    /// there is no cursor here and nothing is waiting on the twenty-first set.
+    /// nothing is waiting on the twenty-first set, and there is no *More*
+    /// button for a cursor to serve. The cursor is followed for one thing
+    /// only — pages eaten by blocked contributors, see
+    /// ``sets(matching:excluding:)`` — and never to hand back more than this.
     /// The oldest are the ones kept, so a hike's gallery does not reshuffle
     /// under somebody who scrolls back.
     static var maximumContributions: Int { 20 }
@@ -204,20 +214,10 @@ nonisolated extension CloudKitCommunityTransport {
 
         let published: [ContributionRecord]
         do {
-            let (matches, _) = try await database.records(
-                matching: query,
-                resultsLimit: Self.maximumContributions
-            )
-            published = Self.withinBudget(
-                matches
-                    .compactMap { try? $0.1.get() }
-                    .compactMap(ContributionRecord.init(record:))
-                    // On the request as well as on the way out, which is what
-                    // the exclusion set is for everywhere else in this
-                    // protocol: a blocked contributor's photographs must not
-                    // be downloaded, because the download is the cost.
-                    .filter { !excluding.contains($0.authorID) }
-            )
+            // Before the fetch below, which is where the exclusion set has to
+            // be applied for a block to mean anything about a stranger's
+            // pictures: the download is the cost. See ``sets(matching:excluding:)``.
+            published = Self.withinBudget(try await sets(matching: query, excluding: excluding))
         } catch {
             throw Self.failure(from: error, while: "reading a hike's contributed photos")
         }
@@ -246,6 +246,55 @@ nonisolated extension CloudKitCommunityTransport {
             else { return nil }
             return Self.contribution(entry, from: record, downloadingInto: directory)
         }
+    }
+
+    /// The published sets on this hike that the hiker is allowed to see, in
+    /// the order the server returned them.
+    ///
+    /// Paged rather than a single request, and for the reason
+    /// ``CommunityPageBudget`` exists: the exclusion cannot go into the
+    /// predicate, because ``CommunitySchema/Contribution/authorID`` is
+    /// deliberately unindexed — indexing it would let anybody enumerate one
+    /// person's contributions — so blocked sets are removed *after* the
+    /// server has already counted them towards ``maximumContributions``. One
+    /// contributor with twenty sets on a trail would otherwise hide every
+    /// other contributor's photographs there, permanently and with no way
+    /// back.
+    ///
+    /// A hiker who has blocked nobody pays exactly one request, as this
+    /// always did: the first page satisfies the limit and nothing asks for a
+    /// second.
+    private func sets(
+        matching query: CKQuery,
+        excluding: Set<String>
+    ) async throws -> [ContributionRecord] {
+        var budget = CommunityPageBudget<ContributionRecord>(
+            limit: Self.maximumContributions,
+            excluding: excluding
+        )
+        var cursor: CKQueryOperation.Cursor?
+        var wantsMore = true
+        while wantsMore {
+            let (matches, next) = if let cursor {
+                try await database.records(
+                    continuingMatchFrom: cursor,
+                    resultsLimit: Self.maximumContributions
+                )
+            } else {
+                try await database.records(
+                    matching: query,
+                    resultsLimit: Self.maximumContributions
+                )
+            }
+            cursor = next
+            wantsMore = budget.accept(
+                matches
+                    .compactMap { try? $0.1.get() }
+                    .compactMap(ContributionRecord.init(record:)),
+                hasMore: next != nil
+            )
+        }
+        return budget.results
     }
 
     /// One published set, with its photographs copied somewhere this app
@@ -346,7 +395,7 @@ nonisolated extension CloudKitCommunityTransport {
     /// because the difference between the two is exactly the download — and a
     /// type that could exist with no pictures in it would be a type every
     /// screen had to check.
-    struct ContributionRecord: Sendable {
+    struct ContributionRecord: CommunityBlockableRow, Sendable {
         var id: String
         var photoSubmissionID: String
         var authorName: String
@@ -359,6 +408,12 @@ nonisolated extension CloudKitCommunityTransport {
         /// describe one. Nothing draws it — the gallery counts the files that
         /// actually came back.
         var photoCount: Int
+
+        /// ``CommunityBlockableRow``'s one requirement, and never `nil` here:
+        /// a contribution with no author is dropped by the initializer below,
+        /// exactly as a listing with no author is. There is no curated case on
+        /// this type — a set of photographs always came from somebody.
+        var blockableAuthorID: String? { authorID }
 
         /// Spelled out rather than synthesized, because the failable
         /// initializer below suppresses the memberwise one — and this is what

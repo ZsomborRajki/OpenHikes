@@ -45,6 +45,16 @@
 //  visible, so the honest behaviour is to go back one screen to the trail and
 //  let the reopened gallery come back without those pictures.
 //
+//  **Going back is not a refetch, and that is why both actions here are read
+//  on the far side too.** The trail's detail was downloaded when it opened and
+//  is not asked for again, so a block or a takedown decided in this gallery
+//  would otherwise leave the pictures drawn in the strip behind it and the
+//  gallery one tap from reopening on them. ``CommunityHikeView`` filters what
+//  it draws against the block list and
+//  ``CommunityReviewQueue/takenDownContributions`` for exactly this reason —
+//  the exclusion the *request* takes cannot help a screen that is not going to
+//  make one.
+//
 
 import SwiftUI
 
@@ -58,11 +68,14 @@ struct CommunityPhotoActions: View {
     let blockList: CommunityBlockList
     /// Needed only by the takedown, which only a reviewer can perform.
     let transport: any CommunityTransporting
-    /// Whether this account may take a contribution down. A fact about the
-    /// account rather than about this photograph — see
+    /// The reviewer's own state: whether this account may take a contribution
+    /// down, and where a takedown is recorded once the server has accepted
+    /// one.
+    ///
+    /// A fact about the account rather than about this photograph — see
     /// ``CommunityReviewQueue/isReviewer``, and note that forging it buys
     /// nothing, since the server refuses the write.
-    var isReviewer = false
+    var review: CommunityReviewQueue?
     /// Leaves the gallery, because what it is showing has just been hidden or
     /// removed.
     let onLeave: () -> Void
@@ -89,7 +102,7 @@ struct CommunityPhotoActions: View {
             }
             .accessibilityIdentifier("community-photo-block")
 
-            if isReviewer {
+            if review?.isReviewer ?? false {
                 Button(role: .destructive) {
                     isConfirmingTakeDown = true
                 } label: {
@@ -185,8 +198,9 @@ private extension CommunityPhotoActions {
     /// Hides this contributor, then leaves the gallery.
     ///
     /// The gallery is the one screen still showing what was just hidden, and
-    /// the lists behind it filter on read — so going back is what makes the
-    /// block visible rather than a refresh.
+    /// everything behind it filters on read — the lists, and now the trail's
+    /// own strip and pins. So going back is what makes the block visible
+    /// rather than a refresh, which is just as well: nothing refetches.
     func block() {
         blockList.block(contribution.authorID, name: contribution.credit)
         onLeave()
@@ -221,6 +235,11 @@ private extension CommunityPhotoActions {
                 return
             }
             isTakingDown = false
+            // Before the screen goes, because the screen it goes *to* is the
+            // one still drawing these photographs: the trail's detail was
+            // downloaded when it opened and nothing fetches it again on the
+            // way back. See ``CommunityReviewQueue/tookDown(contribution:)``.
+            review?.tookDown(contribution: contribution.contributionID)
             onLeave()
         }
     }

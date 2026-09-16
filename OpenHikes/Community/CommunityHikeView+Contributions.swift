@@ -17,6 +17,13 @@
 //  default: a failure draws nothing, blocked contributors never reach the
 //  wire, and the answer is thrown away with the screen.
 //
+//  And the read side, which is here because it is the same subject seen from
+//  the other end. The request's exclusion set covers everybody this hiker had
+//  already blocked when the screen opened; ``visible(_:)`` covers the ones
+//  they blocked *while it was up*, and the sets a reviewer took down, neither
+//  of which can reach a request that is long finished. See
+//  ``CommunityPhotoActions``, which is where both decisions are made.
+//
 
 import os
 import SwiftUI
@@ -79,8 +86,36 @@ extension CommunityHikeView {
             // hike's own photographs went up when the route did, and these are
             // the ones that arrived afterwards. One call with the whole list
             // rather than an append, so the strip and the pins are always the
-            // same answer to the same question.
-            browser.previewPhotosLoaded(detail.previewPhotos, of: listing)
+            // same answer to the same question — which is why it is the
+            // filtered detail that goes, exactly as the strip draws one.
+            browser.previewPhotosLoaded(visible(detail).previewPhotos, of: listing)
         }
+    }
+
+    /// `detail` without the contributed sets this hiker may no longer see.
+    ///
+    /// Two things can hide a set after it has been downloaded, and neither can
+    /// reach the request that fetched it: blocking its contributor, and — for
+    /// a reviewer — taking it down. Both are decided in the gallery pushed
+    /// over this screen, and coming back from that gallery is a pop rather
+    /// than a fetch: ``CommunityHikeView/load()`` returns at once for a loaded
+    /// phase, deliberately, because re-downloading a stranger's photographs
+    /// every time somebody closes the viewer would be the cost this screen is
+    /// most careful about. So the filter is on the draw.
+    ///
+    /// The filtering itself is ``CommunityHikeDetail/excluding(authors:contributions:)``,
+    /// which is where the arithmetic it has to preserve lives and where a
+    /// suite can reach it. This is the half that knows *which* sets: the block
+    /// list, which is the hiker's, and the reviewer's own record of what they
+    /// have removed.
+    ///
+    /// Nothing is thrown away — ``CommunityHikeView/phase`` keeps every set
+    /// that arrived — so unblocking a contributor from Settings brings their
+    /// photographs back without a second download.
+    func visible(_ detail: CommunityHikeDetail) -> CommunityHikeDetail {
+        detail.excluding(
+            authors: blockList.blockedIDs,
+            contributions: review?.takenDownContributions ?? []
+        )
     }
 }

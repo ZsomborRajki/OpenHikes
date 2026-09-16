@@ -96,13 +96,36 @@ nonisolated struct HikePhoto: Codable, Hashable, Identifiable, Sendable {
     /// not watch being taken. See ``PhotoMatchEvidence``.
     var matchEvidence: PhotoMatchEvidence?
 
+    /// The community listing this photograph was copied out of, for one that
+    /// arrived with somebody else's hike rather than being taken by this
+    /// hiker. `nil` — the absence — is every photograph the hiker took or
+    /// imported themselves, which is almost all of them.
+    ///
+    /// Recorded for one job, and it is a job nothing else on this type can
+    /// do: **a photograph this hiker did not take must never be published
+    /// under their name.** ``CommunityImport`` copies a listing's pictures
+    /// into the saved hike so the trail is useful offline, and that saved hike
+    /// is exactly the one the contribution flow then offers to add photographs
+    /// to — see ``CommunityPublishingEligibility``. Without this field the
+    /// *Add Photos* form opened pre-selected with the original author's
+    /// pictures, one tap from being re-published onto their own trail under
+    /// the importer's credit. ``CommunityPublisher/shareablePhotos(of:)`` and
+    /// ``CommunityPublisher/selectedPhotos(of:excluding:)`` read it, and are
+    /// the only things that do.
+    ///
+    /// Optional for the reason ``assetLocalIdentifier`` is, and one more: the
+    /// rows written before this existed carry no key for it, and an optional
+    /// is what lets them decode unchanged. See ``isOwn``.
+    var importedFromListingID: String?
+
     init(
         id: UUID = UUID(),
         capturedAt: Date = .now,
         pathExtension: String = ImageDataFormat.jpeg.pathExtension,
         coordinate: CLLocationCoordinate2D? = nil,
         assetLocalIdentifier: String? = nil,
-        matchEvidence: PhotoMatchEvidence? = nil
+        matchEvidence: PhotoMatchEvidence? = nil,
+        importedFromListingID: String? = nil
     ) {
         self.id = id
         self.capturedAt = capturedAt
@@ -111,6 +134,35 @@ nonisolated struct HikePhoto: Codable, Hashable, Identifiable, Sendable {
         longitude = coordinate?.longitude
         self.assetLocalIdentifier = assetLocalIdentifier
         self.matchEvidence = matchEvidence
+        self.importedFromListingID = importedFromListingID
+    }
+
+    /// Whether this photograph is the hiker's own to publish.
+    ///
+    /// The question every community path asks, written once so no caller has
+    /// to remember which way the optional runs. See
+    /// ``importedFromListingID``.
+    var isOwn: Bool { importedFromListingID == nil }
+
+    /// Where a photograph came from, as against where it sits on the trail.
+    ///
+    /// The three fields above that describe the *source* rather than the
+    /// picture, gathered so they travel together: they are filled in by the
+    /// surface that produced the photograph, read by nothing on the way to
+    /// disk, and are the only part of ``HikePhoto`` that
+    /// ``HikePhotoStore/store(_:capturedAt:coordinate:origin:)`` does not work
+    /// out for itself. Gathering them also keeps that call and the hop in
+    /// front of it inside the parameter count the linter allows, which is a
+    /// smaller reason and a real one.
+    struct Origin: Sendable {
+        var assetLocalIdentifier: String?
+        var matchEvidence: PhotoMatchEvidence?
+        var importedFromListingID: String?
+
+        /// A photograph with nothing to say about where it came from: one the
+        /// app watched being taken. The ordinary case, and the reason every
+        /// field here is optional.
+        static var own: Self { Self() }
     }
 
     /// The trail position this photo was anchored to, if any.

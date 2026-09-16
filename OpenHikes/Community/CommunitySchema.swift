@@ -193,16 +193,21 @@
 //  down, which is a set of photographs nobody can reach rather than a dangling
 //  reference — the same end state declining already produces.
 //
-//  **``contributionType`` needs one index, and it is the target.**
-//  `listing` QUERYABLE, because opening a hike asks *which contributions are
-//  about this one* — and that is the only query this type serves. It is safe
-//  for the reason ``Listing/submission``'s index is: running it needs an
-//  identity that is already public, and what comes back is a record that is
-//  `_world` read and reachable by anybody who opened the same hike.
-//  `publishedAt` is SORTABLE so a hike's contributed photographs keep their
-//  order between two people's screens. ``PhotoSubmission`` gets **none**, like
-//  its sibling and for the identical reason: it is only ever fetched by a
-//  record name that came off a published contribution.
+//  **``contributionType`` needs two queryable fields, and both are
+//  targets.** `listing` QUERYABLE, because opening a hike asks *which
+//  contributions are about this one*. `photoSubmission` QUERYABLE, because a
+//  contributor's own device asks *has mine been published yet* — the same
+//  question ``Listing/submission``'s index answers about a hike, asked of the
+//  other pair of types, and without it every contributed set reads as
+//  *waiting for review* forever however many are live. See
+//  ``CommunityTransporting/contribution(of:)``. Both are safe for the reason
+//  ``Listing/submission``'s index is: running either needs a name that is
+//  already public or that only its author holds, and what comes back is a
+//  record that is `_world` read and reachable by anybody who opened the same
+//  hike. `publishedAt` is SORTABLE so a hike's contributed photographs keep
+//  their order between two people's screens. ``PhotoSubmission`` gets
+//  **none**, like its sibling and for the identical reason: it is only ever
+//  fetched by a record name that came off a published contribution.
 //
 //  **There is no count anywhere else.** A contribution does not touch the
 //  listing it is about — the reviewer's role could write that record, and
@@ -363,7 +368,10 @@ nonisolated enum CommunitySchema {
         /// The hike these were published onto — QUERYABLE, and the only
         /// predicate this type ever serves. See this file's header.
         static let listing = "listing"
-        /// The submission holding the assets.
+        /// The submission holding the assets — QUERYABLE, so a contributor
+        /// can ask whether their own upload has been published yet. See this
+        /// file's header, and ``Listing/submission``, which carries the
+        /// identical index for the identical reason.
         static let photoSubmission = "photoSubmission"
         static let authorName = "authorName"
         /// The contributor, as CloudKit stamped them on the submission.
