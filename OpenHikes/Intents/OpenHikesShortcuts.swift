@@ -10,21 +10,16 @@
 //  actually say are not the ones an intent is titled: "start a hike" and
 //  "record a hike" are the same request.
 //
-//  Ten is the system's ceiling on shortcuts per app. The nine below are the
-//  whole recording loop, the three questions, and the two that take a
-//  parameter — `HikeDurationIntent` and `OpenHikeIntent`, which is what
-//  ``HikeEntity`` was built for. **One slot is left**, and what is queued for
-//  it is #481 — an unbuilt intent belongs on the issue tracker rather than in
-//  a comment here, and the argument is there rather than repeated below.
+//  Ten is the system's ceiling on shortcuts per app, and **all ten are now
+//  spent**: the whole recording loop, the three questions, and the three that
+//  take a parameter — `HikeDurationIntent`, `OpenHikeIntent` and
+//  `RecordAlongTrailIntent`, which is what ``HikeEntity`` was built for.
 //
-//  #481 is blocked on a product decision rather than on plumbing: starting a
-//  recording *and* naming a trail to follow is the one gesture that asks for
-//  both at once, and *a live recording outranks the selected trail* means the
-//  trail the hiker just said out loud is the thing that leaves the widget.
-//
-//  ``OpenHikeIntent`` spent the other one. What had been blocking it was
-//  navigation, not the intent — see ``HikeOpenRequests`` for how an intent
-//  running outside the view tree reaches the router the widget already uses.
+//  There is no room left, and that is the thing to know before adding one. The
+//  system takes the first ten and drops the rest in silence, so an eleventh
+//  would ship as a feature that simply never appears —
+//  `OpenHikesShortcutsTests` is what refuses it. A new shortcut from here is a
+//  decision about which existing one stops being offered.
 //
 
 import AppIntents
@@ -96,6 +91,16 @@ nonisolated struct OpenHikesShortcuts: AppShortcutsProvider {
             ],
             shortTitle: "Hike Summary",
             systemImageName: "figure.hiking.circle"
+        )
+        AppShortcut(
+            intent: RecordAlongTrailIntent(),
+            phrases: [
+                "Record along a trail in \(.applicationName)",
+                "Start recording along \(\.$hike) in \(.applicationName)",
+                "Hike \(\.$hike) with \(.applicationName)",
+            ],
+            shortTitle: "Record Along Trail",
+            systemImageName: "point.topleft.down.curvedto.point.bottomright.up"
         )
         AppShortcut(
             intent: OpenHikeIntent(),

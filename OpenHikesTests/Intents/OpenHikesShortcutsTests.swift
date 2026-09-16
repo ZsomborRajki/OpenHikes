@@ -28,9 +28,9 @@ struct OpenHikesShortcutsTests {
 
     @Test("every intent in the folder is reachable by voice")
     func everyIntentIsOffered() {
-        // Nine intents, nine shortcuts. An intent added without a phrase is
+        // Ten intents, ten shortcuts — the system's ceiling exactly. An intent added without a phrase is
         // reachable only by a hiker who goes and builds a shortcut for it by
         // hand, which is the opposite of the point.
-        #expect(OpenHikesShortcuts.appShortcuts.count == 9)
+        #expect(OpenHikesShortcuts.appShortcuts.count == 10)
     }
 }
