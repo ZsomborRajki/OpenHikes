@@ -35,6 +35,24 @@ nonisolated enum SettingsKey {
     /// re-deriving it; absent means "no continuity reference yet", which is why
     /// it is removed rather than zeroed when the selection changes.
     static let lastMatchedDistance = "trailTracking.lastMatchedDistance"
+    /// The tracked trail's bounding box and the hike it belongs to, as JSON.
+    /// Written by `BackgroundTrailTracker` on every selection change and read
+    /// at launch, where it is half of the proximity gate on arming
+    /// significant-change monitoring — see ``TrackedTrailArea`` for why the
+    /// box is stored rather than derived from the route.
+    ///
+    /// A blob this build cannot read is treated as absent, which arms
+    /// monitoring rather than standing it down: nothing there can prove the
+    /// phone is far from the trail. The next selection writes the current
+    /// shape.
+    static let trackedTrailArea = "trailTracking.trailArea"
+    /// The last position this app heard about, as `[latitude, longitude]`.
+    /// The other half of the proximity gate, and the only part of it that
+    /// survives a force-quit — see ``TrailProximity``.
+    ///
+    /// Never the reason a location is requested: it is written from fixes
+    /// that arrived for some other purpose, which is what keeps the gate free.
+    static let lastKnownCoordinate = "trailTracking.lastKnownCoordinate"
     /// The last weather reading and the subject it was for, as JSON. Written
     /// by ``WeatherReadingStore`` on every successful fetch and read once at
     /// launch, so the badge is on screen before the first network round trip

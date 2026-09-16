@@ -48,6 +48,20 @@ final class SignificantLocationFeed: NSObject {
 
     private(set) var coordinate: CLLocationCoordinate2D?
 
+    /// Handed every published coordinate, synchronously.
+    ///
+    /// One consumer, and it is not a view: ``BackgroundTrailTracker`` takes
+    /// the arming decision behind its own feed partly on where the phone is,
+    /// and once that decision has come down there is no significant-change
+    /// delivery of its own left to re-take it with. This is the position that
+    /// arrives anyway, offered to it — see ``TrailProximity``.
+    ///
+    /// A closure rather than a second `Observations` loop over ``movements``
+    /// because the tracker's answer is synchronous and has no state of its
+    /// own to keep: what a loop would add is a task and a suspension between
+    /// the fix and the decision it should have changed.
+    @ObservationIgnored var onMovement: ((CLLocationCoordinate2D) -> Void)?
+
     @ObservationIgnored private let monitor: any SignificantLocationMonitor
     @ObservationIgnored private var isMonitoring = false
 
@@ -99,6 +113,7 @@ final class SignificantLocationFeed: NSObject {
            coordinate.latitude == next.latitude,
            coordinate.longitude == next.longitude { return }
         coordinate = next
+        onMovement?(next)
     }
 }
 

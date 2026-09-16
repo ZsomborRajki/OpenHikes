@@ -56,7 +56,7 @@ nonisolated enum SlippyTileMath {
 /// an eastward span, and picks whichever of the two arcs through the route's
 /// points is shorter. Latitude is bounded and doesn't wrap, so it stays a plain
 /// interval.
-nonisolated struct TileBoundingBox: Sendable {
+nonisolated struct TileBoundingBox: Codable, Equatable, Sendable {
     /// Ground metres in one degree of latitude — and, scaled by the cosine of
     /// the latitude, in one degree of longitude. Rough (the earth isn't a
     /// sphere), but this only ever sizes a padding buffer.
@@ -157,6 +157,23 @@ nonisolated struct TileBoundingBox: Sendable {
         // Distance east from the first column, the long way round if need be —
         // which is exactly the order the enumeration walks them in.
         return SlippyTileMath.wrap(x - firstColumn, to: 1 << z) < columnCount
+    }
+
+    /// Whether a coordinate falls inside the box.
+    ///
+    /// The longitude test is the same eastward walk ``columns(at:)`` makes,
+    /// in degrees rather than in columns: how far east of ``westLon`` the
+    /// point lies, brought into `[0, 360)`, against ``lonSpan``. Comparing
+    /// `westLon <= longitude <= westLon + lonSpan` directly would answer
+    /// `false` for every point in a box that runs through the antimeridian,
+    /// which is the one case this type exists for.
+    ///
+    /// Edge-inclusive, like ``contains(z:x:y:)``.
+    func contains(_ coordinate: CLLocationCoordinate2D) -> Bool {
+        guard coordinate.latitude >= southLat, coordinate.latitude <= northLat else { return false }
+        var eastward = (coordinate.longitude - westLon).truncatingRemainder(dividingBy: 360)
+        if eastward < 0 { eastward += 360 }
+        return eastward <= lonSpan
     }
 
     /// The box grown by `meters` on every side — "near this trail" rather than

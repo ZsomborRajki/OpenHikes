@@ -23,8 +23,13 @@
 //  It does not make the feed free, though: iOS's periodic "has been using
 //  your location in the background" reminder is keyed on background location
 //  *use*, not on the indicator, and every significant change wakes or
-//  relaunches this app. So monitoring is armed only while it has something to
-//  do — see ``syncMonitoring(trackingEnabled:)``.
+//  relaunches this app. Nor does it make the argument above a promise about
+//  what the hiker sees: this app declares both the mode and the flag for the
+//  recorder's sake, and a device left armed has been reported showing the
+//  system's background-location indicator with no process behind it. So
+//  monitoring is armed only while it has something to do — see
+//  ``syncMonitoring(trackingEnabled:)``, and ``TrailProximity`` for the
+//  condition that finally makes "something to do" untrue again.
 //
 
 import CoreLocation
@@ -198,12 +203,14 @@ final class BackgroundTrailTracker: NSObject {
         super.init()
         self.monitor.monitorDelegate = self
         trackedHikeID = UUID(uuidString: defaults.string(forKey: SettingsKey.lastSelectedHikeID) ?? "")
-        // Re-arm on every launch: the system wakes the app specifically so it
-        // can call this again and receive the pending event — monitoring
-        // doesn't itself persist across process launches. The same call is
-        // what stands monitoring *down* on a launch that shouldn't have it,
-        // which is the one place a registration left over from a previous
-        // launch can be cancelled.
+        // Re-taken on every launch, and the *down* half is the load-bearing
+        // one. Significant-change monitoring outlives the process that armed
+        // it — that is what makes it able to relaunch an app, and it is why a
+        // force-quit does not clear it — so this is the one place a
+        // registration left over from a previous launch can be cancelled.
+        // `HikeRecorder+State` says the same thing about the same mechanism.
+        // Arming here costs nothing the system was not going to deliver
+        // anyway: the wake that started this launch is already paid for.
         syncMonitoring()
     }
 
@@ -248,7 +255,7 @@ final class BackgroundTrailTracker: NSObject {
     ///   passes its own argument, so arming doesn't depend on whether the
     ///   `@AppStorage` binding behind the switch has written the new value yet.
     private func syncMonitoring(trackingEnabled: Bool) {
-        if trackingEnabled, monitor.isAlwaysAuthorized, trackedHikeID != nil {
+        if trackingEnabled, monitor.isAlwaysAuthorized, trackedHikeID != nil, isNearTrackedTrail {
             monitor.startSignificantLocationUpdates()
         } else {
             monitor.stopSignificantLocationUpdates()
@@ -278,6 +285,12 @@ final class BackgroundTrailTracker: NSObject {
         // for the trail being left rather than a lookup against the new one.
         if hike?.id != trackedHikeID { endFollowActivity(hikeID: nil) }
         trackedHikeID = hike?.id
+        // The stored box describes the trail being left. Cleared here rather
+        // than overwritten below, because the new one is computed off the main
+        // actor and the gate must not answer the distance question about the
+        // previous trail in between. Absent arms, so the window costs at most
+        // a few armed milliseconds and never a missed fix.
+        trackedTrailArea = nil
         // The selection is half of what decides whether monitoring should be
         // running at all, so deselecting is what stands it down: nothing else
         // will, and the settings toggle deliberately stays on across it.
@@ -317,6 +330,17 @@ final class BackgroundTrailTracker: NSObject {
         selectionPublishTask = Task { [weak self] in
             defer { self?.finishSelectionPublish(revision: revision) }
             guard !Task.isCancelled else { return }
+            // Before the snapshot, because it is the cheaper half and the one
+            // a *launch* reads: a box written here is what tells the next
+            // process whether this trail is worth waking for. Off the main
+            // actor for the same reason the snapshot is — the box over a
+            // five-hour recording's twenty thousand points is a sort, and the
+            // tap that selected the trail has a frame to make.
+            let area = await Self.offMainThread { TrackedTrailArea(hikeID: input.hikeID, route: input.route) }
+            if let self, !Task.isCancelled, selectionRevision == revision, trackedHikeID == input.hikeID {
+                trackedTrailArea = area
+                syncMonitoring()
+            }
             let snapshot = await Self.buildSnapshotOffMain(from: input, liveFix: nil)
             guard let snapshot,
                   let self,
@@ -490,6 +514,11 @@ final class BackgroundTrailTracker: NSObject {
             maximumAge: LocationFixPolicy.backgroundMaximumAge,
             maximumHorizontalAccuracy: RouteProfile.followMatchThresholdMeters
         ) else { return }
+        // An accepted fix is also the freshest thing anybody knows about where
+        // the phone is, and this feed is the only one still running once the
+        // app is gone. Offering it to the arming decision here is what lets a
+        // wake far from the trail be the *last* one — see ``TrailProximity``.
+        deviceDidMove(to: location.coordinate)
         // Before the match rather than inside it, and before the tracked hike
         // is even read. Matching is the only thing that used to reach the
         // session here, so a hiker who left the trail produced nothing but
@@ -600,12 +629,17 @@ final class BackgroundTrailTracker: NSObject {
     /// the relaunch this pin exists for.
     func walkDidStart(hikeID: UUID) {
         walkedHikeID = hikeID
+        // Every path, including the common one where the walked hike is
+        // already the tracked one: a walk outranks the proximity gate, and
+        // the stored position it would be judged against can easily be the
+        // one from home. Starting a walk is the strongest possible evidence
+        // that the hiker is at the trail.
+        defer { syncMonitoring() }
         guard trackedHikeID != hikeID else { return }
         trackedHikeID = hikeID
         lastMatchedDistance = nil
         lastForegroundPublish = nil
         lastStatusFlipPublish = nil
-        syncMonitoring()
     }
 
     /// Releases the pin, clears the walk from the widget, ends the Lock
@@ -619,6 +653,9 @@ final class BackgroundTrailTracker: NSObject {
     func walkDidEnd(final: SharedTrailSnapshot.Walk?) {
         guard let hikeID = walkedHikeID else { return }
         walkedHikeID = nil
+        // Releasing the pin puts the proximity gate back in charge, so the
+        // decision is re-taken here rather than left until the next fix.
+        syncMonitoring()
         // The revision this walk's last write is gated on. Applying the
         // deferred selection bumps it, which is why that now happens inside
         // the completion below and not beside it: done first, it rejected the
@@ -664,6 +701,108 @@ final class BackgroundTrailTracker: NSObject {
             guard let snapshot else { return }
             self?.publishFollowActivity(snapshot)
         }
+    }
+}
+
+/// The proximity half of the arming decision: where the phone is, where the
+/// trail is, and whether a wake could buy anything.
+///
+/// In an extension in this same file for the reason the write path below is:
+/// the class body is at the limit SwiftLint enforces, and everything here is
+/// main-actor state on the tracker itself. It stays `private` because a
+/// `private` member is visible to the whole file.
+extension BackgroundTrailTracker {
+    // MARK: Proximity
+
+    /// The tracked trail's bounding box, persisted for the reason
+    /// ``lastMatchedDistance`` is: the launch that reads it may be a
+    /// background relaunch with no in-memory selection, and computing it there
+    /// would mean materialising a route before deciding whether this launch
+    /// should have happened at all. See ``TrackedTrailArea``.
+    ///
+    /// A blob that does not decode reads as absent, and absent arms — see
+    /// ``isNearTrackedTrail``.
+    private var trackedTrailArea: TrackedTrailArea? {
+        get {
+            guard let data = defaults.data(forKey: SettingsKey.trackedTrailArea) else { return nil }
+            return try? JSONDecoder().decode(TrackedTrailArea.self, from: data)
+        }
+        set {
+            guard let newValue, let data = try? JSONEncoder().encode(newValue) else {
+                defaults.removeObject(forKey: SettingsKey.trackedTrailArea)
+                return
+            }
+            defaults.set(data, forKey: SettingsKey.trackedTrailArea)
+        }
+    }
+
+    /// Where the phone last was, according to some feed that is not this one.
+    ///
+    /// Two doubles rather than JSON because that is all it is, and because
+    /// this is read on every arming decision including the one a launch
+    /// takes.
+    private var lastKnownCoordinate: CLLocationCoordinate2D? {
+        get {
+            guard let pair = defaults.array(forKey: SettingsKey.lastKnownCoordinate) as? [Double],
+                  pair.count == 2,
+                  CLLocationCoordinate2DIsValid(.init(latitude: pair[0], longitude: pair[1]))
+            else { return nil }
+            return CLLocationCoordinate2D(latitude: pair[0], longitude: pair[1])
+        }
+        set {
+            guard let newValue else {
+                defaults.removeObject(forKey: SettingsKey.lastKnownCoordinate)
+                return
+            }
+            defaults.set([newValue.latitude, newValue.longitude], forKey: SettingsKey.lastKnownCoordinate)
+        }
+    }
+
+    /// Whether the phone is near enough to the tracked trail for a wake to be
+    /// able to buy anything.
+    ///
+    /// Answers `true` whenever it cannot prove otherwise, and that direction
+    /// is the point: the cost of arming wrongly is background wakes, and the
+    /// cost of standing down wrongly is a walk that goes unmatched while the
+    /// phone is in a pocket. A launch with no stored position — a fresh
+    /// install, a hiker who has never granted When In Use — therefore behaves
+    /// exactly as it did before this condition existed.
+    ///
+    /// A box belonging to another hike is no answer either: the selection can
+    /// change while a walk holds the tracked hike, and ``walkDidStart(hikeID:)``
+    /// pins a hike that the stored box may not be for.
+    private var isNearTrackedTrail: Bool {
+        // A walk under way outranks the distance question outright. The hiker
+        // is on the trail by definition, and this is the feed that keeps their
+        // coverage honest while the app is not on screen — see
+        // ``handleBackgroundFix(_:)``.
+        if walkedHikeID != nil { return true }
+        guard let hikeID = trackedHikeID,
+              let area = trackedTrailArea, area.hikeID == hikeID,
+              let coordinate = lastKnownCoordinate
+        else { return true }
+        return TrailProximity.isNear(coordinate, of: area)
+    }
+
+    /// A position that arrived for some other purpose, offered to the arming
+    /// decision.
+    ///
+    /// The re-arm half of the proximity gate: once monitoring is down there is
+    /// no feed here left to notice the hiker approaching the trail, so the
+    /// decision is re-taken wherever a coordinate turns up — the foreground
+    /// ``SignificantLocationFeed`` on every movement and on becoming active,
+    /// and a background fix still being delivered. Nothing here asks
+    /// CoreLocation for anything.
+    ///
+    /// - Parameter coordinate: `nil` means *no news*, not *nowhere*, and
+    ///   leaves the stored position alone. The feed's own coordinate is `nil`
+    ///   until its first delivery, and forgetting where the phone was because
+    ///   the app has just come back would arm monitoring for every trail the
+    ///   hiker has ever left selected.
+    func deviceDidMove(to coordinate: CLLocationCoordinate2D?) {
+        guard let coordinate, CLLocationCoordinate2DIsValid(coordinate) else { return }
+        lastKnownCoordinate = coordinate
+        syncMonitoring()
     }
 }
 
