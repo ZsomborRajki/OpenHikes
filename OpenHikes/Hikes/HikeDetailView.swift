@@ -106,6 +106,15 @@ struct HikeDetailView: View {
     /// the two conversations — a flag that had to say which would be a third
     /// thing to keep in step with the two columns that already decide it.
     @State var isWithdrawingPhotosFromCommunity = false
+    /// What the hiker's *is this still live?* tap came back with, non-`nil`
+    /// while the alert reporting it is up.
+    ///
+    /// An answer rather than a `Bool` because all three outcomes have to be
+    /// said out loud — still live, taken down, and could not ask — and only
+    /// one of them offers an action. See
+    /// ``CommunityPublicationCheck/Liveness``, which this adds the failure to
+    /// for the reason the check itself throws rather than swallowing.
+    @State var publicationLiveness: CommunityLivenessAnswer?
     // swiftlint:enable private_swiftui_state
     /// Owned by the navigation session so changing presentation hosts keeps
     /// the selected section and an unfinished rename. Read only by this screen.

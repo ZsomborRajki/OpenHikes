@@ -36,8 +36,11 @@
 //    one live. The hiker who comes back to a published hike is almost always
 //    carrying photographs they did not have on the day, so the item is now
 //    *Add Photos to This Trail* — a contribution onto the listing that already
-//    exists — beside the two ways to ask for something back. See
-//    ``publishedMenuItems(_:)``.
+//    exists — beside the two ways to ask for something back, and beside the
+//    one item that is about the listing rather than about anything sent to it:
+//    *Check Whether It's Still Live*, which is how a hike that was taken down
+//    finds its way back to being shareable at all. See
+//    ``publishedMenuItems(_:_:)``.
 //
 //  ## And the state that used to be a dead end
 //
@@ -116,7 +119,7 @@ extension HikeDetailView {
                 submissionID: hike.communityPhotoSubmissionID,
                 contributionID: hike.communityPhotoContributionID
             )
-            communityControl(publication, eligibility, contribution)
+            communityControl(publication, eligibility, contribution, transport)
                 .accessibilityLabel(
                     Self.shareButtonLabel(publication, eligibility, contribution)
                 )
@@ -171,6 +174,41 @@ extension HikeDetailView {
                         CommunityWithdrawalSheet(withdrawal: withdrawal)
                     }
                 }
+                // An alert rather than a sheet, and the only alert this
+                // control raises: all three answers are one sentence, and one
+                // of them needs a decision made on top of the sentence. A
+                // sheet for that would be a screen whose whole content is a
+                // line of text, which is what the refusal form already is and
+                // is only tolerable there because it explains a rule.
+                .alert(
+                    publicationLiveness.map(Self.livenessTitle) ?? "",
+                    isPresented: Binding(
+                        get: { publicationLiveness != nil },
+                        set: { if !$0 { publicationLiveness = nil } }
+                    ),
+                    presenting: publicationLiveness
+                ) { answer in
+                    if answer == .takenDown {
+                        // Destructive because it throws away the two record
+                        // names a removal request quotes, which is the one
+                        // thing here that cannot be undone from this screen.
+                        Button("Reset", role: .destructive) {
+                            CommunityPublicationCheck.forgetPublication(hike)
+                        }
+                        .accessibilityIdentifier("community-liveness-reset-button")
+                        Button("Cancel", role: .cancel) {
+                            // Dismissal is the whole action: the hike keeps
+                            // reading published, which is what it read before.
+                        }
+                    } else {
+                        Button("OK", role: .cancel) {
+                            // Nothing to decide — these two answers are told,
+                            // not acted on.
+                        }
+                    }
+                } message: { answer in
+                    Text(Self.livenessMessage(answer))
+                }
         }
     }
 
@@ -190,7 +228,8 @@ extension HikeDetailView {
     private func communityControl(
         _ publication: CommunityPublicationState,
         _ eligibility: CommunityPublishingEligibility,
-        _ contribution: CommunityContributionState
+        _ contribution: CommunityContributionState,
+        _ transport: any CommunityTransporting
     ) -> some View {
         switch publication {
         case .notShared:
@@ -209,7 +248,7 @@ extension HikeDetailView {
             .buttonStyle(.plain)
         case .published:
             Menu {
-                publishedMenuItems(contribution)
+                publishedMenuItems(contribution, transport)
             } label: {
                 Self.shareButtonGlyph(publication, eligibility, contribution)
             }
@@ -248,8 +287,20 @@ extension HikeDetailView {
     /// which is what the removal request is for and what it always had to be —
     /// what changed is that the app no longer offers a shortcut that quietly
     /// skips the takedown.
+    ///
+    /// That route only leads anywhere because of the third item. A takedown is
+    /// something a reviewer does elsewhere, and nothing tells this device — so
+    /// without *Check Whether It's Still Live* the hike would read published
+    /// forever, aim its photographs at a listing that is gone, and refuse a
+    /// re-recording of the same walk as a retread. The fresh share the
+    /// paragraph above promises would be unreachable. See
+    /// ``checkWhetherStillLive(_:)``, and ``Hike/communityListingID`` for why
+    /// the ask is a tap rather than something this screen does on its own.
     @ViewBuilder
-    private func publishedMenuItems(_ contribution: CommunityContributionState) -> some View {
+    private func publishedMenuItems(
+        _ contribution: CommunityContributionState,
+        _ transport: any CommunityTransporting
+    ) -> some View {
         if let target = CommunityPhotoTarget.published(
             listingID: hike.communityListingID,
             title: hike.displayTitle
@@ -268,6 +319,10 @@ extension HikeDetailView {
             }
             .accessibilityIdentifier("community-photo-withdraw-button")
         }
+        Button("Check Whether It's Still Live", systemImage: "arrow.clockwise") {
+            checkWhetherStillLive(transport)
+        }
+        .accessibilityIdentifier("community-liveness-button")
         Button("Ask for Removal", systemImage: "envelope", role: .destructive) {
             isWithdrawingFromCommunity = true
         }
@@ -462,4 +517,92 @@ extension HikeDetailView {
             String(localized: "Add more photos, or ask for yours to be taken down.")
         }
     }
+
+    /// Spends one request to ask whether this hike's listing is still there.
+    ///
+    /// The tap that the argument in ``Hike/communityListingID`` leaves room
+    /// for: publication stays one-way on its own, and this is the hiker
+    /// deciding the badge is worth a request. It exists because dropping
+    /// *Share Again* made a stale *published* into a dead end rather than a
+    /// cosmetic error — a hike whose listing is gone aims its photographs at
+    /// nothing and is refused as a retread if the walk is recorded again.
+    ///
+    /// ``CommunityPublicationCheck/Liveness/notPublished`` says nothing,
+    /// because it can only mean the hike stopped being published while the
+    /// request was in flight — deleted, or re-shared from another device — and
+    /// the menu that raised this has already been rebuilt around that.
+    private func checkWhetherStillLive(_ transport: any CommunityTransporting) {
+        Task {
+            do {
+                switch try await CommunityPublicationCheck.liveness(
+                    of: hike,
+                    transport: transport
+                ) {
+                case .live: publicationLiveness = .live
+                case .takenDown: publicationLiveness = .takenDown
+                case .notPublished: publicationLiveness = nil
+                }
+            } catch {
+                publicationLiveness = .failed
+            }
+        }
+    }
+
+    /// Never *rejected*, for the reason the share button's label never is.
+    private static func livenessTitle(_ answer: CommunityLivenessAnswer) -> String {
+        switch answer {
+        case .live: String(localized: "Still published")
+        case .takenDown: String(localized: "No longer published")
+        case .failed: String(localized: "Couldn't check")
+        }
+    }
+
+    /// The taken-down message is the only one that asks for anything, and it
+    /// says what *Reset* costs before it offers it: the removal request needs
+    /// record names that this throws away, so a hiker who taps it cannot then
+    /// ask for a hike back. It is safe to offer only because there is nothing
+    /// left to ask back — that is what the answer above established.
+    private static func livenessMessage(_ answer: CommunityLivenessAnswer) -> String {
+        switch answer {
+        case .live:
+            String(
+                localized: """
+                This hike is still live for other hikers, so it's still \
+                somewhere your photos can go.
+                """
+            )
+        case .takenDown:
+            String(
+                localized: """
+                This hike isn't in the community list any more. You can reset \
+                it here, which forgets that it was ever sent and lets you \
+                share a corrected walk — but it also forgets the details a \
+                removal request needs, so only do it if you no longer want \
+                this one back.
+                """
+            )
+        case .failed:
+            String(
+                localized: """
+                Couldn't reach the community list just now, so this hike still \
+                reads the way it did. Try again when you're back online.
+                """
+            )
+        }
+    }
+}
+
+/// What a *still live?* tap came back with, as a screen has to say it.
+///
+/// ``CommunityPublicationCheck/Liveness`` with a failure added, rather than a
+/// fourth case over there: the check throws because it was asked for, and what
+/// a throw means to a hiker — *ask again later* — is a fact about this screen
+/// and not about the question.
+enum CommunityLivenessAnswer: Equatable, Sendable {
+    /// The question could not be put at all.
+    case failed
+    /// A listing still points at this hike's submission.
+    case live
+    /// None does, and one did once. The only answer that offers an action.
+    case takenDown
 }

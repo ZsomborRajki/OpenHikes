@@ -56,6 +56,7 @@
 
 import CoreLocation
 import Foundation
+import Synchronization
 
 #if DEBUG
 
@@ -107,6 +108,19 @@ nonisolated struct SeededCommunityTransport: CommunityTransporting {
         case reviewing = "reviewing"
         /// Three published hikes, one of them with photographs.
         case seeded = "seeded"
+        /// ``published``, and then not.
+        ///
+        /// The one scenario whose answer changes over a launch: yes once, and
+        /// `nil` every time after. That is the only way automation reaches a
+        /// hike this device *believed* was live and then found gone, which is
+        /// the state ``CommunityPublicationCheck/liveness(of:transport:)``
+        /// exists for — and believing it first is the whole point, so two
+        /// launches with two scenarios would not do.
+        ///
+        /// It costs exactly one yes because nothing asks twice: `refresh`
+        /// stops calling once ``Hike/communityListingID`` is set, so the
+        /// second call is always the hiker's own tap.
+        case takenDown = "takenDown"
 
         /// Whether this scenario has a database behind it at all, as opposed
         /// to being empty or broken. The two that do differ only in what
@@ -452,9 +466,25 @@ nonisolated struct SeededCommunityTransport: CommunityTransporting {
         guard scenario != .failing else { throw CommunityFailure.unreachable }
     }
 
+    /// Whether ``Scenario/takenDown`` has already given out its one yes.
+    private static let takedownAnswered = Mutex(false)
+
     @concurrent
     func publication(of submissionID: String) async throws -> CommunityListing? {
         guard scenario != .failing else { throw CommunityFailure.unreachable }
+        // Yes once and `nil` afterwards, so a launch can reach a hike that
+        // went live and was taken down. Static because this transport is a
+        // struct copied freely by everything that holds one, and a `Mutex`
+        // cannot be stored in a copyable value and shared between its copies;
+        // a UI test is one process per case, so there is nothing for the
+        // static to leak into. The same shape as ``MapEntitlement/state``.
+        if scenario == .takenDown {
+            let answeredAlready = Self.takedownAnswered.withLock { answered in
+                defer { answered = true }
+                return answered
+            }
+            return answeredAlready ? nil : Self.publishedListing(of: submissionID)
+        }
         // Never published, which is the honest answer for a submission this
         // process invented a moment ago and the state the share screen has to
         // be able to draw: a hike waiting for a reviewer looks the same as one
@@ -498,7 +528,7 @@ nonisolated struct SeededCommunityTransport: CommunityTransporting {
     /// put under a test.
     private func answer(_ listings: [CommunityListing]) throws -> [CommunityListing] {
         switch scenario {
-        case .seeded, .published, .reviewing, .curated: listings
+        case .seeded, .published, .reviewing, .curated, .takenDown: listings
         case .empty: []
         case .failing: throw CommunityFailure.unreachable
         }

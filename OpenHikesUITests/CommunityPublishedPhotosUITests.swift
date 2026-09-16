@@ -50,6 +50,13 @@ nonisolated final class CommunityPublishedPhotosUITests: XCTestCase {
             app.buttons["Share Again"].exists,
             "and must not offer a second copy of a walk that is already in the list"
         )
+        XCTAssertTrue(
+            element("community-liveness-button", in: app).exists,
+            """
+            and must offer the one item that is about the listing itself — without \
+            it a hike taken down has no way back to being shareable
+            """
+        )
 
         tapWhenReady(addPhotos)
         XCTAssertTrue(
@@ -76,9 +83,11 @@ nonisolated final class CommunityPublishedPhotosUITests: XCTestCase {
     /// a helper reached across two classes to save four lines is how one
     /// class's scenario quietly becomes another's.
     @MainActor
-    private func shareTheImportedHike() -> XCUIApplication {
+    private func shareTheImportedHike(
+        scenario: SeededCommunityScenario = .published
+    ) -> XCUIApplication {
         let app = launchCommunity(
-            scenario: .published,
+            scenario: scenario,
             extraArguments: ["--ui-test-import-gpx=\(UITestFixture.gpxName)"]
         )
         openHikeDetail(in: app)
@@ -94,5 +103,51 @@ nonisolated final class CommunityPublishedPhotosUITests: XCTestCase {
         )
         app.buttons["Done"].firstMatch.tap()
         return app
+    }
+
+    /// The other half of dropping *Share Again*: a takedown has to be
+    /// survivable.
+    ///
+    /// Nothing tells this device when a reviewer removes a listing, so a
+    /// published hike goes on reading published — and since it is published it
+    /// offers no share form, aims its photographs at a listing that is gone,
+    /// and is refused as a retread if the walk is recorded again. Every way
+    /// out is shut. This walks the way back in: ask, be told, reset, share.
+    ///
+    /// ``SeededCommunityScenario/takenDown`` is what makes it reachable — one
+    /// yes from `publication(of:)` so the device believes it is live, and
+    /// `nil` afterwards. Believing it first is the point; a scenario that
+    /// always said `nil` would never reach the published menu at all.
+    @MainActor
+    func testAHikeWhoseListingIsGoneCanBeSharedAgain() {
+        let app = shareTheImportedHike(scenario: .takenDown)
+        popScreen(in: app)
+        openHikeDetail(in: app)
+
+        tapWhenReady(element("community-share-button", in: app))
+        let check = element("community-liveness-button", in: app)
+        XCTAssertTrue(
+            check.waitForExistence(timeout: UITestTimeout.existence),
+            "a live hike should offer to check whether it is still live"
+        )
+        tapWhenReady(check)
+
+        let reset = element("community-liveness-reset-button", in: app)
+        XCTAssertTrue(
+            reset.waitForExistence(timeout: UITestTimeout.existence),
+            "a hike whose listing has gone should say so and offer the way back"
+        )
+        tapWhenReady(reset)
+
+        // The assertion that matters is not the alert but what the hike can do
+        // afterwards: the share form is the thing a published hike does not
+        // have, so reaching it is proof the reset undid the publication rather
+        // than only the badge.
+        tapWhenReady(element("community-share-button", in: app))
+        XCTAssertTrue(
+            element("community-author-field", in: app)
+                .waitForExistence(timeout: UITestTimeout.existence),
+            "a forgotten hike should be shareable again, which is the whole point of forgetting it"
+        )
     }
 }

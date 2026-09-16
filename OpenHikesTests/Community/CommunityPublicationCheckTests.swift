@@ -246,4 +246,145 @@ struct CommunityPublicationCheckTests {
         #expect(hike.communityListingID == "listing-2")
         #expect(transport.recording.publicationChecks == ["submission-1", "submission-2"])
     }
+
+    // MARK: Asking again, because somebody asked
+
+    /// The published hike `refresh` will not ask about, asked about on purpose.
+    private static func publishedHike(in context: ModelContext) -> Hike {
+        let hike = Fixture.hike(in: context)
+        hike.communitySubmissionID = "submission-1"
+        hike.communityListingID = "listing-1"
+        return hike
+    }
+
+    @Test("a listing that is still there comes back live")
+    func stillListedReadsLive() async throws {
+        let context = try Fixture.modelContext()
+        let hike = Self.publishedHike(in: context)
+        let transport = StubCommunityTransport()
+        transport.publicationResult = .success(Self.listing())
+
+        let liveness = try await CommunityPublicationCheck.liveness(
+            of: hike,
+            transport: transport
+        )
+
+        #expect(liveness == .live)
+        #expect(hike.communityListingID == "listing-1", "asking is not deciding")
+        #expect(hike.communitySubmissionID == "submission-1")
+    }
+
+    /// The asymmetry this whole path rests on: the same `nil` that means
+    /// *nobody has looked yet* to ``CommunityPublicationCheck/refresh`` means
+    /// *it went away* here, because a listing was seen once already.
+    @Test("no listing, where one was seen before, reads as taken down")
+    func missingListingReadsTakenDown() async throws {
+        let context = try Fixture.modelContext()
+        let hike = Self.publishedHike(in: context)
+        let transport = StubCommunityTransport()
+        transport.publicationResult = .success(nil)
+
+        let liveness = try await CommunityPublicationCheck.liveness(
+            of: hike,
+            transport: transport
+        )
+
+        #expect(liveness == .takenDown)
+        #expect(hike.communityListingID == "listing-1", "the screen confirms before anything moves")
+    }
+
+    @Test("a hike that was never published is not asked about at all")
+    func unpublishedHikeAsksNothing() async throws {
+        let context = try Fixture.modelContext()
+        let hike = Fixture.hike(in: context)
+        hike.communitySubmissionID = "submission-1"
+        let transport = StubCommunityTransport()
+
+        let liveness = try await CommunityPublicationCheck.liveness(
+            of: hike,
+            transport: transport
+        )
+
+        #expect(liveness == .notPublished)
+        #expect(transport.recording.publicationChecks.isEmpty)
+    }
+
+    /// Where ``CommunityPublicationCheck/refresh`` swallows, this throws: it
+    /// ran because the hiker asked, and an unanswered question is an answer
+    /// they are owed rather than an interruption.
+    @Test("a failed ask throws, because this one was asked for")
+    func failedAskThrows() async throws {
+        let context = try Fixture.modelContext()
+        let hike = Self.publishedHike(in: context)
+        let transport = StubCommunityTransport()
+        transport.publicationResult = .failure(.unreachable)
+
+        await #expect(throws: CommunityFailure.unreachable) {
+            try await CommunityPublicationCheck.liveness(of: hike, transport: transport)
+        }
+        #expect(hike.communityListingID == "listing-1")
+    }
+
+    // MARK: Forgetting one
+
+    @Test("forgetting a publication clears both columns together")
+    func forgettingClearsBothColumns() throws {
+        let context = try Fixture.modelContext()
+        let hike = Self.publishedHike(in: context)
+
+        #expect(CommunityPublicationCheck.forgetPublication(hike))
+
+        #expect(hike.communitySubmissionID == nil)
+        #expect(hike.communityListingID == nil)
+        #expect(
+            CommunityPublicationState(
+                submissionID: hike.communitySubmissionID,
+                listingID: hike.communityListingID
+            ) == .notShared
+        )
+    }
+
+    /// The reason the submission id goes too. A hike keeping it is still a
+    /// retread of itself, so clearing only the listing would leave the hiker
+    /// exactly as stuck as the stale *published* did.
+    @Test("a forgotten hike stops blocking a re-record of the same walk")
+    func forgottenHikeStopsBlockingARerecord() throws {
+        let context = try Fixture.modelContext()
+        let published = Self.publishedHike(in: context)
+        let fresh = Fixture.hike(in: context)
+
+        #expect(
+            !CommunityPublishingCheck.alreadyShared(in: context, excluding: fresh).isEmpty,
+            "the published walk is a retread candidate while it remembers its submission"
+        )
+
+        CommunityPublicationCheck.forgetPublication(published)
+
+        #expect(
+            CommunityPublishingCheck.alreadyShared(in: context, excluding: fresh).isEmpty
+        )
+    }
+
+    @Test("forgetting a hike that was never shared writes nothing")
+    func forgettingAnUnsharedHikeWritesNothing() throws {
+        let context = try Fixture.modelContext()
+        let hike = Fixture.hike(in: context)
+
+        #expect(!CommunityPublicationCheck.forgetPublication(hike))
+    }
+
+    /// A refused commit is not the harmless kind it is in `refresh`: nothing
+    /// re-asks a hike with no submission id, so the caller has to be told.
+    @Test("a refused commit reports the failure rather than swallowing it")
+    func refusedForgetIsReported() throws {
+        let context = try Fixture.modelContext()
+        let hike = Self.publishedHike(in: context)
+
+        let forgotten = CommunityPublicationCheck.forgetPublication(
+            hike,
+            save: { _ in throw CocoaError(.fileWriteNoPermission) }
+        )
+
+        #expect(!forgotten)
+    }
 }
