@@ -53,3 +53,23 @@ final class DormantLocationSource: ForegroundLocationSource, SignificantLocation
     func startSignificantLocationUpdates() { /* intentionally dormant */ }
     func stopSignificantLocationUpdates() { /* nothing was ever started */ }
 }
+
+/// A ``TrailRegionMonitor`` that registers nothing and knows nothing.
+///
+/// Composed in place of the real one on the same launches and for the same
+/// reason as ``DormantLocationSource``: ``BackgroundTrailTracker`` opens its
+/// region monitor from its own `init`, so a hosted test run would otherwise
+/// register real geofences on whatever Simulator it was handed, and take its
+/// arming decision from whatever those answered.
+///
+/// ``TrailRegionState/unknown`` is the honest answer — this process has
+/// registered no condition, so there is nothing for the system to say about
+/// one — and it is also the inert one: unknown arms, which is exactly how
+/// every one of these launches behaved before the region gate existed.
+nonisolated struct DormantTrailRegionMonitor: TrailRegionMonitor {
+    func setRegion(_ region: TrailRegion?) { /* intentionally dormant */ }
+    func currentState() -> TrailRegionState { .unknown }
+    func startObserving(_ onChange: @MainActor @Sendable (TrailRegionState) -> Void) {
+        // Never called back: there is no condition to cross.
+    }
+}

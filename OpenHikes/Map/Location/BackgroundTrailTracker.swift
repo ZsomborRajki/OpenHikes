@@ -23,8 +23,13 @@
 //  It does not make the feed free, though: iOS's periodic "has been using
 //  your location in the background" reminder is keyed on background location
 //  *use*, not on the indicator, and every significant change wakes or
-//  relaunches this app. So monitoring is armed only while it has something to
-//  do — see ``syncMonitoring(trackingEnabled:)``.
+//  relaunches this app. Nor does it make the argument above a promise about
+//  what the hiker sees: this app declares both the mode and the flag for the
+//  recorder's sake, and a device left armed has been reported showing the
+//  system's background-location indicator with no process behind it. So
+//  monitoring is armed only while it has something to do — see
+//  ``syncMonitoring(trackingEnabled:)``, and ``TrailRegion`` for the
+//  condition that finally makes "something to do" untrue again.
 //
 
 import CoreLocation
@@ -68,6 +73,19 @@ protocol SignificantLocationMonitor: AnyObject {
 @Observable
 final class BackgroundTrailTracker: NSObject {
     private let monitor: any SignificantLocationMonitor
+    /// Registers the tracked trail's region with the system and reports what
+    /// it says about it — the proximity half of the arming decision.
+    private let regionMonitor: any TrailRegionMonitor
+    /// What the system last said about that region.
+    ///
+    /// In memory and nowhere else, which is the whole privacy argument for
+    /// taking the decision this way: the answer survives a launch as a
+    /// question the system can be re-asked, not as a coordinate this app
+    /// wrote down. Starts ``TrailRegionState/unknown``, which arms.
+    private var regionState: TrailRegionState = .unknown
+    /// The launch's trail-region work, held only so a test can wait for it —
+    /// see ``waitForTrailRegionWatch()``.
+    private var regionWatchTask: Task<Void, Never>?
     private let defaults: UserDefaults
     /// The Lock Screen, when the app has one. A trail being followed is the
     /// second thing this app can put there — see
@@ -171,6 +189,10 @@ final class BackgroundTrailTracker: NSObject {
     /// - Parameters:
     ///   - monitor: significant-change delivery. Deliberately a *separate*
     ///     manager from `LocationManager`'s — see the file comment.
+    ///   - regionMonitor: the system's answer to "is the phone near the
+    ///     tracked trail". A suite passes a fake, because every interesting
+    ///     path belongs to a process it did not start — see
+    ///     ``TrailRegionMonitor``.
     ///   - defaults: where the selection, the settings toggle and the matching
     ///     continuity reference are read from. A test passes a suite of its
     ///     own rather than editing the ones the host app is using.
@@ -182,6 +204,7 @@ final class BackgroundTrailTracker: NSObject {
     init(
         container: ModelContainer,
         monitor: (any SignificantLocationMonitor)? = nil,
+        regionMonitor: (any TrailRegionMonitor)? = nil,
         defaults: UserDefaults = .standard,
         liveActivityController: HikeLiveActivityController? = nil,
         clock: @escaping @Sendable () -> Date = { Date() },
@@ -190,6 +213,7 @@ final class BackgroundTrailTracker: NSObject {
         let initialGeneration = SelectionGeneration()
         self.container = container
         self.monitor = monitor ?? CLLocationManager()
+        self.regionMonitor = regionMonitor ?? SystemTrailRegionMonitor.shared
         self.defaults = defaults
         self.liveActivityController = liveActivityController
         self.clock = clock
@@ -198,13 +222,16 @@ final class BackgroundTrailTracker: NSObject {
         super.init()
         self.monitor.monitorDelegate = self
         trackedHikeID = UUID(uuidString: defaults.string(forKey: SettingsKey.lastSelectedHikeID) ?? "")
-        // Re-arm on every launch: the system wakes the app specifically so it
-        // can call this again and receive the pending event — monitoring
-        // doesn't itself persist across process launches. The same call is
-        // what stands monitoring *down* on a launch that shouldn't have it,
-        // which is the one place a registration left over from a previous
-        // launch can be cancelled.
+        // Re-taken on every launch, and the *down* half is the load-bearing
+        // one. Significant-change monitoring outlives the process that armed
+        // it — that is what makes it able to relaunch an app, and it is why a
+        // force-quit does not clear it — so this is the one place a
+        // registration left over from a previous launch can be cancelled.
+        // `HikeRecorder+State` says the same thing about the same mechanism.
+        // Arming here costs nothing the system was not going to deliver
+        // anyway: the wake that started this launch is already paid for.
         syncMonitoring()
+        startWatchingTrailRegion()
     }
 
     // MARK: Settings toggle
@@ -248,7 +275,7 @@ final class BackgroundTrailTracker: NSObject {
     ///   passes its own argument, so arming doesn't depend on whether the
     ///   `@AppStorage` binding behind the switch has written the new value yet.
     private func syncMonitoring(trackingEnabled: Bool) {
-        if trackingEnabled, monitor.isAlwaysAuthorized, trackedHikeID != nil {
+        if trackingEnabled, monitor.isAlwaysAuthorized, trackedHikeID != nil, isNearTrackedTrail {
             monitor.startSignificantLocationUpdates()
         } else {
             monitor.stopSignificantLocationUpdates()
@@ -278,6 +305,13 @@ final class BackgroundTrailTracker: NSObject {
         // for the trail being left rather than a lookup against the new one.
         if hike?.id != trackedHikeID { endFollowActivity(hikeID: nil) }
         trackedHikeID = hike?.id
+        // Whatever the system last said was about the trail being left.
+        // Dropped here rather than overwritten below, because the new region
+        // is computed off the main actor and the gate must not answer the
+        // proximity question about the previous trail in between. Unknown
+        // arms, so the window costs at most a few armed milliseconds and
+        // never a missed fix.
+        regionState = .unknown
         // The selection is half of what decides whether monitoring should be
         // running at all, so deselecting is what stands it down: nothing else
         // will, and the settings toggle deliberately stays on across it.
@@ -302,6 +336,11 @@ final class BackgroundTrailTracker: NSObject {
             let clearedSelectionID = hike?.id
             selectionPublishTask = Task { [weak self] in
                 defer { self?.finishSelectionPublish(revision: revision) }
+                // Nothing left to be near. Before the guard below, so the
+                // condition comes down whether or not the store write lands:
+                // a registration for a trail nobody has open is exactly the
+                // standing wake this gate exists to end.
+                await self?.regionMonitor.setRegion(nil)
                 guard let self,
                       await snapshotWriter.clear(ifCurrent: revision),
                       selectionRevision == revision,
@@ -317,6 +356,21 @@ final class BackgroundTrailTracker: NSObject {
         selectionPublishTask = Task { [weak self] in
             defer { self?.finishSelectionPublish(revision: revision) }
             guard !Task.isCancelled else { return }
+            // Before the snapshot, because it is the cheaper half and the one
+            // a *launch* depends on: the region registered here is what the
+            // next process asks the system about, instead of asking where the
+            // phone is. Off the main actor for the same reason the snapshot is
+            // — the enclosing box over a five-hour recording's twenty thousand
+            // points is a sort, and the tap that selected the trail has a
+            // frame to make.
+            let region = await Self.offMainThread { TrailRegion(route: input.route.map(\.clCoordinate)) }
+            if let self, !Task.isCancelled, selectionRevision == revision, trackedHikeID == input.hikeID {
+                await regionMonitor.setRegion(region)
+                // The system starts a freshly registered condition at unknown
+                // whatever it said about the last one, and so does this.
+                regionState = .unknown
+                syncMonitoring()
+            }
             let snapshot = await Self.buildSnapshotOffMain(from: input, liveFix: nil)
             guard let snapshot,
                   let self,
@@ -372,37 +426,6 @@ final class BackgroundTrailTracker: NSObject {
         while let task = selectionPublishTask, awaitedRevision != selectionRevision {
             awaitedRevision = selectionRevision
             await task.value
-        }
-    }
-
-    // MARK: Widget basemaps
-
-    /// Re-checks the widget's rendered basemaps against whatever trail is
-    /// currently stored, rendering only if they no longer frame it. Called on
-    /// every foreground as well as on selection, because rendering needs the
-    /// network: a trail selected offline — or one whose images a background
-    /// relaunch couldn't produce — gets its map the next time the app is
-    /// opened somewhere with a connection.
-    ///
-    /// The read goes through the writer for the same reason the writes do:
-    /// every foreground calls this, and decoding the snapshot is an App Group
-    /// file read that has no business on the frame that brought the app back.
-    func refreshBasemaps() {
-        Task { [weak self] in
-            guard let writer = self?.snapshotWriter else { return }
-            guard let snapshot = await writer.load(), let self else { return }
-            refreshBasemaps(for: snapshot)
-        }
-    }
-
-    private func refreshBasemaps(for snapshot: SharedTrailSnapshot) {
-        // Framed from the same decimated polyline the widget draws, so the
-        // rendered region can't disagree with the line drawn over it.
-        Task {
-            await TrailBasemapRenderer.shared.refreshIfNeeded(
-                hikeID: snapshot.hikeID,
-                polyline: snapshot.polyline
-            )
         }
     }
 
@@ -600,12 +623,18 @@ final class BackgroundTrailTracker: NSObject {
     /// the relaunch this pin exists for.
     func walkDidStart(hikeID: UUID) {
         walkedHikeID = hikeID
+        // Every path, including the common one where the walked hike is
+        // already the tracked one: a walk outranks the proximity gate, and
+        // the region it would be judged against may well be another trail's
+        // — this pins a hike the registered condition need not be for.
+        // Starting a walk is the strongest possible evidence that the hiker
+        // is at the trail.
+        defer { syncMonitoring() }
         guard trackedHikeID != hikeID else { return }
         trackedHikeID = hikeID
         lastMatchedDistance = nil
         lastForegroundPublish = nil
         lastStatusFlipPublish = nil
-        syncMonitoring()
     }
 
     /// Releases the pin, clears the walk from the widget, ends the Lock
@@ -619,6 +648,9 @@ final class BackgroundTrailTracker: NSObject {
     func walkDidEnd(final: SharedTrailSnapshot.Walk?) {
         guard let hikeID = walkedHikeID else { return }
         walkedHikeID = nil
+        // Releasing the pin puts the proximity gate back in charge, so the
+        // decision is re-taken here rather than left until the next fix.
+        syncMonitoring()
         // The revision this walk's last write is gated on. Applying the
         // deferred selection bumps it, which is why that now happens inside
         // the completion below and not beside it: done first, it rejected the
@@ -664,6 +696,132 @@ final class BackgroundTrailTracker: NSObject {
             guard let snapshot else { return }
             self?.publishFollowActivity(snapshot)
         }
+    }
+}
+
+/// Redrawing the widget's basemaps. In an extension in this same file for
+/// the reason the proximity members below are: the class body is at the
+/// limit SwiftLint enforces, and everything here is main-actor state on the
+/// tracker itself.
+extension BackgroundTrailTracker {
+    // MARK: Widget basemaps
+
+    /// Re-checks the widget's rendered basemaps against whatever trail is
+    /// currently stored, rendering only if they no longer frame it. Called on
+    /// every foreground as well as on selection, because rendering needs the
+    /// network: a trail selected offline — or one whose images a background
+    /// relaunch couldn't produce — gets its map the next time the app is
+    /// opened somewhere with a connection.
+    ///
+    /// The read goes through the writer for the same reason the writes do:
+    /// every foreground calls this, and decoding the snapshot is an App Group
+    /// file read that has no business on the frame that brought the app back.
+    func refreshBasemaps() {
+        Task { [weak self] in
+            guard let writer = self?.snapshotWriter else { return }
+            guard let snapshot = await writer.load(), let self else { return }
+            refreshBasemaps(for: snapshot)
+        }
+    }
+
+    private func refreshBasemaps(for snapshot: SharedTrailSnapshot) {
+        // Framed from the same decimated polyline the widget draws, so the
+        // rendered region can't disagree with the line drawn over it.
+        Task {
+            await TrailBasemapRenderer.shared.refreshIfNeeded(
+                hikeID: snapshot.hikeID,
+                polyline: snapshot.polyline
+            )
+        }
+    }
+}
+
+/// The proximity half of the arming decision: what the system says about the
+/// region the tracked trail sits in.
+///
+/// In an extension in this same file for the reason the write path below is:
+/// the class body is at the limit SwiftLint enforces, and everything here is
+/// main-actor state on the tracker itself. It stays `private` because a
+/// `private` member is visible to the whole file.
+extension BackgroundTrailTracker {
+    // MARK: Proximity
+
+    /// Whether the phone is near enough to the tracked trail for a wake to be
+    /// able to buy anything.
+    ///
+    /// Answers `true` whenever it cannot prove otherwise, and that direction
+    /// is the point: the cost of arming wrongly is background wakes, and the
+    /// cost of standing down wrongly is a walk that goes unmatched while the
+    /// phone is in a pocket. A launch before the system has answered, a trail
+    /// too large to fence, a hiker who has never granted Always, a condition
+    /// the system has stopped watching — every one of them leaves
+    /// ``regionState`` at ``TrailRegionState/unknown``, which arms, so every
+    /// one of them behaves exactly as it did before this condition existed.
+    private var isNearTrackedTrail: Bool {
+        // A walk under way outranks the region question outright. The hiker is
+        // on the trail by definition, and this is the feed that keeps their
+        // coverage honest while the app is not on screen — see
+        // ``handleBackgroundFix(_:)``. It is also the answer for a walk
+        // pinned to a hike the registered condition is not for, which
+        // ``walkDidStart(hikeID:)`` can do.
+        if walkedHikeID != nil { return true }
+        return regionState != .outside
+    }
+
+    /// Opens the system monitor and takes the proximity decision again with
+    /// whatever it has to say.
+    ///
+    /// Two questions, and they answer different ones. The record is the state
+    /// a *previous* process's registration has been accruing — the ordinary
+    /// launch, where nothing has changed and the phone has been at home for a
+    /// week, and the one that finally stands a leftover registration down. The
+    /// event stream is how the crossing that relaunched this process gets
+    /// delivered, and how a hiker arriving at the trailhead re-arms matching
+    /// with the app closed. That second half is what the box-and-position
+    /// draft of this gate could not do on its own: once monitoring is down
+    /// there is no feed of the tracker's left to notice anyone approaching, so
+    /// it had to borrow positions from feeds that happened to be running.
+    /// Here the system is the feed, and it costs no wakes in between.
+    ///
+    /// Neither question asks CoreLocation for a location, and nothing either
+    /// of them returns is written down.
+    ///
+    /// Detached from `init` rather than awaited in it: opening a `CLMonitor`
+    /// suspends, and a launch the system started to hand over one fix has to
+    /// get on with that. Until this lands, ``regionState`` is
+    /// ``TrailRegionState/unknown`` and monitoring is armed — the same
+    /// fail-open direction as everything else here.
+    private func startWatchingTrailRegion() {
+        regionWatchTask = Task { [weak self] in
+            guard let self else { return }
+            await regionMonitor.startObserving { [weak self] state in
+                self?.regionStateChanged(to: state)
+            }
+            regionStateChanged(to: await regionMonitor.currentState())
+        }
+    }
+
+    /// Waits for the launch to have asked the system where the phone is.
+    ///
+    /// A test seam, in the same spirit as ``waitForSelectionPublish()``.
+    /// Nothing in the app waits for this — arming is idempotent and the gate
+    /// is armed until it lands — but a test asserting on the decision has to
+    /// know the answer it turns on has arrived.
+    func waitForTrailRegionWatch() async {
+        await regionWatchTask?.value
+    }
+
+    /// Applies an answer the system reported, and re-takes the decision that
+    /// turns on it.
+    ///
+    /// Guarded on a change because both sources deliver the state a launch has
+    /// already read: the pending event that relaunched the process and the
+    /// record it is recorded in say the same thing, and arming is idempotent
+    /// but does not need saying twice.
+    private func regionStateChanged(to state: TrailRegionState) {
+        guard regionState != state else { return }
+        regionState = state
+        syncMonitoring()
     }
 }
 
