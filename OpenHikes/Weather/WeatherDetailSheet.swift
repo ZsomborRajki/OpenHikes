@@ -72,14 +72,25 @@ extension View {
 private struct WeatherDetailSheetModifier: ViewModifier {
     let presentation: WeatherDetailPresentation
     let weather: WeatherManager
+    /// Which detent the sheet opens at, rather than which ones it offers.
+    ///
+    /// SwiftUI opens at the smallest detent in the set unless it is given a
+    /// selection, and the smallest one stopped being enough when the hourly
+    /// strip arrived: a half sheet then held the conditions the badge already
+    /// showed, the next twelve hours, and none of the rows underneath — which
+    /// is the screen this file's header says was the problem in the first
+    /// place. So it opens whole and can still be dragged down; `.medium` stays
+    /// in the set because the sheet is dismissible by drag from it and because
+    /// a hiker who only wanted the hours can have the map back.
+    @State private var detent: PresentationDetent = .large
 
     func body(content: Content) -> some View {
         content.sheet(isPresented: presentation.isPresentedBinding) {
             WeatherDetailView(weather: weather)
-                // Small, but not fixed: at an accessibility text size the
-                // credits and the legal link stop fitting a half sheet, and a
-                // legal notice that cannot be read has not been given.
-                .presentationDetents([.medium, .large])
+                // Both, not one: at an accessibility text size the credits and
+                // the legal link stop fitting a half sheet, and a legal notice
+                // that cannot be read has not been given.
+                .presentationDetents([.medium, .large], selection: $detent)
                 .presentationDragIndicator(.visible)
         }
     }
