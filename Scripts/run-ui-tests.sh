@@ -20,6 +20,7 @@ suites=(
   SettingsUITests
   CommunityUITests
   CommunityCuratedUITests
+  CommunityPhotoUITests
   CommunityReviewUITests
   AccessibilityUITests
   AccessibilityLabelUITests

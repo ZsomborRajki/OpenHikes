@@ -31,7 +31,7 @@ struct CommunityReviewQueueTests {
     @Test("selecting the tab asks once and keeps what came back")
     func selectingTheTabAsksOnce() async {
         let transport = StubCommunityTransport()
-        transport.pendingResult = .success([.stub(), .stub(id: "notice-2")])
+        transport.pendingResult = .success(.hikes([.stub(), .stub(id: "notice-2")]))
         let queue = CommunityReviewQueue(transport: transport)
 
         queue.startBrowsing()
@@ -46,7 +46,7 @@ struct CommunityReviewQueueTests {
     @Test("leaving the tab and coming back does not ask again")
     func returningToTheTabDoesNotAskAgain() async {
         let transport = StubCommunityTransport()
-        transport.pendingResult = .success([.stub()])
+        transport.pendingResult = .success(.hikes([.stub()]))
         let queue = CommunityReviewQueue(transport: transport)
 
         queue.startBrowsing()
@@ -71,7 +71,7 @@ struct CommunityReviewQueueTests {
     @Test("leaving the tab and coming back still shows the queue")
     func leavingAndReturningKeepsTheRows() async {
         let transport = StubCommunityTransport()
-        transport.pendingResult = .success([.stub(), .stub(id: "notice-2")])
+        transport.pendingResult = .success(.hikes([.stub(), .stub(id: "notice-2")]))
         let queue = CommunityReviewQueue(transport: transport)
 
         queue.startBrowsing()
@@ -94,7 +94,7 @@ struct CommunityReviewQueueTests {
     @Test("a request abandoned on the way out is asked again on the way back")
     func anAbandonedRequestIsAskedAgain() async {
         let transport = StubCommunityTransport()
-        transport.pendingResult = .success([.stub()])
+        transport.pendingResult = .success(.hikes([.stub()]))
         let gate = AsyncGate()
         transport.beforeQueueReturns = { await gate.wait() }
         let queue = CommunityReviewQueue(transport: transport)
@@ -133,7 +133,7 @@ struct CommunityReviewQueueTests {
     @Test("an empty queue that was allowed still means reviewer")
     func anAllowedEmptyQueueStillMeansReviewer() async {
         let transport = StubCommunityTransport()
-        transport.pendingResult = .success([])
+        transport.pendingResult = .success(.hikes([]))
         let queue = CommunityReviewQueue(transport: transport)
 
         queue.startBrowsing()
@@ -149,7 +149,7 @@ struct CommunityReviewQueueTests {
     @Test("a network failure does not revoke the reviewer answer")
     func aNetworkFailureDoesNotRevokeReviewer() async {
         let transport = StubCommunityTransport()
-        transport.pendingResult = .success([.stub()])
+        transport.pendingResult = .success(.hikes([.stub()]))
         let queue = CommunityReviewQueue(transport: transport)
         queue.startBrowsing()
         await settle(queue)
@@ -188,7 +188,7 @@ struct CommunityReviewQueueTests {
     @Test("refreshing asks again")
     func refreshingAsksAgain() async {
         let transport = StubCommunityTransport()
-        transport.pendingResult = .success([.stub()])
+        transport.pendingResult = .success(.hikes([.stub()]))
         let queue = CommunityReviewQueue(transport: transport)
 
         queue.startBrowsing()
@@ -222,7 +222,7 @@ struct CommunityReviewQueueTests {
         let transport = StubCommunityTransport()
         let decided = CommunityPendingSubmission.stub(id: "notice-1")
         let other = CommunityPendingSubmission.stub(id: "notice-2")
-        transport.pendingResult = .success([decided, other])
+        transport.pendingResult = .success(.hikes([decided, other]))
         let queue = CommunityReviewQueue(transport: transport)
 
         queue.startBrowsing()
@@ -242,7 +242,7 @@ struct CommunityReviewQueueTests {
     func actingMakesTheNextSelectionAskAgain() async {
         let transport = StubCommunityTransport()
         let decided = CommunityPendingSubmission.stub(id: "notice-1")
-        transport.pendingResult = .success([decided, .stub(id: "notice-2")])
+        transport.pendingResult = .success(.hikes([decided, .stub(id: "notice-2")]))
         let queue = CommunityReviewQueue(transport: transport)
 
         queue.startBrowsing()
@@ -265,7 +265,7 @@ struct CommunityReviewQueueTests {
     @Test("a superseded request does not clear the flag for the one that replaced it")
     func aSupersededRequestLeavesTheFlagAlone() async {
         let transport = StubCommunityTransport()
-        transport.pendingResult = .success([.stub()])
+        transport.pendingResult = .success(.hikes([.stub()]))
         let queue = CommunityReviewQueue(transport: transport)
         let gate = AsyncGate()
         transport.beforeQueueReturns = { await gate.wait() }

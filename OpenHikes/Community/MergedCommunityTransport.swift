@@ -317,8 +317,8 @@ nonisolated extension MergedCommunityTransport {
     }
 
     @concurrent
-    func pendingSubmissions() async throws -> [CommunityPendingSubmission] {
-        try await published.pendingSubmissions()
+    func reviewQueue() async throws -> CommunityReviewBatch {
+        try await published.reviewQueue()
     }
 
     @concurrent
@@ -365,6 +365,74 @@ nonisolated extension MergedCommunityTransport {
             throw CommunityFailure.notPermitted
         }
         try await published.takeDown(listing)
+    }
+
+    // MARK: - Contributed photographs
+
+    // Every one of these is CloudKit's and none of them routes, which is a
+    // statement rather than an oversight. A contribution is a record in the
+    // public database whichever kind of trail it is about — that is the whole
+    // reason its target is a ``CommunityIdentity`` string and not a reference
+    // — so OpenStreetMap has nothing to answer here. The one place the two
+    // sources meet is ``detail(for:downloadingInto:)`` above, where a curated
+    // route's contributed photographs are fetched from CloudKit and hung on a
+    // hike Overpass described.
+
+    @concurrent
+    func submitPhotos(_ draft: CommunityPhotoDraft) async throws -> String {
+        try await published.submitPhotos(draft)
+    }
+
+    @concurrent
+    func contribution(of photoSubmissionID: String) async throws -> String? {
+        try await published.contribution(of: photoSubmissionID)
+    }
+
+    @concurrent
+    func contributedPhotos(
+        for listingID: String,
+        excluding: Set<String>,
+        downloadingInto directory: URL
+    ) async throws -> [CommunityPhotoContribution] {
+        try await published.contributedPhotos(
+            for: listingID,
+            excluding: excluding,
+            downloadingInto: directory
+        )
+    }
+
+    @concurrent
+    func photos(
+        ofPending pending: CommunityPendingPhotos,
+        downloadingInto directory: URL
+    ) async throws -> CommunityPhotoContribution {
+        try await published.photos(ofPending: pending, downloadingInto: directory)
+    }
+
+    @concurrent
+    func keepOnlyPhotos(
+        _ kept: [CommunityKeptPhoto],
+        ofPending pending: CommunityPendingPhotos,
+        staging: URL
+    ) async throws {
+        try await published.keepOnlyPhotos(kept, ofPending: pending, staging: staging)
+    }
+
+    @concurrent
+    func publishPhotos(
+        _ pending: CommunityPendingPhotos
+    ) async throws -> CommunityPhotoContribution {
+        try await published.publishPhotos(pending)
+    }
+
+    @concurrent
+    func declinePhotos(_ pending: CommunityPendingPhotos) async throws {
+        try await published.declinePhotos(pending)
+    }
+
+    @concurrent
+    func takeDownPhotos(_ contribution: CommunityPhotoContribution) async throws {
+        try await published.takeDownPhotos(contribution)
     }
 }
 

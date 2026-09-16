@@ -30,6 +30,11 @@ enum SheetRoute: Hashable {
     ///
     /// Reachable only from a queue that came back non-empty, which is a thing
     /// the server decides. See ``CommunityReviewQueue``.
+    /// Photographs waiting for review. Its own case rather than a payload on
+    /// ``pendingSubmission(_:)``, because the two open different screens and
+    /// publish different record types — the split ``CommunityReviewBatch``
+    /// makes, carried through to navigation.
+    case pendingPhotos(CommunityPendingPhotos)
     case pendingSubmission(CommunityPendingSubmission)
     /// A hike's gallery, opened at one photo. Carries the hike rather than the
     /// photo so the viewer can page through the rest of them, and so a photo
@@ -67,7 +72,8 @@ enum SheetRoute: Hashable {
         // deleted. A community preview — and the gallery over it — is about a
         // hike that is not in the library at all, which is exactly the state a
         // deletion puts one back into.
-        case .communityHike, .communityPhoto, .pendingSubmission, .recording: false
+        case .communityHike, .communityPhoto, .pendingPhotos, .pendingSubmission, .recording:
+            false
         }
     }
 
@@ -105,7 +111,7 @@ enum SheetRoute: Hashable {
     var isCommunityPreview: Bool {
         switch self {
         case .communityHike, .communityPhoto: true
-        case .hike, .photo, .pendingSubmission, .recording, .walk: false
+        case .hike, .pendingPhotos, .pendingSubmission, .photo, .recording, .walk: false
         }
     }
 
@@ -115,7 +121,7 @@ enum SheetRoute: Hashable {
     var prefersFullHeight: Bool {
         switch self {
         case .communityPhoto, .photo: true
-        case .communityHike, .hike, .pendingSubmission, .recording, .walk: false
+        case .communityHike, .hike, .pendingPhotos, .pendingSubmission, .recording, .walk: false
         }
     }
 
@@ -137,6 +143,7 @@ enum SheetRoute: Hashable {
         case let (.communityPhoto(left, _, leftIndex), .communityPhoto(right, _, rightIndex)):
             left.id == right.id && leftIndex == rightIndex
         case let (.pendingSubmission(left), .pendingSubmission(right)): left.id == right.id
+        case let (.pendingPhotos(left), .pendingPhotos(right)): left.id == right.id
         default: false
         }
     }
@@ -171,6 +178,9 @@ enum SheetRoute: Hashable {
             // The notice's record name, for the reason above: the fields
             // beside it are a snapshot of a submission, and two pushes of the
             // same queue entry are the same screen.
+            hasher.combine(pending.id)
+        case let .pendingPhotos(pending):
+            hasher.combine(7)
             hasher.combine(pending.id)
         }
     }

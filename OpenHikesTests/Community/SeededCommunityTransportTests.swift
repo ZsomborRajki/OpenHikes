@@ -162,7 +162,7 @@ struct SeededCommunityTransportTests {
             _ = try await transport.outlines(for: SeededCommunityTransport.seededListings)
         }
         await #expect(throws: CommunityFailure.unreachable) {
-            _ = try await transport.pendingSubmissions()
+            _ = try await transport.reviewQueue()
         }
     }
 

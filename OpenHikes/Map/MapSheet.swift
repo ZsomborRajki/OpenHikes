@@ -124,6 +124,7 @@ struct MapSheet: View {
                     onSubmitQuery: performSearch,
                     onSelectListing: select,
                     onSelectPending: { presentation.path.append(.pendingSubmission($0)) },
+                    onSelectPendingPhotos: { presentation.path.append(.pendingPhotos($0)) },
                     onDelete: delete,
                     onWithdraw: { withdrawingHike = $0 },
                     onRecord: openRecording,
@@ -291,29 +292,6 @@ struct MapSheet: View {
         .accessibilityIdentifier("settings-button")
     }
 
-    /// The review screen, or nothing.
-    ///
-    /// Guarded on the transport exactly as the preview above is, and
-    /// unreachable without one for a second reason: the route that gets here
-    /// comes from a queue that only a transport can fill.
-    @ViewBuilder
-    private func pendingSubmissionDestination(
-        _ pending: CommunityPendingSubmission
-    ) -> some View {
-        if let transport = appModel.communityTransport {
-            CommunityReviewView(
-                pending: pending,
-                transport: transport,
-                queue: appModel.communityReview,
-                browser: appModel.community,
-                // Back to the list the row was on. The row itself is already
-                // gone — the screen tells the queue before it pops — so this
-                // lands on a list that agrees with the decision just made.
-                onFinished: { presentation.path.removeAll() }
-            )
-        }
-    }
-
     /// Somebody else's hike, or nothing at all on a launch that must not reach
     /// CloudKit — see ``OpenHikesModel/makeCommunityTransport()``.
     ///
@@ -378,6 +356,7 @@ struct MapSheet: View {
     /// The listing in the route is not read here — it is what identifies the
     /// screen, which is ``SheetPresentation``'s business and not this view's.
     private func communityPhotoDestination(
+        _ listing: CommunityListing,
         _ photos: [CommunityGalleryPhoto],
         startIndex: Int,
         route: SheetRoute
@@ -387,7 +366,37 @@ struct MapSheet: View {
             startIndex: startIndex,
             mapController: mapController,
             onShowOnMap: presentation.restAtMiddleWhenFullHeightScreenPops,
-            selection: presentation.communityPhotoSelection(for: route)
+            selection: presentation.communityPhotoSelection(for: route),
+            // Absent on a launch with no transport, which is every hosted
+            // suite and every UI scenario that did not ask for one — the rule
+            // the share button and the community list already follow, so a
+            // menu is never drawn over an action the launch could not perform.
+            actions: appModel.communityTransport.map { transport in
+                CommunityPhotoViewer.Context(
+                    listing: listing,
+                    blockList: appModel.communityBlocks,
+                    transport: transport,
+                    // Whether this account may take a contribution down, which
+                    // is a fact about the account rather than about the
+                    // photograph. See ``CommunityReviewQueue/isReviewer``.
+                    isReviewer: appModel.communityReview.isReviewer
+                )
+            },
+            // Back one screen, to the trail. Deliberately one and not all the
+            // way out: unlike blocking a hike's author — which leaves the
+            // hiker looking at the whole of what they hid — the hike here is
+            // somebody else's and stays perfectly visible. What has to go is
+            // the gallery, which reopens without those pictures.
+            //
+            // Guarded rather than assumed: this screen is only ever reached by
+            // a push, so the path cannot be empty — but `removeLast` on an
+            // empty array is a crash rather than a no-op, and a callback held
+            // by a view that outlives its own dismissal is not somewhere to
+            // rely on an invariant nothing enforces.
+            onLeave: {
+                guard !presentation.path.isEmpty else { return }
+                presentation.path.removeLast()
+            }
         )
     }
 
@@ -415,10 +424,12 @@ struct MapSheet: View {
             )
         case let .communityHike(listing):
             communityHikeDestination(listing)
-        case let .communityPhoto(_, photos, startIndex):
-            communityPhotoDestination(photos, startIndex: startIndex, route: route)
+        case let .communityPhoto(listing, photos, startIndex):
+            communityPhotoDestination(listing, photos, startIndex: startIndex, route: route)
         case let .pendingSubmission(pending):
             pendingSubmissionDestination(pending)
+        case let .pendingPhotos(pending):
+            pendingPhotosDestination(pending)
         case .recording:
             RecordingView(
                 recorder: appModel.hikeRecorder,
@@ -446,6 +457,58 @@ struct MapSheet: View {
                 walkHighlight: walkHighlight,
                 mapController: mapController,
                 onShowOnMap: presentation.makeRoomForTheMap
+            )
+        }
+    }
+}
+
+// MARK: - The reviewer's two destinations
+
+// An extension rather than more of the struct above, and the reason is the
+// length limit doing its job: these two are one subject — where a queue row
+// goes — and they are reachable only by somebody the *server* has decided is a
+// reviewer, which is almost nobody. Reading them beside the destinations every
+// hiker reaches obscured both.
+private extension MapSheet {
+    /// The review screen, or nothing.
+    ///
+    /// Guarded on the transport exactly as the preview above is, and
+    /// unreachable without one for a second reason: the route that gets here
+    /// comes from a queue that only a transport can fill.
+    @ViewBuilder
+    private func pendingSubmissionDestination(
+        _ pending: CommunityPendingSubmission
+    ) -> some View {
+        if let transport = appModel.communityTransport {
+            CommunityReviewView(
+                pending: pending,
+                transport: transport,
+                queue: appModel.communityReview,
+                browser: appModel.community,
+                // Back to the list the row was on. The row itself is already
+                // gone — the screen tells the queue before it pops — so this
+                // lands on a list that agrees with the decision just made.
+                onFinished: { presentation.path.removeAll() }
+            )
+        }
+    }
+
+    /// The contributed-photo review screen, or nothing.
+    ///
+    /// Guarded on the transport for the reason the one above is, and
+    /// unreachable without one for the same second reason: the route that
+    /// gets here comes from a queue only a transport can fill.
+    @ViewBuilder
+    private func pendingPhotosDestination(
+        _ pending: CommunityPendingPhotos
+    ) -> some View {
+        if let transport = appModel.communityTransport {
+            CommunityPhotoReviewView(
+                pending: pending,
+                transport: transport,
+                queue: appModel.communityReview,
+                browser: appModel.community,
+                onFinished: { presentation.path.removeAll() }
             )
         }
     }

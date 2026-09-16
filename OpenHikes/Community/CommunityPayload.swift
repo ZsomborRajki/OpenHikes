@@ -101,14 +101,33 @@ nonisolated struct CommunityGalleryPhoto: Identifiable, Hashable, Sendable {
     /// Which photograph of the hike this is, and its identity — the same index
     /// ``CommunityPreviewPhoto`` carries, so a map pin and a page agree about
     /// which picture they are both about.
+    ///
+    /// Counted across the **whole** gallery rather than within one source: the
+    /// hike's own photographs first and then each published contribution, so
+    /// the viewer can go on using it as a position in one array. See
+    /// ``CommunityHikeDetail/galleryPhotos``, which is the only thing that
+    /// assigns it.
     var index: Int
     /// Where and when it was taken, or `nil` when nothing may claim to know.
     var pin: CommunityPhotoPin?
     var fileURL: URL
+    /// Who contributed this picture, or `nil` when it came from the hike's own
+    /// author.
+    ///
+    /// The `nil` is the ordinary case and carries the meaning: a photograph
+    /// with no attribution is the hike's, credited by the listing's own author
+    /// name, reported by reporting the hike and taken down by taking the hike
+    /// down. One with an attribution is a second person's, and every one of
+    /// those four is a different record — see ``CommunityPhotoAttribution``.
+    var contribution: CommunityPhotoAttribution?
 
     var id: Int { index }
 
     var coordinate: CLLocationCoordinate2D? { pin?.coordinate }
+
+    /// What to put beside the picture, or `nil` when it is the hike's own and
+    /// the screen has already credited its author.
+    var credit: String? { contribution?.credit }
 }
 
 /// The decoded contents of the two asset fields on a submission.
@@ -361,6 +380,25 @@ nonisolated struct CommunityHikeDetail: Sendable {
     /// about it. See ``hasEveryPhoto``, which is the question this exists to
     /// answer.
     var photosOnRecord: Int
+    /// Photographs other hikers have published onto this trail, oldest set
+    /// first.
+    ///
+    /// Beside the four fields above rather than merged into them, and that
+    /// separation is load-bearing rather than tidy. Those four describe **the
+    /// submission**: they are what ``hasEveryPhoto`` is asked about and what
+    /// ``keptPhotos(at:)`` rewrites, and a reviewer taking a photograph off a
+    /// hike must never be able to reach a picture somebody else owns. These
+    /// are separate records with separate authors, taken down separately and
+    /// blocked separately — see ``CommunityPhotoContribution``.
+    ///
+    /// Where the two *do* come together is on screen, in
+    /// ``galleryPhotos`` and ``previewPhotos``, because a hiker looking at a
+    /// trail is looking at pictures of a place rather than at a filing system.
+    ///
+    /// Empty is the ordinary case: every hike had none until this existed, a
+    /// download that failed leaves none, and nothing about the screen changes
+    /// when there are none.
+    var contributions: [CommunityPhotoContribution] = []
 
     /// Whether the pins and the assets still describe each other.
     ///
@@ -403,6 +441,17 @@ nonisolated struct CommunityHikeDetail: Sendable {
     /// detail that cannot support it draws no pins at all rather than pins
     /// that might each be about the picture next door.
     var previewPhotos: [CommunityPreviewPhoto] {
+        ownPreviewPhotos + contributedPreviewPhotos
+    }
+
+    /// The hike author's own anchored photographs.
+    ///
+    /// Separate from ``previewPhotos`` because the review screen wants exactly
+    /// these: a reviewer striking a photograph off a submission is deciding
+    /// about that submission's pictures, and a contributed pin under their
+    /// thumb would be a picture they cannot remove from a record they are not
+    /// editing.
+    var ownPreviewPhotos: [CommunityPreviewPhoto] {
         guard isConsistent else { return [] }
         return zip(photoPins, photoFileURLs).enumerated().compactMap { index, pair in
             guard let coordinate = pair.0.coordinate else { return nil }
@@ -416,6 +465,37 @@ nonisolated struct CommunityHikeDetail: Sendable {
         }
     }
 
+    /// Everybody else's anchored photographs, numbered on from the author's.
+    ///
+    /// The offsets are the whole of what this does, and they have to be the
+    /// gallery's: a map pin and a gallery page identify the same picture by
+    /// the same number, so a pin tapped on the map has to open the page the
+    /// strip would. ``contributedOffsets`` is the one place that arithmetic
+    /// is done.
+    var contributedPreviewPhotos: [CommunityPreviewPhoto] {
+        zip(contributions, contributedOffsets).flatMap { contribution, offset in
+            contribution.previewPhotos(startingAt: offset)
+        }
+    }
+
+    /// Where each contribution starts in the merged gallery.
+    ///
+    /// The author's photographs come first and every contribution follows in
+    /// publication order, so one set gaining or losing a picture between two
+    /// opens moves the ones after it — which is why nothing stores these
+    /// numbers and everything derives them from the same walk.
+    ///
+    /// Counted over the **downloaded** files rather than over each set's
+    /// ``CommunityPhotoContribution/photosOnRecord``, because the gallery can
+    /// only show what arrived and the index is a position in it.
+    private var contributedOffsets: [Int] {
+        var offset = photoFileURLs.count
+        return contributions.map { contribution in
+            defer { offset += contribution.photoFileURLs.count }
+            return offset
+        }
+    }
+
     /// Every downloaded photograph, in the order the strip draws them.
     ///
     /// Unlike ``previewPhotos`` this drops nothing, because the gallery is the
@@ -425,12 +505,29 @@ nonisolated struct CommunityHikeDetail: Sendable {
     /// photograph was taken where, pairing by index is the entirety of what
     /// backs that claim, and a detail that cannot support it makes none.
     var galleryPhotos: [CommunityGalleryPhoto] {
+        ownGalleryPhotos + zip(contributions, contributedOffsets).flatMap { contribution, offset in
+            contribution.galleryPhotos(startingAt: offset)
+        }
+    }
+
+    /// The hike author's own photographs, which is what the review screen
+    /// draws.
+    ///
+    /// The distinction the strip on the *public* screen deliberately does not
+    /// make — a hiker deciding on a trail is looking at pictures of a place,
+    /// whoever took them — and the one the reviewer's screen has to, for the
+    /// reason ``ownPreviewPhotos`` gives.
+    var ownGalleryPhotos: [CommunityGalleryPhoto] {
         let pinned = isConsistent
         return photoFileURLs.enumerated().map { index, url in
             CommunityGalleryPhoto(
                 index: index,
                 pin: pinned ? photoPins[index] : nil,
-                fileURL: url
+                fileURL: url,
+                // The hike's own: credited by the listing's author name, and
+                // reported, blocked and taken down as the hike. See
+                // ``CommunityGalleryPhoto/contribution``.
+                contribution: nil
             )
         }
     }

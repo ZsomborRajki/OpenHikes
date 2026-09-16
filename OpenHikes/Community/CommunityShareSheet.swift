@@ -46,16 +46,6 @@ struct CommunityShareSheet: View {
         case sent
     }
 
-    /// The strip's metrics. The same 76-point tile the hike's own gallery
-    /// draws — this is the same row of the same photographs, and two sizes
-    /// would be two answers to one question.
-    private static let photoTileSize: CGFloat = 76
-    private static let photoTileSpacing: CGFloat = 8
-    private static let photoTileCornerRadius: CGFloat = 12
-    /// How far a struck-off picture fades. Faded rather than removed, so the
-    /// tap that took it out is the tap that puts it back.
-    private static let excludedTileOpacity: Double = 0.4
-
     let hike: Hike
     let transport: any CommunityTransporting
     /// Where the photo files are, so the form can ask which of this hike's
@@ -379,77 +369,17 @@ private extension CommunityShareSheet {
 
     /// The hike's photographs, each one a tap away from being left out.
     ///
-    /// Struck off rather than removed from the strip, and put back by the same
-    /// tap. A tile that vanished would take its own undo with it — the
-    /// argument ``CommunityReviewView``'s photo section already makes about
-    /// the reviewer's half of this, and the two screens are deliberately the
-    /// same gesture: what a hiker does before sending and what a reviewer does
-    /// before publishing should not be two different interactions with two
-    /// different meanings.
-    ///
-    /// Everything is included to begin with, because sharing a hike shares the
-    /// walk — the pictures are most of what makes a shared trail worth
-    /// somebody's day out, and a strip that started empty would publish hikes
-    /// with no photographs every time somebody did not notice it.
-    ///
-    /// Drawn in ``CommunityPublisher/shareablePhotos(of:)``'s order rather
-    /// than the gallery's, so the tiles are in the order the upload will take
-    /// them and the twelve that fit are the first twelve here.
+    /// Drawn by ``CommunitySharePhotoStrip``, which is shared with the
+    /// contribution form — see that file for the three rules the two screens
+    /// have to agree about and why a second spelling of any of them would make
+    /// the same tap mean two things.
     @ViewBuilder var photoPicker: some View {
-        let photos = CommunityPublisher.shareablePhotos(of: hike)
-        if !photos.isEmpty {
-            ScrollView(.horizontal, showsIndicators: false) {
-                HStack(spacing: Self.photoTileSpacing) {
-                    ForEach(photos) { photo in
-                        photoTile(photo, among: photos.count)
-                    }
-                }
-                .padding(.vertical, 2)
-            }
-            .scrollIndicators(.hidden)
-            .disabled(phase == .sending)
-        }
-    }
-
-    func photoTile(_ photo: HikePhoto, among total: Int) -> some View {
-        let isExcluded = excludedPhotoIDs.contains(photo.id)
-        return Button {
-            toggle(photo)
-        } label: {
-            HikePhotoThumbnail(
-                photo: photo,
-                store: store,
-                size: Self.photoTileSize,
-                cornerRadius: Self.photoTileCornerRadius,
-                label: Self.photoLabel(for: photo, isExcluded: isExcluded, among: total)
-            )
-            .opacity(isExcluded ? Self.excludedTileOpacity : 1)
-            .overlay(alignment: .topTrailing) {
-                Image(systemName: isExcluded ? "circle" : "checkmark.circle.fill")
-                    .font(.title3)
-                    .symbolRenderingMode(.palette)
-                    .foregroundStyle(.white, isExcluded ? Color.secondary : Color.accentColor)
-                    .padding(4)
-                    // The tick is what the label already says, so it is
-                    // decoration rather than a second thing to hear.
-                    .accessibilityHidden(true)
-            }
-        }
-        .buttonStyle(.plain)
-        // `-tile-` rather than bare `-photo-`: the count row above answers to
-        // `community-share-photo-count`, and a test reaching for "the first
-        // tile" by prefix would otherwise find the number instead.
-        .accessibilityIdentifier("community-share-photo-tile-\(photo.id.uuidString)")
-    }
-
-    /// What a tile is called, which has to carry the state as well as the
-    /// place: the difference between included and struck off is drawn as a
-    /// glyph and an opacity, and neither is a thing a screen reader can see.
-    static func photoLabel(for photo: HikePhoto, isExcluded: Bool, among total: Int) -> String {
-        let place = String(localized: "Photo, \(total) in this hike")
-        return isExcluded
-            ? String(localized: "\(place), not shared")
-            : String(localized: "\(place), shared")
+        CommunitySharePhotoStrip(
+            photos: CommunityPublisher.shareablePhotos(of: hike),
+            excluded: $excludedPhotoIDs,
+            store: store,
+            isSending: phase == .sending
+        )
     }
 
     /// What the hike is credited to, asked for as the display name it is.
@@ -748,15 +678,6 @@ private extension CommunityShareSheet {
         guard case .renamed(let name) = HikeTitleEdit.of(titleDraft, against: hike.displayTitle)
         else { return }
         hike.customName = name
-    }
-
-    /// Strikes a photograph off the share, or puts it back.
-    func toggle(_ photo: HikePhoto) {
-        if excludedPhotoIDs.contains(photo.id) {
-            excludedPhotoIDs.remove(photo.id)
-        } else {
-            excludedPhotoIDs.insert(photo.id)
-        }
     }
 
     /// Puts the draft on the hike, bounded the way every other piece of free

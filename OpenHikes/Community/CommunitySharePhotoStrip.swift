@@ -1,0 +1,125 @@
+//
+//  CommunitySharePhotoStrip.swift
+//  OpenHikes
+//
+//  The row of the hiker's own photographs, each one a tap away from being left
+//  out, drawn by both screens that send pictures anywhere.
+//
+//  Split out when the second of those screens arrived, and it is the split
+//  this repository already makes elsewhere for the same reason — the half that
+//  *draws* takes the value it draws, and the half that reads a `Hike` stays on
+//  the screen that has one. See ``TrailSurfaceSection`` beside
+//  ``HikeSurfaceSection``, and ``ElevationChartView`` beside
+//  ``HikeElevationChart``.
+//
+//  It earns the split twice over here, because what the two screens must agree
+//  about is not the pixels but the **rules**:
+//
+//  - everything is included to begin with, since sending a walk sends its
+//    pictures and a strip that started empty would quietly publish hikes with
+//    no photographs every time somebody did not notice it;
+//  - a struck-off tile stays in the strip, faded, because a tile that vanished
+//    would take its own undo with it — the same gesture
+//    ``CommunityReviewView``'s photo section gives a reviewer, deliberately,
+//    so that what a hiker does before sending and what a reviewer does before
+//    publishing are one interaction rather than two;
+//  - the order is ``CommunityPublisher/shareablePhotos(of:)``'s rather than the
+//    gallery's, so the tiles are in the order the upload will take them and
+//    the ones that fit under the cap are the first ones here.
+//
+//  Two spellings of any of those is how the two screens end up meaning
+//  different things by the same tap.
+//
+
+import SwiftUI
+
+/// The photographs a hiker is about to send, and which of them are going.
+struct CommunitySharePhotoStrip: View {
+    /// The same 76-point tile the hike's own gallery draws — this is the same
+    /// row of the same photographs, and two sizes would be two answers to one
+    /// question.
+    static let tileSize: CGFloat = 76
+    private static let tileSpacing: CGFloat = 8
+    private static let tileCornerRadius: CGFloat = 12
+    /// How far a struck-off picture fades. Faded rather than removed, so the
+    /// tap that took it out is the tap that puts it back.
+    private static let excludedTileOpacity: Double = 0.4
+
+    /// Every picture the form offers, including the ones struck off — which
+    /// still have to be drawn so they can be put back.
+    let photos: [HikePhoto]
+    /// Which of them are out, by id. Held by id rather than by index because
+    /// the list is re-derived on every pass and an index would follow whatever
+    /// moved into that slot.
+    @Binding var excluded: Set<UUID>
+    /// Where the photo files are.
+    var store: HikePhotoStore = .shared
+    /// Whether the form is mid-send, which is the one state the strip does not
+    /// take taps in.
+    var isSending = false
+
+    var body: some View {
+        if !photos.isEmpty {
+            ScrollView(.horizontal, showsIndicators: false) {
+                HStack(spacing: Self.tileSpacing) {
+                    ForEach(photos) { photo in
+                        tile(photo)
+                    }
+                }
+                .padding(.vertical, 2)
+            }
+            .scrollIndicators(.hidden)
+            .disabled(isSending)
+        }
+    }
+
+    private func tile(_ photo: HikePhoto) -> some View {
+        let isExcluded = excluded.contains(photo.id)
+        return Button {
+            toggle(photo)
+        } label: {
+            HikePhotoThumbnail(
+                photo: photo,
+                store: store,
+                size: Self.tileSize,
+                cornerRadius: Self.tileCornerRadius,
+                label: Self.label(for: photo, isExcluded: isExcluded, among: photos.count)
+            )
+            .opacity(isExcluded ? Self.excludedTileOpacity : 1)
+            .overlay(alignment: .topTrailing) {
+                Image(systemName: isExcluded ? "circle" : "checkmark.circle.fill")
+                    .font(.title3)
+                    .symbolRenderingMode(.palette)
+                    .foregroundStyle(.white, isExcluded ? Color.secondary : Color.accentColor)
+                    .padding(4)
+                    // The tick is what the label already says, so it is
+                    // decoration rather than a second thing to hear.
+                    .accessibilityHidden(true)
+            }
+        }
+        .buttonStyle(.plain)
+        // `-tile-` rather than bare `-photo-`: the count row above answers to
+        // `community-share-photo-count`, and a test reaching for "the first
+        // tile" by prefix would otherwise find the number instead.
+        .accessibilityIdentifier("community-share-photo-tile-\(photo.id.uuidString)")
+    }
+
+    /// Strikes a photograph off, or puts it back.
+    private func toggle(_ photo: HikePhoto) {
+        if excluded.contains(photo.id) {
+            excluded.remove(photo.id)
+        } else {
+            excluded.insert(photo.id)
+        }
+    }
+
+    /// What a tile is called, which has to carry the state as well as the
+    /// place: the difference between included and struck off is drawn as a
+    /// glyph and an opacity, and neither is a thing a screen reader can see.
+    static func label(for photo: HikePhoto, isExcluded: Bool, among total: Int) -> String {
+        let place = String(localized: "Photo, \(total) in this hike")
+        return isExcluded
+            ? String(localized: "\(place), not shared")
+            : String(localized: "\(place), shared")
+    }
+}

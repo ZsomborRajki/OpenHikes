@@ -37,7 +37,12 @@ nonisolated struct CloudKitCommunityTransport: CommunityTransporting {
     /// The same container the mirrored store uses, and the same one the
     /// entitlement names. The public database inside it is a different
     /// database, not a different container.
-    private let containerIdentifier: String
+    ///
+    /// Internal rather than `private` because `private` is file-scoped in
+    /// Swift and the account check on the way into an upload lives in a
+    /// sibling file — see `CloudKitCommunityTransport+Photos.swift`. Nothing
+    /// outside this type reads it.
+    let containerIdentifier: String
 
     init(containerIdentifier: String = CloudSyncCoordinator.containerIdentifier) {
         self.containerIdentifier = containerIdentifier
@@ -494,8 +499,17 @@ nonisolated struct CloudKitCommunityTransport: CommunityTransporting {
     /// Internal rather than private for the reason ``stage(_:)`` and
     /// ``pins(_:for:of:takenOn:)`` are: what it decides is invisible in the
     /// result, and a suite can reach it without the public database.
-    static func decodePins(in record: CKRecord) -> [CommunityPhotoPin] {
-        guard let asset = record[CommunitySchema.Submission.photoPins] as? CKAsset,
+    ///
+    /// - Parameter field: Which field holds them. Defaulted, because there is
+    ///   one right answer for a hike's submission and the parameter exists
+    ///   only so ``CommunitySchema/PhotoSubmission/photoPins`` — the same
+    ///   payload on the other record type — is decoded by this code rather
+    ///   than by a copy of it.
+    static func decodePins(
+        in record: CKRecord,
+        field: String = CommunitySchema.Submission.photoPins
+    ) -> [CommunityPhotoPin] {
+        guard let asset = record[field] as? CKAsset,
               let url = asset.fileURL,
               let data = try? Data(contentsOf: url),
               let pins = try? JSONDecoder().decode([CommunityPhotoPin].self, from: data)

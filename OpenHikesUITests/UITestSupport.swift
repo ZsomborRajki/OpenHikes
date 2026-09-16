@@ -205,6 +205,13 @@ nonisolated enum UITestTimeout {
     static let existence: TimeInterval = 15
     static let navigation: TimeInterval = 10
     static let trace: TimeInterval = 40
+    /// For asserting that something is **not** there.
+    ///
+    /// Short on purpose, and the reason is the opposite of every other value
+    /// here: a wait for an absence pays its whole timeout on the happy path,
+    /// so a generous one turns a passing assertion into dead time. It still
+    /// has to outlast a screen settling, which is what it is set by.
+    static let brief: TimeInterval = 2
     /// How often ``XCTestCase/waitUntil(timeout:_:)`` re-asks. Every query
     /// crosses to the app and back, so polling faster buys nothing and costs
     /// the very contention these waits exist to survive.

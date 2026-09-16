@@ -91,6 +91,11 @@ struct MapSheetHikes: View, Equatable {
     let onSelectListing: (CommunityListing, Hike?) -> Void
     /// A queued submission tapped: the caller pushes the review screen.
     var onSelectPending: (CommunityPendingSubmission) -> Void = { _ in /* no-op default */ }
+    /// A queued set of contributed photographs tapped: the caller pushes the
+    /// other review screen. A second closure rather than one taking a sum
+    /// type, because the two destinations are different screens and the sum
+    /// would be unwrapped at the only place it was ever built.
+    var onSelectPendingPhotos: (CommunityPendingPhotos) -> Void = { _ in /* no-op default */ }
     /// The surviving hikes are handed over with the doomed one because freeing
     /// its tiles means asking which of them are still claimed elsewhere.
     let onDelete: (Hike, [Hike]) -> Void

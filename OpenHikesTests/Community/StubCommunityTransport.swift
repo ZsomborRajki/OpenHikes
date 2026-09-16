@@ -71,6 +71,23 @@ final class StubCommunityTransport: CommunityTransporting, @unchecked Sendable {
         /// reaches the record rather than only the screen, and that it
         /// happens before the listing exists.
         var photoEdits: [(submissionID: String, kept: [CommunityKeptPhoto])] = []
+        /// The contributions uploaded, in order. Held whole for the reason
+        /// ``submissions`` is: what these suites assert is what the draft
+        /// carried, pins and all.
+        var photoDrafts: [CommunityPhotoDraft] = []
+        /// The photo submissions a publication check asked about, in order.
+        var contributionChecks: [String] = []
+        /// The listings a hike's contributed photographs were asked for, with
+        /// the exclusion set each request carried. What proves a blocked
+        /// contributor's pictures are never downloaded rather than merely not
+        /// drawn.
+        var contributionRequests: [(listingID: String, excluding: Set<String>)] = []
+        /// Contributed sets published, declined and taken down, in order.
+        var publishedPhotos: [CommunityPendingPhotos] = []
+        var declinedPhotos: [CommunityPendingPhotos] = []
+        var takenDownPhotos: [String] = []
+        /// Each photo edit a reviewer made to a *contribution*, in order.
+        var contributionPhotoEdits: [(submissionID: String, kept: [CommunityKeptPhoto])] = []
     }
 
     /// What each call should do. Set before the call, read inside it.
@@ -93,7 +110,21 @@ final class StubCommunityTransport: CommunityTransporting, @unchecked Sendable {
     /// What the review queue answers. Empty — the default — is what the server
     /// tells everybody who is not a reviewer, so a suite that sets nothing is
     /// testing the ordinary hiker's app.
-    var pendingResult: Result<[CommunityPendingSubmission], CommunityFailure> = .success([])
+    var pendingResult: Result<CommunityReviewBatch, CommunityFailure> = .success(
+        CommunityReviewBatch()
+    )
+    /// What a hike's contributed photographs come back as. Empty by default,
+    /// which is the honest state of a trail nobody has added to — and what
+    /// every suite written before this existed is still asserting against.
+    var contributedPhotosResult: Result<[CommunityPhotoContribution], CommunityFailure> =
+        .success([])
+    /// What a contributed set's own fetch answers, for the review screen.
+    var pendingPhotosResult: Result<CommunityPhotoContribution, CommunityFailure>?
+    /// Whether a photo submission has been published, by record name. `nil` —
+    /// the default — is the state a contribution spends its whole time in
+    /// until a reviewer says yes.
+    var contributionResult: Result<String?, CommunityFailure> = .success(nil)
+    var publishPhotosResult: Result<CommunityPhotoContribution, CommunityFailure>?
     /// The detail a pending preview loads. Falls back to ``detailResult`` when
     /// unset, since most suites want one answer for both paths.
     var pendingDetailResult: Result<CommunityHikeDetail, CommunityFailure>?
@@ -111,6 +142,13 @@ final class StubCommunityTransport: CommunityTransporting, @unchecked Sendable {
     /// exists only while the upload is in flight, so a suite that wants to see
     /// what an upload puts on disk has to look from in here.
     var beforeSubmissionReturns: (@Sendable (CommunitySubmissionDraft) async -> Void)?
+    /// The same for a contribution, for the same reason.
+    var beforePhotoSubmissionReturns: (@Sendable (CommunityPhotoDraft) async -> Void)?
+    /// The same, for the check that asks whether contributed photographs have
+    /// been published. Held so a suite can send a second set while the first
+    /// question is still waiting — the window in which an answer about a
+    /// replaced submission would be written back.
+    var beforeContributionReturns: (@Sendable () async -> Void)?
     /// The same, for the outline request — which lands *after* the rows it
     /// belongs to and so is the one a suite has to be able to hold.
     var beforeOutlinesReturn: (@Sendable () async -> Void)?
@@ -225,7 +263,7 @@ final class StubCommunityTransport: CommunityTransporting, @unchecked Sendable {
     // MARK: - Reviewing
 
     @concurrent
-    func pendingSubmissions() async throws -> [CommunityPendingSubmission] {
+    func reviewQueue() async throws -> CommunityReviewBatch {
         state.withLock { $0.queueRequests += 1 }
         await beforeQueueReturns?()
         return try pendingResult.get()
@@ -286,6 +324,97 @@ final class StubCommunityTransport: CommunityTransporting, @unchecked Sendable {
     @concurrent
     func takeDown(_ listing: CommunityListing) async throws {
         state.withLock { $0.takenDown.append(listing.id) }
+        try takeDownResult.get()
+    }
+
+    // MARK: - Contributed photographs
+
+    @concurrent
+    func submitPhotos(_ draft: CommunityPhotoDraft) async throws -> String {
+        state.withLock { $0.photoDrafts.append(draft) }
+        await beforePhotoSubmissionReturns?(draft)
+        return try submissionResult.get()
+    }
+
+    @concurrent
+    func contribution(of photoSubmissionID: String) async throws -> String? {
+        state.withLock { $0.contributionChecks.append(photoSubmissionID) }
+        await beforeContributionReturns?()
+        return try contributionResult.get()
+    }
+
+    @concurrent
+    func contributedPhotos(
+        for listingID: String,
+        excluding: Set<String>,
+        downloadingInto directory: URL
+    ) async throws -> [CommunityPhotoContribution] {
+        state.withLock { recording in
+            recording.contributionRequests.append(
+                (listingID: listingID, excluding: excluding)
+            )
+        }
+        // Honoured rather than merely recorded, for the reason the listing
+        // queries honour theirs: the real transport filters before it spends
+        // the download, and a suite asserting against a stub that had not
+        // filtered would be asserting about a transport nobody ships.
+        let contributions = try contributedPhotosResult.get()
+        guard !excluding.isEmpty else { return contributions }
+        return contributions.filter { !excluding.contains($0.authorID) }
+    }
+
+    @concurrent
+    func photos(
+        ofPending pending: CommunityPendingPhotos,
+        downloadingInto directory: URL
+    ) async throws -> CommunityPhotoContribution {
+        state.withLock { $0.pendingDetailRequests.append(pending.photoSubmissionID) }
+        await beforeDetailReturns?()
+        guard let pendingPhotosResult else { throw CommunityFailure.noLongerAvailable }
+        return try pendingPhotosResult.get()
+    }
+
+    @concurrent
+    func keepOnlyPhotos(
+        _ kept: [CommunityKeptPhoto],
+        ofPending pending: CommunityPendingPhotos,
+        staging: URL
+    ) async throws {
+        state.withLock { recording in
+            recording.contributionPhotoEdits.append((pending.photoSubmissionID, kept))
+        }
+        try keepPhotosResult.get()
+    }
+
+    @concurrent
+    func publishPhotos(
+        _ pending: CommunityPendingPhotos
+    ) async throws -> CommunityPhotoContribution {
+        state.withLock { $0.publishedPhotos.append(pending) }
+        if let publishPhotosResult { return try publishPhotosResult.get() }
+        // Built from what went in rather than from a fixture, the default the
+        // hike's own publish takes and for the same reason.
+        return CommunityPhotoContribution(
+            id: "contribution-for-\(pending.photoSubmissionID)",
+            photoSubmissionID: pending.photoSubmissionID,
+            authorName: pending.authorName,
+            authorID: pending.authorID,
+            publishedAt: pending.noticedAt,
+            photoPins: [],
+            photoFileURLs: [],
+            photosOnRecord: pending.photoCount
+        )
+    }
+
+    @concurrent
+    func declinePhotos(_ pending: CommunityPendingPhotos) async throws {
+        state.withLock { $0.declinedPhotos.append(pending) }
+        try declineResult.get()
+    }
+
+    @concurrent
+    func takeDownPhotos(_ contribution: CommunityPhotoContribution) async throws {
+        state.withLock { $0.takenDownPhotos.append(contribution.id) }
         try takeDownResult.get()
     }
 }
@@ -442,5 +571,25 @@ actor AsyncGate {
         isOpen = true
         for waiter in waiters { waiter.resume() }
         waiters.removeAll()
+    }
+}
+
+// MARK: - Writing a queue down
+
+extension CommunityReviewBatch {
+    /// A queue of hikes and nothing else.
+    ///
+    /// Which is what every suite written before contributions existed is
+    /// describing, and the reason it earns a spelling of its own: those suites
+    /// are about *the queue*, not about what is in it, and rewriting each of
+    /// them to name an empty second array would have made the half they do not
+    /// care about the visible half.
+    static func hikes(_ hikes: [CommunityPendingSubmission]) -> Self {
+        Self(hikes: hikes)
+    }
+
+    /// A queue of contributed photographs and nothing else.
+    static func photographs(_ photographs: [CommunityPendingPhotos]) -> Self {
+        Self(photographs: photographs)
     }
 }

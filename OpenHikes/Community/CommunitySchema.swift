@@ -173,6 +173,54 @@
 //  IDs rather than a different kind of read — so it needs no index and must
 //  not be given one.
 //
+//  ## The other pair: photographs offered to a hike that already exists
+//
+//  ``photoSubmissionType`` and ``contributionType`` are the same two-type
+//  shape again, for the same reason, and everything argued above holds of them
+//  word for word: a hiker may create a photo submission and never change one,
+//  only the `reviewer` role may create the published record, and the queue is
+//  the notice rather than an index on either.
+//
+//  Three things about them are genuinely different, and each one follows from
+//  the trail already being public.
+//
+//  **The target is a string, not a reference.** ``PhotoSubmission/listing``
+//  and ``Contribution/listing`` both hold a ``CommunityIdentity`` — a
+//  ``listingType`` record name, or the `osm:r/<relation>` form a curated route
+//  gets. A `CKRecord.Reference` could only ever express the first, and the
+//  OpenStreetMap half is precisely the half with nothing in this database to
+//  point at. It also means a contribution outlives its target being taken
+//  down, which is a set of photographs nobody can reach rather than a dangling
+//  reference — the same end state declining already produces.
+//
+//  **``contributionType`` needs one index, and it is the target.**
+//  `listing` QUERYABLE, because opening a hike asks *which contributions are
+//  about this one* — and that is the only query this type serves. It is safe
+//  for the reason ``Listing/submission``'s index is: running it needs an
+//  identity that is already public, and what comes back is a record that is
+//  `_world` read and reachable by anybody who opened the same hike.
+//  `publishedAt` is SORTABLE so a hike's contributed photographs keep their
+//  order between two people's screens. ``PhotoSubmission`` gets **none**, like
+//  its sibling and for the identical reason: it is only ever fetched by a
+//  record name that came off a published contribution.
+//
+//  **There is no count anywhere else.** A contribution does not touch the
+//  listing it is about — the reviewer's role could write that record, and
+//  deliberately does not. ``Listing/photoCount`` goes on meaning *the
+//  photographs the hike's own author published*, so it cannot go stale behind
+//  a contribution that was later taken down, and a curated route — which has
+//  no record at all and never could have one — is not the odd one out. The
+//  consequence is stated plainly because it is the cost of that choice:
+//  contributed photographs are found by opening the hike and not by reading
+//  its row.
+//
+//  ``noticeType`` carries both kinds, through a second reference field rather
+//  than a second type. One query a launch is what the queue costs *everybody*
+//  — almost none of whom is a reviewer — and a second type would have doubled
+//  that to list a second kind of row in the same place. Exactly one of
+//  ``Notice/submission`` and ``Notice/photoSubmission`` is set; a notice with
+//  neither is a record nothing wrote and is dropped.
+//
 //  Nothing here contacts CloudKit, and nothing here is verified against a
 //  live container. See *Schema and migration policy* for the standing rule
 //  that a deployment fact is recorded in the instructions file rather than in
@@ -201,6 +249,15 @@ nonisolated enum CommunitySchema {
     /// See *How a reviewer finds a submission* in this file's header for why
     /// the queue cannot live on ``submissionType`` itself.
     static let noticeType = "CommunitySubmissionNotice"
+    /// What a hiker uploads when the trail is already here and the
+    /// photographs are not: written once, then read by record name only.
+    ///
+    /// Never *queried*, like ``submissionType`` and for the same reason — it
+    /// carries no index at all. See *The other pair* in this file's header.
+    static let photoSubmissionType = "CommunityPhotoSubmission"
+    /// What a reviewer publishes from one of those. The only type a hike's
+    /// contributed photographs are ever found through.
+    static let contributionType = "CommunityPhotoContribution"
 
     /// Fields on ``submissionType``.
     enum Submission {
@@ -251,9 +308,76 @@ nonisolated enum CommunitySchema {
     }
 
     /// Fields on ``noticeType``.
+    ///
+    /// Exactly one of the two is set. A notice with neither points at nothing
+    /// and is dropped by ``CommunityTransporting/reviewQueue()``; a notice
+    /// with both would be a record this app never writes, and the queue reads
+    /// the hike first.
     enum Notice {
-        /// The submission this notice is about. The whole of the record.
+        /// The hike submission this notice is about.
         static let submission = "submission"
+        /// The photo submission this notice is about, when it is a
+        /// contribution rather than a hike.
+        ///
+        /// A second field rather than a second record type, so the queue stays
+        /// one query — see *The other pair* in this file's header. It needs no
+        /// index: the queue is listed by `___recordID` and sorted by
+        /// `___createTime`, and this field is only ever read off a row that
+        /// query already returned.
+        static let photoSubmission = "photoSubmission"
+    }
+
+    /// Fields on ``photoSubmissionType``.
+    ///
+    /// No title, no description, no route and no distance. The trail already
+    /// has all four, from whoever published it or from OpenStreetMap, and none
+    /// of them is a contributor's to send — which is also why nothing here is
+    /// editable by a reviewer except the photographs themselves.
+    enum PhotoSubmission {
+        /// The hike these belong to, as a ``CommunityIdentity``: a
+        /// ``listingType`` record name, or `osm:r/<relation>`.
+        ///
+        /// A `String` rather than a reference, because half the trails a
+        /// contribution can be aimed at have no record in this database. See
+        /// *The other pair* in this file's header.
+        static let listing = "listing"
+        static let authorName = "authorName"
+        /// The day the photographs were taken.
+        static let takenOn = "takenOn"
+        /// The photographs, in the order ``photoPins`` describes them.
+        static let photos = "photos"
+        /// Per-photo capture time and coordinate, JSON-encoded, in the same
+        /// order as ``photos``. The same payload
+        /// ``Submission/photoPins`` carries, decoded by the same code.
+        static let photoPins = "photoPins"
+        /// Where the photographs were taken, for the reviewer's map.
+        static let location = "location"
+    }
+
+    /// Fields on ``contributionType``.
+    ///
+    /// Denormalised from the photo submission for the reason ``Listing``'s
+    /// fields are: this is the type that gets queried, and a `CKQuery` filters
+    /// on fields of the type being queried.
+    enum Contribution {
+        /// The hike these were published onto — QUERYABLE, and the only
+        /// predicate this type ever serves. See this file's header.
+        static let listing = "listing"
+        /// The submission holding the assets.
+        static let photoSubmission = "photoSubmission"
+        static let authorName = "authorName"
+        /// The contributor, as CloudKit stamped them on the submission.
+        ///
+        /// Here for the reason ``Listing/authorID`` is there, and it is a
+        /// sharper one: a contributed photograph is somebody *other* than the
+        /// hike's author posting into the hike, so blocking the author cannot
+        /// reach it and nothing else could. A contribution without one is
+        /// dropped, exactly as a listing without one is.
+        static let authorID = "authorID"
+        static let photoCount = "photoCount"
+        /// When the reviewer published it — SORTABLE, so a hike's contributed
+        /// photographs are in the same order on everybody's screen.
+        static let publishedAt = "publishedAt"
     }
 
     /// Fields on ``listingType``.

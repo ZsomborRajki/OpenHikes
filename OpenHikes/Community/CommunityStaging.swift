@@ -76,6 +76,25 @@ nonisolated enum CommunityStaging {
         )
     }
 
+    /// The directory one attempt to contribute one hike's photographs stages
+    /// into.
+    ///
+    /// Its own name rather than ``shareDirectory(of:attempt:)`` with a second
+    /// kind of caller, and the reason is the one names have to earn here:
+    /// these directories outlive their owners on a kill, and the only person
+    /// who ever reads one is somebody looking at `tmp` asking what left it
+    /// behind. A contribution and a share are two different uploads of two
+    /// different things.
+    ///
+    /// Unique per *attempt* for the reason a share's is, and the form allows
+    /// the same second send.
+    static func contributionDirectory(of hikeID: UUID, attempt: UUID = UUID()) -> URL {
+        directory.appending(
+            path: "CommunityPhotos-\(hikeID.uuidString)-\(attempt.uuidString)",
+            directoryHint: .isDirectory
+        )
+    }
+
     /// How long an entry is left alone before a later preview or share removes
     /// it.
     ///

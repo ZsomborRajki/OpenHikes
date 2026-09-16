@@ -153,7 +153,7 @@ extension MapSheetHikes {
     /// waiting on the reviewer, and it belongs above the thing they would
     /// otherwise be doing rather than somewhere they have to go and look.
     @ViewBuilder var reviewSection: some View {
-        if !review.pending.isEmpty {
+        if review.hasWork {
             Section {
                 ForEach(review.pending) { pending in
                     Button {
@@ -170,15 +170,71 @@ extension MapSheetHikes {
                     }
                     .buttonStyle(.plain)
                 }
+                ForEach(review.pendingPhotos) { pending in
+                    Button {
+                        onSelectPendingPhotos(pending)
+                    } label: {
+                        pendingPhotosRow(pending)
+                    }
+                    .buttonStyle(.plain)
+                }
             } header: {
                 // On the header rather than the `Section`, and that is not a
                 // detail: an identifier on a `Section` is inherited by every
                 // element inside it, which silently replaced the rows' own
                 // `community-hike-row` and made them unfindable as hikes.
-                Text("Pending Review (\(review.pending.count))")
+                Text("Pending Review (\(review.workCount))")
                     .accessibilityIdentifier("community-review-section")
             }
         }
+    }
+
+    /// One queued contribution, which is deliberately **not** a
+    /// ``CommunityHikeRow``.
+    ///
+    /// That row draws a hike: a title, a distance, a date and a photo count.
+    /// A contribution has one of those four — and borrowing the row would mean
+    /// inventing the other three, which is exactly the shape
+    /// ``CommunityPendingPhotos/prospectiveListing`` warns against being read
+    /// as a listing. So this row says the true short thing: somebody's photos,
+    /// for a trail, from a walk on a day.
+    func pendingPhotosRow(_ pending: CommunityPendingPhotos) -> some View {
+        HStack(spacing: 12) {
+            Image(systemName: "photo.badge.plus")
+                .foregroundStyle(.secondary)
+                // Decoration: the label below says which kind of row this is.
+                .accessibilityHidden(true)
+            VStack(alignment: .leading, spacing: 2) {
+                Text(
+                    pending.authorName.isEmpty
+                        ? String(localized: "Photos for a trail")
+                        : String(localized: "Photos from \(pending.authorName)")
+                )
+                .font(.body)
+                Text(
+                    pending.isCurated
+                        ? String(
+                            localized: """
+                            For an OpenStreetMap trail · \
+                            \(pending.takenOn.formatted(date: .abbreviated, time: .omitted))
+                            """
+                        )
+                        : String(
+                            localized: """
+                            For a shared hike · \
+                            \(pending.takenOn.formatted(date: .abbreviated, time: .omitted))
+                            """
+                        )
+                )
+                .font(.caption)
+                .foregroundStyle(.secondary)
+                .lineLimit(1)
+            }
+            Spacer(minLength: 0)
+        }
+        .contentShape(.rect)
+        .accessibilityElement(children: .combine)
+        .accessibilityIdentifier("community-review-photos-row")
     }
 
     /// What the list is currently able to show.

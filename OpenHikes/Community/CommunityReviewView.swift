@@ -488,7 +488,11 @@ private extension CommunityReviewView {
             // would delete that one as well — a photograph nobody decided
             // anything about, gone for good. See
             // ``CommunityHikeDetail/hasEveryPhoto``.
-            Text(Self.incompleteDownload(missing: detail.photosOnRecord - detail.photoFileURLs.count))
+            Text(
+                CommunityPublishedPhotos.incompleteDownload(
+                    missing: detail.photosOnRecord - detail.photoFileURLs.count
+                )
+            )
                 .accessibilityIdentifier("review-photos-incomplete")
         } else if removedPhotos.isEmpty {
             Text("Leave out any photo that shouldn't be published. The hike still goes.")
@@ -496,50 +500,9 @@ private extension CommunityReviewView {
             // Said plainly because it is the only irreversible thing on this
             // screen short of declining, and because the strip above is still
             // showing the pictures it is about.
-            Text(Self.removalWarning(count: removedPhotos.count))
+            Text(CommunityPublishedPhotos.removalWarning(count: removedPhotos.count))
                 .accessibilityIdentifier("review-photos-removed")
         }
-    }
-
-    /// Why nothing can be left out, when a download came back short.
-    ///
-    /// Number-neutral after the count, the rule ``CommunityShareDisclosure``
-    /// already follows: one photograph reads as written English rather than as
-    /// a template with a 1 in it.
-    static func incompleteDownload(missing: Int) -> String {
-        missing == 1
-            ? String(
-                localized: """
-                One of this submission's photos didn't download, so none can be \
-                left out here — leaving one out rewrites the whole set from the \
-                copies on this device. Publish it as it is, decline it, or open \
-                it again.
-                """
-            )
-            : String(
-                localized: """
-                \(missing) of this submission's photos didn't download, so none \
-                can be left out here — leaving one out rewrites the whole set \
-                from the copies on this device. Publish it as it is, decline it, \
-                or open it again.
-                """
-            )
-    }
-
-    static func removalWarning(count: Int) -> String {
-        count == 1
-            ? String(
-                localized: """
-                Publishing deletes the faded photo from the submission for good. \
-                The rest go with the hike.
-                """
-            )
-            : String(
-                localized: """
-                Publishing deletes the \(count) faded photos from the submission \
-                for good. The rest go with the hike.
-                """
-            )
     }
 
     func failureSection(_ failure: CommunityFailure) -> some View {

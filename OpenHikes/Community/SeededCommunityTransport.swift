@@ -255,7 +255,7 @@ nonisolated struct SeededCommunityTransport: CommunityTransporting {
     // MARK: - Reviewing
 
     @concurrent
-    func pendingSubmissions() async throws -> [CommunityPendingSubmission] {
+    func reviewQueue() async throws -> CommunityReviewBatch {
         guard scenario != .failing else { throw CommunityFailure.unreachable }
         // A refusal rather than an empty list, because that is what the
         // server gives an account outside the role — and the two are no longer
@@ -263,7 +263,14 @@ nonisolated struct SeededCommunityTransport: CommunityTransporting {
         // would put *Take Down* on every published hike in these scenarios.
         // See ``CommunityReviewQueue/isReviewer``.
         guard scenario.servesQueue else { throw CommunityFailure.notPermitted }
-        return Self.queuedSubmissions
+        // Both kinds, from the one call the real transport also answers in
+        // one: a queue holding only hikes would leave the contributed-photo
+        // row, its screen and its two decisions undriveable by automation,
+        // which is the gap ``Scenario/reviewing`` exists to close.
+        return CommunityReviewBatch(
+            hikes: Self.queuedSubmissions,
+            photographs: Self.queuedPhotos
+        )
     }
 
     @concurrent
@@ -334,6 +341,114 @@ nonisolated struct SeededCommunityTransport: CommunityTransporting {
 
     @concurrent
     func takeDown(_ listing: CommunityListing) async throws {
+        guard scenario != .failing else { throw CommunityFailure.unreachable }
+    }
+
+    // MARK: - Contributed photographs
+
+    @concurrent
+    func submitPhotos(_ draft: CommunityPhotoDraft) async throws -> String {
+        guard !draft.photoFileURLs.isEmpty else { throw CommunityFailure.noPhotosToShare }
+        guard scenario != .failing else { throw CommunityFailure.notSignedIn }
+        return "seeded-photo-submission-\(draft.hikeID.uuidString)"
+    }
+
+    @concurrent
+    func contribution(of photoSubmissionID: String) async throws -> String? {
+        guard scenario != .failing else { throw CommunityFailure.unreachable }
+        // Never published, for the reason ``publication(of:)`` answers `nil`
+        // outside ``Scenario/published``: a submission this process invented a
+        // moment ago has not been reviewed, and *waiting* is the state the
+        // button has to be able to draw.
+        guard scenario == .published else { return nil }
+        return "seeded-contribution-\(photoSubmissionID)"
+    }
+
+    @concurrent
+    func contributedPhotos(
+        for listingID: String,
+        excluding: Set<String>,
+        downloadingInto directory: URL
+    ) async throws -> [CommunityPhotoContribution] {
+        guard scenario != .failing else { throw CommunityFailure.unreachable }
+        // One hike carries them, so a launch can see a gallery that is part
+        // the author's and part somebody else's — which is the only shape the
+        // merge is visible in. Everything else has none, which is the
+        // ordinary case and the one that must go on looking untouched.
+        let targets = [Self.contributedToListingID, Self.contributedToCuratedID]
+        guard scenario.servesListings, targets.contains(listingID) else { return [] }
+        guard !excluding.contains(Self.contributorAuthorID) else { return [] }
+        try Task.checkCancellation()
+        let set = directory.appending(
+            path: "contributed-\(Self.contributionID)",
+            directoryHint: .isDirectory
+        )
+        try FileManager.default.createDirectory(at: set, withIntermediateDirectories: true)
+        let photos = await Self.writePhotos(count: Self.contributedCount, into: set)
+        return [Self.contribution(files: photos)]
+    }
+
+    @concurrent
+    func photos(
+        ofPending pending: CommunityPendingPhotos,
+        downloadingInto directory: URL
+    ) async throws -> CommunityPhotoContribution {
+        guard scenario != .failing else { throw CommunityFailure.unreachable }
+        try Task.checkCancellation()
+        try FileManager.default.createDirectory(at: directory, withIntermediateDirectories: true)
+        let photos = await Self.writePhotos(count: Self.contributedCount, into: directory)
+        return CommunityPhotoContribution(
+            id: pending.id,
+            photoSubmissionID: pending.photoSubmissionID,
+            authorName: pending.authorName,
+            authorID: pending.authorID,
+            publishedAt: pending.noticedAt,
+            photoPins: photos.map { _ in
+                CommunityPhotoPin(capturedAt: pending.takenOn, coordinate: Self.photoCoordinate)
+            },
+            photoFileURLs: photos,
+            photosOnRecord: photos.count
+        )
+    }
+
+    @concurrent
+    func keepOnlyPhotos(
+        _ kept: [CommunityKeptPhoto],
+        ofPending pending: CommunityPendingPhotos,
+        staging: URL
+    ) async throws {
+        guard scenario != .failing else { throw CommunityFailure.unreachable }
+        // Nothing is rewritten, for the reason the hike's own edit rewrites
+        // nothing here: the photographs this stand-in hands out are drawn into
+        // files on the way out of the fetch above, so there is no record. What
+        // a UI test can see is the strip and the count the screen carries into
+        // publishing, and both are the review screen's own state.
+    }
+
+    @concurrent
+    func publishPhotos(
+        _ pending: CommunityPendingPhotos
+    ) async throws -> CommunityPhotoContribution {
+        guard scenario != .failing else { throw CommunityFailure.unreachable }
+        return CommunityPhotoContribution(
+            id: "seeded-contribution-\(pending.photoSubmissionID)",
+            photoSubmissionID: pending.photoSubmissionID,
+            authorName: pending.authorName,
+            authorID: pending.authorID,
+            publishedAt: Self.publishedDate,
+            photoPins: [],
+            photoFileURLs: [],
+            photosOnRecord: pending.photoCount
+        )
+    }
+
+    @concurrent
+    func declinePhotos(_ pending: CommunityPendingPhotos) async throws {
+        guard scenario != .failing else { throw CommunityFailure.unreachable }
+    }
+
+    @concurrent
+    func takeDownPhotos(_ contribution: CommunityPhotoContribution) async throws {
         guard scenario != .failing else { throw CommunityFailure.unreachable }
     }
 
@@ -494,6 +609,112 @@ nonisolated extension SeededCommunityTransport {
             trackDescription: trackDescription,
             hikeDate: hikeDate,
             distanceMeters: distanceMeters,
+            photoCount: 0,
+            latitude: startLatitude,
+            longitude: startLongitude,
+            noticedAt: hikeDate
+        )
+    }
+
+    /// The two trails other hikers have added photographs to, and both are
+    /// trails whose own author published none.
+    ///
+    /// The **lake** is the published half and the **OpenStreetMap loop** is
+    /// the curated one, which is the pair worth having: a contribution reaching
+    /// a target that has a record and one reaching a target that has none are
+    /// the two cases ``CommunityIdentity`` exists to make one code path, and
+    /// the second is the headline case of the whole feature — nothing curated
+    /// carries a photograph, measured rather than assumed.
+    ///
+    /// **The ridge is deliberately left alone**, even though a trail with two
+    /// of its own and three of somebody else's is where the merged numbering
+    /// is visible. `CommunityUITests` pins that gallery's size — *1 of 2* in a
+    /// navigation bar — so hanging a set on it would turn an unrelated
+    /// assertion red and say nothing about why. The arithmetic belongs to
+    /// `CommunityContributedGalleryTests`, which can ask about it directly and
+    /// does; what a launch is for here is that the pictures arrive at all, are
+    /// credited, and can be reported and blocked.
+    static let contributedToListingID = "seeded-listing-lake"
+    static let contributedToCuratedID = CommunityIdentity.curated(
+        relationID: SeededCuratedTrailSource.loopRelationID
+    )
+    /// A third person, so blocking either of the two authors leaves the
+    /// contributed photographs standing and blocking *this* one takes them
+    /// away. With the contributor sharing an identity with a hike's author,
+    /// neither half of that could be told from the other.
+    static let contributorAuthorID = "seeded-author-cass"
+    static let contributorName = "Cass"
+    static let contributionID = "seeded-contribution-lake"
+    /// Three, so the merged gallery's numbering is visibly wrong if a set is
+    /// counted from the start rather than from where it sits.
+    static let contributedCount = 3
+
+    /// Where every seeded contributed photograph stands.
+    ///
+    /// One coordinate for all of them rather than a spread, because what a
+    /// scenario asserts about these is that they *have* a place at all: the
+    /// merged pin set is what is under test, not the arithmetic of a walk.
+    static let photoCoordinate = CLLocationCoordinate2D(
+        latitude: startLatitude,
+        longitude: startLongitude
+    )
+
+    /// The published set the lake hike carries, built around whichever files
+    /// were drawn for this open.
+    static func contribution(files: [URL]) -> CommunityPhotoContribution {
+        CommunityPhotoContribution(
+            id: contributionID,
+            photoSubmissionID: "\(contributionID)-submission",
+            authorName: contributorName,
+            authorID: contributorAuthorID,
+            publishedAt: publishedDate,
+            photoPins: files.map { _ in
+                CommunityPhotoPin(capturedAt: hikeDate, coordinate: photoCoordinate)
+            },
+            photoFileURLs: files,
+            photosOnRecord: files.count
+        )
+    }
+
+    /// What a reviewer's queue holds in the way of contributed photographs
+    /// under ``Scenario/reviewing``.
+    ///
+    /// Two, and deliberately one of each kind: a set offered to a published
+    /// hike and a set offered to an OpenStreetMap trail. The two draw
+    /// different subtitles and different section headers, and every one of
+    /// those differences is invisible unless both are on screen at once —
+    /// the rule ``CommunityCuratedUITests`` already applies to the browse
+    /// list's two row kinds.
+    static let queuedPhotos: [CommunityPendingPhotos] = [
+        queuedPhotos(
+            id: "seeded-photo-notice-lake",
+            listingID: contributedToListingID,
+            authorName: contributorName
+        ),
+        queuedPhotos(
+            id: "seeded-photo-notice-osm",
+            listingID: contributedToCuratedID,
+            authorName: ""
+        ),
+    ]
+
+    private static func queuedPhotos(
+        id: String,
+        listingID: String,
+        authorName: String
+    ) -> CommunityPendingPhotos {
+        CommunityPendingPhotos(
+            id: id,
+            photoSubmissionID: "\(id)-submission",
+            listingID: listingID,
+            authorName: authorName,
+            // An opaque string, as the real one is: this is what CloudKit
+            // stamps on the upload, not anything the hiker chose.
+            authorID: "seeded-author-\(id)",
+            takenOn: hikeDate,
+            // Zero, because that is what the real transport returns — the
+            // count arrives with the photographs, from the screen that fetches
+            // them.
             photoCount: 0,
             latitude: startLatitude,
             longitude: startLongitude,
