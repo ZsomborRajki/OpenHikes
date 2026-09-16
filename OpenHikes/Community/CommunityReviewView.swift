@@ -141,9 +141,10 @@ struct CommunityReviewView: View {
     /// read off the detail at the tap so that what is published is a value
     /// this screen watched arrive.
     ///
-    /// Not the number written onto the listing any more: that is
-    /// ``keptPhotoCount``, which is this minus whatever the reviewer struck
-    /// off.
+    /// Not the number written onto the listing, and not the one in the strip's
+    /// header either: the listing's is ``CommunityPublishedPhotos/count``,
+    /// which describes the *record*, and the header's is ``keptPhotoCount``,
+    /// which describes what is on screen.
     @State private var photoCount = 0
     /// The title as it will be published, which starts as the one that was
     /// sent.
@@ -194,8 +195,8 @@ struct CommunityReviewView: View {
     /// Whether the thing being decided about has actually arrived.
     ///
     /// Publishing waits on it for two reasons, and each would be enough on its
-    /// own. ``photoCount`` is zero until the photographs land — a queue entry
-    /// cannot know how many it has, see
+    /// own. Nothing knows how many photographs there are until the detail
+    /// arrives — a queue entry cannot, see
     /// ``CommunityPendingSubmission/photoCount`` — so a publish before then
     /// writes *no photos* onto a listing that has some, which is a row that
     /// hides a gallery it could have shown. And a screen still loading, or one
@@ -632,21 +633,26 @@ private extension CommunityReviewView {
         guard canPublish, case .loaded(let detail) = phase else { return }
         isDeciding = true
         decisionTask = Task {
-            // Unreachable with anything in it unless every photograph arrived
-            // — the buttons that fill this are not drawn otherwise — and
-            // checked anyway, because what it would cost is a stranger's
-            // photograph deleted for good by a rule nobody applied. Falling
-            // back to *remove nothing* is the conservative half of a
-            // disagreement that cannot happen.
-            let removing = detail.hasEveryPhoto ? removedPhotos : []
-            if !removing.isEmpty {
+            // Both halves of what happens to the photographs, decided
+            // together: which of them the record keeps, and what the listing
+            // may then claim. An incomplete download answers *keep the record
+            // as it is* — the rewrite is built from the copies on this device
+            // and would delete the missing one too — and the count follows
+            // that rather than the strip on screen. See
+            // ``CommunityPublishedPhotos``.
+            let photos = CommunityPublishedPhotos(
+                photosOnRecord: detail.photosOnRecord,
+                downloaded: detail.photoFileURLs.count,
+                removing: removedPhotos
+            )
+            if case .keepOnly(let keeping) = photos.rewrite {
                 do {
                     // Before the listing exists, never after: until one does,
                     // nothing can reach this submission but the reviewer
                     // holding its record name. See
                     // ``CommunityTransporting/keepOnlyPhotos(_:of:staging:)``.
                     try await transport.keepOnlyPhotos(
-                        detail.keptPhotos(at: Set(detail.photoFileURLs.indices).subtracting(removing)),
+                        detail.keptPhotos(at: keeping),
                         of: pending,
                         staging: downloadDirectory
                     )
@@ -668,11 +674,13 @@ private extension CommunityReviewView {
             // The reviewer's title, which is the listing's alone — see this
             // file's header.
             decided.title = publishedTitle
-            // The count the photographs actually arrived with, less whatever
-            // was just taken off the record: a listing claiming photographs it
-            // has not got is a row that promises a gallery and opens a shorter
-            // one.
-            decided.photoCount = photoCount - removing.count
+            // What the record will serve, which is the only number a row can
+            // promise: a listing claiming photographs it has not got opens a
+            // shorter gallery than it advertised, and one claiming fewer than
+            // the record holds hides a stranger's photograph that anybody
+            // opening the hike can still fetch. The second is what a download
+            // that came back short used to write.
+            decided.photoCount = photos.count
             do {
                 _ = try await transport.publish(decided)
             } catch {
