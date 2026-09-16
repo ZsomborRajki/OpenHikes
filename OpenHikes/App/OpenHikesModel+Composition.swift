@@ -359,14 +359,21 @@ private extension OpenHikesModel {
             guard scenario.servesCuratedTrails else { return seeded }
             return MergedCommunityTransport(
                 published: seeded,
-                curated: SeededCuratedTrailSource()
+                curated: SeededCuratedTrailSource(),
+                // Heights that reached no network either, so the chart a
+                // curated hike now draws is reachable from automation.
+                elevation: SeededElevationSource()
             )
         }
         #endif
         guard !AppLaunchEnvironment.isRunningTests else { return nil }
         return MergedCommunityTransport(
             published: CloudKitCommunityTransport(),
-            curated: CuratedTrailSource()
+            curated: CuratedTrailSource(),
+            // The one launch that may spend a billable call: a real one, with
+            // a key. Every other path here keeps the dormant default — see
+            // ``MergedCommunityTransport/elevation``.
+            elevation: StadiaElevationSource()
         )
     }
 

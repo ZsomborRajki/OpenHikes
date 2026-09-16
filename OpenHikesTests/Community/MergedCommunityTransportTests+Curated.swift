@@ -17,6 +17,7 @@
 import CoreLocation
 import Foundation
 @testable import OpenHikes
+import Synchronization
 import Testing
 
 // MARK: - Overpass is asked only when the question asks for it
@@ -165,6 +166,83 @@ extension MergedCommunityTransportTests {
         #expect(merged.overpass.recording.cacheReads.isEmpty)
     }
 
+    // MARK: The heights OpenStreetMap does not have
+
+    /// A curated hike opens with a profile now, and this is where the heights
+    /// join the route: on the detail, once, when one is opened. Not on the
+    /// list, which offers a page of routes to draw one of them.
+    @Test("opening a curated route fills its heights in")
+    func openingACuratedRouteFetchesHeights() async throws {
+        let trail = Self.trail(Relation.wimbach, named: "Wimbachgries", metresNorth: Offset.nearest)
+        let merged = Self.merged(curated: [trail], elevation: StubElevationSource(height: 642))
+        let listing = CommunityListing(curated: trail, editedAt: .now)
+
+        let detail = try await merged.transport.detail(
+            for: listing,
+            downloadingInto: FileManager.default.temporaryDirectory
+        )
+
+        #expect(detail.route.count == trail.route.count, "the line itself is the one Overpass assembled")
+        #expect(detail.route.allSatisfy { $0.elevation == 642 })
+    }
+
+    /// And a vendor that will not answer costs the chart and nothing else. The
+    /// route, the length, the facts and the surface are all already in hand,
+    /// and a hike that opens without a profile is what this screen did before
+    /// heights existed.
+    @Test("a refused height request still opens the hike")
+    func refusedHeightsStillOpenTheHike() async throws {
+        let trail = Self.trail(Relation.almbach, named: "Almbachklamm", metresNorth: Offset.near)
+        let merged = Self.merged(curated: [trail], elevation: StubElevationSource(height: nil))
+        let listing = CommunityListing(curated: trail, editedAt: .now)
+
+        let detail = try await merged.transport.detail(
+            for: listing,
+            downloadingInto: FileManager.default.temporaryDirectory
+        )
+
+        #expect(detail.route.count == trail.route.count)
+        #expect(detail.route.allSatisfy { $0.elevation == nil })
+    }
+
+    /// The default nobody has to remember: a composite built without an
+    /// elevation source asks no vendor anything. Every suite in this file
+    /// relies on it, and a change to it would spend money from a test run.
+    @Test("a composite built without an elevation source asks nobody")
+    func defaultCompositeAsksNoVendor() async throws {
+        let trail = Self.trail(Relation.wimbach, named: "Wimbachgries", metresNorth: Offset.nearest)
+        let cloudKit = StubCommunityTransport()
+        let merged = MergedCommunityTransport(
+            published: cloudKit,
+            curated: StubCuratedTrailSource(trails: [trail])
+        )
+
+        let detail = try await merged.detail(
+            for: CommunityListing(curated: trail, editedAt: .now),
+            downloadingInto: FileManager.default.temporaryDirectory
+        )
+
+        #expect(detail.route.allSatisfy { $0.elevation == nil })
+    }
+
+    /// A published hike's heights are the ones the hiker who walked it
+    /// uploaded, and nothing here may go looking for others.
+    @Test("a published hike's detail asks no elevation source")
+    func publishedDetailAsksNoElevationSource() async {
+        let source = StubElevationSource(height: 642)
+        let merged = Self.merged(
+            published: [Self.published("listing-a", metresNorth: Offset.near)],
+            elevation: source
+        )
+
+        _ = try? await merged.transport.detail(
+            for: Self.published("listing-a", metresNorth: Offset.near),
+            downloadingInto: FileManager.default.temporaryDirectory
+        )
+
+        #expect(source.requestCount == 0)
+    }
+
     /// A published-only question has nothing to fall back *from*: nothing was
     /// asked of Overpass, so nothing was refused.
     @Test("a published-only question never reads the device's routes either")
@@ -180,5 +258,28 @@ extension MergedCommunityTransportTests {
 
         #expect(answer.listings.map(\.id) == ["listing-a"])
         #expect(merged.overpass.recording.cacheReads.isEmpty)
+    }
+}
+
+/// Heights that reached no vendor.
+///
+/// `height: nil` is the refusal — a `403` from a plan that does not carry the
+/// endpoint, a timeout, a build with no key — which is the branch that decides
+/// whether a hike opens at all.
+nonisolated final class StubElevationSource: CuratedElevationSourcing, @unchecked Sendable {
+    private let height: Double?
+    private let requests = Mutex(0)
+
+    var requestCount: Int { requests.withLock { $0 } }
+
+    init(height: Double?) {
+        self.height = height
+    }
+
+    @concurrent
+    func heights(at coordinates: [CLLocationCoordinate2D]) async throws -> [Double] {
+        requests.withLock { $0 += 1 }
+        guard let height else { throw CuratedElevationFailure.noKey }
+        return coordinates.map { _ in height }
     }
 }
