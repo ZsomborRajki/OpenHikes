@@ -55,7 +55,7 @@ import Foundation
 
 /// A submission waiting for a person to look at it.
 ///
-/// Built by ``CommunityTransporting/pendingSubmissions()`` from a notice and
+/// Built by ``CommunityTransporting/reviewQueue()`` from a notice and
 /// the submission it points at. The text fields are bounded on the way in, the
 /// way ``CommunityListing/init(record:)`` bounds the same fields and for the
 /// same reason: what is being read is a stranger's text off a public database,

@@ -68,7 +68,7 @@ struct SeededCommunityReviewingTests {
     func queueIsRefusedOutsideTheRole() async {
         for scenario in [SeededCommunityTransport.Scenario.seeded, .published, .empty] {
             await #expect(throws: CommunityFailure.notPermitted) {
-                _ = try await Seed.transport(scenario).pendingSubmissions()
+                _ = try await Seed.transport(scenario).reviewQueue()
             }
         }
     }
@@ -77,7 +77,7 @@ struct SeededCommunityReviewingTests {
     /// at, one with nothing but a title, a credit and a line on the map.
     @Test("the reviewing scenario holds two unalike submissions")
     func queueHoldsTwoShapes() async throws {
-        let queue = try await Seed.transport(.reviewing).pendingSubmissions()
+        let queue = try await Seed.transport(.reviewing).reviewQueue().hikes
         #expect(queue.count == 2)
 
         let described = queue.filter { !$0.trackDescription.isEmpty }
@@ -108,7 +108,7 @@ struct SeededCommunityReviewingTests {
         defer { try? FileManager.default.removeItem(at: directory) }
 
         let transport = Seed.transport(.reviewing)
-        let queue = try await transport.pendingSubmissions()
+        let queue = try await transport.reviewQueue().hikes
 
         let photographed = try #require(
             queue.first { $0.title == SeededCommunityTransport.queuedPhotographedTitle }
@@ -140,7 +140,7 @@ struct SeededCommunityReviewingTests {
     @Test("a reviewer's decisions succeed, and a broken database refuses them")
     func reviewerDecisions() async throws {
         let transport = Seed.transport(.reviewing)
-        let queue = try await transport.pendingSubmissions()
+        let queue = try await transport.reviewQueue().hikes
         let pending = try #require(queue.first)
         let staging = try Seed.scratch()
         defer { try? FileManager.default.removeItem(at: staging) }

@@ -692,18 +692,18 @@ extension MergedCommunityTransportTests {
     func reviewerMethodsForward() async throws {
         let merged = Self.merged()
         let pending = CommunityPendingSubmission.stub()
-        merged.cloudKit.pendingResult = .success([pending])
+        merged.cloudKit.pendingResult = .success(.hikes([pending]))
         merged.cloudKit.detailResult = .success(
             Self.detail(of: Self.published("listing-a", metresNorth: Offset.nearest))
         )
 
-        let queue = try await merged.transport.pendingSubmissions()
+        let queue = try await merged.transport.reviewQueue()
         _ = try await merged.transport.detail(ofPending: pending, downloadingInto: Self.downloads)
         try await merged.transport.keepOnlyPhotos([], of: pending, staging: Self.downloads)
         _ = try await merged.transport.publish(pending)
         try await merged.transport.decline(pending)
 
-        #expect(queue == [pending])
+        #expect(queue.hikes == [pending])
         #expect(merged.cloudKit.recording.queueRequests == 1)
         #expect(merged.cloudKit.recording.pendingDetailRequests == [pending.submissionID])
         #expect(merged.cloudKit.recording.photoEdits.map(\.submissionID) == [pending.submissionID])

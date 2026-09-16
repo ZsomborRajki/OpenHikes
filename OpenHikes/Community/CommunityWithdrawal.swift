@@ -44,6 +44,21 @@
 //  still in the queue and a hike other people can already find are different
 //  things to ask about, and the reviewer's work is different for each.
 //
+//  ## And the second thing a hiker can publish
+//
+//  ``Subject`` is why this type takes a `kind` rather than being copied. A
+//  hiker who contributed photographs to somebody else's trail has published
+//  something, so the promise quoted above covers it word for word — and the
+//  request is the same request against a different pair of record types. What
+//  changes is the two type names in the body and the sentence explaining what
+//  deleting each one does; what does not change is anything at all about the
+//  mechanism, which is why a second type would have been two copies of one
+//  promise drifting apart.
+//
+//  The **hike is never named as a record to remove**, whichever kind this is.
+//  A contribution is somebody else's trail with this hiker's pictures on it,
+//  and a withdrawal must not read as a request to take that trail down.
+//
 
 import Foundation
 
@@ -55,8 +70,38 @@ import Foundation
 /// be asserted without a screen, exactly as `CommunityReportTests` does for
 /// the other direction.
 nonisolated struct CommunityWithdrawal: Equatable, Sendable {
-    /// The ``Hike/communitySubmissionID`` this was sent as. Always present:
-    /// there is nothing to withdraw without one.
+    /// Which of the two things a hiker can publish this is about.
+    enum Subject: Equatable, Sendable {
+        /// A hike of their own: ``CommunitySchema/listingType`` and
+        /// ``CommunitySchema/submissionType``.
+        case hike
+        /// Photographs they put on a trail that already existed:
+        /// ``CommunitySchema/contributionType`` and
+        /// ``CommunitySchema/photoSubmissionType``.
+        case photographs
+
+        /// What the reviewer deletes to unpublish it.
+        var publishedType: String {
+            switch self {
+            case .hike: CommunitySchema.listingType
+            case .photographs: CommunitySchema.contributionType
+            }
+        }
+
+        /// What the reviewer deletes to remove the content behind it.
+        var submissionType: String {
+            switch self {
+            case .hike: CommunitySchema.submissionType
+            case .photographs: CommunitySchema.photoSubmissionType
+            }
+        }
+    }
+
+    /// Whether this is about a hike or about contributed photographs.
+    var kind: Subject = .hike
+    /// The submission record's name — ``Hike/communitySubmissionID`` for a
+    /// hike, ``Hike/communityPhotoSubmissionID`` for photographs. Always
+    /// present: there is nothing to withdraw without one.
     var submissionID: String
     /// The ``Hike/communityListingID``, when a reviewer has published it.
     /// `nil` while the submission is still in the queue.
@@ -75,8 +120,10 @@ nonisolated struct CommunityWithdrawal: Equatable, Sendable {
         listingID: String?,
         title: String,
         hikeDate: Date,
+        kind: Subject = .hike,
         note: String = ""
     ) {
+        self.kind = kind
         self.submissionID = submissionID
         self.listingID = listingID
         self.title = title
@@ -97,9 +144,31 @@ nonisolated struct CommunityWithdrawal: Equatable, Sendable {
         )
     }
 
+    /// Built from the hiker's own row, about the photographs they put on
+    /// somebody else's trail — or `nil` when they never sent any.
+    ///
+    /// The title is still their own hike's, which is the right one: it is what
+    /// they will call the walk when they write about it, and the reviewer
+    /// finds the records by name rather than by the trail.
+    init?(contributedPhotosOf hike: Hike, note: String = "") {
+        guard let sent = hike.communityPhotoSubmissionID else { return nil }
+        self.init(
+            submissionID: sent,
+            listingID: hike.communityPhotoContributionID,
+            title: hike.displayTitle,
+            hikeDate: hike.date,
+            kind: .photographs,
+            note: note
+        )
+    }
+
     /// Whether a reviewer has published this, which decides what they have to
     /// delete and what the hiker is told.
     var isPublished: Bool { listingID != nil }
+
+    /// Whether this is about photographs rather than about a hike. What the
+    /// sheet's own wording branches on.
+    var isAboutPhotographs: Bool { kind == .photographs }
 
     /// Carries a record name so a reviewer scanning a mailbox can tell two
     /// requests apart before opening either — the listing's when there is one,
@@ -117,11 +186,9 @@ nonisolated struct CommunityWithdrawal: Equatable, Sendable {
     /// language they cannot read is one they cannot act on.
     var body: String {
         var lines = [
-            isPublished
-                ? "The hiker who shared this hike is asking for it to be taken down."
-                : "The hiker who sent this submission is asking to withdraw it.",
+            Self.opening(kind: kind, isPublished: isPublished),
             "",
-            "The hike",
+            kind == .hike ? "The hike" : "The walk the photos came from",
             "Title: \(title)",
             "Walked: \(Self.reviewerDate.string(from: hikeDate))",
             "Status: \(isPublished ? "published" : "awaiting review")",
@@ -131,19 +198,43 @@ nonisolated struct CommunityWithdrawal: Equatable, Sendable {
         }
         lines.append(contentsOf: ["", "Records to remove"])
         if let listingID {
-            lines.append("CommunityHike: \(listingID)")
+            lines.append("\(kind.publishedType): \(listingID)")
         }
-        lines.append("CommunityHikeSubmission: \(submissionID)")
+        lines.append("\(kind.submissionType): \(submissionID)")
         lines.append("")
-        lines.append(
-            isPublished
-                ? "Deleting the CommunityHike record unlists the hike; deleting the"
-                : "There is no CommunityHike record yet. Deleting the"
-        )
-        lines.append(
-            "CommunityHikeSubmission record removes the route and photographs behind it."
-        )
+        lines.append(contentsOf: Self.closing(kind: kind, isPublished: isPublished))
         return lines.joined(separator: "\n")
+    }
+
+    /// The first line, which is the one a reviewer reads before deciding
+    /// whether to open the console at all.
+    private static func opening(kind: Subject, isPublished: Bool) -> String {
+        switch (kind, isPublished) {
+        case (.hike, true):
+            "The hiker who shared this hike is asking for it to be taken down."
+        case (.hike, false):
+            "The hiker who sent this submission is asking to withdraw it."
+        case (.photographs, true):
+            """
+            The hiker who contributed these photos is asking for them to be taken down. \
+            The trail itself is somebody else's and is not part of this request.
+            """
+        case (.photographs, false):
+            "The hiker who sent these photos is asking to withdraw them before review."
+        }
+    }
+
+    /// What deleting each record actually does, so a reviewer acting on this
+    /// does not have to remember which of the four types is which.
+    private static func closing(kind: Subject, isPublished: Bool) -> [String] {
+        let first = isPublished
+            ? "Deleting the \(kind.publishedType) record unlists it; deleting the"
+            : "There is no \(kind.publishedType) record yet. Deleting the"
+        let second = switch kind {
+        case .hike: "\(kind.submissionType) record removes the route and photographs behind it."
+        case .photographs: "\(kind.submissionType) record removes the photographs behind it."
+        }
+        return [first, second]
     }
 
     /// The `mailto:` this opens, or `nil` if it could not be formed. Escaped

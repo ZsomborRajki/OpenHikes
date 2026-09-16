@@ -26,6 +26,7 @@ struct CommunityWithdrawalTests {
         submissionID: String = "submission-42",
         listingID: String? = "listing-42",
         title: String = "Ben Nevis",
+        kind: CommunityWithdrawal.Subject = .hike,
         note: String = ""
     ) -> CommunityWithdrawal {
         CommunityWithdrawal(
@@ -33,6 +34,7 @@ struct CommunityWithdrawalTests {
             listingID: listingID,
             title: title,
             hikeDate: walked,
+            kind: kind,
             note: note
         )
     }
@@ -166,5 +168,87 @@ struct CommunityWithdrawalTests {
         #expect(text.contains(CommunityReport.recipient))
         #expect(text.contains("listing-42"))
         #expect(text.contains("submission-42"))
+    }
+
+    // MARK: - The other thing a hiker can publish
+
+    /// A hiker who contributed photographs to somebody else's trail has
+    /// published something, so the promise both published pages make covers it
+    /// word for word. What changes is which pair of records a reviewer has to
+    /// delete — and a request naming the hike's two would be a request to take
+    /// down a trail nobody asked about.
+    @Test("a photo withdrawal names the contribution's records and not a hike's")
+    func photoWithdrawalNamesItsOwnRecords() {
+        let body = Self.withdrawal(
+            submissionID: "photo-submission-9",
+            listingID: "contribution-9",
+            kind: .photographs
+        ).body
+
+        #expect(body.contains("\(CommunitySchema.contributionType): contribution-9"))
+        #expect(body.contains("\(CommunitySchema.photoSubmissionType): photo-submission-9"))
+        // Neither of the hike's two types is named anywhere, which is the
+        // half that matters: the trail is somebody else's.
+        #expect(!body.contains(CommunitySchema.listingType))
+        #expect(!body.contains(CommunitySchema.submissionType))
+    }
+
+    /// And the sentence says so, because a reviewer reading this in a mailbox
+    /// decides what to open before they read the record names.
+    @Test("a photo withdrawal says the trail is not part of the request")
+    func photoWithdrawalSpareTheTrail() {
+        let published = Self.withdrawal(kind: .photographs).body
+        #expect(published.contains("not part of this request"))
+
+        // Before review there is nothing published to unlist, and the opening
+        // line has to be a different sentence: *withdraw* rather than *take
+        // down*.
+        let waiting = Self.withdrawal(listingID: nil, kind: .photographs).body
+        #expect(waiting.contains("withdraw"))
+        #expect(waiting.contains("There is no \(CommunitySchema.contributionType) record yet"))
+    }
+
+    /// Built from the hiker's own row, and `nil` for a hike that never
+    /// contributed anything — which is the state with nothing to ask about,
+    /// exactly as it is for a hike that was never shared.
+    @Test("a hike that contributed nothing has nothing to withdraw")
+    @MainActor
+    func nothingContributedIsNothingToAskAbout() throws {
+        let context = try Fixture.modelContext()
+        let hike = Fixture.hike(in: context)
+        #expect(CommunityWithdrawal(contributedPhotosOf: hike) == nil)
+
+        hike.communityPhotoSubmissionID = "photo-submission-9"
+        let waiting = try #require(CommunityWithdrawal(contributedPhotosOf: hike))
+        #expect(waiting.kind == .photographs)
+        #expect(waiting.isAboutPhotographs)
+        #expect(!waiting.isPublished)
+
+        hike.communityPhotoContributionID = "contribution-9"
+        let live = try #require(CommunityWithdrawal(contributedPhotosOf: hike))
+        #expect(live.isPublished)
+        #expect(live.subject.contains("contribution-9"))
+    }
+
+    /// The two conversations do not cross. A hike that has both shared its own
+    /// route and contributed photographs to a different trail has two
+    /// withdrawals to make, and each names its own pair.
+    @Test("the two withdrawals a hike can make are about different records")
+    @MainActor
+    func theTwoWithdrawalsStayApart() throws {
+        let context = try Fixture.modelContext()
+        let hike = Fixture.hike(in: context)
+        hike.communitySubmissionID = "submission-1"
+        hike.communityListingID = "listing-1"
+        hike.communityPhotoSubmissionID = "photo-submission-9"
+        hike.communityPhotoContributionID = "contribution-9"
+
+        let own = try #require(CommunityWithdrawal(hike: hike))
+        let photos = try #require(CommunityWithdrawal(contributedPhotosOf: hike))
+
+        #expect(own.submissionID == "submission-1")
+        #expect(own.listingID == "listing-1")
+        #expect(photos.submissionID == "photo-submission-9")
+        #expect(photos.listingID == "contribution-9")
     }
 }

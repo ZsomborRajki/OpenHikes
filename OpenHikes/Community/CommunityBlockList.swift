@@ -157,9 +157,33 @@ final class CommunityBlockList {
             )
             return
         }
+        block(authorID, name: listing.authorName, at: date)
+    }
+
+    /// Hides one person by the identity CloudKit stamped on their upload.
+    ///
+    /// What ``block(_:at:)`` above does once it has found an author, and what
+    /// a contributed photograph calls directly — there is no listing to hand
+    /// over there, because the person being blocked is not the one who
+    /// published the hike. See ``CommunityPhotoActions``.
+    ///
+    /// The empty-id refusal stays with the listing overload, which is where an
+    /// absent author is a thing that can happen: this one takes the id as a
+    /// fact its caller has already unwrapped out of
+    /// ``CommunityPhotoAttribution``, where it cannot be absent —
+    /// ``CloudKitCommunityTransport/ContributionRecord`` drops a record
+    /// without one.
+    ///
+    /// - Parameter name: What the hiker will recognise them by in Settings.
+    ///   Empty is ordinary: a credit is optional everywhere it is typed.
+    func block(_ authorID: String, name: String?, at date: Date = .now) {
+        guard !authorID.isEmpty else {
+            Self.logger.error("Refused to block an empty author id.")
+            return
+        }
         guard !authorsByID.keys.contains(authorID) else { return }
         authorsByID.updateValue(
-            BlockedAuthor(id: authorID, name: listing.authorName, blockedAt: date),
+            BlockedAuthor(id: authorID, name: name ?? "", blockedAt: date),
             forKey: authorID,
             insertingAt: 0
         )

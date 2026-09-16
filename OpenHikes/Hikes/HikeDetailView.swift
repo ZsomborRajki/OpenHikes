@@ -91,6 +91,21 @@ struct HikeDetailView: View {
     /// Whether the takedown-request form is up. Here for the reason
     /// ``isSharingToCommunity`` is, and presented from the same place.
     @State var isWithdrawingFromCommunity = false
+    /// The hike a photo contribution would be attached to, non-`nil` while
+    /// that form is up.
+    ///
+    /// The target rather than a `Bool`, because unlike the two above this
+    /// sheet cannot be built from the hike alone: where the photographs go is
+    /// worked out by ``CommunityPublishingCheck`` and is the one thing the
+    /// form has to be handed. Presented from the same place as the other two
+    /// and for the same reason.
+    @State var contributionTarget: CommunityPhotoTarget?
+    /// Whether the takedown-request form is up *about the photographs*. A
+    /// second flag rather than a second case of ``isWithdrawingFromCommunity``
+    /// because the two name different records and a hike can be in only one of
+    /// the two conversations — a flag that had to say which would be a third
+    /// thing to keep in step with the two columns that already decide it.
+    @State var isWithdrawingPhotosFromCommunity = false
     // swiftlint:enable private_swiftui_state
     /// Owned by the navigation session so changing presentation hosts keeps
     /// the selected section and an unfinished rename. Read only by this screen.

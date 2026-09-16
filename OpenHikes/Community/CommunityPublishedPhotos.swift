@@ -67,3 +67,60 @@ nonisolated struct CommunityPublishedPhotos: Equatable, Sendable {
         count = kept.count
     }
 }
+
+// MARK: - What the reviewer is told
+
+/// The two sentences a review screen puts under the strip.
+///
+/// Here rather than on either screen because both of them draw both, and they
+/// are about this type's subject: what a rewrite is built from, and therefore
+/// what it can and cannot be asked to do. The hike's reviewer and the
+/// contribution's reviewer are making the same decision about the same kind of
+/// record, and two wordings of it would be two accounts of one risk.
+///
+/// Both are number-neutral after the count, the rule
+/// ``CommunityShareDisclosure`` already follows: one photograph reads as
+/// written English rather than as a template with a 1 in it.
+nonisolated extension CommunityPublishedPhotos {
+    /// Why nothing can be left out, when a download came back short.
+    static func incompleteDownload(missing: Int) -> String {
+        missing == 1
+            ? String(
+                localized: """
+                One of this submission's photos didn't download, so none can be \
+                left out here — leaving one out rewrites the whole set from the \
+                copies on this device. Publish it as it is, decline it, or open \
+                it again.
+                """
+            )
+            : String(
+                localized: """
+                \(missing) of this submission's photos didn't download, so none \
+                can be left out here — leaving one out rewrites the whole set \
+                from the copies on this device. Publish it as it is, decline it, \
+                or open it again.
+                """
+            )
+    }
+
+    /// What publishing will do to the struck-off photographs.
+    ///
+    /// Said plainly because it is the only irreversible thing on either review
+    /// screen short of declining, and because the strip above it is still
+    /// showing the pictures it is about.
+    static func removalWarning(count: Int) -> String {
+        count == 1
+            ? String(
+                localized: """
+                Publishing deletes the faded photo from the submission for good. \
+                The rest still go.
+                """
+            )
+            : String(
+                localized: """
+                Publishing deletes the \(count) faded photos from the submission \
+                for good. The rest still go.
+                """
+            )
+    }
+}

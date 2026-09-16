@@ -212,6 +212,17 @@ nonisolated enum CommunityImport {
     /// proportionate answer: the route committed before this ran and is the
     /// thing the hiker asked for. It is the same bargain the loop below makes
     /// for one unreadable file, one size larger.
+    ///
+    /// **Photographs other hikers contributed are deliberately not copied.**
+    /// This reads ``CommunityHikeDetail/photoPins`` and
+    /// ``CommunityHikeDetail/photoFileURLs``, which are the submission's own
+    /// — ``CommunityHikeDetail/contributions`` sits beside them and is not
+    /// read here. Saving a stranger's trail saves the walk its author
+    /// published; what other people added to it is a thing that goes on
+    /// happening on the shared listing, and a copy taken on the day of the
+    /// import would be a snapshot that never grows, never shrinks when one is
+    /// taken down, and carries no credit into a library that has nowhere to
+    /// show one.
     @MainActor
     private static func attachPhotos(
         of detail: CommunityHikeDetail,

@@ -22,10 +22,45 @@ struct CommunityReportTests {
     private static func report(
         reason: CommunityReportReason = .objectionable,
         note: String = "",
-        listing: CommunityListing = .stub()
+        listing: CommunityListing = .stub(),
+        contribution: CommunityPhotoAttribution? = nil
     ) -> CommunityReport {
-        CommunityReport(listing: listing, reason: reason, note: note)
+        CommunityReport(
+            listing: listing,
+            reason: reason,
+            contribution: contribution,
+            note: note
+        )
     }
+
+    /// A trail OpenStreetMap already had, which has no records of its own for
+    /// a takedown to name.
+    private static func curatedListing(relationID: Int64) -> CommunityListing {
+        CommunityListing(
+            id: CommunityIdentity.curated(relationID: relationID),
+            origin: .openStreetMap(
+                relationID: relationID,
+                facts: CuratedTrailFacts(tags: ["name": "Soleleitensteig"], route: [])
+            ),
+            title: "Soleleitensteig",
+            authorName: "",
+            hikeDate: nil,
+            distanceMeters: 6200,
+            photoCount: 0,
+            latitude: 47.6,
+            longitude: 12.8,
+            publishedAt: Date(timeIntervalSince1970: 1_750_000_000)
+        )
+    }
+
+    /// One contributed set, for the reports that are about a photograph rather
+    /// than about the hike it is on.
+    private static let contribution = CommunityPhotoAttribution(
+        contributionID: "contribution-9",
+        photoSubmissionID: "photo-submission-9",
+        credit: "Cass",
+        authorID: "author-cass"
+    )
 
     // MARK: - What the reviewer can act on
 
@@ -155,5 +190,68 @@ struct CommunityReportTests {
         #expect(Set(CommunityReportReason.pickerOrder) == Set(CommunityReportReason.allCases))
         #expect(CommunityReportReason.pickerOrder.count == CommunityReportReason.allCases.count)
         #expect(CommunityReportReason.pickerOrder.last == .other)
+    }
+
+    // MARK: - Reporting one photograph rather than a hike
+
+    /// The reason this whole variant exists: a contributed photograph is
+    /// somebody else's picture on a third party's trail, so the two records a
+    /// reviewer deletes are the contribution's. Pointing them at the hike's
+    /// would be a report that takes down a trail nobody complained about.
+    @Test("a photo report names the contribution's two records")
+    func photoReportNamesTheContribution() {
+        let body = Self.report(
+            listing: .stub(id: "listing-42", submissionID: "submission-42"),
+            contribution: Self.contribution
+        ).body
+
+        #expect(body.contains("\(CommunitySchema.contributionType): contribution-9"))
+        #expect(body.contains("\(CommunitySchema.photoSubmissionType): photo-submission-9"))
+        #expect(!body.contains("\(CommunitySchema.listingType): listing-42"))
+        #expect(!body.contains("\(CommunitySchema.submissionType): submission-42"))
+        #expect(body.contains("not part of this report"))
+    }
+
+    /// The hike is still named, because a reviewer has to be able to find the
+    /// photograph — and the credit, because it is what a hiker recognises the
+    /// picture's owner by.
+    @Test("a photo report still says which hike and who added it")
+    func photoReportNamesTheContextAndTheAuthor() {
+        let body = Self.report(
+            listing: .stub(id: "listing-42", title: "Almbachklamm"),
+            contribution: Self.contribution
+        ).body
+
+        #expect(body.contains("Almbachklamm"))
+        #expect(body.contains("Cass"))
+        #expect(body.contains("A photo somebody added"))
+    }
+
+    /// A curated trail has no records at all, and a report about a photograph
+    /// on one is still perfectly actionable: the contribution's two names are
+    /// the whole of what a takedown needs. The hike-report path sends a
+    /// reviewer upstream to OpenStreetMap instead, which is the right answer
+    /// there and the wrong one here.
+    @Test("a photo report on an OpenStreetMap trail names records, not an upstream link")
+    func photoReportOnACuratedTrail() {
+        let body = Self.report(
+            listing: Self.curatedListing(relationID: 12_345),
+            contribution: Self.contribution
+        ).body
+
+        #expect(body.contains("contribution-9"))
+        #expect(!body.contains("openstreetmap.org"))
+    }
+
+    /// A reviewer scanning a mailbox tells two reports apart before opening
+    /// either, so the subject names the record this one is about.
+    @Test("the subject names the contribution rather than the hike")
+    func photoReportSubject() {
+        let report = Self.report(
+            listing: .stub(id: "listing-42"),
+            contribution: Self.contribution
+        )
+        #expect(report.subject.contains("contribution-9"))
+        #expect(!report.subject.contains("listing-42"))
     }
 }

@@ -61,6 +61,9 @@ struct CommunityReportSheet: View {
     }
 
     let listing: CommunityListing
+    /// The contributed set, when what is being reported is one photograph on
+    /// the hike rather than the hike itself. `nil` is the ordinary report.
+    var contribution: CommunityPhotoAttribution?
 
     @Environment(\.openURL)
     private var openURL
@@ -69,7 +72,12 @@ struct CommunityReportSheet: View {
     @State private var phase: Phase = .editing
 
     private var report: CommunityReport {
-        CommunityReport(listing: listing, reason: reason, note: note)
+        CommunityReport(
+            listing: listing,
+            reason: reason,
+            contribution: contribution,
+            note: note
+        )
     }
 
     var body: some View {
@@ -91,7 +99,7 @@ struct CommunityReportSheet: View {
                     editAgainSection
                 }
             }
-            .navigationTitle("Report Hike")
+            .navigationTitle(contribution == nil ? "Report Hike" : "Report Photo")
             #if os(iOS)
             .navigationBarTitleDisplayMode(.inline)
             #endif
@@ -110,12 +118,30 @@ private extension CommunityReportSheet {
     /// reached it from the wrong row should find that out here.
     var reportedSection: some View {
         Section {
-            LabeledContent("Hike", value: listing.title)
-            if !listing.authorName.isEmpty {
-                LabeledContent("Shared by", value: listing.authorName)
+            if let contribution {
+                // The photograph first, because it is what is being reported.
+                // The hike is named underneath as the place it was found, and
+                // the footer says plainly that it is not part of the request —
+                // a hiker reporting a stranger's picture must not be left
+                // wondering whether they have just asked for the trail to come
+                // down as well.
+                LabeledContent(
+                    "Photo added by",
+                    value: contribution.credit ?? String(localized: "Someone")
+                )
+                LabeledContent("On", value: listing.title)
+            } else {
+                LabeledContent("Hike", value: listing.title)
+                if !listing.authorName.isEmpty {
+                    LabeledContent("Shared by", value: listing.authorName)
+                }
             }
         } header: {
             Text("What you're reporting")
+        } footer: {
+            if contribution != nil {
+                Text("The hike itself isn't reported — only the photo somebody added to it.")
+            }
         }
     }
 

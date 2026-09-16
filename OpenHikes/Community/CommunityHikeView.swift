@@ -133,6 +133,7 @@
 //  without. See ``actionsToolbarItem``.
 //
 
+import os
 import SwiftData
 import SwiftUI
 
@@ -146,7 +147,12 @@ struct CommunityHikeView: View {
     /// failure with a detail behind it, a load that is both finished and
     /// running — and every one of them would be a screen somebody has to
     /// reason about.
-    private enum Phase {
+    ///
+    /// Internal rather than `private` because the contributions fetch reads
+    /// and replaces it from a sibling file, where `private` — which is
+    /// file-scoped in Swift — does not reach. See
+    /// `CommunityHikeView+Contributions.swift`.
+    enum Phase {
         case failed(CommunityFailure)
         case loaded(CommunityHikeDetail)
         case loading
@@ -202,7 +208,12 @@ struct CommunityHikeView: View {
 
     @Environment(\.modelContext)
     private var context
-    @State private var phase: Phase = .loading
+    // Shared with the contributions fetch in the companion extension file,
+    // which hangs its answer on the detail already on screen — the same
+    // disable ``HikeDetailView`` carries for its own companion files, and for
+    // the same reason: `private` is file-scoped in Swift.
+    // swiftlint:disable:next private_swiftui_state
+    @State var phase: Phase = .loading
     /// The elevation profile and the stat tiles, from the same builder a hike
     /// in the library uses.
     ///
@@ -265,6 +276,21 @@ struct CommunityHikeView: View {
     /// on a trail graph would couple two unrelated things through one `for`
     /// loop.
     @State private var analysisTask: Task<Void, Never>?
+    // swiftlint:disable private_swiftui_state
+    /// The other hikers' photographs, held so backing out stops the fetch.
+    ///
+    /// **In** ``discardDownloads()``'s wait list, unlike the analysis beside
+    /// it, and the difference is exactly the rule that list states: this one
+    /// writes files into the download directory. A hiker who backs out
+    /// mid-download would otherwise have the directory deleted and re-created
+    /// underneath them, leaving a stranger's photographs in a temporary
+    /// directory with nothing left that would ever collect them.
+    ///
+    /// Internal for the reason ``phase`` is: the fetch that owns it lives in
+    /// `CommunityHikeView+Contributions.swift`, and nothing outside this type
+    /// touches it.
+    @State var contributionsTask: Task<Void, Never>?
+    // swiftlint:enable private_swiftui_state
     /// Whether this author was blocked while the screen was up.
     ///
     /// Read by the import when it finishes, so a hike the hiker asked for a
@@ -289,7 +315,7 @@ struct CommunityHikeView: View {
 
     /// Where this visit's downloads live. Per-visit rather than per-listing —
     /// see ``previewSession`` — and removed in `onDisappear`.
-    private var downloadDirectory: URL {
+    var downloadDirectory: URL {
         CommunityStaging.previewDirectory(of: listing, in: previewSession)
     }
 
@@ -697,7 +723,13 @@ private extension CommunityHikeView {
     func loadedState(_ detail: CommunityHikeDetail) -> some View {
         statsGrid
 
-        if !detail.photoFileURLs.isEmpty {
+        // Asked of the *merged* gallery rather than of the submission's own
+        // files, which is the whole difference a contribution makes to this
+        // screen: a trail whose author published no photographs — every
+        // curated route, and plenty of published hikes — has a strip as soon
+        // as somebody else adds one, and gating on `photoFileURLs` drew
+        // nothing for exactly the case the feature exists for.
+        if !detail.galleryPhotos.isEmpty {
             photoStrip(detail)
         }
 
@@ -955,6 +987,15 @@ private extension CommunityHikeView {
             // measured nothing, and the analysis belongs to the route rather
             // than to the screen's first visit.
             analyse(detail.route)
+            // And what other hikers have added to this trail, which is a
+            // second query against a different record type and is deliberately
+            // not part of the fetch above — see
+            // ``CommunityTransporting/contributedPhotos(for:excluding:downloadingInto:)``.
+            // Started rather than awaited for the reason the analysis is: the
+            // route, the numbers and the author's own pictures are what the
+            // hiker is waiting for, and none of them should be held behind a
+            // request that may return nothing.
+            loadContributions()
             prepared = await Self.prepare(detail)
         } catch is CancellationError {
             // The screen has gone. There is nothing to report a failure on and
@@ -1058,11 +1099,21 @@ private extension CommunityHikeView {
         // nothing ever comes back for it. Cancelling the load in `onDisappear`
         // is what keeps this wait short rather than a whole download long.
         //
-        // Both of them are this visit's, and so is the path — see
+        // The contributions fetch is the third and is here for the *writing*
+        // reason: it downloads other hikers' photographs into a subdirectory
+        // of this one. The trail analysis is deliberately still absent — it
+        // touches no file here, and making a stranger's photographs wait on a
+        // trail graph would couple two unrelated things through one `for`
+        // loop.
+        //
+        // All three are this visit's, and so is the path — see
         // ``previewSession``. What is waited for and what is removed have to
         // belong to the same screen, or the wait is for one visit's work and
         // the remove lands on another's.
-        Self.discardDownloads(at: downloadDirectory, after: [loadTask, importTask])
+        Self.discardDownloads(
+            at: downloadDirectory,
+            after: [loadTask, importTask, contributionsTask]
+        )
     }
 }
 

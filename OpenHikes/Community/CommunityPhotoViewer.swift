@@ -78,6 +78,18 @@ struct CommunityPhotoViewer: View {
     /// back over the pin it was asked to reveal.
     var onShowOnMap: () -> Void = { /* no-op default */ }
     var selection = CommunityPhotoSelection()
+    /// Everything the per-photograph menu needs, or `nil` for a launch without
+    /// a transport — where the menu would be a promise the launch cannot keep,
+    /// exactly as the share button is absent rather than disabled.
+    ///
+    /// One optional value rather than four optional properties, because the
+    /// four are meaningful only together: a block list with no way to report,
+    /// or a reviewer flag with no transport behind it, is a menu that can
+    /// offer something it cannot do. See ``CommunityPhotoActions``.
+    var actions: Context?
+    /// Leaves the gallery, after a block or a takedown has made what it is
+    /// showing untrue.
+    var onLeave: () -> Void = { /* no-op default */ }
 
     /// No bigger than the file: ``CommunityPublisher/photoMaxPixelSize``
     /// re-encodes every published photograph to 1600 points on its long edge,
@@ -221,6 +233,33 @@ struct CommunityPhotoViewer: View {
                 )
             }
         }
+        // Drawn for a contributed photograph and **absent** for the hike
+        // author's own, which is not a simplification: reporting or blocking
+        // over one of those is about the hike, and the hike's own screen one
+        // push back already offers both. A second door to the same two actions
+        // that named a different pair of records would be the bug this menu
+        // exists to prevent.
+        ToolbarItem(placement: .topBarTrailing) {
+            if let contribution = current?.contribution, let actions {
+                CommunityPhotoActions(
+                    contribution: contribution,
+                    listing: actions.listing,
+                    blockList: actions.blockList,
+                    transport: actions.transport,
+                    isReviewer: actions.isReviewer,
+                    onLeave: onLeave
+                )
+            }
+        }
+    }
+
+    /// What the per-photograph menu needs, gathered so the gallery can carry
+    /// it without four properties of its own. See ``actions``.
+    struct Context {
+        var listing: CommunityListing
+        var blockList: CommunityBlockList
+        var transport: any CommunityTransporting
+        var isReviewer = false
     }
 
     // MARK: - Titles
@@ -229,7 +268,16 @@ struct CommunityPhotoViewer: View {
         guard let index = currentIndex, photos.indices.contains(index) else {
             return String(localized: "Photo")
         }
-        return String(localized: "\(index + 1) of \(photos.count)")
+        let place = String(localized: "\(index + 1) of \(photos.count)")
+        // The credit goes in the title rather than under the picture, and it
+        // is the only place it *can* go: the page is a photograph against
+        // black edge to edge, and a caption drawn over it would sit on the
+        // picture it is about. A hike author's own photographs carry none —
+        // the screen this was pushed from is already headed with their name,
+        // and repeating it on every page would say something new about
+        // nothing.
+        guard let credit = photos[index].credit else { return place }
+        return String(localized: "\(place) · by \(credit)")
     }
 
     /// What a page is called, which is its place in the walk and when it was
@@ -240,7 +288,14 @@ struct CommunityPhotoViewer: View {
     /// with the picture — so saying it here is the app showing what it said it
     /// would carry, exactly as a map pin's subtitle does.
     private static func label(for photo: CommunityGalleryPhoto, of count: Int) -> String {
-        let place = String(localized: "Photo \(photo.index + 1) of \(count)")
+        var place = String(localized: "Photo \(photo.index + 1) of \(count)")
+        // Spoken before the capture time, because *whose photograph is this*
+        // is the fact a screen-reader user has no other way to reach: the
+        // credit is drawn in the navigation title, which a page's own element
+        // does not carry.
+        if let credit = photo.credit {
+            place = String(localized: "\(place), by \(credit)")
+        }
         guard let takenAt = photo.pin?.capturedAt else { return place }
         return String(localized: "\(place), taken \(HikeFormat.timestamp(takenAt))")
     }

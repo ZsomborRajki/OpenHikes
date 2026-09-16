@@ -72,9 +72,27 @@ nonisolated enum CommunityPublisher {
     /// A cap rather than all of them, because the two costs it bounds are both
     /// paid by somebody other than the hiker choosing: the public database's
     /// asset quota, which this app pays for, and the download of anyone who
-    /// opens the hike. A dozen pictures is a generous account of a walk;
-    /// ninety is an album, and nobody browsing scrolls one.
-    static let maximumPhotos = 12
+    /// opens the hike.
+    ///
+    /// It was a dozen, on the argument that a dozen is a generous account of a
+    /// walk and ninety is an album nobody browsing scrolls. The argument about
+    /// *reading* still stands and is not what the number is set by — the
+    /// gallery pages one picture at a time and always did. What set it at
+    /// twelve was the bill, and the bill is a forecast: nothing is published
+    /// yet, so the quota this bounds is being spent by nobody. Raised to
+    /// thirty-six while that is true, which is three times the account a walk
+    /// needs and still an order of magnitude under a day's camera roll.
+    ///
+    /// **This is the number to bring back down first** if the public
+    /// database's asset quota becomes a real cost, and it is the cheapest
+    /// lever there is: it is read in one place on the way up
+    /// (``selectedPhotos(of:excluding:)``) and quoted rather than restated
+    /// everywhere else, so lowering it changes what new uploads carry and
+    /// nothing about what is already published. At
+    /// ``photoMaxPixelSize``/``photoQuality`` a published photograph is a few
+    /// hundred kilobytes, so this is the difference between roughly four
+    /// megabytes an upload and twelve.
+    static let maximumPhotos = 36
 
     /// Shares `hike`, waiting for CloudKit to accept it.
     ///

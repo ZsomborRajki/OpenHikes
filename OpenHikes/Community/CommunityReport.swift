@@ -121,21 +121,39 @@ nonisolated struct CommunityReport: Equatable, Sendable {
     static let recipient = "zsombor.rajki@gmail.com"
 
     var listing: CommunityListing
+    /// The contributed set this is about, when the thing being reported is one
+    /// photograph on the hike rather than the hike itself.
+    ///
+    /// `nil` is the ordinary report and means *this hike*. A value changes
+    /// which records the reviewer is pointed at and — the part that matters —
+    /// which ones they are told to leave alone: a contributed photograph is
+    /// somebody else's picture on a third party's trail, and a report about it
+    /// must never read as a request to delete the trail.
+    var contribution: CommunityPhotoAttribution?
     var reason: CommunityReportReason
     /// What the hiker typed, or empty. Trimmed on the way in by
-    /// ``init(listing:reason:note:)``.
+    /// ``init(listing:reason:contribution:note:)``.
     var note: String
 
-    init(listing: CommunityListing, reason: CommunityReportReason, note: String = "") {
+    init(
+        listing: CommunityListing,
+        reason: CommunityReportReason,
+        contribution: CommunityPhotoAttribution? = nil,
+        note: String = ""
+    ) {
         self.listing = listing
+        self.contribution = contribution
         self.reason = reason
         self.note = note.trimmingCharacters(in: .whitespacesAndNewlines)
     }
 
-    /// Carries the listing's record name so a reviewer scanning a mailbox can
-    /// tell two reports of two hikes apart before opening either.
+    /// Carries a record name so a reviewer scanning a mailbox can tell two
+    /// reports apart before opening either — the contribution's when there is
+    /// one, since that is the record this report is about, and the listing's
+    /// otherwise.
     var subject: String {
-        "OpenHikes report: \(listing.id)"
+        contribution.map { "OpenHikes photo report: \($0.contributionID)" }
+            ?? "OpenHikes report: \(listing.id)"
     }
 
     /// Everything the reviewer needs to find the hike, judge the complaint and
@@ -148,16 +166,36 @@ nonisolated struct CommunityReport: Equatable, Sendable {
     /// confirmation — is localized; what the reviewer reads is not.
     var body: String {
         var lines = [
-            "A hike published in OpenHikes has been reported.",
+            contribution == nil
+                ? "A hike published in OpenHikes has been reported."
+                : "A photo somebody added to a hike in OpenHikes has been reported.",
             "",
             "Reported for: \(reason.reportedDescription)",
         ]
         if !note.isEmpty {
             lines.append(contentsOf: ["", "From the reporter:", note])
         }
+        if let contribution {
+            // The contributed records first and on their own, because they are
+            // what this report is about; the hike follows as context below.
+            lines.append(contentsOf: [
+                "",
+                "The photos",
+                "Added by: \(contribution.credit ?? "(no name given)")",
+                "",
+                "Records to review",
+                "\(CommunitySchema.contributionType): \(contribution.contributionID)",
+                "\(CommunitySchema.photoSubmissionType): \(contribution.photoSubmissionID)",
+                "",
+                "Deleting the \(CommunitySchema.contributionType) record takes the photos off",
+                "the hike; deleting the \(CommunitySchema.photoSubmissionType) record removes",
+                "the photos themselves.",
+                "The hike below is somebody else's and is not part of this report.",
+            ])
+        }
         lines.append(contentsOf: [
             "",
-            "The hike",
+            contribution == nil ? "The hike" : "The hike they were added to",
             "Title: \(listing.title)",
             "Shared by: \(listing.authorName.isEmpty ? "(no name given)" : listing.authorName)",
             "Walked: \(listing.hikeDate.map(Self.reviewerDate.string(from:)) ?? "(not recorded)")",
@@ -169,6 +207,12 @@ nonisolated struct CommunityReport: Equatable, Sendable {
         // answer for it. This is the guard behind that rather than instead of
         // it: if one ever arrived, the reviewer gets a report that says what it
         // is about instead of two record names that name nothing.
+        // A contribution names its own two records above, and the hike below
+        // is context rather than a thing to delete — so the listing's own
+        // record names are deliberately not repeated for it. A curated trail
+        // is the case that makes this matter: it has no records at all, and a
+        // report about a photograph on one is still perfectly actionable.
+        if contribution != nil { return lines.joined(separator: "\n") }
         guard let submissionID = listing.submissionID else {
             // Read off the origin rather than cut out of the id. Both halves
             // of this are facts about ``CommunityOrigin``, so they cannot come

@@ -150,6 +150,39 @@ final class Hike {
     /// trail that is already live.
     var communityListingID: String?
 
+    /// The public-database photo submission this hike's pictures were offered
+    /// as, or `nil` if they never have been.
+    ///
+    /// The contribution half of the two columns above, and it is deliberately
+    /// a *second pair* rather than a reuse of the first. A hike can be in only
+    /// one of the two conversations — a hike whose route was published is not
+    /// a hike whose photographs were contributed to somebody else's — but the
+    /// two states are read by different controls and mean different things,
+    /// and one pair of columns holding either would make *sent for review*
+    /// ambiguous about what had been sent.
+    ///
+    /// Written only once CloudKit has accepted the upload, the ordering
+    /// ``CommunityPhotoPublisher/contribute(_:to:authorName:transport:excludingPhotos:store:save:)``
+    /// treats as a contract for the reason ``CommunityPublisher`` does.
+    ///
+    /// Mirrored along with the rest of the row, like the two above and for the
+    /// same reason: contributing is an account-level act, so a second device
+    /// should know these pictures have already gone.
+    var communityPhotoSubmissionID: String?
+
+    /// The published contribution this hike's photographs became, or `nil`
+    /// while they are still waiting — or were never sent, or were declined.
+    ///
+    /// Not distinguishable, exactly as ``communityListingID`` is not, and for
+    /// the identical reason: a decline leaves no record, so the absence covers
+    /// a reviewer who has not looked and one who said no. The screen says
+    /// *waiting for review* and never *rejected*.
+    ///
+    /// Written by ``CommunityContributionCheck`` and by nothing else, and
+    /// cleared alongside ``communityPhotoSubmissionID`` whenever a second set
+    /// is sent, so the two are never seen describing different uploads.
+    var communityPhotoContributionID: String?
+
     /// The published listing this hike was imported from, or `nil` for a hike
     /// this hiker recorded or imported from a file.
     ///

@@ -40,6 +40,18 @@ nonisolated enum CommunityFailure: LocalizedError, Equatable, Sendable {
     /// looking at can outlive the submission behind it: a reviewer can take
     /// one down, and the hiker's own copy of the list is a snapshot.
     case noLongerAvailable
+    /// The contribution has nothing worth publishing — no photograph this
+    /// device can actually send.
+    ///
+    /// Its own case rather than ``nothingToShare`` with different wording,
+    /// because the two are different facts with different answers. A hike with
+    /// no route is a recording that went wrong; a hike with no photograph is
+    /// the ordinary state of a trail somebody saved and has not yet walked
+    /// with a camera. It also covers the case only this app has — every
+    /// picture being a row whose file lives on the device it was added on, so
+    /// a full strip on the iPad can send nothing. See *Photo pixels stay on
+    /// the device the photo was added on* in the repository instructions.
+    case noPhotosToShare
     /// The hike is not this hiker's to publish, is too short to be worth
     /// publishing, or retraces one they have already sent.
     ///
@@ -59,9 +71,9 @@ nonisolated enum CommunityFailure: LocalizedError, Equatable, Sendable {
     /// queue to act on in the first place — so in practice it means the role
     /// was taken away between the list arriving and the tap, or that the
     /// account is in the role in one environment and not the other. See
-    /// ``CommunityTransporting/pendingSubmissions()``, which turns the same
-    /// refusal into an empty queue rather than an error, because there it is
-    /// an answer and here it is a failure.
+    /// ``CommunityTransporting/reviewQueue()``, which turns the same refusal
+    /// into an empty queue rather than an error, because there it is an answer
+    /// and here it is a failure.
     case notPermitted
     /// No Apple Account on the device, or iCloud is switched off for it.
     ///
@@ -82,6 +94,8 @@ nonisolated enum CommunityFailure: LocalizedError, Equatable, Sendable {
             "Couldn't reach iCloud."
         case .notEligible(let reason):
             reason.title
+        case .noPhotosToShare:
+            "There are no photos to add."
         case .nothingToShare:
             "This hike has no route to share."
         case .notPermitted:
@@ -101,6 +115,11 @@ nonisolated enum CommunityFailure: LocalizedError, Equatable, Sendable {
             "Check your connection and try again."
         case .notEligible(let reason):
             reason.explanation()
+        case .noPhotosToShare:
+            """
+            Add photos to this hike first, or check that they aren't on the device \
+            they were taken on — a photo's file stays where it was added.
+            """
         case .nothingToShare:
             "Record or import a route first."
         case .notPermitted:
@@ -263,7 +282,8 @@ nonisolated protocol CommunityTransporting: Sendable {
 
     // MARK: - Reviewing
 
-    /// Submissions nobody has published or declined yet, oldest first.
+    /// Everything nobody has published or declined yet, oldest first —
+    /// hikes and contributed photographs both, from the one query.
     ///
     /// **Throws ``CommunityFailure/notPermitted`` for everybody who is not a
     /// reviewer, and that is the whole access control.** The queue is
@@ -289,8 +309,13 @@ nonisolated protocol CommunityTransporting: Sendable {
     /// notice whose submission is missing is left out — an upload that failed
     /// after its notice was written, or a submission already deleted — since
     /// there is nothing to review.
+    ///
+    /// The two kinds arrive together and are separated on the way out; see
+    /// ``CommunityReviewBatch`` for why that is one request and two arrays.
+    /// A notice pointing at neither kind is dropped for the reason one
+    /// pointing at a missing record is: there is nothing behind it to judge.
     @concurrent
-    func pendingSubmissions() async throws -> [CommunityPendingSubmission]
+    func reviewQueue() async throws -> CommunityReviewBatch
 
     /// The route and photographs behind a pending submission, downloaded into
     /// `directory`, so a reviewer can look at what they are deciding about.
@@ -410,4 +435,154 @@ nonisolated protocol CommunityTransporting: Sendable {
     /// kept as evidence — it is not, for the reason ``decline(_:)`` gives.
     @concurrent
     func takeDown(_ listing: CommunityListing) async throws
+
+    // MARK: - Photographs offered to a hike that already exists
+
+    /// Uploads `draft` and returns the photo submission's record name.
+    ///
+    /// Everything ``submit(_:)``'s documentation says holds here: the name is
+    /// what the hiker's own device remembers so the button can say the
+    /// pictures have already gone, it is not a claim that anybody else can see
+    /// them, and **a contribution is not submitted until it is in the queue**
+    /// — a conformance writes the notice too and throws if it cannot, because
+    /// an upload no reviewer will be shown is worse than a failed one.
+    ///
+    /// Needs an Apple Account, like every write here and unlike every read.
+    @concurrent
+    func submitPhotos(_ draft: CommunityPhotoDraft) async throws -> String
+
+    /// The record name of the contribution published from `photoSubmissionID`,
+    /// or `nil` if there is not one.
+    ///
+    /// ``publication(of:)``'s opposite number, and narrow for the same reason:
+    /// *is there a published record pointing at this?* A `nil` is not
+    /// "declined" — it covers a reviewer who has not looked and one who said
+    /// no, which leave the same absence.
+    ///
+    /// A `String` rather than a value, because a record name is the whole of
+    /// what the caller does anything with — see
+    /// ``CommunityContributionCheck``. Needs
+    /// ``CommunitySchema/Contribution/listing``'s sibling index on the record
+    /// name, which the Console adds by default.
+    @concurrent
+    func contribution(of photoSubmissionID: String) async throws -> String?
+
+    /// Every published set of photographs somebody has put on the hike
+    /// `listingID` names, downloaded into `directory`, oldest set first.
+    ///
+    /// Asked on **open** and never for a list, which is the rule
+    /// ``HikeTrailAnalysis`` and ``CuratedElevationSourcing`` already follow on
+    /// that screen and the reason a hike's row says nothing about contributed
+    /// pictures: a page offers twenty-five trails and a hiker opens one.
+    ///
+    /// Its own request rather than part of ``detail(for:downloadingInto:)``,
+    /// and three things follow from that which are each worth having. The
+    /// route and the author's photographs are not held up behind a second
+    /// query. The blocked set reaches the *download* rather than only the
+    /// draw, which is where it has to reach for a block to mean anything about
+    /// a stranger's pictures. And the two sources need no routing at all: a
+    /// curated hike's contributions come from CloudKit exactly as a published
+    /// one's do, because the target is an identity rather than a reference.
+    ///
+    /// `listingID` is a ``CommunityIdentity`` — a published listing's record
+    /// name, or a curated route's `osm:r/<relation>`. Both are asked of
+    /// CloudKit, and that is the whole point: an OpenStreetMap trail has no
+    /// record in this database and can still have photographs on it.
+    ///
+    /// - Parameter excluding: Blocked authors, by
+    ///   ``CommunitySchema/Contribution/authorID``. Applied here as well as on
+    ///   the way out for the reason the two list queries take one: a set from
+    ///   a blocked contributor must not be downloaded, because downloading it
+    ///   is the cost.
+    ///
+    /// Needs no account, like every other read here. The caller owns
+    /// `directory` and is what eventually deletes it.
+    @concurrent
+    func contributedPhotos(
+        for listingID: String,
+        excluding: Set<String>,
+        downloadingInto directory: URL
+    ) async throws -> [CommunityPhotoContribution]
+
+    /// The photographs behind a pending contribution, downloaded into
+    /// `directory`, so a reviewer can look at what they are deciding about.
+    ///
+    /// A fetch by record name, never a query — the same read
+    /// ``detail(ofPending:downloadingInto:)`` makes, and needing the same
+    /// nothing in the way of permission: a photo submission is `_world` read,
+    /// so this would work for anybody holding the record name. The queue is
+    /// what a reviewer has and other people do not.
+    @concurrent
+    func photos(
+        ofPending pending: CommunityPendingPhotos,
+        downloadingInto directory: URL
+    ) async throws -> CommunityPhotoContribution
+
+    /// Rewrites `pending`'s submission so it carries only `kept`, deleting
+    /// every other photograph on it.
+    ///
+    /// ``keepOnlyPhotos(_:of:staging:)`` for the other record type, and every
+    /// word of that method's documentation applies: CloudKit cannot drop one
+    /// element of an asset field, so the kept photographs go back up from the
+    /// copies the review screen downloaded; the two photo fields are rewritten
+    /// together because they describe each other by index; and it must be
+    /// called **before** ``publishPhotos(_:)``, never after, because until a
+    /// contribution record exists nothing can reach the submission but the
+    /// reviewer holding its name.
+    ///
+    /// It is a sharper instrument here than there. On a hike, leaving every
+    /// photograph out still publishes the walk; on a contribution the
+    /// photographs *are* the submission, so a reviewer who strikes them all
+    /// off is declining — and the screen says so rather than offering an
+    /// empty publish.
+    ///
+    /// Gated by `GRANT WRITE TO reviewer` on
+    /// ``CommunitySchema/photoSubmissionType``.
+    @concurrent
+    func keepOnlyPhotos(
+        _ kept: [CommunityKeptPhoto],
+        ofPending pending: CommunityPendingPhotos,
+        staging: URL
+    ) async throws
+
+    /// Publishes `pending`, putting its photographs on the hike it names, and
+    /// takes it out of the queue.
+    ///
+    /// Writes the fields carried on `pending` and reads nothing back off the
+    /// submission first, for the reason ``publish(_:)`` does not: what the
+    /// reviewer saw has to be what gets published.
+    ///
+    /// It deliberately does **not** touch the listing it is about, even though
+    /// the role could write one: ``CommunitySchema/Listing/photoCount`` goes
+    /// on meaning the photographs the hike's own author published. See *The
+    /// other pair* in ``CommunitySchema`` for what that costs and why it is
+    /// still the right side to be wrong on.
+    ///
+    /// Gated by `GRANT CREATE, WRITE TO reviewer` on
+    /// ``CommunitySchema/contributionType``.
+    @concurrent
+    func publishPhotos(_ pending: CommunityPendingPhotos) async throws -> CommunityPhotoContribution
+
+    /// Deletes `pending`'s submission and its notice, publishing nothing.
+    ///
+    /// The photographs go with the record, for the reason ``decline(_:)``
+    /// deletes rather than keeps: nothing enumerates this type, so a declined
+    /// submission left behind would be a stranger's photographs held in a
+    /// public database for good with no way to reach them.
+    @concurrent
+    func declinePhotos(_ pending: CommunityPendingPhotos) async throws
+
+    /// Unlists a published set of photographs and deletes the submission
+    /// behind it.
+    ///
+    /// Both records, and in that order, for the reason ``takeDown(_:)`` does
+    /// it in that order: a failure partway leaves photographs nobody can find
+    /// rather than a published record pointing at a submission that is gone.
+    ///
+    /// The hike it was on is untouched. A contribution is a record of its own
+    /// with an author of its own, which is what makes taking one down a thing
+    /// that can be done at all — and the reason the hike's own photographs are
+    /// never at risk from it.
+    @concurrent
+    func takeDownPhotos(_ contribution: CommunityPhotoContribution) async throws
 }

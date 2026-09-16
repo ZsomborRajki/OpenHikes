@@ -63,9 +63,29 @@ import os
 @MainActor
 @Observable
 final class CommunityReviewQueue {
-    /// What is waiting, oldest first. Empty for everybody who is not a
-    /// reviewer, which is the whole access control — see this file's header.
+    /// Hikes waiting for a person, oldest first. Empty for everybody who is
+    /// not a reviewer, which is the whole access control — see this file's
+    /// header.
     private(set) var pending: [CommunityPendingSubmission] = []
+
+    /// Photographs waiting for a person, oldest first.
+    ///
+    /// The second half of one answer rather than a second question — both
+    /// arrive from the single ``CommunityTransporting/reviewQueue()`` call
+    /// this launch spends, because the queue is asked for by everybody and
+    /// almost none of them is a reviewer. See ``CommunityReviewBatch``.
+    private(set) var pendingPhotos: [CommunityPendingPhotos] = []
+
+    /// Whether there is anything at all to review.
+    ///
+    /// What the section is drawn on. Asked of both halves together because
+    /// the section is one section: a reviewer with two contributions and no
+    /// hikes has work waiting, and a rule that read only ``pending`` would
+    /// have hidden it.
+    var hasWork: Bool { !pending.isEmpty || !pendingPhotos.isEmpty }
+
+    /// How many things are waiting, which is what the header counts.
+    var workCount: Int { pending.count + pendingPhotos.count }
 
     /// Whether a request is in flight.
     ///
@@ -133,9 +153,9 @@ final class CommunityReviewQueue {
         let generation = loadGeneration
         loadTask?.cancel()
         loadTask = Task { [weak self] in
-            let result: [CommunityPendingSubmission]
+            let result: CommunityReviewBatch
             do {
-                result = try await transport.pendingSubmissions()
+                result = try await transport.reviewQueue()
             } catch CommunityFailure.notPermitted {
                 // The ordinary answer for almost every launch, and not an
                 // error in any sense a hiker would recognise: they asked for
@@ -177,7 +197,8 @@ final class CommunityReviewQueue {
                 // The read succeeded, so the account is in the role — however
                 // few rows came back with it.
                 self.isReviewer = true
-                self.pending = result
+                self.pending = result.hikes
+                self.pendingPhotos = result.photographs
                 self.isLoading = false
             }
         }
@@ -222,12 +243,29 @@ final class CommunityReviewQueue {
     /// it twice.
     func forget(_ submission: CommunityPendingSubmission) {
         pending.removeAll { $0.id == submission.id }
-        // And the launch's one question is spent: acting is the thing that
-        // changes the answer, so the next time the tab is taken this asks
-        // again rather than redrawing a list from before the decision. Not a
-        // request *now* — the reviewer is on their way back to a list this
-        // device has already corrected, and a round trip in front of it would
-        // buy them nothing they cannot see.
+        spendTheLaunchsQuestion()
+    }
+
+    /// Takes one contributed set out, for the same reason and in the same
+    /// breath.
+    ///
+    /// A second method rather than one taking an id, because the two lists are
+    /// keyed on notices of the same type and a single `removeAll` across both
+    /// would silently take the wrong row out on the day two notices collide.
+    /// See ``CommunityReviewBatch`` for why the two stay apart.
+    func forget(_ photos: CommunityPendingPhotos) {
+        pendingPhotos.removeAll { $0.id == photos.id }
+        spendTheLaunchsQuestion()
+    }
+
+    /// The launch's one question is spent: acting is the thing that changes
+    /// the answer, so the next time the tab is taken this asks again rather
+    /// than redrawing a list from before the decision.
+    ///
+    /// Not a request *now* — the reviewer is on their way back to a list this
+    /// device has already corrected, and a round trip in front of it would buy
+    /// them nothing they cannot see.
+    private func spendTheLaunchsQuestion() {
         hasAsked = false
     }
 }

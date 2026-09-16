@@ -11,13 +11,17 @@
 //  door, because agreeing with the code under test is not the claim.
 //
 //  The half worth the suite is the **order of the two operations**.
-//  ``CommunityPublisher/maximumPhotos`` caps a submission at twelve, and a
-//  hiker with twenty pictures who strikes one off is choosing which twelve go
+//  ``CommunityPublisher/maximumPhotos`` caps a submission, and a hiker with
+//  more pictures than that who strikes one off is choosing *which* of them go
 //  — so the exclusion has to be applied *before* the cap. Filtering afterwards
-//  compiles, passes any test that uses fewer than twelve photographs, and
-//  turns "leave that one out" into "send eleven": the thirteenth picture stays
-//  outside the cap and the walk quietly loses a slot. That is the assertion
-//  this file exists for.
+//  compiles, passes any test that stays under the cap, and turns "leave that
+//  one out" into "send one fewer": the first picture past the cap stays
+//  outside it and the walk quietly loses a slot. That is the assertion this
+//  file exists for.
+//
+//  Written against the constant throughout and never against its value, which
+//  is what lets the cap move — it has, from twelve to thirty-six — without a
+//  suite that reads as being about a number it no longer is.
 //
 //  Photographs are identified in the draft by the minute they were taken,
 //  because that is what survives the trip: the upload carries

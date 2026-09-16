@@ -18,6 +18,21 @@
 //  it as advice. This is the one case where the app knows the answer, so advice
 //  was the wrong instrument.
 //
+//  ## And what those refusals became
+//
+//  Two of them are not refusals any more. What a saved trail actually
+//  establishes is that the *route* is already in the list — and the hiker's
+//  own photographs are not — so both answer
+//  ``CommunityPublishingEligibility/photographsOnly(_:because:)`` with the
+//  listing to put them on. The reasons survive unchanged and are still what
+//  the screen says; what changed is what happens underneath the sentence.
+//
+//  So these assert both halves of each answer: the ``Reason``, which is what a
+//  hiker reads, and the ``CommunityPhotoTarget``, which is what the upload
+//  aims at. A target with the wrong listing id is the one failure here that
+//  nothing downstream could catch — the photographs would be published, onto
+//  somebody else's trail.
+//
 
 import Foundation
 @testable import OpenHikes
@@ -28,12 +43,14 @@ struct CommunityPublishingEligibilityTests {
     private static func of(
         listingID: String? = nil,
         author: String? = nil,
-        meters: Double = 5000
+        meters: Double = 5000,
+        title: String = "Ostwand Scramble"
     ) -> CommunityPublishingEligibility {
         .of(
             importedFromListingID: listingID,
             importedAuthorName: author,
-            distanceMeters: meters
+            distanceMeters: meters,
+            title: title
         )
     }
 
@@ -46,20 +63,62 @@ struct CommunityPublishingEligibilityTests {
 
     /// The case the issue is about, and the only one where the app is certain
     /// rather than asking the hiker to judge.
-    @Test("a hike saved from the community cannot be published again")
+    ///
+    /// The route still does not go. What goes instead is the photographs, onto
+    /// the listing this hike was saved from — which is why the target's id has
+    /// to be *that* listing and not this hike's anything.
+    @Test("a hike saved from the community offers its photographs instead")
     func savedFromTheCommunity() {
         let eligibility = Self.of(listingID: "listing-1", author: "Anna")
-        #expect(eligibility == .refused(.savedFromTheCommunity(author: "Anna")))
+        #expect(!eligibility.isEligible)
+        #expect(eligibility.reason == .savedFromTheCommunity(author: "Anna"))
+        #expect(eligibility.photoTarget?.listingID == "listing-1")
+        #expect(eligibility.photoTarget?.authorName == "Anna")
+        #expect(eligibility.photoTarget?.isCurated == false)
     }
 
-    /// A listing shared without a name still cannot be republished; the
-    /// refusal just has to say it differently.
+    /// A curated route is its own case and its own sentence — there is nobody
+    /// to credit — and the target has to know it came from OpenStreetMap,
+    /// because that is the half of the list with no photographs at all.
+    @Test("a trail saved from OpenStreetMap offers its photographs too")
+    func savedFromOpenStreetMap() {
+        let id = CommunityIdentity.curated(relationID: 12_345)
+        let eligibility = Self.of(listingID: id, author: nil)
+        #expect(eligibility.reason == .savedFromOpenStreetMap)
+        #expect(eligibility.photoTarget?.listingID == id)
+        #expect(eligibility.photoTarget?.isCurated == true)
+        // Nobody published it, so there is nobody to name.
+        #expect(eligibility.photoTarget?.authorName == nil)
+    }
+
+    /// A listing shared without a name is still somebody else's trail; the
+    /// sentence just has to say it differently, and the target carries no
+    /// credit to show.
     @Test("an import with no credit is still an import")
     func savedWithoutACredit() {
-        #expect(Self.of(listingID: "listing-1") == .refused(.savedFromTheCommunity(author: nil)))
+        let eligibility = Self.of(listingID: "listing-1")
+        #expect(eligibility.reason == .savedFromTheCommunity(author: nil))
+        #expect(eligibility.photoTarget?.authorName == nil)
         let explanation = CommunityPublishingEligibility.Reason
             .savedFromTheCommunity(author: nil).explanation()
         #expect(explanation.contains("Another hiker"))
+    }
+
+    /// Whitespace is not a credit. A target carrying `"  "` would put an empty
+    /// row on the share form under the heading *Shared by*.
+    @Test("a blank credit is no credit")
+    func blankCreditIsNoCredit() {
+        #expect(Self.of(listingID: "listing-1", author: "   ").photoTarget?.authorName == nil)
+    }
+
+    /// The hiker's own copy's name, which is what the form calls the trail
+    /// they are adding to. Nothing writes it anywhere — see
+    /// ``CommunityPhotoTarget/title`` — but a form headed with the wrong walk
+    /// is a hiker sending pictures to a trail they did not mean.
+    @Test("the target is named by the hike it was saved as")
+    func targetCarriesTheTitle() {
+        let eligibility = Self.of(listingID: "listing-1", title: "Almbachklamm")
+        #expect(eligibility.photoTarget?.title == "Almbachklamm")
     }
 
     /// **A GPX imported from anywhere else is not an import in this sense.**
@@ -85,19 +144,35 @@ struct CommunityPublishingEligibilityTests {
         #expect(Self.of(meters: 0) == .refused(.tooShort(meters: 0)))
     }
 
-    /// Provenance first. A hike that is both somebody else's *and* short is
-    /// refused for the reason that is about who it belongs to, because that is
-    /// the one the hiker cannot fix by walking further.
-    @Test("an import that is also too short is refused as an import")
+    /// Provenance first, and the floor never reached. A saved trail offers its
+    /// photographs however short the walk was, which is the ordering doing
+    /// something rather than merely deciding which sentence to show: the floor
+    /// asks *is this a walk worth listing*, and a contribution is not listing a
+    /// walk. Half a mile up a gorge can still be the photograph the trail was
+    /// missing.
+    @Test("a short walk on a saved trail still offers its photographs")
     func provenanceOutranksLength() {
         let eligibility = Self.of(listingID: "listing-1", author: "Anna", meters: 10)
-        #expect(eligibility == .refused(.savedFromTheCommunity(author: "Anna")))
+        #expect(eligibility.reason == .savedFromTheCommunity(author: "Anna"))
+        #expect(eligibility.photoTarget?.listingID == "listing-1")
     }
 
-    /// Every refusal has to name the thing the hiker can still do. A dead end
+    /// The one refusal with nothing behind it. A short walk that retraces
+    /// nothing has no trail in the list to attach to, so the offer has to be
+    /// absent rather than aimed at the hike itself.
+    @Test("a short walk that retraces nothing offers nothing")
+    func tooShortOffersNothing() {
+        let eligibility = Self.of(meters: 10)
+        #expect(eligibility == .refused(.tooShort(meters: 10)))
+        #expect(eligibility.photoTarget == nil)
+        #expect(!eligibility.offersPhotographs)
+    }
+
+    /// Every reason has to name the thing the hiker can still do. A dead end
     /// reads as the feature being broken rather than as a rule.
-    @Test("every refusal says what to do instead", arguments: [
+    @Test("every reason says what to do instead", arguments: [
         CommunityPublishingEligibility.Reason.savedFromTheCommunity(author: "Anna"),
+        .savedFromOpenStreetMap,
         .tooShort(meters: 300),
         .retreads(title: "Thumsee Ridge Traverse"),
     ])
@@ -151,5 +226,45 @@ struct CommunityPublishingEligibilityTests {
             .explanation(locale: Locale(identifier: identifier))
         #expect(explanation.contains(floor), "\(identifier) drew \"\(explanation)\"")
         #expect(explanation.contains(walked), "\(identifier) drew \"\(explanation)\"")
+    }
+
+    /// The two sentences that are now *promises* rather than advice, and the
+    /// one that deliberately is not.
+    ///
+    /// A saved trail always has somewhere for its pictures to go, so both of
+    /// those explanations may say so. ``retreads`` reaches both answers —
+    /// published is a target and awaiting-review is not — so its sentence has
+    /// to hold either way, and promising the photographs there would be a
+    /// promise half its readers cannot have. The offer is the control's job,
+    /// not the sentence's.
+    @Test("only the two that always offer say the photographs can go")
+    func onlyTheCertainOnesPromise() {
+        let saved = CommunityPublishingEligibility.Reason
+            .savedFromTheCommunity(author: "Anna").explanation()
+        let curated = CommunityPublishingEligibility.Reason
+            .savedFromOpenStreetMap.explanation()
+        let retread = CommunityPublishingEligibility.Reason
+            .retreads(title: "Thumsee Ridge Traverse").explanation()
+        #expect(saved.contains("photographs") || saved.contains("photos"))
+        #expect(curated.contains("photograph") || curated.contains("photo"))
+        #expect(!retread.contains("photograph") && !retread.contains("photo"))
+    }
+
+    /// Only a hiker's own credit is ever shown beside a contribution, and only
+    /// one of the four reasons has one. A curated trail has nobody; a retread
+    /// is the hiker themselves, and naming them back to themselves would read
+    /// as a stranger.
+    @Test("only a community import names somebody to credit")
+    func onlyACommunityImportHasAnAuthor() {
+        #expect(
+            CommunityPublishingEligibility.Reason
+                .savedFromTheCommunity(author: "Anna").creditedAuthor == "Anna"
+        )
+        #expect(CommunityPublishingEligibility.Reason.savedFromOpenStreetMap.creditedAuthor == nil)
+        #expect(
+            CommunityPublishingEligibility.Reason
+                .retreads(title: "Anything").creditedAuthor == nil
+        )
+        #expect(CommunityPublishingEligibility.Reason.tooShort(meters: 1).creditedAuthor == nil)
     }
 }

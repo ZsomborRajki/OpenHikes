@@ -61,7 +61,12 @@ nonisolated struct SeededCuratedTrailSource: CuratedTrailSourcing {
     /// Relation ids no real OSM relation has, so a seeded run can never be
     /// confused with a fetched one in a log or a saved hike's
     /// ``Hike/importedFromListingID``.
-    private static let loopRelationID: Int64 = 4_811_001
+    /// Internal rather than private, because ``SeededCommunityTransport``
+    /// hangs a contributed set of photographs on this route: a trail
+    /// OpenStreetMap has no picture of, with three of somebody's, is the
+    /// headline case of the whole contribution feature and the only way a
+    /// launch can reach it.
+    static let loopRelationID: Int64 = 4_811_001
     private static let openRelationID: Int64 = 4_811_002
     /// About 110 m of latitude and a little less of longitude at this
     /// latitude, which makes each leg a few hundred metres and the loop long

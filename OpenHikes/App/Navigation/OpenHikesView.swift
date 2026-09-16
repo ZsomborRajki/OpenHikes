@@ -916,6 +916,9 @@ struct ImportSelectionGate {
         // in, on the same terms the photo viewer is the hike's.
         case .some(.communityPhoto(let listing, _, _)): .communityHike(listing.id)
         case .some(.pendingSubmission(let pending)): .pendingSubmission(pending.id)
+        // A contributed set under review is the same kind of screen and gets
+        // the same protection, keyed on its own queue entry.
+        case .some(.pendingPhotos(let pending)): .pendingSubmission(pending.id)
         }
     }
 }

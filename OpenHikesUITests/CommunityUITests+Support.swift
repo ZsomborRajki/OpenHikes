@@ -55,6 +55,20 @@ nonisolated enum SeededCuratedTrail {
     static let loopWaymark = "Red waymark 7"
 }
 
+/// What `--ui-test-community=seeded` puts on a trail that somebody *else*
+/// published.
+///
+/// Mirrors ``SeededCommunityTransport``'s own constants. Cass is a third
+/// person, deliberately: with the contributor sharing an identity with one of
+/// the two authors, blocking one and blocking the other could not be told
+/// apart.
+nonisolated enum SeededContribution {
+    static let author = "Cass"
+    /// Three, and they are on a hike whose own author published none — so a
+    /// strip on that screen is the contributed photographs and nothing else.
+    static let photoCount = 3
+}
+
 /// Which stand-in database a scenario asks for. Mirrors
 /// ``SeededCommunityTransport.Scenario``.
 nonisolated enum SeededCommunityScenario: String {

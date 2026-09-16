@@ -93,14 +93,16 @@ nonisolated extension CloudKitCommunityTransport {
     static var queueLimit: Int { 50 }
 
     @concurrent
-    func pendingSubmissions() async throws -> [CommunityPendingSubmission] {
+    func reviewQueue() async throws -> CommunityReviewBatch {
         let query = CKQuery(
             recordType: CommunitySchema.noticeType,
             predicate: NSPredicate(value: true)
         )
         // The server's own stamp, which is why there is no field to sort on.
         // See ``CommunitySchema`` — a client-written date could put a
-        // submission at the front of somebody else's queue.
+        // submission at the front of somebody else's queue. It also orders the
+        // two kinds against each other, which is what makes one queue rather
+        // than two lists that each claim to be oldest-first.
         query.sortDescriptors = [NSSortDescriptor(key: "creationDate", ascending: true)]
 
         let notices: [CKRecord]
@@ -120,17 +122,49 @@ nonisolated extension CloudKitCommunityTransport {
             // ``CommunityReviewQueue`` is where the silence lives instead.
             throw Self.failure(from: error, while: "reading the review queue")
         }
-        guard !notices.isEmpty else { return [] }
+        guard !notices.isEmpty else { return CommunityReviewBatch() }
 
-        let submissionIDs = notices.compactMap { notice in
-            (notice[CommunitySchema.Notice.submission] as? CKRecord.Reference)?.recordID
+        // Split by which reference the notice carries, before anything is
+        // fetched, because the two kinds are read with different `desiredKeys`
+        // off different record types. A notice pointing at neither is dropped
+        // here — nothing this app writes produces one, and there is nothing
+        // behind it to judge.
+        let hikeIDs = Self.referencedIDs(in: notices, field: CommunitySchema.Notice.submission)
+        let photoIDs = Self.referencedIDs(
+            in: notices,
+            field: CommunitySchema.Notice.photoSubmission
+        )
+        async let hikes = pendingHikes(from: notices, ids: hikeIDs)
+        async let photographs = pendingPhotos(from: notices, ids: photoIDs)
+        return CommunityReviewBatch(hikes: try await hikes, photographs: try await photographs)
+    }
+
+    /// The record IDs the notices point at through one of their two reference
+    /// fields, deduplicated.
+    ///
+    /// Deduplicated because two notices can name one record — a queueing that
+    /// was retried — and `records(for:)` is keyed by ID, so a duplicate would
+    /// cost a slot in the batch and buy nothing.
+    private static func referencedIDs(in notices: [CKRecord], field: String) -> [CKRecord.ID] {
+        var seen: Set<CKRecord.ID> = []
+        return notices.compactMap { notice in
+            guard let reference = notice[field] as? CKRecord.Reference,
+                  seen.insert(reference.recordID).inserted
+            else { return nil }
+            return reference.recordID
         }
-        guard !submissionIDs.isEmpty else { return [] }
+    }
 
+    /// The hike half of one look at the queue.
+    private func pendingHikes(
+        from notices: [CKRecord],
+        ids: [CKRecord.ID]
+    ) async throws -> [CommunityPendingSubmission] {
+        guard !ids.isEmpty else { return [] }
         let submissions: [CKRecord.ID: Result<CKRecord, any Error>]
         do {
             submissions = try await database.records(
-                for: submissionIDs,
+                for: ids,
                 // Every field the listing needs and not one more. The two
                 // asset fields are deliberately absent: asking for `photos`
                 // would download every photograph of every hike in the queue
@@ -151,11 +185,93 @@ nonisolated extension CloudKitCommunityTransport {
             throw Self.failure(from: error, while: "reading queued submissions")
         }
 
-        let alreadyPublished = await publishedSubmissionIDs(among: submissionIDs)
-
+        let alreadyPublished = await publishedSubmissionIDs(among: ids)
         return notices.compactMap { notice in
             Self.pending(from: notice, in: submissions, skipping: alreadyPublished)
         }
+    }
+
+    /// The contribution half of one look at the queue.
+    ///
+    /// No self-healing pass beside it, unlike the hikes above, and the
+    /// asymmetry is the cheap direction rather than an omission: a
+    /// contribution whose notice outlived its publication shows up once, opens
+    /// on a screen that says how many photographs are on the record, and is
+    /// resolved by the reviewer publishing or declining it. Spending a second
+    /// query per launch on everybody to save that is the trade
+    /// ``CommunityReviewBatch`` exists to refuse.
+    private func pendingPhotos(
+        from notices: [CKRecord],
+        ids: [CKRecord.ID]
+    ) async throws -> [CommunityPendingPhotos] {
+        guard !ids.isEmpty else { return [] }
+        let submissions: [CKRecord.ID: Result<CKRecord, any Error>]
+        do {
+            submissions = try await database.records(
+                for: ids,
+                // The assets are absent for the reason they are absent above,
+                // and it bites harder here: a contribution is nothing but
+                // photographs, so asking for them would make listing the queue
+                // and reviewing it the same download.
+                desiredKeys: [
+                    CommunitySchema.PhotoSubmission.listing,
+                    CommunitySchema.PhotoSubmission.authorName,
+                    CommunitySchema.PhotoSubmission.takenOn,
+                    CommunitySchema.PhotoSubmission.location,
+                ]
+            )
+        } catch {
+            throw Self.failure(from: error, while: "reading queued photos")
+        }
+        return notices.compactMap { notice in
+            Self.pendingPhotos(from: notice, in: submissions)
+        }
+    }
+
+    /// One contributed-photo queue entry, or `nil` for a notice there is
+    /// nothing to review behind.
+    ///
+    /// Strict about the target, which is the field with no sensible fallback:
+    /// a contribution that does not say which hike it is for is one a reviewer
+    /// cannot judge and publishing would put photographs on nothing. The
+    /// credit and the place are forgiving, for the reason the hike queue's
+    /// are — a contribution with no credit is ordinary, and one with no
+    /// coordinate is a set of pictures that will be judged on the pictures.
+    private static func pendingPhotos(
+        from notice: CKRecord,
+        in submissions: [CKRecord.ID: Result<CKRecord, any Error>]
+    ) -> CommunityPendingPhotos? {
+        guard let reference = notice[CommunitySchema.Notice.photoSubmission]
+            as? CKRecord.Reference,
+            let record = try? submissions[reference.recordID]?.get(),
+            let listingID = record[CommunitySchema.PhotoSubmission.listing] as? String,
+            !listingID.isEmpty
+        else { return nil }
+
+        let location = record[CommunitySchema.PhotoSubmission.location] as? CLLocation
+        return CommunityPendingPhotos(
+            id: notice.recordID.recordName,
+            photoSubmissionID: reference.recordID.recordName,
+            listingID: listingID,
+            // Bounded exactly as the hike queue bounds the same field: this
+            // text was written by whoever uploaded it, it is rendered on the
+            // review screen, and publishing copies it onto the contribution
+            // verbatim.
+            authorName: BoundedText.boundedOrEmpty(
+                record[CommunitySchema.PhotoSubmission.authorName] as? String,
+                to: .credit
+            ),
+            // Stamped by CloudKit and settable by no client. Without it
+            // nothing could block the contributor, so a published record
+            // carrying an empty one is dropped on the way back in — see
+            // ``CloudKitCommunityTransport/ContributionRecord``.
+            authorID: record.creatorUserRecordID?.recordName ?? "",
+            takenOn: record[CommunitySchema.PhotoSubmission.takenOn] as? Date ?? .distantPast,
+            photoCount: 0,
+            latitude: location?.coordinate.latitude ?? 0,
+            longitude: location?.coordinate.longitude ?? 0,
+            noticedAt: notice.creationDate ?? .distantPast
+        )
     }
 
     /// One queue entry, or `nil` for a notice there is nothing to review
@@ -281,62 +397,20 @@ nonisolated extension CloudKitCommunityTransport {
         of pending: CommunityPendingSubmission,
         staging: URL
     ) async throws {
-        let id = CKRecord.ID(recordName: pending.submissionID)
-        let record: CKRecord
-        do {
-            // One cheap text field, never the assets. This fetch exists to get
-            // a record with a current change tag to write against; asking for
-            // the photographs would download every one of them a second time,
-            // when the review screen has them on disk already and the kept
-            // ones are about to go back up from exactly those copies.
-            let fetched = try await database.records(
-                for: [id],
-                desiredKeys: [CommunitySchema.Submission.title]
-            )
-            guard let result = fetched[id] else { throw CommunityFailure.noLongerAvailable }
-            record = try result.get()
-        } catch {
-            throw Self.failure(from: error, while: "reading a submission to edit its photos")
-        }
-
-        do {
-            if kept.isEmpty {
-                // Both fields go, rather than an empty list beside an absent
-                // one: that is the shape ``stage(_:)`` writes for a hike that
-                // never had a photograph, and a submission a reviewer emptied
-                // should be indistinguishable from one that arrived empty.
-                record[CommunitySchema.Submission.photos] = nil
-                record[CommunitySchema.Submission.photoPins] = nil
-            } else {
-                let pins = try Self.writeJSON(
-                    kept.map(\.pin),
-                    named: Self.reviewedPinsFilename,
-                    in: staging
-                )
-                record[CommunitySchema.Submission.photos] = kept.map(\.fileURL)
-                    .map(CKAsset.init(fileURL:))
-                record[CommunitySchema.Submission.photoPins] = CKAsset(fileURL: pins)
-            }
-        } catch {
-            throw Self.failure(from: error, while: "staging a reviewed submission's photos")
-        }
-
-        do {
-            // `.changedKeys`, which is what the one-field fetch above is only
-            // safe because of: the route, the outline, the title and the
-            // description are not on this record, and a policy that sent the
-            // whole of it would send them as absent. What goes is the two
-            // fields set above.
-            let (saved, _) = try await database.modifyRecords(
-                saving: [record],
-                deleting: [],
-                savePolicy: .changedKeys,
-                atomically: true
-            )
-            if let result = saved[id] { _ = try result.get() }
-        } catch {
-            throw Self.failure(from: error, while: "removing photos from a submission")
-        }
+        // One body for both record types — see
+        // ``rewritePhotos(of:keeping:cheapKey:photosField:pinsField:staging:)``,
+        // which is where the fetch-for-a-change-tag, the paired rewrite and
+        // the `.changedKeys` save all live. What differs between the two is
+        // which record and which single cheap field to fetch, and both are
+        // arguments.
+        try await rewritePhotos(
+            of: CKRecord.ID(recordName: pending.submissionID),
+            keeping: kept,
+            cheapKey: CommunitySchema.Submission.title,
+            photosField: CommunitySchema.Submission.photos,
+            pinsField: CommunitySchema.Submission.photoPins,
+            staging: staging
+        )
     }
 
     @concurrent
@@ -385,7 +459,7 @@ nonisolated extension CloudKitCommunityTransport {
         // The hike is live at this point, so a failure past here is not a
         // failed publication and must not be reported as one. What it costs is
         // a queue entry that outlives its submission's approval, which
-        // ``pendingSubmissions()`` filters out on the next look.
+        // ``reviewQueue()`` filters out on the next look.
         do {
             _ = try await database.deleteRecord(withID: CKRecord.ID(recordName: pending.id))
         } catch {
