@@ -91,4 +91,56 @@ struct WeatherReadingFormatTests {
     private func digits(in formatted: String) -> String {
         formatted.filter(\.isNumber)
     }
+
+    // MARK: Light remaining
+
+    /// Rounded down, which is the direction that cannot mislead: a hiker told
+    /// forty minutes who has thirty-nine is fine; one told forty who has
+    /// thirty-nine and a half is being flattered by a rounding rule.
+    @Test("a part-minute is rounded down rather than up")
+    func roundsRemainingLightDown() {
+        let almostFourty = WeatherReadingFormat.remainingLight(
+            39.5 * 60,
+            locale: Locale(identifier: "en_US")
+        )
+
+        #expect(almostFourty.contains("39"))
+        #expect(!almostFourty.contains("40"))
+    }
+
+    /// "0 hr 35 min" makes a trailhead decision slower rather than more
+    /// precise.
+    @Test("an hours field of zero is dropped")
+    func hidesAZeroHoursField() {
+        let underAnHour = WeatherReadingFormat.remainingLight(
+            35 * 60,
+            locale: Locale(identifier: "en_US")
+        )
+
+        #expect(underAnHour.contains("35"))
+        #expect(!underAnHour.contains("0 hr"))
+    }
+
+    @Test("both fields are spelled when there are hours and minutes")
+    func spellsHoursAndMinutes() {
+        let twoHoursForty = WeatherReadingFormat.remainingLight(
+            (2 * 60 + 40) * 60,
+            locale: Locale(identifier: "en_US")
+        )
+
+        #expect(twoHoursForty.contains("2"))
+        #expect(twoHoursForty.contains("40"))
+    }
+
+    /// A caller that has already refused a negative interval should still not
+    /// be able to produce "-1 min" by accident.
+    @Test("a negative interval floors at nothing")
+    func floorsANegativeInterval() {
+        let past = WeatherReadingFormat.remainingLight(
+            -600,
+            locale: Locale(identifier: "en_US")
+        )
+
+        #expect(!past.contains("-"))
+    }
 }
