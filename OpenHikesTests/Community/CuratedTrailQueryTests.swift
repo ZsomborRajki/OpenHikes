@@ -271,6 +271,66 @@ struct CuratedTrailQueryTests {
         #expect(Self.isClose(centre.longitude, 12.9, within: Self.coordinateTolerance))
     }
 
+    /// Overpass's `bb` is a plain minimum and maximum over the members'
+    /// longitudes, so a route that steps across the date line comes back as
+    /// `−179.99 … 179.99` — a box around the whole world that means a sliver
+    /// two hundredths of a degree wide. Averaging the two numbers put the pin
+    /// on longitude 0, in the Gulf of Guinea: 20,000 km from the trail, which
+    /// is where the list then sorted it and where the store then failed to
+    /// find it again.
+    @Test("a route across the date line is pinned on the line, not on zero")
+    func centreOfAnAntimeridianBoxStaysOnTheLine() {
+        let box = CuratedTrailQuery.BoundingBox(
+            south: 66.0,
+            west: -179.99,
+            north: 66.01,
+            east: 179.99
+        )
+        let centre = CuratedTrailQuery.centre(of: box)
+        #expect(Self.isClose(centre.latitude, 66.005, within: Self.coordinateTolerance))
+        // Either spelling of the line: −180 and 180 are the same meridian, and
+        // ``CuratedTrailQuery`` normalises into −180...180.
+        #expect(Self.isClose(abs(centre.longitude), 180, within: 0.01))
+    }
+
+    /// The width the filter reads is the short way round, which is what makes
+    /// the sliver above a day hike at all — and what keeps this from letting
+    /// anything else through: a route genuinely spanning more than half the
+    /// planet is thousands of kilometres wide on the complement too.
+    @Test("the date line is crossed at its true width, and nothing else is")
+    func antimeridianSpanIsTheShortWayRound() {
+        let sliver = CuratedTrailQuery.BoundingBox(
+            south: 66.0,
+            west: -179.99,
+            north: 66.01,
+            east: 179.99
+        )
+        #expect(CuratedTrailQuery.isDayHike(box: sliver))
+
+        // Half the northern hemisphere, arriving in the same shape. The
+        // complement is 160°, which at this latitude is thousands of
+        // kilometres and nowhere near a day's walk.
+        let continental = CuratedTrailQuery.BoundingBox(
+            south: 66.0,
+            west: -100,
+            north: 67,
+            east: 100
+        )
+        #expect(!CuratedTrailQuery.isDayHike(box: continental))
+    }
+
+    /// An ordinary box is unaffected, which is the half of this worth pinning:
+    /// the wrap correction may only ever fire across the seam.
+    @Test("an ordinary box is read exactly as it was before")
+    func ordinaryBoxKeepsItsWidth() {
+        let box = CuratedTrailQuery.BoundingBox(south: 47.5, west: 12.8, north: 47.7, east: 13)
+        #expect(Self.isClose(
+            CuratedTrailQuery.longitudeSpanDegrees(of: box),
+            0.2,
+            within: Self.coordinateTolerance
+        ))
+    }
+
     // MARK: - The two queries
 
     /// The whole economy of the feature is in one verb. `out geom` over this

@@ -43,19 +43,26 @@ import Foundation
 nonisolated enum CuratedTrailQuery {
     /// The widest search this will ask Overpass about, in metres of radius.
     ///
-    /// Lower than ``CommunityQueryPolicy/maximumRadiusMeters``, and
-    /// deliberately so: that ceiling is about whether *near here* still means
-    /// anything, and this one is about what a volunteer-run API should be
-    /// asked for in one request. The listing pass scales with the area of the
-    /// box — 44 KB over a 17 × 28 km box in dense Alpine mapping — so an
-    /// 80 × 80 km box is roughly 350 KB in the worst region there is, and a
-    /// 300 × 300 km one is several megabytes of rows that would then be
-    /// thrown away by the limit.
+    /// **The app's zoom ceiling as well, and this is where it is decided.**
+    /// ``CommunityQueryPolicy/maximumRadiusMeters`` is spelled as this value
+    /// rather than as a number of its own — see *One ceiling, and it is
+    /// OpenStreetMap's* in that file. The figure is set by the source that
+    /// minds being asked: the listing pass scales with the *area* of the box
+    /// — 44 KB over a 17 × 28 km box in dense Alpine mapping — so an 80 × 80 km
+    /// box is roughly 350 KB in the worst region there is, and a 300 × 300 km
+    /// one is several megabytes of rows the limit would then throw away.
     ///
-    /// Above this the curated half of the answer is empty and the published
-    /// half is unaffected. That is the right failure: the hiker is looking at
-    /// half a continent, where a list of village loops is not what they asked
-    /// for anyway.
+    /// There used to be two ceilings, 150 km there and 40 km here, described
+    /// as a deliberate difference. It was a gap: between them the pill was
+    /// enabled, a tap spent a CloudKit query, and this half answered `[]` with
+    /// no failure to report, so a hiker looking at 100 km of map got no trails
+    /// and nothing saying that zooming in was the answer.
+    ///
+    /// The guard below is therefore unreachable from the app — the policy
+    /// refuses a wider region before anything is committed — and it stays as
+    /// the contract for callers that are not the policy: a search wider than
+    /// this answers `[]` rather than asking, which is the right answer when
+    /// the hiker is looking at half a continent.
     static let maximumRadiusMeters: Double = 40_000
 
     /// The longest bounding-box diagonal a curated route may have, in metres.
@@ -256,6 +263,30 @@ nonisolated extension CuratedTrailQuery {
 // MARK: - Which routes are day hikes
 
 nonisolated extension CuratedTrailQuery {
+    /// How wide `box` is, in degrees of longitude, read the short way round.
+    ///
+    /// **Overpass has no antimeridian, and its bounding boxes say so.** `bb`
+    /// is a plain minimum and maximum over the members' longitudes, so a route
+    /// that steps across the date line comes back as `minlon −179.99,
+    /// maxlon 179.99` — which read literally is a box around the entire world,
+    /// and read as the mapper meant it is a sliver two hundredths of a degree
+    /// wide. Nothing in the box itself distinguishes the two, and above 180°
+    /// the short reading is the only one that can be a day hike: a route
+    /// genuinely spanning more than half the planet is 20,000 km of walking
+    /// either way round and ``isDayHike(box:)`` rejects it on the complement
+    /// just as it would on the literal width.
+    ///
+    /// Stated once here because ``spanMeters(of:)`` and ``centre(of:)`` have
+    /// to agree about it. They used to agree by accident and only halfway:
+    /// the span was already short, because `RouteGeometry.distanceMeters`
+    /// normalises the delta it is handed, while the centre averaged the two
+    /// numbers as they stood and put a Fijian trail's pin on longitude 0.
+    static func longitudeSpanDegrees(of box: BoundingBox) -> Double {
+        // Overpass emits `minlon <= maxlon`, so there is one direction to fix.
+        let raw = box.east - box.west
+        return raw > 180 ? raw - 360 : raw
+    }
+
     /// The diagonal of `box` on the ground, in metres.
     ///
     /// Great-circle on each edge rather than a degree-space hypotenuse,
@@ -269,7 +300,10 @@ nonisolated extension CuratedTrailQuery {
         )
         let width = RouteGeometry.distanceMeters(
             from: CLLocationCoordinate2D(latitude: box.south, longitude: box.west),
-            to: CLLocationCoordinate2D(latitude: box.south, longitude: box.east)
+            to: CLLocationCoordinate2D(
+                latitude: box.south,
+                longitude: box.west + longitudeSpanDegrees(of: box)
+            )
         )
         return (height * height + width * width).squareRoot()
     }
@@ -293,10 +327,19 @@ nonisolated extension CuratedTrailQuery {
     /// carries no meaning at all; the centre of the box is at least a true
     /// statement about where the route is. The listing pass has no geometry to
     /// do better with, and by the time it does the pin is already placed.
+    ///
+    /// Walked half a width east of `west` rather than averaged with `east`,
+    /// which is the same arithmetic everywhere except across the date line and
+    /// the whole difference there — see ``longitudeSpanDegrees(of:)``. This is
+    /// the coordinate the row is sorted by, the pin stands at and
+    /// ``CuratedTrailStore/trails(near:limit:)`` matches an area against, so a
+    /// route that got the naive average was not merely drawn in the wrong
+    /// place: it sorted as though it were 20,000 km away and could never be
+    /// found in the cache again.
     static func centre(of box: BoundingBox) -> CLLocationCoordinate2D {
         CLLocationCoordinate2D(
             latitude: (box.south + box.north) / 2,
-            longitude: (box.west + box.east) / 2
+            longitude: wrapped(box.west + longitudeSpanDegrees(of: box) / 2)
         )
     }
 }
