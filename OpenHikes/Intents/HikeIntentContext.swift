@@ -25,6 +25,12 @@ nonisolated enum HikeIntentContext {
     /// The coordinator an intent performed inside ``$override`` sees. `nil`
     /// everywhere else, which is every real launch.
     @TaskLocal static var override: HikeIntentCoordinator?
+
+    /// The same escape for ``OpenHikeIntent``, which reaches the view tree
+    /// rather than the store and so has a dependency of its own. A separate
+    /// task-local rather than a field on the coordinator because the two are
+    /// registered separately and a suite may want either without the other.
+    @TaskLocal static var openRequestsOverride: HikeOpenRequests?
 }
 
 /// An intent that acts on the app rather than on its own parameters.
