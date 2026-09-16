@@ -99,6 +99,8 @@ private struct WeatherDetailSheetModifier: ViewModifier {
 struct WeatherDetailView: View {
     private static let markHeight: CGFloat = 18
     private static let headerSpacing: CGFloat = 12
+    /// Between an alert's headline and the authority that issued it.
+    private static let alertRowSpacing: CGFloat = 2
     /// The hourly strip's own measurements, named rather than spelled inline
     /// for the reason every other constant in this file is.
     private enum HourStrip {
@@ -125,6 +127,16 @@ struct WeatherDetailView: View {
         NavigationStack {
             List {
                 if let snapshot = weather.current {
+                    // **Above the reading, which is the one section that
+                    // earns it.** Everything below this is what the weather
+                    // is doing; this is a meteorological agency telling the
+                    // hiker to reconsider the walk, and a storm warning under
+                    // the humidity row would be the sheet ranking it by how
+                    // easy it was to lay out. It costs nothing in the ordinary
+                    // case: it draws only for an alert that actually stands,
+                    // so the fold that #425 and the daylight section were
+                    // fought over is unmoved on every reading that has none.
+                    alertsSection(snapshot.alerts)
                     conditionsSection(snapshot)
                     hourlySection(snapshot.hourly)
                     readingsSection(snapshot.conditions)
@@ -141,6 +153,9 @@ struct WeatherDetailView: View {
                     // is a statement about the day, and so is the freshness
                     // section below it.
                     daylightSection(snapshot.daylight)
+                    // The *absence* of an alert, which is a footnote rather
+                    // than news and so sits here rather than at the top.
+                    alertStatusSection(snapshot.alerts)
                     freshnessSection(snapshot)
                 } else if case .unavailable = weather.state {
                     unavailableSection
@@ -525,6 +540,114 @@ struct WeatherDetailView: View {
         } header: {
             Text("Data Source")
         }
+    }
+}
+
+// MARK: - Severe-weather alerts
+
+/// The alert sections, in a same-file extension.
+///
+/// `WeatherDetailView` sits at SwiftLint's `type_body_length` limit and these
+/// three members put it over. The extension is the way out — `.swiftlint.yml`
+/// sets `excluded_types: [extension, protocol]` — and it is **in this file**
+/// rather than a neighbouring one because `private` in Swift is file-scoped:
+/// a cross-file extension could not reach `DetailRow` or the view's own state
+/// and would not compile. Same move `OpenHikesView` makes, for the same
+/// reason; see the note on that file.
+private extension WeatherDetailView {
+    /// The alerts that stand over this place, worst first.
+    ///
+    /// **Every alert is drawn, including the ones below the interruption
+    /// threshold.** ``WeatherAlertPolicy/interruptionThreshold`` rations the
+    /// *banner*, not the information: a hiker who opened this sheet is asking,
+    /// and a minor advisory they asked for is worth an answer even though it
+    /// was not worth a notification.
+    ///
+    /// The link is not a convenience. WeatherKit's terms require an alert to
+    /// be presented with a link to the issuing authority's own page, because
+    /// the summary is a headline and the page is the advice — see
+    /// ``WeatherAlerts``. It is the row rather than an accessory on it, so
+    /// the tap target is the whole width and a hiker in weather is not asked
+    /// to hit a chevron.
+    @ViewBuilder
+    private func alertsSection(_ alerts: WeatherAlerts?) -> some View {
+        if let alerts, case .active(let summaries) = alerts {
+            Section {
+                ForEach(Self.worstFirst(summaries)) { alert in
+                    Link(destination: alert.detailsURL) {
+                        Label {
+                            VStack(alignment: .leading, spacing: Self.alertRowSpacing) {
+                                Text(alert.summary)
+                                    .font(.headline)
+                                    .foregroundStyle(.primary)
+                                Text("Issued by \(alert.source)")
+                                    .font(.footnote)
+                                    .foregroundStyle(.secondary)
+                            }
+                        } icon: {
+                            Image(systemName: alert.severity.symbolName)
+                                .foregroundStyle(.orange)
+                        }
+                    }
+                    .accessibilityIdentifier("weather-detail-alert")
+                    // The link's own label is the summary and the source; what
+                    // a screen reader cannot see is that it goes somewhere.
+                    .accessibilityHint("Opens the full warning from \(alert.source)")
+                }
+            } header: {
+                Text("Weather Warnings")
+            }
+            .accessibilityIdentifier("weather-detail-alerts")
+        }
+    }
+
+    /// What it means when there is nothing to warn about, which is two
+    /// different things.
+    ///
+    /// **The distinction is the whole reason this row exists.** WeatherKit
+    /// returns `nil` rather than an empty list where it has no alerting
+    /// partner, and drawing both as "No warnings" would tell a hiker in a
+    /// country nobody reports from that the ridge is clear — on the authority
+    /// of an app that has no idea. See ``WeatherAlerts``.
+    ///
+    /// Nothing at all is drawn for a reading restored from a build that never
+    /// asked for `.alerts`: that is a fact about this app rather than about
+    /// the weather, and it is gone on the next fetch.
+    @ViewBuilder
+    private func alertStatusSection(_ alerts: WeatherAlerts?) -> some View {
+        switch alerts {
+        case .clear:
+            Section {
+                DetailRow(label: "Warnings", value: "None")
+                    .accessibilityIdentifier("weather-detail-alerts-clear")
+            }
+        case .unavailable:
+            Section {
+                DetailRow(label: "Warnings", value: "Not reported here")
+                    .accessibilityIdentifier("weather-detail-alerts-unavailable")
+            } footer: {
+                Text("Apple Weather has no severe-weather source for this area.")
+            }
+        case .active, .none:
+            EmptyView()
+        }
+    }
+
+    /// Worst first, so the one that matters is the one read first.
+    ///
+    /// A stable sort on severity alone: alerts of equal grade keep the order
+    /// the authority sent them in, which is the only ordering this app has any
+    /// standing to claim is meaningful.
+    private static func worstFirst(
+        _ summaries: [WeatherAlertSummary]
+    ) -> [WeatherAlertSummary] {
+        summaries.enumerated()
+            .sorted { lhs, rhs in
+                lhs.element.severity == rhs.element.severity
+                    ? lhs.offset < rhs.offset
+                    : lhs.element.severity > rhs.element.severity
+            }
+            .map(\.element)
     }
 }
 

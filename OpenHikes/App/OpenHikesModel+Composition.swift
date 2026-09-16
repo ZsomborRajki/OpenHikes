@@ -521,7 +521,15 @@ private extension OpenHikesModel {
         // ``WeatherPlaceNaming`` existed.
         let weatherManager = WeatherManager(
             store: WeatherReadingStore(defaults: defaults),
-            placeNames: GeocodedWeatherPlaceNames()
+            placeNames: GeocodedWeatherPlaceNames(),
+            // The same notifier the movement reminders use, and the same
+            // refusal under test: a suite must not post banners. It is a
+            // second instance rather than the controller's, because the two
+            // share only the transport — the policy behind an alert is
+            // ``WeatherAlertWatch`` and has nothing to do with a walk's state.
+            notifier: AppLaunchEnvironment.isRunningTests
+                ? nil
+                : SystemMovementReminderNotifier()
         )
         let significantLocations = SignificantLocationFeed(monitor: Self.dormantLocationSource())
         let communityTransport = Self.makeCommunityTransport()

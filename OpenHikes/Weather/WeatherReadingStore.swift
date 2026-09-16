@@ -214,6 +214,39 @@ final class WeatherReadingStore {
             }
         }
 
+        /// The alert state, flattened so the stored bytes do not depend on
+        /// how Foundation happens to encode an enum with an associated value.
+        ///
+        /// Two fields rather than one, because the three-way state needs them:
+        /// ``isWatched`` is whether WeatherKit has an alerting partner for the
+        /// place at all, and ``summaries`` is what it said. Watched with an
+        /// empty list is the all-clear; unwatched is nobody looking. Collapsing
+        /// them would lose exactly the distinction ``WeatherAlerts`` exists
+        /// for — see that file's header.
+        struct Alerts: Codable {
+            var isWatched: Bool
+            var summaries: [WeatherAlertSummary]
+
+            var restored: WeatherAlerts {
+                guard isWatched else { return .unavailable }
+                return summaries.isEmpty ? .clear : .active(summaries)
+            }
+
+            init(_ alerts: WeatherAlerts) {
+                switch alerts {
+                case .unavailable:
+                    isWatched = false
+                    summaries = []
+                case .clear:
+                    isWatched = true
+                    summaries = []
+                case .active(let active):
+                    isWatched = true
+                    summaries = active
+                }
+            }
+        }
+
         var symbolName: String
         var celsius: Double
         var conditionDescription: String
@@ -244,6 +277,14 @@ final class WeatherReadingStore {
         /// for it would throw away a perfectly good reading to hurry up a
         /// field nothing depends on.
         var daylight: Daylight?
+        /// Optional for the reason ``daylight`` is, and for one more that is
+        /// specific to it: the restored value's own ``WeatherAlerts/unavailable``
+        /// means *this region has no alerting partner*, and a blob written by
+        /// a build that never asked for `.alerts` must not decode as that. The
+        /// optional's `nil` is "this build did not ask"; `isWatched == false`
+        /// is "nobody is watching here". Only one of those is a fact about the
+        /// weather.
+        var alerts: Alerts?
     }
 
     private let defaults: UserDefaults
@@ -267,7 +308,8 @@ final class WeatherReadingStore {
             capturedAt: payload.capturedAt,
             conditions: payload.conditions.restored,
             hourly: payload.hourly.map(\.restored),
-            daylight: payload.daylight?.restored
+            daylight: payload.daylight?.restored,
+            alerts: payload.alerts?.restored
         )
         let subject: WeatherSubject
         switch payload.subjectKind {
@@ -310,7 +352,8 @@ final class WeatherReadingStore {
             hikeID: hikeID,
             conditions: Payload.Conditions(snapshot.conditions),
             hourly: snapshot.hourly.map(Payload.Hour.init),
-            daylight: snapshot.daylight.map(Payload.Daylight.init)
+            daylight: snapshot.daylight.map(Payload.Daylight.init),
+            alerts: snapshot.alerts.map(Payload.Alerts.init)
         )
         guard let data = try? JSONEncoder().encode(payload) else { return }
         defaults.set(data, forKey: SettingsKey.lastWeatherReading)

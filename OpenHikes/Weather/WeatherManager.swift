@@ -89,6 +89,17 @@ nonisolated struct WeatherSnapshot: Equatable, Sendable {
     /// this one is `nil`-able rather than decode-failing, and an old blob
     /// keeps working until the next fetch fills it in.
     let daylight: WeatherDaylight?
+    /// What `.alerts` said about this place — see ``WeatherAlerts``.
+    ///
+    /// Optional for the reason ``daylight`` is, plus one that is specific to
+    /// it and sharper: the type's own ``WeatherAlerts/unavailable`` already
+    /// means *nobody is watching here*, and a blob written by a build that
+    /// never asked for `.alerts` must not decode as that. "This build did not
+    /// ask" and "this region has no alerting partner" are different facts and
+    /// only one of them is about the weather, so the absent case is the
+    /// optional's `nil` and `unavailable` is kept for the answer WeatherKit
+    /// actually gave.
+    let alerts: WeatherAlerts?
 
     init(
         symbolName: String,
@@ -97,7 +108,8 @@ nonisolated struct WeatherSnapshot: Equatable, Sendable {
         capturedAt: Date,
         conditions: WeatherConditions,
         hourly: [WeatherHourSummary] = [],
-        daylight: WeatherDaylight? = nil
+        daylight: WeatherDaylight? = nil,
+        alerts: WeatherAlerts? = nil
     ) {
         self.symbolName = symbolName
         self.temperature = temperature
@@ -106,12 +118,14 @@ nonisolated struct WeatherSnapshot: Equatable, Sendable {
         self.conditions = conditions
         self.hourly = hourly
         self.daylight = daylight
+        self.alerts = alerts
     }
 
     init(
         _ weather: CurrentWeather,
         hourly: [WeatherHourSummary] = [],
-        daylight: WeatherDaylight? = nil
+        daylight: WeatherDaylight? = nil,
+        alerts: WeatherAlerts? = nil
     ) {
         self.init(
             symbolName: weather.symbolName,
@@ -120,7 +134,8 @@ nonisolated struct WeatherSnapshot: Equatable, Sendable {
             capturedAt: weather.metadata.date,
             conditions: WeatherConditions(weather),
             hourly: hourly,
-            daylight: daylight
+            daylight: daylight,
+            alerts: alerts
         )
     }
 }
@@ -279,6 +294,15 @@ final class WeatherManager {
     @ObservationIgnored private var cache: OrderedDictionary<String, WeatherSnapshot> = [:]
 
     @ObservationIgnored private let service = WeatherService.shared
+    /// The transport a severe-weather banner goes out through, or `nil` for a
+    /// launch that must not post one — which is every test launch, exactly as
+    /// ``OpenHikesModel/makeMovementReminderController(defaults:)`` decides
+    /// for the movement reminders.
+    @ObservationIgnored private let notifier: (any MovementReminderNotifying)?
+    /// One watch per subject, bounded the same way ``cache`` is and for the
+    /// same reason. See ``announceAlerts(in:for:)`` for why it is per subject
+    /// rather than one for the app.
+    @ObservationIgnored private var alertWatches: OrderedDictionary<String, WeatherAlertWatch> = [:]
     @ObservationIgnored private let store: WeatherReadingStore?
     /// `nil` for a launch that must not reach the network — see
     /// ``WeatherPlaceNaming``. The sheet is then headed exactly as it was
@@ -330,9 +354,14 @@ final class WeatherManager {
     /// for a badge that has nothing to draw against until a location fix
     /// arrives. See ``restoreLastReading()`` for where it went and why the
     /// time is *relocated* rather than saved.
-    init(store: WeatherReadingStore? = nil, placeNames: (any WeatherPlaceNaming)? = nil) {
+    init(
+        store: WeatherReadingStore? = nil,
+        placeNames: (any WeatherPlaceNaming)? = nil,
+        notifier: (any MovementReminderNotifying)? = nil
+    ) {
         self.store = store
         self.placeNames = placeNames
+        self.notifier = notifier
     }
 
     /// Looks up the city the current subject's forecast is for, if it is the
@@ -440,15 +469,17 @@ final class WeatherManager {
         // keeps it rare is a constant nobody would notice regressing. The
         // count per hike is the check.
         do {
-            // One round trip, three datasets. `weather(for:including:)` is
+            // One round trip, four datasets. `weather(for:including:)` is
             // variadic and answers all of them from the same request, so the
-            // strip and the daylight row cost what the badge was already
-            // spending — see ``WeatherHourSummary`` and ``WeatherDaylight``.
-            let (reading, forecast, daily) = try await service.weather(
+            // strip, the daylight row and the alerts cost what the badge was
+            // already spending — see ``WeatherHourSummary``,
+            // ``WeatherDaylight`` and ``WeatherAlerts``.
+            let (reading, forecast, daily, alerts) = try await service.weather(
                 for: location,
                 including: .current,
                 .hourly,
-                .daily
+                .daily,
+                .alerts
             )
             let snapshot = WeatherSnapshot(
                 reading,
@@ -463,11 +494,16 @@ final class WeatherManager {
                 daylight: WeatherDaylight.forDay(
                     of: reading.metadata.date,
                     in: daily
-                )
+                ),
+                // The `nil` is carried rather than defaulted away: it is the
+                // difference between nobody watching this place and nothing to
+                // report, and it is the one this app must not get wrong.
+                alerts: WeatherAlerts(alerts)
             )
             remember(snapshot, for: subject)
             state = .reading(snapshot, subject: subject)
             store?.save(snapshot: snapshot, subject: subject)
+            await announceAlerts(in: snapshot, for: subject)
             return true
         } catch {
             // WeatherKit's failure modes are the opaque ones — a missing
@@ -489,6 +525,47 @@ final class WeatherManager {
             }
             return false
         }
+    }
+
+    /// Interrupts the hiker for anything severe that has not been said yet.
+    ///
+    /// Everything about *whether* is in ``WeatherAlertWatch``, which is a
+    /// value type with no clock and no framework in it; this is the call that
+    /// follows, exactly the split ``MovementReminderController`` keeps with
+    /// its notifier.
+    ///
+    /// **One banner, even when several alerts are new.** The kind's identifier
+    /// is its own, so a second post would replace the first rather than stack
+    /// under it — and the worst one is what `observed(_:)` returns first.
+    /// Three warnings over one ridge is a sheet to open, not three banners.
+    ///
+    /// A watch per subject, because an alert already announced over one ridge
+    /// is news again over another: it is a different place being warned about.
+    private func announceAlerts(
+        in snapshot: WeatherSnapshot,
+        for subject: WeatherSubject
+    ) async {
+        guard let notifier, let alerts = snapshot.alerts else { return }
+        var watch = alertWatches[subject.key] ?? WeatherAlertWatch()
+        let worthSaying = watch.observed(alerts)
+        alertWatches[subject.key] = watch
+        alertWatches.move(keys: CollectionOfOne(subject.key), to: alertWatches.count)
+        if alertWatches.count > WeatherRequestState.trackedSubjectLimit {
+            alertWatches.removeFirst()
+        }
+        guard let worst = worthSaying.first else { return }
+        // Asked rather than assumed, and asked only when there is something to
+        // say: `authorize()` prompts the first time, and a prompt that arrives
+        // because a storm warning just came in is a question about something
+        // the hiker is in the middle of. One at launch is a question about
+        // something that may never happen.
+        guard await notifier.authorize() else { return }
+        await notifier.post(
+            MovementReminderWording.severeWeather(
+                worst,
+                placeName: cities[subject.key] ?? subject.placeName ?? ""
+            )
+        )
     }
 
     private func remember(_ snapshot: WeatherSnapshot, for subject: WeatherSubject) {
