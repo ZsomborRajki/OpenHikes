@@ -20,7 +20,10 @@ import UniformTypeIdentifiers
 struct GPXExportTests {
     // MARK: Fixtures
 
-    private static let date = Date(timeIntervalSince1970: 1_780_000_000)
+    /// Internal rather than private: `GPXExportTests+Photographs.swift`
+    /// measures its waypoint times as offsets from this, and an extension in
+    /// another file cannot reach a `private` member.
+    static let date = Date(timeIntervalSince1970: 1_780_000_000)
     private static let gpxIdentifier = "com.topografix.gpx"
 
     /// ``date`` as the file name spells it, taken from the calendar rather
@@ -58,7 +61,10 @@ struct GPXExportTests {
     /// than asserting on strings: the importer is a real GPX reader written
     /// against other people's files, not a mirror of this writer, so agreeing
     /// with it is evidence the file travels.
-    private func reimported(_ track: GPXExport.Track) throws -> GPXImport.Track {
+    /// Internal rather than private for the reason ``date`` is:
+    /// `GPXExportTests+Photographs.swift` needs the same round trip, and an
+    /// extension in another file cannot reach a `private` member.
+    func reimported(_ track: GPXExport.Track) throws -> GPXImport.Track {
         let url = FileManager.default.temporaryDirectory
             .appendingPathComponent("export-\(UUID().uuidString)")
             .appendingPathExtension("gpx")

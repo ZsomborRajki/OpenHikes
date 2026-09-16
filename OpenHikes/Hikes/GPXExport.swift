@@ -7,6 +7,7 @@
 //  whatever else the hiker uses.
 //
 
+import CoreLocation
 import CoreTransferable
 import Foundation
 import UniformTypeIdentifiers
@@ -24,6 +25,30 @@ nonisolated enum GPXExport {
         var keywords: String?
         var date: Date
         var route: [RouteCoordinate]
+        /// Where the hiker photographed something, in the order the hike
+        /// carries them. Empty for a hike with no pictures, and for one whose
+        /// pictures are all unanchored — see ``Photograph``.
+        var photographs: [Photograph] = []
+    }
+
+    /// One photograph's place and moment, which is all of it that GPX can
+    /// carry.
+    ///
+    /// A value of its own rather than a `HikePhoto`, for the reason ``Track``
+    /// is not a `Hike`: this crosses to whatever executor the share sheet
+    /// serializes on, and `HikePhoto` belongs to a main-actor model graph.
+    ///
+    /// **No file name, and that is the decision rather than an omission.**
+    /// GPX 1.1 allows `<link href="…">` on a waypoint, and the pixels live
+    /// under ``HikePhotoStore`` rather than beside the `.gpx` — so a relative
+    /// filename would be a promise about a file the share sheet does not
+    /// send. The waypoint says *a photo was taken here*, which is the part
+    /// that is lost entirely today; making export a folder or a zip is a
+    /// different change to ``writeTemporaryFile(for:)`` and to what the share
+    /// sheet hands over.
+    struct Photograph: Sendable, Equatable {
+        var coordinate: RouteCoordinate
+        var capturedAt: Date
     }
 
     /// Named in the file so a track that turns up in another app says where it
@@ -81,6 +106,19 @@ nonisolated enum GPXExport {
     /// re-grow the string dozens of times on its way to a few megabytes.
     private static let bytesPerPoint = 96
     private static let preambleBytes = 512
+    /// Rough cost of one `<wpt>`, budgeted with the points above so a hike
+    /// with a full gallery does not re-grow the string on its way past them.
+    private static let bytesPerPhotograph = 160
+
+    /// What a photo waypoint is called in a reader that lists it.
+    ///
+    /// Not the hike's name and not the file's: the hike's is already on the
+    /// track and repeating it would give every waypoint the same label, while
+    /// the file's names something the export does not carry.
+    static let photographName = "Photo"
+    /// `<sym>` is a hint to the reader's own symbol table rather than a
+    /// drawing, and this is the name readers conventionally map to a camera.
+    static let photographSymbol = "Photo"
 
     /// The GPX 1.1 document for `track`.
     ///
@@ -91,13 +129,18 @@ nonisolated enum GPXExport {
     /// thread.
     static func xml(for track: Track) -> String {
         var xml = ""
-        xml.reserveCapacity(preambleBytes + track.route.count * bytesPerPoint)
+        xml.reserveCapacity(
+            preambleBytes
+                + track.route.count * bytesPerPoint
+                + track.photographs.count * bytesPerPhotograph
+        )
         xml += "<?xml version=\"1.0\" encoding=\"UTF-8\"?>\n"
         xml += "<gpx version=\"1.1\" creator=\"\(escaped(creator))\""
         xml += " xmlns=\"\(namespace)\""
         xml += " xmlns:xsi=\"\(schemaNamespace)\""
         xml += " xsi:schemaLocation=\"\(schemaLocation)\">\n"
         appendMetadata(of: track, to: &xml)
+        appendPhotographs(track, to: &xml)
         appendTrack(track, to: &xml)
         xml += "</gpx>\n"
         return xml
@@ -131,6 +174,47 @@ nonisolated private extension GPXExport {
             xml += "    <keywords>\(escaped(keywords))</keywords>\n"
         }
         xml += "  </metadata>\n"
+    }
+
+    /// A `<wpt>` for every photograph that has a place on the trail.
+    ///
+    /// **Between `<metadata>` and `<trk>`, and that is the schema rather than
+    /// a preference.** GPX 1.1 fixes the order of `<gpx>`'s children —
+    /// metadata, then `wpt*`, then `rte*`, then `trk*` — exactly as it fixes
+    /// the order of `<metadata>`'s own, and a schema-validating reader refuses
+    /// a file that puts waypoints after the track.
+    ///
+    /// **An unanchored photograph is deliberately not written.** `lat` and
+    /// `lon` are required attributes, and ``HikePhoto``'s coordinate is
+    /// optional on purpose — see that type, whose own note says an unanchored
+    /// photo "is still a photo of the walk; it simply has no place to point at
+    /// on the map". There is no honest `<wpt>` for one. Filtered in
+    /// ``Track/init(hike:)`` rather than here, so what this receives is
+    /// already the set that can be written.
+    ///
+    /// `<name>` rather than the photograph's own file name: the file is not
+    /// in the export, so naming it would be describing something the receiver
+    /// does not have. `<sym>` is the conventional way to say what kind of
+    /// waypoint this is, and *Photo* is the name every reader that has a
+    /// symbol table for it already uses.
+    static func appendPhotographs(_ track: Track, to xml: inout String) {
+        for photograph in track.photographs {
+            let latitude = photograph.coordinate.latitude.formatted(coordinateStyle)
+            let longitude = photograph.coordinate.longitude.formatted(coordinateStyle)
+            xml += "  <wpt lat=\"\(latitude)\" lon=\"\(longitude)\">\n"
+            // The same guard ``appendPoint(_:to:)`` applies and for the same
+            // reason: `inf` and `nan` are not `xsd:decimal`, and a strict
+            // reader refuses the whole file over one of them.
+            if let elevation = photograph.coordinate.elevation, elevation.isFinite {
+                xml += "    <ele>\(elevation.formatted(elevationStyle))</ele>\n"
+            }
+            // GPX 1.1 fixes `<wpt>`'s children too, and `<time>` comes before
+            // `<ele>`'s successors but after `<ele>` itself.
+            xml += "    <time>\(timeStyle.format(photograph.capturedAt))</time>\n"
+            xml += "    <name>\(escaped(photographName))</name>\n"
+            xml += "    <sym>\(escaped(photographSymbol))</sym>\n"
+            xml += "  </wpt>\n"
+        }
     }
 
     static func appendTrack(_ track: Track, to xml: inout String) {
@@ -462,6 +546,11 @@ extension GPXExport.Track {
     /// A file's own author wins where both exist. It is the more specific
     /// claim about the document being written, and nothing in the app sets
     /// both.
+    ///
+    /// The photographs are filtered to the anchored ones here rather than at
+    /// the point of writing, so what the serializer receives is already the
+    /// set GPX can express — see ``GPXExport/Photograph``. They keep the
+    /// hike's own order, which is the order the gallery draws them in.
     init(hike: Hike) {
         self.init(
             name: hike.displayTitle,
@@ -469,7 +558,17 @@ extension GPXExport.Track {
             author: hike.author ?? hike.importedAuthorName,
             keywords: hike.keywords,
             date: hike.date,
-            route: hike.route
+            route: hike.route,
+            photographs: hike.photos.compactMap { photo in
+                guard let coordinate = photo.coordinate else { return nil }
+                return GPXExport.Photograph(
+                    coordinate: RouteCoordinate(
+                        latitude: coordinate.latitude,
+                        longitude: coordinate.longitude
+                    ),
+                    capturedAt: photo.capturedAt
+                )
+            }
         )
     }
 }
