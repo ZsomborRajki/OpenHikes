@@ -83,6 +83,10 @@ Scripts/run-ui-tests.sh --all
 
 # Strict SwiftLint, the same one CI runs; --fix applies what it can correct
 Scripts/lint.sh
+
+# The shell scripts' own tests, against stubbed xcrun/xcodebuild — nothing is
+# built and no simulator is touched. CI fails a merge on this one too.
+Scripts/run-script-tests.sh
 ```
 
 Against a cold simulator, `xcodebuild test` fails with "The test runner hung before establishing connection" after several minutes without a single test having reported — which is why the boot is the first line above rather than an optional one.
@@ -113,6 +117,7 @@ Following Apple's [Food Truck](https://github.com/apple/sample-food-truck) and [
 | `OpenHikes/Tiles/` | Tile provider policy, cache, auto-save, offline downloads, overlay rendering. |
 | `OpenHikes/Community/` | Publishing a hike to the public database, browsing and searching what other people published, the map's lines and pins for them, importing one, reporting and blocking. |
 | `OpenHikes/Photos/` | Capture and import, library discovery and time-to-place matching, the file store, trail anchoring, gallery, viewer and map pins. |
+| `OpenHikes/Health/` | Writing a finished hike into the hiker's own Health store, behind a switch and behind a seam that keeps HealthKit out of the tests. |
 | `OpenHikes/Sync/` | iCloud sync status and control, and the settings key-value mirror. |
 | `OpenHikes/Weather/` | WeatherKit polling, the badge over the map and its detail sheet, unit formatting, and Apple Weather attribution. |
 | `OpenHikes/Purchases/` | The Pro entitlement and its StoreKit state, the paywall, and the subscription terms and links. |
@@ -125,6 +130,7 @@ Following Apple's [Food Truck](https://github.com/apple/sample-food-truck) and [
 | `OpenWidget/` | iOS Home Screen widget and the Live Activity's Lock Screen and Dynamic Island views. |
 | `OpenHikesTests/`, `OpenWidgetTests/` | App-hosted tests mirroring the app's domain folders. |
 | `OpenHikesUITests/` | Simulator UI automation, location spoofing, launch metrics. |
+| `Scripts/` | The gates and tools a contributor runs by hand: lint, the UI-test runner, the simulated hike, and the three checks CI fails a merge on. |
 | `ci_scripts/` | Xcode Cloud hooks, run automatically by name. |
 
 ## License
