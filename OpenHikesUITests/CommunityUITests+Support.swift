@@ -91,6 +91,16 @@ nonisolated enum SeededQueuedHike {
     static let photoCount = 2
 }
 
+/// How many screens ``XCTestCase/awaitCommunityAnswer(_:in:)`` walks before
+/// turning round.
+///
+/// The merged list is a page of twenty-five at most and four rows fit on a
+/// sheet at its middle detent, so four screens reaches the bottom of anything
+/// these scenarios seed with room to spare. It is a bound rather than a
+/// measurement: what it has to be is *enough*, and a sweep that overshoots
+/// costs a swipe against a list that has stopped moving.
+private let communityListSweepScreens = 4
+
 extension XCTestCase {
     /// A launch with a stand-in public database, a fix on the fixture
     /// trailhead, and the sheet already open.
@@ -229,16 +239,47 @@ extension XCTestCase {
     /// Budgeted at launch scale for the reason ``selectCommunityTab(in:)``
     /// gives. It costs that budget only when nothing happens at all, which is
     /// a failure either way.
+    /// **A row that is not in the element tree is two different failures, and
+    /// this used to answer only one of them.** `List` builds its rows lazily,
+    /// so a row the browser has already returned is absent from the tree
+    /// until the list has been scrolled to it — which reads exactly like a
+    /// half that never answered. The merged list is five rows against a sheet
+    /// that shows four, and the curated pair sorts behind all three published
+    /// hikes, so the last row was permanently past the fold: the browser had
+    /// answered correctly, the pill was tapped fifty times over forty
+    /// seconds, and the wait reported that the row "should be listed".
+    ///
+    /// So each poll walks one screen as well as asking again. It walks
+    /// **both ways**, because a case asks about five titles and the merge
+    /// decides which row is which — the row wanted next is as often above the
+    /// last one as below it. The step counter is what makes going back up
+    /// safe: `swipeDown` with the list already at its top is a gesture on the
+    /// *sheet*, which would resize the screen under the test rather than
+    /// scroll it, so this never swipes down more times than it has swiped up.
     @MainActor
     @discardableResult func awaitCommunityAnswer(
         _ target: XCUIElement,
         in app: XCUIApplication
     ) -> Bool {
         let pill = element("community-search-this-area", in: app)
+        let container = scrollContainer(in: app)
+        // How far this sweep has walked the list down, so it can walk back.
+        var walked = 0
         return waitUntil(timeout: UITestTimeout.trace) {
-            if target.exists { return true }
+            // Reachable rather than merely present: the callers read this
+            // row's label or tap it, and a row hanging off the bottom edge
+            // answers `exists` while neither of those works. See
+            // ``XCTestCase/isReachable(_:in:)``.
+            if isReachable(target, in: app) { return true }
             if pill.exists { pill.tap() }
-            return false
+            if walked < communityListSweepScreens {
+                container.swipeUp()
+                walked += 1
+            } else if walked > 0 {
+                container.swipeDown()
+                walked -= 1
+            }
+            return isReachable(target, in: app)
         }
     }
 

@@ -30,9 +30,21 @@
 //    row it has something for. A screen that has never been seen sparse is a
 //    screen whose sparse state was written blind.
 //
-//  Both start within a few hundred metres of ``UITestFixture``'s trailhead,
-//  where the scenarios put the simulated fix, so a nearby search finds them
-//  beside the seeded published hikes rather than instead of them.
+//  Both sit about eight kilometres from ``UITestFixture``'s trailhead, where
+//  the scenarios put the simulated fix — inside the smallest search this
+//  feature allows (``CommunityQueryPolicy/minimumRadiusMeters``), so a nearby
+//  search finds them beside the seeded published hikes rather than instead of
+//  them.
+//
+//  **Eight kilometres and not a few hundred metres, which is what this said
+//  and was believed.** The merged answer is sorted nearest first across both
+//  halves, so the distance is what decides where a curated row lands: at this
+//  range both sort behind all three seeded published hikes, which puts the
+//  second of them past the fold of a sheet at its middle detent. That is not
+//  a fault in the fixture — a list of twenty-five is past the fold whatever
+//  the order — but it is the reason a wait that only asked whether a row
+//  existed reported that the curated half had never answered. See
+//  ``XCTestCase/awaitCommunityAnswer(_:in:)``.
 //
 
 import CoreLocation
