@@ -121,24 +121,6 @@ final class WidgetRecordingRequest {
     }
 }
 
-/// The widget's configuration, which is deliberately empty.
-///
-/// There is nothing for a hiker to choose here: the widget shows whatever
-/// hike the app has selected, and an active recording always wins. Picking a
-/// hike in two places would be one place too many.
-///
-/// It exists because `AppIntentConfiguration` is what gives
-/// ``TrailWidgetProvider`` an `async` timeline and a `relevance()` the Smart
-/// Stack reads — see the provider.
-struct TrailWidgetConfiguration: WidgetConfigurationIntent {
-    static let title: LocalizedStringResource = "Trail"
-    // periphery:ignore - an optional `AppIntent` requirement, read through
-    // the AppIntents metadata rather than by any call site.
-    static let description = IntentDescription(
-        "Shows your selected trail or a hike currently being recorded."
-    )
-}
-
 struct TrailWidgetProvider: AppIntentTimelineProvider {
     /// How far ahead the timeline schedules its self-healing reload.
     ///
@@ -162,7 +144,9 @@ struct TrailWidgetProvider: AppIntentTimelineProvider {
         for configuration: TrailWidgetConfiguration,
         in context: Context
     ) async -> TrailWidgetEntry { // swiftlint:disable:this async_without_await
-        context.isPreview ? Self.placeholderEntry() : Self.currentEntry()
+        context.isPreview
+            ? Self.placeholderEntry()
+            : Self.currentEntry(pinnedTo: configuration.hike?.id)
     }
 
     /// An `async` requirement rather than the completion-handler pair
@@ -177,16 +161,17 @@ struct TrailWidgetProvider: AppIntentTimelineProvider {
         for configuration: TrailWidgetConfiguration,
         in context: Context
     ) async -> Timeline<TrailWidgetEntry> {
-        let entry = Self.currentEntry()
+        let pinned = configuration.hike?.id
+        let entry = Self.currentEntry(pinnedTo: pinned)
         guard let recording = entry.recordingSnapshot,
               recording.isCapturingFixes else {
-            return Self.currentTimeline()
+            return Self.currentTimeline(pinnedTo: pinned)
         }
         // Best-effort: the sampler answers whether or not it got a fix, and a
         // timeline is owed either way. Whatever it managed to write is picked
         // up by re-reading the store below.
         await WidgetRecordingLocationSampler.shared.fix(for: recording.sessionID)
-        return Self.currentTimeline()
+        return Self.currentTimeline(pinnedTo: pinned)
     }
 
     /// What the Smart Stack ranks this widget by.
@@ -221,10 +206,26 @@ struct TrailWidgetProvider: AppIntentTimelineProvider {
     // surface a test can reach at all.
 
     /// Whatever the app most recently wrote, with its basemaps if it has any.
-    static func currentEntry(date: Date = .now) -> TrailWidgetEntry {
+    ///
+    /// - Parameter pinnedHikeID: the trail this widget was configured for, or
+    ///   `nil` to follow the app's selection — which is what every widget
+    ///   placed before #468 decodes as, and what must keep working unchanged.
+    ///
+    /// **A pinned widget whose trail has no snapshot draws nothing rather than
+    /// the selected trail.** Falling back to the selection would be the widget
+    /// silently showing a different hike from the one its own settings name,
+    /// which is worse than an empty state: it is wrong without saying so.
+    ///
+    /// The recording is read the same way whatever is pinned, which is the
+    /// takeover rule surviving the change — see ``TrailWidgetEntry/init``.
+    /// Pinning a trail does not buy a widget an exemption from it.
+    static func currentEntry(
+        date: Date = .now,
+        pinnedTo pinnedHikeID: UUID? = nil
+    ) -> TrailWidgetEntry {
         TrailWidgetEntry(
             date: date,
-            snapshot: SharedStore.load(),
+            snapshot: pinnedHikeID.map(SharedStore.loadTrailSnapshot(for:)) ?? SharedStore.load(),
             recordingSnapshot: SharedStore.loadRecording()
         )
     }
@@ -233,8 +234,11 @@ struct TrailWidgetProvider: AppIntentTimelineProvider {
         TrailWidgetEntry(date: date, snapshot: placeholderSnapshot)
     }
 
-    static func currentTimeline(date: Date = .now) -> Timeline<TrailWidgetEntry> {
-        let entry = currentEntry(date: date)
+    static func currentTimeline(
+        date: Date = .now,
+        pinnedTo pinnedHikeID: UUID? = nil
+    ) -> Timeline<TrailWidgetEntry> {
+        let entry = currentEntry(date: date, pinnedTo: pinnedHikeID)
         return Timeline(
             entries: [entry],
             policy: .after(

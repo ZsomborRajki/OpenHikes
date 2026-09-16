@@ -82,6 +82,14 @@ struct OpenHikesApp: App {
             // because it wants the same coordinator, and off the main actor
             // because it is a whole-library fetch nothing on screen waits for.
             HikeSpotlightIndex.donate(from: coordinator)
+            // The App Group's copy of the library, and a trail snapshot for
+            // every hike a placed widget is pinned to. Beside the Spotlight
+            // sweep because it is the same sweep argument — see
+            // ``SharedHikeCataloguePublisher``.
+            SharedHikeCataloguePublisher.publish(
+                from: coordinator,
+                container: appModel.container
+            )
             // The Live Activity's own buttons, registered the same way and for
             // the same reason: the intent type is compiled into the widget
             // extension and performed here.
