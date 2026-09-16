@@ -47,6 +47,7 @@
 
 import AppIntents
 import Foundation
+import OpenHikesShared
 
 /// Not `nonisolated`, for the reason ``HikeEntity`` gives: `@Parameter` and
 /// `@Dependency` wrap mutable stored properties.

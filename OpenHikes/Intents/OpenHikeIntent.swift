@@ -33,6 +33,7 @@
 
 import AppIntents
 import Foundation
+import OpenHikesShared
 
 /// Not `nonisolated`, unlike almost everything else in this folder, and for
 /// the reason ``HikeEntity`` gives: `@Parameter` and `@Dependency` are
