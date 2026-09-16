@@ -514,7 +514,15 @@ private extension OpenHikesModel {
             workoutWriter: Self.makeWorkoutWriter()
         )
         let locationManager = LocationManager(manager: Self.dormantLocationSource())
-        let weatherManager = WeatherManager(store: WeatherReadingStore(defaults: defaults))
+        // The geocoder is passed here and deliberately *not* on the
+        // UI-testing path below: naming a forecast's place reaches MapKit's
+        // network, and a launch that must not do that heads the detail sheet
+        // with the subject's own name, exactly as it did before
+        // ``WeatherPlaceNaming`` existed.
+        let weatherManager = WeatherManager(
+            store: WeatherReadingStore(defaults: defaults),
+            placeNames: GeocodedWeatherPlaceNames()
+        )
         let significantLocations = SignificantLocationFeed(monitor: Self.dormantLocationSource())
         let communityTransport = Self.makeCommunityTransport()
 
