@@ -36,13 +36,14 @@ import Testing
 struct CommunityContributionBudgetTests {
     private static func record(
         _ id: String,
-        photos: Int
+        photos: Int,
+        authorID: String = "author-1"
     ) -> CloudKitCommunityTransport.ContributionRecord {
         CloudKitCommunityTransport.ContributionRecord(
             id: id,
             photoSubmissionID: "\(id)-submission",
             authorName: "Anna",
-            authorID: "author-1",
+            authorID: authorID,
             publishedAt: Date(timeIntervalSince1970: 1_700_000_000),
             photoCount: photos
         )
@@ -111,6 +112,55 @@ struct CommunityContributionBudgetTests {
     @Test("no contributions is no work")
     func nothingIsNothing() {
         #expect(Self.budget([]).isEmpty)
+    }
+
+    /// The third ceiling, which is the query's own and is spent *before*
+    /// either of the two above.
+    ///
+    /// A blocked contributor's sets cannot be kept out of the predicate —
+    /// ``CommunitySchema/Contribution/authorID`` carries no index, deliberately
+    /// — so the server counts them towards the limit and the client throws
+    /// them away afterwards. One contributor with a page's worth of sets on a
+    /// trail would therefore hide every other contributor's photographs there,
+    /// permanently: the same failure ``CommunityPageBudget`` was written for on
+    /// the browse queries, which is why the transport now spends it here too.
+    ///
+    /// Asserted against the budget rather than against the transport, for the
+    /// reason the rest of this file is `CKRecord`-free: the paging needs the
+    /// public database and the rule does not.
+    @Test("a page of one blocked contributor's sets buys another page")
+    func blockedSetsDoNotSpendTheQueryLimit() {
+        let limit = CloudKitCommunityTransport.maximumContributions
+        var budget = CommunityPageBudget<CloudKitCommunityTransport.ContributionRecord>(
+            limit: limit,
+            excluding: ["author-1"]
+        )
+        let blockedPage = (0..<limit).map { Self.record("blocked-\($0)", photos: 1) }
+
+        let wantsMore = budget.accept(blockedPage, hasMore: true)
+        #expect(wantsMore, "a page of nothing must ask again")
+        #expect(budget.results.isEmpty)
+
+        let ordinary = Self.record("c1", photos: 1, authorID: "author-2")
+        _ = budget.accept([ordinary], hasMore: false)
+        #expect(budget.results.map(\.id) == ["c1"])
+    }
+
+    /// And a hiker who has blocked nobody pays exactly one request, which is
+    /// what this behaved like before the paging existed.
+    @Test("with nobody blocked the first page is the answer")
+    func nothingBlockedIsOneRequest() {
+        var budget = CommunityPageBudget<CloudKitCommunityTransport.ContributionRecord>(
+            limit: CloudKitCommunityTransport.maximumContributions,
+            excluding: []
+        )
+        let page = (0..<CloudKitCommunityTransport.maximumContributions)
+            .map { Self.record("c\($0)", photos: 1) }
+
+        let wantsMore = budget.accept(page, hasMore: true)
+        #expect(!wantsMore)
+        #expect(budget.requestsMade == 1)
+        #expect(budget.results.count == CloudKitCommunityTransport.maximumContributions)
     }
 
     /// The relationship between the two ceilings, stated so a change to either

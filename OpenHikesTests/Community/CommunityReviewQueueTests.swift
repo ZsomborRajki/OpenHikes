@@ -258,6 +258,35 @@ struct CommunityReviewQueueTests {
         #expect(queue.pending.map(\.id) == ["notice-1", "notice-2"], "the server's answer, not ours")
     }
 
+    /// A takedown decided in a gallery is not a queue decision: the
+    /// contribution had been published, which is how somebody was looking at
+    /// it, so there is no notice to drop and no reason to spend the launch's
+    /// one question on it. What it does have to do is tell the trail behind
+    /// that gallery to stop drawing it — see
+    /// `CommunityContributionVisibilityTests`, which is where the other end of
+    /// this is asserted.
+    @Test("a takedown is remembered for the screen behind it and costs no request")
+    func aTakeDownIsRememberedWithoutRefetching() async {
+        let transport = StubCommunityTransport()
+        transport.pendingResult = .success(.hikes([.stub()]))
+        let queue = CommunityReviewQueue(transport: transport)
+
+        queue.startBrowsing()
+        await settle(queue)
+        #expect(queue.takenDownContributions.isEmpty)
+
+        queue.tookDown(contribution: "contribution-1")
+
+        #expect(queue.takenDownContributions == ["contribution-1"])
+        #expect(queue.pending.count == 1, "a published contribution was never in the queue")
+
+        queue.stopBrowsing()
+        queue.startBrowsing()
+        await settle(queue)
+        #expect(transport.recording.queueRequests == 1, "nothing about the queue changed")
+        #expect(queue.takenDownContributions == ["contribution-1"], "and it outlives the tab")
+    }
+
     /// The guard that keeps two requests from overlapping has to survive a
     /// cancelled one landing late. Without a generation to check, the
     /// superseded task clears ``isLoading`` for the request that replaced it,

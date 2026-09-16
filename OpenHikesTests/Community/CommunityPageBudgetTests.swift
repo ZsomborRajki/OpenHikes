@@ -27,7 +27,7 @@ struct CommunityPageBudgetTests {
     /// answers the question.
     @Test("a full page with nothing blocked ends the request")
     func oneFullPageIsEnough() {
-        var budget = CommunityPageBudget(limit: Self.limit, excluding: [])
+        var budget = CommunityPageBudget<CommunityListing>(limit: Self.limit, excluding: [])
         let wantsMore = budget.accept(Self.page(of: Self.limit, by: "author-1"), hasMore: true)
 
         #expect(!wantsMore)
@@ -41,7 +41,7 @@ struct CommunityPageBudgetTests {
     /// hidden page forever.
     @Test("a page eaten by blocked rows buys another")
     func aBlockedPageIsFollowed() {
-        var budget = CommunityPageBudget(limit: Self.limit, excluding: ["author-1"])
+        var budget = CommunityPageBudget<CommunityListing>(limit: Self.limit, excluding: ["author-1"])
 
         let wantsSecond = budget.accept(
             Self.page(of: Self.limit, by: "author-1"),
@@ -64,14 +64,14 @@ struct CommunityPageBudgetTests {
     /// to walk the whole table by panning.
     @Test("the request stops at the cap however much is blocked")
     func pagingIsBounded() {
-        var budget = CommunityPageBudget(limit: Self.limit, excluding: ["author-1"])
+        var budget = CommunityPageBudget<CommunityListing>(limit: Self.limit, excluding: ["author-1"])
         var pages = 0
         while budget.accept(Self.page(of: Self.limit, by: "author-1"), hasMore: true) {
             pages += 1
-            #expect(pages < CommunityPageBudget.maxRequests, "paging did not stop")
+            #expect(pages < CommunityPageBudget<CommunityListing>.maxRequests, "paging did not stop")
         }
 
-        #expect(budget.requestsMade == CommunityPageBudget.maxRequests)
+        #expect(budget.requestsMade == CommunityPageBudget<CommunityListing>.maxRequests)
         // Nothing, which is the honest reading of "everything near here is
         // from people you have blocked" rather than a failure.
         #expect(budget.results.isEmpty)
@@ -81,7 +81,7 @@ struct CommunityPageBudgetTests {
     /// again would return nothing, twice.
     @Test("a page with no cursor behind it ends the request")
     func noCursorEndsIt() {
-        var budget = CommunityPageBudget(limit: Self.limit, excluding: ["author-1"])
+        var budget = CommunityPageBudget<CommunityListing>(limit: Self.limit, excluding: ["author-1"])
         let wantsMore = budget.accept(
             Self.page(of: 3, by: "author-1") + [.stub(id: "keeper", authorID: "author-2")],
             hasMore: false
@@ -95,7 +95,7 @@ struct CommunityPageBudgetTests {
     /// asked for a screenful.
     @Test("more collected than asked for is trimmed to the limit")
     func resultsNeverExceedTheLimit() {
-        var budget = CommunityPageBudget(limit: 3, excluding: ["author-1"])
+        var budget = CommunityPageBudget<CommunityListing>(limit: 3, excluding: ["author-1"])
         _ = budget.accept(Self.page(of: 2, by: "author-2"), hasMore: true)
         _ = budget.accept(Self.page(of: 5, by: "author-2", startingAt: 100), hasMore: true)
 

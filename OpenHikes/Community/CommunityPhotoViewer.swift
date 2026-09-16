@@ -246,7 +246,7 @@ struct CommunityPhotoViewer: View {
                     listing: actions.listing,
                     blockList: actions.blockList,
                     transport: actions.transport,
-                    isReviewer: actions.isReviewer,
+                    review: actions.review,
                     onLeave: onLeave
                 )
             }
@@ -259,7 +259,15 @@ struct CommunityPhotoViewer: View {
         var listing: CommunityListing
         var blockList: CommunityBlockList
         var transport: any CommunityTransporting
-        var isReviewer = false
+        /// The reviewer's own state, which answers two questions rather than
+        /// one: whether a takedown may be offered at all, and — once one has
+        /// happened — what the trail behind this gallery must stop drawing.
+        /// See ``CommunityReviewQueue/takenDownContributions``.
+        ///
+        /// Optional because a launch without a transport has no queue either,
+        /// which is every hosted suite and every UI scenario that did not ask
+        /// for one.
+        var review: CommunityReviewQueue?
     }
 
     // MARK: - Titles

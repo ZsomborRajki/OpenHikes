@@ -462,8 +462,11 @@ nonisolated protocol CommunityTransporting: Sendable {
     /// A `String` rather than a value, because a record name is the whole of
     /// what the caller does anything with — see
     /// ``CommunityContributionCheck``. Needs
-    /// ``CommunitySchema/Contribution/listing``'s sibling index on the record
-    /// name, which the Console adds by default.
+    /// ``CommunitySchema/Contribution/photoSubmission`` QUERYABLE, which is
+    /// the predicate this runs and the second of that type's two indexes —
+    /// not the record-name index the Console adds by default, which is about
+    /// a different field. Without it every contributed set reads as *waiting
+    /// for review* for good; see ``CommunitySchema``.
     @concurrent
     func contribution(of photoSubmissionID: String) async throws -> String?
 
@@ -493,7 +496,10 @@ nonisolated protocol CommunityTransporting: Sendable {
     ///   ``CommunitySchema/Contribution/authorID``. Applied here as well as on
     ///   the way out for the reason the two list queries take one: a set from
     ///   a blocked contributor must not be downloaded, because downloading it
-    ///   is the cost.
+    ///   is the cost. It cannot go into the predicate — that field carries no
+    ///   index, deliberately — so a conformance that pages owes the same debt
+    ///   the browse queries do: a page spent entirely on blocked sets must buy
+    ///   another. See ``CommunityPageBudget``.
     ///
     /// Needs no account, like every other read here. The caller owns
     /// `directory` and is what eventually deletes it.

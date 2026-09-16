@@ -265,12 +265,16 @@ nonisolated enum CommunityPublisher {
     /// twenty photographs who strikes off the first can have the thirteenth,
     /// where filtering afterwards would simply have sent eleven.
     ///
+    /// A photograph that came with somebody else's hike is not here at all,
+    /// and that exclusion is nearer a safety rail than a rule about order —
+    /// see ``ownPhotos(of:)``.
+    ///
     /// Internal rather than private so the form can draw the same list in the
     /// same order the upload will use. A screen that built its own order would
     /// eventually disagree with this one about which twelve go.
     @MainActor
     static func selectedPhotos(of hike: Hike, excluding excluded: Set<UUID> = []) -> [HikePhoto] {
-        let ordered = hike.orderedPhotos.filter { !excluded.contains($0.id) }
+        let ordered = ownPhotos(of: hike).filter { !excluded.contains($0.id) }
         let anchored = ordered.filter(\.isAnchored)
         let unanchored = ordered.filter { !$0.isAnchored }
         return Array((anchored + unanchored).prefix(maximumPhotos))
@@ -281,8 +285,29 @@ nonisolated enum CommunityPublisher {
     /// they can be put back.
     @MainActor
     static func shareablePhotos(of hike: Hike) -> [HikePhoto] {
-        let ordered = hike.orderedPhotos
+        let ordered = ownPhotos(of: hike)
         return ordered.filter(\.isAnchored) + ordered.filter { !$0.isAnchored }
+    }
+
+    /// A hike's photographs minus the ones that came with somebody else's
+    /// listing, in the hike's own order.
+    ///
+    /// The single gate both paths above go through, so *what may be published*
+    /// is decided in one place rather than agreed on by two.
+    ///
+    /// It matters most on the path that looks least like publishing. A hike
+    /// saved from the community carries a copy of its author's pictures — see
+    /// ``CommunityImport`` — and is precisely the hike the contribution form
+    /// then offers to add photographs to, aimed at the trail those pictures
+    /// came from. Drawing them there would put somebody else's work in a strip
+    /// that is pre-selected and one tap from being sent back under a different
+    /// credit. On the hike-share path it can never fire, because an imported
+    /// hike is refused a listing of its own — which is a reason to keep the
+    /// gate here rather than to put it on the caller that needs it: the two
+    /// forms must not be able to disagree about this.
+    @MainActor
+    static func ownPhotos(of hike: Hike) -> [HikePhoto] {
+        hike.orderedPhotos.filter(\.isOwn)
     }
 
     /// Re-encodes the photographs and assembles the draft, entirely off the

@@ -213,6 +213,13 @@ nonisolated enum CommunityImport {
     /// thing the hiker asked for. It is the same bargain the loop below makes
     /// for one unreadable file, one size larger.
     ///
+    /// **Every copy is stamped with the listing it came from.** See
+    /// ``HikePhoto/importedFromListingID``: these are the hike author's
+    /// photographs sitting in this hiker's library, and the contribution flow
+    /// offers to send this very hike's pictures back to this very trail. A
+    /// copy that looked like the hiker's own would be one tap from
+    /// republishing somebody else's work under the importer's credit.
+    ///
     /// **Photographs other hikers contributed are deliberately not copied.**
     /// This reads ``CommunityHikeDetail/photoPins`` and
     /// ``CommunityHikeDetail/photoFileURLs``, which are the submission's own
@@ -253,6 +260,12 @@ nonisolated enum CommunityImport {
                 // Never the hiker's setting — see this file's header.
                 savesToPhotoLibrary: false,
                 capturedAt: pin.capturedAt,
+                // Stamped as somebody else's, which is the one thing that
+                // keeps it out of a contribution back to the same trail: the
+                // saved hike is exactly the one the *Add Photos* form opens
+                // on, and without this it opened pre-selected with the
+                // author's own pictures. See ``HikePhoto/importedFromListingID``.
+                importedFromListingID: detail.listing.id,
                 store: store,
                 libraryWriter: libraryWriter,
                 save: save

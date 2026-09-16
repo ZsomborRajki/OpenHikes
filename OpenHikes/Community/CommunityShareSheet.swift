@@ -101,6 +101,14 @@ struct CommunityShareSheet: View {
     /// send that the answer is about to withdraw is worse than offering it a
     /// moment late.
     @State private var eligibility: CommunityPublishingEligibility?
+    /// The trail this hike's photographs would go on instead, once the hiker
+    /// has asked for that. `nil` is the ordinary state, including while the
+    /// offer is merely being drawn.
+    ///
+    /// Only ever set from ``CommunityPublishingEligibility/photoTarget``,
+    /// which is the single thing that decides where a contribution may be
+    /// aimed.
+    @State private var contributionTarget: CommunityPhotoTarget?
 
     /// Where this hike already is on the way to being published, which decides
     /// whether the form warns about making a second copy of it.
@@ -128,7 +136,8 @@ struct CommunityShareSheet: View {
     /// How many of this hike's photographs are still ticked, before the disk
     /// and the cap have had their say.
     private var includedPhotoCount: Int {
-        hike.photos.count(where: { !excludedPhotoIDs.contains($0.id) })
+        CommunityPublisher.ownPhotos(of: hike)
+            .count(where: { !excludedPhotoIDs.contains($0.id) })
     }
 
     /// How many of this hike's pictures are on another device, and so are not
@@ -210,6 +219,11 @@ struct CommunityShareSheet: View {
             // app pretending to still be considering it.
             if let reason = eligibility?.reason {
                 refusalSection(reason)
+                // The offer the refusal leaves unspoken, where there is one.
+                // See ``contributeSection(_:)``.
+                if let target = eligibility?.photoTarget {
+                    contributeSection(target)
+                }
                 contentsSection
             } else {
                 duplicateSection
@@ -239,6 +253,20 @@ struct CommunityShareSheet: View {
             .onDisappear {
                 commitNotes()
                 commitTitle()
+            }
+            // Over this sheet rather than in place of it, because the hiker
+            // has not left the decision this screen is about: backing out of
+            // the photo form puts them back on the explanation they were
+            // reading. The same form the hike's own toolbar opens for the two
+            // saved-trail refusals — this is the third way in, and the only
+            // one that needs a fetch to know it exists.
+            .sheet(item: $contributionTarget) { target in
+                CommunityPhotoShareSheet(
+                    hike: hike,
+                    target: target,
+                    transport: transport,
+                    store: store
+                )
             }
             // Re-asked whenever the hiker strikes a photograph off or puts
             // one back, because the answer is about a particular set of files:
@@ -535,6 +563,38 @@ private extension CommunityShareSheet {
             }
             .accessibilityElement(children: .combine)
             .accessibilityIdentifier("community-share-refusal")
+        }
+    }
+
+    /// What the hiker can still do about a trail that is already in the list.
+    ///
+    /// The refusal above says the route is not going anywhere; this is the
+    /// half that is, and without it the sentence *your photographs are a
+    /// different matter* points at nothing. A hike saved from OpenStreetMap or
+    /// from another hiker reaches the contribution form straight from the
+    /// toolbar, because the cheap half of the eligibility can answer from the
+    /// hike alone. A hike that **retraces one this hiker already published**
+    /// cannot: that answer needs every other hike they have sent and a pass
+    /// over the routes, which is this screen's fetch and nobody else's. So
+    /// this is where that case is offered, and it is the only place it can be.
+    ///
+    /// Drawn whenever there is a target rather than only for the retread — one
+    /// rule is easier to hold than an exception, and a second door to the same
+    /// form cannot say anything different about it.
+    func contributeSection(_ target: CommunityPhotoTarget) -> some View {
+        Section {
+            Button {
+                contributionTarget = target
+            } label: {
+                Label("Add Your Photos Instead", systemImage: "photo.badge.plus")
+            }
+            .accessibilityIdentifier("community-share-contribute")
+        } footer: {
+            Text("""
+            Your photographs are yours, and \(target.title) is already in the list. \
+            They go on it with the spot each one was taken, and a person reviews them \
+            before anybody else sees them.
+            """)
         }
     }
 

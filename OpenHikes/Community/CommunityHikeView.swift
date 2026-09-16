@@ -336,7 +336,10 @@ struct CommunityHikeView: View {
                 case .failed(let failure):
                     failureState(failure)
                 case .loaded(let detail):
-                    loadedState(detail)
+                    // Filtered on the draw, because a block or a takedown
+                    // decided in the gallery over this screen cannot reach the
+                    // request that fetched these. See ``visible(_:)``.
+                    loadedState(visible(detail))
                 }
             }
             .padding()
@@ -427,7 +430,10 @@ struct CommunityHikeView: View {
             // what retires the previous preview's line.
             if case .loaded(let detail) = phase {
                 browser.previewLoaded(detail.route, of: listing)
-                browser.previewPhotosLoaded(detail.previewPhotos, of: listing)
+                // The same filtered answer the strip is drawing, so the pins
+                // and the pages agree about which picture is which — coming
+                // back from the gallery is exactly when the two can differ.
+                browser.previewPhotosLoaded(visible(detail).previewPhotos, of: listing)
             }
         }
         .onDisappear {
@@ -441,6 +447,11 @@ struct CommunityHikeView: View {
             // Before the discard, so a download still running is told to stop
             // rather than raced to the directory it is writing into.
             loadTask?.cancel()
+            // And the other download, for the same reason and the same
+            // order: it writes into the directory two lines down, and an
+            // unstructured `Task` does not inherit the load's cancellation
+            // however closely the two are started together.
+            contributionsTask?.cancel()
             // Nothing waits for this one; it is cancelled because a screen
             // that has gone has no use for an answer and no right to keep
             // asking Overpass for it.

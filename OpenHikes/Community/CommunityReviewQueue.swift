@@ -76,6 +76,25 @@ final class CommunityReviewQueue {
     /// almost none of them is a reviewer. See ``CommunityReviewBatch``.
     private(set) var pendingPhotos: [CommunityPendingPhotos] = []
 
+    /// Contributions this reviewer has taken down since the app launched.
+    ///
+    /// Held here rather than on the screen that did it, because the screen
+    /// that has to *stop drawing them* is two pushes away: the takedown is
+    /// performed from the gallery and the photographs are on the trail behind
+    /// it, whose detail was downloaded once on open and is not fetched again
+    /// when the hiker comes back to it. See
+    /// ``CommunityHikeView/visible(_:)``.
+    ///
+    /// A launch is the right lifetime. The records are gone for everybody, so
+    /// the next open of that trail will not return them and nothing has to be
+    /// remembered across one — what this covers is the single screen still
+    /// holding an answer from before the delete.
+    ///
+    /// Empty for everybody who is not a reviewer, like ``pending`` beside it
+    /// and by the same route: the only thing that adds to it is a takedown the
+    /// server accepted.
+    private(set) var takenDownContributions: Set<String> = []
+
     /// Whether there is anything at all to review.
     ///
     /// What the section is drawn on. Asked of both halves together because
@@ -256,6 +275,17 @@ final class CommunityReviewQueue {
     func forget(_ photos: CommunityPendingPhotos) {
         pendingPhotos.removeAll { $0.id == photos.id }
         spendTheLaunchsQuestion()
+    }
+
+    /// Records a contribution this reviewer has just removed.
+    ///
+    /// Not a `forget(_:)`: a contribution taken down from the gallery was
+    /// never in ``pendingPhotos`` — it had been published, which is how
+    /// somebody was looking at it — so there is no queue row to drop and no
+    /// reason to spend the launch's question. What it changes is what the
+    /// trail behind the gallery may still draw.
+    func tookDown(contribution id: String) {
+        takenDownContributions.insert(id)
     }
 
     /// The launch's one question is spent: acting is the thing that changes

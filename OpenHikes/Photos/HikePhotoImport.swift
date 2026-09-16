@@ -76,6 +76,7 @@ nonisolated enum HikePhotoImport {
         capturedAt: Date = .now,
         assetLocalIdentifier: String? = nil,
         matchEvidence: PhotoMatchEvidence? = nil,
+        importedFromListingID: String? = nil,
         store: HikePhotoStore = .shared,
         libraryWriter: any PhotoLibraryWriting = PhotoLibraryWriter(),
         save: (ModelContext) throws -> Void = { try $0.save() }
@@ -94,8 +95,11 @@ nonisolated enum HikePhotoImport {
             data,
             capturedAt: capturedAt,
             coordinate: coordinate,
-            assetLocalIdentifier: assetLocalIdentifier,
-            matchEvidence: matchEvidence,
+            origin: HikePhoto.Origin(
+                assetLocalIdentifier: assetLocalIdentifier,
+                matchEvidence: matchEvidence,
+                importedFromListingID: importedFromListingID
+            ),
             in: store
         ) else { return nil }
         // The write above is an `await`, and an import can spend seconds in it
@@ -284,17 +288,10 @@ nonisolated enum HikePhotoImport {
         _ data: Data,
         capturedAt: Date,
         coordinate: CLLocationCoordinate2D?,
-        assetLocalIdentifier: String?,
-        matchEvidence: PhotoMatchEvidence?,
+        origin: HikePhoto.Origin,
         in store: HikePhotoStore
     ) async -> HikePhoto? {
-        store.store(
-            data,
-            capturedAt: capturedAt,
-            coordinate: coordinate,
-            assetLocalIdentifier: assetLocalIdentifier,
-            matchEvidence: matchEvidence
-        )
+        store.store(data, capturedAt: capturedAt, coordinate: coordinate, origin: origin)
     }
 
     @concurrent
