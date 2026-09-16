@@ -478,6 +478,13 @@ struct OpenHikesView: View {
             // view's job because it owns `photoPresentation`. The pickers
             // themselves hang off `MapSheet` above — a modal attached beside a
             // sheet that is never dismissed is never presented at all.
+            // An intent asked for a hike, from outside the view tree. Handed
+            // to the same router the widget's taps go through rather than a
+            // second way in — see ``HikeOpenRequests``.
+            .onChange(of: appModel.hikeOpenRequests.request) { _, _ in
+                guard let url = appModel.hikeOpenRequests.link else { return }
+                openInboundURL(url)
+            }
             .onChange(of: photoCapture.cameraRequest) { _, _ in
                 Task { await presentCamera() }
             }

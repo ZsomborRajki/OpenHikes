@@ -36,6 +36,13 @@ final class OpenHikesModel {
     /// — see ``TrailWalkSession``.
     let walkSession: TrailWalkSession
     let locationManager: LocationManager
+    /// Where ``OpenHikeIntent`` leaves a request for the view tree to pick up.
+    ///
+    /// Owned here rather than by ``OpenHikesView`` because the intent needs it
+    /// registered with `AppDependencyManager` at launch, and a `@State` on a
+    /// view does not exist until the view does — the system can launch this
+    /// process *to run an intent*.
+    let hikeOpenRequests = HikeOpenRequests()
     let weatherManager: WeatherManager
     /// What the weather badge is about. Written by the three places that can
     /// say — the recorder, hike selection and search — and read by nothing

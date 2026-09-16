@@ -10,22 +10,21 @@
 //  actually say are not the ones an intent is titled: "start a hike" and
 //  "record a hike" are the same request.
 //
-//  Ten is the system's ceiling on shortcuts per app. The eight below are the
-//  whole recording loop, the three questions, and the one that takes a
-//  parameter — `HikeDurationIntent`, which is what ``HikeEntity`` was built
-//  for. Two slots are deliberately unspent, and what is queued for them is
-//  #480 and #481 — an unbuilt intent belongs on the issue tracker rather than
-//  in a comment here, and the argument for each is there rather than repeated
-//  below.
+//  Ten is the system's ceiling on shortcuts per app. The nine below are the
+//  whole recording loop, the three questions, and the two that take a
+//  parameter — `HikeDurationIntent` and `OpenHikeIntent`, which is what
+//  ``HikeEntity`` was built for. **One slot is left**, and what is queued for
+//  it is #481 — an unbuilt intent belongs on the issue tracker rather than in
+//  a comment here, and the argument is there rather than repeated below.
 //
-//  Neither is blocked on plumbing. #480 is blocked on navigation:
-//  `OpenHikesView` is at its `type_body_length` limit and an intent runs in
-//  the app process but outside the view tree, so the honest version routes a
-//  ``HikeEntity`` through the deep link the widget already uses rather than
-//  opening a second way in. #481 is blocked on a product decision: starting a
+//  #481 is blocked on a product decision rather than on plumbing: starting a
 //  recording *and* naming a trail to follow is the one gesture that asks for
 //  both at once, and *a live recording outranks the selected trail* means the
 //  trail the hiker just said out loud is the thing that leaves the widget.
+//
+//  ``OpenHikeIntent`` spent the other one. What had been blocking it was
+//  navigation, not the intent — see ``HikeOpenRequests`` for how an intent
+//  running outside the view tree reaches the router the widget already uses.
 //
 
 import AppIntents
@@ -97,6 +96,21 @@ nonisolated struct OpenHikesShortcuts: AppShortcutsProvider {
             ],
             shortTitle: "Hike Summary",
             systemImageName: "figure.hiking.circle"
+        )
+        AppShortcut(
+            intent: OpenHikeIntent(),
+            phrases: [
+                // "Open <hike> in OpenHikes" is the one people say, and the
+                // parameter is left for the system to fill: a phrase naming
+                // `\(\.$hike)` matches only when the hike is said in that exact
+                // position, where an unparameterised phrase opens the picker.
+                "Open a hike in \(.applicationName)",
+                "Show a hike in \(.applicationName)",
+                "Open \(\.$hike) in \(.applicationName)",
+                "Show me \(\.$hike) in \(.applicationName)",
+            ],
+            shortTitle: "Open Hike",
+            systemImageName: "map"
         )
         AppShortcut(
             intent: LastHikeIntent(),
