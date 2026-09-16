@@ -114,6 +114,34 @@ final class HealthKitWorkoutWriter: HikeWorkoutWriting {
         return workout.uuid
     }
 
+    /// Deletes by predicate rather than by sample, which is what keeps this
+    /// file write-only.
+    ///
+    /// `HKHealthStore.delete(_:)` wants the `HKWorkout` itself, and getting
+    /// one means an `HKSampleQuery`, which means `.workoutType()` in
+    /// `readTypes` — the authorization this app has never asked for and whose
+    /// absence the Settings footer states. `deleteObjects(of:predicate:)`
+    /// needs only the share access already granted, and
+    /// `HKQuery.predicateForObject(with:)` names exactly the one workout by
+    /// its UUID.
+    ///
+    /// **It can only reach this app's own samples, which is the other half of
+    /// why it is safe.** HealthKit refuses a delete of an object another
+    /// source wrote, so the worst a wrong identifier can do is delete
+    /// nothing — and the identifier is not guessed: it is what
+    /// ``write(_:)`` returned and ``HikeLocalState/healthWorkoutID`` stored.
+    ///
+    /// A count of zero is not an error. The hiker may have deleted the
+    /// workout in the Health app already, which is a perfectly ordinary
+    /// thing to have done and leaves this with nothing to do.
+    func delete(workoutID: UUID) async throws {
+        guard Self.isAvailable else { throw HikeWorkoutFailure.unavailable }
+        try await store.deleteObjects(
+            of: HKQuantityType.workoutType(),
+            predicate: HKQuery.predicateForObject(with: workoutID)
+        )
+    }
+
     /// The walked distance as one sample spanning the whole workout.
     ///
     /// One sample rather than a series: the figure that matters is

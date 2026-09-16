@@ -474,7 +474,12 @@ private func delete(_ hike: Hike, among hikes: [Hike]) {
     guard case let .committed(deletionPlan) = HikeDeletion.delete(
         hike,
         among: hikes,
-        autoSave: autoSave
+        autoSave: autoSave,
+        // The fourth store this hike may be in. Taken from the recorder
+        // because that is where the writer lives — it is the same instance
+        // that wrote the workout — and passed rather than reached for inside
+        // `HikeDeletion`, which has no composition root to ask.
+        workouts: hikeRecorder.workoutWriter
     ) else { return }
 
     // Clearing the selection stops the *map* drawing a deleted trail; clearing

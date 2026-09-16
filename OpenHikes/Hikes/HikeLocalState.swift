@@ -85,10 +85,14 @@ final class HikeLocalState {
     /// reconciled against.
     ///
     /// Written after the workout exists, so a row carrying one is a row whose
-    /// export is known to have landed. Nothing reads it yet beyond not
-    /// exporting twice; it is stored because an identifier that is thrown away
-    /// cannot be recovered, and a hiker who later wants the duplicate removed
-    /// has nothing to name without it.
+    /// export is known to have landed.
+    ///
+    /// Read by ``HikeDeletion``, which is what it was stored for: an
+    /// identifier thrown away cannot be recovered, and Health is a second
+    /// store that must never hold a walk this app does not — see
+    /// ``HikeWorkoutWriting/write(_:)``. It is read while the sidecar is still
+    /// here and spent after the deletion commits, for the reason the photo
+    /// files are; that ordering is argued in `HikeDeletion.swift`.
     var healthWorkoutID: UUID?
 
     init(hikeID: UUID) {

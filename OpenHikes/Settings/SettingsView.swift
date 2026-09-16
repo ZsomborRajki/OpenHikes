@@ -535,9 +535,10 @@ private extension SettingsView {
             Text(
                 "Writes each hike you finish recording to the Health app as a hiking"
                 + " workout, with its distance, time, climb and route — so it counts"
-                + " towards your rings and sits beside your other activity. OpenHikes"
-                + " only ever writes to Health and never reads anything from it. You'll"
-                + " be asked for permission the first time a hike is saved."
+                + " towards your rings and sits beside your other activity. Deleting a"
+                + " hike removes its workout from Health too. OpenHikes never reads"
+                + " anything from Health. You'll be asked for permission the first time"
+                + " a hike is saved."
             )
         }
         #endif
