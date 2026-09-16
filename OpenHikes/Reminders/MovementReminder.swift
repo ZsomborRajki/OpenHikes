@@ -42,6 +42,20 @@ nonisolated enum MovementReminderKind: String, CaseIterable, Sendable {
     /// The walk along a followed trail is paused and the trail is being
     /// covered anyway.
     case resumeWalk = "resumeWalk"
+    /// A severe-weather alert stands over the place the hiker is looking at.
+    ///
+    /// The second one that is not a disagreement at all, and it stretches this
+    /// type's name further than ``leftTheTrail`` does — it is not about
+    /// movement in any sense. The name stays because every raw value here is a
+    /// storage contract a delivered banner carries (see this file's header),
+    /// and because what the type actually models is *the things this app
+    /// interrupts a walk to say*, which is a set the wording, the categories
+    /// and the transport already handle identically. What it is not is a
+    /// reason to route it through ``MovementReminderController``: that
+    /// controller is driven by the recorder and the walk session, and an alert
+    /// is driven by the weather poll. The policy lives in
+    /// ``WeatherAlertWatch``; only the value and the transport are shared.
+    case severeWeather = "severeWeather"
 
     var notificationIdentifier: String { "openhikes.reminder.\(rawValue)" }
     var categoryIdentifier: String { "openhikes.category.\(rawValue)" }
@@ -61,7 +75,12 @@ nonisolated enum MovementReminderKind: String, CaseIterable, Sendable {
     /// tapping it opens the app the way any notification does.
     var action: MovementReminderAction? {
         switch self {
-        case .leftTheTrail: nil
+        // Nothing a button could settle, for the same reason leaving the
+        // trail has none: the app cannot call off the weather, and a button
+        // that only silenced the banner would offer to stop saying the one
+        // thing this reminder exists to say. The alert's own link is in the
+        // detail sheet, which is where the authority's advice is.
+        case .leftTheTrail, .severeWeather: nil
         case .pauseRecording: .pause
         case .resumeRecording, .resumeWalk: .resume
         }
@@ -150,6 +169,32 @@ nonisolated enum MovementReminderWording {
             kind: .leftTheTrail,
             title: "Off the trail",
             body: "You're about \(distance(offRouteMeters)) from \(subject)."
+        )
+    }
+
+    /// The authority's own headline, with nothing added to it.
+    ///
+    /// No paraphrase and no advice of this app's own: the summary is what a
+    /// meteorological agency chose to say, and re-wording somebody else's
+    /// storm warning to fit a banner is the one place in this app where being
+    /// creative could get a hiker hurt. The place is named for the reason
+    /// ``leftTheTrail(trailTitle:offRouteMeters:)`` names the trail — a hiker
+    /// comparing three routes needs to know which ridge this is about.
+    ///
+    /// The `detailsURL` is deliberately not in the body. A banner cannot make
+    /// a URL tappable as a link, and pasting one in as text would be asking
+    /// somebody in weather to read out an address; tapping the banner opens
+    /// the app, where the sheet draws it as the link WeatherKit's terms
+    /// require.
+    static func severeWeather(
+        _ alert: WeatherAlertSummary,
+        placeName: String
+    ) -> MovementReminder {
+        let subject = placeName.isEmpty ? "your route" : placeName
+        return MovementReminder(
+            kind: .severeWeather,
+            title: "Weather warning",
+            body: "\(alert.summary) — \(subject). Issued by \(alert.source)."
         )
     }
 

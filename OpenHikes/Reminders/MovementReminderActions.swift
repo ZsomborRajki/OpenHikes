@@ -66,11 +66,12 @@ final class MovementReminderActions: NSObject {
         guard action == kind.action else { return }
         switch kind {
         // Unreachable: the guard above refuses every action for a kind whose
-        // own is `nil`, which is what an off-trail banner's category
-        // registers. Spelled positively rather than defaulted so that a
-        // fourth kind gaining a verb fails the build here instead of
-        // silently doing nothing.
-        case .leftTheTrail: break
+        // own is `nil`, which is what the off-trail and severe-weather
+        // banners' categories register. Spelled positively rather than
+        // defaulted so that a later kind gaining a verb fails the build here
+        // instead of silently doing nothing — which is what it did when
+        // `.severeWeather` was added.
+        case .leftTheTrail, .severeWeather: break
         case .pauseRecording: await pauseRecording()
         case .resumeRecording: await resumeRecording()
         case .resumeWalk: walkSession?.resume()
