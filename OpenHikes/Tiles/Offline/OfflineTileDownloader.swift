@@ -127,11 +127,20 @@ final class OfflineTileDownloader {
     /// ready to go the moment a slot frees.
     nonisolated static let inFlightWindow = 5
 
+    /// Where this run asks not to be suspended halfway through — see
+    /// ``BackgroundTimeReservation``.
+    private let backgroundTime: BackgroundTimeReservation
+    /// The grant currently held, so the run can give it back exactly once.
+    /// `nil` between runs and for a run the system refused — the same state
+    /// as far as `releaseBackgroundTime()` is concerned.
+    private var backgroundTimeToken: BackgroundTimeToken?
+
     init(
         gate: TileLoadGate = .shared,
         isOnline: @escaping @Sendable () -> Bool = { TileCache.shared.isOnline },
         quota: QuotaBroker = .standard,
         registry: OfflineDownloadRegistry = .shared,
+        backgroundTime: BackgroundTimeReservation = .system,
         saveTile: @escaping @Sendable (String, URL) async -> Bool = { key, url in
             await TileCache.shared.saveTileDurably(forKey: key, url: url)
         }
@@ -140,6 +149,7 @@ final class OfflineTileDownloader {
         self.isOnline = isOnline
         self.quota = quota
         self.registry = registry
+        self.backgroundTime = backgroundTime
         self.saveTile = saveTile
     }
 
@@ -192,6 +202,9 @@ final class OfflineTileDownloader {
         // CPU, footprint and *logical writes* is a question no Simulator run
         // can answer, because the Simulator writes to a Mac's SSD.
         let span = FieldSignpost.begin(.offlineDownload)
+        // Before the task starts rather than inside it, so a hiker who taps
+        // Save and locks the phone in the same second is already covered.
+        reserveBackgroundTime()
         task = Task { [weak self] in
             defer { FieldSignpost.end(span) }
             await self?.prepareAndRun(
@@ -200,20 +213,13 @@ final class OfflineTileDownloader {
                 maxZoom: maxZoom,
                 generation: currentGeneration
             )
+            // Whatever the run did — finished, failed, was superseded or was
+            // cancelled out from under itself — the grant goes back here.
+            // Holding one after the work has stopped is how an app gets
+            // killed on the next expiry instead of suspended.
+            self?.releaseBackgroundTime()
         }
         lastRun = task
-    }
-
-    func cancel() {
-        generation += 1
-        task?.cancel()
-        task = nil
-        phase = .idle
-        completed = 0
-        total = 0
-        completedRecord = nil
-        pendingRun = nil
-        finishPlanning()
     }
 
     private func prepareAndRun(
@@ -470,5 +476,62 @@ final class OfflineTileDownloader {
         for waiter in waiters {
             waiter.resume()
         }
+    }
+}
+
+// MARK: - Stopping, and the background time a run holds
+
+// An extension rather than more of the class above, which is at its
+// `type_body_length` limit — the same way out `OpenHikesView` takes, and in
+// the same file so these stay beside the run they bracket. Same-file
+// extensions reach the type's `private` members, so nothing had to be opened
+// up to move them here.
+extension OfflineTileDownloader {
+    /// Stops the current run and puts everything back to rest.
+    func cancel() {
+        generation += 1
+        task?.cancel()
+        task = nil
+        phase = .idle
+        completed = 0
+        total = 0
+        completedRecord = nil
+        pendingRun = nil
+        // Given back here as well as in the task's tail: a cancelled task's
+        // tail is not guaranteed to run promptly and the system is counting.
+        // Both paths are idempotent.
+        releaseBackgroundTime()
+        finishPlanning()
+    }
+
+    /// Asks the system not to suspend this run, and remembers the grant.
+    ///
+    /// A refusal is not a failure: background execution can be unavailable,
+    /// and the download then behaves exactly as it did before this existed —
+    /// it stalls on lock and resumes on return. Nothing is reported, because
+    /// there is nothing the hiker could do about it.
+    private func reserveBackgroundTime() {
+        // A run already holding one is a run being restarted. Give the old
+        // grant back first rather than leaking it: the system counts them,
+        // and an unreturned task is charged against the app either way.
+        releaseBackgroundTime()
+        backgroundTimeToken = backgroundTime.begin { [weak self] in
+            // The system is about to reclaim the time. Stopping is not
+            // optional here — an app still running when the grant expires is
+            // killed rather than suspended, and a killed run is the one
+            // outcome that costs the hiker every tile it fetched.
+            self?.cancel()
+        }
+    }
+
+    /// Gives the grant back, once.
+    ///
+    /// Idempotent by clearing the token before spending it, which is what
+    /// lets both the task's tail and ``cancel()`` call it without the second
+    /// one ending a task the system has already reclaimed.
+    private func releaseBackgroundTime() {
+        guard let token = backgroundTimeToken else { return }
+        backgroundTimeToken = nil
+        backgroundTime.end(token)
     }
 }
