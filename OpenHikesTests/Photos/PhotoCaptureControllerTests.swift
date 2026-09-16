@@ -1,0 +1,266 @@
+//
+//  PhotoCaptureControllerTests.swift
+//  OpenHikesTests
+//
+//  "Photo capture controller", split out of HikePhotoTests.swift so that a
+//  file declares one @Suite. That file's header still holds the context the
+//  two share.
+//
+
+import CoreLocation
+import Foundation
+@testable import OpenHikes
+import Testing
+
+/// A stand-in for the picker's per-asset loop: it yields between items, so a
+/// cancellation raised while it is working is seen on the next one.
+@MainActor
+private final class ImportProgress {
+    private(set) var items = 0
+    private(set) var wasCancelled = false
+    private(set) var finished = false
+
+    func run(steps: Int = 10_000) async {
+        for _ in 0..<steps {
+            guard !Task.isCancelled else {
+                wasCancelled = true
+                return
+            }
+            items += 1
+            await Task.yield()
+        }
+        finished = true
+    }
+}
+
+/// A coordinate a test can move after handing out the closure that reads it.
+@MainActor
+private final class Position {
+    var coordinate: CLLocationCoordinate2D?
+}
+
+@Suite("Photo capture controller")
+struct PhotoCaptureControllerTests {
+    @Test("no screen attached means no camera pill")
+    func startsUnavailable() {
+        let controller = PhotoCaptureController()
+
+        #expect(controller.isAvailable == false)
+        #expect(controller.currentSubject() == nil)
+    }
+
+    @Test("an attached screen offers the pill and its anchor")
+    func attachOffersSubject() throws {
+        let context = try Fixture.modelContext()
+        let hike = Fixture.hike(in: context)
+        let controller = PhotoCaptureController()
+        let coordinate = CLLocationCoordinate2D(latitude: 47.63, longitude: 12.86)
+
+        controller.attach(to: hike) { coordinate }
+
+        #expect(controller.isAvailable)
+        let subject = try #require(controller.currentSubject())
+        #expect(subject.hike.id == hike.id)
+        #expect(subject.coordinate?.latitude == coordinate.latitude)
+    }
+
+    @Test("the anchor is read at the shutter, not at attach time")
+    func anchorIsResolvedLate() throws {
+        let context = try Fixture.modelContext()
+        let hike = Fixture.hike(in: context)
+        let controller = PhotoCaptureController()
+        // Stands in for the hiker moving between opening the camera and
+        // taking the picture.
+        let position = Position()
+        controller.attach(to: hike) { position.coordinate }
+
+        #expect(controller.currentSubject()?.coordinate == nil)
+        position.coordinate = CLLocationCoordinate2D(latitude: 47.63, longitude: 12.86)
+
+        #expect(controller.currentSubject()?.coordinate != nil)
+    }
+
+    @Test("an outgoing screen cannot cancel the one that replaced it")
+    func staleDetachIsIgnored() throws {
+        let context = try Fixture.modelContext()
+        let outgoing = Fixture.hike(in: context, title: "Recording")
+        let incoming = Fixture.hike(in: context, title: "Saved")
+        let controller = PhotoCaptureController()
+
+        // SwiftUI's real ordering: the new screen appears, then the old one
+        // disappears. Stopping a recording lands on that recording's own
+        // detail screen, so the two can even be the same hike.
+        let firstToken = controller.attach(to: outgoing) { nil }
+        controller.attach(to: incoming) { nil }
+        controller.detach(token: firstToken)
+
+        #expect(controller.isAvailable)
+        #expect(controller.currentSubject()?.hike.id == incoming.id)
+    }
+
+    @Test("the last screen to leave takes the pill with it")
+    func matchingDetachWithdrawsPill() throws {
+        let context = try Fixture.modelContext()
+        let hike = Fixture.hike(in: context)
+        let controller = PhotoCaptureController()
+
+        let token = controller.attach(to: hike) { nil }
+        controller.detach(token: token)
+
+        #expect(controller.isAvailable == false)
+        #expect(controller.currentSubject() == nil)
+    }
+
+    @Test("each tap is a distinct request")
+    func requestsAdvanceTokens() throws {
+        let context = try Fixture.modelContext()
+        let controller = PhotoCaptureController()
+        controller.attach(to: Fixture.hike(in: context)) { nil }
+        let camera = controller.cameraRequest
+        let library = controller.libraryRequest
+
+        controller.requestCamera()
+        controller.requestLibrary()
+
+        #expect(controller.cameraRequest != camera)
+        #expect(controller.libraryRequest != library)
+    }
+
+    /// The last line of the defence the two tests below describe.
+    ///
+    /// A tap can only land on a pill that is on screen, but it can land on the
+    /// same frame the pill is withdrawn in — and a picker opened by one has
+    /// nothing to file into by the time the user has chosen a photo, which is
+    /// a modal that appears and then does nothing at all.
+    @Test("a tap with no screen behind it raises no request")
+    func requestsAreRefusedWithoutASubject() {
+        let controller = PhotoCaptureController()
+        let camera = controller.cameraRequest
+        let library = controller.libraryRequest
+
+        controller.requestCamera()
+        controller.requestLibrary()
+
+        #expect(controller.cameraRequest == camera)
+        #expect(controller.libraryRequest == library)
+    }
+
+    /// The bug this rule exists for: SwiftUI runs the pop animation first and
+    /// calls the leaving screen's `onDisappear` after it, so the claim alone
+    /// leaves the pill over the map — opaque and tappable — for the whole of a
+    /// back navigation out of a hike.
+    @Test("emptying the sheet's stack withdraws the pill before the claim does")
+    func anEmptyStackWithdrawsThePill() throws {
+        let context = try Fixture.modelContext()
+        let controller = PhotoCaptureController()
+        controller.attach(to: Fixture.hike(in: context)) { nil }
+
+        controller.setHostScreenPresent(false)
+
+        #expect(controller.isAvailable == false, "the pop has started; the pill goes now")
+        controller.requestLibrary()
+        #expect(controller.libraryRequest == 0, "and it cannot be tapped on the way out")
+    }
+
+    /// Which is why the sheet reports the *state* of its path rather than the
+    /// pop as an event: a back-swipe the user changes their mind about never
+    /// disappears the screen, so an event would withdraw the pill for good.
+    @Test("a back-swipe that is abandoned brings the pill back")
+    func anAbandonedPopRestoresThePill() throws {
+        let context = try Fixture.modelContext()
+        let controller = PhotoCaptureController()
+        controller.attach(to: Fixture.hike(in: context)) { nil }
+
+        controller.setHostScreenPresent(false)
+        controller.setHostScreenPresent(true)
+
+        #expect(controller.isAvailable)
+        #expect(controller.currentSubject() != nil)
+    }
+
+    @Test("a screen that arrives while the stack is reported empty stays hidden")
+    func aClaimCannotOverrideAnEmptyStack() throws {
+        let context = try Fixture.modelContext()
+        let controller = PhotoCaptureController()
+
+        controller.setHostScreenPresent(false)
+        controller.attach(to: Fixture.hike(in: context)) { nil }
+
+        #expect(controller.isAvailable == false)
+    }
+
+    /// The picker's loop checks `Task.isCancelled` on every asset, and before
+    /// the controller held the task nothing could ever make that check true.
+    /// A pick of thirty photos therefore kept loading, and kept writing, into a
+    /// hike the user had already navigated away from.
+    @Test("an import whose sheet empties out is cancelled")
+    func importIsCancelledWhenTheStackEmpties() async throws {
+        let context = try Fixture.modelContext()
+        let controller = PhotoCaptureController()
+        controller.attach(to: Fixture.hike(in: context)) { nil }
+        let progress = ImportProgress()
+
+        controller.runLibraryImport { await progress.run() }
+        await settleDelegateHop(until: "the import to start working") {
+            progress.items > 0
+        }
+
+        controller.setHostScreenPresent(false)
+        await settleDelegateHop(until: "the import to notice it was cancelled") {
+            progress.wasCancelled
+        }
+
+        #expect(progress.wasCancelled)
+        #expect(!progress.finished)
+    }
+
+    /// Every asset in one pick is filed under a single anchor resolved when the
+    /// picker closed, so a second pick is a newer answer to the same question
+    /// rather than more of the same one — and two loops appending to one hike
+    /// interleave their photos.
+    @Test("a second pick supersedes the one still working")
+    func aSecondImportCancelsTheFirst() async throws {
+        let context = try Fixture.modelContext()
+        let controller = PhotoCaptureController()
+        controller.attach(to: Fixture.hike(in: context)) { nil }
+        let first = ImportProgress()
+        let second = ImportProgress()
+
+        controller.runLibraryImport { await first.run() }
+        await settleDelegateHop(until: "the first import to start working") {
+            first.items > 0
+        }
+
+        controller.runLibraryImport { await second.run(steps: 2) }
+        await settleDelegateHop(until: "the first import to give way to the second") {
+            first.wasCancelled && second.finished
+        }
+
+        #expect(first.wasCancelled)
+        #expect(!first.finished)
+        #expect(second.finished)
+    }
+
+    /// A pop is routinely transient — pushing the photo viewer over a hike
+    /// releases and re-claims the same walk — so cancellation hangs off the
+    /// sheet's path and not off `detach`, which would kill an import every
+    /// time the user opened one of the photos it had already filed.
+    @Test("opening a photo over the hike does not cancel its import")
+    func detachAloneDoesNotCancelAnImport() async throws {
+        let context = try Fixture.modelContext()
+        let hike = Fixture.hike(in: context)
+        let controller = PhotoCaptureController()
+        let token = controller.attach(to: hike) { nil }
+        let progress = ImportProgress()
+
+        controller.runLibraryImport { await progress.run(steps: 3) }
+        controller.attach(to: hike) { nil }
+        controller.detach(token: token)
+
+        await settleDelegateHop(until: "the import to run to completion") {
+            progress.finished
+        }
+        #expect(progress.finished)
+        #expect(!progress.wasCancelled)
+    }
+}

@@ -439,3 +439,26 @@ variable_shadowing:
 
 explicit_init:
   include_bare_init: false
+
+# --- Project rules ------------------------------------------------------------
+
+custom_rules:
+  # `single_test_class` governs XCTestCase and nothing else, so for Swift
+  # Testing the one-@Suite-per-file rule in AGENTS.md and CONTRIBUTING.md was
+  # enforced by nobody — and a rule the linter cannot see is a rule a
+  # contributor cannot tell the direction of. Thirty files carried two to five
+  # suites each when this was added — 77 suites between them — and they were
+  # split rather than grandfathered, so this rule is about keeping the tree the
+  # way it now is: 301 suites in 301 files.
+  #
+  # A custom rule is a regex over the whole file, so counting is done by
+  # looking for a *second* declaration: two `@Suite` attributes, each at the
+  # start of its own line, with anything between them. Anchoring to the line
+  # start is what keeps a doc comment that mentions ``@Suite`` out of it —
+  # `excluded_match_kinds` cannot help here, because a match spanning half a
+  # file spans comments as well.
+  one_suite_per_file:
+    name: "One @Suite Per File"
+    regex: '(?ms)^[ \t]*@Suite\b.*?^[ \t]*@Suite\b'
+    message: "Declare one @Suite per file; move the second into a file of its own."
+    severity: error

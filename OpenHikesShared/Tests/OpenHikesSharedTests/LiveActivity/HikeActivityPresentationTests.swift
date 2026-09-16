@@ -2,9 +2,9 @@
 //  HikeActivityPresentationTests.swift
 //  OpenHikesSharedTests
 //
-//  "Hike activity presentation", split out of HikeActivityTests.swift, which had outgrown the
-//  500-line file limit. That file's header still holds the context the three
-//  share.
+//  "Hike activity presentation", split out of HikeActivityTests.swift so that
+//  a file declares one @Suite. That file's header still holds the context the
+//  two share.
 //
 
 import Foundation
