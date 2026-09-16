@@ -21,6 +21,45 @@
 import Foundation
 
 nonisolated enum WeatherReadingFormat {
+    private static let secondsPerMinute: Double = 60
+
+    /// How much walking light is left, as a hiker would say it.
+    ///
+    /// Hours and minutes, abbreviated and dropping the zero field — "2 hr
+    /// 40 min", "35 min" — because this number is read at a trailhead while
+    /// deciding whether to go on, and "0 hr 35 min" makes that decision
+    /// slower rather than more precise.
+    ///
+    /// Rounded **down** to the minute, which is the direction that cannot
+    /// mislead: a hiker told they have forty minutes and given thirty-nine is
+    /// fine, and one told forty who has thirty-nine and a half is being
+    /// flattered by a rounding rule. Twilight is not a cliff edge, but the
+    /// arithmetic should not be the optimistic part.
+    ///
+    /// **Floored to whole minutes before formatting, not after.** `.units`
+    /// rounds the smallest field it is allowed to show, so handing it 2,370
+    /// seconds with minutes as the floor renders "40 min" — flooring the
+    /// *seconds* does nothing when seconds are not a field. Dropping the
+    /// remainder here is what makes the sentence above true.
+    ///
+    /// `locale` takes the same seam every other formatter here does, so a
+    /// suite can ask about a region rather than inheriting the simulator's.
+    static func remainingLight(
+        _ seconds: TimeInterval,
+        locale: Locale = .autoupdatingCurrent
+    ) -> String {
+        let whole = max(0, seconds)
+        let flooredToMinute = (whole / secondsPerMinute).rounded(.down) * secondsPerMinute
+        return Duration.seconds(flooredToMinute).formatted(
+            .units(
+                allowed: [.hours, .minutes],
+                width: .abbreviated,
+                zeroValueUnits: .hide
+            )
+            .locale(locale)
+        )
+    }
+
     /// The one place a temperature becomes text.
     ///
     /// `usage: .weather` rather than the default `.general`: both convert to

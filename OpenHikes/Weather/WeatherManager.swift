@@ -77,6 +77,18 @@ nonisolated struct WeatherSnapshot: Equatable, Sendable {
     /// is to draw no strip. Unlike ``conditions``, an absent strip does not
     /// make the reading wrong, so it does not fail the decode.
     let hourly: [WeatherHourSummary]
+    /// The day's light and its temperature range — see ``WeatherDaylight``.
+    ///
+    /// **Optional, where ``conditions`` is not and ``hourly`` is empty-but-
+    /// present.** The three are deliberately different and the difference is
+    /// the reset policy. A blob written before `conditions` existed *should*
+    /// fail to decode and be refetched, because a reading without them is
+    /// wrong. An empty strip is a real answer. And an absent daylight is a
+    /// real answer twice over: a provider with no daily data for the point,
+    /// and a reading restored from a build that did not ask for `.daily` — so
+    /// this one is `nil`-able rather than decode-failing, and an old blob
+    /// keeps working until the next fetch fills it in.
+    let daylight: WeatherDaylight?
 
     init(
         symbolName: String,
@@ -84,7 +96,8 @@ nonisolated struct WeatherSnapshot: Equatable, Sendable {
         conditionDescription: String,
         capturedAt: Date,
         conditions: WeatherConditions,
-        hourly: [WeatherHourSummary] = []
+        hourly: [WeatherHourSummary] = [],
+        daylight: WeatherDaylight? = nil
     ) {
         self.symbolName = symbolName
         self.temperature = temperature
@@ -92,16 +105,22 @@ nonisolated struct WeatherSnapshot: Equatable, Sendable {
         self.capturedAt = capturedAt
         self.conditions = conditions
         self.hourly = hourly
+        self.daylight = daylight
     }
 
-    init(_ weather: CurrentWeather, hourly: [WeatherHourSummary] = []) {
+    init(
+        _ weather: CurrentWeather,
+        hourly: [WeatherHourSummary] = [],
+        daylight: WeatherDaylight? = nil
+    ) {
         self.init(
             symbolName: weather.symbolName,
             temperature: weather.temperature,
             conditionDescription: weather.condition.description,
             capturedAt: weather.metadata.date,
             conditions: WeatherConditions(weather),
-            hourly: hourly
+            hourly: hourly,
+            daylight: daylight
         )
     }
 }
@@ -352,20 +371,29 @@ final class WeatherManager {
         // keeps it rare is a constant nobody would notice regressing. The
         // count per hike is the check.
         do {
-            // One round trip, two datasets. `weather(for:including:)` is
-            // variadic and answers both from the same request, so the strip
-            // costs what the badge was already spending — see
-            // ``WeatherHourSummary``.
-            let (reading, forecast) = try await service.weather(
+            // One round trip, three datasets. `weather(for:including:)` is
+            // variadic and answers all of them from the same request, so the
+            // strip and the daylight row cost what the badge was already
+            // spending — see ``WeatherHourSummary`` and ``WeatherDaylight``.
+            let (reading, forecast, daily) = try await service.weather(
                 for: location,
                 including: .current,
-                .hourly
+                .hourly,
+                .daily
             )
             let snapshot = WeatherSnapshot(
                 reading,
                 hourly: WeatherHourSummary.summaries(
                     from: forecast,
                     notBefore: reading.metadata.date
+                ),
+                // Against the reading's own date rather than `Date.now`, for
+                // the reason ``WeatherSnapshot/capturedAt`` gives: WeatherKit
+                // serves cached payloads, and a response that arrives at
+                // 00:05 may be a reading taken yesterday.
+                daylight: WeatherDaylight.forDay(
+                    of: reading.metadata.date,
+                    in: daily
                 )
             )
             remember(snapshot, for: subject)
@@ -443,8 +471,49 @@ extension WeatherSnapshot {
             conditionDescription: "Partly Cloudy",
             capturedAt: .now,
             conditions: .preview,
-            hourly: WeatherHourSummary.previewStrip
+            hourly: WeatherHourSummary.previewStrip,
+            daylight: .uiTestFixture
         )
+    }
+}
+
+extension WeatherDaylight {
+    /// The daylight `--ui-test-weather` publishes.
+    ///
+    /// Relative to the launch rather than at fixed clock times, for the reason
+    /// ``WeatherSnapshot/uiTestFixture`` is computed: a run at nine in the
+    /// evening would otherwise find a dusk that had already passed and no
+    /// *Light remaining* row to assert on. Two hours of light left is enough
+    /// to be unambiguous in either direction.
+    static var uiTestFixture: Self {
+        let now = Date.now
+        return Self(
+            sunrise: now.addingTimeInterval(-Preview.sunriseSecondsAgo),
+            sunset: now.addingTimeInterval(Preview.sunsetSecondsAhead),
+            civilDusk: now.addingTimeInterval(Preview.civilDuskSecondsAhead),
+            highTemperature: Measurement(
+                value: Preview.highCelsius,
+                unit: UnitTemperature.celsius
+            ),
+            lowTemperature: Measurement(
+                value: Preview.lowCelsius,
+                unit: UnitTemperature.celsius
+            )
+        )
+    }
+
+    /// Named so the linter can tell a reading from an arithmetic constant, the
+    /// way ``WeatherConditions``' own preview values are.
+    private enum Preview {
+        /// Nine hours ago, so the fixture reads as an afternoon.
+        static let sunriseSecondsAgo: TimeInterval = 9 * 3600
+        static let sunsetSecondsAhead: TimeInterval = 90 * 60
+        /// Half an hour after sunset, which is about what civil dusk is at
+        /// temperate latitudes — and far enough from it that a row wired to
+        /// the wrong one shows.
+        static let civilDuskSecondsAhead: TimeInterval = 120 * 60
+        static let highCelsius: Double = 16
+        static let lowCelsius: Double = 4
     }
 }
 

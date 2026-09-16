@@ -128,6 +128,19 @@ struct WeatherDetailView: View {
                     conditionsSection(snapshot)
                     hourlySection(snapshot.hourly)
                     readingsSection(snapshot.conditions)
+                    // After the readings rather than above them, and that is
+                    // not a preference. Above, it pushed the wind row past the
+                    // fold of a sheet at its middle detent — and `List` builds
+                    // rows lazily, so past the fold is absent from the element
+                    // tree, which is what `testTheWeatherBadgeOpensTheWhole`
+                    // `Reading` caught. Wind is the row #425 was filed about;
+                    // moving a section in above it is not a free change.
+                    //
+                    // It also reads better here. Everything above is a
+                    // statement about *now*, which is what a reading is; this
+                    // is a statement about the day, and so is the freshness
+                    // section below it.
+                    daylightSection(snapshot.daylight)
                     freshnessSection(snapshot)
                 } else if case .unavailable = weather.state {
                     unavailableSection
@@ -353,6 +366,81 @@ struct WeatherDetailView: View {
             Text(
                 "OpenHikes couldn\u{2019}t reach Apple Weather. It will try again automatically."
             )
+        }
+    }
+
+    /// The day's light, and the range the day will reach.
+    ///
+    /// `@ViewBuilder` rather than `some View` so an absent daylight costs no
+    /// section at all — the shape ``hourlySection(_:)`` takes, and for the
+    /// two reasons that one takes it: a reading restored from a blob written
+    /// before this existed, and a provider with no daily data for the point.
+    ///
+    /// **Drawn only when there is a time to draw.** North of the Arctic
+    /// Circle in June there is no sunrise, no sunset and no dusk, and three
+    /// empty rows under a heading would be a worse answer than no heading —
+    /// see ``WeatherDaylight/hasDaylightTimes``. The high and low go with the
+    /// section rather than into the readings above, because they are a
+    /// statement about the *day* and everything in that section is a statement
+    /// about now.
+    @ViewBuilder
+    private func daylightSection(_ daylight: WeatherDaylight?) -> some View {
+        if let daylight, daylight.hasDaylightTimes {
+            Section {
+                if let remaining = daylight.remainingLight(asOf: .now) {
+                    // First, because it is the only row here that is an
+                    // answer rather than a fact: everything else is a time the
+                    // hiker has to subtract from themselves.
+                    DetailRow(
+                        label: "Light remaining",
+                        value: WeatherReadingFormat.remainingLight(remaining)
+                    )
+                        .accessibilityIdentifier("weather-detail-light-remaining")
+                }
+                if let sunrise = daylight.sunrise {
+                    DetailRow(label: "Sunrise", value: Self.time(sunrise))
+                }
+                if let sunset = daylight.sunset {
+                    DetailRow(label: "Sunset", value: Self.time(sunset))
+                        .accessibilityIdentifier("weather-detail-sunset")
+                }
+                if let civilDusk = daylight.civilDusk {
+                    DetailRow(label: "Light until", value: Self.time(civilDusk))
+                }
+                if let range = Self.range(of: daylight) {
+                    DetailRow(label: "Today", value: range)
+                }
+            } header: {
+                Text("Daylight")
+            }
+            .accessibilityIdentifier("weather-detail-daylight")
+        }
+    }
+
+    /// A clock time, in the reader's own format.
+    private static func time(_ date: Date) -> String {
+        date.formatted(date: .omitted, time: .shortened)
+    }
+
+    /// The day's high and low as one row, or `nil` when the forecast carried
+    /// neither.
+    ///
+    /// One row rather than two because they are one fact — the range — and a
+    /// grid that spent two rows on it would push the times that matter off the
+    /// first screenful. A forecast with only one of the pair is drawn as the
+    /// one it has rather than skipped.
+    private static func range(of daylight: WeatherDaylight) -> String? {
+        let high = daylight.highTemperature.map { temperature in
+            WeatherReadingFormat.temperature(temperature, width: .narrow)
+        }
+        let low = daylight.lowTemperature.map { temperature in
+            WeatherReadingFormat.temperature(temperature, width: .narrow)
+        }
+        switch (high, low) {
+        case let (high?, low?): return "\(high) / \(low)"
+        case let (high?, nil): return high
+        case let (nil, low?): return low
+        case (nil, nil): return nil
         }
     }
 

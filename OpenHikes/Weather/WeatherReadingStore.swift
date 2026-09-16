@@ -178,6 +178,42 @@ final class WeatherReadingStore {
             }
         }
 
+        /// The day's light, in fixed units for the reason ``Conditions`` is:
+        /// these bytes are read back by a later build.
+        ///
+        /// Every field optional, because every one of them genuinely is —
+        /// see ``WeatherDaylight``, whose header explains why a missing
+        /// sunset is a fact about the Arctic rather than a failure.
+        struct Daylight: Codable {
+            var sunrise: Date?
+            var sunset: Date?
+            var civilDusk: Date?
+            var highCelsius: Double?
+            var lowCelsius: Double?
+
+            var restored: WeatherDaylight {
+                WeatherDaylight(
+                    sunrise: sunrise,
+                    sunset: sunset,
+                    civilDusk: civilDusk,
+                    highTemperature: highCelsius.map { celsius in
+                        Measurement(value: celsius, unit: UnitTemperature.celsius)
+                    },
+                    lowTemperature: lowCelsius.map { celsius in
+                        Measurement(value: celsius, unit: UnitTemperature.celsius)
+                    }
+                )
+            }
+
+            init(_ daylight: WeatherDaylight) {
+                sunrise = daylight.sunrise
+                sunset = daylight.sunset
+                civilDusk = daylight.civilDusk
+                highCelsius = daylight.highTemperature?.converted(to: .celsius).value
+                lowCelsius = daylight.lowTemperature?.converted(to: .celsius).value
+            }
+        }
+
         var symbolName: String
         var celsius: Double
         var conditionDescription: String
@@ -198,6 +234,16 @@ final class WeatherReadingStore {
         /// fetch, seconds after launch. An *empty* array is still a valid
         /// value, and means the provider had no hourly data for the point.
         var hourly: [Hour]
+        /// **Optional, unlike ``conditions`` and ``hourly``**, and that is the
+        /// reset policy rather than an inconsistency. Those two are
+        /// non-optional so a blob written before they existed fails to decode
+        /// and is replaced within seconds of launch — which is right, because
+        /// a reading without conditions is wrong. A reading without daylight
+        /// is merely older: it draws every row it drew before and gains the
+        /// daylight section on the next successful fetch. Failing the decode
+        /// for it would throw away a perfectly good reading to hurry up a
+        /// field nothing depends on.
+        var daylight: Daylight?
     }
 
     private let defaults: UserDefaults
@@ -220,7 +266,8 @@ final class WeatherReadingStore {
             conditionDescription: payload.conditionDescription,
             capturedAt: payload.capturedAt,
             conditions: payload.conditions.restored,
-            hourly: payload.hourly.map(\.restored)
+            hourly: payload.hourly.map(\.restored),
+            daylight: payload.daylight?.restored
         )
         let subject: WeatherSubject
         switch payload.subjectKind {
@@ -262,7 +309,8 @@ final class WeatherReadingStore {
             subjectKind: subjectKind,
             hikeID: hikeID,
             conditions: Payload.Conditions(snapshot.conditions),
-            hourly: snapshot.hourly.map(Payload.Hour.init)
+            hourly: snapshot.hourly.map(Payload.Hour.init),
+            daylight: snapshot.daylight.map(Payload.Daylight.init)
         )
         guard let data = try? JSONEncoder().encode(payload) else { return }
         defaults.set(data, forKey: SettingsKey.lastWeatherReading)
