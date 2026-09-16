@@ -88,6 +88,10 @@ nonisolated enum SeededCommunityScenario: String {
     /// what the *server* gives everybody who is not a reviewer.
     case reviewing = "reviewing"
     case seeded = "seeded"
+    /// ``published``, and then not — one yes from `publication(of:)` and `nil`
+    /// after it. The only way automation reaches a hike that was believed live
+    /// and then found gone. Mirrors ``SeededCommunityTransport/Scenario``.
+    case takenDown = "takenDown"
 }
 
 /// What `--ui-test-community=reviewing` puts in the reviewer's queue.

@@ -129,13 +129,31 @@ final class Hike {
     /// That query needs ``CommunitySchema/Listing/submission`` to be QUERYABLE
     /// in the Console — the one index this field costs.
     ///
-    /// One-way on purpose, *for a given submission*. Once a listing has been
-    /// seen, it is remembered and never re-checked, so a hike that has gone
-    /// live stays live on this screen even offline. A takedown therefore
-    /// leaves this stale, which is the cheap direction to be wrong in: the
-    /// alternative is a request per detail-open forever, against a shared
-    /// quota, to keep a badge honest about something the hiker will find out
-    /// about the moment they open the hike itself.
+    /// One-way *by itself*, and for a given submission. Once a listing has
+    /// been seen it is remembered and never re-checked on its own, so a hike
+    /// that has gone live stays live on this screen even offline. A takedown
+    /// therefore leaves this stale until somebody asks, which is the cheap
+    /// direction to be wrong in: the alternative is a request per detail-open
+    /// forever, against a shared quota, to keep a badge honest.
+    ///
+    /// What that argument was worth changed when *Share Again* went, because
+    /// the staleness stopped being only a badge. A hike that reads published
+    /// aims ``CommunityPhotoTarget/published(listingID:title:)`` at this
+    /// column, and is refused as a retread if the same walk is recorded again
+    /// — so a hike whose listing is gone had, for a while, no way back to the
+    /// list at all. The clause that made the badge cheap to be wrong about —
+    /// *the hiker finds out the moment they open the hike itself* — is exactly
+    /// what stopped being true: there is no listing left to open.
+    ///
+    /// So the re-check is deliberate rather than automatic.
+    /// ``CommunityPublicationCheck/liveness(of:transport:)`` spends one
+    /// request when the hiker asks for one, and
+    /// ``CommunityPublicationCheck/forgetPublication(_:save:)`` clears this
+    /// column and ``communitySubmissionID`` together once they confirm. Behind
+    /// a confirmation because the query is eventually consistent: a `nil` that
+    /// arrived a moment early would otherwise silently un-publish a live hike
+    /// and let a second copy be sent, which is the duplicate the whole gate
+    /// exists to refuse.
     ///
     /// The one thing that does clear it is a second share of the same hike,
     /// which makes a second submission — see
