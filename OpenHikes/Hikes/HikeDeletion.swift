@@ -5,8 +5,10 @@
 //  Taking a whole hike out of the store, in the one order that survives being
 //  interrupted.
 //
-//  A hike is three things in three places: a row, a `HikeLocalState` sidecar
-//  in the *other* store, and a pile of photo files nothing else points at.
+//  A hike is three things in three places — a row, a `HikeLocalState` sidecar
+//  in the *other* store, and a pile of photo files nothing else points at —
+//  and, for a hike that was recorded with the Health switch on, a fourth in a
+//  store this app cannot read.
 //  The row and the files cannot go in the same instant, so the only choice is
 //  which way a process killed between them falls — the same choice
 //  ``HikePhotoImport/remove(_:from:store:save:)`` makes for a single photo,
@@ -18,6 +20,26 @@
 //  launch. Erasing first would leave the hike back in the list — its gallery
 //  pointing at pixels no sweep can bring back, which is the unrecoverable
 //  side of the same invariant.
+//
+//  ## The workout in Health
+//
+//  ``HikeWorkoutWriting/write(_:)``'s own header states the invariant: Health
+//  is a second store and it must never hold a walk this app does not. Deleting
+//  a hike inverted it — the row, the sidecar, the photographs and the walk
+//  history all went, and the `HKWorkout` and its `HKWorkoutRoute` stayed in
+//  Health permanently, with the app having thrown away the only handle it had.
+//
+//  So ``HikeLocalState/healthWorkoutID`` is read *before* the sidecar goes —
+//  a deleted row has nothing left to read — and spent *after* the store has
+//  accepted the deletion, for the reason the photo files are: the identifier
+//  is recoverable from the sidecar right up until the commit, and is gone
+//  forever afterwards. A refused save therefore leaves the workout exactly
+//  where it was, beside a hike that is still in the list.
+//
+//  It is the last thing to happen and the only one that cannot fail the
+//  deletion. A hiker who asked for a hike to go gets it whether or not a
+//  second store co-operates; the alternative is refusing to delete a hike
+//  because HealthKit would not answer.
 //
 //  Which is why every whole-hike deletion goes through here: the swipe in
 //  `MapSheet`, the discarded recording draft, and the orphan sweep at launch.
@@ -71,12 +93,17 @@ nonisolated enum HikeDeletion {
     ///
     /// A refused save puts all of it back, auto-save included, and says so —
     /// so the caller can leave the screen exactly as the user left it.
+    /// - Parameter workouts: Where a recorded hike's `HKWorkout` is removed
+    ///   from, or `nil` for a launch with no Health writer — a hosted suite,
+    ///   or a device with no Health store. `nil` is not a stub: the workout is
+    ///   simply not deleted, exactly as it was not written.
     @MainActor
     static func delete(
         _ hike: Hike,
         among hikes: [Hike],
         autoSave: AutoSaveController,
         store: HikePhotoStore = .shared,
+        workouts: (any HikeWorkoutWriting)? = nil,
         save: (ModelContext) throws -> Void = { try $0.save() }
     ) -> Outcome {
         let standDown = autoSave.standDown(for: hike)
@@ -91,7 +118,7 @@ nonisolated enum HikeDeletion {
             ? StoredTileDeletionPlan(removing: hike, among: hikes)
             : nil
         do {
-            try delete([hike], store: store, save: save)
+            try delete([hike], store: store, workouts: workouts, save: save)
         } catch {
             if let standDown {
                 autoSave.restoreAfterRefusal(standDown, for: hike)
@@ -129,14 +156,25 @@ nonisolated enum HikeDeletion {
     /// - Parameter save: The seam the commit goes through, so a test can watch
     ///   what is on disk at the moment the deletion lands, or refuse it. The
     ///   recorder passes its own — see ``HikeRecorder/saveModelContext``.
+    /// - Parameter workouts: Where a recorded hike's `HKWorkout` is removed
+    ///   from — see this file's header. `nil` deletes no workout, which is
+    ///   what a launch with no Health writer should do.
     @MainActor
     static func delete(
         _ hikes: [Hike],
         store: HikePhotoStore = .shared,
+        workouts: (any HikeWorkoutWriting)? = nil,
         save: (ModelContext) throws -> Void = { try $0.save() }
     ) throws {
         guard !hikes.isEmpty else { return }
         let files = hikes.flatMap { $0.photos.map(HikePhotoStore.PhotoFiles.init) }
+        // Read while the sidecar is still there, for the reason the file names
+        // are read while the models are still attached: `deleteLocalState()`
+        // takes the only record of this identifier with it, and after the
+        // commit there is nothing left to ask. Spent after the save, so a
+        // refusal leaves the workout beside the hike that is still in the
+        // list.
+        let workoutIDs = hikes.compactMap { $0.localState?.healthWorkoutID }
         let context = hikes.compactMap(\.modelContext).first
         for hike in hikes {
             hike.deleteLocalState()
@@ -157,5 +195,36 @@ nonisolated enum HikeDeletion {
             }
         }
         HikePhotoImport.discardFiles(files, from: store)
+        remove(workoutIDs, from: workouts)
+    }
+
+    /// Takes the workouts out of Health, after the deletion is on disk.
+    ///
+    /// Fire-and-forget and logged, the shape ``HikeRecorder`` already uses for
+    /// the write. Nothing waits on it and nothing reports it: the hike is gone
+    /// from the list either way, and a hiker who has just deleted a walk has
+    /// nothing to do about HealthKit declining to remove its copy. One task
+    /// for the batch rather than one each, so the orphan sweep's dozen
+    /// drafts — which carry no workout at all — cost nothing.
+    @MainActor
+    private static func remove(
+        _ workoutIDs: [UUID],
+        from workouts: (any HikeWorkoutWriting)?
+    ) {
+        guard let workouts, !workoutIDs.isEmpty else { return }
+        Task {
+            for workoutID in workoutIDs {
+                do {
+                    try await workouts.delete(workoutID: workoutID)
+                } catch {
+                    logger.error(
+                        """
+                        Health kept a workout whose hike was deleted: \
+                        \(error.localizedDescription, privacy: .public)
+                        """
+                    )
+                }
+            }
+        }
     }
 }

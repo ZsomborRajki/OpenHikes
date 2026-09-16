@@ -44,6 +44,19 @@ final class StubWorkoutWriter: HikeWorkoutWriting {
         await Task.yield()
         return try result.get()
     }
+
+    /// What a deletion asked Health to remove, in the order it asked.
+    private(set) var deleted: [UUID] = []
+    /// What the next delete does. `nil` succeeds; a failure is what a caller
+    /// has to be able to survive, since the hike is gone from the list either
+    /// way.
+    var deleteFailure: HikeWorkoutFailure?
+
+    func delete(workoutID: UUID) async throws {
+        deleted.append(workoutID)
+        await Task.yield()
+        if let deleteFailure { throw deleteFailure }
+    }
 }
 
 @MainActor

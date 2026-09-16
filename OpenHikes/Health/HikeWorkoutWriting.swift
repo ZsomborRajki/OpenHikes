@@ -24,7 +24,15 @@
 //
 //  `.shareTypes` and no `.readTypes`. Nothing in this app needs to read
 //  Health, and asking for read access buys a second prompt and a privacy
-//  manifest question for nothing. The switch is off until a hiker turns it on,
+//  manifest question for nothing.
+//
+//  ``delete(workoutID:)`` does not change that, and it is worth saying why
+//  rather than leaving a reader to check: it deletes *by predicate* rather
+//  than by sample, so it never fetches one. The alternative — `delete(_:)`,
+//  which takes the `HKWorkout` — would have needed `.workoutType()` in
+//  `readTypes` and cost exactly the promise this section makes. A delete is
+//  not a read, but it is also not nothing, so the Settings footer says it
+//  out loud beside the sentence about reading. The switch is off until a hiker turns it on,
 //  because Health is their most sensitive store and the app has no business
 //  writing to it merely because they recorded a walk — the same shape
 //  ``SettingsKey/keepScreenAwake`` and *Also Save to Photos* already take.
@@ -80,4 +88,26 @@ protocol HikeWorkoutWriting: Sendable {
     /// workout to sweep — which is why this needs no owner the way
     /// `TileOwnership` does.
     func write(_ request: HikeWorkoutRequest) async throws -> UUID
+
+    /// Removes the workout this app wrote under `workoutID`, and its route
+    /// with it.
+    ///
+    /// **A delete, and still no read type.** `HKHealthStore.delete(_:)` takes
+    /// the sample, which would mean fetching it, which would mean asking for
+    /// `.workoutType()` as a *read* type — and the promise above, and the
+    /// sentence under the Settings switch, are that nothing is read back.
+    /// `deleteObjects(of:predicate:)` against
+    /// `HKQuery.predicateForObject(with:)` needs only share authorization, so
+    /// the one thing this app has ever been allowed to do to Health is the
+    /// one thing it does.
+    ///
+    /// The route goes with the workout: `HKWorkoutRoute` is a child of the
+    /// sample it was finished against, and HealthKit takes an object's
+    /// children with it.
+    ///
+    /// Throws for the same reason ``write(_:)`` does and is called the same
+    /// way. A hike is deleted whether or not this lands — the alternative
+    /// would be refusing to delete a hike because a second store would not
+    /// co-operate — so the caller logs and moves on.
+    func delete(workoutID: UUID) async throws
 }
