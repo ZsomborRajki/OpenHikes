@@ -159,14 +159,6 @@ final class OpenHikesModel {
         self.locationManager = locationManager
         self.weatherManager = weatherManager
         self.significantLocations = significantLocations
-        // The foreground feed's coordinate is the only thing that can re-arm
-        // background matching for a trail the phone had wandered away from —
-        // see ``BackgroundTrailTracker/deviceDidMove(to:)``. Wired here rather
-        // than composed in, because this is where both halves are in hand, and
-        // inert on the launches where the feed is dormant.
-        significantLocations.onMovement = { [weak backgroundTracker] coordinate in
-            backgroundTracker?.deviceDidMove(to: coordinate)
-        }
         // Seeded from whatever the manager restored, so a launch that comes
         // back with last night's reading is also pointed at the place that
         // reading was for — otherwise the badge would show a subject the poll

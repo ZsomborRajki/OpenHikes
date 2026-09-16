@@ -49,11 +49,6 @@ extension OpenHikesModel {
         if AppLaunchEnvironment.usesLiveLocation {
             significantLocations.start()
         }
-        // The second half of that arming decision, for the coordinate the feed
-        // is *already* holding: `onMovement` fires on a delivery, and a return
-        // to the foreground is not one. `nil` before the first delivery leaves
-        // the stored position alone.
-        backgroundTracker.deviceDidMove(to: significantLocations.coordinate)
         hikeRecorder.sceneDidBecomeActive()
         // A walk left in a pocket through the night has no fix to notice it
         // by; coming back is the other moment it can.

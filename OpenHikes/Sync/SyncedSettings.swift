@@ -25,10 +25,6 @@
 //    a pocket was looking at.
 //  - ``SettingsKey/lastMatchedDistance`` stays put, for the same reason and
 //    more so: it is a continuity reference for one device's walk.
-//  - ``SettingsKey/trackedTrailArea`` and
-//    ``SettingsKey/lastKnownCoordinate`` stay put, and the second of them
-//    most of all: it is where this phone was, and a phone in a drawer must
-//    not learn its position from a phone in a pocket.
 //
 
 import Foundation
