@@ -18,12 +18,6 @@ import Foundation
 import OpenHikesShared
 import SwiftData
 import Testing
-
-/// Both child suites share one App Group file, so they must not run beside
-/// each other even when they are selected together.
-@Suite("Widget feeds", .serialized, .enabled(if: SharedStoreProbe.isAvailable))
-struct WidgetFeedSuites {}
-
 extension WidgetFeedSuites {
 @Suite("Feed behavior", .serialized)
 final class WidgetFeedTests {

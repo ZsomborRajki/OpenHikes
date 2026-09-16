@@ -87,8 +87,10 @@ linter enforces what it can. The handful that catch people out:
   a body — or in a helper `func`, a computed `var`, or a `.toolbar` /
   `.overlay` / `.safeAreaInset` closure, all of which are inlined into the body
   that declares them — is how an idle map starts costing a core.
-- **One test class or `@Suite` per file.** SwiftLint's `single_test_class` rule
-  is enabled and will reject a second one.
+- **One test class or `@Suite` per file.** SwiftLint enforces both halves:
+  `single_test_class` rejects a second `XCTestCase`, and the project's
+  `one_suite_per_file` custom rule rejects a second `@Suite`. Split the new
+  suite into a file named after its type.
 - **Tests use Swift Testing** (`@Suite`, `@Test`, `#expect`). Only
   `OpenHikesUITests` uses XCTest, because Apple's UI automation and launch
   metrics are not available through Swift Testing.
