@@ -32,11 +32,21 @@ struct CommunityHikeRow: View {
 
     var body: some View {
         HStack(spacing: 12) {
-            Image(systemName: "figure.hiking")
+            // A different glyph for a curated route, because the two rows are
+            // different things and the badge alone is easy to miss at a
+            // glance: a signpost for a waymarked trail nobody walked yet, and
+            // a walker for somebody's hike. Hidden from VoiceOver like every
+            // other decoration here — the spoken row says which it is in
+            // ``subtitle``, where it is a word rather than a picture.
+            Image(systemName: listing.isCurated ? "signpost.right" : "figure.hiking")
                 .font(.system(size: 16, weight: .semibold))
                 .foregroundStyle(.white)
                 .frame(width: Self.symbolFrameSize, height: Self.symbolFrameSize)
-                .background(.tint, in: Circle())
+                // This listing's own colour rather than the app's, so a page
+                // of results is not a column of identical circles and so the
+                // row matches the line and the pin the map is drawing for the
+                // same trail. See ``CommunityListing/tint``.
+                .background(listing.tint, in: Circle())
                 .accessibilityHidden(true)
 
             VStack(alignment: .leading, spacing: 2) {
@@ -45,12 +55,16 @@ struct CommunityHikeRow: View {
                     .foregroundStyle(.primary)
                 HStack(spacing: 6) {
                     if isImported {
+                        // The listing's colour here too, which is what
+                        // ``HikeRow`` does with its own status capsule: the
+                        // badge belongs to the row it is in, and a row whose
+                        // circle and capsule disagree reads as two things.
                         Text("Saved")
                             .font(.caption.weight(.semibold))
-                            .foregroundStyle(.tint)
+                            .foregroundStyle(listing.tint)
                             .padding(.horizontal, 6)
                             .padding(.vertical, 2)
-                            .background(.tint.opacity(Self.badgeOpacity), in: Capsule())
+                            .background(listing.tint.opacity(Self.badgeOpacity), in: Capsule())
                     }
                     Text(subtitle)
                         .font(.subheadline)
@@ -70,13 +84,21 @@ struct CommunityHikeRow: View {
         .accessibilityIdentifier("community-hike-row")
     }
 
-    /// "5.2 km · by Anna · 3 photos", with the parts that have nothing to say
-    /// left out rather than rendered empty.
+    /// "5.2 km · by Anna · 3 photos", or "5.2 km · Loop · Red waymark 411",
+    /// with the parts that have nothing to say left out rather than rendered
+    /// empty.
     ///
     /// The author is prefixed in the string rather than given its own line
     /// because the row is one spoken element either way, and "by Anna" is how
     /// a person reads a credit — "Anna" alone next to a distance is a second
     /// place name.
+    ///
+    /// A curated route's two extra parts are chosen for what a hiker decides
+    /// on rather than for what OpenStreetMap happens to carry most of: whether
+    /// they end up back at the car, and what to follow on the ground. Both are
+    /// short enough to sit inside the one line the row spends, which is why
+    /// the rest of what a route knows — its maintainer, its two ends, its
+    /// website — waits for the screen that has room for it.
     private var subtitle: String {
         var parts = [
             Measurement(value: listing.distanceMeters, unit: UnitLength.meters)
@@ -84,6 +106,10 @@ struct CommunityHikeRow: View {
         ]
         if !listing.authorName.isEmpty {
             parts.append("by \(listing.authorName)")
+        }
+        if let facts = listing.curatedFacts {
+            if let shape = facts.shape { parts.append(shape.displayName) }
+            if let waymark = facts.waymark { parts.append(waymark.displayName) }
         }
         if listing.photoCount > 0 {
             parts.append(

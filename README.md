@@ -17,6 +17,7 @@ That is local-first with one deliberate exception. There is no OpenHikes account
 - **Live Activity.** The same figures on the Lock Screen and in the Dynamic Island while a recording runs or a trail is being followed, ticking their own clock so a walk costs no updates while it is simply going well.
 - **iCloud sync.** Hikes and their metadata follow the hiker across their own devices, through their own private CloudKit database. Photo files and the tile cache stay on the device that produced them.
 - **Community hikes.** Shared hikes are found by panning the map and asking, or by typing a name, and are drawn as lines rather than only as pins. Opening one shows the same statistics a hike of your own gets; saving it copies its route and photographs into your library. Publishing your own is free and is reviewed by a person before anyone else can see it; every published hike can be reported or its author blocked, and a hiker can ask for their own to be taken down. Browsing needs no account.
+- **Waymarked trails from OpenStreetMap.** The same list also offers the signposted routes OpenStreetMap already knows about nearby, so it has something in it before anyone has published anything. They carry what a signpost carries and a stranger's upload cannot — the blaze to follow, whether it loops back to the car, and the two places it runs between — and they are marked as coming from OpenStreetMap rather than from a person: there is no author to credit or block, no photographs, and a link to the route's own page for anyone who wants to correct it. Long-distance paths are left out; what is offered is the length of a day.
 
 ## Requirements
 
@@ -115,7 +116,7 @@ Following Apple's [Food Truck](https://github.com/apple/sample-food-truck) and [
 | `OpenHikes/Recording/` | Live recording, recovery journal, sensors, trail matching, recording UI. |
 | `OpenHikes/Map/` | MapKit bridge, map state, search, location tracking, map rendering. |
 | `OpenHikes/Tiles/` | Tile provider policy, cache, auto-save, offline downloads, overlay rendering. |
-| `OpenHikes/Community/` | Publishing a hike to the public database, browsing and searching what other people published, the map's lines and pins for them, importing one, reporting and blocking. |
+| `OpenHikes/Community/` | Publishing a hike to the public database, browsing and searching what other people published, the waymarked routes fetched from OpenStreetMap that fill the same list, the map's lines and pins for both, importing one, reporting and blocking. |
 | `OpenHikes/Photos/` | Capture and import, library discovery and time-to-place matching, the file store, trail anchoring, gallery, viewer and map pins. |
 | `OpenHikes/Health/` | Writing a finished hike into the hiker's own Health store, behind a switch and behind a seam that keeps HealthKit out of the tests. |
 | `OpenHikes/Sync/` | iCloud sync status and control, and the settings key-value mirror. |

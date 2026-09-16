@@ -197,6 +197,24 @@ final class CommunityBrowser {
     /// rows and is logged; it must not put an error over a nearby list that
     /// is perfectly good.
     private(set) var state: CommunityBrowseState = .idle
+    /// Whether a nearby answer is on its way.
+    ///
+    /// Derived rather than stored, for the reason ``nearbyListings`` is: one
+    /// source for each fact. ``state`` already knows, and a second flag could
+    /// only disagree with it about whether the map's question is still open.
+    ///
+    /// It covers **both** halves of that question and could not cover one:
+    /// ``MergedCommunityTransport`` asks CloudKit and Overpass side by side
+    /// and returns when both have answered or failed, so there is a single
+    /// request here and this is its whole life. The outlines that follow an
+    /// answer are deliberately outside it — the rows and pins are already up
+    /// by then, and a control that kept spinning for the lines would be
+    /// reporting work the hiker is not waiting on.
+    ///
+    /// Read by the *Search this area* pill, which draws it as a spinner in
+    /// place of its glyph and stops answering taps while it is true. See
+    /// ``MapCommunitySearchControl``.
+    var isSearching: Bool { state == .loading || state == .refreshing }
     /// Whether the hiker has asked for shared hikes at all.
     ///
     /// Also *which list the sheet is showing*: the ``MapSheetList`` picker is
@@ -209,11 +227,26 @@ final class CommunityBrowser {
     /// Whether the map has moved somewhere the list does not describe.
     ///
     /// Coarse by construction: ``CommunityQueryPolicy`` refuses everything
-    /// smaller than a quarter of the search radius, so this moves a handful of
-    /// times in a browsing session and never at gesture frequency. `Equatable`
+    /// smaller than half the search radius, so this moves a handful of times
+    /// in a browsing session and never at gesture frequency. `Equatable`
     /// so `@Observable` filters the same-value writes a run of settles
     /// produces — see *Render isolation, in practice*.
     private(set) var areaPrompt: CommunityAreaPrompt = .settled
+    /// Why the last search that asked for OpenStreetMap trails has none, when
+    /// that is a failure rather than an answer.
+    ///
+    /// Observed, and drawn beside the *Search this area* pill rather than over
+    /// the rows — see ``MapCommunitySearchControl``. It is not a
+    /// ``CommunityBrowseState``: the request succeeded, the list underneath is
+    /// real, and the button stays enabled, because the one thing a
+    /// rate-limited hiker can still usefully do is search this area for the
+    /// hikes people published in it.
+    ///
+    /// Written only by a ``CommunityNearbyScope/withCuratedTrails`` answer, so
+    /// a refill after a block cannot clear a limit that is still running, and
+    /// cleared by leaving the tab. `Equatable` so `@Observable` filters the
+    /// same-value writes a run of refused taps produces.
+    private(set) var curatedOutage: CuratedTrailOutage?
     /// What to call the area the list is answering about, once something has
     /// answered. `nil` until then, and for a launch with no ``areaNames``.
     private(set) var areaName: String?
@@ -352,7 +385,9 @@ final class CommunityBrowser {
         // The opt-in that arrived before the map did — see ``startBrowsing()``.
         if wantsFirstRegion, case .offer(let area) = action {
             wantsFirstRegion = false
-            commit(area)
+            // The published half only, like the opt-in it is finishing. See
+            // ``startBrowsing()``.
+            commit(area, from: .publishedOnly)
             return
         }
         switch action {
@@ -397,9 +432,24 @@ final class CommunityBrowser {
     /// so this asks it rather than spelling the same three lines again.
     /// `.tooFarOut` still asks nothing, which is what the pill being disabled
     /// above the ceiling says on screen.
+    ///
+    /// **This is the tap OpenStreetMap is asked on, and the only one.** Every
+    /// other path into ``commit(_:from:)`` asks for the published hikes alone
+    /// — see ``CommunityNearbyScope`` for what that costs and why the
+    /// distinction is the question's rather than the transport's.
     func searchVisibleArea() {
-        guard isBrowsing else { return }
-        if let offeredArea { commit(offeredArea) } else { retry() }
+        // A second question while the first is unanswered buys nothing and
+        // costs an Overpass listing pass: ``perform(_:describing:about:matching:from:)``
+        // awaits the task it supersedes before starting, so a tap during a
+        // search cannot arrive sooner — it can only queue another one. The
+        // pill is dimmed and spinning while this is true, so a tap that gets
+        // here at all is a race rather than an instruction.
+        guard isBrowsing, !isSearching else { return }
+        if let offeredArea {
+            commit(offeredArea, from: .withCuratedTrails)
+        } else {
+            retry()
+        }
     }
 
     // MARK: - Opting in
@@ -425,7 +475,12 @@ final class CommunityBrowser {
         }
         switch policy.action(for: latestRegion) {
         case .offer(let area):
-            commit(area)
+            // The hiker's own published hikes, and not OpenStreetMap. Opening
+            // the tab is one tap standing in for a question nobody typed, and
+            // two Overpass round trips is not what it should buy — the pill it
+            // raises is right there, and that tap is the one that asks. See
+            // ``CommunityNearbyScope``.
+            commit(area, from: .publishedOnly)
         case .tooFarOut:
             // Saying so is better than an empty list, which would read as
             // "there are none near you".
@@ -466,6 +521,11 @@ final class CommunityBrowser {
         wantsFirstRegion = false
         areaPrompt = .settled
         areaName = nil
+        // The notice goes with the tab that drew it. A limit that is still
+        // running will say so again on the next tap — ``CuratedTrailSource``
+        // refuses one without a round trip — and a caption left standing over
+        // a list nobody is looking at is a caption nothing will ever clear.
+        curatedOutage = nil
         state = .idle
     }
 
@@ -478,10 +538,14 @@ final class CommunityBrowser {
     /// back. Above the ceiling it still asks nothing — a region that means
     /// "this continent" is not a question however many times it is put.
     func retry() {
-        guard isBrowsing, let latestRegion else { return }
+        guard isBrowsing, !isSearching, let latestRegion else { return }
         policy.forgetLastQuery()
         guard case .offer(let area) = policy.action(for: latestRegion) else { return }
-        commit(area)
+        // Both halves, because every caller is a hiker's tap: *Try Again* in
+        // the list, and the pill with no offer standing. A retry that quietly
+        // dropped the trails would leave a rate-limited hiker no way back to
+        // them but panning away and returning.
+        commit(area, from: .withCuratedTrails)
     }
 
     /// Refills the nearby list when a block has just emptied it.
@@ -515,7 +579,11 @@ final class CommunityBrowser {
     func refreshAfterBlock() {
         guard isBrowsing, !nearbyResults.isEmpty, nearbyListings.isEmpty else { return }
         guard let resultsArea else { return }
-        requestNearby(resultsArea)
+        // Published only: a block is not a hiker asking OpenStreetMap
+        // anything, and the curated rows in the list are unaffected by it —
+        // they have no author to block. Re-asking Overpass here would spend
+        // two round trips to get back the same trails.
+        requestNearby(resultsArea, from: .publishedOnly)
     }
 
     /// Takes a hike out of both lists, because it is no longer in the
@@ -577,12 +645,16 @@ final class CommunityBrowser {
     /// that have to move together cannot drift apart: what the policy
     /// remembers, what the transport is asked, and what the header says the
     /// answer is about.
-    private func commit(_ area: CommunitySearchArea) {
+    ///
+    /// The scope is the caller's to state and there is no default, because the
+    /// two callers mean opposite things by it and a default would quietly give
+    /// one of them the other's. See ``CommunityNearbyScope``.
+    private func commit(_ area: CommunitySearchArea, from scope: CommunityNearbyScope) {
         policy.commit(area)
         offeredArea = nil
         areaPrompt = .settled
         nameArea(area)
-        requestNearby(area)
+        requestNearby(area, from: scope)
     }
 
     /// Asks the transport about `area`, and nothing else.
@@ -594,14 +666,15 @@ final class CommunityBrowser {
     ///
     /// The exclusion set is read here rather than passed in, which is what
     /// makes the refill carry the author who was just blocked.
-    private func requestNearby(_ area: CommunitySearchArea) {
+    private func requestNearby(_ area: CommunitySearchArea, from scope: CommunityNearbyScope) {
         let excluded = blockList.blockedIDs
-        perform(.nearby, describing: "a nearby search", about: area) { transport in
+        perform(.nearby, describing: "a nearby search", about: area, from: scope) { transport in
             try await transport.listings(
                 near: area.coordinate,
                 radiusMeters: area.radiusMeters,
                 limit: Self.resultLimit,
-                excluding: excluded
+                excluding: excluded,
+                scope: scope
             )
         }
     }
@@ -703,12 +776,19 @@ final class CommunityBrowser {
     /// - Parameter title: The normalized word a title search is about, for the
     ///   same reason — an answer is published only while it is still an answer
     ///   to what is being asked. `nil` for a nearby search.
+    /// - Parameter scope: Which sources the nearby question covered, carried
+    ///   through so ``curatedOutage`` is only ever written by a request that
+    ///   asked about OpenStreetMap. A published-only refresh has nothing to
+    ///   say about a rate limit and must not clear one that still stands.
+    ///   `nil` for a title search.
     private func perform(
         _ question: Question,
         describing reason: String,
         about area: CommunitySearchArea? = nil,
         matching title: String? = nil,
-        _ work: @escaping @Sendable (any CommunityTransporting) async throws -> [CommunityListing]
+        from scope: CommunityNearbyScope? = nil,
+        _ work: @escaping @Sendable (any CommunityTransporting) async throws
+            -> CommunityNearbyAnswer
     ) {
         guard let transport else { return }
         issuedRequests += 1
@@ -729,9 +809,15 @@ final class CommunityBrowser {
             await previous?.value
             guard !Task.isCancelled else { return }
             do {
-                let results = try await work(transport)
+                let answer = try await work(transport)
                 guard !Task.isCancelled else { return }
-                self?.accept(results, answering: question, about: area, matching: title)
+                self?.accept(
+                    answer,
+                    answering: question,
+                    about: area,
+                    matching: title,
+                    from: scope
+                )
             } catch is CancellationError {
                 return
             } catch {
@@ -750,16 +836,23 @@ final class CommunityBrowser {
     /// Publishes an answer: the rows, the area they are about, and the name
     /// of that area, in one place so the three cannot disagree.
     private func accept(
-        _ results: [CommunityListing],
+        _ answer: CommunityNearbyAnswer,
         answering question: Question,
         about area: CommunitySearchArea?,
-        matching title: String?
+        matching title: String?,
+        from scope: CommunityNearbyScope?
     ) {
+        let results = answer.listings
         switch question {
         case .nearby:
             nearbyResults = results
             resultsArea = area
             requestOutlines(for: results)
+            // Only a question that asked about OpenStreetMap may answer for
+            // it. A `nil` here from a published-only refresh means "not asked"
+            // rather than "fine", and writing it would take the notice off the
+            // button while the address was still rate-limited.
+            if scope == .withCuratedTrails { curatedOutage = answer.curatedOutage }
             // The header describes these rows from here on. If MapKit has
             // already said what this area is called, say it; if it has not,
             // say nothing rather than keep the last area's name — the geocode
@@ -892,10 +985,15 @@ extension CommunityBrowser {
         // flight is applied by the read-time filter above.
         let excluded = blockList.blockedIDs
         perform(.title, describing: "a title search", matching: titleQuery) { transport in
-            try await transport.listings(
-                matching: trimmed,
-                limit: Self.resultLimit,
-                excluding: excluded
+            // Wrapped rather than given a shape of its own: a title search has
+            // no curated half to fail — see ``MergedCommunityTransport`` — so
+            // there is one thing for it to answer and it is the rows.
+            CommunityNearbyAnswer(
+                listings: try await transport.listings(
+                    matching: trimmed,
+                    limit: Self.resultLimit,
+                    excluding: excluded
+                )
             )
         }
     }
@@ -964,9 +1062,9 @@ extension CommunityBrowser {
     /// what the previous hike's full-strength line would be.
     ///
     /// Retiring it here rather than leaving it to the close is the difference
-    /// between the two orderings mattering and not. A map pin can push a
-    /// second preview over an open one, and SwiftUI then tears the first
-    /// screen down *after* the second appears — so the close that would have
+    /// between the two orderings mattering and not. A map pin replaces an
+    /// open preview with another, and SwiftUI then tears the first screen
+    /// down *after* the second appears — so the close that would have
     /// cleared it arrives matched against the new hike and is rejected, as it
     /// must be. Without this line the old trail stays emphasised until the
     /// new one loads, and stays emphasised for good if the new one fails.

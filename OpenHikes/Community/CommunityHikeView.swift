@@ -48,9 +48,10 @@
 //  hike somebody owns: no route colour, no line pattern, no auto-follow, no
 //  offline tiles, no walk. This is not their hike yet, and the two controls
 //  that would be lying about that are the ones this screen must not offer. The
-//  chart is drawn in the app's own tint for the same reason the lines and the
-//  pins are — it is the colour the map behind is already drawing this very
-//  route in.
+//  chart is drawn in the listing's own colour for the same reason the lines
+//  and the pins are — it is the colour the map behind is already drawing this
+//  very route in — and that colour is the listing's identity rather than
+//  anything the hiker picked. See ``CommunityListing/tint``.
 //
 //  ## OpenStreetMap is asked on open, and the answer is not kept
 //
@@ -405,11 +406,11 @@ struct CommunityHikeView: View {
         }
         .onDisappear {
             // A screen pushed over this one is not the hiker leaving it, and
-            // both look identical from here — a map pin can push another
-            // preview over an open one. Disposing on the first would take the
-            // line off the map and delete the photographs out from under a
-            // screen the hiker is one Back from returning to, with its own
-            // cached detail still pointing at the deleted files.
+            // both look identical from here — its gallery pushes over it.
+            // Disposing on the first would take the line off the map and
+            // delete the photographs out from under a screen the hiker is
+            // one Back from returning to, with its own cached detail still
+            // pointing at the deleted files.
             guard !remainsPushed() else { return }
             // Before the discard, so a download still running is told to stop
             // rather than raced to the directory it is writing into.
@@ -452,21 +453,32 @@ private extension CommunityHikeView {
             Menu {
                 importMenuItem
 
-                Button {
-                    isReporting = true
-                } label: {
-                    Label("Report Hike", systemImage: "exclamationmark.bubble")
-                }
-                .accessibilityHint("Tells the reviewer something is wrong with it")
-                .accessibilityIdentifier("community-report-button")
+                // Absent rather than disabled for a curated route, and the
+                // difference is not cosmetic. Both of these are Guideline 1.2
+                // affordances about *user-generated content*, and an OSM
+                // relation is not that: there is no author to block — the menu
+                // item would read "Block This Hiker" about nobody — and no
+                // record for a reviewer to delete, so a report would ask a
+                // person to act on something they cannot reach. What can be
+                // done about a wrong trail is done upstream, which is what
+                // ``curatedAttribution`` links to.
+                if !listing.isCurated {
+                    Button {
+                        isReporting = true
+                    } label: {
+                        Label("Report Hike", systemImage: "exclamationmark.bubble")
+                    }
+                    .accessibilityHint("Tells the reviewer something is wrong with it")
+                    .accessibilityIdentifier("community-report-button")
 
-                Button(role: .destructive) {
-                    isConfirmingBlock = true
-                } label: {
-                    Label(blockActionTitle, systemImage: "hand.raised.slash")
+                    Button(role: .destructive) {
+                        isConfirmingBlock = true
+                    } label: {
+                        Label(blockActionTitle, systemImage: "hand.raised.slash")
+                    }
+                    .accessibilityHint("Hides their hikes on this device")
+                    .accessibilityIdentifier("community-block-button")
                 }
-                .accessibilityHint("Hides their hikes on this device")
-                .accessibilityIdentifier("community-block-button")
 
                 // A last entry, and only for an account the server has already
                 // let read the queue. Not a permission check — the permission
@@ -476,7 +488,7 @@ private extension CommunityHikeView {
                 // reaches everybody rather than this device: reporting sends a
                 // mail and blocking writes to `UserDefaults`, while this
                 // unlists a hike for the whole world.
-                if review?.isReviewer == true {
+                if review?.isReviewer == true, !listing.isCurated {
                     Divider()
                     Button(role: .destructive) {
                         isConfirmingTakeDown = true
@@ -612,10 +624,24 @@ private extension CommunityHikeView {
         .accessibilityElement(children: .combine)
     }
 
+    /// Who to thank for this hike, and when it was walked.
+    ///
+    /// Three shapes, because there are three things that can be known. A
+    /// published hike names the hiker and the day. One published without a
+    /// typed name shows the day alone, which is what it always did. A curated
+    /// route has neither — nobody walked it and nobody shared it — so it
+    /// credits the people who mapped it, which is also the attribution ODbL
+    /// requires and the reason this string is never empty. The licence itself
+    /// is reachable from ``curatedAttribution``, one row below.
     var credit: String {
-        let day = listing.hikeDate.formatted(date: .abbreviated, time: .omitted)
-        guard !listing.authorName.isEmpty else { return day }
-        return "Shared by \(listing.authorName) · \(day)"
+        guard !listing.isCurated else { return "From OpenStreetMap contributors" }
+        let day = listing.hikeDate?.formatted(date: .abbreviated, time: .omitted)
+        switch (listing.authorName.isEmpty, day) {
+        case (false, let day?): return "Shared by \(listing.authorName) · \(day)"
+        case (false, nil): return "Shared by \(listing.authorName)"
+        case (true, let day?): return day
+        case (true, nil): return ""
+        }
     }
 
     var loadingState: some View {
@@ -675,6 +701,7 @@ private extension CommunityHikeView {
             photoStrip(detail)
         }
 
+        trailFactsSection
         surfaceSection
         difficultySection
 
@@ -683,6 +710,7 @@ private extension CommunityHikeView {
         }
 
         importButton(detail)
+        curatedAttribution
     }
 
     /// The route's shape, in the same chart the hiker's own hikes draw.
@@ -694,31 +722,38 @@ private extension CommunityHikeView {
     /// everything that needs a hike — the route tint, the map pin, the live
     /// dot — so the callbacks end at ``tracker`` and go no further.
     ///
-    /// Nothing at all until the route has been walked, and the placeholder
-    /// only once it has: *no elevation data* is an answer, and a screen that
-    /// is still loading has not got one.
+    /// Absent entirely when there are no heights to draw, rather than replaced
+    /// by a card saying so.
+    ///
+    /// This screen's rule everywhere else — a section with nothing in it is
+    /// not drawn, see ``trailFactsSection`` — and the curated routes are what
+    /// made it matter here. OpenStreetMap carries no elevation on a hiking
+    /// relation: measured over one Berchtesgaden box, `ele` was on **zero** of
+    /// 1,725 geometry nodes, so *every* curated trail took the empty state.
+    /// That turned it from a rare admission about one person's upload into a
+    /// permanent grey card on most of the screens this feature opens, sitting
+    /// where a hiker looks first and saying only that there is nothing to look
+    /// at. A section that is simply not there says the same thing and takes up
+    /// none of the page.
+    ///
+    /// A hike in the library keeps its placeholder — see
+    /// ``HikeElevationPlaceholder``. The difference is what the hiker can do
+    /// about it: that file is theirs, so *no elevation data in this file* tells
+    /// them something true about a thing they chose to import.
     @ViewBuilder var elevationSection: some View {
-        if let profile = prepared?.profile {
-            if profile.samples.count > 1 {
-                ElevationChartView(
-                    profile: profile,
-                    // The app's tint rather than a hike's, exactly as the
-                    // lines and the markers on the map are: the map behind
-                    // this screen is drawing this very route in it, and the
-                    // route tints belong to hikes the hiker owns.
-                    tint: .accentColor,
-                    tracker: tracker,
-                    onScrub: { tracker.trackerDistance = $0 }
-                )
-                .equatable()
-            } else {
-                ElevationPlaceholderView(
-                    tint: .accentColor,
-                    // Not "in this file": what the hiker is looking at is
-                    // somebody's upload, and they have never seen a file.
-                    message: "No elevation data in this hike"
-                )
-            }
+        if let profile = prepared?.profile, profile.samples.count > 1 {
+            ElevationChartView(
+                profile: profile,
+                // The listing's own colour, exactly as the line and the marker
+                // on the map behind this screen are: the map is drawing this
+                // very route in it. Still not a `Hike`'s route tint, which
+                // belongs to hikes the hiker owns — see
+                // ``CommunityListing/tint``.
+                tint: listing.tint,
+                tracker: tracker,
+                onScrub: { tracker.trackerDistance = $0 }
+            )
+            .equatable()
         }
     }
 

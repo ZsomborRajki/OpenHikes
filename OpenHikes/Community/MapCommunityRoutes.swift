@@ -197,13 +197,19 @@ extension MapView.Coordinator {
         else { return nil }
         let renderer = MKPolylineRenderer(polyline: polyline)
         let previewed = drawing.line.isPreviewed
-        // The app's tint rather than the route tint the hiker chose, exactly
-        // as the markers are: that colour belongs to their own selected hike,
-        // which may well be drawn on the same screen.
+        // This listing's own colour, exactly as its marker and its row are.
+        // Every shared line used to be the app's tint, which made a page of
+        // results one tangle of identical green — see
+        // ``CommunityListing/tint``.
+        //
+        // It is still not the route tint the hiker chose: that colour belongs
+        // to their own selected hike, which may well be drawn on the same
+        // screen. What keeps the two apart is what always did the work — these
+        // are thinner, faded, and underneath — and that is unchanged below.
         #if os(macOS)
-        let tint = NSColor.controlAccentColor
+        let tint = NSColor(drawing.line.listing.tint)
         #else
-        let tint = UIColor.tintColor
+        let tint = UIColor(drawing.line.listing.tint)
         #endif
         renderer.strokeColor = previewed ? tint : tint.withAlphaComponent(Self.communityRouteAlpha)
         renderer.lineWidth = previewed ? Self.previewedRouteWidth : Self.communityRouteWidth

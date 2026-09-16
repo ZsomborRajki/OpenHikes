@@ -163,7 +163,7 @@ struct HikeDeletionPrompt: Equatable {
 
     private static func walks(_ count: Int) -> String {
         count == 1
-            ? String(localized: "1 walk")
-            : String(localized: "\(count) walks")
+            ? String(localized: "1 hike")
+            : String(localized: "\(count) hikes")
     }
 }

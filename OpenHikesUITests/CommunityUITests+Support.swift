@@ -31,9 +31,38 @@ nonisolated enum SeededHike {
     static let ridgePhotoCount = 2
 }
 
+/// What `--ui-test-community=curated` adds beside the published hikes.
+///
+/// Mirrors ``SeededCuratedTrailSource``'s two routes, and they are a pair for
+/// the reason that file gives: the differences worth asserting are differences
+/// *between* rows, so one carries every fact a signpost can and the other
+/// carries almost none.
+nonisolated enum SeededCuratedTrail {
+    /// Fully tagged: `roundtrip=yes`, an `osmc:symbol`, both ends, a via, an
+    /// operator and a website.
+    static let loopTitle = "Seeded Ridge Loop"
+    /// Nothing but a name and a network, so its shape is derived from the
+    /// line's two ends and it has no waymark at all.
+    static let pathTitle = "Seeded Valley Path"
+
+    static let allTitles = [loopTitle, pathTitle]
+
+    /// The two parts ``CommunityHikeRow`` spends a curated row's subtitle on,
+    /// as the loop's tags spell them. Both are words rather than pictures,
+    /// which is what makes the row assertable at all — the signpost glyph is
+    /// `accessibilityHidden`, like every other decoration in that row.
+    static let loopShape = "Loop"
+    static let loopWaymark = "Red waymark 7"
+}
+
 /// Which stand-in database a scenario asks for. Mirrors
 /// ``SeededCommunityTransport.Scenario``.
 nonisolated enum SeededCommunityScenario: String {
+    /// ``seeded``, plus the two OpenStreetMap routes.
+    ///
+    /// The only way to reach a *mixed* list from automation, which is the one
+    /// the shipping app draws — see ``SeededCuratedTrailSource``.
+    case curated = "curated"
     case empty = "empty"
     case failing = "failing"
     /// ``seeded``, with a reviewer who has said yes — the only way to reach a

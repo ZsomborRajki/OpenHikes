@@ -63,7 +63,7 @@ struct WalkSummaryView: View {
             }
             .padding()
         }
-        .navigationTitle("Walk Summary")
+        .navigationTitle("Hike Summary")
         #if os(iOS)
         .navigationBarTitleDisplayMode(.inline)
         #endif
@@ -88,7 +88,7 @@ struct WalkSummaryView: View {
                 HikeHeaderSymbol(hike: hike)
             }
             VStack(alignment: .leading, spacing: 4) {
-                Text(hike?.displayTitle ?? "Walk")
+                Text(hike?.displayTitle ?? "Hike")
                     .font(.title2.bold())
                     .accessibilityAddTraits(.isHeader)
                 Text(walk.startedAt.formatted(date: .complete, time: .shortened))
@@ -158,7 +158,7 @@ struct WalkSummaryView: View {
             .disabled(hike == nil || walk.coverage.ranges.isEmpty || !routeMatchesWalk)
             .accessibilityIdentifier("walk-show-on-map")
             if trailHasChanged {
-                Text("This trail has changed since the walk, so the stretches "
+                Text("This trail has changed since the hike, so the stretches "
                     + "it covered can no longer be drawn along it.")
                     .font(.caption)
                     .foregroundStyle(.secondary)

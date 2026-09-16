@@ -66,7 +66,7 @@ struct CommunityImportedHikesTests {
     }
 
     /// The import refuses to make a second copy — see
-    /// ``CommunityImport/importHike(_:into:store:libraryWriter:save:)`` — but
+    /// ``CommunityImport/importHike(_:into:store:libraryWriter:saveDate:alreadyImported:save:)`` — but
     /// a mirrored store can deliver one from another device. The lists this
     /// reads are sorted newest first, so first wins means the newer copy.
     @Test("one listing imported twice answers with the newer copy")

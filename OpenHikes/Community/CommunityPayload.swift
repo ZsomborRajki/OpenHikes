@@ -183,22 +183,35 @@ nonisolated struct CommunitySubmissionDraft: Sendable {
 /// list nobody asked to keep, so the row draws a symbol and a photo count and
 /// the pictures arrive with the hike itself.
 nonisolated struct CommunityListing: Identifiable, Hashable, Sendable {
-    /// The listing record's own name, which is also its identity here.
-    var id: String
-    /// The submission record this was published from, fetched on open.
-    var submissionID: String
-    var title: String
-    /// What the hiker typed when they shared it, which is a credit and not
-    /// an identity. See ``authorID`` for the difference and why both are here.
-    var authorName: String
-    /// Who published it, as CloudKit knows them.
+    /// This hike's identity across the whole app, including
+    /// ``Hike/importedFromListingID``.
     ///
-    /// Carried on every listing so a hiker can block the person rather than
-    /// the name they happened to type — see ``CommunitySchema/Listing/authorID``
-    /// and ``CommunityBlockList``. Never shown: it is an opaque record name,
-    /// and the screen credits ``authorName``.
-    var authorID: String
-    var hikeDate: Date
+    /// A CloudKit listing's record name, or — for a curated route — the
+    /// namespaced form ``CommunityIdentity/curated(relationID:)`` builds. One
+    /// column holds both, so they cannot be allowed to look alike.
+    var id: String
+    /// Where this came from, and the facts that exist only for that source.
+    ///
+    /// See ``CommunityOrigin``: the author and the submission live in here
+    /// rather than beside the fields below, because a curated route has
+    /// neither and the empty strings that used to stand in for them were
+    /// values the app treated as meaningful.
+    var origin: CommunityOrigin
+    var title: String
+    /// What the hiker typed when they shared it, which is a credit and not an
+    /// identity — see ``CommunityOrigin/published(submissionID:authorID:)``
+    /// for the identity and why the two are apart.
+    ///
+    /// Empty for a curated route, which nobody shared. The screen credits
+    /// OpenStreetMap's contributors instead, and the emptiness is what every
+    /// existing consumer already branches on.
+    var authorName: String
+    /// The day this was walked, or `nil` when nobody walked it.
+    ///
+    /// Optional rather than a `.distantPast` sentinel, because the sentinel is
+    /// a date and every consumer formatted it as one: a curated route carrying
+    /// it would head its screen with *1 January 1*.
+    var hikeDate: Date?
     var distanceMeters: Double
     var photoCount: Int
     var latitude: Double
@@ -207,6 +220,95 @@ nonisolated struct CommunityListing: Identifiable, Hashable, Sendable {
 
     var coordinate: CLLocationCoordinate2D {
         CLLocationCoordinate2D(latitude: latitude, longitude: longitude)
+    }
+
+    /// The submission behind this hike, or `nil` for a curated route.
+    var submissionID: String? { origin.submissionID }
+
+    /// Who may be blocked over this hike, or `nil` when there is nobody.
+    var blockableAuthorID: String? { origin.blockableAuthorID }
+
+    /// Whether this came from OpenStreetMap rather than from a hiker.
+    var isCurated: Bool { origin.isCurated }
+
+    /// The OSM relation behind this hike, or `nil` when a person published it.
+    ///
+    /// The fourth of these and the one that was missing, which left its two
+    /// callers reading through ``origin`` while everything beside them had a
+    /// spelling here. It is also the *total* answer to the question
+    /// ``CommunityIdentity/relationID(of:)`` answers about a bare string:
+    /// routing a per-listing request on this is a fact about where the listing
+    /// came from, where routing on the id is a fact about how the id is
+    /// spelled, and only one of those is what the caller means.
+    var relationID: Int64? { origin.relationID }
+
+    /// What OpenStreetMap says about this route, or `nil` for a published
+    /// hike. See ``CuratedTrailFacts``.
+    var curatedFacts: CuratedTrailFacts? { origin.curatedFacts }
+}
+
+nonisolated extension CommunityListing {
+    /// A published listing, spelled the way every caller already spells one.
+    ///
+    /// Kept when ``origin`` replaced the two loose fields, rather than
+    /// rewriting forty-odd construction sites across the app and the test
+    /// bundles to say `.published(submissionID:authorID:)` in longhand. It is
+    /// not a convenience so much as the *only* way to build this case — which
+    /// is the point: there is no initialiser here that can make a listing with
+    /// an author it cannot name.
+    init(
+        id: String,
+        submissionID: String,
+        title: String,
+        authorName: String,
+        authorID: String,
+        hikeDate: Date?,
+        distanceMeters: Double,
+        photoCount: Int,
+        latitude: Double,
+        longitude: Double,
+        publishedAt: Date
+    ) {
+        self.init(
+            id: id,
+            origin: .published(submissionID: submissionID, authorID: authorID),
+            title: title,
+            authorName: authorName,
+            hikeDate: hikeDate,
+            distanceMeters: distanceMeters,
+            photoCount: photoCount,
+            latitude: latitude,
+            longitude: longitude,
+            publishedAt: publishedAt
+        )
+    }
+
+    /// The listing a curated route is drawn as.
+    ///
+    /// Everything a published hike gets from a person is absent by
+    /// construction: no author to credit, no date anybody walked it, and no
+    /// photographs.
+    ///
+    /// `editedAt` is **not** OSM's last-edit time, and nothing here can make
+    /// it one: the listing pass asks `out tags bb` rather than `out meta`,
+    /// because a timestamp nothing draws is not worth doubling the size of
+    /// every search for. It is the moment the row was fetched — see
+    /// ``MergedCommunityTransport``, which passes `.now`. That gives a merged
+    /// list something defensible to order by when there is no distance to use,
+    /// and it is never shown.
+    init(curated trail: CuratedTrail, editedAt: Date) {
+        self.init(
+            id: CommunityIdentity.curated(relationID: trail.relationID),
+            origin: .openStreetMap(relationID: trail.relationID, facts: trail.facts),
+            title: trail.name,
+            authorName: "",
+            hikeDate: nil,
+            distanceMeters: trail.distanceMeters,
+            photoCount: 0,
+            latitude: trail.coordinate.latitude,
+            longitude: trail.coordinate.longitude,
+            publishedAt: editedAt
+        )
     }
 }
 

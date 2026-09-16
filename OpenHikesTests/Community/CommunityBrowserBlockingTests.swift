@@ -84,7 +84,7 @@ struct CommunityBrowserBlockingTests {
         for step in 1...4 {
             switch step {
             case 1, 3: blocks.block(listing)
-            case 2: blocks.unblock(listing.authorID)
+            case 2: listing.blockableAuthorID.map(blocks.unblock)
             default: blocks.unblockAll()
             }
             await settleDelegateHop(until: "all block-list readers observe the change") {

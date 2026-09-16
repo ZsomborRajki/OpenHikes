@@ -29,10 +29,16 @@
 //  There are three separate reasons to refuse, and they are worth naming
 //  because only one of them is the obvious one.
 //
-//  1. **The server cannot tell.** CloudKit's `distanceToLocation:` resolves at
-//     around ten kilometres, so nudging the map two streets over asks a
-//     different question and gets the same answer back. Offering to re-ask
-//     after every small pan would be a button that changes nothing.
+//  1. **The server cannot tell, and the other one is being asked nicely.**
+//     CloudKit's `distanceToLocation:` resolves at around ten kilometres, so
+//     nudging the map two streets over asks a different question and gets the
+//     same answer back — offering to re-ask after every small pan would be a
+//     button that changes nothing. That was the whole of the argument while
+//     CloudKit was the whole of the list. It is not any more: an accepted
+//     offer now also spends an Overpass request, against a volunteer-run API
+//     that allows a handful of slots per address, so ``recentreFraction`` is
+//     set by the source that minds being asked rather than by the one that
+//     cannot tell the difference.
 //  2. **A country is not a place.** Zoomed out far enough, "near here" stops
 //     meaning anything — every hike in Europe is within the radius, and the
 //     twenty that come back are twenty arbitrary ones. Above the ceiling the
@@ -42,6 +48,21 @@
 //  3. **Nobody asked.** Browsing is opt-in, and a hiker who has never asked
 //     for shared hikes should never put a request on the radio — the same
 //     bargain the rest of the app's energy policies make.
+//
+//  ## One ceiling, and it is OpenStreetMap's
+//
+//  There used to be two, 150 km here and 40 km in ``CuratedTrailQuery``, and
+//  the band between them was written down as intended rather than as a gap.
+//  It was a gap. Inside it the pill was enabled, a tap spent a CloudKit query,
+//  and the curated half answered `[]` with no failure to report — so a hiker
+//  looking at 100 km of map tapped *Search this area*, got no trails, and had
+//  nothing on screen telling them that zooming in was the answer. Two ceilings
+//  also meant two sentences to keep true about one control.
+//
+//  So this one *is* ``CuratedTrailQuery/maximumRadiusMeters`` rather than
+//  merely being checked against it. What is given up is searching published
+//  hikes between 40 and 150 km, and the argument above is the reason that is
+//  affordable: a result that wide was already twenty arbitrary hikes.
 //
 
 import CoreLocation
@@ -71,11 +92,29 @@ struct CommunityQueryPolicy {
     static let minimumRadiusMeters: Double = 10_000
     /// Largest radius worth asking about, and the zoom ceiling with it: past
     /// this a result means "somewhere on this continent".
-    static let maximumRadiusMeters: Double = 150_000
+    ///
+    /// **``CuratedTrailQuery/maximumRadiusMeters`` itself, not a number of its
+    /// own.** See *One ceiling, and it is OpenStreetMap's* above. Spelled as a
+    /// reference rather than copied so the two cannot drift back apart, which
+    /// is how the band between them appeared in the first place.
+    static let maximumRadiusMeters: Double = CuratedTrailQuery.maximumRadiusMeters
     /// How far the centre has to move, as a fraction of the last radius,
-    /// before the question counts as a new one. A quarter of the search radius
-    /// is roughly the point at which the returned set can actually differ.
-    static let recentreFraction: Double = 0.25
+    /// before the question counts as a new one.
+    ///
+    /// Half, where it used to be a quarter. A quarter is the point at which
+    /// *CloudKit's* answer can differ, and that was the right figure while
+    /// CloudKit was the only thing being asked. Taking an offer now also
+    /// spends an Overpass listing pass — and a geometry pass, for anything not
+    /// already on the device — so the question this threshold answers is no
+    /// longer "could the rows change" but "is this worth inviting a request
+    /// for against a shared quota".
+    ///
+    /// It costs the hiker nothing, which is what makes it affordable: the pill
+    /// stands for the whole *Community* tab rather than only while an offer is
+    /// up, so a tap with no offer standing still re-asks through
+    /// ``CommunityBrowser/retry()``. What a refused offer withholds is the
+    /// invitation, never the ability.
+    static let recentreFraction: Double = 0.5
     /// How far the radius has to change before a zoom counts as a new
     /// question, either way.
     private static let zoomFactor: Double = 2

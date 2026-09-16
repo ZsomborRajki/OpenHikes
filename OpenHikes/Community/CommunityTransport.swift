@@ -190,14 +190,27 @@ nonisolated protocol CommunityTransporting: Sendable {
     func publication(of submissionID: String) async throws -> CommunityListing?
 
     /// Published hikes whose start point is within `radiusMeters` of
-    /// `coordinate`, nearest first.
+    /// `coordinate`, nearest first, and — when `scope` asks for them — the
+    /// curated OpenStreetMap routes beside them.
+    ///
+    /// The only requirement here that takes a scope, because it is the only
+    /// one with a second source behind it. A conformance with one source
+    /// ignores it and says so; see ``MergedCommunityTransport``, which is
+    /// where it decides anything, and ``CommunityNearbyScope`` for why the
+    /// question carries it rather than the transport.
+    ///
+    /// It answers a ``CommunityNearbyAnswer`` rather than an array for the
+    /// same reason: a curated half that could not be reached is reported
+    /// beside the rows instead of thrown, so a busy Overpass costs the trails
+    /// and nothing else.
     @concurrent
     func listings(
         near coordinate: CLLocationCoordinate2D,
         radiusMeters: Double,
         limit: Int,
-        excluding: Set<String>
-    ) async throws -> [CommunityListing]
+        excluding: Set<String>,
+        scope: CommunityNearbyScope
+    ) async throws -> CommunityNearbyAnswer
 
     /// Published hikes whose title matches `query`, newest first.
     @concurrent

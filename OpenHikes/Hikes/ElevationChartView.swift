@@ -446,18 +446,21 @@ struct ElevationChartView: View, Equatable {
 
 // MARK: - Empty state
 
-/// What stands in for the graph when a route carries no elevations.
+/// What stands in for the graph when a hike in the library carries no
+/// elevations.
 ///
 /// Split from ``HikeElevationPlaceholder`` for the reason the chart itself is
 /// split from ``HikeElevationChart``: the tint is an observable read on the
-/// hike's own screen and a constant on the community preview, and only the
-/// former needs a wrapper to absorb it.
+/// hike's own screen, and the wrapper is what absorbs it.
 ///
-/// The message is a parameter rather than a constant because the two callers
-/// are looking at different things. A hike in the library came from a file the
-/// hiker has; a shared one came from somebody else's upload, and telling them
-/// their *file* is missing elevations would be naming something they have
-/// never seen.
+/// **One caller, and a `message` parameter anyway.** The community preview used
+/// to draw this too, with wording of its own; it now draws nothing at all when
+/// a route has no heights, because every curated trail has none and a
+/// permanent card saying so is worse than an absent section — see
+/// ``CommunityHikeView/elevationSection``. The parameter stays because the
+/// wording is the reason the split existed: *no elevation data in this file*
+/// names a thing the hiker has, and any second caller will by definition be
+/// looking at something else.
 struct ElevationPlaceholderView: View {
     private static let tintOpacity = 0.12
     private static let height: CGFloat = 180

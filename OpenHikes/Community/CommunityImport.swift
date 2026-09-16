@@ -55,6 +55,8 @@ nonisolated enum CommunityImport {
 
     /// Adds `detail` to the library, committing before it reports success.
     ///
+    /// - Parameter saveDate: The clock, handed in so the date a curated route
+    ///   is filed under can be pinned by a test.
     /// - Parameter alreadyImported: The has-it-already read, handed in so the
     ///   branch below can be reached at all. Closure-driven for the reason
     ///   ``StoredTileDeletionPlan/init(doomedClaim:survivingClaims:)`` is:
@@ -71,6 +73,7 @@ nonisolated enum CommunityImport {
         into context: ModelContext,
         store: HikePhotoStore = .shared,
         libraryWriter: any PhotoLibraryWriting = PhotoLibraryWriter(),
+        saveDate: Date = .now,
         alreadyImported: (String, ModelContext) throws -> Hike? = { try existingImport(of: $0, in: $1) },
         save: (ModelContext) throws -> Void = { try $0.save() }
     ) async -> CommunityImportOutcome {
@@ -97,11 +100,36 @@ nonisolated enum CommunityImport {
         let hike = Hike(
             title: listing.title,
             distanceMeters: routeLength(of: detail.route),
-            date: listing.hikeDate,
+            // A curated route carries no date, because nobody walked it. The
+            // day it was saved is the only honest value: ``Hike/date`` means
+            // *when this walk happened*, and the hikes list is sorted by it, so
+            // a distant-past sentinel would file a trail the hiker just added
+            // at the bottom of everything they have ever done.
+            date: listing.hikeDate ?? saveDate,
             route: detail.route,
             trackDescription: detail.trackDescription
         )
         hike.importedFromListingID = listing.id
+        // The colour the hiker has been looking at, rather than the green
+        // ``Hike`` defaults to.
+        //
+        // A file import picks at random for this reason — a library of
+        // identical lines tells a hiker nothing — and a community import had
+        // been landing every trail in the default green instead. It need not
+        // pick at random, because this hike has been on screen for a while
+        // already: it was a coloured row, a pin, a line on the map and the
+        // graph on the screen the hiker pressed *Add to My Hikes* on. Keeping
+        // that colour is what makes the hike that appears in the library the
+        // one they were just deciding about. See ``CommunityListing/tint``,
+        // which is derived from the same id ``importedFromListingID`` holds,
+        // so the two agree by construction.
+        //
+        // Theirs to change from here, like any other hike's.
+        hike.tintHex = listing.tintHex
+        // Left `nil` for a curated route, which nobody shared. It is what
+        // ``CommunityPublishingEligibility`` reads to tell a stranger's hike
+        // from a trail OpenStreetMap already had — see
+        // ``CommunityPublishingEligibility/Reason/savedFromOpenStreetMap``.
         hike.importedAuthorName = listing.authorName.isEmpty ? nil : listing.authorName
         context.insert(hike)
 
@@ -153,7 +181,7 @@ nonisolated enum CommunityImport {
     /// same fact rather than two readings of it.
     ///
     /// Two hikes carrying one listing id is a state the import refuses to
-    /// create — see ``importHike(_:into:store:libraryWriter:save:)`` — but a
+    /// create — see ``importHike(_:into:store:libraryWriter:saveDate:alreadyImported:save:)`` — but a
     /// mirrored store can deliver one from another device, so the first wins
     /// rather than the last. The lists are sorted newest first, which makes
     /// that the copy the hiker made most recently.

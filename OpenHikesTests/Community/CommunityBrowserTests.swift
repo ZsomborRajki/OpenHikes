@@ -295,7 +295,9 @@ struct CommunityBrowserTests {
         browser.search(matching: "Pilis")
         await settle(browser)
 
-        // Zoomed out past 150 km, where the policy refuses to ask anything.
+        // Zoomed out past the ceiling, where the policy refuses to ask
+        // anything — see ``CommunityQueryPolicy/maximumRadiusMeters``, which
+        // is OpenStreetMap's 40 km rather than CloudKit's old 150.
         browser.regionDidSettle(Self.region(spanMeters: 600_000))
         await settle(browser)
         browser.search(matching: "")

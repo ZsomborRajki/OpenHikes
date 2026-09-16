@@ -296,7 +296,15 @@ extension MapSheetHikes {
             if community.areaPrompt == .zoomIn {
                 Text("Zoom in to look here")
                     .font(.subheadline.weight(.medium))
-                Text("A whole country is too wide to search.")
+                // Not *a whole country* any more, and deliberately not a
+                // figure either. The old sentence described the old 150 km
+                // ceiling; this one is OpenStreetMap's 40 km — see
+                // ``CommunityQueryPolicy/maximumRadiusMeters`` — which a
+                // regional view reaches long before a country does. Spelling
+                // the distance instead would put a number in a string beside
+                // a constant that owns it, and would owe the hiker their own
+                // units on top.
+                Text("This is wider than a search reaches.")
                     .font(.subheadline)
                     .foregroundStyle(.secondary)
             } else {
@@ -353,6 +361,33 @@ extension MapSheetHikes {
                 .foregroundStyle(.secondary)
                 .textCase(nil)
         }
+        curatedCredit(for: community.nearbyListings)
+    }
+
+    /// The ODbL credit, drawn only when `listings` actually holds a curated
+    /// route.
+    ///
+    /// Conditional is what makes it a credit rather than boilerplate: a list
+    /// of hikes people published owes OpenStreetMap nothing. The *linked* form
+    /// of the obligation is on the screen a row opens — see
+    /// ``CommunityHikeView/curatedAttribution`` and ``TileAttribution``, which
+    /// owns the argument for the whole app — because a footer under a
+    /// scrolling list is not somewhere a link can be relied on to be seen, and
+    /// the credit has to be reachable from the content it is about.
+    ///
+    /// Taken as a parameter rather than read off ``nearbyListings``, because
+    /// the Community tab is not the only place a curated row appears: typing a
+    /// name puts one in ``matchingListings``, and the credit is owed wherever
+    /// the data is drawn rather than wherever the feature was introduced.
+    @ViewBuilder
+    func curatedCredit(for listings: [CommunityListing]) -> some View {
+        if listings.contains(where: \.isCurated) {
+            Text("Trail routes from OpenStreetMap contributors.")
+                .font(.footnote)
+                .foregroundStyle(.secondary)
+                .textCase(nil)
+                .accessibilityIdentifier("community-osm-credit")
+        }
     }
 
     /// Community matches in the search results, between the hiker's own hikes
@@ -364,7 +399,7 @@ extension MapSheetHikes {
     @ViewBuilder
     func communitySuggestionsSection() -> some View {
         if !community.matchingListings.isEmpty {
-            Section("Community Hikes") {
+            Section {
                 ForEach(community.matchingListings) { listing in
                     Button { openListing(listing) } label: {
                         CommunityHikeRow(
@@ -375,6 +410,10 @@ extension MapSheetHikes {
                     }
                     .buttonStyle(.plain)
                 }
+            } header: {
+                Text("Community Hikes")
+            } footer: {
+                curatedCredit(for: community.matchingListings)
             }
         }
     }
@@ -389,7 +428,7 @@ extension MapSheetHikes {
     /// map behind it.
     @ViewBuilder var nearbySuggestionsSection: some View {
         if community.isBrowsing, !community.nearbyListings.isEmpty {
-            Section("Near Here") {
+            Section {
                 ForEach(community.nearbyListings) { listing in
                     Button { openListing(listing) } label: {
                         CommunityHikeRow(
@@ -400,6 +439,10 @@ extension MapSheetHikes {
                     }
                     .buttonStyle(.plain)
                 }
+            } header: {
+                Text("Near Here")
+            } footer: {
+                curatedCredit(for: community.nearbyListings)
             }
         }
     }
