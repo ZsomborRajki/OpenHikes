@@ -169,12 +169,21 @@ nonisolated private extension GPXExport {
         let latitude = point.latitude.formatted(coordinateStyle)
         let longitude = point.longitude.formatted(coordinateStyle)
         let attributes = "lat=\"\(latitude)\" lon=\"\(longitude)\""
-        guard point.elevation != nil || point.timestamp != nil else {
+        // A non-finite height is not a height, and writing one is worse than
+        // dropping it: `inf` and `nan` are not `xsd:decimal`, so a strict
+        // reader refuses the whole file, and this app's own importer drops the
+        // value silently on the way back in — `GPXImport` and
+        // `CommunityRoutePayload` both guard `isFinite` at the door. This is
+        // the same guard, one step earlier, on the way out. Hikes stored
+        // before those guards existed, and any synced from a device that had
+        // not got them, are the population it is for.
+        let elevation = point.elevation.flatMap { $0.isFinite ? $0 : nil }
+        guard elevation != nil || point.timestamp != nil else {
             xml += "      <trkpt \(attributes)/>\n"
             return
         }
         xml += "      <trkpt \(attributes)>\n"
-        if let elevation = point.elevation {
+        if let elevation {
             xml += "        <ele>\(elevation.formatted(elevationStyle))</ele>\n"
         }
         if let timestamp = point.timestamp {

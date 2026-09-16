@@ -461,9 +461,18 @@ private extension TrackJournal {
                     longitude: longitude,
                     timestamp: Date(timeIntervalSince1970: timestamp),
                     horizontalAccuracy: Double(accuracy),
-                    elevation: elevation.isNaN ? nil : Double(elevation),
-                    course: course.isNaN ? nil : Double(course),
-                    speed: speed.isNaN ? nil : Double(speed),
+                    // `isFinite`, not `!isNaN`: NaN is what this file writes
+                    // for *absent*, and an infinity is what a glitched
+                    // barometer, a hand-edited journal or a mirrored
+                    // pre-guard recording can leave here. Both mean the same
+                    // thing to everything downstream — `Hike+Statistics` and
+                    // `GPXImport` already drop a non-finite height — and an
+                    // infinity that gets past this point reaches `Hike.route`,
+                    // where it poisons the elevation chart's buckets and the
+                    // exported `<ele>`.
+                    elevation: elevation.isFinite ? Double(elevation) : nil,
+                    course: course.isFinite ? Double(course) : nil,
+                    speed: speed.isFinite ? Double(speed) : nil,
                     flags: RecordingPointFlags(rawValue: flags)
                 )
             )
