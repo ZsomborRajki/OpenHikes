@@ -95,6 +95,12 @@ struct MapPaywallView: View {
     private static let featureGlyphWidth: CGFloat = 28
     private static let sectionSpacing: CGFloat = 24
     private static let featureSpacing: CGFloat = 18
+    /// The smallest a control may be and still be reliably hittable, which is
+    /// Apple's own figure and the one `performAccessibilityAudit` checks
+    /// against. Spelled here because the only control on this screen the app
+    /// lays out itself is smaller than it without help — everything else is
+    /// drawn by `SubscriptionStoreView`, which sizes its own.
+    private static let minimumHitTarget: CGFloat = 44
 
     var body: some View {
         NavigationStack {
@@ -229,6 +235,21 @@ struct MapPaywallView: View {
                 Task { await restore() }
             }
             .font(.subheadline)
+            // A subheadline's glyphs are eighteen points tall and that is
+            // exactly what the button was: 128 × 18, against the 44 × 44
+            // Apple asks for and `performAccessibilityAudit` enforces. It is
+            // the one control on this screen a *returning* subscriber needs —
+            // they have already paid, and a reinstall gives them nothing back
+            // until this is tapped — so a hit area two fifths of the minimum
+            // is the most expensive small target in the app.
+            //
+            // The frame is on the button rather than padding inside its label
+            // so the text stays where it was: the row is centred and the
+            // sentence below it is the one a customer reads next, and growing
+            // the label would push them apart. `contentShape` is what makes
+            // the grown frame answer the touch rather than merely occupy it.
+            .frame(minWidth: Self.minimumHitTarget, minHeight: Self.minimumHitTarget)
+            .contentShape(.rect)
             .disabled(!store.canRestore)
             .accessibilityIdentifier("paywall-restore-button")
             Text("Unlocks on every device signed in to your Apple Account.")
