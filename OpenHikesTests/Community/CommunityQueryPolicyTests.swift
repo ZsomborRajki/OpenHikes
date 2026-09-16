@@ -210,18 +210,42 @@ struct CommunityQueryPolicyTests {
         }
     }
 
-    /// Hiding the section and asking for it again must not show a list from
-    /// wherever the map used to be.
-    @Test("switching browsing off forgets the last query")
-    func stoppingForgets() {
+    /// Hiding the section and asking for it again must not spend a request on
+    /// a map that has not moved.
+    ///
+    /// This used to assert the opposite, and the reasoning it carried — that
+    /// re-opting in should ask again rather than show a list from wherever the
+    /// map used to be — was answered by ``CommunityBrowser`` keeping its rows
+    /// and the area they describe. Forgetting here is what made a returning
+    /// hiker's list come back without its OpenStreetMap half: the region read
+    /// as a new question and the re-ask was
+    /// ``CommunityNearbyScope/publishedOnly``.
+    @Test("switching browsing off keeps the last query")
+    func stoppingRemembers() {
         var policy = CommunityQueryPolicy()
         policy.startBrowsing()
         Self.commit(Self.region(), to: &policy)
         policy.stopBrowsing()
         #expect(!policy.isBrowsing)
+        // Nothing is offered while the tab is away, whatever the map does.
+        #expect(policy.action(for: Self.region(latitude: 48.03)) == .ignore)
         policy.startBrowsing()
-        guard case .offer = policy.action(for: Self.region()) else {
-            Issue.record("re-opting in should ask again")
+        #expect(policy.action(for: Self.region()) == .ignore)
+        #expect(policy.issuedQueries == 1)
+    }
+
+    /// The other half of the same rule: the rows are kept, not pinned to the
+    /// screen, so a map that moved while the tab was away is still a question.
+    @Test("a map that moved while the tab was away is a new question")
+    func stoppingStillNoticesAPan() {
+        var policy = CommunityQueryPolicy()
+        policy.startBrowsing()
+        Self.commit(Self.region(), to: &policy)
+        policy.stopBrowsing()
+        policy.startBrowsing()
+        // Roughly 44 km north, the same pan ``largePanIsOffered`` uses.
+        guard case .offer = policy.action(for: Self.region(latitude: 48.03)) else {
+            Issue.record("a pan past the threshold is a question wherever it happened")
             return
         }
     }

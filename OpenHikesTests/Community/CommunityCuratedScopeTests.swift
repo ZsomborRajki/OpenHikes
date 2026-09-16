@@ -254,3 +254,92 @@ extension CommunityCuratedScopeTests {
         #expect(browser.curatedOutage == nil)
     }
 }
+
+// MARK: - Coming back to the tab
+
+/// The cheapest request is the one a return visit does not make, and this is
+/// where that was being got wrong.
+///
+/// The bug these pin: leaving the tab emptied the rows, coming back re-asked as
+/// ``CommunityNearbyScope/publishedOnly``, and `publishedOnly` returns from
+/// ``MergedCommunityTransport``'s `listCurated` before ``CuratedTrailSource``
+/// is consulted at all. So the OpenStreetMap half of a list the hiker had just
+/// spent two Overpass round trips on vanished on a switch to *My Hikes* and
+/// back, and no cache could have answered it — the question was never put.
+extension CommunityCuratedScopeTests {
+    /// A search, then a round trip through the other tab.
+    ///
+    /// The transport's answer is swapped afterwards, so a re-ask would be
+    /// visible in the rows rather than only in the recording: this fails on
+    /// both counts if the old behaviour comes back.
+    private func searchedThenLeftAndReturned(
+        _ transport: StubCommunityTransport
+    ) async -> (browser: CommunityBrowser, askedBefore: [CommunityNearbyScope]) {
+        transport.listingsResult = .success([.stub(id: "curated-1"), .stub(id: "theirs")])
+        let browser = await browsing(transport)
+        browser.searchVisibleArea()
+        await settle(browser)
+        let askedBefore = transport.recording.nearbyScopes
+        transport.listingsResult = .success([.stub(id: "re-asked")])
+        browser.stopBrowsing()
+        return (browser, askedBefore)
+    }
+
+    @Test("coming back to an unmoved map keeps the trails it already found")
+    func returningKeepsTheRows() async {
+        let transport = StubCommunityTransport()
+        let (browser, askedBefore) = await searchedThenLeftAndReturned(transport)
+
+        browser.startBrowsing()
+        await settle(browser)
+
+        #expect(
+            transport.recording.nearbyScopes == askedBefore,
+            "a return visit to an unmoved map is not a question"
+        )
+        #expect(browser.nearbyListings.map(\.id).sorted() == ["curated-1", "theirs"])
+        #expect(browser.state == .loaded)
+    }
+
+    /// The rows are kept; the *drawing* of them is not. The map observes
+    /// ``CommunityBrowser/nearbyListings`` and has no other signal, so pins and
+    /// lines for a list nobody is looking at would otherwise sit over *My
+    /// Hikes*.
+    @Test("the pins come off the map while the tab is away")
+    func leavingClearsTheMap() async {
+        let transport = StubCommunityTransport()
+        let (browser, _) = await searchedThenLeftAndReturned(transport)
+
+        #expect(browser.nearbyListings.isEmpty, "nothing of the list is drawn while it is away")
+        #expect(browser.routeLines.isEmpty)
+
+        browser.startBrowsing()
+        await settle(browser)
+        #expect(browser.nearbyListings.map(\.id).sorted() == ["curated-1", "theirs"])
+    }
+
+    /// The other half of keeping them: they are kept, not pinned to the
+    /// screen. A map that moved while the tab was away is a different question,
+    /// and the answer is the offer the hiker already knows — not a silent
+    /// replacement of good rows with a published-only list.
+    @Test("a map that moved while the tab was away offers the new area")
+    func aPanWhileAwayRaisesTheOffer() async {
+        let transport = StubCommunityTransport()
+        let (browser, askedBefore) = await searchedThenLeftAndReturned(transport)
+
+        // Roughly 44 km north, comfortably past the policy's threshold.
+        browser.regionDidSettle(Self.region(latitude: 48.03))
+        browser.startBrowsing()
+        await settle(browser)
+
+        #expect(browser.areaPrompt == .search, "the hiker is offered where they are now")
+        #expect(
+            transport.recording.nearbyScopes == askedBefore,
+            "the offer is an invitation, not a request"
+        )
+        #expect(
+            browser.nearbyListings.map(\.id).sorted() == ["curated-1", "theirs"],
+            "the rows still answer about the area they came back for"
+        )
+    }
+}
