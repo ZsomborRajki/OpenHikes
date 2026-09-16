@@ -22,7 +22,7 @@ That is local-first with one deliberate exception. There is no OpenHikes account
 
 - Xcode 26.5 or later. Every target deploys to iOS 26.0, which is also what
   `OpenHikesShared/Package.swift` declares; CI builds on Xcode 26.6.
-- An Apple development team that can sign the WeatherKit entitlement, the shared App Group, the iCloud container and the push entitlement.
+- An Apple development team that can sign the WeatherKit entitlement, the shared App Group, the iCloud container, the push entitlement and HealthKit.
 - iPhone only. Every target sets `TARGETED_DEVICE_FAMILY = 1`.
 
 OpenStreetMap is the keyless default and Apple Maps needs no key either. Stadia and Thunderforest require build-time API keys *and* a paid subscription with each vendor, whose terms forbid using them free of charge in a shipping app — in OpenHikes they sit behind a monthly subscription, OpenHikes Pro, which is what pays for them, along with saving a whole route's Stadia map for offline use — Thunderforest's licence reserves pre-caching for a plan this app is not on. Everything else in the app, the community feature included, is free. A build without keys shows them locked, and OpenStreetMap keeps working.
@@ -32,8 +32,9 @@ OpenStreetMap is the keyless default and Apple Maps needs no key either. Stadia 
 1. Open `OpenHikes.xcodeproj` and set your development team for `OpenHikes` and `OpenWidgetExtension`.
 2. Enable WeatherKit for the app's App ID in Certificates, Identifiers & Profiles, in both **App Services** and **App Capabilities**, then refresh its signing assets. The capability and entitlement are checked in, but Apple still returns HTTP 401 until the App ID itself is enabled.
 3. If your team cannot use `group.tappium.com.OpenHikes`, replace it in both entitlement files and in `SharedStore.appGroupID`.
-4. iCloud sync needs a CloudKit container. Xcode creates `iCloud.tappium.com.OpenHikes` on the first signed build; to use another identifier, replace it in `OpenHikes/OpenHikes.entitlements` and in `CloudSyncCoordinator.containerIdentifier`. SwiftData's mirroring creates the development schema from the model on first run.
-5. Optionally enable Stadia or Thunderforest:
+4. HealthKit needs no portal step in the ordinary case: the capability and both usage strings are checked in, and the App ID picks it up when Xcode refreshes signing assets. Enable it by hand in **App Capabilities** if signing refuses. The app only ever *writes* a finished hike into the hiker's own store — `HealthKitWorkoutWriter` asks for share types and no read types — and the switch is off until they turn it on.
+5. iCloud sync needs a CloudKit container. Xcode creates `iCloud.tappium.com.OpenHikes` on the first signed build; to use another identifier, replace it in `OpenHikes/OpenHikes.entitlements` and in `CloudSyncCoordinator.containerIdentifier`. SwiftData's mirroring creates the development schema from the model on first run.
+6. Optionally enable Stadia or Thunderforest:
 
    ```sh
    cp Secrets.example.plist OpenHikes/Secrets.plist
@@ -41,7 +42,7 @@ OpenStreetMap is the keyless default and Apple Maps needs no key either. Stadia 
 
    Add your keys to the copied file. `OpenHikes/Secrets.plist` is gitignored and must never be committed; unavailable providers stay disabled in Settings.
 
-6. Build and run. `OpenHikes.storekit` at the repository root describes the OpenHikes Pro subscription and the shared scheme already points its Run action at it, so a local build has a working paywall with no Apple account involved.
+7. Build and run. `OpenHikes.storekit` at the repository root describes the OpenHikes Pro subscription and the shared scheme already points its Run action at it, so a local build has a working paywall with no Apple account involved.
 
 Shipping the subscription for real additionally needs a matching auto-renewable subscription in App Store Connect and an active Paid Apps agreement; `.github/copilot-instructions.md` carries the exact contract, including the product ID that can never change.
 
