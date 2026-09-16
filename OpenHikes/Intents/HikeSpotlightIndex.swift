@@ -30,6 +30,7 @@
 import AppIntents
 import CoreSpotlight
 import Foundation
+import OpenHikesShared
 import os
 
 nonisolated enum HikeSpotlightIndex {

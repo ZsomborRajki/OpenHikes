@@ -13,6 +13,7 @@
 
 import AppIntents
 import Foundation
+import OpenHikesShared
 
 struct CurrentHikeProgressIntent: AppIntent, HikeCoordinatingIntent {
     static let title: LocalizedStringResource = "Current Hike Progress"

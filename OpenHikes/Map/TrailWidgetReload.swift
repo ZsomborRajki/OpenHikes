@@ -41,6 +41,22 @@ import WidgetKit
 /// `AppGroupRecordingSharedStateStore` — this is only about the feed that has
 /// lost the screen.
 ///
+/// ## What it cannot do, now that widgets can differ (#468)
+///
+/// `reloadTimelines(ofKind:)` is the whole granularity WidgetKit offers: there
+/// is no API that reloads one *placed* widget. So a selection change still
+/// redraws every Trail widget, including the ones pinned to a trail the
+/// selection has nothing to do with — which for them produces a byte-identical
+/// timeline, exactly the waste this type exists to bound in the other
+/// direction.
+///
+/// That is a budget cost rather than a correctness one, and it is bounded by
+/// the same gate above. Narrowing it further would mean asking
+/// `getCurrentConfigurations()` on a path that runs every 45 seconds, and then
+/// caching the answer against a configuration the hiker can change at any
+/// moment — which is more machinery than the reloads it would save. Left
+/// deliberately, rather than overlooked.
+///
 /// A value with an injected sink rather than a free function, for the reason
 /// `TrailBasemapRenderer.Render` is one: `WidgetCenter` neither reports a
 /// reload nor replays it, so without a seam here the only assertable thing is

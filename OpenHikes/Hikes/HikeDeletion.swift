@@ -48,6 +48,7 @@
 //
 
 import Foundation
+import OpenHikesShared
 import os
 import SwiftData
 
@@ -175,6 +176,9 @@ nonisolated enum HikeDeletion {
         // refusal leaves the workout beside the hike that is still in the
         // list.
         let workoutIDs = hikes.compactMap { $0.localState?.healthWorkoutID }
+        // Read here for the reason the file names are: a deleted `@Model` has
+        // nothing left to ask.
+        let deletedIDs = hikes.map(\.id)
         let context = hikes.compactMap(\.modelContext).first
         for hike in hikes {
             hike.deleteLocalState()
@@ -196,6 +200,17 @@ nonisolated enum HikeDeletion {
         }
         HikePhotoImport.discardFiles(files, from: store)
         remove(workoutIDs, from: workouts)
+        // The App Group copies of these trails, which nothing else would take.
+        // A widget pinned to a deleted hike is *meant* to keep its snapshot
+        // through a mere deselection — see ``SharedStore/clear()`` — so the
+        // deletion has to be the thing that says otherwise, or the route
+        // outlives the hike on somebody's Home Screen until the next sweep.
+        //
+        // After the save, like the workouts and for the same reason: a refusal
+        // leaves the snapshot beside the hike that is still in the list.
+        for hikeID in deletedIDs {
+            SharedStore.clearTrailSnapshot(for: hikeID)
+        }
     }
 
     /// Takes the workouts out of Health, after the deletion is on disk.

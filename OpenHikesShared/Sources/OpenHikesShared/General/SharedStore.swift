@@ -14,6 +14,14 @@ import Foundation
 public enum SharedStore {
     public static let appGroupID = "group.tappium.com.OpenHikes"
     private static let fileName = "trail-snapshot.json"
+    private static let catalogueFileName = "hike-catalogue.json"
+    /// The directory the per-hike snapshots live in, one file each.
+    ///
+    /// A directory rather than more names beside ``fileName``, because the set
+    /// is unbounded and has to be sweepable: ``pruneTrailSnapshots(keeping:)``
+    /// is what keeps a hiker with three hundred walks from accumulating three
+    /// hundred snapshots, and it can only do that if it can list them.
+    private static let trailSnapshotDirectoryName = "trail-snapshots"
     private static let recordingFileName = "recording-snapshot.json"
     private static let basemapSetFileName = "trail-basemaps.json"
     private static let basemapDirectoryName = "basemaps"
@@ -76,6 +84,18 @@ public enum SharedStore {
         containerURL?.appendingPathComponent(fileName)
     }
 
+    private static var catalogueURL: URL? {
+        containerURL?.appendingPathComponent(catalogueFileName)
+    }
+
+    private static var trailSnapshotDirectoryURL: URL? {
+        containerURL?.appendingPathComponent(trailSnapshotDirectoryName, isDirectory: true)
+    }
+
+    private static func trailSnapshotURL(for hikeID: UUID) -> URL? {
+        trailSnapshotDirectoryURL?.appendingPathComponent("\(hikeID.uuidString).json")
+    }
+
     private static var recordingFileURL: URL? {
         containerURL?.appendingPathComponent(recordingFileName)
     }
@@ -101,7 +121,14 @@ public enum SharedStore {
 
     /// Writes the snapshot. No-ops rather than crashing if the App Group
     /// container can't be resolved.
+    ///
+    /// **Mirrored into the per-hike store as well**, and here rather than at
+    /// the call sites, because that is what makes the two impossible to
+    /// disagree. The selected trail is by far the most-written snapshot, and a
+    /// widget pinned to the hike that also happens to be selected must not see
+    /// a staler copy of it than the unconfigured widget beside it does.
     public static func save(_ snapshot: SharedTrailSnapshot) {
+        saveTrailSnapshot(snapshot)
         guard let fileURL else { return }
         guard let data = try? JSONEncoder().encode(snapshot) else { return }
         try? data.write(to: fileURL, options: .atomic)
@@ -110,10 +137,109 @@ public enum SharedStore {
     /// Removes the stored snapshot and any rendered basemaps — used when the
     /// tracked hike is deselected or deleted, so a stale trail doesn't linger
     /// in the widget.
+    /// **The per-hike snapshots are deliberately left alone.** This is
+    /// deselection, and a widget pinned to a trail is not following the
+    /// selection — taking its route away because the hiker looked at
+    /// something else is the bug #468 was filed about, in a new place. What
+    /// bounds that set is ``pruneTrailSnapshots(keeping:)``, which is driven
+    /// by what is on a screen rather than by what is selected.
     public static func clear() {
         guard let fileURL else { return }
         try? FileManager.default.removeItem(at: fileURL)
         clearBasemaps()
+    }
+
+    // MARK: The hike catalogue
+
+    /// Every saved hike, for a process that has no store to ask — see
+    /// ``SharedHikeCatalogue``.
+    ///
+    /// ``SharedHikeCatalogue/empty`` rather than `nil` for a container that
+    /// cannot be resolved or a file that has never been written. Every caller
+    /// is a picker, and a picker with nothing to offer is the same drawing
+    /// either way; handing them an optional would spread a decision none of
+    /// them can act on, which is the argument ``load()`` already makes.
+    public static func loadHikeCatalogue() -> SharedHikeCatalogue {
+        guard let catalogueURL, let data = try? Data(contentsOf: catalogueURL) else {
+            return .empty
+        }
+        return decodeUnversioned(
+            SharedHikeCatalogue.self,
+            from: data,
+            named: catalogueFileName
+        ) ?? .empty
+    }
+
+    /// Unversioned, like the basemap manifest and unlike the snapshots, and
+    /// for the same reason: this is **derived state**. A catalogue this build
+    /// cannot decode reads as empty, the app rewrites it on its next change,
+    /// and the cost in between is a picker with no rows — where the same
+    /// failure in a snapshot would be a blank widget with nothing to rebuild
+    /// it from.
+    public static func saveHikeCatalogue(_ catalogue: SharedHikeCatalogue) {
+        guard let catalogueURL, let data = try? JSONEncoder().encode(catalogue) else { return }
+        try? data.write(to: catalogueURL, options: .atomic)
+    }
+
+    // MARK: Per-hike trail snapshots
+
+    /// The snapshot for one hike, for a widget pinned to a trail that is not
+    /// the selected one.
+    ///
+    /// `nil` means **this hike has no snapshot on this device**, which is an
+    /// ordinary state rather than a failure: the app only keeps snapshots for
+    /// the trails something is actually showing — see
+    /// ``pruneTrailSnapshots(keeping:)`` — so a widget configured for a hike
+    /// the app has not published yet draws its empty state until it has.
+    public static func loadTrailSnapshot(for hikeID: UUID) -> SharedTrailSnapshot? {
+        guard let url = trailSnapshotURL(for: hikeID),
+              let data = try? Data(contentsOf: url) else { return nil }
+        let snapshot = decode(
+            SharedTrailSnapshot.self,
+            from: data,
+            named: url.lastPathComponent
+        )
+        // Guarded rather than trusted, the same way ``loadBasemapSet(for:)``
+        // checks its manifest's `hikeID`: the file name is a claim about the
+        // contents and a mismatched pair is a stale write, not a trail to
+        // draw for somebody.
+        return snapshot?.hikeID == hikeID ? snapshot : nil
+    }
+
+    public static func saveTrailSnapshot(_ snapshot: SharedTrailSnapshot) {
+        guard let directory = trailSnapshotDirectoryURL,
+              let url = trailSnapshotURL(for: snapshot.hikeID),
+              let data = try? JSONEncoder().encode(snapshot) else { return }
+        try? FileManager.default.createDirectory(
+            at: directory,
+            withIntermediateDirectories: true
+        )
+        try? data.write(to: url, options: .atomic)
+    }
+
+    /// Deletes every per-hike snapshot except these, which is what keeps the
+    /// set bounded by *what is on a screen* rather than by the library.
+    ///
+    /// Writing a snapshot for every hike in a library of three hundred is not
+    /// the design; writing one for each hike a placed widget asks for, plus
+    /// the selected one, is. The app learns that set from
+    /// `WidgetCenter.getCurrentConfigurations` and hands it here.
+    public static func pruneTrailSnapshots(keeping hikeIDs: Set<UUID>) {
+        guard let directory = trailSnapshotDirectoryURL,
+              let contents = try? FileManager.default.contentsOfDirectory(
+                  at: directory,
+                  includingPropertiesForKeys: nil
+              ) else { return }
+        let kept = Set(hikeIDs.map { "\($0.uuidString).json" })
+        for url in contents where !kept.contains(url.lastPathComponent) {
+            try? FileManager.default.removeItem(at: url)
+        }
+    }
+
+    /// Removes one hike's snapshot — what a deleted hike leaves behind.
+    public static func clearTrailSnapshot(for hikeID: UUID) {
+        guard let url = trailSnapshotURL(for: hikeID) else { return }
+        try? FileManager.default.removeItem(at: url)
     }
 
     // MARK: Live recording
