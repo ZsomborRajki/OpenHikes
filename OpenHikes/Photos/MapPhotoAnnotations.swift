@@ -184,6 +184,10 @@ final class PhotoCalloutPreview: UIControl {
         switch reason {
         case .notOnThisDevice: "icloud.slash"
         case .unreadable: "exclamationmark.triangle"
+        // A pin rather than a broken picture: on this surface the row is not
+        // failing at anything. Where it was taken is exactly what it has, and
+        // exactly what the map is for.
+        case .placeOnly: "mappin.and.ellipse"
         }
     }
 
@@ -221,6 +225,8 @@ final class PhotoCalloutPreview: UIControl {
             return String(localized: "\(base), not on this device")
         case .unreadable:
             return String(localized: "\(base), unavailable")
+        case .placeOnly:
+            return String(localized: "\(base), place only, no photo in the file")
         }
     }
 }

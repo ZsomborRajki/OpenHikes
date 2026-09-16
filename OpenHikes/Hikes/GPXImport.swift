@@ -19,6 +19,26 @@ nonisolated enum GPXImport {
         let time: Date?
     }
 
+    /// A `<wpt>` the file marked as a photograph: where one was taken, and
+    /// when. See ``GPXExport/appendPhotographs(_:to:)`` for the other end.
+    ///
+    /// No picture, and no field that could hold one. GPX carries a place and a
+    /// time; the pixels live under ``HikePhotoStore`` and never enter the
+    /// file, which is why the export writes no `<link>` either. What this
+    /// becomes is a ``HikePhoto`` with ``HikePhoto/isPlaceOnly`` set.
+    struct Photograph: Sendable {
+        let coordinate: CLLocationCoordinate2D
+        let elevation: Double?
+        /// Required rather than optional, and the one thing that can keep a
+        /// waypoint out. ``HikePhoto/capturedAt`` is not optional, so a
+        /// photograph with no `<time>` would have to be given one — and every
+        /// candidate is a lie that sorts: the hike's start would stack every
+        /// such pin at one moment in the gallery, and the import's own clock
+        /// would claim the walk happened today. Our own export always writes
+        /// one.
+        let capturedAt: Date
+    }
+
     struct Track: Sendable {
         let name: String?
         let trackDescription: String?
@@ -30,6 +50,9 @@ nonisolated enum GPXImport {
         let route: [RouteCoordinate]
         /// Total length in meters, computed once while preparing the import.
         let distanceMeters: Double
+        /// The `<wpt>`s the file marked as photographs. Empty for a file that
+        /// carries none, which is every file this app did not write.
+        let photographs: [Photograph]
 
         /// Built from `<trkseg>`-shaped runs rather than one flat list, so the
         /// file's own boundaries survive into the route.
@@ -62,13 +85,15 @@ nonisolated enum GPXImport {
             author: String?,
             keywords: String?,
             startTime: Date?,
-            segments: [[Point]]
+            segments: [[Point]],
+            photographs: [Photograph] = []
         ) {
             self.name = name
             self.trackDescription = trackDescription
             self.author = author
             self.keywords = keywords
             self.startTime = startTime
+            self.photographs = photographs
             points = Array(segments.joined())
 
             var coordinates: [RouteCoordinate] = []
@@ -281,6 +306,8 @@ nonisolated enum GPXImport {
         // which is what keeps a file full of unprojectable `<trkpt>` reporting
         // that its track is unusable instead of quietly importing a route's
         // handful of turn markers in its place.
+        let hasGeometryOfItsOwn = document.trackSegments.contains { !$0.points.isEmpty }
+            || document.routeSegments.contains { !$0.points.isEmpty }
         let source = if document.trackSegments.contains(where: { !$0.points.isEmpty }) {
             document.trackSegments
         } else if document.routeSegments.contains(where: { !$0.points.isEmpty }) {
@@ -329,7 +356,40 @@ nonisolated enum GPXImport {
             // half-million-point file another array for one timestamp.
             startTime: document.metadataTime
                 ?? segments.lazy.joined().first { $0.time != nil }?.time,
-            segments: segments
+            segments: segments,
+            // Only when the route came from somewhere else. A file whose
+            // waypoints *are* its geometry has just had them read as the line;
+            // reading the same elements a second time as photographs would pin
+            // a photograph to every vertex of the track it just drew.
+            photographs: hasGeometryOfItsOwn
+                ? document.waypoints.compactMap(photograph)
+                : []
+        )
+    }
+
+    /// A `<wpt>` read as a photograph, or `nil` for one that is not.
+    ///
+    /// Recognised by `<sym>` first and `<name>` second, matching what
+    /// ``GPXExport`` writes. Both are checked because readers disagree about
+    /// which they keep: `<sym>` is the one that means *what kind of waypoint
+    /// this is* and is the reading intended, but a reader that drops symbols
+    /// it has no glyph for and keeps the label would otherwise lose the round
+    /// trip through no fault of the file.
+    ///
+    /// Case-insensitive, because a symbol name is a lookup key in somebody
+    /// else's table rather than text this app wrote.
+    private static func photograph(_ waypoint: ParsedPoint) -> Photograph? {
+        let labels = [waypoint.symbol, waypoint.name].compacted()
+        guard labels.contains(where: isPhotographLabel) else { return nil }
+        // Reuses the track point's own guards, so a photograph cannot be
+        // pinned somewhere a track point would have been refused: the same
+        // Web Mercator range check, and the same refusal of a non-finite
+        // `<ele>`.
+        guard let point = point(waypoint), let capturedAt = point.time else { return nil }
+        return Photograph(
+            coordinate: point.coordinate,
+            elevation: point.elevation,
+            capturedAt: capturedAt
         )
     }
 
@@ -360,6 +420,15 @@ nonisolated enum GPXImport {
         )
     }
 
+    /// Whether one `<sym>` or `<name>` is the label ``GPXExport`` writes.
+    ///
+    /// Case-insensitive, because a symbol name is a lookup key in somebody
+    /// else's table rather than text this app wrote.
+    private static func isPhotographLabel(_ label: String) -> Bool {
+        label.caseInsensitiveCompare(GPXExport.photographSymbol) == .orderedSame
+            || label.caseInsensitiveCompare(GPXExport.photographName) == .orderedSame
+    }
+
     private static func nonEmpty(_ string: String?) -> String? {
         guard let trimmed = string?.trimmingCharacters(in: .whitespacesAndNewlines),
               !trimmed.isEmpty else { return nil }
@@ -373,6 +442,12 @@ nonisolated private extension GPXImport {
         var longitude: Double?
         var elevation: Double?
         var time: Date?
+        /// `<name>` and `<sym>`, read only so a `<wpt>` can be recognised as a
+        /// photograph. Both stay `nil` for a `<trkpt>` or `<rtept>`: nothing
+        /// asks a route point what it is called, and filling them would cost
+        /// two string stores per point on a hundred-thousand-point track.
+        var name: String?
+        var symbol: String?
     }
 
     /// One run of points that the file itself kept together: a `<trkseg>`, or
@@ -424,6 +499,7 @@ nonisolated private extension GPXImport {
             static let keywords = "keywords"
             static let elevation = "ele"
             static let time = "time"
+            static let symbol = "sym"
         }
 
         private enum PointKind {
@@ -570,6 +646,12 @@ nonisolated private extension GPXImport {
             switch element {
             case Element.elevation: point.value.elevation = Double(value)
             case Element.time: point.value.time = date(from: value)
+            // Only for a waypoint, which is the only kind anything asks. A
+            // `<trkpt>` may legally carry both and a long track carrying them
+            // would pay two string stores a point to record what no reader
+            // here ever looks at.
+            case Element.name where point.kind == .waypoint: point.value.name = value
+            case Element.symbol where point.kind == .waypoint: point.value.symbol = value
             default: return
             }
             pendingPoint = point

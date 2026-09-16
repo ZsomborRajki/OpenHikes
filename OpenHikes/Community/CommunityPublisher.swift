@@ -384,7 +384,13 @@ nonisolated enum CommunityPublisher {
     /// forms must not be able to disagree about this.
     @MainActor
     static func ownPhotos(of hike: Hike) -> [HikePhoto] {
-        hike.orderedPhotos.filter(\.isOwn)
+        // `recordsPlaceOnly` is a second thing this gate refuses, and it is
+        // refused here for the same reason: there is no picture behind such a
+        // row at all — it is a `<wpt>` read out of an imported `.gpx` — so
+        // offering it would put a tile in the form that can never upload
+        // anything. The encode drops it downstream regardless; what this
+        // prevents is the hiker selecting it and being told nothing went.
+        hike.orderedPhotos.filter { $0.isOwn && !$0.recordsPlaceOnly }
     }
 
     /// Re-encodes the photographs and assembles the draft, entirely off the

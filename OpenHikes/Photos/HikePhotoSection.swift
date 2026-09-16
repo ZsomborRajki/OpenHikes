@@ -301,6 +301,8 @@ struct HikePhotoThumbnail: View {
             return "icloud.slash"
         case .unavailable(.unreadable):
             return "exclamationmark.triangle"
+        case .unavailable(.placeOnly):
+            return "mappin.and.ellipse"
         }
     }
 
@@ -312,6 +314,8 @@ struct HikePhotoThumbnail: View {
             return String(localized: "\(label), not on this device")
         case .unavailable(.unreadable):
             return String(localized: "\(label), unavailable")
+        case .unavailable(.placeOnly):
+            return String(localized: "\(label), place only, no photo in the file")
         }
     }
 }

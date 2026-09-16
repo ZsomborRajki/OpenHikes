@@ -154,6 +154,28 @@ struct CommunityImportedPhotoGuardTests {
         #expect(CommunityPublisher.shareablePhotos(of: hike).first?.isOwn == true)
     }
 
+    /// The second thing the gate refuses, and it refuses it for a different
+    /// reason: a place-only row is the hiker's own — nobody else's work is at
+    /// stake — but there is no picture behind it to upload. Offering it would
+    /// put a tile in the form that can only ever send nothing.
+    @Test("a row read out of a GPX waypoint is not offered for publishing")
+    func aPlaceOnlyRowIsNotOffered() async throws {
+        let context = try Fixture.modelContext()
+        let sandbox = PhotoStoreSandbox()
+        let hike = Fixture.hike(in: context)
+        await addStoredPhotos(1, to: hike, in: sandbox)
+        hike.photos.append(HikePhoto(isPlaceOnly: true))
+
+        #expect(hike.photos.count == 2)
+        // Its own, and still not publishable — which is the distinction that
+        // would be lost if the gate only asked `isOwn`.
+        let everyRowIsTheHikersOwn = hike.photos.allSatisfy(\.isOwn)
+        #expect(everyRowIsTheHikersOwn)
+        #expect(CommunityPublisher.ownPhotos(of: hike).count == 1)
+        #expect(CommunityPublisher.shareablePhotos(of: hike).count == 1)
+        #expect(CommunityPublisher.shareablePhotos(of: hike).first?.recordsPlaceOnly == false)
+    }
+
     /// A photograph written before this field existed decodes without one, and
     /// the absence has to read as *the hiker's own* — anything else would hide
     /// every picture anybody already had.

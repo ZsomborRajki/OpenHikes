@@ -186,6 +186,7 @@ enum HikeImport {
             author: track.author,
             keywords: track.keywords
         )
+        hike.photos = placeOnlyPhotos(of: track)
         context.insert(hike)
         do {
             try save(context)
@@ -204,6 +205,26 @@ enum HikeImport {
             throw .notSaved
         }
         return hike.id
+    }
+
+    /// The file's photo waypoints as rows on the imported hike.
+    ///
+    /// Each is a ``HikePhoto`` with a place, a time and
+    /// ``HikePhoto/isPlaceOnly`` set, because that is all a `<wpt>` can say —
+    /// see ``GPXImport/Photograph``. Nothing is written to
+    /// ``HikePhotoStore``: there are no bytes to write, and a row whose file
+    /// is missing because it never existed is exactly what that flag is for.
+    ///
+    /// Assigned rather than appended, on a hike built two lines above whose
+    /// `photos` is empty by construction.
+    nonisolated private static func placeOnlyPhotos(of track: GPXImport.Track) -> [HikePhoto] {
+        track.photographs.map { photograph in
+            HikePhoto(
+                capturedAt: photograph.capturedAt,
+                coordinate: photograph.coordinate,
+                isPlaceOnly: true
+            )
+        }
     }
 
     /// The committed row, in the context the screen draws from.

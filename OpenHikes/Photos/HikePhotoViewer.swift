@@ -398,7 +398,34 @@ private struct HikePhotoPage: View {
             notOnThisDevice
         case .unreadable:
             unreadable
+        case .placeOnly:
+            placeOnly
         }
+    }
+
+    /// A place a photograph was taken, read out of an imported file that could
+    /// not carry the photograph.
+    ///
+    /// Nothing to press, and for a firmer reason than ``notOnThisDevice`` has.
+    /// That state withholds the removal because some *other* device has the
+    /// picture; here there is no picture anywhere, so "Try Again" would retry
+    /// a read of a file that was never written. What the row is worth is on
+    /// the map, where it is a pin on the trail, and saying so is the whole job
+    /// of this page.
+    private var placeOnly: some View {
+        ContentUnavailableView {
+            Label("No Photo in the File", systemImage: "mappin.and.ellipse")
+        } description: {
+            Text(
+                """
+                This came from an imported GPX file, which records where a \
+                photo was taken but cannot carry the photo itself. Its place \
+                on the trail is on the map.
+                """
+            )
+        }
+        .accessibilityIdentifier("photo-place-only")
+        .environment(\.colorScheme, .dark)
     }
 
     /// A photo whose file is not here and is not coming.
