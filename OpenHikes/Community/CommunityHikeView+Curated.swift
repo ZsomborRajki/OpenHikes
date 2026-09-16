@@ -69,7 +69,7 @@ extension CommunityHikeView {
     /// *Report* item this screen does not draw for a curated route: a wrong
     /// trail is fixed where it is wrong.
     @ViewBuilder var curatedAttribution: some View {
-        if let relationID = listing.origin.relationID {
+        if let relationID = listing.relationID {
             VStack(alignment: .leading, spacing: 4) {
                 Text("This route is mapped by OpenStreetMap contributors.")
                     .font(.footnote)

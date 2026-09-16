@@ -244,15 +244,24 @@ struct CommunityOriginTests {
     /// built without the prefix would be a curated route the app afterwards
     /// believes is a CloudKit listing.
     ///
-    /// `publishedAt` carries the relation's last-edit time because the merged
-    /// list is ordered by it — without one, every curated row sinks below every
-    /// published row and the feature is invisible on a busy area.
-    @Test("a curated listing is identified by its relation and dated by its edit")
+    /// `publishedAt` is **not** an OSM edit time and nothing can make it one —
+    /// the listing pass asks `out tags bb` rather than `out meta`. It is the
+    /// moment the row was fetched, which is what gives a merged list something
+    /// defensible to order by, and it is never shown. See
+    /// ``CommunityListing/init(curated:editedAt:)``.
+    ///
+    /// ``CommunityListing/relationID`` is asserted beside the id because the
+    /// two are the same fact read two ways, and every per-listing method in
+    /// ``MergedCommunityTransport`` routes on the first: it is a statement
+    /// about where the listing came from rather than about how its id is
+    /// spelled.
+    @Test("a curated listing is identified by its relation and dated by its fetch")
     func curatedListingCarriesItsIdentityAndFacts() {
         let listing = CommunityListing(curated: Sample.trail, editedAt: Sample.editedAt)
 
         #expect(listing.id == CommunityIdentity.curated(relationID: Sample.relationID))
         #expect(listing.id.hasPrefix(CommunityIdentity.curatedPrefix))
+        #expect(listing.relationID == Sample.relationID)
         #expect(listing.isCurated)
         #expect(listing.publishedAt == Sample.editedAt)
         #expect(listing.title == Sample.trail.name)
@@ -292,6 +301,10 @@ struct CommunityOriginTests {
         #expect(listing.hikeDate == Sample.walked)
         #expect(!listing.isCurated)
         #expect(listing.curatedFacts == nil)
+        // The other half of the routing in ``MergedCommunityTransport``: a
+        // published listing names no relation, so its per-listing requests go
+        // to the database it came from.
+        #expect(listing.relationID == nil)
     }
 
     // MARK: - The separation where listings enter the app

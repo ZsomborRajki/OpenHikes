@@ -231,6 +231,17 @@ nonisolated struct CommunityListing: Identifiable, Hashable, Sendable {
     /// Whether this came from OpenStreetMap rather than from a hiker.
     var isCurated: Bool { origin.isCurated }
 
+    /// The OSM relation behind this hike, or `nil` when a person published it.
+    ///
+    /// The fourth of these and the one that was missing, which left its two
+    /// callers reading through ``origin`` while everything beside them had a
+    /// spelling here. It is also the *total* answer to the question
+    /// ``CommunityIdentity/relationID(of:)`` answers about a bare string:
+    /// routing a per-listing request on this is a fact about where the listing
+    /// came from, where routing on the id is a fact about how the id is
+    /// spelled, and only one of those is what the caller means.
+    var relationID: Int64? { origin.relationID }
+
     /// What OpenStreetMap says about this route, or `nil` for a published
     /// hike. See ``CuratedTrailFacts``.
     var curatedFacts: CuratedTrailFacts? { origin.curatedFacts }

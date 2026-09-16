@@ -53,11 +53,23 @@
 //  *Search this area* asks for both.
 //
 //  **A curated id must never reach CloudKit.** Every per-listing method routes
-//  on ``CommunityIdentity``, and the write paths refuse a curated listing
-//  outright rather than forwarding it. `takeDown(_:)` is the one that matters:
-//  it builds `CKRecord.ID`s out of the listing's two names and deletes them, so
-//  forwarding one would at best fail and at worst delete a record that happened
-//  to be named alike.
+//  on the listing's ``CommunityOrigin`` — ``CommunityListing/relationID`` and
+//  ``CommunityListing/isCurated`` — and the write paths refuse a curated
+//  listing outright rather than forwarding it. `takeDown(_:)` is the one that
+//  matters: it builds `CKRecord.ID`s out of the listing's two names and deletes
+//  them, so forwarding one would at best fail and at worst delete a record that
+//  happened to be named alike.
+//
+//  The origin and not the id, and the two are not the same question. That a
+//  listing's id begins with ``CommunityIdentity/curatedPrefix`` is a fact about
+//  how the string is spelled; that it came from OpenStreetMap is a fact about
+//  what it is. The two agree by construction today —
+//  ``CommunityListing/init(curated:editedAt:)`` is the only thing that mints
+//  the prefix and ``CommunityListing/init(record:)`` refuses a record carrying
+//  it — and routing on the one that cannot come apart is what keeps a future
+//  origin case from being posted to CloudKit because its id happened not to
+//  match a prefix. ``CommunityIdentity/relationID(of:)`` stays for the caller
+//  that genuinely holds nothing but a string: ``Hike/importedFromListingID``.
 //
 
 import Algorithms
@@ -75,7 +87,13 @@ nonisolated struct MergedCommunityTransport: CommunityTransporting {
 
 // MARK: - Browsing
 
-extension MergedCommunityTransport {
+// `nonisolated` for the reason the private extension below spells it, and for
+// the reason every extension of ``CloudKitCommunityTransport`` does: under
+// default main-actor isolation an unannotated extension is a main-actor
+// context, and what keeps these off the main actor today is `@concurrent` on
+// each member individually. One helper added here without it would be a
+// main-actor hop inside a transport, and nothing would say so.
+nonisolated extension MergedCommunityTransport {
     @concurrent
     func listings(
         near coordinate: CLLocationCoordinate2D,
@@ -136,11 +154,18 @@ extension MergedCommunityTransport {
         // Nearest first across both halves, so the list reads as one answer to
         // one question rather than two answers stacked. Both sources already
         // sort this way; what this settles is the interleave between them.
+        //
+        // Measured once per row and then sorted, rather than measured inside
+        // the comparator: a haversine is trigonometry, and a comparator that
+        // recomputes both sides runs it twice per comparison — about two
+        // hundred times for a page, against fifty here. See
+        // ``CuratedTrailSource/listings(near:limit:)``, which sorts the same
+        // way over four times as many rows.
         return CommunityNearbyAnswer(
-            listings: rows.sorted { lhs, rhs in
-                RouteGeometry.distanceMeters(from: coordinate, to: lhs.coordinate)
-                    < RouteGeometry.distanceMeters(from: coordinate, to: rhs.coordinate)
-            },
+            listings: rows
+                .map { ($0, RouteGeometry.distanceMeters(from: coordinate, to: $0.coordinate)) }
+                .sorted { $0.1 < $1.1 }
+                .map(\.0),
             // The listing pass first: it is the one that decides whether there
             // was anything to complete, so its refusal is the one that
             // explains an answer with no trails in it.
@@ -200,10 +225,9 @@ extension MergedCommunityTransport {
         // of single lookups would turn a miss into one Overpass round trip per
         // pin, at up to 30 seconds of server timeout each.
         var outlines: [String: [RouteCoordinate]] = [:]
-        let relationIDs = curatedListings.compactMap { CommunityIdentity.relationID(of: $0.id) }
-        let trails = (try? await curated.trails(of: relationIDs)) ?? [:]
+        let trails = (try? await curated.trails(of: curatedListings.compactMap(\.relationID))) ?? [:]
         for listing in curatedListings {
-            guard let relationID = CommunityIdentity.relationID(of: listing.id),
+            guard let relationID = listing.relationID,
                   let trail = trails[relationID]
             else { continue }
             outlines[listing.id] = CommunityRouteOutline
@@ -238,7 +262,7 @@ extension MergedCommunityTransport {
         for listing: CommunityListing,
         downloadingInto directory: URL
     ) async throws -> CommunityHikeDetail {
-        guard let relationID = CommunityIdentity.relationID(of: listing.id) else {
+        guard let relationID = listing.relationID else {
             return try await published.detail(for: listing, downloadingInto: directory)
         }
         guard let trail = try await curated.trail(of: relationID) else {
@@ -262,7 +286,7 @@ extension MergedCommunityTransport {
 
 // MARK: - Everything only a published hike has
 
-extension MergedCommunityTransport {
+nonisolated extension MergedCommunityTransport {
     @concurrent
     func submit(_ draft: CommunitySubmissionDraft) async throws -> String {
         try await published.submit(draft)
@@ -345,12 +369,34 @@ nonisolated private extension MergedCommunityTransport {
     /// A tuple rather than a `throws`, because the whole point is that neither
     /// half may end the other: an `async let` that throws would propagate out
     /// of the `await` and take the sibling's answer with it.
+    ///
+    /// **Logged here as well as returned**, because the returned half is not
+    /// always used. ``merge(published:curated:limit:)`` reports this failure
+    /// only when *both* halves came back empty; a CloudKit outage over an area
+    /// where OpenStreetMap had trails is swallowed on purpose — the list the
+    /// hiker gets is real and drawing *These are the hikes from the last
+    /// search that worked* over it would be false. That is the right screen
+    /// and it was the wrong log: the one case where the hiker's own published
+    /// hike is missing from a list that looks perfectly normal left no trace
+    /// anywhere at all. The curated half has said this much since it was added
+    /// — see ``attemptCurated(_:)`` — and there was never a reason for the two
+    /// to differ.
+    ///
+    /// A cancellation is not one of these. A superseded search cancels both
+    /// halves mid-flight and a hiker panning across a valley supersedes
+    /// several, so logging those would bury the failures worth finding under
+    /// the ordinary working of the screen.
     func attempt(
         _ work: () async throws -> [CommunityListing]
     ) async -> (rows: [CommunityListing], failure: CommunityFailure?) {
         do {
             return (try await work(), nil)
         } catch {
+            if !(error is CancellationError) {
+                Self.logger.error(
+                    "Published hikes unavailable: \(error.localizedDescription, privacy: .public)"
+                )
+            }
             return ([], error as? CommunityFailure ?? .unavailable(error.localizedDescription))
         }
     }
@@ -414,16 +460,24 @@ nonisolated private extension MergedCommunityTransport {
     /// request can say the trails are missing, which is the difference between
     /// an area with no waymarked routes in it and an address that has been
     /// asked to stop for a minute.
+    ///
+    /// The log follows the outage rather than the `catch`, so the one error
+    /// ``CuratedTrailOutage/init(_:)`` refuses is the one error this stays
+    /// quiet about: a cancellation is a superseded search, not a service that
+    /// would not answer.
     func attemptCurated(
         _ work: () async throws -> [CuratedTrail]
     ) async -> CuratedAttempt {
         do {
             return CuratedAttempt(trails: try await work(), outage: nil)
         } catch {
-            Self.logger.error(
-                "Curated trails unavailable: \(error.localizedDescription, privacy: .public)"
-            )
-            return CuratedAttempt(trails: [], outage: CuratedTrailOutage(error))
+            let outage = CuratedTrailOutage(error)
+            if outage != nil {
+                Self.logger.error(
+                    "Curated trails unavailable: \(error.localizedDescription, privacy: .public)"
+                )
+            }
+            return CuratedAttempt(trails: [], outage: outage)
         }
     }
 
