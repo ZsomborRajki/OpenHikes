@@ -332,7 +332,14 @@ extension MergedCommunityTransport {
 
 // MARK: - Merging two answers
 
-private extension MergedCommunityTransport {
+// `nonisolated` spelled out rather than inherited. Everything here runs
+// inside the `@concurrent` methods above, and the default-isolation rules
+// disagree between toolchains about what a nested type in an unannotated
+// extension gets: Xcode 27 reads it as nonisolated, Xcode 26.6 as main-actor,
+// which fails the build with *main actor-isolated static property 'notAsked'
+// cannot be accessed from outside of the actor* — and would have put the
+// merge on the main actor wherever it did compile.
+nonisolated private extension MergedCommunityTransport {
     /// Runs `work`, turning a failure into one to report later.
     ///
     /// A tuple rather than a `throws`, because the whole point is that neither
@@ -353,7 +360,7 @@ private extension MergedCommunityTransport {
     /// Two fields rather than a `Result` because the two are not exclusive in
     /// principle and the caller treats them separately: the rows are merged,
     /// the outage is carried out to the button that spent the request.
-    struct CuratedAttempt {
+    nonisolated struct CuratedAttempt {
         var trails: [CuratedTrail]
         var outage: CuratedTrailOutage?
 

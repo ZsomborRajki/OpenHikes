@@ -132,18 +132,19 @@ extension MapCoordinatorTests {
         browser.regionDidSettle(Self.areaRegion(latitude: Self.pannedLatitude))
         await settle(until: "the offer to be raised") { browser.areaPrompt == .search }
         browser.searchVisibleArea()
-        // The *answer*, not merely the offer being taken. `commit` clears the
-        // prompt and starts the request in one turn, so waiting on the prompt
-        // alone would assert about a pill that is still spinning — see
-        // ``CommunityBrowser/isSearching``.
-        await settle(until: "the area to be answered") {
-            browser.areaPrompt == .settled && !browser.isSearching
+        // On the **pill**, not on the browser. `commit` clears the prompt and
+        // starts the request in one turn, so the old wait — the prompt alone —
+        // asserted about a control that was still spinning; and waiting on
+        // `browser.isSearching` instead only moves the race, because the
+        // control catches up an observation hop later. The house rule is to
+        // wait on the effect, and the effect here is the pill answering again.
+        await settle(until: "the pill to answer again") {
+            pill.isEnabled && !pill.isSearching
         }
 
-        #expect(!pill.isHidden)
+        #expect(browser.areaPrompt == .settled, "the offer was taken")
+        #expect(!pill.isHidden, "an answered area is still an area worth asking about again")
         #expect(pill.isUserInteractionEnabled)
-        #expect(pill.isEnabled, "an answered area is still an area worth asking about again")
-        #expect(!pill.isSearching)
         #endif
     }
 
