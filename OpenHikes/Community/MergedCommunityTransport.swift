@@ -221,17 +221,24 @@ nonisolated extension MergedCommunityTransport {
             ? [:]
             : published.outlines(for: publishedListings)
 
-        // Usually a cache read: a curated listing that came from a search
-        // already has its line, because ``CuratedTrailSourcing/completed(_:)``
-        // drops a route it could not draw rather than offering it. But
-        // *usually* is not *always* — a long browse can evict an entry, and a
-        // listing can arrive from a saved link that no search preceded — so
-        // this is asked as one question about every relation at once. A loop
-        // of single lookups would turn a miss into one Overpass round trip per
-        // pin, at up to 30 seconds of server timeout each.
+        // **Rows that have a line, and only those.** A row the geometry pass
+        // was refused for has none — see ``CuratedTrailSourcing/completed(_:)``
+        // — and asking about it here would put a fresh Overpass geometry
+        // request straight behind the refusal that produced it, on the app's
+        // own behalf and against the rule this file keeps: Overpass is asked
+        // when the question asks for it. Its line arrives when the hiker opens
+        // the row; until then the pin stands without one.
+        //
+        // What is left is usually a cache read, because a drawn row's line is
+        // what drew it. But *usually* is not *always* — a long browse can evict
+        // an entry, and a listing can arrive from a saved link that no search
+        // preceded — so this is asked as one question about every relation at
+        // once. A loop of single lookups would turn a miss into one Overpass
+        // round trip per pin, at up to 30 seconds of server timeout each.
         var outlines: [String: [RouteCoordinate]] = [:]
-        let trails = (try? await curated.trails(of: curatedListings.compactMap(\.relationID))) ?? [:]
-        for listing in curatedListings {
+        let drawable = curatedListings.filter { $0.drawnDistanceMeters != nil }
+        let trails = (try? await curated.trails(of: drawable.compactMap(\.relationID))) ?? [:]
+        for listing in drawable {
             guard let relationID = listing.relationID,
                   let trail = trails[relationID]
             else { continue }
