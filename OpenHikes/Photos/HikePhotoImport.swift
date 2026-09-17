@@ -77,6 +77,7 @@ nonisolated enum HikePhotoImport {
         assetLocalIdentifier: String? = nil,
         matchEvidence: PhotoMatchEvidence? = nil,
         importedFromListingID: String? = nil,
+        importedAuthorName: String? = nil,
         store: HikePhotoStore = .shared,
         libraryWriter: any PhotoLibraryWriting = PhotoLibraryWriter(),
         save: (ModelContext) throws -> Void = { try $0.save() }
@@ -98,7 +99,8 @@ nonisolated enum HikePhotoImport {
             origin: HikePhoto.Origin(
                 assetLocalIdentifier: assetLocalIdentifier,
                 matchEvidence: matchEvidence,
-                importedFromListingID: importedFromListingID
+                importedFromListingID: importedFromListingID,
+                importedAuthorName: importedAuthorName
             ),
             in: store
         ) else { return nil }

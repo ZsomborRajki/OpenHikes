@@ -562,7 +562,14 @@ private extension CommunityHikeView {
     @ViewBuilder var importMenuItem: some View {
         if case .loaded(let detail) = phase {
             Button {
-                performImport(detail)
+                // Filtered, exactly as the button under the page is — see
+                // ``visible(_:)``. The two are one tap doing one thing, and
+                // the import copies contributed photographs now, so an
+                // unfiltered detail here would save a blocked contributor's
+                // pictures into the library of the hiker who blocked them, or
+                // a set a reviewer had just taken down. The strip on the
+                // screen behind the menu is already showing neither.
+                performImport(visible(detail))
             } label: {
                 Label(importButtonTitle, systemImage: importGlyph)
             }
@@ -1070,7 +1077,10 @@ private extension CommunityHikeView {
         // inside it needs and what ``CommunityImport/importHike(_:into:)``
         // requires anyway.
         importTask = Task {
-            let outcome = await CommunityImport.importHike(detail, into: context)
+            let outcome = await CommunityImport.importHike(
+                await withContributedSets(detail),
+                into: context
+            )
             isImporting = false
             switch outcome {
             case .imported(let hike), .alreadyImported(let hike):
@@ -1088,6 +1098,34 @@ private extension CommunityHikeView {
                 importFailure = failure
             }
         }
+    }
+
+    /// `detail` once the contributed sets have had their chance to land.
+    ///
+    /// The trail is two requests, and the second is deliberately not awaited
+    /// by the first — see ``loadContributions()`` — so this screen is
+    /// tappable while the contributed photographs are still in flight.
+    /// Importing on that tap used to be harmless, because the import ignored
+    /// those sets entirely. Now that it copies them, a hiker quick on the
+    /// button would get a hike missing exactly the photographs that copy
+    /// exists for, *some* of the time, with nothing to tell the fast tap from
+    /// the slow one — which is the worst shape a bug of this kind can take.
+    ///
+    /// So it waits, and then reads the detail the **screen** ended up with
+    /// rather than the one captured at the tap: the fetch hangs its answer on
+    /// ``phase``, where a value copied out before it landed cannot see it.
+    /// Filtered on the way out for the reason everything drawn from `phase` is
+    /// — see ``visible(_:)``.
+    ///
+    /// A fetch that fails, finds nothing or is cancelled changes nothing: the
+    /// wait ends and what comes back is the detail already on screen, which is
+    /// what makes this safe to wait on unconditionally rather than only when
+    /// something is known to be coming. The button is showing a spinner by the
+    /// time this runs, so the wait reads as part of the import it is part of.
+    func withContributedSets(_ detail: CommunityHikeDetail) async -> CommunityHikeDetail {
+        await contributionsTask?.value
+        guard case .loaded(let latest) = phase else { return detail }
+        return visible(latest)
     }
 
     /// Off the main actor, in the shape the photo and tile deletions already

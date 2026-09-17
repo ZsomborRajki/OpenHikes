@@ -92,7 +92,7 @@ struct HikePhotoViewer: View {
                 pages(photos)
             }
         }
-        .overlay(alignment: .bottom) { controls(photos, currentIndex: currentIndex) }
+        .overlay(alignment: .bottom) { bottomBar(photos, currentIndex: currentIndex) }
         .navigationTitle(title(photos, currentIndex: currentIndex))
         #if os(iOS)
         .navigationBarTitleDisplayMode(.inline)
@@ -170,35 +170,83 @@ struct HikePhotoViewer: View {
 
     // MARK: - Controls
 
+    /// What stands over the bottom of the photograph: who took it, and the
+    /// way to the next one.
+    ///
+    /// One ``GlassStack`` around both, which is the rule this app follows
+    /// wherever two pieces of glass sit near each other — separate containers
+    /// each sample the backdrop for themselves, and two that nearly touch
+    /// render as two panes rather than merging as they approach. See that
+    /// type, where the cost is the argument.
+    ///
+    /// The credit is above the pill rather than beside it, and its visibility
+    /// is its own: the pill goes transparent on a gallery of one, and a credit
+    /// is exactly as due on a single photograph as on the fortieth.
+    private func bottomBar(_ photos: [HikePhoto], currentIndex: Int?) -> some View {
+        GlassStack(spacing: 6) {
+            VStack(spacing: 10) {
+                credit(currentIndex.map { photos[$0] })
+                stepControls(photos, currentIndex: currentIndex)
+            }
+        }
+        .padding(.bottom, 20)
+    }
+
     /// Previous and next, merged into one pill.
     ///
     /// Disabled rather than hidden at the two ends: a control that disappears
     /// moves the one beside it, and at the end of a gallery that would shift
     /// the button the user is about to press.
-    private func controls(_ photos: [HikePhoto], currentIndex: Int?) -> some View {
-        GlassStack(spacing: 6) {
-            HStack(spacing: 6) {
-                stepButton(
-                    systemImage: "chevron.left",
-                    label: "Previous photo",
-                    identifier: "previous-photo-button",
-                    offset: -1,
-                    photos: photos,
-                    currentIndex: currentIndex
-                )
-                stepButton(
-                    systemImage: "chevron.right",
-                    label: "Next photo",
-                    identifier: "next-photo-button",
-                    offset: 1,
-                    photos: photos,
-                    currentIndex: currentIndex
-                )
-            }
+    private func stepControls(_ photos: [HikePhoto], currentIndex: Int?) -> some View {
+        HStack(spacing: 6) {
+            stepButton(
+                systemImage: "chevron.left",
+                label: "Previous photo",
+                identifier: "previous-photo-button",
+                offset: -1,
+                photos: photos,
+                currentIndex: currentIndex
+            )
+            stepButton(
+                systemImage: "chevron.right",
+                label: "Next photo",
+                identifier: "next-photo-button",
+                offset: 1,
+                photos: photos,
+                currentIndex: currentIndex
+            )
         }
-        .padding(.bottom, 20)
         .opacity(photos.count > 1 ? 1 : 0)
         .accessibilityHidden(photos.count <= 1)
+    }
+
+    /// Who took the photograph on screen, when that is somebody other than
+    /// the hiker looking at it and other than whoever published the walk.
+    ///
+    /// Drawn from ``HikePhoto/importedAuthorName``, which is set on exactly
+    /// one kind of row: a copy of a photograph another hiker *contributed* to
+    /// a shared trail, taken when this hiker saved that trail — see
+    /// ``CommunityImport``. Everything else draws nothing, which is almost
+    /// every photograph in almost every library.
+    ///
+    /// It is the same credit the community gallery puts under the same
+    /// picture, and the reason it has to survive the import is that the import
+    /// is the point at which the picture stops sitting under the name of the
+    /// person who took it. A hike's own *Shared by* row names whoever
+    /// published the route, which for these is the wrong person.
+    @ViewBuilder
+    private func credit(_ photo: HikePhoto?) -> some View {
+        if let name = photo?.importedAuthorName, !name.isEmpty {
+            Text("Photo by \(name)")
+                .font(.footnote)
+                .padding(.horizontal, 14)
+                .padding(.vertical, 8)
+                .glassSurface(.regular, in: Capsule())
+                // The backdrop is black whatever the device is set to, the
+                // same reason the navigation bar above is told this.
+                .environment(\.colorScheme, .dark)
+                .accessibilityIdentifier("photo-credit")
+        }
     }
 
     private func stepButton(

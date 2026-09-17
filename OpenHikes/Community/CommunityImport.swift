@@ -20,6 +20,24 @@
 //  thing they did not ask for and would have to undo one at a time. So the
 //  writer is passed `false` unconditionally rather than read from defaults.
 //
+//  The pictures other hikers contributed come too, and they are the reason the
+//  paragraph above has to be said twice. A contribution is a *different
+//  person's* photograph on the same trail — see ``CommunityPhotoContribution``
+//  — so a copy of one is stamped with the listing like any other import, and
+//  additionally with the name its contributor asked to be credited under. That
+//  per-photograph credit is the whole of what this needed and did not have:
+//  the hike's ``Hike/importedAuthorName`` names whoever published the walk,
+//  which for a contributed picture is the wrong person.
+//
+//  This used to copy only the author's own submission, and that was wrong in
+//  the one way a hiker could see. The trail's preview draws the two sets
+//  merged, deliberately — a hiker looking at a trail is looking at pictures of
+//  a place, whoever took them — so saving a hike from a preview showing eight
+//  photographs produced a hike holding three, with no account of where the
+//  other five went. It is also how a hiker lost *their own* contributed
+//  photograph: the way to add a picture to a trail somebody else published is
+//  to contribute it, and a hike deleted and saved again came back without it.
+//
 //  And the distance is recomputed from the route rather than copied from the
 //  listing. The listing is a record a human creates by hand in the CloudKit
 //  Console, so its numbers are typed; the route is what was actually uploaded.
@@ -193,7 +211,57 @@ nonisolated enum CommunityImport {
         )
     }
 
-    /// Copies the downloaded photographs into this hiker's own store.
+    /// Copies the downloaded photographs into this hiker's own store: the
+    /// hike author's, and then everybody else's.
+    ///
+    /// **What the saved hike holds is what the preview drew.** The strip on
+    /// that screen merges the submission's photographs and the contributed
+    /// ones deliberately — a hiker looking at a trail is looking at pictures
+    /// of a place, whoever took them — and saving from it is the promise the
+    /// button under that strip makes.
+    ///
+    /// Both halves are a snapshot: a contribution published tomorrow does not
+    /// appear in a hike saved today, and one taken down tomorrow does not
+    /// leave it. That is true of the author's own photographs already, and of
+    /// the route and the title beside them — a saved hike is this hiker's own
+    /// copy rather than a window onto a record somebody else can still edit,
+    /// and the trail stays in the community list for anybody who wants the
+    /// live one.
+    ///
+    /// Two calls rather than one loop over a merged array, and the separation
+    /// is the point: the two sets are separate records with separate authors,
+    /// so they are paired separately, credited separately, and fail
+    /// separately.
+    @MainActor
+    private static func attachPhotos(
+        of detail: CommunityHikeDetail,
+        to hike: Hike,
+        store: HikePhotoStore,
+        libraryWriter: any PhotoLibraryWriting,
+        save: (ModelContext) throws -> Void
+    ) async {
+        await attachOwnPhotos(
+            of: detail,
+            to: hike,
+            store: store,
+            libraryWriter: libraryWriter,
+            save: save
+        )
+        // Unconditionally, whatever the call above made of the submission. A
+        // submission whose pins and files disagree is a fact about the
+        // submission, and letting it cost the contributed sets too would hide
+        // pictures that are perfectly well described because somebody else's
+        // are not.
+        await attachContributedPhotos(
+            of: detail,
+            to: hike,
+            store: store,
+            libraryWriter: libraryWriter,
+            save: save
+        )
+    }
+
+    /// The hike author's own photographs — the ones on the submission.
     ///
     /// One at a time, and a failure costs its own picture rather than the
     /// import: the hike is already committed and already useful, and a single
@@ -220,18 +288,13 @@ nonisolated enum CommunityImport {
     /// copy that looked like the hiker's own would be one tap from
     /// republishing somebody else's work under the importer's credit.
     ///
-    /// **Photographs other hikers contributed are deliberately not copied.**
-    /// This reads ``CommunityHikeDetail/photoPins`` and
-    /// ``CommunityHikeDetail/photoFileURLs``, which are the submission's own
-    /// — ``CommunityHikeDetail/contributions`` sits beside them and is not
-    /// read here. Saving a stranger's trail saves the walk its author
-    /// published; what other people added to it is a thing that goes on
-    /// happening on the shared listing, and a copy taken on the day of the
-    /// import would be a snapshot that never grows, never shrinks when one is
-    /// taken down, and carries no credit into a library that has nowhere to
-    /// show one.
+    /// No per-photograph credit, and that is not an omission: these are the
+    /// work of whoever published the walk, which the hike records once on
+    /// ``Hike/importedAuthorName`` and its own screen draws as *Shared by*.
+    /// ``attachContributedPhotos(of:to:store:libraryWriter:save:)`` is where a
+    /// photograph needs a name of its own.
     @MainActor
-    private static func attachPhotos(
+    private static func attachOwnPhotos(
         of detail: CommunityHikeDetail,
         to hike: Hike,
         store: HikePhotoStore,
@@ -270,6 +333,85 @@ nonisolated enum CommunityImport {
                 libraryWriter: libraryWriter,
                 save: save
             )
+        }
+    }
+
+    /// The photographs other hikers published onto this trail.
+    ///
+    /// Copied for the reason the author's are: what the hiker pressed *Add to
+    /// My Hikes* on was a strip showing both sets merged — see
+    /// ``CommunityHikeDetail/galleryPhotos`` — and a saved hike holding fewer
+    /// pictures than the screen it was saved from is a loss nothing on that
+    /// screen accounts for. It is also the only way a hiker gets back a
+    /// photograph **they contributed themselves**, which is what adding a
+    /// picture to somebody else's trail means in this app.
+    ///
+    /// Two things are different from the author's half, and both follow from a
+    /// contribution being a separate record with a separate author.
+    ///
+    /// **The pairing is checked per set rather than once.** Each contribution
+    /// carries its own pins and its own files — see
+    /// ``CommunityPhotoContribution/isConsistent`` — so one set whose two
+    /// arrays disagree loses its own pictures and none of anybody else's. The
+    /// reason for checking at all is the reason the author's half checks:
+    /// `zip` truncates silently, and a photograph pinned to another
+    /// photograph's coordinate is the one failure nothing downstream could
+    /// ever notice.
+    ///
+    /// **Each copy carries its contributor's credit**, from
+    /// ``CommunityPhotoContribution/credit``, because the hike's own
+    /// ``Hike/importedAuthorName`` names the person who published the *walk*
+    /// and that is not who took these. A contributor who asked for no credit
+    /// leaves it `nil`, which is the honest answer rather than a lost one.
+    ///
+    /// Every copy is stamped with the listing just as the author's are, so
+    /// ``HikePhoto/isOwn`` is false for all of them and
+    /// ``CommunityPublisher/ownPhotos(of:)`` keeps the lot out of any
+    /// contribution sent back to this same trail. That matters more here, not
+    /// less: these pictures are already on the listing, so re-sending one
+    /// would put a second copy of it in the gallery it came from — and under
+    /// the wrong hiker's name.
+    ///
+    /// What arrives here has already been filtered for this hiker — see
+    /// ``CommunityHikeView/visible(_:)`` — so a blocked contributor's
+    /// photographs and a set a reviewer has taken down never reach it.
+    @MainActor
+    private static func attachContributedPhotos(
+        of detail: CommunityHikeDetail,
+        to hike: Hike,
+        store: HikePhotoStore,
+        libraryWriter: any PhotoLibraryWriting,
+        save: (ModelContext) throws -> Void
+    ) async {
+        for contribution in detail.contributions {
+            guard contribution.isConsistent else {
+                logger.error(
+                    """
+                    Imported \(detail.listing.id, privacy: .public) without a \
+                    contributed set: \(contribution.photoPins.count) pins for \
+                    \(contribution.photoFileURLs.count) files.
+                    """
+                )
+                continue
+            }
+            for (pin, url) in zip(contribution.photoPins, contribution.photoFileURLs) {
+                guard let data = await readFile(at: url) else { continue }
+                // Swiped away while the copy was running, exactly as above.
+                guard hike.isAttached else { return }
+                await HikePhotoImport.add(
+                    data,
+                    to: hike,
+                    coordinate: pin.coordinate,
+                    // Never the hiker's setting — see this file's header.
+                    savesToPhotoLibrary: false,
+                    capturedAt: pin.capturedAt,
+                    importedFromListingID: detail.listing.id,
+                    importedAuthorName: contribution.credit,
+                    store: store,
+                    libraryWriter: libraryWriter,
+                    save: save
+                )
+            }
         }
     }
 
