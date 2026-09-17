@@ -88,18 +88,48 @@ struct StatGrid<Content: View>: View {
 }
 
 struct DetailRow: View {
+    /// The glyph column's width, fixed so that every icon in a section hangs
+    /// on the same line and the labels beside them line up — a column of
+    /// symbols of different widths reads as a ragged edge rather than as a
+    /// column.
+    private static let iconWidth: CGFloat = 26
+    private static let iconSpacing: CGFloat = 10
+
     let label: String
     let value: String
+    /// An SF Symbol drawn ahead of the label, where there is one that says
+    /// what the label says.
+    ///
+    /// Optional, and left `nil` on purpose more often than not: a row given a
+    /// glyph because its neighbours have one is a glyph that means nothing,
+    /// and the reader has to look at it to find that out. Rows without it are
+    /// laid out exactly as they were before this existed.
+    var systemImage: String?
 
     var body: some View {
-        VStack(alignment: .leading, spacing: 2) {
-            Text(label)
-                .font(.caption)
-                .foregroundStyle(.secondary)
-            Text(value)
-                .font(.body)
-                .foregroundStyle(.primary)
-                .textSelection(.enabled)
+        HStack(spacing: Self.iconSpacing) {
+            if let systemImage {
+                // Secondary rather than tinted or multicolour: these sit
+                // beside a caption in that same weight, and a column of
+                // coloured glyphs down a `List` competes with the reading
+                // above it for the eye. The icon is also not announced —
+                // `children: .ignore` below drops it, which is what we want,
+                // since the label it duplicates is spoken already.
+                Image(systemName: systemImage)
+                    .font(.body)
+                    .foregroundStyle(.secondary)
+                    .frame(width: Self.iconWidth)
+            }
+            VStack(alignment: .leading, spacing: 2) {
+                Text(label)
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
+                Text(value)
+                    .font(.body)
+                    .foregroundStyle(.primary)
+                    .textSelection(.enabled)
+            }
+            .frame(maxWidth: .infinity, alignment: .leading)
         }
         .frame(maxWidth: .infinity, alignment: .leading)
         .accessibilityElement(children: .ignore)

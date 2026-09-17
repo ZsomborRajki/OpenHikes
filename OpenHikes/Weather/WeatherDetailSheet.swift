@@ -302,67 +302,6 @@ struct WeatherDetailView: View {
         return String(localized: "\(temperature), \(chance) chance of precipitation")
     }
 
-    /// The rest of the reading, one row each.
-    ///
-    /// ``DetailRow`` rather than a grid or a set of tiles, because that is what
-    /// this app already uses for a label and a value in a `List` — and what a
-    /// reader hears as one element rather than two.
-    ///
-    /// No identifier on the `Section`, deliberately. SwiftUI pushes a
-    /// container's identifier down onto every descendant, so one here would
-    /// both smother the rows underneath it and make nine rows answer to one
-    /// name — the reason the surface and difficulty sections carry theirs on
-    /// the bar alone.
-    ///
-    /// The order is not arbitrary and is worth keeping. It runs from what a
-    /// hiker acts on soonest to what they act on least: how cold it will feel,
-    /// what the wind will do to that, then the two that decide whether to
-    /// carry water and a hat, then what can be seen, and finally the three
-    /// that are context rather than instruction.
-    private func readingsSection(_ conditions: WeatherConditions) -> some View {
-        Section {
-            DetailRow(
-                label: "Feels like",
-                value: WeatherReadingFormat.temperature(
-                    conditions.apparentTemperature,
-                    width: .narrow
-                )
-            )
-            DetailRow(label: "Wind", value: Self.wind(conditions.wind))
-                .accessibilityIdentifier("weather-detail-wind")
-            DetailRow(
-                label: "Humidity",
-                value: WeatherReadingFormat.percentage(conditions.humidity)
-            )
-            DetailRow(
-                label: "UV index",
-                value: WeatherReadingFormat.uvIndex(conditions.uvIndex)
-            )
-            DetailRow(
-                label: "Visibility",
-                value: WeatherReadingFormat.visibility(conditions.visibility)
-            )
-            DetailRow(
-                label: "Pressure",
-                value: WeatherReadingFormat.pressure(conditions.pressure)
-            )
-            DetailRow(
-                label: "Dew point",
-                value: WeatherReadingFormat.temperature(conditions.dewPoint, width: .narrow)
-            )
-            DetailRow(
-                label: "Cloud cover",
-                value: WeatherReadingFormat.percentage(conditions.cloudCover)
-            )
-            DetailRow(
-                label: "Precipitation",
-                value: WeatherReadingFormat.precipitation(conditions.precipitationIntensity)
-            )
-        } header: {
-            Text("Conditions")
-        }
-    }
-
     /// Speed, the way it came from, and the gust when there is one.
     ///
     /// One row rather than three, because wind is one fact: a speed with no
@@ -426,22 +365,42 @@ struct WeatherDetailView: View {
                     // hiker has to subtract from themselves.
                     DetailRow(
                         label: "Light remaining",
-                        value: WeatherReadingFormat.remainingLight(remaining)
+                        value: WeatherReadingFormat.remainingLight(remaining),
+                        systemImage: "hourglass"
                     )
                         .accessibilityIdentifier("weather-detail-light-remaining")
                 }
                 if let sunrise = daylight.sunrise {
-                    DetailRow(label: "Sunrise", value: Self.time(sunrise))
+                    DetailRow(
+                        label: "Sunrise",
+                        value: Self.time(sunrise),
+                        systemImage: "sunrise"
+                    )
                 }
                 if let sunset = daylight.sunset {
-                    DetailRow(label: "Sunset", value: Self.time(sunset))
+                    DetailRow(
+                        label: "Sunset",
+                        value: Self.time(sunset),
+                        systemImage: "sunset"
+                    )
                         .accessibilityIdentifier("weather-detail-sunset")
                 }
                 if let civilDusk = daylight.civilDusk {
-                    DetailRow(label: "Light until", value: Self.time(civilDusk))
+                    // Not `sunset` again: this is the light that outlasts the
+                    // sun, and the same glyph twice would read as the same
+                    // fact twice.
+                    DetailRow(
+                        label: "Light until",
+                        value: Self.time(civilDusk),
+                        systemImage: "sun.horizon"
+                    )
                 }
                 if let range = Self.range(of: daylight) {
-                    DetailRow(label: "Today", value: range)
+                    DetailRow(
+                        label: "Today",
+                        value: range,
+                        systemImage: "thermometer.variable"
+                    )
                 }
             } header: {
                 Text("Daylight")
@@ -487,9 +446,14 @@ struct WeatherDetailView: View {
         Section {
             DetailRow(
                 label: "Updated",
-                value: snapshot.capturedAt.formatted(date: .omitted, time: .shortened)
+                value: snapshot.capturedAt.formatted(date: .omitted, time: .shortened),
+                systemImage: "clock"
             )
-            DetailRow(label: "Age", value: snapshot.formattedAge())
+            DetailRow(
+                label: "Age",
+                value: snapshot.formattedAge(),
+                systemImage: "clock.arrow.trianglehead.counterclockwise.rotate.90"
+            )
                 .accessibilityIdentifier("weather-detail-age")
         } footer: {
             if snapshot.isStale() {
@@ -620,12 +584,22 @@ private extension WeatherDetailView {
         switch alerts {
         case .clear:
             Section {
-                DetailRow(label: "Warnings", value: "None")
+                DetailRow(
+                    label: "Warnings",
+                    value: "None",
+                    systemImage: "checkmark.shield"
+                )
                     .accessibilityIdentifier("weather-detail-alerts-clear")
             }
         case .unavailable:
             Section {
-                DetailRow(label: "Warnings", value: "Not reported here")
+                // A question mark rather than a shield of any kind: nothing
+                // here is known to be clear, and a shield would say it is.
+                DetailRow(
+                    label: "Warnings",
+                    value: "Not reported here",
+                    systemImage: "questionmark.circle"
+                )
                     .accessibilityIdentifier("weather-detail-alerts-unavailable")
             } footer: {
                 Text("Apple Weather has no severe-weather source for this area.")
@@ -650,6 +624,102 @@ private extension WeatherDetailView {
                     : lhs.element.severity > rhs.element.severity
             }
             .map(\.element)
+    }
+}
+
+// MARK: - The reading, row by row
+
+/// The conditions section, in a same-file extension for the reason the alert
+/// sections are in one: `WeatherDetailView` is at SwiftLint's
+/// `type_body_length` limit and these three members put it over. See the note
+/// on the extension above for why the extension is in *this* file.
+private extension WeatherDetailView {
+    /// The rest of the reading, one row each.
+    ///
+    /// ``DetailRow`` rather than a grid or a set of tiles, because that is what
+    /// this app already uses for a label and a value in a `List` — and what a
+    /// reader hears as one element rather than two. Each row carries the SF
+    /// Symbol that says what its label says, where one exists that does; see
+    /// ``DetailRow/systemImage`` for why some rows elsewhere carry none.
+    ///
+    /// No identifier on the `Section`, deliberately. SwiftUI pushes a
+    /// container's identifier down onto every descendant, so one here would
+    /// both smother the rows underneath it and make nine rows answer to one
+    /// name — the reason the surface and difficulty sections carry theirs on
+    /// the bar alone.
+    ///
+    /// The order is not arbitrary and is worth keeping. It runs from what a
+    /// hiker acts on soonest to what they act on least: how cold it will feel,
+    /// what the wind will do to that, then the two that decide whether to
+    /// carry water and a hat, then what can be seen, and finally the ones
+    /// that are context rather than instruction. The split into two builders
+    /// below is that same break, and is drawn as one section either way.
+    private func readingsSection(_ conditions: WeatherConditions) -> some View {
+        Section {
+            instructionRows(conditions)
+            contextRows(conditions)
+        } header: {
+            Text("Conditions")
+        }
+    }
+
+    /// The half of the reading a hiker does something about.
+    @ViewBuilder
+    private func instructionRows(_ conditions: WeatherConditions) -> some View {
+        DetailRow(
+            label: "Feels like",
+            value: WeatherReadingFormat.temperature(
+                conditions.apparentTemperature,
+                width: .narrow
+            ),
+            systemImage: "thermometer.medium"
+        )
+        DetailRow(
+            label: "Wind",
+            value: Self.wind(conditions.wind),
+            systemImage: "wind"
+        )
+            .accessibilityIdentifier("weather-detail-wind")
+        DetailRow(
+            label: "Humidity",
+            value: WeatherReadingFormat.percentage(conditions.humidity),
+            systemImage: "humidity"
+        )
+        DetailRow(
+            label: "UV index",
+            value: WeatherReadingFormat.uvIndex(conditions.uvIndex),
+            systemImage: "sun.max"
+        )
+        DetailRow(
+            label: "Visibility",
+            value: WeatherReadingFormat.visibility(conditions.visibility),
+            systemImage: "eye"
+        )
+    }
+
+    /// The half that is the shape of the day rather than a decision in it.
+    @ViewBuilder
+    private func contextRows(_ conditions: WeatherConditions) -> some View {
+        DetailRow(
+            label: "Pressure",
+            value: WeatherReadingFormat.pressure(conditions.pressure),
+            systemImage: "barometer"
+        )
+        DetailRow(
+            label: "Dew point",
+            value: WeatherReadingFormat.temperature(conditions.dewPoint, width: .narrow),
+            systemImage: "drop.degreesign"
+        )
+        DetailRow(
+            label: "Cloud cover",
+            value: WeatherReadingFormat.percentage(conditions.cloudCover),
+            systemImage: "cloud"
+        )
+        DetailRow(
+            label: "Precipitation",
+            value: WeatherReadingFormat.precipitation(conditions.precipitationIntensity),
+            systemImage: "cloud.rain"
+        )
     }
 }
 
