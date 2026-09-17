@@ -139,6 +139,22 @@ struct MapSheet: View {
             }
             .navigationDestination(for: SheetRoute.self, destination: navigationDestinationView)
             #if os(iOS)
+            // The sheet's own screen has no navigation bar: the search field
+            // and the settings button are its chrome, and they are drawn at
+            // the top of the sheet rather than under a bar.
+            //
+            // Said outright rather than left to be inferred from "this view
+            // sets no title". The inferred answer is right until a pushed
+            // screen that *does* set one is popped programmatically — a
+            // discarded recording, which pops from inside its confirmation
+            // dialog's own dismissal — and then the bar the pushed screen
+            // brought stays behind, 54 points of empty glass above the search
+            // field. Pushing anything else and coming back cleared it, which
+            // is what made it look like padding that came and went. An
+            // explicit hidden bar is a preference the root re-asserts every
+            // time it is shown, so the pop has something to restore *to*
+            // rather than an absence to infer from.
+            .toolbar(.hidden, for: .navigationBar)
             // Set the title mode at the stack level so it's resolved before
             // any push — avoids the large-title bar expanding/flicking in.
             .navigationBarTitleDisplayMode(.inline)
