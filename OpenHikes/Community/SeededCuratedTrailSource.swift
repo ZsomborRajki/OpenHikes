@@ -95,8 +95,8 @@ nonisolated struct SeededCuratedTrailSource: CuratedTrailSourcing {
     /// and nothing here makes one. What a scenario still exercises is the
     /// *shape* of the split — the real ``MergedCommunityTransport`` decides
     /// how many rows to ask about and this answers about exactly those.
-    func completed(_ listed: [CuratedTrail]) -> [CuratedTrail] {
-        listed
+    func completed(_ listed: [CuratedTrail]) -> CuratedCompletion {
+        CuratedCompletion(trails: listed)
     }
 
     func trails(matching query: String, limit: Int) -> [CuratedTrail] {

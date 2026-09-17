@@ -28,7 +28,9 @@ import Testing
 /// An actor because ``CuratedTrailSource``'s transport is `@Sendable` and
 /// genuinely called off the main actor — the same shape
 /// `OverpassTrailGraphProviderTests` uses for its own recorder.
-private actor CuratedTransportStub {
+/// Internal rather than file-private because `CuratedTrailSourceTests+Geometry`
+/// drives the same stub — see that file for why those cases live next door.
+actor CuratedTransportStub {
     /// What a queue that has run dry answers with: a success carrying nothing,
     /// so an unexpected extra request fails on its empty body rather than on a
     /// status code and says which request was unexpected.
@@ -70,14 +72,14 @@ struct CuratedTrailSourceTests {
     private static let centre = CLLocationCoordinate2D(latitude: 47.62, longitude: 12.97)
     private static let searchRadius: Double = 10_000
 
-    private static var area: CommunitySearchArea {
+    static var area: CommunitySearchArea {
         CommunitySearchArea(coordinate: centre, radiusMeters: searchRadius)
     }
 
     /// Two named day-hike relations and one continental path, which is what
     /// the day-hike filter exists to throw out — see
     /// ``CuratedTrailQuery/maximumSpanMeters``.
-    private static let listingBody = """
+    static let listingBody = """
     {"elements":[
         {"type":"relation","id":11,"tags":{"name":"Near Loop","route":"hiking","roundtrip":"yes"},
         "bounds":{"minlat":47.620,"minlon":12.970,"maxlat":47.628,"maxlon":12.980}},
@@ -107,7 +109,7 @@ struct CuratedTrailSourceTests {
     /// it serves when it is too busy — see ``htmlServedAsSuccessIsTyped``.
     private static let httpOK = 200
     /// What Overpass sends when it wants to be left alone for a while.
-    private static let httpRateLimited = 429
+    static let httpRateLimited = 429
 
     /// Where the flood fixture's relation ids start, clear of the three the
     /// listing body carries.
@@ -150,7 +152,7 @@ struct CuratedTrailSourceTests {
         return "{\"elements\":[\(elements.joined(separator: ","))]}"
     }
 
-    private static func ok(_ json: String) -> OverpassHTTPResponse {
+    static func ok(_ json: String) -> OverpassHTTPResponse {
         OverpassHTTPResponse(
             data: Data(json.utf8),
             statusCode: httpOK,
@@ -177,7 +179,7 @@ struct CuratedTrailSourceTests {
     ///   requests and memory evictions, and a disk cache turns an eviction
     ///   into a file read rather than the round trip the assertion is written
     ///   against. The cases that are about the disk pass one.
-    private static func makeSource(
+    static func makeSource(
         _ responses: [OverpassHTTPResponse],
         clock: TestClock = TestClock(),
         directory: URL? = nil
@@ -208,6 +210,20 @@ struct CuratedTrailSourceTests {
         limit: Int = 25,
         room: Int? = nil
     ) async throws -> [CuratedTrail] {
+        try await completion(source, area: area, limit: limit, room: room).trails
+    }
+
+    /// The same search, with what the geometry pass had to say about itself.
+    ///
+    /// The rows alone answer most of this file; the cases about a refused
+    /// geometry pass need the other half of ``CuratedCompletion``, which is
+    /// the difference between a row kept without its line and a row dropped.
+    static func completion(
+        _ source: CuratedTrailSource,
+        area: CommunitySearchArea = Self.area,
+        limit: Int = 25,
+        room: Int? = nil
+    ) async throws -> CuratedCompletion {
         let listed = try await source.listings(near: area, limit: limit)
         return try await source.completed(Array(listed.prefix(room ?? limit)))
     }

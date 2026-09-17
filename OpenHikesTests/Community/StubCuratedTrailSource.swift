@@ -61,6 +61,24 @@ final class StubCuratedTrailSource: CuratedTrailSourcing, @unchecked Sendable {
     /// the merge is built to survive rather than an exotic one.
     var nearbyResult: Result<[CuratedTrail], TrailGraphProviderError> = .success([])
 
+    /// What the geometry pass does, which is a different question from what
+    /// the listing pass does and has to be armed separately: the case worth
+    /// testing is the one where the cheap pass got through and the expensive
+    /// one did not.
+    enum GeometryResult: Sendable {
+        /// Every line arrives. The default, and what a case that has not
+        /// thought about Overpass refusing should get.
+        case drawn
+        /// The rows come back without their lines, and the refusal beside
+        /// them — the real source's answer to a refused geometry pass.
+        case refused(CuratedTrailOutage)
+        /// Nothing comes back at all. A conformance may still throw, and a
+        /// cancellation does.
+        case thrown(any Error)
+    }
+
+    var geometryResult: GeometryResult = .drawn
+
     /// Every route this source knows, by relation. A relation absent from here
     /// is one OSM no longer has, which is a real and unremarkable state: ids
     /// are stable but not permanent.
@@ -89,14 +107,32 @@ final class StubCuratedTrailSource: CuratedTrailSourcing, @unchecked Sendable {
     }
 
     /// Records how many rows the expensive pass was asked about, which is the
-    /// whole point of the pass being separate. The rows come back unchanged:
-    /// the stub's trails already carry their lines, and what is under test
-    /// here is the size of the question rather than the answer to it.
+    /// whole point of the pass being separate. The rows come back unchanged
+    /// unless a case has armed ``geometryResult``: the stub's trails already
+    /// carry their lines, and what is under test here is usually the size of
+    /// the question rather than the answer to it.
     @concurrent
-    func completed(_ listed: [CuratedTrail]) async -> [CuratedTrail] {
+    func completed(_ listed: [CuratedTrail]) async throws -> CuratedCompletion {
         state.withLock { $0.completionSizes.append(listed.count) }
         await Task.yield()
-        return listed
+        switch geometryResult {
+        case .drawn:
+            return CuratedCompletion(trails: listed)
+        case .refused(let outage):
+            // What the real source does with a refused geometry pass: the rows
+            // the listing pass paid for, without their lines, and the refusal
+            // beside them. See ``CuratedTrailSourcing/completed(_:)``.
+            return CuratedCompletion(
+                trails: listed.map { trail in
+                    var lineless = trail
+                    lineless.route = []
+                    return lineless
+                },
+                outage: outage
+            )
+        case .thrown(let error):
+            throw error
+        }
     }
 
     /// Filters by name the way the real source does, so a query written in a

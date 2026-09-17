@@ -100,10 +100,18 @@ struct CommunityHikeRow: View {
     /// the rest of what a route knows — its maintainer, its two ends, its
     /// website — waits for the screen that has room for it.
     private var subtitle: String {
-        var parts = [
-            Measurement(value: listing.distanceMeters, unit: UnitLength.meters)
-                .formatted(.measurement(width: .abbreviated, usage: .road)),
-        ]
+        // The distance leads when there is one, and is simply absent when
+        // there is not: a curated row whose line Overpass refused still has a
+        // name, a shape and a waymark to decide on, and *0 m* beside them
+        // would be the one part of the row that is false. See
+        // ``CommunityListing/drawnDistanceMeters``.
+        var parts: [String] = []
+        if let metres = listing.drawnDistanceMeters {
+            parts.append(
+                Measurement(value: metres, unit: UnitLength.meters)
+                    .formatted(.measurement(width: .abbreviated, usage: .road))
+            )
+        }
         if !listing.authorName.isEmpty {
             parts.append("by \(listing.authorName)")
         }

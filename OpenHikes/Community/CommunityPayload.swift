@@ -268,6 +268,24 @@ nonisolated struct CommunityListing: CommunityBlockableRow, Identifiable, Hashab
     /// What OpenStreetMap says about this route, or `nil` for a published
     /// hike. See ``CuratedTrailFacts``.
     var curatedFacts: CuratedTrailFacts? { origin.curatedFacts }
+
+    /// How long this hike is, or `nil` when there is no line to measure yet.
+    ///
+    /// Only a curated row is ever in that second state, and only between the
+    /// search that listed it and its line arriving. A geometry pass Overpass
+    /// refused now leaves the row standing without one rather than taking it
+    /// off the list — see ``CuratedTrailSourcing/completed(_:)`` — because the
+    /// listing pass had already paid for it and the trail is really there.
+    /// Opening the row fetches the line, so the state is as short as the
+    /// hiker's next tap. A published hike always has a length of its own,
+    /// measured from the track somebody uploaded.
+    ///
+    /// Zero is how that is spelled, because a route's length *is* its line's
+    /// length and an empty line is zero metres long. What this exists for is
+    /// to keep every reader from formatting that as *0 m*, which is a claim
+    /// about a trail rather than the absence of one — and which is what a row
+    /// and a map callout each did with it once.
+    var drawnDistanceMeters: Double? { distanceMeters > 0 ? distanceMeters : nil }
 }
 
 nonisolated extension CommunityListing {
