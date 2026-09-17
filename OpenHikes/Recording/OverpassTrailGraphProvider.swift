@@ -86,6 +86,14 @@ nonisolated extension TrailGraphProviding {
 }
 
 nonisolated enum TrailGraphProviderError: LocalizedError, Equatable, Sendable {
+    /// Overpass began the query and gave up on it: a timeout, a memory limit,
+    /// or a dispatcher too busy to start. Carries the server's own `remark`,
+    /// which names which of those it was.
+    ///
+    /// Separate from ``server(statusCode:)`` because it does not arrive as
+    /// one — see ``OverpassRequest/abort(_:)``, which is where a `200` that is
+    /// not an answer is read.
+    case aborted(String)
     case invalidResponse
     case malformedGraph(String)
     case rateLimited(retryAfter: TimeInterval)
@@ -94,6 +102,7 @@ nonisolated enum TrailGraphProviderError: LocalizedError, Equatable, Sendable {
 
     var errorDescription: String? {
         switch self {
+        case .aborted(let remark): "Overpass could not finish the query: \(remark)"
         case .invalidResponse: "Overpass returned an invalid response."
         case .server(let statusCode): "Overpass returned HTTP \(statusCode)."
         case .rateLimited: "Overpass temporarily rate-limited trail downloads."

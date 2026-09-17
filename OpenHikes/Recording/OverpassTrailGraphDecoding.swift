@@ -26,6 +26,14 @@ extension OverpassTrailGraphProvider {
             )
         }
 
+        // Before anything is built out of them. An aborted query answers
+        // `200` with valid JSON and an empty `elements`, and a graph built
+        // from that is an empty graph — which this provider would then write
+        // to its cache as *this tile has no trails in it* and keep for the
+        // life of the entry, with nothing anywhere to say the tile was never
+        // really read. See ``OverpassRequest/abort(_:)``.
+        if let abort = OverpassRequest.abort(response.remark) { throw abort }
+
         let elementsByKey = buildElementIndex(from: response.elements)
         let nodeCoordinates = extractNodeCoordinates(from: response.elements)
         let hikingRouteNames = extractHikingRouteNames(from: elementsByKey)

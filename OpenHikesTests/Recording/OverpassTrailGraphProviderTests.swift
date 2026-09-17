@@ -132,6 +132,37 @@ struct OverpassTrailGraphProviderTests {
         #expect(edge.tracktype == "grade2")
     }
 
+    /// The same `200` that is not an answer, and here the stake is a *cached*
+    /// lie: a graph built from an aborted query is an empty graph, and this
+    /// provider writes what it builds to disk as the answer for that tile. A
+    /// recording matched against it would be snapped to nothing, for as long
+    /// as the entry lives, with no trace of the tile never having been read.
+    /// See ``OverpassRequest/abort(_:)``.
+    @Test("a query the server gave up on is not an empty tile")
+    func anAbortedQueryIsNotAnEmptyGraph() throws {
+        // A raw literal: the `\"` inside the remark is the two characters
+        // Overpass really sends, not a quote Swift unescapes into a fixture
+        // that is no longer JSON.
+        let timedOut = Data(#"""
+        {
+            "version": 0.6,
+            "generator": "Overpass API 0.7.62.11 87bfad18",
+            "elements": [
+
+            ],
+        "remark": "runtime error: Query timed out in \"query\" at line 1 after 39 seconds."
+        }
+        """#.utf8)
+
+        // The decoded value, so the quotes are quotes: JSON's `\"` is one
+        // character by the time it reaches the error.
+        #expect(throws: TrailGraphProviderError.aborted(
+            #"runtime error: Query timed out in "query" at line 1 after 39 seconds."#
+        )) {
+            _ = try OverpassTrailGraphProvider.decodeGraph(from: timedOut)
+        }
+    }
+
     @Test("prefetch identifies itself, is bounded, and reuses its disk cache")
     func prefetchAndCache() async throws {
         let directory = FileManager.default.temporaryDirectory

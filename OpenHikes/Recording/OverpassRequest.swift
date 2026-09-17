@@ -8,8 +8,9 @@
 //  fetching the walking graph a recording is matched against, and
 //  ``CuratedTrailSource`` fetching the waymarked routes the community list
 //  offers. What they share is not logic but *manners*: the same identifying
-//  `User-Agent`, the same form encoding, the same client timeout, and the same
-//  reading of a `429` and its `Retry-After`.
+//  `User-Agent`, the same form encoding, the same client timeout, the same
+//  reading of a `429` and its `Retry-After` — and the same reading of the
+//  failure that arrives dressed as a success, see ``abort(_:)``.
 //
 //  Those are the half a volunteer-run API notices, and the half that would
 //  drift silently if it were written twice. A second copy that forgot the
@@ -87,6 +88,40 @@ nonisolated enum OverpassRequest {
         default:
             throw TrailGraphProviderError.server(statusCode: response.statusCode)
         }
+    }
+
+    /// The failure a `200` is carrying, if it is carrying one.
+    ///
+    /// **An aborted query answers with HTTP 200 and well-formed JSON.**
+    /// Measured against `overpass-api.de` (0.7.62.11) on 2026-09-17: a query
+    /// the server gave up on came back `200`, with `"elements": []` and
+    ///
+    ///     "remark": "runtime error: Query timed out in \"query\" at line 1
+    ///                after 39 seconds."
+    ///
+    /// Nothing about the status line or the shape of the body says anything is
+    /// wrong, which is why this has to be read explicitly: a caller that only
+    /// decodes `elements` reads *the server gave up* as *there is nothing
+    /// here*, and in this app that is the difference between a caption saying
+    /// OpenStreetMap is busy and one telling a hiker there are no trails where
+    /// they are standing.
+    ///
+    /// A partial answer wears the same remark — the elements are whatever had
+    /// been collected when the clock ran out, which is a biased slice of an
+    /// area rather than a short answer about it — so this is read *instead of*
+    /// the rows rather than beside them. What the caller draws in their place
+    /// is its own decision; see ``MergedCommunityTransport``'s fall back to
+    /// the routes already on the device.
+    ///
+    /// The other runtime errors arrive the same way and are the same kind of
+    /// thing: `Query run out of memory` for one past `[maxsize:]`, and the
+    /// dispatcher's `request_read_and_idx::timeout` when the server is too
+    /// busy to start at all. They are one case here because there is one thing
+    /// a hiker can do about any of them.
+    static func abort(_ remark: String?) -> TrailGraphProviderError? {
+        guard let remark, !remark.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
+        else { return nil }
+        return .aborted(remark)
     }
 
     /// Lowercased header names, the way both callers read them.

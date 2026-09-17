@@ -46,5 +46,10 @@ extension OverpassTrailGraphProvider {
 
     struct OverpassResponse: Decodable {
         let elements: [OverpassElement]
+        /// What the server has to say about a query it did not finish — see
+        /// ``OverpassRequest/abort(_:)``. Read by ``decodeGraph(from:)``,
+        /// where the stake is a tile cached as trailless because Overpass ran
+        /// out of time on it.
+        let remark: String?
     }
 }
