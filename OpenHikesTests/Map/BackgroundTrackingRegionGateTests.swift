@@ -185,6 +185,43 @@ final class BackgroundTrackingRegionGateTests {
         #expect(defaults.bool(forKey: SettingsKey.trailRegionCleared))
     }
 
+    /// Every launch syncs the region twice — `init` does it, and then
+    /// CoreLocation reports the authorization the app already has, which does
+    /// it again — and the "already cleared" flag that would have made the
+    /// second a no-op is only written at the end of the first. The two used
+    /// to overwrite each other in one slot and run side by side; each now
+    /// waits for the one before it and looks again.
+    @Test("a launch told its authorization twice removes the condition once")
+    func aSecondSyncDoesNotRemoveAgain() async throws {
+        try seedSelection()
+        let regionMonitor = await inheritedCondition()
+        let registrationsBefore = await regionMonitor.setRegionCount
+
+        let tracker = tracker(regionMonitor: regionMonitor)
+        monitor.reportAuthorizationUnchanged()
+        await tracker.waitForTrailRegionWatch()
+
+        #expect(await regionMonitor.setRegionCount == registrationsBefore + 1)
+        #expect(await regionMonitor.registeredRegion == nil)
+        #expect(defaults.bool(forKey: SettingsKey.trailRegionCleared))
+    }
+
+    /// The same twice-per-launch pair on the other branch. Asking the system
+    /// where the phone is costs a round trip, and the answer to the second
+    /// question is the answer to the first.
+    @Test("a launch told its authorization twice watches the region once")
+    func aSecondSyncDoesNotWatchAgain() async throws {
+        try seedSelection()
+        defaults.set(true, forKey: SettingsKey.backgroundTrackingEnabled)
+        let regionMonitor = FakeTrailRegionMonitor()
+
+        let tracker = tracker(regionMonitor: regionMonitor)
+        monitor.reportAuthorizationUnchanged()
+        await tracker.waitForTrailRegionWatch()
+
+        #expect(await regionMonitor.observerCount == 1)
+    }
+
     /// A launch with the feature on is untouched by any of this: it watches,
     /// and the selection that follows registers.
     @Test("a launch with the feature on watches the region")

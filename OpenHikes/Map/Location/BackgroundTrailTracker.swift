@@ -90,9 +90,26 @@ final class BackgroundTrailTracker: NSObject {
     /// question the system can be re-asked, not as a coordinate this app
     /// wrote down. Starts ``TrailRegionState/unknown``, which arms.
     private var regionState: TrailRegionState = .unknown
-    /// The launch's trail-region work, held only so a test can wait for it —
-    /// see ``waitForTrailRegionWatch()``.
+    /// The trail-region work, as one chain rather than a slot.
+    ///
+    /// Held so a test can wait for it — see ``waitForTrailRegionWatch()`` —
+    /// and so the next piece of work can wait for it, which is the part that
+    /// matters in the app: a launch asks for this twice, from `init` and
+    /// again from CoreLocation's first authorization callback, and the two
+    /// used to overwrite each other here and run side by side. Each piece now
+    /// awaits the one before it and re-checks its own precondition, so the
+    /// second is a no-op instead of a second round trip. See
+    /// ``queueRegionWork(_:)``.
     private var regionWatchTask: Task<Void, Never>?
+    /// Whether the system is already being watched.
+    ///
+    /// Never reset. The real monitor keeps one event loop for the life of the
+    /// process and `clearTrailRegion()` does not take it down — what it takes
+    /// down is the condition — so once this is true, asking again buys
+    /// nothing. Re-enabling the feature skips straight to the selection that
+    /// registers, and until one does, the system has no condition to report
+    /// on and ``regionState`` stays ``TrailRegionState/unknown``, which arms.
+    private var isWatchingTrailRegion = false
     private let defaults: UserDefaults
     /// The Lock Screen, when the app has one. A trail being followed is the
     /// second thing this app can put there — see
@@ -810,12 +827,35 @@ extension BackgroundTrailTracker {
     /// ``TrailRegionState/unknown`` and monitoring is armed — the same
     /// fail-open direction as everything else here.
     private func startWatchingTrailRegion() {
-        regionWatchTask = Task { [weak self] in
-            guard let self else { return }
+        queueRegionWork { [weak self] in
+            // `startObserving` is idempotent on its own — the monitor keeps
+            // one event loop however often it is asked — but `currentState()`
+            // is a round trip, and a launch asks for this twice. Checked
+            // inside the queued work rather than at the call site so that the
+            // first piece has finished setting it before the second looks.
+            guard let self, !isWatchingTrailRegion else { return }
+            isWatchingTrailRegion = true
             await regionMonitor.startObserving { [weak self] state in
                 self?.regionStateChanged(to: state)
             }
             regionStateChanged(to: await regionMonitor.currentState())
+        }
+    }
+
+    /// Runs region work after whatever region work is already in flight.
+    ///
+    /// One at a time and in the order asked for. Not cancellation: the piece
+    /// being replaced is a registration or a removal, and a half-applied one
+    /// is the state this gate has no name for — `clearTrailRegion()` would
+    /// leave the condition registered and the "cleared" flag unwritten, which
+    /// reads on the next launch as a region to ask about that nothing will
+    /// answer. Letting it finish costs one round trip; cancelling it costs
+    /// the invariant.
+    private func queueRegionWork(_ work: @escaping @MainActor @Sendable () async -> Void) {
+        let previous = regionWatchTask
+        regionWatchTask = Task {
+            await previous?.value
+            await work()
         }
     }
 
@@ -825,6 +865,11 @@ extension BackgroundTrailTracker {
     /// Nothing in the app waits for this — arming is idempotent and the gate
     /// is armed until it lands — but a test asserting on the decision has to
     /// know the answer it turns on has arrived.
+    ///
+    /// The whole chain, not the last link: each piece awaits the one before
+    /// it, so awaiting the newest waits for all of them. Before that it waited
+    /// on whichever task had been assigned last, which on a launch that asks
+    /// twice is not the one still doing the work.
     func waitForTrailRegionWatch() async {
         await regionWatchTask?.value
     }
@@ -1132,9 +1177,16 @@ extension BackgroundTrailTracker {
     /// against a hiker who turns it back on.
     func clearTrailRegion() {
         regionState = .unknown
-        regionWatchTask = Task { [weak self] in
-            await self?.regionMonitor.setRegion(nil)
-            self?.defaults.set(true, forKey: SettingsKey.trailRegionCleared)
+        queueRegionWork { [weak self] in
+            guard let self else { return }
+            // Re-read rather than trusted from the call site: a launch queues
+            // this twice and the flag is only written at the end of the first,
+            // so the caller's answer is stale by the time this runs. Without
+            // the re-read the second removal is a wasted round trip against a
+            // condition that is already gone.
+            guard !defaults.bool(forKey: SettingsKey.trailRegionCleared) else { return }
+            await regionMonitor.setRegion(nil)
+            defaults.set(true, forKey: SettingsKey.trailRegionCleared)
         }
     }
 
