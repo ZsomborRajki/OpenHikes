@@ -118,6 +118,32 @@ nonisolated struct HikePhoto: Codable, Hashable, Identifiable, Sendable {
     /// is what lets them decode unchanged. See ``isOwn``.
     var importedFromListingID: String?
 
+    /// Who took this photograph, for one copied out of a *contribution* to a
+    /// shared trail rather than out of the hike its author published.
+    ///
+    /// `nil` for almost every photograph, and the absence means two different
+    /// innocent things rather than one: the hiker took it themselves, or it
+    /// came off the hike author's own submission — whose credit is a fact
+    /// about the walk and is already on ``Hike/importedAuthorName``, drawn as
+    /// *Shared by* on the hike's own screen. A contributed photograph is the
+    /// one case where the person who took the picture is somebody other than
+    /// the person who published the trail, so it is the one case that needs a
+    /// credit of its own.
+    ///
+    /// It is `nil` again for a contributor who asked for no credit — see
+    /// ``CommunityPhotoContribution/credit``, which is what this is read
+    /// from. That is honest rather than lossy: there is nobody to name.
+    ///
+    /// Never a reason to treat the photograph as the hiker's own. That
+    /// question is ``isOwn``'s and is answered by ``importedFromListingID``
+    /// alone, so a contributed copy carrying no credit is exactly as
+    /// unpublishable as one with a name on it.
+    ///
+    /// Optional for the reason ``sentToCommunityAt`` is: a new key in a blob
+    /// every earlier version wrote, which decodes as `nil` for the rows they
+    /// saved.
+    var importedAuthorName: String?
+
     /// When this picture was last sent to the community, or `nil` for one that
     /// never has been.
     ///
@@ -185,6 +211,7 @@ nonisolated struct HikePhoto: Codable, Hashable, Identifiable, Sendable {
         assetLocalIdentifier: String? = nil,
         matchEvidence: PhotoMatchEvidence? = nil,
         importedFromListingID: String? = nil,
+        importedAuthorName: String? = nil,
         isPlaceOnly: Bool? = nil // swiftlint:disable:this discouraged_optional_boolean
     ) {
         self.id = id
@@ -195,6 +222,7 @@ nonisolated struct HikePhoto: Codable, Hashable, Identifiable, Sendable {
         self.assetLocalIdentifier = assetLocalIdentifier
         self.matchEvidence = matchEvidence
         self.importedFromListingID = importedFromListingID
+        self.importedAuthorName = importedAuthorName
         self.isPlaceOnly = isPlaceOnly
     }
 
@@ -213,7 +241,7 @@ nonisolated struct HikePhoto: Codable, Hashable, Identifiable, Sendable {
 
     /// Where a photograph came from, as against where it sits on the trail.
     ///
-    /// The three fields above that describe the *source* rather than the
+    /// The four fields above that describe the *source* rather than the
     /// picture, gathered so they travel together: they are filled in by the
     /// surface that produced the photograph, read by nothing on the way to
     /// disk, and are the only part of ``HikePhoto`` that
@@ -225,6 +253,7 @@ nonisolated struct HikePhoto: Codable, Hashable, Identifiable, Sendable {
         var assetLocalIdentifier: String?
         var matchEvidence: PhotoMatchEvidence?
         var importedFromListingID: String?
+        var importedAuthorName: String?
 
         /// A photograph with nothing to say about where it came from: one the
         /// app watched being taken. The ordinary case, and the reason every
