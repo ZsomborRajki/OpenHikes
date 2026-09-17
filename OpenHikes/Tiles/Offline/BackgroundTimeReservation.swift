@@ -108,4 +108,19 @@ struct BackgroundTimeReservation {
         begin: { _ in nil },
         end: { _ in /* nothing was begun */ }
     )
+
+    /// What a downloader gets when its caller does not name one: the real
+    /// reservation, except under a test launch.
+    ///
+    /// The guard is here rather than at each call site because there is no
+    /// call site — the default is what every suite that does not care about
+    /// background time silently takes, and a suite that took ``system`` would
+    /// reserve the grant for the whole test host and every test after it, for
+    /// the reason this file's header gives. `isRunningTests` rather than
+    /// `isHostingTests`, matching ``OpenHikesModel/makeWorkoutWriter()``: a
+    /// UI-automation launch is a real process and must not hold the grant
+    /// either.
+    static var `default`: Self {
+        AppLaunchEnvironment.isRunningTests ? .unavailable : .system
+    }
 }

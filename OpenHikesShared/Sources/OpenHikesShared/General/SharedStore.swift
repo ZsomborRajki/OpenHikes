@@ -62,6 +62,8 @@ public enum SharedStore {
     struct ContainerOverride: Sendable {
         let resolve: @Sendable () -> URL?
 
+        // periphery:ignore - exercised by `OpenHikesShared/Tests`, a SwiftPM
+        // target the Xcode scheme this scan builds does not contain.
         init(_ resolve: @escaping @Sendable () -> URL?) {
             self.resolve = resolve
         }

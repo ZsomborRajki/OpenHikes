@@ -48,7 +48,7 @@ final class HealthKitWorkoutWriter: HikeWorkoutWriting {
     /// this app ships to but is what a simulator can be.
     static var isAvailable: Bool { HKHealthStore.isHealthDataAvailable() }
 
-    var isAuthorizationDetermined: Bool {
+    private var isAuthorizationDetermined: Bool {
         guard Self.isAvailable else { return false }
         // `.notDetermined` is the only answer that means "has not been asked".
         // `.sharingDenied` is an answer, and a settled one: Apple deliberately
@@ -57,7 +57,7 @@ final class HealthKitWorkoutWriter: HikeWorkoutWriting {
         return store.authorizationStatus(for: HKQuantityType.workoutType()) != .notDetermined
     }
 
-    func requestAuthorization() async -> Bool {
+    private func requestAuthorization() async -> Bool {
         guard Self.isAvailable else { return false }
         do {
             try await store.requestAuthorization(toShare: shareTypes, read: [])

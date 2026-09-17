@@ -169,7 +169,7 @@ final class OfflineTileDownloader {
         isOnline: @escaping @Sendable () -> Bool = { TileCache.shared.isOnline },
         quota: QuotaBroker = .standard,
         registry: OfflineDownloadRegistry = .shared,
-        backgroundTime: BackgroundTimeReservation = .system,
+        backgroundTime: BackgroundTimeReservation = .default,
         claimBatchSize: Int = defaultClaimBatchSize,
         saveTile: @escaping @Sendable (String, URL) async -> Bool = { key, url in
             await TileCache.shared.saveTileDurably(forKey: key, url: url)

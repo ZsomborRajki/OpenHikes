@@ -718,7 +718,7 @@ private extension HikeDetailView {
 
     /// The no-match half of ``updateLiveFollow(profile:)``: clears the live dot
     /// and tells the widget there is nothing to show.
-    private func clearLiveFollow(profile: RouteProfile, reason: String) {
+    private func clearLiveFollow(profile: RouteProfile) {
         // Guarded so a run of off-route fixes (nil already) doesn't write
         // `tracker` for nothing.
         if tracker.liveTrackerDistance != nil {
@@ -750,7 +750,7 @@ private extension HikeDetailView {
               let fix = locationManager.routeFix(
                 maximumHorizontalAccuracy: RouteProfile.followMatchThresholdMeters
               ) else {
-            clearLiveFollow(profile: profile, reason: "no-fix")
+            clearLiveFollow(profile: profile)
             return
         }
         let searchScope = offRouteSearch.scope
@@ -767,7 +767,7 @@ private extension HikeDetailView {
             // Leaving the route is what rearms auto-start after an End: the
             // hiker is off this trail, so coming back to it is a new walk.
             walkSession.recordOffRoute(hikeID: hike.id)
-            clearLiveFollow(profile: profile, reason: "off-route")
+            clearLiveFollow(profile: profile)
             return
         }
         followAnchor = .matched(at: match.distanceAlongRoute, course: fix.course, from: followAnchor)

@@ -26,15 +26,7 @@ import Testing
 @MainActor
 final class StubWorkoutWriter: HikeWorkoutWriting {
     private(set) var written: [HikeWorkoutRequest] = []
-    private(set) var authorizationRequests = 0
-    var isAuthorizationDetermined = true
     var result: Result<UUID, HikeWorkoutFailure> = .success(UUID())
-
-    func requestAuthorization() async -> Bool {
-        authorizationRequests += 1
-        await Task.yield()
-        return true
-    }
 
     func write(_ request: HikeWorkoutRequest) async throws -> UUID {
         written.append(request)

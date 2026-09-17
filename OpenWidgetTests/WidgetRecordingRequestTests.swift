@@ -9,7 +9,6 @@
 
 import CoreLocation
 import Foundation
-import OpenHikesShared
 import Testing
 import WidgetKit
 

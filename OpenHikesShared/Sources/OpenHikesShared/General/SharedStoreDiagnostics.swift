@@ -21,7 +21,7 @@ import Foundation
 import OSLog
 
 /// A payload `SharedStore` declined to hand back, and why.
-public enum SharedStoreDiagnostic: Sendable, Equatable {
+enum SharedStoreDiagnostic: Sendable, Equatable {
     /// The bytes are present but this build cannot read them — the signature
     /// of a renamed, retyped or removed non-optional key. `detail` names the
     /// key and its coding path.
@@ -29,7 +29,7 @@ public enum SharedStoreDiagnostic: Sendable, Equatable {
     /// The bytes announce a version this build does not understand.
     case unsupportedSchemaVersion(file: String, found: Int, supported: Int)
 
-    public var summary: String {
+    var summary: String {
         switch self {
         case let .decodeFailed(file, detail):
             "\(file) could not be decoded: \(detail)"
@@ -53,6 +53,8 @@ enum SharedStoreDiagnostics {
     struct Sink: Sendable {
         let receive: @Sendable (SharedStoreDiagnostic) -> Void
 
+        // periphery:ignore - exercised by `OpenHikesShared/Tests`, a SwiftPM
+        // target the Xcode scheme this scan builds does not contain.
         init(_ receive: @escaping @Sendable (SharedStoreDiagnostic) -> Void) {
             self.receive = receive
         }

@@ -135,24 +135,4 @@ nonisolated extension CommunityPhotoTarget {
         // the hiker back to themselves reads as a stranger.
         return Self(listingID: listingID, title: title, authorName: nil, isYours: true)
     }
-
-    /// The target a hike saved from the community points at, or `nil` for a
-    /// hike nobody saved from anywhere.
-    ///
-    /// The author is taken from ``Hike/importedAuthorName`` and is empty for a
-    /// curated route — see ``CommunityImport``, which does not write one
-    /// because there is nobody to credit.
-    static func saved(
-        fromListingID listingID: String?,
-        importedAuthorName: String?,
-        title: String
-    ) -> Self? {
-        guard let listingID else { return nil }
-        let author = importedAuthorName?.trimmingCharacters(in: .whitespacesAndNewlines)
-        return Self(
-            listingID: listingID,
-            title: title,
-            authorName: (author?.isEmpty ?? true) ? nil : author
-        )
-    }
 }

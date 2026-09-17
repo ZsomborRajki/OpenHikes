@@ -72,6 +72,8 @@ extension View {
 private struct WeatherDetailSheetModifier: ViewModifier {
     let presentation: WeatherDetailPresentation
     let weather: WeatherManager
+    // periphery:ignore - read only as `$detent`, the binding
+    // `.presentationDetents(_:selection:)` takes.
     /// Which detent the sheet opens at, rather than which ones it offers.
     ///
     /// SwiftUI opens at the smallest detent in the set unless it is given a

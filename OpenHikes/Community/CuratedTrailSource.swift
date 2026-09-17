@@ -167,13 +167,6 @@ actor CuratedTrailSource: CuratedTrailSourcing {
         case trail(CuratedTrail)
         /// Asked about, and Overpass had nothing to draw.
         case absent
-
-        var trail: CuratedTrail? {
-            switch self {
-            case .trail(let trail): trail
-            case .absent: nil
-            }
-        }
     }
 
     private let endpoint: URL

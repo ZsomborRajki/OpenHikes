@@ -65,10 +65,10 @@ nonisolated struct TileNetworkConditions: Equatable, Sendable {
 
 nonisolated enum TileNetworkDecision: Equatable, Sendable {
     case allowed
-    /// Carries a short, stable reason so a suppressed fetch is visible in the
-    /// signpost stream. A tile that silently never loads is the single
-    /// hardest thing to debug in this pipeline, and this policy exists to
-    /// create exactly that situation on purpose.
+    /// Carries a short, stable reason so a suppressed fetch says why rather
+    /// than simply not happening. A tile that silently never loads is the
+    /// single hardest thing to debug in this pipeline, and this policy exists
+    /// to create exactly that situation on purpose.
     case denied(String)
 
     var isAllowed: Bool { self == .allowed }

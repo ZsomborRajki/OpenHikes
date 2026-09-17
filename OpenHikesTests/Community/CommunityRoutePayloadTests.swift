@@ -20,7 +20,6 @@
 import CoreLocation
 import Foundation
 @testable import OpenHikes
-import OpenHikesShared
 import Testing
 
 @Suite("Community route payload")

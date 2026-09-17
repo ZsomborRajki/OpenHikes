@@ -104,6 +104,8 @@ public protocol HikeActivityControlHandling: Sendable {
 /// Pauses the recording the panel is showing.
 public struct PauseHikeActivityIntent: LiveActivityIntent {
     public static let title: LocalizedStringResource = "Pause Hike"
+    // periphery:ignore - an optional `AppIntent` requirement, read through
+    // the AppIntents metadata rather than by any call site.
     public static let description = IntentDescription(
         "Pauses the hike being recorded, from its Lock Screen panel.",
         categoryName: "Recording"
@@ -125,6 +127,8 @@ public struct PauseHikeActivityIntent: LiveActivityIntent {
 /// Resumes the recording the panel is showing.
 public struct ResumeHikeActivityIntent: LiveActivityIntent {
     public static let title: LocalizedStringResource = "Resume Hike"
+    // periphery:ignore - an optional `AppIntent` requirement, read through
+    // the AppIntents metadata rather than by any call site.
     public static let description = IntentDescription(
         "Resumes the paused hike, from its Lock Screen panel.",
         categoryName: "Recording"

@@ -453,8 +453,8 @@ nonisolated extension TileCache {
         // Offline, metered, or asked to conserve: the tile isn't cached and
         // opening a connection for it is either doomed or unwanted. Return
         // without requesting so we don't spam failing loads for every visible
-        // tile, and mark it so the reason is in the signpost stream rather
-        // than only in a debug log nobody is reading on a mountain.
+        // tile, and carry the reason down so the refusal is named rather than
+        // silent.
         let decision = networkDecision(for: purpose)
         guard decision.isAllowed else {
             #if DEBUG
@@ -467,7 +467,6 @@ nonisolated extension TileCache {
             // that can't refresh it is the phone least able to do without it.
             return withheldFetch(
                 forKey: key,
-                purpose: purpose,
                 reason: decision.reason ?? "unknown",
                 hasStaleCoverage: hasStaleCoverage,
                 token: mutationToken,
@@ -490,7 +489,6 @@ nonisolated extension TileCache {
         if retryDeadline(forKey: key) != nil {
             return withheldFetch(
                 forKey: key,
-                purpose: purpose,
                 reason: "retry-after",
                 hasStaleCoverage: hasStaleCoverage,
                 token: mutationToken,
@@ -707,9 +705,9 @@ nonisolated extension TileCache {
         #if DEBUG
         Self.logger.debug("Requesting tile \(key, privacy: .public) from \(url.redactedForLogging, privacy: .public)")
         #endif
-        // The counter an offline-first app is judged on. Everything else in
-        // this file is about *not* reaching here; this is the one place that
-        // does, so a scenario's tile traffic is exactly this signpost's count.
+        // The one request an offline-first app is judged on. Everything else
+        // in this file is about *not* reaching here; this is the only place
+        // that does.
         do {
             let (data, response) = try await session.data(from: url)
             guard let http = response as? HTTPURLResponse else {
