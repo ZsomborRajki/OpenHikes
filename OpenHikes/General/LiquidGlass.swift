@@ -134,6 +134,36 @@ struct GlassStack<Content: View>: View {
     }
 }
 
+/// A break between two groups of toolbar items, so they are drawn as separate
+/// pieces of glass instead of merging into one capsule.
+///
+/// Items sharing a placement are one glass group by default, which is right
+/// for a set of related actions and wrong for a pair that are not: a
+/// destructive button in the same capsule as a navigation one reads as another
+/// facet of it, and the two are a fingertip apart with nothing between them.
+///
+/// Wrapped for the reason the rest of this file is — `ToolbarSpacer` is
+/// `@available(visionOS, unavailable)`, where a toolbar is not a row of glass
+/// capsules to be split in the first place. The visionOS branch is an empty
+/// item rather than nothing at all, because a `body` has to produce some
+/// `ToolbarContent` in either branch — there is no empty one to return.
+///
+/// Fixed rather than flexible: this separates two neighbours, it does not push
+/// them to opposite ends of the bar.
+struct GlassToolbarSpacer: ToolbarContent {
+    /// The placement of the items being separated. A spacer only breaks up the
+    /// group it is in, so this has to be the same placement they carry.
+    let placement: ToolbarItemPlacement
+
+    var body: some ToolbarContent {
+        #if os(visionOS)
+        ToolbarItem(placement: placement) { EmptyView() }
+        #else
+        ToolbarSpacer(.fixed, placement: placement)
+        #endif
+    }
+}
+
 extension View {
     /// Draws `shape` behind this view as Liquid Glass.
     ///

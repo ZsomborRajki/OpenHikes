@@ -129,7 +129,11 @@ struct MapPaywallView: View {
             // Ours rather than `.storeButton(.visible, for: .restorePurchases)`
             // — see this file's header for why the distinction matters.
             .storeButton(.hidden, for: .restorePurchases)
-            .safeAreaInset(edge: .bottom) { restoreRow }
+            // `safeAreaBar` rather than `safeAreaInset`, for the reason
+            // ``PhotoDiscoverySheet``'s selection bar gives: the system draws
+            // the glass and handles the scroll edge, so the row stops carrying
+            // a `.bar` material of its own.
+            .safeAreaBar(edge: .bottom) { restoreRow }
             // The product's own name, as App Store Connect and
             // `OpenHikes.storekit` spell it, rather than a description of
             // what it currently unlocks: a customer reads this beside a
@@ -259,7 +263,6 @@ struct MapPaywallView: View {
         .padding(.horizontal, 20)
         .padding(.bottom, 8)
         .frame(maxWidth: .infinity)
-        .background(.bar)
         .alert("Nothing to Restore", isPresented: $showNothingToRestore) {
             Button("OK", role: .cancel) { /* dismiss */ }
         } message: {

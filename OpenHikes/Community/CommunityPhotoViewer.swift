@@ -233,6 +233,11 @@ struct CommunityPhotoViewer: View {
                 )
             }
         }
+        // Split from the menu below rather than grouped with it, for the
+        // reason ``HikePhotoViewer``'s pair is: report, block and take down are
+        // not another facet of *show me where this was*, and one glass capsule
+        // around both would say they were. See ``GlassToolbarSpacer``.
+        GlassToolbarSpacer(placement: .topBarTrailing)
         // Drawn for a contributed photograph and **absent** for the hike
         // author's own, which is not a simplification: reporting or blocking
         // over one of those is about the hike, and the hike's own screen one

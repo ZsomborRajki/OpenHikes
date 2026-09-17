@@ -225,7 +225,7 @@ struct HikePhotoViewer: View {
 
     @ToolbarContentBuilder
     private func toolbarContent(_ current: HikePhoto?) -> some ToolbarContent {
-        ToolbarItemGroup(placement: .topBarTrailing) {
+        ToolbarItem(placement: .topBarTrailing) {
             if let current, let coordinate = current.coordinate {
                 ShowPhotoOnMapButton(
                     coordinate: coordinate,
@@ -234,6 +234,13 @@ struct HikePhotoViewer: View {
                     onShowOnMap: onShowOnMap
                 )
             }
+        }
+        // Two items, split rather than one group: *show me where this was* and
+        // *delete this* share a placement and nothing else, and a single glass
+        // capsule around both puts the destructive one a fingertip from the
+        // harmless one with no edge between them. See ``GlassToolbarSpacer``.
+        GlassToolbarSpacer(placement: .topBarTrailing)
+        ToolbarItem(placement: .topBarTrailing) {
             if current != nil {
                 Button(role: .destructive) {
                     showDeleteConfirmation = true
@@ -482,10 +489,10 @@ private struct HikePhotoPage: View {
 
             HStack(spacing: Self.recoverySpacing) {
                 Button("Try Again") { attempt += 1 }
-                    .buttonStyle(.bordered)
+                    .glassButtonStyle()
                     .accessibilityIdentifier("photo-retry-button")
                 Button("Remove Photo", role: .destructive, action: onRemove)
-                    .buttonStyle(.bordered)
+                    .glassButtonStyle()
                     .accessibilityIdentifier("photo-remove-button")
             }
         }
