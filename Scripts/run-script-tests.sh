@@ -120,10 +120,13 @@ STUB
 
 # Records every xcodebuild invocation so a case can assert which device and
 # which selection the run addressed, and reports whatever outcome it asks for.
+# STUB_XCODEBUILD_OUTPUT stands in for a run's own console output, which is what
+# run-ui-tests.sh reads its failed-test summary back out of; unset, it is the
+# one line every case written before that existed was written against.
 cat > "$stub_bin/xcodebuild" <<'STUB'
 #!/usr/bin/env bash
 printf 'xcodebuild %s\n' "$*" >> "$STUB_CALL_LOG"
-echo "Test Suite 'All tests' passed at 2026-08-30 12:00:00.000."
+printf '%s\n' "${STUB_XCODEBUILD_OUTPUT:-Test Suite 'All tests' passed at 2026-08-30 12:00:00.000.}"
 exit "${STUB_XCODEBUILD_STATUS:-0}"
 STUB
 
@@ -248,6 +251,14 @@ ui_bundle="OpenHikesUITests"
 # second pass, so a rename breaks them together rather than one at a time.
 pinned_test="RecordingUITests/testDiscardingARecordingSavesNothing"
 recording_test="${pinned_test#*/}"
+
+# The cases below include real runs, and a real run claims the simulator it
+# resolved. Pointed into the work directory so this suite never writes into the
+# lock directory a developer's own runs use — and never refuses one of them
+# either.
+device_lock_dir="$work/device-locks"
+export OPENHIKES_UI_TEST_LOCK_DIR="$device_lock_dir"
+pro_lock="$device_lock_dir/$pro_udid.lock"
 
 echo "Simulator resolution"
 
@@ -423,6 +434,201 @@ run_script "run-ui-tests rejects a worker count that is not a number" \
     "$ui_tests" --device "iPhone 17 Pro" --all --parallel two --dry-run
 if expect_status 2 \
     && expect_contains "$output" "worker count of 2 or more" "the error"; then
+    pass
+fi
+
+echo "Derived data"
+
+# The shared derived-data directory is the other thing two runs cannot have at
+# once: the second xcodebuild waits on the first one's build lock, prints
+# nothing while it waits, and reads as a hang. Both passes have to carry the
+# path, not just the first — the pinned serial pass is a second xcodebuild, and
+# a run that built its clones' bundle in one place and its pinned tests' in
+# another would pay for two builds and say nothing about it.
+run_script "run-ui-tests --derived-data reaches both passes" \
+    "$ui_tests" --device "iPhone 17 Pro" --all --derived-data "$work/dd" --dry-run
+if expect_status 0 \
+    && expect_contains "$output" "-derivedDataPath $work/dd" "the printed invocation" \
+    && expect_contains "$output" "Derived data: $work/dd" "the printed summary"; then
+    if [[ "$(grep -c -- "-derivedDataPath" <<< "$output")" == 2 ]]; then
+        pass
+    else
+        fail "only one of the two passes was given -derivedDataPath" "$output"
+    fi
+fi
+
+# Through the environment as well as the flag, for the reason
+# OPENHIKES_SIMULATOR_NAME is: a second session sets both once and then runs the
+# documented line, rather than remembering two flags every time.
+run_script "run-ui-tests takes the derived-data path from the environment" \
+    env OPENHIKES_DERIVED_DATA="$work/dd-env" \
+    "$ui_tests" --device "iPhone 17 Pro" --dry-run
+if expect_status 0 \
+    && expect_contains "$output" "-derivedDataPath $work/dd-env" "the printed invocation"; then
+    pass
+fi
+
+# And nothing at all when nobody asked, which is what keeps every existing
+# machine building where it has always built.
+run_script "run-ui-tests leaves derived data alone when nobody asked" \
+    "$ui_tests" --device "iPhone 17 Pro" --dry-run
+if expect_status 0 \
+    && expect_absent "$output" "-derivedDataPath" "the printed invocation" \
+    && expect_absent "$output" "Derived data:" "the printed summary"; then
+    pass
+fi
+
+echo "Device locking"
+
+# A run claims the simulator it resolved and gives it back, so the next run on
+# this machine is not refused by a ghost.
+rm -rf "$device_lock_dir"
+run_script "run-ui-tests releases the device it claimed" \
+    "$ui_tests" --device "iPhone 17 Pro"
+if expect_status 0 && expect_contains "$calls" "xcodebuild" "the recorded calls"; then
+    if [[ -e "$pro_lock" ]]; then
+        fail "the claim at $pro_lock outlived the run"
+    else
+        pass
+    fi
+fi
+
+# A second run against a device somebody already has is told so. This is the
+# case the whole mechanism exists for: without it the second install tears the
+# first run's app out from under it and the failure lands on whichever test was
+# executing, with nothing in the report naming the cause.
+#
+# The holder is this suite's own PID, which is alive by definition — a case
+# that invented a number would be asserting on whatever process happened to own
+# it.
+rm -rf "$device_lock_dir"
+mkdir -p "$pro_lock"
+printf '%s\n' "$$" > "$pro_lock/pid"
+run_script "run-ui-tests refuses a simulator another run holds" \
+    "$ui_tests" --device "iPhone 17 Pro"
+if expect_status 2 \
+    && expect_contains "$output" "pid $$" "the refusal" \
+    && expect_absent "$calls" "xcodebuild" "the recorded calls"; then
+    pass
+fi
+
+# And the same claim left behind by a run that is gone is not a claim at all. A
+# killed run must not make a simulator permanently unusable, which is the
+# failure this half prevents and the reason the PID is written down rather than
+# the lock being a bare directory.
+#
+# The dead PID is a real one, reaped: a made-up number can be a process this
+# machine is running.
+rm -rf "$device_lock_dir"
+mkdir -p "$pro_lock"
+( exit 0 ) &
+dead_pid=$!
+wait "$dead_pid" 2>/dev/null || true
+printf '%s\n' "$dead_pid" > "$pro_lock/pid"
+run_script "run-ui-tests takes over a claim whose run is gone" \
+    "$ui_tests" --device "iPhone 17 Pro"
+if expect_status 0 && expect_contains "$calls" "xcodebuild" "the recorded calls"; then
+    pass
+fi
+
+# The escape hatch runs, and — the half that matters — leaves the other run's
+# claim where it found it. A flag that let one run release another run's lock
+# would be worse than no flag at all.
+rm -rf "$device_lock_dir"
+mkdir -p "$pro_lock"
+printf '%s\n' "$$" > "$pro_lock/pid"
+run_script "run-ui-tests --no-device-lock starts without taking the claim" \
+    "$ui_tests" --device "iPhone 17 Pro" --no-device-lock
+if expect_status 0 && expect_contains "$calls" "xcodebuild" "the recorded calls"; then
+    if [[ -f "$pro_lock/pid" ]]; then
+        pass
+    else
+        fail "--no-device-lock released a claim it never took"
+    fi
+fi
+
+# --dry-run claims nothing, for the same reason it leaves a result bundle
+# alone: a mode whose whole job is to print what would happen must not take
+# anything away from a run that is actually happening.
+rm -rf "$device_lock_dir"
+run_script "run-ui-tests --dry-run claims no device" \
+    "$ui_tests" --device "iPhone 17 Pro" --dry-run
+if expect_status 0; then
+    if [[ -e "$pro_lock" ]]; then
+        fail "--dry-run left a claim at $pro_lock"
+    else
+        pass
+    fi
+fi
+
+echo "Test outcome summary"
+
+# What a run failed, named at the end of it. The console shows a tick per test
+# and one mark for a failure, so a red run reads as a green one with a trailing
+# sentence — which is how two failing tests sat on main for days.
+#
+# The fixture is the three shapes that matter: a test that passed, one that
+# failed both attempts, and one that failed and then passed the way a retry
+# does. The retried one carries the *parallel* spelling, copied from a real
+# run rather than invented, because the two are disjoint — a serial run of
+# this bundle printed six `Test Case '-[Bundle.Class method]'` lines and no
+# other kind, and a parallel one fifteen `Test case 'Class.method()' … on
+# 'Clone N of …'` lines and no other kind. A summary that read only the first
+# would say nothing at all in a parallel run, which is the run it is for.
+export STUB_XCODEBUILD_OUTPUT="Test Case '-[OpenHikesUITests.RecordingUITests testGreen]' passed (12.0 seconds).
+Test Case '-[OpenHikesUITests.CommunityUITests testBroken]' failed (3.0 seconds).
+Test Case '-[OpenHikesUITests.CommunityUITests testBroken]' failed (3.1 seconds).
+Test case 'WalkUITests.testFlaky()' failed on 'Clone 1 of iPhone 17 Pro - OpenHikesUITests-Runner (1234)' (9.0 seconds).
+Test case 'WalkUITests.testFlaky()' passed on 'Clone 2 of iPhone 17 Pro - OpenHikesUITests-Runner (1235)' (4.0 seconds)."
+export STUB_XCODEBUILD_STATUS=65
+
+rm -rf "$device_lock_dir"
+run_script "run-ui-tests names what a red run failed" \
+    "$ui_tests" --device "iPhone 17 Pro"
+if expect_status 65 \
+    && expect_contains "$output" "Failed:" "the summary" \
+    && expect_contains "$output" "CommunityUITests/testBroken" "the failed list" \
+    && expect_absent "$output" "RecordingUITests/testGreen" "the summary"; then
+    pass
+fi
+
+run_script "run-ui-tests separates what failed twice from what was retried" \
+    "$ui_tests" --device "iPhone 17 Pro"
+if expect_status 65 \
+    && expect_contains "$output" "Passed on a retry:" "the summary" \
+    && expect_contains "$output" "WalkUITests/testFlaky" "the retried list"; then
+    pass
+fi
+
+# The retried ones are named on a green run too, and over time that is the half
+# that earns its keep: -retry-tests-on-failure makes a test that failed once and
+# passed once look exactly like one that always passes. Nothing here failed, so
+# nothing may be reported as having failed.
+export STUB_XCODEBUILD_OUTPUT="Test Case '-[OpenHikesUITests.RecordingUITests testGreen]' passed (12.0 seconds).
+Test case 'WalkUITests.testFlaky()' failed on 'Clone 1 of iPhone 17 Pro - OpenHikesUITests-Runner (1234)' (9.0 seconds).
+Test case 'WalkUITests.testFlaky()' passed on 'Clone 2 of iPhone 17 Pro - OpenHikesUITests-Runner (1235)' (4.0 seconds)."
+export STUB_XCODEBUILD_STATUS=0
+
+rm -rf "$device_lock_dir"
+run_script "run-ui-tests names a retry a green run absorbed" \
+    "$ui_tests" --device "iPhone 17 Pro"
+if expect_status 0 \
+    && expect_contains "$output" "Passed on a retry:" "the summary" \
+    && expect_contains "$output" "WalkUITests/testFlaky" "the retried list" \
+    && expect_absent "$output" "Failed:" "the summary"; then
+    pass
+fi
+
+unset STUB_XCODEBUILD_OUTPUT STUB_XCODEBUILD_STATUS
+
+# And an ordinary run says neither, rather than printing two empty headings at
+# the foot of every green run anybody ever makes.
+rm -rf "$device_lock_dir"
+run_script "run-ui-tests stays quiet when there is nothing to report" \
+    "$ui_tests" --device "iPhone 17 Pro"
+if expect_status 0 \
+    && expect_absent "$output" "Failed:" "the summary" \
+    && expect_absent "$output" "Passed on a retry:" "the summary"; then
     pass
 fi
 

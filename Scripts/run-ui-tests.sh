@@ -81,6 +81,19 @@ default_test="testReviewsSnappedRouteAfterStopping"
 default_parallel_workers=3
 
 device="${OPENHIKES_SIMULATOR_NAME:-iPhone 18 Pro}"
+# Where the build lands. Empty means Xcode's shared derived-data
+# directory, which is what one session wants and what every command in this
+# repository has always used.
+#
+# It is an option because that directory is the one thing two runs cannot
+# quietly share. A second `xcodebuild` against the same project and the same
+# derived data waits on the first one's build lock, prints nothing while it
+# waits, and cannot be told apart from a hang: one run here compiled the UI
+# bundle and then produced no test result for the better part of an hour,
+# with no error and no output. `--device` is that answer for the simulator;
+# this is it for the build, and the pair is what makes a second session on
+# this machine possible at all.
+derived_data="${OPENHIKES_DERIVED_DATA:-}"
 test_name="$default_test"
 suite=""
 run_all=false
@@ -93,6 +106,18 @@ retry_set=false
 result_bundle=""
 parallel_workers=""
 serial=false
+# Whether this run claims the simulator it resolves. See
+# `acquire_device_lock`.
+device_lock=true
+# Where those claims are recorded: outside the repository, because a lock
+# file inside it is lintable material and would reach the working tree, and
+# under a stable per-user path rather than $TMPDIR, because the run it has to
+# be visible to is in another terminal. The variable exists so
+# Scripts/run-script-tests.sh can exercise this without writing into the home
+# directory of whoever runs it.
+device_lock_root="${OPENHIKES_UI_TEST_LOCK_DIR:-${HOME:-/tmp}/Library/Caches/OpenHikes/ui-test-locks}"
+# The lock this run holds, so the cleanup trap knows whether to release one.
+held_device_lock=""
 
 usage() {
     cat <<EOF
@@ -111,6 +136,12 @@ and pass when the machine is quiet — see the comment on that list, including
 why a test that fails serially must not be added to it.
 Pinned now: ${serial_tests[*]}
 
+Two runs cannot share a simulator, and they cannot share a derived-data
+directory either: the first collision arrives as tests killed mid-gesture, the
+second as a run that prints nothing for an hour. So a run claims the device it
+resolved and refuses to start on one another run holds. Give a second session
+its own with --device, and its own build with --derived-data.
+
 Options:
   --device <name|udid>    Simulator name or UDID (default: $device)
   --suite <name>          Test class to run (default: $default_suite)
@@ -121,6 +152,8 @@ Options:
   --parallel [N]          Override the worker count (needs --all without --suite)
   --serial                Run in one simulator, the way --all used to
   --result-bundle <path>  Write an .xcresult bundle for inspection
+  --derived-data <path>   Build here instead of Xcode's shared derived data
+  --no-device-lock        Start even when another run holds this simulator
   --verbose               Show the full xcodebuild output
   --list                  List the available test methods
   --dry-run               Print the xcodebuild invocation and exit
@@ -132,6 +165,7 @@ Examples:
   Scripts/run-ui-tests.sh --suite AccessibilityUITests --all
   Scripts/run-ui-tests.sh --all --device 'iPhone 17'
   Scripts/run-ui-tests.sh --all --serial
+  Scripts/run-ui-tests.sh --all --device OH-second --derived-data .dd-second
 EOF
 }
 
@@ -174,6 +208,64 @@ suite_for_test() {
             return 0
         fi
     done < <(list_tests)
+    return 1
+}
+
+# Says who has the device, in the terms the collision would otherwise be
+# reported in — which is to say, not at all.
+refuse_busy_device() {
+    local holder="$1"
+    echo "Another UI-test run (pid $holder) is using $device ($device_udid)." >&2
+    echo "Two xcodebuild runs cannot share a simulator: the second install tears" >&2
+    echo "the first run's app out from under it, and the failure lands on" >&2
+    echo "whichever test happened to be executing, with no assertion and no" >&2
+    echo "diagnostic." >&2
+    echo "Wait for that run, pass --device <name|udid> to use another simulator," >&2
+    echo "or --no-device-lock to start anyway." >&2
+}
+
+# Claims $device_udid for this run, or explains who has it and fails.
+#
+# `mkdir` rather than a test followed by a write, because creating a directory
+# is one atomic step and failing it is how the second run finds out. A test and
+# a write are two steps with a window between them, and that window is the case
+# this exists for: two runs started seconds apart.
+#
+# The PID inside is what makes a lock recoverable rather than permanent. A run
+# killed part-way leaves its claim behind — the same way it leaves simulator
+# clones behind — so a holder that is gone is cleared and the claim retaken,
+# and only a holder that is still alive refuses the run.
+#
+# The guard is a courtesy and the tests are the job: a machine that cannot
+# write the lock at all gets a warning and its run, not an error.
+acquire_device_lock() {
+    local lock="$device_lock_root/$device_udid.lock"
+    if ! mkdir -p "$device_lock_root" 2>/dev/null; then
+        echo "Could not record a device lock under $device_lock_root." >&2
+        echo "Continuing without one; nothing here will notice a second run." >&2
+        return 0
+    fi
+
+    if mkdir "$lock" 2>/dev/null; then
+        printf '%s\n' "$$" > "$lock/pid"
+        held_device_lock="$lock"
+        return 0
+    fi
+
+    local holder
+    holder="$(cat "$lock/pid" 2>/dev/null || true)"
+    if [[ -n "$holder" ]] && kill -0 "$holder" 2>/dev/null; then
+        refuse_busy_device "$holder"
+        return 1
+    fi
+
+    rm -rf "$lock"
+    if mkdir "$lock" 2>/dev/null; then
+        printf '%s\n' "$$" > "$lock/pid"
+        held_device_lock="$lock"
+        return 0
+    fi
+    refuse_busy_device "${holder:-unknown}"
     return 1
 }
 
@@ -231,6 +323,15 @@ while [[ $# -gt 0 ]]; do
             require_value "$1" "${2:-}"
             result_bundle="$2"
             shift 2
+            ;;
+        --derived-data)
+            require_value "$1" "${2:-}"
+            derived_data="$2"
+            shift 2
+            ;;
+        --no-device-lock)
+            device_lock=false
+            shift
             ;;
         --verbose)
             verbose=true
@@ -315,6 +416,20 @@ fi
 if [[ "$retry_set" != true && "$run_all" == true && -z "$suite" && "$serial" != true ]]; then
     retry=true
 fi
+
+# Both things a run leaves on the machine, released together and early: the
+# trap is installed before either is taken, so there is no window in which this
+# holds a device lock and has nothing to give it back.
+raw_log=""
+release_run_state() {
+    if [[ -n "$raw_log" ]]; then
+        rm -f "$raw_log" || true
+    fi
+    if [[ -n "$held_device_lock" ]]; then
+        rm -rf "$held_device_lock" || true
+    fi
+}
+trap release_run_state EXIT
 
 command -v xcodebuild >/dev/null 2>&1 || {
     echo "xcodebuild is required. Install Xcode first." >&2
@@ -403,6 +518,9 @@ base_command=(
     # CI runner — cannot build the app target without this.
     -skipPackagePluginValidation
 )
+if [[ -n "$derived_data" ]]; then
+    base_command+=(-derivedDataPath "$derived_data")
+fi
 if [[ "$retry" == true ]]; then
     base_command+=(-retry-tests-on-failure -test-iterations 2)
 fi
@@ -440,6 +558,9 @@ fi
 
 echo "Scheme: $scheme"
 echo "Simulator: $device ($device_udid)"
+if [[ -n "$derived_data" ]]; then
+    echo "Derived data: $derived_data"
+fi
 echo "Running: ${only_testing[*]#-only-testing:}"
 if [[ -n "$parallel_workers" ]]; then
     echo "Workers: $parallel_workers simulator clones"
@@ -455,6 +576,13 @@ if [[ "$dry_run" == true ]]; then
         printf '\n'
     fi
     exit 0
+fi
+
+# Past the dry run deliberately: a mode whose whole job is to print what would
+# happen must not claim a device, and it touches nothing that a concurrent run
+# could disturb.
+if [[ "$device_lock" == true ]] && ! acquire_device_lock; then
+    exit 2
 fi
 
 # xcodebuild refuses to write over an existing bundle, so a stale one has to go
@@ -475,11 +603,78 @@ xcrun simctl location "$device_udid" clear >/dev/null 2>&1 || true
 # Created once and reused by both passes: what it is for is the output of the
 # invocation that just ran, and the second pass has already had the first one's
 # read out of it.
-raw_log=""
 if [[ "$verbose" != true ]]; then
     raw_log="$(mktemp -t openhikes-ui-tests)"
-    trap 'rm -f "$raw_log"' EXIT
 fi
+
+# The tests a pass ended up failing, and the ones that only passed on a second
+# attempt, named together underneath it.
+#
+# A run's verdict arrives as an exit code and one trailing sentence. What the
+# formatter prints on the way there is a tick per test and a single mark for a
+# failure, so a hundred green lines can carry one red one nobody sees — which
+# is exactly how two red tests sat on `main` for days, each found by somebody
+# reading a result bundle rather than the run. A parallel run makes it worse
+# rather than better: three clones write into one terminal, interleaved.
+#
+# The retried ones are printed on a green run too, and over time that is the
+# more useful half. `-retry-tests-on-failure` makes a test that failed once and
+# passed once indistinguishable from one that always passes, which is how a
+# suite fills up with tests that only work on the second go.
+print_test_outcomes() {
+    local raw_log="$1"
+
+    [[ -f "$raw_log" ]] || return 0
+
+    # xcodebuild has two spellings for this, and they share nothing but the
+    # words:
+    #
+    #   Test Case '-[OpenHikesUITests.RecordingUITests testSomething]' passed (12.0 seconds).
+    #   Test case 'RecordingUITests.testSomething()' passed on 'Clone 1 of X' (12.0 seconds).
+    #
+    # The first is what a serial run prints; the second is what a parallel one
+    # does, in different case, with no bundle, no brackets and the method
+    # carrying its own parentheses. Both are reduced to
+    # `RecordingUITests/testSomething passed`.
+    #
+    # Measured rather than assumed, and the measurement is the reason this
+    # reads both: one serial run of this bundle printed six of the first form
+    # and none of the second, and a parallel one fifteen of the second and none
+    # of the first. A summary that knew only the serial spelling would be
+    # silent in exactly the run it exists for — which is also why the fallback
+    # output filter in lib/xcodebuild-output.sh shows no test lines at all in a
+    # parallel run: its pattern is the capitalised one.
+    local outcomes
+    outcomes="$(
+        sed -nE \
+            -e "s/.*Test Case '-\\[[A-Za-z0-9_]+\\.([A-Za-z0-9_]+) ([A-Za-z0-9_]+)\\]' (passed|failed).*/\\1\\/\\2 \\3/p" \
+            -e "s/.*Test case '([A-Za-z0-9_]+)\\.([A-Za-z0-9_]+)\\(\\)' (passed|failed).*/\\1\\/\\2 \\3/p" \
+            "$raw_log"
+    )"
+    [[ -n "$outcomes" ]] || return 0
+
+    # Every verdict a test got, gathered under its name: one with no `passed`
+    # among them failed, and one with both was retried.
+    local failed retried
+    failed="$(
+        printf '%s\n' "$outcomes" \
+            | awk '{ seen[$1] = seen[$1] " " $2 }
+                   END { for (test in seen) if (seen[test] !~ /passed/) print "  " test }' \
+            | sort
+    )"
+    retried="$(
+        printf '%s\n' "$outcomes" \
+            | awk '{ seen[$1] = seen[$1] " " $2 }
+                   END {
+                       for (test in seen)
+                           if (seen[test] ~ /passed/ && seen[test] ~ /failed/) print "  " test
+                   }' \
+            | sort
+    )"
+
+    [[ -z "$failed" ]] || printf '\nFailed:\n%s\n' "$failed"
+    [[ -z "$retried" ]] || printf '\nPassed on a retry:\n%s\n' "$retried"
+}
 
 # One xcodebuild, formatted or raw.
 #
@@ -503,6 +698,7 @@ run_xcodebuild() {
     raw_log_status="${statuses[1]}"
 
     print_measurement_lines "$raw_log"
+    print_test_outcomes "$raw_log"
 }
 
 status=0

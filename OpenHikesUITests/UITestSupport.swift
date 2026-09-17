@@ -707,6 +707,41 @@ extension XCTestCase {
         back.tap()
     }
 
+    /// Replaces everything in a text field, retrying the select-all a busy
+    /// machine drops.
+    ///
+    /// Three taps are select-all when the system reads them as one gesture and
+    /// three carets when it does not, and which one happens depends on how
+    /// loaded the machine is. Under a three-clone `--all` the new name is
+    /// therefore *inserted* into the old one and the screen ends up titled
+    /// "Thumsee LoopRenamed Route (fast, simulated)" — a failure that reads as
+    /// a broken rename and is nothing of the sort. It was seen four times
+    /// across two branches under load and never once on a quiet machine.
+    ///
+    /// So the gesture is not trusted and its effect is. This is the *No fixed
+    /// sleeps as barriers* rule pointed at a gesture rather than a wait: what
+    /// is asserted is what the field holds, and a tap that did not take is
+    /// simply made again. A field that already reads `text` costs one query
+    /// and no taps.
+    ///
+    /// Not usable to *empty* a field whose placeholder is what it draws when
+    /// empty — the value read back is then the placeholder, and a clear cannot
+    /// be told from a fill. Replacing is the case that reads back
+    /// unambiguously, and is what both callers here do.
+    @MainActor
+    @discardableResult func replaceText(
+        of field: XCUIElement,
+        with text: String,
+        timeout: TimeInterval = UITestTimeout.navigation
+    ) -> Bool {
+        waitUntil(timeout: timeout) {
+            if field.value as? String == text { return true }
+            field.tap(withNumberOfTaps: 3, numberOfTouches: 1)
+            field.typeText(text)
+            return field.value as? String == text
+        }
+    }
+
     /// Confirms an edit through the keyboard's own Done button, falling back
     /// to a return key.
     ///
@@ -741,11 +776,14 @@ extension XCTestCase {
             field.waitForExistence(timeout: UITestTimeout.navigation)
         )
         field.tap()
-        if let draft = field.value as? String, !draft.isEmpty {
-            field.tap(withNumberOfTaps: 3, numberOfTouches: 1)
-        }
-        field.typeText(name)
-        XCTAssertEqual(field.value as? String, name)
+        // The prompt opens holding a suggested title, so this replaces rather
+        // than types — and the replacement is waited on rather than assumed,
+        // for the reason `replaceText(of:with:)` gives.
+        XCTAssertTrue(
+            replaceText(of: field, with: name),
+            "the name field should hold \"\(name)\", said "
+                + "\"\(field.value as? String ?? "")\""
+        )
         namePrompt.buttons["Save"].tap()
     }
 }

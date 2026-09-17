@@ -73,7 +73,16 @@ reasons, and pinning it would only make the same failure take longer to find. Re
 a branch cut before a fix that made a suite faster still pays the old cost.
 
 Check the exit code rather than the printed summary: `xcodebuild` will relaunch
-a crashed test host and still print a green summary.
+a crashed test host and still print a green summary. What the script does print
+at the end of each pass is the tests that failed, and the ones that only passed
+on a retry — read those before suspecting the branch.
+
+**A second session on this machine needs its own of both.** Two runs cannot
+share a simulator, and they cannot share a derived-data directory either: the
+first collision kills tests mid-gesture with no diagnostic, the second stalls
+silently for as long as it is left to. So a run claims the simulator it
+resolved and refuses to start on one another run holds; `--device <name|udid>`
+gives this one its own device and `--derived-data <path>` its own build.
 
 ## House rules an agent trips over first
 
