@@ -210,26 +210,26 @@ struct LibraryPhotoMatchTests {
             HikePhotoTimeline.graceInterval * 2
         )
 
-        let matches = LibraryPhotoMatcher.matches(
-            assets: [
-                PhotoLibraryAsset(localIdentifier: "late", createdAt: late),
-            ],
+        let matches = HikePhotoSearchPlan(
             timeline: timeline,
+            walks: [],
             route: Self.route
-        )
+        ).matches(assets: [PhotoLibraryAsset(localIdentifier: "late", createdAt: late)])
 
         #expect(matches.isEmpty)
     }
 
     @Test("a photo already imported is not offered again")
     func alreadyImportedAssetsAreSkipped() throws {
-        let matches = LibraryPhotoMatcher.matches(
+        let matches = HikePhotoSearchPlan(
+            timeline: try Self.timeline(),
+            walks: [],
+            route: Self.route
+        ).matches(
             assets: [
                 Self.asset("kept", atStep: 2),
                 Self.asset("taken", atStep: 4),
             ],
-            timeline: try Self.timeline(),
-            route: Self.route,
             alreadyImported: ["taken"]
         )
 
@@ -238,14 +238,16 @@ struct LibraryPhotoMatchTests {
 
     @Test("matches come back in the order the photos were taken")
     func matchesAreOrderedByCaptureTime() throws {
-        let matches = LibraryPhotoMatcher.matches(
+        let matches = HikePhotoSearchPlan(
+            timeline: try Self.timeline(),
+            walks: [],
+            route: Self.route
+        ).matches(
             assets: [
                 Self.asset("third", atStep: 7),
                 Self.asset("first", atStep: 1),
                 Self.asset("second", atStep: 4),
-            ],
-            timeline: try Self.timeline(),
-            route: Self.route
+            ]
         )
 
         #expect(matches.map(\.id) == ["first", "second", "third"])

@@ -12,10 +12,10 @@
 //
 //  Three things are worth stating about the order it does its work in.
 //
-//  Permission is asked for after the timeline is built, not before. A hike
-//  whose route carries no timestamps has nothing to match against, and
-//  prompting for access to somebody's photo library in order to then tell them
-//  the feature cannot work is the worst possible sequence.
+//  Permission is asked for after the plan is built, not before. A hike with
+//  neither a stamped route nor a walk along it has nothing to match against,
+//  and prompting for access to somebody's photo library in order to then tell
+//  them the feature cannot work is the worst possible sequence.
 //
 //  Nothing is imported without being shown first. The match is a good guess
 //  and is presented as one: the user sees each picture, sees how it was
@@ -64,8 +64,9 @@ final class PhotoDiscoveryController {
         case importing(completed: Int, total: Int)
         case results
         case searching
-        /// The route carries no timestamps, so there is no clock to look a
-        /// photograph up against. Distinct from ``empty``, which means the
+        /// Neither the route nor any walk along it can place a photograph:
+        /// the points carry no timestamps and the trail has never been
+        /// walked with this app. Distinct from ``empty``, which means the
         /// question was asked and came back with nothing: here it was never
         /// askable, and the sheet says so rather than reporting a search it
         /// did not run.
@@ -118,7 +119,8 @@ final class PhotoDiscoveryController {
     /// hike's imported identifiers, so anything already attached is skipped
     /// rather than offered twice.
     func search(in hike: Hike) async {
-        guard let timeline = hike.photoTimeline else {
+        let plan = hike.photoSearchPlan
+        guard !plan.isEmpty else {
             phase = .unsupported
             return
         }
@@ -135,7 +137,7 @@ final class PhotoDiscoveryController {
         }
         guard !Task.isCancelled else { return }
 
-        let assets = await reader.assets(takenIn: timeline.searchWindow)
+        let assets = await libraryAssets(in: plan.searchWindows)
         guard !Task.isCancelled, hike.isAttached else { return }
 
         // Asked again after the fetch, not only before it. The fetch is a
@@ -151,15 +153,42 @@ final class PhotoDiscoveryController {
             return
         }
 
-        let found = LibraryPhotoMatcher.matches(
+        let found = plan.matches(
             assets: assets,
-            timeline: timeline,
-            route: hike.route,
             alreadyImported: hike.importedPhotoAssetIdentifiers
         )
         matches = found
         selection = Set(found.map(\.id))
         phase = found.isEmpty ? .empty : .results
+    }
+
+    /// Everything the library holds in any of `windows`, each asset once.
+    ///
+    /// One fetch per window rather than one across the lot. The windows are
+    /// already merged, so what is left between two of them is genuinely
+    /// unrelated time — a trail imported from a track recorded years ago and
+    /// walked this morning has two, and the span between them is a query for
+    /// every photograph the user owns.
+    ///
+    /// Deduplicated by the library's own identifier rather than by the
+    /// moment, which is the same reason ``HikePhoto/assetLocalIdentifier``
+    /// exists: two frames of a burst share a second. The windows are disjoint
+    /// once merged, so nothing should arrive twice — but what comes back here
+    /// is whatever a reader answered, and one photograph offered as two rows
+    /// is a photograph the user would import twice.
+    private func libraryAssets(
+        in windows: [ClosedRange<Date>]
+    ) async -> [PhotoLibraryAsset] {
+        var found: [PhotoLibraryAsset] = []
+        var seen: Set<String> = []
+        for window in windows {
+            guard !Task.isCancelled else { return found }
+            for asset in await reader.assets(takenIn: window)
+            where seen.insert(asset.localIdentifier).inserted {
+                found.append(asset)
+            }
+        }
+        return found
     }
 
     /// Hands the user the system's own picker for the shared subset, then

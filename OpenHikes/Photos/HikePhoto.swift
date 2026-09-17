@@ -37,8 +37,14 @@ nonisolated enum PhotoMatchEvidence: String, Codable, Hashable, Sendable {
     /// The moment the photo was taken, against the route's own timestamps.
     /// The asset carried no position of its own.
     case time = "time"
-    /// Both, and they agreed: the strongest of the three.
+    /// Both, and they agreed: the strongest of the four.
     case timeAndPlace = "timeAndPlace"
+    /// A walk along this trail, rather than the trail's own clock: the photo
+    /// was taken between the walk's first match and its last, and is placed at
+    /// the point the walk had evenly got to by then. The weakest of the four
+    /// and the only one available on an imported route, whose points carry
+    /// somebody else's timestamps or none — see ``HikeWalkPhotoTimeline``.
+    case walk = "walk"
 }
 
 /// One photo attached to a hike.

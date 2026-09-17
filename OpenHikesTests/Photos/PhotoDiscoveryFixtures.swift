@@ -13,6 +13,7 @@
 //  and a fixture built in one must be readable from another.
 //
 
+import CoreLocation
 import Foundation
 @testable import OpenHikes
 import Synchronization
@@ -44,6 +45,42 @@ nonisolated enum PhotoDiscoveryFixture {
         )
     }
 
+    /// The same ten points with no clock on them: a GPX somebody else
+    /// recorded or planned, which is what a trail in this app usually is.
+    static let unstampedRoute: [RouteCoordinate] = route.map { point in
+        RouteCoordinate(
+            latitude: point.latitude,
+            longitude: point.longitude,
+            elevation: nil,
+            timestamp: nil
+        )
+    }
+
+    /// A finished walk along a route, between two moments expressed in route
+    /// steps and covering one stretch of it in metres.
+    ///
+    /// Inserted by the caller, which is also where the relationship to the
+    /// hike is set: a walk reaches its hike through `hike`, and a walk built
+    /// without one would be a row no ``Hike/walkPhotoTimelines`` ever sees.
+    static func walk(
+        hikeID: UUID,
+        fromStep: Double,
+        toStep: Double,
+        covering stretch: ClosedRange<Double>,
+        routeDistanceMeters: Double
+    ) -> HikeWalk {
+        HikeWalk(
+            hikeID: hikeID,
+            startedAt: date(atStep: fromStep),
+            endedAt: date(atStep: toStep),
+            activeSeconds: (toStep - fromStep) * stepSeconds,
+            coveredIntervals: [stretch.lowerBound, stretch.upperBound],
+            furthestDistanceMeters: stretch.upperBound,
+            routeDistanceMeters: routeDistanceMeters,
+            endReason: .ended
+        )
+    }
+
     /// A moment expressed in route points rather than in seconds, so a test
     /// says where on the walk it means rather than doing the arithmetic.
     static func date(atStep step: Double) -> Date {
@@ -52,11 +89,21 @@ nonisolated enum PhotoDiscoveryFixture {
 
     static func asset(
         _ identifier: String,
-        atStep step: Double
+        atStep step: Double,
+        coordinate: CLLocationCoordinate2D? = nil
     ) -> PhotoLibraryAsset {
         PhotoLibraryAsset(
             localIdentifier: identifier,
-            createdAt: date(atStep: step)
+            createdAt: date(atStep: step),
+            coordinate: coordinate
+        )
+    }
+
+    /// The route point `step` along, as the camera would have recorded it.
+    static func coordinate(atStep step: Double) -> CLLocationCoordinate2D {
+        CLLocationCoordinate2D(
+            latitude: latitude + latitudeStep * step,
+            longitude: longitude
         )
     }
 

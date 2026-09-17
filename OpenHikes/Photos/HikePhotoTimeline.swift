@@ -192,8 +192,13 @@ extension Hike {
 
     /// Whether it is worth offering to look through the photo library for
     /// pictures of this walk.
+    ///
+    /// A stamped route is one way to be able to answer and a finished walk
+    /// along the trail is the other — see ``HikePhotoSearchPlan``. An
+    /// imported GPX has neither until somebody walks it, which is what the
+    /// caption under the button says.
     var canMatchLibraryPhotos: Bool {
-        route.contains { $0.timestamp != nil }
+        route.contains { $0.timestamp != nil } || !walkPhotoTimelines.isEmpty
     }
 
     /// The library assets already imported into this hike, so a second scan
