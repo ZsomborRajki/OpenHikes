@@ -63,6 +63,21 @@ struct RouteLinePatternPicker: View {
                 .frame(height: swatchHeight)
                 .frame(maxWidth: .infinity)
                 .padding(.vertical, 6)
+                // The selection border goes *above* `.glassSurface` in the
+                // modifier order, which puts it inside the glass — it is drawn
+                // as content, and the glass is drawn behind it. Ordered the
+                // other way it is a stroke over a `glassEffect` inside a
+                // `GlassEffectContainer`, and the container's own render pass
+                // takes it down to the weight of the hairline every unselected
+                // swatch already carries: the 2 pt tinted border was there and
+                // could not be told from no border at all.
+                .overlay {
+                    RoundedRectangle(cornerRadius: Self.tileCornerRadius)
+                        .strokeBorder(
+                            isSelected ? hike.tintOpaque : .clear,
+                            lineWidth: 2
+                        )
+                }
                 // Plain glass under every swatch, selected or not. Tinting the
                 // selected one filled it with the route's own colour — the
                 // exact colour the line inside it is drawn in — so the swatch
@@ -74,13 +89,6 @@ struct RouteLinePatternPicker: View {
                     .regular.interactive(),
                     in: .rect(cornerRadius: Self.tileCornerRadius)
                 )
-                .overlay {
-                    RoundedRectangle(cornerRadius: Self.tileCornerRadius)
-                        .strokeBorder(
-                            isSelected ? hike.tintOpaque : .clear,
-                            lineWidth: 2
-                        )
-                }
         }
         .buttonStyle(.plain)
         // On the leaf the user actually taps: a container identifier would be
