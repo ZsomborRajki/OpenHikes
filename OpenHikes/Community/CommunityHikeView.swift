@@ -903,7 +903,10 @@ private extension CommunityHikeView {
                 .frame(maxWidth: .infinity, alignment: .leading)
                 .accessibilityAddTraits(.isHeader)
             ScrollView(.horizontal, showsIndicators: false) {
-                HStack(spacing: 8) {
+                // Lazy for the reason ``HikePhotoSection/gallery(_:)`` is: an eager
+                // stack starts a decode for every tile at once, for a row that shows
+                // a handful.
+                LazyHStack(spacing: 8) {
                     ForEach(photos) { photo in
                         Button {
                             onOpenPhoto(photos, photo.index)

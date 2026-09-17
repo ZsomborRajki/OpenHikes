@@ -18,7 +18,6 @@ struct MapSheet: View {
     /// stay two shapes at rest and blend as the layout tightens.
     private static let chromeGlassSpacing: CGFloat = 8
 
-    @Binding var searchText: String
     @Binding var selectedHike: Hike?
     /// Where the sheet rests and what is pushed into it. Owned by
     /// `OpenHikesView` rather than this view, so a widget tap can push a hike's
@@ -30,6 +29,27 @@ struct MapSheet: View {
     /// to ask what's already on screen before deciding to navigate —
     /// `NavigationPath` can be appended to but never read back.
     var presentation: SheetPresentation
+
+    /// What is typed in the field below, which lives on ``presentation``
+    /// rather than here or in `OpenHikesView`.
+    ///
+    /// It was `@State` out there, handed down as a `@Binding`, and `@State`
+    /// invalidates the view that declares it whether or not that view's body
+    /// reads the value — so every keystroke re-evaluated the root view: the
+    /// map, the side panel, the three alerts and the six `onChange` handlers
+    /// attached alongside them. None of that draws a character of it. See
+    /// ``SheetPresentation/searchText`` for why it is stored raw there when
+    /// the path and the detent are not.
+    ///
+    /// Forwarded rather than read at each site so this view keeps writing the
+    /// text the way it always did — clearing it on a tapped hike, filling it
+    /// from a tapped completion — and `nonmutating` because the storage is a
+    /// reference this struct merely points at.
+    private var searchText: String {
+        get { presentation.searchText }
+        nonmutating set { presentation.searchText = newValue }
+    }
+
     var highlight: RouteHighlight
     /// Handed down so a walk's summary can draw what it covered on the map.
     /// See ``WalkHighlight``.
@@ -240,7 +260,7 @@ struct MapSheet: View {
                 .foregroundStyle(.secondary)
                 .accessibilityHidden(true)
 
-            TextField("Search Maps", text: $searchText)
+            TextField("Search Maps", text: presentation.searchTextBinding)
                 .accessibilityIdentifier("map-search")
                 .focused($searchFocused)
                 .autocorrectionDisabled()

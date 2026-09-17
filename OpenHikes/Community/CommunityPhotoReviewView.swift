@@ -225,7 +225,10 @@ private extension CommunityPhotoReviewView {
                     .accessibilityIdentifier("photo-review-empty")
             } else {
                 ScrollView(.horizontal, showsIndicators: false) {
-                    HStack(spacing: 12) {
+                    // Lazy for the reason ``HikePhotoSection/gallery(_:)`` is: an eager
+                    // stack starts a decode for every tile at once, for a row that shows
+                    // a handful.
+                    LazyHStack(spacing: 12) {
                         ForEach(
                             Array(contribution.photoFileURLs.enumerated()),
                             id: \.offset

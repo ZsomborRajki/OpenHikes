@@ -422,7 +422,14 @@ private extension CommunityReviewView {
     func photosSection(_ detail: CommunityHikeDetail) -> some View {
         Section {
             ScrollView(.horizontal, showsIndicators: false) {
-                HStack(spacing: 12) {
+                // Lazy for the reason ``HikePhotoSection/gallery(_:)`` is, and
+                // the most expensive instance of it: these tiles are
+                // `photoTileSize` across so a reviewer can actually judge a
+                // photograph, which makes each decode three times that in
+                // pixels — and an eager stack started every one of a
+                // submission's ``CommunityPublisher/maximumPhotos`` at once,
+                // for a row that shows two.
+                LazyHStack(spacing: 12) {
                     ForEach(Array(detail.photoFileURLs.enumerated()), id: \.offset) { index, url in
                         photoTile(at: index, url: url, removable: detail.hasEveryPhoto)
                     }

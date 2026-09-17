@@ -66,7 +66,10 @@ struct CommunitySharePhotoStrip: View {
     var body: some View {
         if !photos.isEmpty {
             ScrollView(.horizontal, showsIndicators: false) {
-                HStack(spacing: Self.tileSpacing) {
+                // Lazy for the reason ``HikePhotoSection/gallery(_:)`` is: an eager
+                // stack starts a decode for every tile at once, for a row that shows
+                // a handful.
+                LazyHStack(spacing: Self.tileSpacing) {
                     ForEach(photos) { photo in
                         tile(photo)
                     }
