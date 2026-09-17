@@ -40,6 +40,20 @@ struct RouteLinePatternPicker: View {
             .accessibilityElement(children: .ignore)
             .accessibilityLabel("Line style")
             .accessibilityValue(hike.routeLinePattern.title)
+            // Declared as text, because that is what it is. `children:
+            // .ignore` merges the pair into one node carrying no trait to say
+            // so, and `performAccessibilityAudit`'s hit-region check measures
+            // an untyped node as something a finger has to land on — so a
+            // caption nothing taps failed the audit at the 14.9 pt a
+            // `.caption` line is tall.
+            //
+            // The trait is the fix rather than the padding. Growing the row to
+            // the 44 pt floor — what ``minimumTapTarget()`` does for the
+            // offline-tiles caption, which shares its row with a Delete button
+            // and is that tall anyway — would hand a finger-sized target to
+            // something with nothing to activate, and push the swatches under
+            // it down by 29 pt to do it.
+            .accessibilityAddTraits(.isStaticText)
             .accessibilityIdentifier("route-pattern-caption")
             HStack(spacing: 6) {
                 GlassStack(spacing: Self.glassSpacing) {
