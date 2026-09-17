@@ -35,6 +35,18 @@ nonisolated enum SettingsKey {
     /// re-deriving it; absent means "no continuity reference yet", which is why
     /// it is removed rather than zeroed when the selection changes.
     static let lastMatchedDistance = "trailTracking.lastMatchedDistance"
+    /// Whether the app is certain CoreLocation holds no trail-proximity
+    /// condition for it.
+    ///
+    /// Not a preference — a fact about a store this app cannot read. The
+    /// conditions a `CLMonitor` holds outlive the process that added them, so
+    /// "is one registered?" can only be answered by opening the monitor, which
+    /// is a `CLLocationManager` and an XPC connection. This records the one
+    /// answer worth caching: once a launch has removed whatever was there, a
+    /// launch with Background Trail Tracking off never needs to ask again. Set
+    /// back to `false` by anything that registers a condition. Absent means
+    /// "unknown", which is why it is only ever read as "cleared or not".
+    static let trailRegionCleared = "trailTracking.regionCleared"
     /// The last weather reading and the subject it was for, as JSON. Written
     /// by ``WeatherReadingStore`` on every successful fetch and read once at
     /// launch, so the badge is on screen before the first network round trip

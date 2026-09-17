@@ -14,6 +14,13 @@
 //  authorization, and only once the user turns on Background Trail Tracking
 //  in Settings.
 //
+//  Separate manager, shared *registration*, and the difference is the whole of
+//  ``SignificantLocationRegistration``: significant-change monitoring
+//  registers the app rather than the manager it was asked of, so the `start`
+//  and `stop` calls below do not reach CoreLocation directly. They state this
+//  feature's wish, and the registration decides — which is what stops
+//  `syncMonitoring` standing the weather badge's feed down along with this one.
+//
 //  Significant-change monitoring (unlike continuous background updates)
 //  relies on neither `allowsBackgroundLocationUpdates` nor the "Location
 //  updates" background mode — the app declares both, but only the hike
@@ -231,7 +238,7 @@ final class BackgroundTrailTracker: NSObject {
         // Arming here costs nothing the system was not going to deliver
         // anyway: the wake that started this launch is already paid for.
         syncMonitoring()
-        startWatchingTrailRegion()
+        syncTrailRegion()
     }
 
     // MARK: Settings toggle
@@ -239,10 +246,25 @@ final class BackgroundTrailTracker: NSObject {
     func setEnabled(_ enabled: Bool) {
         guard enabled else {
             monitor.stopSignificantLocationUpdates()
+            // A registered condition outlives the process that added it, so
+            // turning the feature off has to *remove* it rather than merely
+            // stop arming on what it says. Without this the switch left a
+            // standing geofence — and the background launches it buys — behind
+            // a feature the hiker had turned off, which is the one thing a
+            // switch like this must not do.
+            clearTrailRegion()
             return
         }
         if monitor.isAlwaysAuthorized {
             syncMonitoring(trackingEnabled: true)
+            // The watch, but not the condition: the region is registered by a
+            // selection, and the selection that would have registered this one
+            // happened while the feature was off. The next one re-registers
+            // it, and so does the next launch, which restores the stored
+            // selection. Until then the gate reads `unknown` and arms, which
+            // is the fail-open direction everything else here takes.
+            defaults.set(false, forKey: SettingsKey.trailRegionCleared)
+            startWatchingTrailRegion()
         } else if monitor.canRequestAlwaysAccess {
             // Asked for even with no hike selected: the toggle is a standing
             // preference, and the grant is a trip out of the app the user
@@ -251,41 +273,6 @@ final class BackgroundTrailTracker: NSObject {
             monitor.requestAlwaysAccess()
         }
         // Denied or restricted: nothing to ask and nothing to start.
-    }
-
-    /// Brings monitoring in line with the one condition under which it is
-    /// worth having armed.
-    ///
-    /// Three conditions, not two: the selection belongs here as much as the
-    /// toggle and the authorization do. Armed without a hike, every
-    /// significant change — one every few hundred metres of driving — wakes
-    /// or relaunches the app only for `handleBackgroundFix` to return at its
-    /// `trackedHikeID` guard, having already paid for the launch. A long
-    /// drive's worth of those is precisely the usage iOS's periodic
-    /// background-location reminder exists to surface, so an idle armed feed
-    /// costs the user prompts as well as battery.
-    ///
-    /// Every arming site goes through here rather than calling the monitor
-    /// directly, so the condition can't drift apart between them — the bug
-    /// this replaces was three `start` sites agreeing with each other and
-    /// none of them agreeing with the fix handler. Both calls are idempotent,
-    /// so re-stating the state monitoring is already in is free.
-    ///
-    /// - Parameter trackingEnabled: the settings toggle's value. `setEnabled`
-    ///   passes its own argument, so arming doesn't depend on whether the
-    ///   `@AppStorage` binding behind the switch has written the new value yet.
-    private func syncMonitoring(trackingEnabled: Bool) {
-        if trackingEnabled, monitor.isAlwaysAuthorized, trackedHikeID != nil, isNearTrackedTrail {
-            monitor.startSignificantLocationUpdates()
-        } else {
-            monitor.stopSignificantLocationUpdates()
-        }
-    }
-
-    /// The same, for the callers with no toggle value in hand — a launch, an
-    /// authorization change, a selection — which read the stored one.
-    private func syncMonitoring() {
-        syncMonitoring(trackingEnabled: defaults.bool(forKey: SettingsKey.backgroundTrackingEnabled))
     }
 
     // MARK: Selection
@@ -340,7 +327,14 @@ final class BackgroundTrailTracker: NSObject {
                 // condition comes down whether or not the store write lands:
                 // a registration for a trail nobody has open is exactly the
                 // standing wake this gate exists to end.
-                await self?.regionMonitor.setRegion(nil)
+                //
+                // Skipped outright when the feature is off, because then there
+                // is nothing registered to take down and asking costs a
+                // `CLLocationManager` and an XPC connection for an answer that
+                // cannot be anything else — see ``syncTrailRegion()``.
+                if self?.wantsTrailRegion == true {
+                    await self?.regionMonitor.setRegion(nil)
+                }
                 guard let self,
                       await snapshotWriter.clear(ifCurrent: revision),
                       selectionRevision == revision,
@@ -363,13 +357,27 @@ final class BackgroundTrailTracker: NSObject {
             // — the enclosing box over a five-hour recording's twenty thousand
             // points is a sort, and the tap that selected the trail has a
             // frame to make.
-            let region = await Self.offMainThread { TrailRegion(route: input.route.map(\.clCoordinate)) }
-            if let self, !Task.isCancelled, selectionRevision == revision, trackedHikeID == input.hikeID {
-                await regionMonitor.setRegion(region)
-                // The system starts a freshly registered condition at unknown
-                // whatever it said about the last one, and so does this.
-                regionState = .unknown
-                syncMonitoring()
+            //
+            // Only while the feature is on, and the whole block is skipped
+            // rather than only its `setRegion` call: the condition exists to
+            // answer one question — may background matching stand down? — and
+            // with the toggle off there is no background matching to stand
+            // down. Registering one then buys nothing and costs a standing
+            // geofence that survives a force-quit and can relaunch the app.
+            // Selecting a trail is not consent to that; the switch in Settings
+            // is. The snapshot below is not conditional on any of it — the
+            // widget draws the selected trail whatever the toggle says.
+            if self?.wantsTrailRegion == true {
+                let region = await Self.offMainThread { TrailRegion(route: input.route.map(\.clCoordinate)) }
+                if let self, !Task.isCancelled, selectionRevision == revision, trackedHikeID == input.hikeID {
+                    await regionMonitor.setRegion(region)
+                    defaults.set(false, forKey: SettingsKey.trailRegionCleared)
+                    // The system starts a freshly registered condition at
+                    // unknown whatever it said about the last one, and so
+                    // does this.
+                    regionState = .unknown
+                    syncMonitoring()
+                }
             }
             let snapshot = await Self.buildSnapshotOffMain(from: input, liveFix: nil)
             guard let snapshot,
@@ -1016,5 +1024,122 @@ extension BackgroundTrailTracker: CLLocationManagerDelegate {
     /// after `setEnabled(true)` asked for it, because the user has to leave
     /// the app and answer a system prompt in between — and stands it down
     /// again if the grant is later taken away in Settings.
-    private func authorizationChanged() { syncMonitoring() }
+    ///
+    /// The region follows the same grant: `CLMonitor` needs Always, so the
+    /// launch that asked for it registered nothing, and this is where that
+    /// becomes possible.
+    private func authorizationChanged() {
+        syncMonitoring()
+        syncTrailRegion()
+    }
+}
+
+// MARK: - The arming decision, and who is allowed to be armed
+
+// An extension because the class above is at its `type_body_length` limit;
+// same file, so nothing had to be opened up to reach its members. Everything
+// here is one question — should this app be registered for background
+// location, and may it register a region to help decide? — which is why the
+// four conditions behind it sit together rather than beside the state they
+// read.
+extension BackgroundTrailTracker {
+    /// Brings monitoring in line with the one condition under which it is
+    /// worth having armed.
+    ///
+    /// Three conditions, not two: the selection belongs here as much as the
+    /// toggle and the authorization do. Armed without a hike, every
+    /// significant change — one every few hundred metres of driving — wakes
+    /// or relaunches the app only for `handleBackgroundFix` to return at its
+    /// `trackedHikeID` guard, having already paid for the launch. A long
+    /// drive's worth of those is precisely the usage iOS's periodic
+    /// background-location reminder exists to surface, so an idle armed feed
+    /// costs the user prompts as well as battery.
+    ///
+    /// Every arming site goes through here rather than calling the monitor
+    /// directly, so the condition can't drift apart between them — the bug
+    /// this replaces was three `start` sites agreeing with each other and
+    /// none of them agreeing with the fix handler. Both calls are idempotent,
+    /// so re-stating the state monitoring is already in is free.
+    ///
+    /// - Parameter trackingEnabled: the settings toggle's value. `setEnabled`
+    ///   passes its own argument, so arming doesn't depend on whether the
+    ///   `@AppStorage` binding behind the switch has written the new value yet.
+    private func syncMonitoring(trackingEnabled: Bool) {
+        if trackingEnabled, monitor.isAlwaysAuthorized, trackedHikeID != nil, isNearTrackedTrail {
+            monitor.startSignificantLocationUpdates()
+        } else {
+            monitor.stopSignificantLocationUpdates()
+        }
+    }
+
+    /// The same, for the callers with no toggle value in hand — a launch, an
+    /// authorization change, a selection — which read the stored one.
+    private func syncMonitoring() {
+        syncMonitoring(trackingEnabled: isTrackingEnabled)
+    }
+
+    /// The settings toggle, as stored. Read rather than held so that a change
+    /// made in Settings is in force at the next question rather than at the
+    /// next launch.
+    private var isTrackingEnabled: Bool {
+        defaults.bool(forKey: SettingsKey.backgroundTrackingEnabled)
+    }
+
+    /// Whether a region is worth having registered at all.
+    ///
+    /// Both halves, because either one alone makes the condition useless: with
+    /// the toggle off nothing would ever arm on the answer, and without Always
+    /// `CLMonitor` cannot produce one. Registering anyway leaves a standing
+    /// geofence that nothing reads, nothing removes, and the system will still
+    /// relaunch this app for.
+    private var wantsTrailRegion: Bool {
+        isTrackingEnabled && monitor.isAlwaysAuthorized
+    }
+
+    /// Brings the registered region — and the watch on it — in line with the
+    /// settings toggle.
+    ///
+    /// The *down* half is the load-bearing one here, exactly as it is in
+    /// ``syncMonitoring()``, and for the same reason: a condition added to a
+    /// `CLMonitor` persists until it is removed, so it outlives the process
+    /// that added it and can relaunch this app. Nothing about it is written
+    /// down by this app, so CoreLocation's own store is the only record that
+    /// one exists, and a launch is the only place one left behind by a build
+    /// that registered it regardless of the toggle can be taken away.
+    ///
+    /// It asks once and remembers that it has. With the toggle off there is
+    /// nothing left to remove afterwards — turning the feature off clears the
+    /// condition where it is turned off, in ``setEnabled(_:)`` — and opening a
+    /// monitor to ask costs a `CLLocationManager` and an XPC connection for an
+    /// answer that cannot be anything else. So the steady state for a hiker
+    /// who does not use Background Trail Tracking is a launch that touches
+    /// `CLMonitor` not at all.
+    func syncTrailRegion() {
+        guard wantsTrailRegion else {
+            clearTrailRegionIfNotAlreadyCleared()
+            return
+        }
+        startWatchingTrailRegion()
+    }
+
+    /// Removes the registered condition and stops treating the system as a
+    /// source of proximity answers.
+    ///
+    /// ``TrailRegionState/unknown`` rather than leaving the last answer in
+    /// place: with nothing registered the system has nothing to say, and
+    /// unknown is both the honest value and the one that arms — which is what
+    /// keeps turning the feature off from *also* quietly turning the gate
+    /// against a hiker who turns it back on.
+    func clearTrailRegion() {
+        regionState = .unknown
+        regionWatchTask = Task { [weak self] in
+            await self?.regionMonitor.setRegion(nil)
+            self?.defaults.set(true, forKey: SettingsKey.trailRegionCleared)
+        }
+    }
+
+    private func clearTrailRegionIfNotAlreadyCleared() {
+        guard !defaults.bool(forKey: SettingsKey.trailRegionCleared) else { return }
+        clearTrailRegion()
+    }
 }

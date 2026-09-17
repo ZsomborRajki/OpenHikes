@@ -49,6 +49,7 @@ final class DormantLocationSource: ForegroundLocationSource, SignificantLocation
     // for hardware, an authorization prompt, or background relaunch.
     func requestWhenInUseAuthorization() { /* intentionally dormant */ }
     func startUpdatingLocation() { /* intentionally dormant */ }
+    func stopUpdatingLocation() { /* nothing was ever started */ }
     func requestAlwaysAccess() { /* intentionally dormant */ }
     func startSignificantLocationUpdates() { /* intentionally dormant */ }
     func stopSignificantLocationUpdates() { /* nothing was ever started */ }

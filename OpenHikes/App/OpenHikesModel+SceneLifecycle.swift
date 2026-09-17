@@ -48,6 +48,11 @@ extension OpenHikesModel {
         // app is not. See ``SignificantLocationFeed``.
         if AppLaunchEnvironment.usesLiveLocation {
             significantLocations.start()
+            // The other half of what `sceneWillResignActive` put down. Safe to
+            // call on a launch whose map has not appeared yet: `resume()` only
+            // restarts a feed `start()` has already asked for, so it cannot
+            // bring the authorization prompt forward.
+            locationManager.resume()
         }
         hikeRecorder.sceneDidBecomeActive()
         // A walk left in a pocket through the night has no fix to notice it
@@ -62,6 +67,13 @@ extension OpenHikesModel {
         // on the way to the background. The rest is after it returns, in
         // UIKit's app-switcher snapshot, which the app has no callback inside.
         significantLocations.stop()
+        // Same argument, one feed further in. Nothing this manager drives is
+        // on screen when the app is not, and it is the only location request
+        // in the app that no object's deallocation will ever end — see
+        // ``LocationManager/stop()``. The recorder's own feed is untouched by
+        // this: it is a different manager, and stopping it is
+        // `hikeRecorder`'s business rather than the scene's.
+        locationManager.stop()
         hikeRecorder.sceneWillResignActive()
         // Backstop: a launch whose map never appeared — a failed store, an
         // error screen — would otherwise leave the extended launch task open
