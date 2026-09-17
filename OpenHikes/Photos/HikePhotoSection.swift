@@ -177,7 +177,8 @@ struct HikePhotoSection: View {
             return String(
                 localized: """
                     This hike\u{2019}s route doesn\u{2019}t record when each point was \
-                    reached, so photos can\u{2019}t be matched to it by time.
+                    reached, so photos can\u{2019}t be matched to it by time. Walk it \
+                    with OpenHikes and they can.
                     """
             )
         }

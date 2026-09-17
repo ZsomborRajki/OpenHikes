@@ -32,6 +32,11 @@
 //  the photo is only kept if the asset's position is itself on this route —
 //  in which case the walk had a gap there, and the reading is all there is.
 //
+//  All of which assumes the route has a clock on it, and an imported one does
+//  not. The second entry point below places a photograph within a ``HikeWalk``
+//  instead — the same rules with a weaker authority behind them, and
+//  ``HikePhotoSearchPlan`` decides which of the two an asset is put to.
+//
 
 import CoreLocation
 import Foundation
@@ -114,45 +119,18 @@ nonisolated enum LibraryPhotoMatcher {
     /// walk is that it was taken during it, next to it.
     static let maximumOffRouteMeters: Double = 100
 
-    /// Every asset that belongs to this walk, in the order they were taken.
-    ///
-    /// - Parameters:
-    ///   - assets: What the library returned for ``HikePhotoTimeline/searchWindow``.
-    ///     Assets outside it are refused here too rather than assumed away —
-    ///     a stub, a future fetch that widens its predicate, or a library that
-    ///     rounds a creation date must not be able to smuggle one past.
-    ///   - timeline: The walk's time-to-place index.
-    ///   - route: The route itself, for the off-route test. Passed as the raw
-    ///     coordinates rather than a ``RouteProfile``: the question here is a
-    ///     distance to the nearest point, not a position along the line, and
-    ///     building a profile for it would be route-sized work for an answer
-    ///     that doesn't need it.
-    ///   - alreadyImported: Local identifiers already attached to the hike —
-    ///     see ``Hike/importedPhotoAssetIdentifiers``.
-    static func matches(
-        assets: [PhotoLibraryAsset],
-        timeline: HikePhotoTimeline,
-        route: [RouteCoordinate],
-        alreadyImported: Set<String> = []
-    ) -> [LibraryPhotoMatch] {
-        let window = timeline.searchWindow
-        return assets
-            .filter { asset in
-                window.contains(asset.createdAt)
-                    && !alreadyImported.contains(asset.localIdentifier)
-            }
-            .sorted { $0.createdAt < $1.createdAt }
-            .compactMap { asset in
-                match(asset, timeline: timeline, route: route)
-            }
-    }
-
     /// The rules in the header, applied to one asset.
+    ///
+    /// The window is re-tested here rather than left to the caller, because
+    /// the `.place` fallback below does not need the clock at all: a
+    /// photograph taken on this trail a year after the walk has a position on
+    /// the route and would be offered on the strength of it alone.
     static func match(
         _ asset: PhotoLibraryAsset,
         timeline: HikePhotoTimeline,
         route: [RouteCoordinate]
     ) -> LibraryPhotoMatch? {
+        guard timeline.searchWindow.contains(asset.createdAt) else { return nil }
         let position = timeline.position(at: asset.createdAt)
         guard let camera = asset.coordinate else {
             // Nothing to corroborate with, so the clock decides alone. A photo
@@ -202,6 +180,69 @@ nonisolated enum LibraryPhotoMatcher {
             // is an offset from. Reported as zero rather than as the distance
             // to the nearest one in time, which would read as a small number
             // describing a match that did not use it.
+            secondsFromFix: 0
+        )
+    }
+
+    /// The rules above, restated for a walk that has a window and a covered
+    /// stretch instead of a clock — see ``HikeWalkPhotoTimeline``.
+    ///
+    /// The shape is the same and the authority is not. A walk cannot say where
+    /// the hiker was at a moment to within a few seconds, so there is no
+    /// position for a camera fix to be corroborated *against*; what the walk
+    /// can do is say whether a place is part of what was walked, which is the
+    /// test that replaces it.
+    ///
+    /// The asset's own position therefore decides outright when it has one,
+    /// and is snapped onto the route exactly as ``PhotoMatchEvidence/place``
+    /// is elsewhere. A photograph with no position of its own falls back to
+    /// the walk's even progress, which is a guess offered as one.
+    ///
+    /// - Parameters:
+    ///   - walk: The walk to place the photo within.
+    ///   - profile: The route indexed by distance — the same profile the live
+    ///     follow matches against, so a photo and a hiker standing in one
+    ///     place are said to be at one distance along the route.
+    static func match(
+        _ asset: PhotoLibraryAsset,
+        walk: HikeWalkPhotoTimeline,
+        profile: RouteProfile
+    ) -> LibraryPhotoMatch? {
+        guard walk.searchWindow.contains(asset.createdAt) else { return nil }
+
+        if let camera = asset.coordinate {
+            // Off the route, or on a stretch this walk never covered. The
+            // second half is the test a bare route cannot make: a picture
+            // taken at the summit on the day the hiker turned back at the col
+            // is a picture of the trail and not of this walk.
+            guard let nearest = profile.nearestPoint(to: camera),
+                  nearest.offRouteMeters <= Self.maximumOffRouteMeters,
+                  walk.covers(nearest.distanceAlongRoute),
+                  let snapped = profile.coordinate(atDistance: nearest.distanceAlongRoute)
+            else { return nil }
+            return LibraryPhotoMatch(
+                asset: asset,
+                latitude: snapped.latitude,
+                longitude: snapped.longitude,
+                evidence: .place,
+                // Placed by position, so there is no fix it is an offset from
+                // — reported as zero for the reason the other `.place` match
+                // reports zero.
+                secondsFromFix: 0
+            )
+        }
+
+        guard let distance = walk.distanceAlongRoute(at: asset.createdAt),
+              let coordinate = profile.coordinate(atDistance: distance)
+        else { return nil }
+        return LibraryPhotoMatch(
+            asset: asset,
+            latitude: coordinate.latitude,
+            longitude: coordinate.longitude,
+            evidence: .walk,
+            // Nothing was measured at this moment or near it. A number here
+            // would read as the precision of a fix that does not exist, and
+            // the evidence is what the grid says about this match instead.
             secondsFromFix: 0
         )
     }

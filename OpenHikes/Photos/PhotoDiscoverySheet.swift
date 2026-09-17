@@ -222,7 +222,8 @@ struct PhotoDiscoverySheet: View {
                 This hike\u{2019}s route doesn\u{2019}t record when each point \
                 was reached, so there is nothing to match a photo\u{2019}s own \
                 timestamp against. Hikes you record in OpenHikes always carry \
-                those times.
+                those times \u{2014} and on an imported trail, walking it with \
+                OpenHikes gives this the times it needs.
                 """
             )
         }
@@ -256,6 +257,7 @@ struct PhotoDiscoverySheet: View {
                     """
             )
         case .timeAndPlace: String(localized: "matched by both time and place")
+        case .walk: String(localized: "placed by how far your walk had got")
         }
     }
 }
@@ -263,7 +265,7 @@ struct PhotoDiscoverySheet: View {
 /// The end of a search that found nothing — which is two different statements
 /// depending on how much of the library the app was allowed to look at.
 ///
-/// Under full access "nothing was taken while this hike was being recorded" is
+/// Under full access "nothing was taken while you were out on this hike" is
 /// true, and it is the whole answer. Under limited access it is false: the app
 /// looked at a subset somebody chose for it, and the walk's photographs may be
 /// sitting just outside that subset. Saying the first thing in the second
@@ -318,8 +320,8 @@ private struct DiscoveryEmptyState: View {
 
     private static let fullMessage = String(
         localized: """
-            Nothing in your photo library was taken while this hike was being \
-            recorded — or everything that was is already here.
+            Nothing in your photo library was taken while you were out on this \
+            hike — or everything that was is already here.
             """
     )
 
@@ -328,7 +330,7 @@ private struct DiscoveryEmptyState: View {
     private static let limitedMessage = String(
         localized: """
             OpenHikes can only see the photos you have shared with it, and none \
-            of those were taken while this hike was being recorded. If your \
+            of those were taken while you were out on this hike. If your \
             pictures of this walk are elsewhere in your library, share them and \
             OpenHikes will look again.
             """
