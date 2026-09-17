@@ -492,6 +492,7 @@ private extension HikeDetailView {
                             .font(.title2.bold())
                             .accessibilityAddTraits(.isHeader)
                         shareButton
+                        archiveButton
                         communityShareButton
                         renameButton
                     }

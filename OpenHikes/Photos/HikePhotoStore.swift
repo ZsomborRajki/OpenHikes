@@ -398,6 +398,52 @@ nonisolated final class HikePhotoStore: @unchecked Sendable {
         return destinationURL
     }
 
+    /// The stored file itself, copied into `directory` under `name`, for an
+    /// archive the hiker is taking away with them.
+    ///
+    /// Here rather than in the export code for the same reason
+    /// ``exportCopy(of:maxPixelSize:quality:named:into:)`` is: this file is
+    /// the only one that knows where a photo's pixels are, and only the
+    /// *destination* is new.
+    ///
+    /// **A byte-for-byte copy, which is the opposite of what `exportCopy`
+    /// does, and deliberately so.** That one re-encodes because it publishes
+    /// to strangers on a quota this app pays for, where a bounded JPEG with no
+    /// EXIF is both cheaper and safer. This one exists because the pixels
+    /// otherwise live in exactly one place — see ``PhotoUnavailability`` for
+    /// what a second device gets — so it is the hiker's way of taking their
+    /// own photographs out. A re-encode would hand them something lossier than
+    /// the file it was rescuing, which is not a rescue. The full EXIF block
+    /// travels with it, camera GPS included; the archive is the hiker's own,
+    /// and ``HikeArchive`` is where that is said out loud.
+    ///
+    /// Takes ``PhotoFiles`` rather than a ``HikePhoto`` because an archive is
+    /// built off the main actor from a snapshot of the names, exactly as the
+    /// measurement and the erase are.
+    ///
+    /// - Returns: The file written, or `nil` when the photo is not on this
+    ///   device or could not be copied. The caller owns the directory.
+    func exportOriginal(
+        of file: PhotoFiles,
+        named name: String,
+        into directory: URL
+    ) -> URL? {
+        assertOffMainThread("Photo export must stay off the main thread")
+        let destination = directory.appendingPathComponent(name, isDirectory: false)
+        do {
+            try FileManager.default.copyItem(at: url(for: file), to: destination)
+            return destination
+        } catch {
+            // Not an error the archive fails over: a photo added on another
+            // device has a row here and no file, which is an ordinary state
+            // rather than a fault — see ``PhotoUnavailability/notOnThisDevice``.
+            Self.logger.notice(
+                "Could not copy a photo into an archive: \(error.localizedDescription, privacy: .public)"
+            )
+            return nil
+        }
+    }
+
     /// What these photos cost on disk, thumbnails included.
     func byteCount(of photos: [HikePhoto]) -> Int64 {
         assertOffMainThread("Photo measurement must stay off the main thread")

@@ -38,17 +38,27 @@ nonisolated enum GPXExport {
     /// is not a `Hike`: this crosses to whatever executor the share sheet
     /// serializes on, and `HikePhoto` belongs to a main-actor model graph.
     ///
-    /// **No file name, and that is the decision rather than an omission.**
-    /// GPX 1.1 allows `<link href="…">` on a waypoint, and the pixels live
-    /// under ``HikePhotoStore`` rather than beside the `.gpx` — so a relative
-    /// filename would be a promise about a file the share sheet does not
-    /// send. The waypoint says *a photo was taken here*, which is the part
-    /// that is lost entirely today; making export a folder or a zip is a
-    /// different change to ``writeTemporaryFile(for:)`` and to what the share
-    /// sheet hands over.
+    /// **The file name is present only when the file is.** GPX 1.1 allows
+    /// `<link href="…">` on a waypoint, and a relative `href` is a promise
+    /// about something beside the `.gpx` — so it is written by the archive
+    /// export, which puts the pixels there, and left out of the plain `.gpx`
+    /// export, which does not. ``linkHref`` carrying `nil` is that second
+    /// case, and it is the default because the bare file is still what most
+    /// shares hand over: the waypoint says *a photo was taken here* and
+    /// nothing further. See ``HikeArchive`` for the other end.
     struct Photograph: Sendable, Equatable {
         var coordinate: RouteCoordinate
         var capturedAt: Date
+        /// Where the photograph is, relative to the `.gpx` — e.g.
+        /// `Photos/photo-1.jpeg`. `nil` when it is nowhere the reader can
+        /// reach.
+        var linkHref: String?
+
+        init(coordinate: RouteCoordinate, capturedAt: Date, linkHref: String? = nil) {
+            self.coordinate = coordinate
+            self.capturedAt = capturedAt
+            self.linkHref = linkHref
+        }
     }
 
     /// Named in the file so a track that turns up in another app says where it
@@ -192,11 +202,18 @@ nonisolated private extension GPXExport {
     /// ``Track/init(hike:)`` rather than here, so what this receives is
     /// already the set that can be written.
     ///
-    /// `<name>` rather than the photograph's own file name: the file is not
-    /// in the export, so naming it would be describing something the receiver
-    /// does not have. `<sym>` is the conventional way to say what kind of
+    /// `<name>` rather than the photograph's own file name, because the name
+    /// labels the waypoint in a reader's list and every photograph should read
+    /// the same there. Where the file *is* alongside — an archive export —
+    /// ``Photograph/linkHref`` names it, and `<link>` is the element for
+    /// exactly that. `<sym>` is the conventional way to say what kind of
     /// waypoint this is, and *Photo* is the name every reader that has a
     /// symbol table for it already uses.
+    ///
+    /// `<link>` sits between `<name>` and `<sym>` because GPX 1.1 fixes
+    /// `<wpt>`'s children too — name, cmt, desc, src, link, sym, type — and a
+    /// schema-validating reader refuses the file over the wrong order just as
+    /// readily as it refuses waypoints after the track.
     static func appendPhotographs(_ track: Track, to xml: inout String) {
         for photograph in track.photographs {
             let latitude = photograph.coordinate.latitude.formatted(coordinateStyle)
@@ -212,6 +229,9 @@ nonisolated private extension GPXExport {
             // `<ele>`'s successors but after `<ele>` itself.
             xml += "    <time>\(timeStyle.format(photograph.capturedAt))</time>\n"
             xml += "    <name>\(escaped(photographName))</name>\n"
+            if let href = photograph.linkHref {
+                xml += "    <link href=\"\(escaped(href))\"/>\n"
+            }
             xml += "    <sym>\(escaped(photographSymbol))</sym>\n"
             xml += "  </wpt>\n"
         }
@@ -363,6 +383,25 @@ nonisolated extension GPXExport {
         )
         return stem + suffix
     }
+
+    /// The stem both halves of an archive are named after — the folder inside
+    /// the `.zip`, and the `.zip` itself — e.g. `Thumsee Loop-2026-06-12`.
+    ///
+    /// Shares ``fileName(for:)``'s budget deliberately: the archive's own name
+    /// is this plus four bytes and the folder inside it is this exactly, so
+    /// budgeting against the longer of the two suffixes keeps every path in
+    /// the archive inside the same bound the bare `.gpx` already respects.
+    static func archiveStem(for track: Track) -> String {
+        let suffix = "-\(fileDateStyle.format(track.date))"
+        return fileStem(
+            for: track.name,
+            availableUTF8Bytes: maximumFileNameUTF8Bytes - suffix.utf8.count - archiveSuffixBytes
+        ) + suffix
+    }
+
+    /// The `.gpx` and the `.zip` extensions weigh the same; this is the bound
+    /// either of them has to leave room for.
+    private static let archiveSuffixBytes = 4
 
     /// Reserved characters become hyphens rather than disappearing, so two
     /// hikes whose names differ only in punctuation still export to different
