@@ -37,8 +37,19 @@ nonisolated final class CommunityReviewUITests: XCTestCase {
                 "\"\(title)\" should be waiting in the review section"
             )
         }
+        // Swept for rather than waited on, and a longer wait is demonstrably
+        // not the same thing: with the queue and its header above it, the
+        // first published row sits past the fold of a sheet that shows four,
+        // and `List` does not build a row it has not been scrolled to. A
+        // fifteen-second `waitForExistence` here fails exactly as `.exists`
+        // did — the browser had answered, and the answer was not in the
+        // element tree. ``awaitCommunityAnswer(_:in:)`` is where that argument
+        // lives, and it is how every other scenario reaches a published row.
         XCTAssertTrue(
-            communityRow(titled: SeededHike.ridgeTitle, in: app).exists,
+            awaitCommunityAnswer(
+                communityRow(titled: SeededHike.ridgeTitle, in: app),
+                in: app
+            ),
             "the published hikes should still be listed under it"
         )
     }
