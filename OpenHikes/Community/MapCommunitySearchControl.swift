@@ -57,6 +57,18 @@
 //  ``CuratedTrailNotice`` is the pair, and the caption draws whichever one the
 //  last search came back with.
 //
+//  The caption is dropped clear of the weather badge rather than hung under
+//  the pill, and carries an *x*. Both are about the same thing: this is the one
+//  piece of the control whose size is a sentence's, so it is the one that
+//  reaches other people's corners of the map and the one a hiker may want gone.
+//  The badge is a SwiftUI overlay measured from the screen's own top edge while
+//  this control hangs off the safe area, so there is no anchor between them and
+//  no fixed gap that clears it on every phone — the caption keeps its distance
+//  from the map's top edge instead, in the same space the badge is placed in.
+//  Dismissing is a write to ``CommunityBrowser/curatedNotice`` rather than a
+//  flag here, which is what makes the next refusal say so again: the caption
+//  describes the last search, and there is always a next search.
+//
 //  **The button is not disabled by either, and that is the point.** A rate
 //  limit is about one of the list's two sources. The hikes people published
 //  are in CloudKit and are unaffected, so the tap still has something to do
@@ -84,6 +96,37 @@ import MapKit
 #if os(iOS)
 import UIKit
 
+/// Widens `rect` to a finger in both directions, leaving it centred on what it
+/// was and leaving anything already that big alone.
+///
+/// Shared by the two halves of one promise: the hit test that answers over the
+/// widened area, and the accessibility frame that says so.
+private func fingerSized(_ rect: CGRect) -> CGRect {
+    let target = AccessibilityMetrics.minimumTapTarget
+    return rect.insetBy(
+        dx: -max(0, (target - rect.width) / 2),
+        dy: -max(0, (target - rect.height) / 2)
+    )
+}
+
+/// The caption's *x*, which is drawn at a caption's size and navigated to at a
+/// finger's.
+///
+/// A subclass for one override, because there is nowhere else to put it: a
+/// `UIView`'s accessibility frame is derived from its own frame and recomputed
+/// on every layout, so a value assigned from outside does not survive the next
+/// pass. `performAccessibilityAudit`'s hit-region check, Switch Control and
+/// Voice Control all navigate by this rather than by what
+/// ``MapAreaSearchView/hitTest(_:with:)`` lets through — so a target that
+/// existed only in the hit test would be a control they could see and not
+/// reach.
+private final class MapNoticeDismissButton: UIButton {
+    override var accessibilityFrame: CGRect {
+        get { UIAccessibility.convertToScreenCoordinates(fingerSized(bounds), in: self) }
+        set { super.accessibilityFrame = newValue }
+    }
+}
+
 /// The pill itself. Owns its appearance and its action, and nothing else —
 /// where it sits is decided in `MapView.addAreaSearchControl`.
 final class MapAreaSearchView: UIView {
@@ -93,14 +136,40 @@ final class MapAreaSearchView: UIView {
     /// map's own rather than as something the sheet put there.
     private static let height: CGFloat = 44
 
-    /// How far the caption sits below the pill.
+    /// How close under the pill the caption may sit.
+    ///
+    /// A floor rather than the gap. What the caption actually clears is the
+    /// weather badge — see ``noticeBadgeClearance`` — and this is what is left
+    /// when there is no badge in the way.
     private static let noticeSpacing: CGFloat = 6
+    /// How far down the map the caption starts, so as to clear the weather
+    /// badge, measured from the map's own top edge.
+    ///
+    /// Built from the two numbers that place the badge rather than agreed with
+    /// it, because the badge is a SwiftUI overlay in another hierarchy and
+    /// there is nothing here to constrain against: ``WeatherBadge/topPadding``,
+    /// which is measured from the screen's edge because the map ignores its
+    /// safe area, and the tap target that decides the capsule's height. Then
+    /// the same gap the caption would have kept from the pill.
+    ///
+    /// Measured from the *map* and not from this control on purpose. This one
+    /// hangs off the safe area, which is most of a badge's height further down
+    /// on a phone with a Dynamic Island than on one without — so a gap under
+    /// the pill would clear the badge on some phones and overlap it on others.
+    ///
+    /// Portrait's number, like the padding it is built from; see
+    /// ``applyNoticeClearance()``.
+    private static let noticeBadgeClearance =
+        WeatherBadge.topPadding + AccessibilityMetrics.minimumTapTarget + noticeSpacing
     private static let noticePadding: CGFloat = 10
     private static let noticeVerticalPadding: CGFloat = 5
     private static let noticeCornerRadius: CGFloat = 12
     private static let noticeSymbolPointSize: CGFloat = 11
 
     private let onTap: () -> Void
+    /// Takes the caption off by hand — see
+    /// ``CommunityBrowser/dismissCuratedNotice()``.
+    private let onDismissNotice: () -> Void
     /// Held so the ceiling can turn the pill off without taking it off screen.
     private var button: UIButton?
     /// The caption's capsule, hidden until there is something to say. Held so
@@ -110,11 +179,24 @@ final class MapAreaSearchView: UIView {
     /// The caption's glyph. Held because it says which *kind* of caption this
     /// is — see ``CuratedTrailNotice`` — and so changes with it.
     private var noticeIcon: UIImageView?
+    /// The caption's *x*. Held for the hit test, which widens it to a finger.
+    private var dismissButton: MapNoticeDismissButton?
+    /// What holds the caption clear of the weather badge. Held because the
+    /// badge is only over the top of the map in one orientation — see
+    /// ``applyNoticeClearance()`` — and because it is made by the placing code,
+    /// which is the half of this that knows the map.
+    private var noticeClearanceConstraint: NSLayoutConstraint?
 
-    init(onTap: @escaping () -> Void) {
+    init(onTap: @escaping () -> Void, onDismissNotice: @escaping () -> Void) {
         self.onTap = onTap
+        self.onDismissNotice = onDismissNotice
         super.init(frame: .zero)
         buildHierarchy()
+        // Where the weather badge is depends on the orientation, so the room
+        // held for it is read again whenever that changes rather than once.
+        registerForTraitChanges([UITraitVerticalSizeClass.self]) { (control: Self, _) in
+            control.applyNoticeClearance()
+        }
     }
 
     /// Whether a tap would ask anything.
@@ -193,23 +275,103 @@ final class MapAreaSearchView: UIView {
         )
     }
 
+    /// The *x* that takes the caption off.
+    ///
+    /// On both captions rather than on the warning alone. They are one capsule
+    /// drawn two ways, and an *x* that came and went with the sentence would be
+    /// a control a hiker has to read the caption to find. Neither one is
+    /// load-bearing: both describe the search that has just been made, and the
+    /// next search says its own piece — which is why this reaches for
+    /// ``CommunityBrowser/dismissCuratedNotice()`` rather than remembering
+    /// anything here.
+    ///
+    /// Drawn at the caption's own size and weight, from the same symbol
+    /// configuration the notice glyph uses, so the two ends of the capsule
+    /// match. It is hit at a finger's size all the same — see
+    /// ``dismissTarget(around:)``.
+    private func buildDismissButton() -> MapNoticeDismissButton {
+        var configuration = UIButton.Configuration.plain()
+        configuration.image = Self.noticeSymbol(named: "xmark")
+        configuration.baseForegroundColor = .secondaryLabel
+        configuration.contentInsets = .zero
+
+        let dismiss = MapNoticeDismissButton(
+            configuration: configuration,
+            primaryAction: UIAction { [onDismissNotice] _ in onDismissNotice() }
+        )
+        dismiss.translatesAutoresizingMaskIntoConstraints = false
+        dismiss.setContentHuggingPriority(.required, for: .horizontal)
+        dismiss.setContentCompressionResistancePriority(.required, for: .horizontal)
+        // The glyph is the whole of the control, so it has to be named; the
+        // caption beside it is what says what is being dismissed.
+        dismiss.accessibilityLabel = String(localized: "Dismiss")
+        dismiss.accessibilityIdentifier = "community-curated-notice-dismiss"
+        dismissButton = dismiss
+        return dismiss
+    }
+
     @available(*, unavailable)
     required init?(coder: NSCoder) {
         fatalError("MapAreaSearchView is created in code only")
     }
 
-    /// Only the button answers a touch.
+    /// Only the button and the caption's *x* answer a touch.
     ///
-    /// The caption is regularly wider than the pill, which makes this view
-    /// wider than the pill — and everything inside it is claimed by
-    /// `MapView.Coordinator`'s own hit test, which is how a tap on a control
-    /// is kept from also being a tap on the map. Without this, the map would
-    /// stop answering taps in the empty air either side of the button, and the
-    /// width it stopped answering in would depend on how long the current
-    /// caption was.
+    /// This view is the full width of the strip the pill is centred in — and
+    /// everything inside it is claimed by `MapView.Coordinator`'s own hit test,
+    /// which is how a tap on a control is kept from also being a tap on the
+    /// map. Without this, the map would stop answering taps in the empty air
+    /// either side of the button and under the caption.
     override func hitTest(_ point: CGPoint, with event: UIEvent?) -> UIView? {
-        guard let button, isUserInteractionEnabled, !isHidden else { return nil }
-        return button.point(inside: convert(point, to: button), with: event) ? button : nil
+        guard isUserInteractionEnabled, !isHidden else { return nil }
+        if let button, button.point(inside: convert(point, to: button), with: event) {
+            return button
+        }
+        guard let dismiss = dismissButton, noticeView?.isHidden == false,
+              dismissTarget(around: dismiss).contains(point) else { return nil }
+        return dismiss
+    }
+
+    /// The *x*'s touch area, in this view's own space.
+    ///
+    /// Widened around the glyph rather than by padding the button, because the
+    /// capsule is a caption line tall and its height is the glyph's: a control
+    /// padded to a finger inside it would set the size of the thing it sits in.
+    /// The pill is tested first, so a target that reaches up past the gap
+    /// cannot take a tap away from the button.
+    private func dismissTarget(around dismiss: UIButton) -> CGRect {
+        fingerSized(convert(dismiss.bounds, from: dismiss))
+    }
+
+    /// Holds the caption clear of the weather badge, which is drawn over the
+    /// same corner of the map from another hierarchy.
+    ///
+    /// Takes the map's own top edge, because that is the space the badge is
+    /// placed in — see ``noticeBadgeClearance`` for why no gap under the pill
+    /// can do this job. Made by the placing code and applied here, since where
+    /// the badge *is* depends on a trait and the constant therefore changes.
+    func keepNoticeClear(of mapTop: NSLayoutYAxisAnchor) {
+        guard let noticeView, noticeClearanceConstraint == nil else { return }
+        let clearance = noticeView.topAnchor.constraint(greaterThanOrEqualTo: mapTop)
+        noticeClearanceConstraint = clearance
+        clearance.isActive = true
+        applyNoticeClearance()
+    }
+
+    /// How much room the badge needs, which is none at all in landscape.
+    ///
+    /// Turned sideways the badge moves inside the safe area and against
+    /// ``MapSidePanel``'s leading margin — see `OpenHikesView` — where it is
+    /// nowhere near a caption centred over what is left of the map. Holding
+    /// portrait's room there would leave the caption floating in the middle of
+    /// a map a third the height.
+    ///
+    /// The size class rather than the panel's own flag: this is UIKit's copy of
+    /// the input `SheetLayoutReader` reads, not a second opinion about it.
+    private func applyNoticeClearance() {
+        noticeClearanceConstraint?.constant = traitCollection.verticalSizeClass == .compact
+            ? 0
+            : Self.noticeBadgeClearance
     }
 
     private func buildHierarchy() {
@@ -260,25 +422,43 @@ final class MapAreaSearchView: UIView {
         glass.contentView.addSubview(searchButton)
 
         let noticeCapsule = buildNotice()
-        // A stack rather than two pinned views, for the one thing a stack does
-        // that constraints would each need a copy of: `isHidden` on an
-        // arranged subview takes its height with it, so a control with nothing
-        // to say is exactly the pill it was before the caption existed.
-        let stack = UIStackView(arrangedSubviews: [glass, noticeCapsule])
-        stack.axis = .vertical
-        stack.alignment = .center
-        stack.spacing = Self.noticeSpacing
-        stack.translatesAutoresizingMaskIntoConstraints = false
-        addSubview(stack)
+        addSubview(glass)
+        addSubview(noticeCapsule)
+
+        // Two pinned views rather than a vertical stack, which is what this
+        // was until the caption had to clear the weather badge: a stack's
+        // spacing is one required constraint, and where the caption starts is
+        // the *lower* of two — the pill above it, and a badge belonging to
+        // another hierarchy. The pair below is how "as high as it is allowed to
+        // be" is spelled. The two `>=` floors say where it may not go, and the
+        // optional pull holds it against whichever of them is lower down.
+        //
+        // What the stack was doing is not lost. It collapsed its own height
+        // around a hidden caption, and nothing measures this view's height:
+        // the sheet does not reach it, no control is stacked under it, and the
+        // hit test above answers for the button and the *x* rather than for
+        // the frame.
+        let hugsPill = noticeCapsule.topAnchor.constraint(
+            equalTo: glass.bottomAnchor,
+            constant: Self.noticeSpacing
+        )
+        hugsPill.priority = .defaultLow
 
         NSLayoutConstraint.activate([
-            stack.leadingAnchor.constraint(equalTo: leadingAnchor),
-            stack.trailingAnchor.constraint(equalTo: trailingAnchor),
-            stack.topAnchor.constraint(equalTo: topAnchor),
-            stack.bottomAnchor.constraint(equalTo: bottomAnchor),
-            glass.leadingAnchor.constraint(greaterThanOrEqualTo: stack.leadingAnchor),
-            glass.trailingAnchor.constraint(lessThanOrEqualTo: stack.trailingAnchor),
+            glass.topAnchor.constraint(equalTo: topAnchor),
+            glass.centerXAnchor.constraint(equalTo: centerXAnchor),
+            glass.leadingAnchor.constraint(greaterThanOrEqualTo: leadingAnchor),
+            glass.trailingAnchor.constraint(lessThanOrEqualTo: trailingAnchor),
             glass.heightAnchor.constraint(greaterThanOrEqualToConstant: Self.height),
+            noticeCapsule.topAnchor.constraint(
+                greaterThanOrEqualTo: glass.bottomAnchor,
+                constant: Self.noticeSpacing
+            ),
+            hugsPill,
+            noticeCapsule.centerXAnchor.constraint(equalTo: centerXAnchor),
+            noticeCapsule.leadingAnchor.constraint(greaterThanOrEqualTo: leadingAnchor),
+            noticeCapsule.trailingAnchor.constraint(lessThanOrEqualTo: trailingAnchor),
+            bottomAnchor.constraint(equalTo: noticeCapsule.bottomAnchor),
             searchButton.leadingAnchor.constraint(equalTo: glass.contentView.leadingAnchor),
             searchButton.trailingAnchor.constraint(equalTo: glass.contentView.trailingAnchor),
             searchButton.topAnchor.constraint(equalTo: glass.contentView.topAnchor),
@@ -312,10 +492,18 @@ final class MapAreaSearchView: UIView {
         label.accessibilityIdentifier = "community-curated-notice"
         noticeLabel = label
 
-        let row = UIStackView(arrangedSubviews: [icon, label])
+        let sentence = UIStackView(arrangedSubviews: [icon, label])
+        sentence.axis = .horizontal
+        sentence.alignment = .firstBaseline
+        sentence.spacing = 5
+
+        let row = UIStackView(arrangedSubviews: [sentence, buildDismissButton()])
         row.axis = .horizontal
-        row.alignment = .firstBaseline
-        row.spacing = 5
+        // Centred rather than baselined, unlike the sentence inside it: the
+        // *x* is a glyph with no text to sit on, and what it is beside is two
+        // lines at the larger text sizes.
+        row.alignment = .center
+        row.spacing = Self.noticePadding
         row.translatesAutoresizingMaskIntoConstraints = false
 
         let glass = UIVisualEffectView(effect: UIGlassEffect(style: .regular))
@@ -466,12 +654,15 @@ extension MapView {
     /// private to `MapView.swift` and this is the file that owns this control.
     private static let areaSearchTopInset: CGFloat = 12
 
-    /// How much room the pill leaves on each side.
+    /// How much room the control leaves on each side.
     ///
     /// Enough for MapKit's compass on the trailing edge and the weather badge
     /// on the leading one, both of which live in the same strip and neither of
     /// which can be anchored against — the compass belongs to MapKit and the
-    /// badge is a SwiftUI overlay in another hierarchy.
+    /// badge is a SwiftUI overlay in another hierarchy. It is what a long
+    /// localisation truncates against and what a caption wraps against, and it
+    /// clears the badge *sideways* only: the badge hangs lower than this strip,
+    /// which is what ``MapAreaSearchView`` drops the caption past.
     private static let areaSearchSideClearance: CGFloat = 56
 
     /// *Search this area*, centred at the top of the map.
@@ -484,13 +675,20 @@ extension MapView {
     ///
     /// Held clear of MapKit's compass and of the weather badge by the side
     /// clearances rather than by a fixed width, so a long localisation
-    /// truncates instead of sliding underneath either.
+    /// truncates instead of sliding underneath either. The control is the whole
+    /// of that strip and its contents are centred in it — the pill and the
+    /// caption are each their own size, and what the strip decides is where
+    /// either of them runs out of room.
     func addAreaSearchControl(
         to mapView: MKMapView,
         _ coordinator: Coordinator,
         alignedTo guide: UILayoutGuide
     ) {
-        let control = MapAreaSearchView { [community] in community.searchVisibleArea() }
+        let control = MapAreaSearchView { [community] in
+            community.searchVisibleArea()
+        } onDismissNotice: { [community] in
+            community.dismissCuratedNotice()
+        }
         control.translatesAutoresizingMaskIntoConstraints = false
         // Starts out of the way: nothing is offered until the map has settled
         // somewhere the list does not describe, and a pill that flashed in on
@@ -501,17 +699,20 @@ extension MapView {
         coordinator.areaSearchControl = control
 
         NSLayoutConstraint.activate([
-            control.centerXAnchor.constraint(equalTo: guide.centerXAnchor),
             control.topAnchor.constraint(equalTo: guide.topAnchor, constant: Self.areaSearchTopInset),
             control.leadingAnchor.constraint(
-                greaterThanOrEqualTo: guide.leadingAnchor,
+                equalTo: guide.leadingAnchor,
                 constant: Self.areaSearchSideClearance
             ),
             control.trailingAnchor.constraint(
-                lessThanOrEqualTo: guide.trailingAnchor,
+                equalTo: guide.trailingAnchor,
                 constant: -Self.areaSearchSideClearance
             ),
         ])
+        // The map's own top edge, not the guide's: the badge the caption is
+        // being kept clear of is measured from the screen's, and the map
+        // ignores its safe area. See ``MapAreaSearchView/keepNoticeClear(of:)``.
+        control.keepNoticeClear(of: mapView.topAnchor)
     }
 }
 #endif

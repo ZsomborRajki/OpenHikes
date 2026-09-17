@@ -267,6 +267,42 @@ extension CommunityCuratedScopeTests {
         #expect(browser.curatedNotice == .outage(.rateLimited(retryAfter: 60)))
     }
 
+    /// The *x* on the capsule. It is a caption about the last search and
+    /// nothing else depends on it, so dismissing is allowed to be the whole of
+    /// what it says it is.
+    @Test("dismissing the caption takes it off the button")
+    func dismissingTakesTheCaptionOff() async {
+        let transport = StubCommunityTransport()
+        transport.listingsResult = .success([.stub(id: "theirs")])
+        transport.curatedOutcome = .outage(.rateLimited(retryAfter: 60))
+        let browser = await browsing(transport)
+        #expect(browser.curatedNotice == .outage(.rateLimited(retryAfter: 60)))
+
+        browser.dismissCuratedNotice()
+
+        #expect(browser.curatedNotice == nil)
+        #expect(browser.state == .loaded, "a caption is not what says the list worked")
+        #expect(browser.nearbyListings.map(\.id) == ["theirs"], "nor what puts rows on screen")
+    }
+
+    /// The half that makes dismissing safe rather than a way to lose the
+    /// sentence. Nothing remembers the *x*, so a hiker who taps again while the
+    /// address is still refused is told again — which is what a tap that has
+    /// just spent a request is owed.
+    @Test("a search after a dismissal says the same thing again")
+    func aDismissedCaptionComesBackOnTheNextSearch() async {
+        let transport = StubCommunityTransport()
+        transport.curatedOutcome = .outage(.rateLimited(retryAfter: 60))
+        let browser = await browsing(transport)
+        browser.dismissCuratedNotice()
+        #expect(browser.curatedNotice == nil)
+
+        browser.retry()
+        await settle(browser)
+
+        #expect(browser.curatedNotice == .outage(.rateLimited(retryAfter: 60)))
+    }
+
     /// The caption belongs to the tab that drew it. A limit still running says
     /// so again on the next tap — the source refuses one without a round trip
     /// — and a notice left standing over a list nobody is looking at is a
