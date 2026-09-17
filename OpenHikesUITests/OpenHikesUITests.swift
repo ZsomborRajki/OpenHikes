@@ -238,12 +238,18 @@ nonisolated final class OpenHikesUITests: XCTestCase {
 
         let directional = element("route-pattern-directional", in: app)
         let dotted = element("route-pattern-dotted", in: app)
+        let caption = element("route-pattern-caption", in: app)
         XCTAssertTrue(
             directional.waitForExistence(timeout: UITestTimeout.navigation)
         )
         XCTAssertTrue(
             directional.isSelected,
             "a hike starts on the line-with-arrows it has always been drawn as"
+        )
+        XCTAssertEqual(
+            caption.value as? String,
+            "Arrows",
+            "the caption should name the style the hike is drawn in"
         )
 
         scrollToTap(dotted, in: app)
@@ -252,6 +258,14 @@ nonisolated final class OpenHikesUITests: XCTestCase {
             "tapping a swatch should move the selection to it"
         )
         XCTAssertFalse(directional.isSelected)
+        // The swatch that was picked stays readable, so the choice has to be
+        // legible from the swatches and from the caption both — the caption is
+        // what a route tint too pale for its selection border falls back on.
+        XCTAssertTrue(
+            waitUntil { caption.value as? String == "Dotted" },
+            "the caption should follow the selection, said "
+                + "\"\(caption.value as? String ?? "")\""
+        )
     }
 
     /// The Surface and Difficulty sections, which are drawn only once
