@@ -125,6 +125,13 @@ actor OverpassTrailGraphProvider: TrailGraphProviding {
     private static let cacheZoom = 12
     private static let cacheLifetime: TimeInterval = 30 * 24 * 60 * 60
     private static let maximumCacheFiles = 64
+    /// How long Overpass is allowed to spend on one tile's graph, in seconds.
+    ///
+    /// Named rather than spelled in the query alone, because the client's own
+    /// patience is derived from it — see
+    /// ``OverpassRequest/idleTimeout(forServerTimeout:)``. Two numbers that
+    /// have to stay in that order should not be two literals in two files.
+    nonisolated static let queryTimeoutSeconds = 25
     // The request's shape, its client timeout and the reading of a 429 live in
     // ``OverpassRequest``, which this and ``CuratedTrailSource`` share. See
     // that file for why manners against a volunteer-run API are not a thing to
@@ -510,7 +517,11 @@ private extension OverpassTrailGraphProvider {
             north: SlippyTileMath.lat(y: key.y, z: key.zoom),
             east: SlippyTileMath.lon(x: key.x + 1, z: key.zoom)
         )
-        let request = OverpassRequest.post(query(for: box), to: endpoint)
+        let request = OverpassRequest.post(
+            query(for: box),
+            to: endpoint,
+            awaiting: queryTimeoutSeconds
+        )
         let response = try await transport(request)
         return try decodeGraph(from: OverpassRequest.body(of: response))
     }
@@ -518,7 +529,7 @@ private extension OverpassTrailGraphProvider {
     nonisolated private static func query(for box: BoundingBox) -> String {
         let bounds = "\(box.south),\(box.west),\(box.north),\(box.east)"
         return """
-        [out:json][timeout:25];
+        [out:json][timeout:\(queryTimeoutSeconds)];
         way["highway"~"^(path|footway|track|bridleway|steps|cycleway|via_ferrata)$"](\(bounds))->.trails;
         rel(bw.trails)["route"="hiking"]->.routes;
         node(w.trails)->.trailNodes;

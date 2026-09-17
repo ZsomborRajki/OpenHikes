@@ -81,6 +81,25 @@ extension MergedCommunityTransportTests {
         )
     }
 
+    /// A gateway refusing in front of a busy Overpass, which is the measured
+    /// shape of a public instance under load. Still not a failure of the
+    /// request: the published half answered.
+    ///
+    /// *Busy* rather than *unavailable*, because the two send the hiker to
+    /// different places — see ``CuratedTrailOutage/busy``.
+    @Test("a gateway refusal is reported as a busy server")
+    func aGatewayRefusalIsReported() async throws {
+        let merged = Self.merged(
+            published: [Self.published("listing-a", metresNorth: Offset.near)]
+        )
+        merged.overpass.nearbyResult = .failure(.server(statusCode: 504))
+
+        let answer = try await Self.answer(merged)
+
+        #expect(answer.curated == .outage(.busy))
+        #expect(answer.listings.map(\.id) == ["listing-a"])
+    }
+
     /// Everything else Overpass can do, which is the state a hiker with no
     /// signal is in. Still not a failure of the request: the published half
     /// answered.
@@ -89,7 +108,7 @@ extension MergedCommunityTransportTests {
         let merged = Self.merged(
             published: [Self.published("listing-a", metresNorth: Offset.near)]
         )
-        merged.overpass.nearbyResult = .failure(.server(statusCode: 504))
+        merged.overpass.nearbyResult = .failure(.invalidResponse)
 
         let answer = try await Self.answer(merged)
 
@@ -170,7 +189,7 @@ extension MergedCommunityTransportTests {
             published: [Self.published("listing-a", metresNorth: Offset.near)],
             curated: [Self.trail(Relation.wimbach, named: "Wimbachgries", metresNorth: Offset.nearest)]
         )
-        merged.overpass.geometryResult = .thrown(TrailGraphProviderError.server(statusCode: 504))
+        merged.overpass.geometryResult = .thrown(TrailGraphProviderError.invalidResponse)
 
         let answer = try await Self.answer(merged)
 
