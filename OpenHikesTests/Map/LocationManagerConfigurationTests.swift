@@ -34,6 +34,11 @@ struct LocationManagerConfigurationTests {
             startUpdatingLocationCalls += 1
         }
 
+        /// Nothing here asserts on it: when the feed stops is
+        /// `LocationManagerLifecycleTests`' subject, and this suite is about
+        /// how it is configured and what starts it.
+        func stopUpdatingLocation() { /* not this suite's question */ }
+
         func simulateAuthorizationChange(to status: CLAuthorizationStatus) {
             foregroundAuthorizationStatus = status
             foregroundDelegate?.locationManagerDidChangeAuthorization?(CLLocationManager())

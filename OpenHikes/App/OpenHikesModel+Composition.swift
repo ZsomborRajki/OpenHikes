@@ -393,6 +393,22 @@ private extension OpenHikesModel {
         AppLaunchEnvironment.usesLiveLocation ? nil : DormantLocationSource()
     }
 
+    /// The one owner of this app's significant-change registration.
+    ///
+    /// Composed here, and only here, because the thing it fixes is only
+    /// visible from here: ``SignificantLocationFeed`` and
+    /// ``BackgroundTrailTracker`` each took a manager of their own and neither
+    /// can see the other, but the registration those managers were starting
+    /// and stopping is one thing the app holds. A launch is where the two are
+    /// put together, so it is where the one registration belongs.
+    ///
+    /// Its own dormant stand-in for the same reason each consumer has one: the
+    /// manager it issues the start and stop calls on is never a consumer's,
+    /// and a hosted test run must not have a real one anywhere.
+    static func makeSignificantLocationRegistration() -> SignificantLocationRegistration {
+        SignificantLocationRegistration(monitor: Self.dormantLocationSource())
+    }
+
     /// The auto-save controller wired to the real selected map source. ///
     /// Same argument as ``makeRecorder(container:trailGraphProvider:defaults:)``:
     /// "which map the user picked" is a choice about the environment, and the
@@ -498,9 +514,13 @@ private extension OpenHikesModel {
         let graphProvider = OverpassTrailGraphProvider()
         let liveActivities = Self.makeLiveActivityController(defaults: defaults)
         let reminders = Self.makeMovementReminderController(defaults: defaults)
+        let significantLocationRegistration = Self.makeSignificantLocationRegistration()
         let backgroundTracker = BackgroundTrailTracker(
             container: container,
-            monitor: Self.dormantLocationSource(),
+            monitor: significantLocationRegistration.client(
+                for: .trailMatching,
+                monitor: Self.dormantLocationSource()
+            ),
             defaults: defaults,
             liveActivityController: liveActivities
         )
@@ -531,7 +551,12 @@ private extension OpenHikesModel {
                 ? nil
                 : SystemMovementReminderNotifier()
         )
-        let significantLocations = SignificantLocationFeed(monitor: Self.dormantLocationSource())
+        let significantLocations = SignificantLocationFeed(
+            monitor: significantLocationRegistration.client(
+                for: .movementFeed,
+                monitor: Self.dormantLocationSource()
+            )
+        )
         let communityTransport = Self.makeCommunityTransport()
 
         return LaunchDependencies(
@@ -565,9 +590,13 @@ private extension OpenHikesModel {
                 BundledTrailGraphProvider(fixtureName: name)
             }
         let liveActivities = Self.makeLiveActivityController(defaults: defaults)
+        let significantLocationRegistration = Self.makeSignificantLocationRegistration()
         let backgroundTracker = BackgroundTrailTracker(
             container: container,
-            monitor: Self.dormantLocationSource(),
+            monitor: significantLocationRegistration.client(
+                for: .trailMatching,
+                monitor: Self.dormantLocationSource()
+            ),
             defaults: defaults,
             liveActivityController: liveActivities
         )
@@ -583,7 +612,12 @@ private extension OpenHikesModel {
         )
         let locationManager = LocationManager(manager: Self.dormantLocationSource())
         let weatherManager = WeatherManager(store: WeatherReadingStore(defaults: defaults))
-        let significantLocations = SignificantLocationFeed(monitor: Self.dormantLocationSource())
+        let significantLocations = SignificantLocationFeed(
+            monitor: significantLocationRegistration.client(
+                for: .movementFeed,
+                monitor: Self.dormantLocationSource()
+            )
+        )
         let communityTransport = Self.makeCommunityTransport()
 
         return UITestingDependencies(

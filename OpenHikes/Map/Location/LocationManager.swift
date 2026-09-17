@@ -92,6 +92,10 @@ protocol ForegroundLocationSource: AnyObject {
 
     func requestWhenInUseAuthorization()
     func startUpdatingLocation()
+    /// Ends delivery. Part of the seam rather than left to the manager's
+    /// deallocation, because this manager is never deallocated: it belongs to
+    /// the app model, which lives for the process. See ``LocationManager/stop()``.
+    func stopUpdatingLocation()
 }
 
 extension CLLocationManager: ForegroundLocationSource {
@@ -127,6 +131,13 @@ final class LocationManager: NSObject {
     /// Authorization callbacks can arrive as soon as the delegate is assigned.
     /// Only start hardware updates after the owning view has called `start()`.
     private var updatesRequested = false
+    /// Whether the receiver is currently running, as distinct from whether the
+    /// screen wants it to. ``stop()`` clears this and leaves
+    /// ``updatesRequested`` alone, which is what lets ``resume()`` tell "the
+    /// map is back" from "the map has never appeared" — the second of which
+    /// must not turn anything on, because `start()` is also where the
+    /// authorization prompt comes from.
+    private var isUpdating = false
     /// Reads the current time for the throttle above. Injectable so a test can
     /// step across the one-second window instead of sleeping through it —
     /// which is both slower and, being a race against a real clock, flakier.
@@ -145,16 +156,62 @@ final class LocationManager: NSObject {
     }
 
     /// Requests "when in use" authorization on first use (if needed) and starts
-    /// updating. Location delivery itself is ongoing via the delegate for as
-    /// long as this object lives.
+    /// updating.
     func start() {
         updatesRequested = true
         let status = manager.foregroundAuthorizationStatus
         if status == .notDetermined {
             manager.requestWhenInUseAuthorization()
         } else if Self.isAuthorized(status) {
-            manager.startUpdatingLocation()
+            beginUpdates()
         }
+    }
+
+    /// Stops the receiver without forgetting that the screen wants it.
+    ///
+    /// Called when the scene resigns the foreground, and the reason it has to
+    /// be called at all is that nothing else will. A `CLLocationManager` stops
+    /// when it is deallocated, and this one is never deallocated: it belongs to
+    /// the app model, which lives for the process. So an app that had ever
+    /// shown its map kept a standing request for location from launch until
+    /// the process died — measured on 2026-09-17, where MapKit's own manager
+    /// issued `stopUpdatingLocation` on the way to the background and this
+    /// one issued nothing at all.
+    ///
+    /// Nothing is lost by stopping. Everything downstream of this feed is on
+    /// screen — the map's centring, the elevation graph's auto-follow, the
+    /// weather poll, the widget's live fix, all of which run from
+    /// ``fixes`` — and the two feeds that are *meant* to outlive the
+    /// foreground are other objects entirely: the recorder's own manager, and
+    /// ``BackgroundTrailTracker``'s significant-change delivery.
+    func stop() {
+        guard isUpdating else { return }
+        isUpdating = false
+        manager.stopUpdatingLocation()
+    }
+
+    /// Starts the receiver again after ``stop()``, and only then.
+    ///
+    /// The guard is the whole of it: a scene becoming active on a launch whose
+    /// map has not appeared yet has asked for nothing, and turning updates on
+    /// there would put the authorization alert in front of a hiker one step
+    /// earlier than ``start()``'s caller decided to.
+    func resume() {
+        guard updatesRequested,
+              Self.isAuthorized(manager.foregroundAuthorizationStatus) else { return }
+        beginUpdates()
+    }
+
+    /// Asks the receiver for delivery, at most once per stop.
+    ///
+    /// Idempotent because its three callers are: the view's `onAppear`, which
+    /// SwiftUI may run more than once for one screen; an authorization change,
+    /// which arrives whenever the hiker visits Settings; and the scene coming
+    /// forward, which happens after every interruption.
+    private func beginUpdates() {
+        guard !isUpdating else { return }
+        isUpdating = true
+        manager.startUpdatingLocation()
     }
 
     private static func isAuthorized(_ status: CLAuthorizationStatus) -> Bool {
@@ -249,7 +306,7 @@ extension LocationManager: CLLocationManagerDelegate {
         onMainActor { [weak self] in
             guard let self, updatesRequested,
                   Self.isAuthorized(self.manager.foregroundAuthorizationStatus) else { return }
-            self.manager.startUpdatingLocation()
+            beginUpdates()
         }
     }
 }
