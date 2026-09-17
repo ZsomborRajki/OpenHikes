@@ -68,22 +68,6 @@ nonisolated struct PowerState: Equatable, Sendable {
     var isConserving: Bool {
         isLowPowerModeEnabled || RecordingEnergyPolicy.conserves(thermalState)
     }
-
-    var signpostDetail: String {
-        "lowPower=\(isLowPowerModeEnabled ? 1 : 0) thermal=\(thermalState.diagnosticName)"
-    }
-}
-
-extension ProcessInfo.ThermalState {
-    nonisolated var diagnosticName: String {
-        switch self {
-        case .nominal: "nominal"
-        case .fair: "fair"
-        case .serious: "serious"
-        case .critical: "critical"
-        @unknown default: "unknown"
-        }
-    }
 }
 
 @Observable

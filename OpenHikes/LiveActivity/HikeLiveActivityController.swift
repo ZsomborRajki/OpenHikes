@@ -483,17 +483,6 @@ final class HikeLiveActivityController {
         case runStateChanged
         case routeStatusChanged
         case intervalElapsed
-
-        /// What the Points of Interest track says about this update. The cases
-        /// arrive at very different rates, and a run where every mark reads
-        /// `route` is a run where something is flapping.
-        var signpostDetail: String {
-            switch self {
-            case .runStateChanged: "runstate"
-            case .routeStatusChanged: "route"
-            case .intervalElapsed: "interval"
-            }
-        }
     }
 
     /// Whether entering `runState` stops the input that would carry a retry.

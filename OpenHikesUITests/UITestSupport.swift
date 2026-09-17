@@ -45,17 +45,10 @@ nonisolated enum UITestFixture {
     static let traceStartLatitude = 47.71840
     static let traceMiddleLatitude = 47.71860
     static let traceEndLatitude = 47.71880
-    /// One point further north, for a scenario that wants a longer walk than
-    /// the three the review fixture is pinned to.
-    static let traceExtraLatitude = 47.71900
 
     static var reviewableTrace: [CLLocationCoordinate2D] {
         [traceStartLatitude, traceMiddleLatitude, traceEndLatitude]
             .map(coordinate(atLatitude:))
-    }
-
-    static var extendedTrace: [CLLocationCoordinate2D] {
-        reviewableTrace + [coordinate(atLatitude: traceExtraLatitude)]
     }
 
     static func coordinate(
@@ -291,32 +284,6 @@ extension XCTestCase {
             """
             \(prefixed(message))no label contained "\(text)"; \
             it read \(quoted(element.exists ? element.label : nil))
-            """,
-            file: file,
-            line: line
-        )
-        return matched
-    }
-
-    /// Waits for an element's value to contain `text`, the same way
-    /// ``expectLabel(_:contains:timeout:file:line:)`` waits on a label.
-    @MainActor
-    @discardableResult func expectValue(
-        _ element: XCUIElement,
-        contains text: String,
-        _ message: String = "",
-        timeout: TimeInterval = UITestTimeout.navigation,
-        file: StaticString = #filePath,
-        line: UInt = #line
-    ) -> Bool {
-        let matched = waitUntil(timeout: timeout) {
-            element.exists && (element.value as? String ?? "").contains(text)
-        }
-        XCTAssertTrue(
-            matched,
-            """
-            \(prefixed(message))no value contained "\(text)"; \
-            it read \(quoted(element.exists ? (element.value as? String) : nil))
             """,
             file: file,
             line: line

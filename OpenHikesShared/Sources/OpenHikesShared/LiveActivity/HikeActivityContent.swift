@@ -198,6 +198,8 @@ public extension HikeActivityAttributes.ContentState {
         }
     }
 
+    // periphery:ignore - exercised by `OpenHikesShared/Tests`, a SwiftPM
+    // target the Xcode scheme this scan builds does not contain.
     /// The same figures, marked as a walk that has ended.
     ///
     /// What a saved recording leaves on the Lock Screen for a few minutes

@@ -34,7 +34,6 @@ struct RouteTintTests {
 
     /// What the palette promises about every colour it hands out.
     private struct Components {
-        let hue: CGFloat
         let saturation: CGFloat
         let brightness: CGFloat
         let alpha: CGFloat
@@ -62,7 +61,7 @@ struct RouteTintTests {
     private func components(_ color: Color) -> Components {
         var hue: CGFloat = 0, saturation: CGFloat = 0, brightness: CGFloat = 0, alpha: CGFloat = 0
         UIColor(color).getHue(&hue, saturation: &saturation, brightness: &brightness, alpha: &alpha)
-        return Components(hue: hue, saturation: saturation, brightness: brightness, alpha: alpha)
+        return Components(saturation: saturation, brightness: brightness, alpha: alpha)
     }
     #endif
 

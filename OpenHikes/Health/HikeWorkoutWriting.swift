@@ -26,6 +26,12 @@
 //  Health, and asking for read access buys a second prompt and a privacy
 //  manifest question for nothing.
 //
+//  Authorization is not on this protocol. It is asked for at the first write
+//  and nowhere else — see ``HealthKitWorkoutWriter/write(_:)``, which says why
+//  the switch being flipped is the wrong moment — so there is nothing above
+//  this seam that has to know whether the hiker has been prompted, and a stub
+//  that answered the question would be answering one nobody asks.
+//
 //  ``delete(workoutID:)`` does not change that, and it is worth saying why
 //  rather than leaving a reader to check: it deletes *by predicate* rather
 //  than by sample, so it never fetches one. The alternative — `delete(_:)`,
@@ -69,17 +75,6 @@ nonisolated struct HikeWorkoutRequest: Equatable, Sendable {
 /// Writes a finished hike into the hiker's Health store, if they asked for it.
 @MainActor
 protocol HikeWorkoutWriting: Sendable {
-    /// Whether the hiker has ever been asked. Answering without prompting, so
-    /// the Settings switch can be drawn before any permission dialog.
-    var isAuthorizationDetermined: Bool { get }
-
-    /// Asks for permission to write, and reports whether the app may.
-    ///
-    /// Called when the hiker turns the switch on rather than at launch: an app
-    /// that asks for Health access before being told to is asking for a
-    /// refusal.
-    func requestAuthorization() async -> Bool
-
     /// Writes `request` as a hiking workout and answers with its identifier in
     /// the Health store.
     ///

@@ -62,8 +62,4 @@ public struct TrailWidgetConfiguration: WidgetConfigurationIntent {
         // `nil` — follow the selection, which is what every already-placed
         // widget decodes as.
     }
-
-    public init(hike: HikeEntity?) {
-        self.hike = hike
-    }
 }

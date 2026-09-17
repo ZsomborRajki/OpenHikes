@@ -41,6 +41,8 @@ import OpenHikesShared
 /// `nonisolated` cannot be applied to one.
 struct OpenHikeIntent: AppIntent {
     static let title: LocalizedStringResource = "Open Hike"
+    // periphery:ignore - an optional `AppIntent` requirement, read through
+    // the AppIntents metadata rather than by any call site.
     static let description = IntentDescription(
         "Opens a saved hike in OpenHikes, with its route on the map.",
         categoryName: "Hikes"

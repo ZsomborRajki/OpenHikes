@@ -8,8 +8,6 @@
 
 import CoreLocation
 import Foundation
-@testable import OpenHikes
-import OpenHikesShared
 import SwiftData
 import Testing
 

@@ -587,9 +587,4 @@ extension CommunityReviewBatch {
     static func hikes(_ hikes: [CommunityPendingSubmission]) -> Self {
         Self(hikes: hikes)
     }
-
-    /// A queue of contributed photographs and nothing else.
-    static func photographs(_ photographs: [CommunityPendingPhotos]) -> Self {
-        Self(photographs: photographs)
-    }
 }
