@@ -16,6 +16,12 @@
 //  ``SystemTrailRegionMonitor/shared``: the one-per-name rule is a
 //  one-per-process rule here, and this app builds a tracker in four places.
 //
+//  Being an actor is not on its own enough, and an earlier version of this
+//  file took it to be: an actor is not held across the `await` that opens the
+//  monitor, so two callers arriving inside that window both found no monitor
+//  and both opened one. That shipped, and it crashed on launch.
+//  ``AsyncOnce`` is what closes the window.
+//
 
 import CoreLocation
 import Foundation
@@ -53,7 +59,23 @@ actor CoreLocationTrailRegionMonitor: TrailRegionMonitor {
 
     private static let log = Logger(subsystem: "com.tappium.OpenHikes", category: "TrailRegion")
 
-    private var monitor: CLMonitor?
+    /// The one open monitor, opened on first use.
+    ///
+    /// Opening it is what makes any event pending from the crossing that
+    /// relaunched this process deliverable — CoreLocation stops monitoring
+    /// conditions whose events nothing is configured to receive.
+    ///
+    /// ``AsyncOnce`` rather than a `CLMonitor?` checked and filled in around
+    /// the `await`: opening one suspends, and every caller here arrives from
+    /// its own `Task`. Two of them in that window is not a duplicated cache
+    /// entry but a second `CLMonitor` under a name already in use, which is an
+    /// Objective-C exception Swift cannot catch and an app that dies on
+    /// launch. A launch produces the pair on its own — `init` syncs the region
+    /// and CoreLocation's first authorization callback syncs it again — so
+    /// this is the ordinary path, not a rare one.
+    private let monitor = AsyncOnce {
+        await CLMonitor(CoreLocationTrailRegionMonitor.monitorName)
+    }
     private var eventLoop: Task<Void, Never>?
     /// Where events go. Replaceable, and read per event rather than captured
     /// by the loop: the loop outlives any one tracker, and a tracker being
@@ -108,16 +130,8 @@ actor CoreLocationTrailRegionMonitor: TrailRegionMonitor {
         await onChange?(state)
     }
 
-    /// The one open monitor, created on first use.
-    ///
-    /// Opening it is what makes any event pending from the crossing that
-    /// relaunched this process deliverable — CoreLocation stops monitoring
-    /// conditions whose events nothing is configured to receive.
     private func openMonitor() async -> CLMonitor {
-        if let monitor { return monitor }
-        let opened = await CLMonitor(Self.monitorName)
-        monitor = opened
-        return opened
+        await monitor.value
     }
 }
 
