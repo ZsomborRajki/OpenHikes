@@ -161,9 +161,14 @@ nonisolated final class OpenHikesUITests: XCTestCase {
         )
         field.tap()
         // The field opens holding the current title, so the new name has to
-        // replace it rather than be appended to it.
-        field.tap(withNumberOfTaps: 3, numberOfTouches: 1)
-        field.typeText(Self.renamedHikeName)
+        // replace it rather than be appended to it — which is a gesture that
+        // loses under load, and `replaceText(of:with:)` is where the argument
+        // for waiting on the field's contents instead lives.
+        XCTAssertTrue(
+            replaceText(of: field, with: Self.renamedHikeName),
+            "the field should hold the new name and nothing of the old one, "
+                + "said \"\(field.value as? String ?? "")\""
+        )
         commitKeyboardEdit(in: app)
 
         XCTAssertTrue(
