@@ -267,8 +267,9 @@ final class CommunityBrowser {
     ///
     /// Written only by a ``CommunityNearbyScope/withCuratedTrails`` answer, so
     /// a refill after a block cannot clear a limit that is still running, and
-    /// cleared by leaving the tab. `Equatable` so `@Observable` filters the
-    /// same-value writes a run of refused taps produces.
+    /// cleared by leaving the tab or by ``dismissCuratedNotice()``. `Equatable`
+    /// so `@Observable` filters the same-value writes a run of refused taps
+    /// produces.
     private(set) var curatedNotice: CuratedTrailNotice?
     /// What to call the area the list is answering about, once something has
     /// answered. `nil` until then, and for a launch with no ``areaNames``.
@@ -613,6 +614,23 @@ final class CommunityBrowser {
         // a list nobody is looking at is a caption nothing will ever clear.
         curatedNotice = nil
         state = .idle
+    }
+
+    /// Takes the caption off the *Search this area* pill, because the hiker
+    /// has read it.
+    ///
+    /// The whole of what dismissing means, and deliberately so: there is no
+    /// memory of having been dismissed, so the next search that asks
+    /// OpenStreetMap captions the button again — with the same sentence, if the
+    /// address is still rate-limited. That is the honest answer to a tap that
+    /// has just spent a request, and it is also why clearing this is safe.
+    /// Nothing is lost that the next question will not say again.
+    ///
+    /// A write to the value the pill draws rather than a flag on the control,
+    /// so the caption and the model cannot disagree about whether there is
+    /// anything to say — see ``MapCommunitySearchControl``.
+    func dismissCuratedNotice() {
+        curatedNotice = nil
     }
 
     /// Asks again about the current region, ignoring the thresholds.
