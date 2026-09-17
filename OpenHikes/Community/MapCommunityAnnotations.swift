@@ -68,7 +68,12 @@ final class CommunityMapAnnotation: NSObject, MKAnnotation {
     /// attribution ODbL requires is not squeezed in here — it is on the screen
     /// this callout opens, where it can be a link. See
     /// ``CommunityHikeView/curatedAttribution``.
-    private static func calloutSubtitle(for listing: CommunityListing) -> String {
+    ///
+    /// `nil` rather than `""` when neither half has anything to say — an
+    /// untagged curated route whose line was refused is the one row that can
+    /// reach that — because MapKit draws an empty subtitle as a blank second
+    /// line in the callout, which is a gap where a fact should be.
+    private static func calloutSubtitle(for listing: CommunityListing) -> String? {
         // A curated pin whose line was refused has no length to give, and the
         // callout says the half it does have rather than *0 m* beside it —
         // see ``CommunityListing/drawnDistanceMeters``.
@@ -80,7 +85,7 @@ final class CommunityMapAnnotation: NSObject, MKAnnotation {
             guard let distance else { return shape.displayName }
             return String(localized: "\(distance) · \(shape.displayName)")
         }
-        guard !listing.authorName.isEmpty else { return distance ?? "" }
+        guard !listing.authorName.isEmpty else { return distance }
         guard let distance else { return String(localized: "by \(listing.authorName)") }
         return String(localized: "\(distance) · by \(listing.authorName)")
     }

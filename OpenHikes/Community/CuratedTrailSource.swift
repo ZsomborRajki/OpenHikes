@@ -404,8 +404,12 @@ extension CuratedTrailSource {
         // A superseded search is not an outage and must not be reported as
         // one — see ``CuratedTrailOutage/init(_:)``. It is also not an answer,
         // so it leaves the way it arrived rather than as a page of lineless
-        // rows nobody is waiting for.
-        if let refusal = gathered.refusal, refusal is CancellationError { throw refusal }
+        // rows nobody is waiting for. Both spellings of a cancellation count:
+        // one cancelled on the wire arrives as `URLError(.cancelled)`, and
+        // that is the one a pan mid-geometry actually produces.
+        if let refusal = gathered.refusal, CuratedTrailOutage.isCancellation(refusal) {
+            throw refusal
+        }
         // Built from what the fetch answered rather than read back out of the
         // cache, so eviction during this very call cannot quietly shorten the
         // list the hiker is looking at.

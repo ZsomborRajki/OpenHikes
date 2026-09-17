@@ -130,12 +130,19 @@ nonisolated enum CuratedTrailOutage: Equatable, Sendable {
     /// that as an outage would put *rate-limited* under the button because the
     /// hiker panned twice quickly.
     ///
+    /// **Both spellings of it**, because a cancelled search has two. A request
+    /// stopped before it left is a `CancellationError`; one stopped on the
+    /// wire is `URLSession`'s own `URLError(.cancelled)`, which is what a pan
+    /// during a geometry pass actually produces. Reading only the first put
+    /// *OpenStreetMap trails unavailable* under the button for the commoner of
+    /// the two — see ``isCancellation(_:)``.
+    ///
     /// Everything that is not Overpass speaking is ``unavailable``, and that
     /// is the honest reading: a `URLError` is this device failing to reach a
     /// server, and an answer that could not be decoded is one nobody here can
     /// claim to know the meaning of.
     init?(_ error: any Error) {
-        if error is CancellationError { return nil }
+        if Self.isCancellation(error) { return nil }
         guard let overpass = error as? TrailGraphProviderError else {
             self = .unavailable
             return
@@ -145,6 +152,21 @@ nonisolated enum CuratedTrailOutage: Equatable, Sendable {
             return
         }
         self = OverpassRequest.isMomentarilyBusy(overpass) ? .busy : .unavailable
+    }
+
+    /// Whether `error` is this app stopping its own request rather than a
+    /// service refusing it.
+    ///
+    /// Two types say it and both have to be read. Swift concurrency throws
+    /// `CancellationError` for a task cancelled before it reached the wire;
+    /// `URLSession` throws `URLError(.cancelled)` for one cancelled on it, and
+    /// that is the one a hiker produces by panning twice while a geometry pass
+    /// is out. Neither is anything to tell them about, and neither is an
+    /// answer — see ``CuratedTrailSourcing/completed(_:)``, which must not
+    /// keep a page of lineless rows for a search nobody is waiting on.
+    static func isCancellation(_ error: any Error) -> Bool {
+        if error is CancellationError { return true }
+        return (error as? URLError)?.code == .cancelled
     }
 
     /// One short line for beside the *Search this area* button.
