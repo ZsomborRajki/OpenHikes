@@ -1,0 +1,221 @@
+//
+//  MapCoordinator+RouteTap.swift
+//  OpenHikes
+//
+//  A thumb on a line, and which line it was.
+//
+//  MapKit hit-tests annotations and never overlays: a polyline is drawn pixels
+//  with no view behind it, so without a recognizer of our own every line on
+//  this map is scenery. There are two kinds drawn — the hiker's own selected
+//  route, and the shared hikes faded beneath it — and this file is here
+//  because *one* recognizer has to answer for both.
+//
+//  Two would not. They would both recognize the same tap (they have to; see
+//  `shouldRecognizeSimultaneouslyWith` below), so a thumb where the lines
+//  cross would open a hike *and* somebody else's preview, and which of them
+//  ended up on top would be gesture-resolution order rather than a decision
+//  anybody made. So the gesture, the check that nothing above the map has a
+//  better claim to the touch, and the order the two hit-tests are asked in all
+//  live here, and each kind of line keeps only the part that knows what it is:
+//  ``communityListing(forTapAt:in:)`` in `MapCommunityRoutes.swift`, and
+//  ``isTapOnDrawnRoute(at:in:)`` below.
+//
+//  ## The hiker's own line wins
+//
+//  It is drawn on top, it is drawn at full strength and the hiker chose its
+//  colour, so it is the one they can see under their thumb where the two
+//  overlap. Asking it first is the whole of that rule.
+//
+//  ## What a tap costs
+//
+//  Both hit-tests project their points through the map, because the tolerance
+//  is a fingertip and a fingertip is a distance on the glass — see
+//  ``RouteHitTest``. A page of shared lines is bounded by an outline's point
+//  budget, but the hiker's own route is not bounded by anything: a six-hour
+//  recording is twenty thousand points, measured at 2.2 ms to project and
+//  0.05 ms to then measure against.
+//
+//  Which is why the drawn route is asked for its bounding rectangle first.
+//  MapKit converts that rectangle in one call, whatever the camera is doing to
+//  it, and a tap outside it cannot be within a fingertip of the line inside —
+//  so the ordinary miss, which is most taps on a map, costs one conversion
+//  rather than twenty thousand.
+//
+
+import MapKit
+#if canImport(UIKit)
+import UIKit
+#endif
+
+/// Which line a tap landed on.
+///
+/// An enumeration rather than two optionals, because the point of asking once
+/// is that the answer is one thing.
+enum RouteTapTarget: Equatable {
+    /// A published hike, drawn faded beneath the hiker's own route.
+    case communityListing(CommunityListing)
+    /// The hiker's own drawn route — the selected hike's, and the only one of
+    /// theirs the map ever draws.
+    case drawnRoute
+
+    static func == (lhs: Self, rhs: Self) -> Bool {
+        switch (lhs, rhs) {
+        case let (.communityListing(left), .communityListing(right)): left.id == right.id
+        case (.drawnRoute, .drawnRoute): true
+        default: false
+        }
+    }
+}
+
+#if canImport(UIKit)
+extension MapView.Coordinator: UIGestureRecognizerDelegate {
+    /// How far from a line a tap may land and still count, in screen points.
+    ///
+    /// About a fingertip, and deliberately more than either line is wide: a
+    /// three-point line nobody could hit is a line that is not tappable, and
+    /// the hit-tests resolve the overlap this creates by taking the nearest.
+    ///
+    /// One number for both kinds, because it is a number about thumbs rather
+    /// than about what the line underneath one happens to be.
+    static let lineTapTolerancePoints: CGFloat = 22
+
+    /// Adds the recognizer that answers a tap on any of the lines drawn here.
+    ///
+    /// Idempotent for the reason the observations are: `makeMapView` runs once
+    /// per map, but nothing here should depend on that, and a second
+    /// recognizer would open the same screen twice.
+    func installRouteTap(on mapView: MKMapView) {
+        guard routeTapRecognizer == nil else { return }
+        let recognizer = UITapGestureRecognizer(
+            target: self,
+            action: #selector(handleRouteTap(_:))
+        )
+        // Alongside MapKit's own recognizers rather than instead of them: this
+        // one answers a question about overlays, and a tap that hits no line
+        // must still do everything a tap on the map did before — dismissing a
+        // callout most visibly.
+        recognizer.delegate = self
+        // **This recognizer observes and never consumes**, and both of these
+        // are what make that true rather than merely intended.
+        //
+        // `cancelsTouchesInView` defaults to *true*, and it does not mean "when
+        // this recognizer acts on the tap" — it means whenever it recognizes
+        // one, which here is every tap anywhere on the map. The touch is then
+        // cancelled in whatever view was under it, so a photo pin's callout
+        // stops opening the gallery and a button stops being a button. That
+        // shipped for exactly as long as it took
+        // `PhotoUITests.testOpensTheGalleryFromAPhotoPinOnTheMap` to run.
+        //
+        // `delaysTouchesEnded` defaults to true too, which would hold every
+        // `touchesEnded` on the map back until this recognizer resolved.
+        // Nothing here needs to arrive first.
+        recognizer.cancelsTouchesInView = false
+        recognizer.delaysTouchesEnded = false
+        routeTapRecognizer = recognizer
+        mapView.addGestureRecognizer(recognizer)
+    }
+
+    func gestureRecognizer(
+        _: UIGestureRecognizer,
+        shouldRecognizeSimultaneouslyWith _: UIGestureRecognizer
+    ) -> Bool {
+        true
+    }
+
+    @objc func handleRouteTap(_ recognizer: UITapGestureRecognizer) {
+        guard recognizer.state == .ended,
+              let mapView = recognizer.view as? MKMapView
+        else { return }
+        switch routeTapTarget(at: recognizer.location(in: mapView), in: mapView) {
+        case .drawnRoute: drawnRouteTap?.open()
+        case let .communityListing(listing): community?.open(listing)
+        case nil: break
+        }
+    }
+
+    /// The line a tap at `point` landed on, if any.
+    ///
+    /// Split from the handler above because this is the half worth asserting
+    /// on and a `UITapGestureRecognizer` is the half that cannot be: its state
+    /// and its location are read-only and set by the touch system, so a suite
+    /// driving the handler would have to fake UIKit rather than the map. What
+    /// is left in the handler is the four lines that turn a gesture into this
+    /// call and hand the answer on.
+    func routeTapTarget(at point: CGPoint, in mapView: MKMapView) -> RouteTapTarget? {
+        guard !isTapClaimed(at: point, in: mapView) else { return nil }
+        if isTapOnDrawnRoute(at: point, in: mapView) { return .drawnRoute }
+        return communityListing(forTapAt: point, in: mapView).map(RouteTapTarget.communityListing)
+    }
+
+    /// Whether a tap at `point` landed on the hiker's own drawn route.
+    ///
+    /// The line only, and deliberately not the inferred or paused stretches
+    /// drawn over it: those are the same geometry drawn differently, so every
+    /// point of them is already a point of this.
+    ///
+    /// The bounding rectangle first, for the reason this file's header gives —
+    /// a route is unbounded in length and a tap that missed it by the width of
+    /// the screen must not pay for twenty thousand projections to find that
+    /// out. Grown by the tolerance, because a tap just outside the rectangle
+    /// can still be within a fingertip of the line that touches its edge.
+    ///
+    /// MapKit converts the rectangle, rather than this deciding what a map
+    /// rectangle is worth in screen points, and that is what makes the guard
+    /// safe to put in front of an exact answer: a camera can be rotated and
+    /// pitched, and both change where a map rectangle lands. Checked against
+    /// every point of a drawn line at heading 37°, at 34° of pitch, and at
+    /// both together — the returned rectangle contained all of them each time,
+    /// so a line that would be hit is never rejected here.
+    func isTapOnDrawnRoute(at point: CGPoint, in mapView: MKMapView) -> Bool {
+        guard routeCoordinates.count > 1, let polyline = routeOverlay else { return false }
+        let tolerance = Self.lineTapTolerancePoints
+        let bounds = mapView
+            .convert(MKCoordinateRegion(polyline.boundingMapRect), toRectTo: mapView)
+            .insetBy(dx: -tolerance, dy: -tolerance)
+        guard bounds.contains(point) else { return false }
+        let projected = routeCoordinates.map { mapView.convert($0, toPointTo: mapView) }
+        guard let distance = RouteHitTest.distance(from: point, to: projected) else { return false }
+        return distance <= tolerance
+    }
+
+    /// Whether something on top of the map has a better claim to this tap.
+    ///
+    /// A marker, a callout, the tracking button, the camera pill, *Search this
+    /// area*, the credit line — all of them are views, all of them sit over the
+    /// lines, and a tap that opens a hike *as well as* pressing a button is
+    /// a tap that did two things. A recognizer on the map view sees those
+    /// touches whatever the view under them does with them, so this is the
+    /// whole of what stops it.
+    ///
+    /// The walk up the hierarchy rather than a test of the hit view alone is
+    /// because every one of these is a tree: what a tap actually lands on is a
+    /// label inside a button inside an annotation view.
+    ///
+    /// The four named views are named because none of them is a `UIControl` —
+    /// `MKUserTrackingButton` is a plain `UIView`, and the other three are this
+    /// app's own containers with the buttons *inside* them. Testing for
+    /// `UIControl` alone would let a tap on the padding around a button through
+    /// while catching the button itself, which is the sort of difference
+    /// nobody can see and everybody hits.
+    private func isTapClaimed(at point: CGPoint, in mapView: MKMapView) -> Bool {
+        var view = mapView.hitTest(point, with: nil)
+        while let current = view, current !== mapView {
+            if current is MKAnnotationView || current is UIControl { return true }
+            if isOwnControl(current) { return true }
+            view = current.superview
+        }
+        return false
+    }
+
+    /// Whether `view` is one of the controls this map puts over its own
+    /// drawing. Identity rather than type, because the coordinator already
+    /// holds each one.
+    private func isOwnControl(_ view: UIView) -> Bool {
+        if view === trackingButton || view === areaSearchControl { return true }
+        #if os(iOS)
+        if view === photoControls || view === attributionView { return true }
+        #endif
+        return false
+    }
+}
+#endif

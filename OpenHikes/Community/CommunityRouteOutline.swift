@@ -50,7 +50,7 @@ nonisolated enum CommunityRouteOutline {
     /// Enough that a switchbacked ascent still reads as switchbacks at the
     /// zoom a browse happens at, few enough that a page of results is
     /// kilobytes. It is also the bound the map's tap hit-test is sized
-    /// against — see ``CommunityRouteHitTest`` — so a tap costs at most
+    /// against — see ``RouteHitTest`` — so a tap costs at most
     /// `resultLimit × maximumPoints` projections however long the original
     /// walks were.
     static let maximumPoints = 128

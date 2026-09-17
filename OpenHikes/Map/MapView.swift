@@ -70,6 +70,14 @@ struct MapView: MapViewRepresentable, Equatable {
     /// the route without re-rendering any view.
     var mapController: MapController
 
+    /// Where a tap on the drawn route above goes.
+    ///
+    /// Handed over rather than observed, and in this direction only: the map
+    /// tells it a line was tapped and it never tells the map anything. See
+    /// ``DrawnRouteTap``, and ``community`` below for the same arrangement
+    /// serving the shared hikes' lines.
+    var drawnRouteTap: DrawnRouteTap
+
     /// Whether a photo can be taken right now, and the two requests the camera
     /// pill raises. Observed directly by the map (not via SwiftUI) so pushing
     /// or popping a screen that can receive a photo shows or hides the pill
@@ -133,6 +141,7 @@ struct MapView: MapViewRepresentable, Equatable {
             && lhs.sheetMetrics === rhs.sheetMetrics
             && lhs.tileSource == rhs.tileSource
             && lhs.mapController === rhs.mapController
+            && lhs.drawnRouteTap === rhs.drawnRouteTap
             && lhs.locationManager === rhs.locationManager
             && lhs.photoCapture === rhs.photoCapture
             && lhs.photoPins === rhs.photoPins
@@ -170,6 +179,7 @@ struct MapView: MapViewRepresentable, Equatable {
         coordinator.observePhotoPins(photoPins, on: mapView)
         coordinator.community = community
         coordinator.searchCompleter = searchCompleter
+        coordinator.drawnRouteTap = drawnRouteTap
         // The map asks the community question and now draws its answer too —
         // see ``MapCommunityAnnotations``. Observed here rather than handed
         // down, so a nearby result landing moves MapKit's annotations and no
@@ -181,11 +191,12 @@ struct MapView: MapViewRepresentable, Equatable {
         coordinator.observeCommunityPhotoPins(community, on: mapView)
         // And where they go, which is the half a pin cannot say — see
         // ``MapCommunityRoutes``. The recognizer goes on with them: MapKit
-        // hit-tests annotations and never overlays, so without it the lines
-        // would be scenery.
+        // hit-tests annotations and never overlays, so without it every line
+        // here — theirs and the hiker's own — would be scenery. One
+        // recognizer answers for both; see `MapCoordinator+RouteTap.swift`.
         coordinator.observeCommunityRoutes(community, on: mapView)
         #if canImport(UIKit)
-        coordinator.installCommunityRouteTap(on: mapView)
+        coordinator.installRouteTap(on: mapView)
         #endif
 
         // Raster tiles from the selected provider, replacing Apple's base map.
@@ -468,6 +479,9 @@ struct MapView: MapViewRepresentable, Equatable {
         if let existing = coordinator.routeOverlay {
             mapView.removeOverlay(existing)
             coordinator.routeOverlay = nil
+            // With the line, because a tap hit-tests these points and a route
+            // that is no longer drawn must not still be tappable.
+            coordinator.routeCoordinates = []
         }
         if !coordinator.inferredRouteOverlays.isEmpty {
             mapView.removeOverlays(coordinator.inferredRouteOverlays)
@@ -485,6 +499,9 @@ struct MapView: MapViewRepresentable, Equatable {
         // takes the new polyline's style from those.
         let polyline = MKPolyline(coordinates: route.coordinates, count: route.coordinates.count)
         coordinator.routeOverlay = polyline
+        // Kept alongside so a tap can be answered without reading them back
+        // out of MapKit — see ``MapView/Coordinator/routeCoordinates``.
+        coordinator.routeCoordinates = route.coordinates
         if let tileOverlay = coordinator.tileOverlay {
             // Above the shared hikes' lines when any are drawn, rather than
             // above the tiles they are anchored on: both sit in this level,

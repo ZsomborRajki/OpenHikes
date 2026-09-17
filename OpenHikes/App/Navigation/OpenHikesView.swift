@@ -12,24 +12,16 @@ import SwiftData
 import SwiftUI
 
 struct OpenHikesView: View {
+    /// Internal, like the state at the foot of this list, so the map's pin and
+    /// line taps can be claimed from `OpenHikesView+MapTaps.swift` —
+    /// `private` is file-scoped in Swift, and this file is at its length
+    /// limit.
     @Environment(OpenHikesModel.self)
-    private var appModel
+    var appModel
     @Environment(\.modelContext)
-    private var modelContext
+    var modelContext
 
     @State private var showSheet = true
-    @State private var selectedHike: Hike?
-    /// The sheet's navigation stack and the height it rests at, held here
-    /// rather than inside `MapSheet` so a widget tap can push a hike's detail
-    /// view (see `openHike(id:)`) and so the detent picker can be attached to
-    /// the sheet from out here.
-    ///
-    /// A reference type rather than two pieces of `@State`, because `@State`
-    /// invalidates the view that declares it whether or not its body reads it —
-    /// which is what made opening a photo from a hike's gallery re-render this
-    /// view, the sheet and the hikes list. Only the coarse flags on it are read
-    /// below; see ``SheetPresentation``.
-    @State private var sheet = SheetPresentation()
     @State private var highlight = RouteHighlight()
     /// The stretches of the drawn route a finished walk covered, observed
     /// directly by the map — see ``WalkHighlight``.
@@ -73,14 +65,33 @@ struct OpenHikesView: View {
     @State private var didProcessLaunchFixture = false
 
     // swiftlint:disable private_swiftui_state
+    /// The hike whose route the map draws, and whose screen the sheet opens
+    /// to when it is tapped there.
+    @State var selectedHike: Hike?
+    /// The sheet's navigation stack and the height it rests at, held here
+    /// rather than inside `MapSheet` so a widget tap can push a hike's detail
+    /// view (see `openHike(id:)`) and so the detent picker can be attached to
+    /// the sheet from out here.
+    ///
+    /// A reference type rather than two pieces of `@State`, because `@State`
+    /// invalidates the view that declares it whether or not its body reads it —
+    /// which is what made opening a photo from a hike's gallery re-render this
+    /// view, the sheet and the hikes list. Only the coarse flags on it are read
+    /// below; see ``SheetPresentation``.
+    @State var sheet = SheetPresentation()
+    /// Where a tap on the drawn route goes. Owned here for the reason
+    /// ``photoPins`` is: the line is drawn by MapKit and the screen it opens
+    /// is a push into the stack this view owns. See ``DrawnRouteTap``.
+    @State var drawnRouteTap = DrawnRouteTap()
     /// Which screen a photo would be filed under. Owned here because the map's
     /// camera pill and the screens that offer it live on opposite sides of the
     /// sheet; see ``PhotoCaptureController``.
     ///
-    /// Internal rather than private, along with the presentation state below,
-    /// so the capture actions in `OpenHikesView+Photos.swift` can reach them —
-    /// `private` is file-scoped in Swift, and those actions are long enough to
-    /// have pushed this file past its length limit.
+    /// Internal rather than private, along with everything else in this block
+    /// and the two environment values above, so the actions split out into
+    /// `OpenHikesView+Photos.swift` and `OpenHikesView+MapTaps.swift` can
+    /// reach them — `private` is file-scoped in Swift, and those actions are
+    /// long enough to have pushed this file past its length limit.
     @State var photoCapture = PhotoCaptureController()
     /// Camera and library presentation, driven by the pill's request tokens.
     /// Owned here because the pill and the screens that offer it sit on
@@ -304,6 +315,7 @@ struct OpenHikesView: View {
             sheetMetrics: sheetMetrics,
             tileSource: activeTileSource,
             mapController: mapController,
+            drawnRouteTap: drawnRouteTap,
             photoCapture: photoCapture,
             photoPins: photoPins,
             community: appModel.community,
@@ -320,31 +332,7 @@ struct OpenHikesView: View {
             .ignoresSafeArea()
             .onAppear {
                 restoreLastSelectedHike()
-                // Points the map's shared-hike pins at the sheet's navigation
-                // stack, for the reason ``PhotoMapPinController`` takes its
-                // `onOpen` from the screen that claims the pins: MapKit draws
-                // them and the destination is a push into a stack the map
-                // cannot see. This view owns that stack, and is never taken
-                // down, so this is set once.
-                //
-                // The three things it reaches are captured rather than read
-                // off `self`, because this closure outlives every copy of this
-                // struct: the sheet's presentation and the model context, both
-                // of which are references to something that outlives the view
-                // anyway, and the selection's own projection — whose storage
-                // does too, for the reason ``MapSheetHikes``'s `==` gives for
-                // the closures it excludes.
-                appModel.community.onOpenListing { [sheet, selection = $selectedHike, context = modelContext] listing in
-                    sheet.open(
-                        listing,
-                        // Fetched here where the sheet's rows read it off the
-                        // `@Query` they are already drawn from: a pin is one
-                        // tap and one listing, and there is no list in front
-                        // of it to derive it from.
-                        importedAs: try? CommunityImport.existingImport(of: listing.id, in: context),
-                        selectedHike: &selection.wrappedValue
-                    )
-                }
+                claimMapTaps()
                 if AppLaunchEnvironment.usesLiveLocation {
                     appModel.locationManager.start()
                 }

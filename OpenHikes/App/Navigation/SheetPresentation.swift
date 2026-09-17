@@ -286,6 +286,37 @@ final class SheetPresentation {
         path = [route]
     }
 
+    /// Opens the hike whose line was tapped on the map.
+    ///
+    /// The drawn route is always the selected hike's — see
+    /// ``DisplayedRoute/forSelection(_:cache:recordingPresented:)`` — so there
+    /// is no selection to make here and nothing to resolve: the tap already
+    /// identified the hike by pointing at its line.
+    ///
+    /// Here rather than at the call site for the reason
+    /// ``showCommunityHike(_:)`` is, and it answers the same two questions the
+    /// same way. **The sheet moves to the middle detent**, unconditionally: at
+    /// the compact detent there is only room for the search field, so a screen
+    /// pushed into it arrives with nowhere to draw, and at `.large` the sheet
+    /// covers the map the hiker just tapped. The detent a reader chose is
+    /// worth less than the thing they opened the screen to look at.
+    ///
+    /// **A jump rather than a step deeper**, so the path is assigned and not
+    /// appended — exactly as ``MapSheet``'s own `open(_:)` assigns for a
+    /// tapped row. A tap on a line is a request to see that trail, whatever
+    /// screen happened to be up.
+    ///
+    /// Which leaves a tap on the line of the hike already in front as a
+    /// request for nothing: the detent is dealt with above, and reassigning an
+    /// identical path would take a `NavigationStack` through a push it has
+    /// nowhere to go.
+    func showDrawnRoute(_ hike: Hike) {
+        makeRoomForTheMap()
+        let route = SheetRoute.hike(hike)
+        guard path != [route] else { return }
+        path = [route]
+    }
+
     /// Whether `listing`'s preview is the screen the hiker is on.
     ///
     /// What an import asks before it navigates. The save itself is already

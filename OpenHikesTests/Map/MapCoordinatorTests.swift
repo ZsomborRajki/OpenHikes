@@ -39,6 +39,9 @@ struct MapCoordinatorTests {
     /// Internal so the photo-pin tests can publish pins to it — see
     /// `MapCoordinatorTests+PhotoPins.swift`.
     let photoPins = PhotoMapPinController()
+    /// Internal so the line-tap tests can ask what a thumb opened — see
+    /// `MapCoordinatorTests+RouteTap.swift`.
+    let drawnRouteTap = DrawnRouteTap()
     private let routeStyle = RouteStyle()
     /// Driven by a clock the test owns: `LocationManager` publishes at most
     /// once a second, and `SheetMetrics` tells a resting sheet from a moving
@@ -86,6 +89,7 @@ struct MapCoordinatorTests {
             sheetMetrics: sheetMetrics,
             tileSource: tileSource,
             mapController: mapController,
+            drawnRouteTap: drawnRouteTap,
             photoCapture: photoCapture,
             photoPins: photoPins,
             community: community,
