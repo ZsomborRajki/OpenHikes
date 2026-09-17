@@ -12,6 +12,10 @@
 //  hike's ``RouteLinePattern``. Dashing is left to `MKPolylineRenderer`'s own
 //  stroke properties; only the chevrons are drawn here.
 //
+//  A chevron is offered to ``RouteChevronField`` before it is drawn, which is
+//  what keeps a route that comes home the way it went out from stamping two
+//  opposed chevrons on every metre of it. That file carries the reasoning.
+//
 
 import MapKit
 #if canImport(UIKit)
@@ -25,6 +29,59 @@ nonisolated final class DirectionalPolylineRenderer: MKPolylineRenderer {
     /// stroke colour and width, so a pattern change restyles the live renderer
     /// rather than rebuilding the overlay.
     var pattern: RouteLinePattern = .default
+
+    /// The chevron geometry for one draw pass, in the map points the renderer
+    /// draws in rather than the screen points the pattern states it in. The
+    /// conversion happens once here instead of at every chevron.
+    private struct ChevronPlan {
+        let spacing: Double
+        let halfLength: Double
+        let halfWidth: Double
+        let strokeWidth: Double
+        /// How far a segment's bounding box grows before it is tested against
+        /// the visible rect, so a chevron reaching over the edge is not
+        /// skipped along with the segment it rides.
+        let pad: Double
+        let retraceClearance: Double
+        let overlapClearance: Double
+
+        /// `nil` at a zoom scale that leaves nothing to place — zero, negative
+        /// or large enough to divide the spacing away to nothing.
+        init?(metrics: RouteChevronMetrics, zoomScale: Double) {
+            guard zoomScale > 0 else { return nil }
+            spacing = metrics.spacing / zoomScale
+            guard spacing > 0, spacing.isFinite else { return nil }
+            halfLength = metrics.halfLength / zoomScale
+            halfWidth = metrics.halfWidth / zoomScale
+            strokeWidth = metrics.strokeWidth / zoomScale
+            pad = (halfLength + halfWidth) * 2
+            retraceClearance = metrics.retraceClearance / zoomScale
+            overlapClearance = metrics.overlapClearance / zoomScale
+        }
+
+        /// The bucket size for the pass's field: the widest clearance it will
+        /// ask about, so a conflicting chevron is always in one of the nine
+        /// cells around the candidate.
+        var cellSize: Double { max(retraceClearance, overlapClearance) }
+    }
+
+    /// What one chevron pass carries from segment to segment: how far along
+    /// the next chevron is, and the ground the drawn ones already cover.
+    private struct ChevronPass {
+        let plan: ChevronPlan
+        let mapRect: MKMapRect
+        /// Distance carried across segment boundaries so spacing is uniform
+        /// along the whole path rather than resetting at every vertex.
+        var carry: Double
+        var placed: RouteChevronField
+
+        init(plan: ChevronPlan, mapRect: MKMapRect) {
+            self.plan = plan
+            self.mapRect = mapRect
+            carry = plan.spacing
+            placed = RouteChevronField(cellSize: plan.cellSize)
+        }
+    }
 
     override func draw(_ mapRect: MKMapRect, zoomScale: MKZoomScale, in context: CGContext) {
         // The dash pattern (and the cap that makes a dotted line round) are
@@ -40,18 +97,9 @@ nonisolated final class DirectionalPolylineRenderer: MKPolylineRenderer {
         let points = polyline.points()
 
         // Convert screen-point sizes into map-point space for this zoom level.
-        let z = Double(zoomScale)
-        guard z > 0 else { return }
-        let spacing = metrics.spacing / z
-        guard spacing > 0 else { return }
-        // chevron reach along the path
-        let halfLen = metrics.halfLength / z
-        // chevron spread across the path
-        let halfWidth = metrics.halfWidth / z
-        let strokeW = metrics.strokeWidth / z
-        let pad = (halfLen + halfWidth) * 2
+        guard let plan = ChevronPlan(metrics: metrics, zoomScale: Double(zoomScale)) else { return }
 
-        context.setLineWidth(CGFloat(strokeW))
+        context.setLineWidth(CGFloat(plan.strokeWidth))
         context.setLineCap(.round)
         context.setLineJoin(.round)
         // The stroke above may have left a dash pattern on the context; a
@@ -59,36 +107,19 @@ nonisolated final class DirectionalPolylineRenderer: MKPolylineRenderer {
         context.setLineDash(phase: 0, lengths: [])
         context.setStrokeColor(arrowColor())
 
-        // Distance carried across segment boundaries so spacing is uniform along
-        // the whole path rather than resetting at every vertex.
-        var carry = spacing
+        var pass = ChevronPass(plan: plan, mapRect: mapRect)
         for i in 1..<count {
-            drawChevrons(
-                from: points[i - 1],
-                to: points[i],
-                halfLen: halfLen,
-                halfWidth: halfWidth,
-                spacing: spacing,
-                pad: pad,
-                mapRect: mapRect,
-                context: context,
-                carry: &carry
-            )
+            drawChevrons(from: points[i - 1], to: points[i], context: context, pass: &pass)
         }
     }
 
-    // swiftlint:disable:next function_parameter_count
     private func drawChevrons(
         from a: MKMapPoint,
         to b: MKMapPoint,
-        halfLen: Double,
-        halfWidth: Double,
-        spacing: Double,
-        pad: Double,
-        mapRect: MKMapRect,
         context: CGContext,
-        carry: inout Double
+        pass: inout ChevronPass
     ) {
+        let plan = pass.plan
         let dx = b.x - a.x, dy = b.y - a.y
         let segLength = (dx * dx + dy * dy).squareRoot()
         if segLength == 0 { return }
@@ -96,50 +127,67 @@ nonisolated final class DirectionalPolylineRenderer: MKPolylineRenderer {
         // Skip segments outside the visible rect, but keep the spacing carry
         // accurate so on-screen chevrons stay evenly placed.
         let segRect = MKMapRect(
-            x: min(a.x, b.x) - pad,
-            y: min(a.y, b.y) - pad,
-            width: abs(dx) + 2 * pad,
-            height: abs(dy) + 2 * pad
+            x: min(a.x, b.x) - plan.pad,
+            y: min(a.y, b.y) - plan.pad,
+            width: abs(dx) + 2 * plan.pad,
+            height: abs(dy) + 2 * plan.pad
         )
-        guard mapRect.intersects(segRect) else {
+        guard pass.mapRect.intersects(segRect) else {
             // Closed-form version of the on-screen loop below (advance `d` by
             // `spacing` until it passes `segLength`). An off-screen segment
             // isn't bounded by screen size, so at deep zoom (tiny `spacing`)
             // a single long segment could otherwise mean millions of
             // iterations just to keep the chevron spacing carry accurate.
-            let steps = max(0, Int(((segLength - carry) / spacing).rounded(.down)) + 1)
-            carry = carry + Double(steps) * spacing - segLength
+            let steps = max(0, Int(((segLength - pass.carry) / plan.spacing).rounded(.down)) + 1)
+            pass.carry = pass.carry + Double(steps) * plan.spacing - segLength
             return
         }
 
         let ux = dx / segLength, uy = dy / segLength   // unit direction
-        let nx = -uy, ny = ux                          // unit normal
-        var d = carry
+        var d = pass.carry
         while d <= segLength {
-            let cx = a.x + ux * d, cy = a.y + uy * d
-            let tip = point(for: MKMapPoint(x: cx + ux * halfLen, y: cy + uy * halfLen))
-            let left = point(
-                for: MKMapPoint(
-                    x: cx - ux * halfLen + nx * halfWidth,
-                    y: cy - uy * halfLen + ny * halfWidth
-                )
+            let chevron = RouteChevron(x: a.x + ux * d, y: a.y + uy * d, ux: ux, uy: uy)
+            // Ground an earlier chevron already covers: the way home over the
+            // way out, a second lap, a switchback tighter than the spacing.
+            let clear = pass.placed.claim(
+                chevron,
+                retrace: plan.retraceClearance,
+                crossing: plan.overlapClearance
             )
-            let right = point(
-                for: MKMapPoint(
-                    x: cx - ux * halfLen - nx * halfWidth,
-                    y: cy - uy * halfLen - ny * halfWidth
-                )
-            )
-
-            context.beginPath()
-            context.move(to: left)
-            context.addLine(to: tip)
-            context.addLine(to: right)
-            context.strokePath()
-
-            d += spacing
+            if clear { stroke(chevron, plan: plan, in: context) }
+            d += plan.spacing
         }
-        carry = d - segLength
+        pass.carry = d - segLength
+    }
+
+    /// One chevron: from its left tail to its tip and on to its right tail.
+    private func stroke(_ chevron: RouteChevron, plan: ChevronPlan, in context: CGContext) {
+        let ux = chevron.ux, uy = chevron.uy
+        let nx = -uy, ny = ux                          // unit normal
+        let tip = point(
+            for: MKMapPoint(
+                x: chevron.x + ux * plan.halfLength,
+                y: chevron.y + uy * plan.halfLength
+            )
+        )
+        let left = point(
+            for: MKMapPoint(
+                x: chevron.x - ux * plan.halfLength + nx * plan.halfWidth,
+                y: chevron.y - uy * plan.halfLength + ny * plan.halfWidth
+            )
+        )
+        let right = point(
+            for: MKMapPoint(
+                x: chevron.x - ux * plan.halfLength - nx * plan.halfWidth,
+                y: chevron.y - uy * plan.halfLength - ny * plan.halfWidth
+            )
+        )
+
+        context.beginPath()
+        context.move(to: left)
+        context.addLine(to: tip)
+        context.addLine(to: right)
+        context.strokePath()
     }
 
     /// A grey shade that contrasts with the line color (near-white on dark lines,

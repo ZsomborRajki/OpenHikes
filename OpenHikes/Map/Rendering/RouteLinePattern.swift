@@ -164,6 +164,34 @@ nonisolated struct RouteChevronMetrics: Equatable, Sendable {
     /// Distance from a chevron's centre to each tail, across the path.
     let halfWidth: Double
     let strokeWidth: Double
+
+    /// How close a chevron may come to an earlier one running along the same
+    /// ground — the same heading or the reverse of it — before ``RouteChevronField``
+    /// drops it as a retrace.
+    ///
+    /// Just under the spacing, which is what makes an out-and-back come out
+    /// right: the chevrons of the outbound leg sit exactly one spacing apart,
+    /// so every point on that stretch is within half a spacing of one of them,
+    /// and nothing the return leg places can clear this.
+    ///
+    /// Under the spacing rather than at it so that a path which merely *bends*
+    /// keeps its chevrons. Two chevrons a spacing apart along a curve are less
+    /// than a spacing apart in a straight line, but the gap only closes this
+    /// far once the path has turned about 145° inside one spacing — a
+    /// switchback, where a chevron dropped is a chevron that would have
+    /// collided anyway.
+    var retraceClearance: Double { spacing * Self.retraceClearanceFraction }
+
+    /// The same distance for two chevrons whose headings genuinely differ: a
+    /// route crossing itself. Both are worth drawing, so this asks only that
+    /// they not print on top of each other — it is the glyph's own footprint.
+    var overlapClearance: Double { halfLength + halfWidth }
+
+    /// Headings this aligned, in either direction, mean two chevrons are
+    /// running along the same ground rather than crossing it. cos 60°.
+    static let collinearAlignment: Double = 0.5
+
+    private static let retraceClearanceFraction: Double = 0.75
 }
 
 /// The grey a chevron is drawn in when it rides a line: near-white on a dark
