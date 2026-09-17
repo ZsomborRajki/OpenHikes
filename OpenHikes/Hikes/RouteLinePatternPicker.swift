@@ -25,8 +25,22 @@ struct RouteLinePatternPicker: View {
 
     var body: some View {
         VStack(alignment: .leading, spacing: 6) {
-            Label("Line style", systemImage: "scribble.variable")
-                .font(.caption.weight(.medium))
+            // The caption names the chosen style as well as marking it, for
+            // the same reason the width row states its number: a swatch is a
+            // picture of a line, and two of the five differ only in how long
+            // the strokes are. It is also the one cue that survives a route
+            // tint too pale for its own selection border to read.
+            HStack {
+                Label("Line style", systemImage: "scribble.variable")
+                Spacer()
+                Text(hike.routeLinePattern.title)
+                    .foregroundStyle(.secondary)
+            }
+            .font(.caption.weight(.medium))
+            .accessibilityElement(children: .ignore)
+            .accessibilityLabel("Line style")
+            .accessibilityValue(hike.routeLinePattern.title)
+            .accessibilityIdentifier("route-pattern-caption")
             HStack(spacing: 6) {
                 GlassStack(spacing: Self.glassSpacing) {
                     HStack(spacing: 6) {
@@ -49,14 +63,15 @@ struct RouteLinePatternPicker: View {
                 .frame(height: swatchHeight)
                 .frame(maxWidth: .infinity)
                 .padding(.vertical, 6)
-                // The selected swatch is tinted glass rather than plain glass
-                // under a stroked border: the tint is the route's own colour,
-                // so selection is carried by the surface as well as by the
-                // outline that still marks it.
+                // Plain glass under every swatch, selected or not. Tinting the
+                // selected one filled it with the route's own colour — the
+                // exact colour the line inside it is drawn in — so the swatch
+                // that was meant to show the choice became a solid rectangle
+                // showing nothing, and the pattern was unreadable until some
+                // other swatch was picked. Selection is the border and the
+                // caption instead; both sit clear of the line.
                 .glassSurface(
-                    isSelected
-                        ? .regular.tint(hike.tintOpaque).interactive()
-                        : .regular.interactive(),
+                    .regular.interactive(),
                     in: .rect(cornerRadius: Self.tileCornerRadius)
                 )
                 .overlay {
