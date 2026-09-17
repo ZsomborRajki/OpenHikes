@@ -94,10 +94,15 @@ final class StubCommunityTransport: CommunityTransporting, @unchecked Sendable {
     var submissionResult: Result<String, CommunityFailure> = .success("submission-1")
     var listingsResult: Result<[CommunityListing], CommunityFailure> = .success([])
     /// What the curated half of a nearby answer reports, for a suite driving
-    /// the rate-limit notice. Only ever returned to a
+    /// the caption under *Search this area*. Only ever returned to a
     /// ``CommunityNearbyScope/withCuratedTrails`` question, since that is the
-    /// only kind that can be refused by OpenStreetMap.
-    var curatedOutage: CuratedTrailOutage?
+    /// only kind that asks OpenStreetMap anything.
+    ///
+    /// One trail by default, which is the case with nothing to say: a suite
+    /// that has not thought about OpenStreetMap should not have its pill
+    /// captioned by it. ``CuratedTrailOutcome/trails(_:)`` with a zero is the
+    /// empty area, and it captions the pill on purpose.
+    var curatedOutcome: CuratedTrailOutcome = .trails(1)
     var detailResult: Result<CommunityHikeDetail, CommunityFailure>?
     /// What a publication check answers. `nil` — the default — is "no listing
     /// for this submission yet", which is the state a hike spends its whole
@@ -203,7 +208,7 @@ final class StubCommunityTransport: CommunityTransporting, @unchecked Sendable {
             // that asked about OpenStreetMap — which is what the real
             // ``MergedCommunityTransport`` does, and the rule
             // ``CommunityBrowser`` is held to.
-            curatedOutage: scope == .withCuratedTrails ? curatedOutage : nil
+            curated: scope == .withCuratedTrails ? curatedOutcome : .notAsked
         )
     }
 

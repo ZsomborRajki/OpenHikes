@@ -32,10 +32,12 @@
 //  That used to be the end of it, and the end of it was too quiet: a curated
 //  failure went to the log and nowhere else, so a hiker whose address had been
 //  rate-limited saw a list with no trails in it and nothing to tell that apart
-//  from an area with no trails in it. The failure is now *reported beside the
-//  rows* as a ``CuratedTrailOutage`` on the answer — still never thrown, still
-//  never the request's own failure — and the *Search this area* button is what
-//  draws it. See ``CommunityNearbyAnswer``.
+//  from an area with no trails in it. What the curated half came to is now
+//  *reported beside the rows* as a ``CuratedTrailOutcome`` on the answer —
+//  still never thrown, still never the request's own failure — and the *Search
+//  this area* button is what draws it. That report covers the empty area as
+//  well as the refusal, because those two are the pair a hiker cannot tell
+//  apart from the rows alone. See ``CommunityNearbyAnswer``.
 //
 //  A refusal is also not the end of the curated half. What this device has
 //  already downloaded near the searched area is drawn in its place — see
@@ -44,13 +46,13 @@
 //  answer to the question.
 //
 //  **Overpass is asked only when the question asks for it.** Every nearby
-//  request used to reach both sources, which meant selecting the *Community*
-//  tab, retrying a failed search and refilling the list after a block each
-//  spent two Overpass round trips the hiker had not asked for — against a
+//  request used to reach both sources, which meant refilling the list after a
+//  block spent two Overpass round trips nobody had asked for — against a
 //  volunteer-run API with a handful of slots per address, from a list that
 //  re-asks whenever the map has moved. ``CommunityNearbyScope`` is the
-//  question's own answer to which sources it covers, and only a tap on
-//  *Search this area* asks for both.
+//  question's own answer to which sources it covers: the hiker's own
+//  approaches to the trails ask for both, and the requests the app makes for
+//  itself do not.
 //
 //  **A curated id must never reach CloudKit.** Every per-listing method routes
 //  on the listing's ``CommunityOrigin`` — ``CommunityListing/relationID`` and
@@ -174,10 +176,7 @@ nonisolated extension MergedCommunityTransport {
                 .map { ($0, RouteGeometry.distanceMeters(from: coordinate, to: $0.coordinate)) }
                 .sorted { $0.1 < $1.1 }
                 .map(\.0),
-            // The listing pass first: it is the one that decides whether there
-            // was anything to complete, so its refusal is the one that
-            // explains an answer with no trails in it.
-            curatedOutage: listed.outage ?? curatedRows.outage
+            curated: outcome(listed: listed, completed: curatedRows, for: scope)
         )
     }
 
@@ -561,6 +560,30 @@ nonisolated private extension MergedCommunityTransport {
             }
             return CuratedAttempt(trails: [], outage: outage)
         }
+    }
+
+    /// What to report about the OpenStreetMap half of an answer: nothing, a
+    /// count, or a refusal.
+    ///
+    /// The listing pass's outage comes first because it is the pass that
+    /// decides whether there was anything to complete, so its refusal is the
+    /// one that explains an answer with no trails in it. The count is that
+    /// same pass's, for the reason ``CuratedTrailOutcome/trails(_:)`` gives:
+    /// it is what OpenStreetMap had near the area, which is the question the
+    /// caption under *Search this area* answers, while the rows are what the
+    /// page had room for.
+    ///
+    /// The scope is asked about rather than inferred from an empty attempt,
+    /// because ``CuratedAttempt/notAsked`` and a genuinely empty area are the
+    /// same two fields and must not become the same sentence.
+    func outcome(
+        listed: CuratedAttempt,
+        completed: CuratedAttempt,
+        for scope: CommunityNearbyScope
+    ) -> CuratedTrailOutcome {
+        guard scope == .withCuratedTrails else { return .notAsked }
+        if let outage = listed.outage ?? completed.outage { return .outage(outage) }
+        return .trails(listed.trails.count)
     }
 
     /// The two halves as one page, with the published half served first.

@@ -20,11 +20,14 @@
 //  decide: whether a tap can ask anything.
 //
 //  The caption under it is asserted here too, and on the same terms: what it
-//  says is ``CuratedTrailOutage``'s and is pinned there, so what is pinned
-//  here is that a refusal from OpenStreetMap *reaches* the control and that it
-//  leaves the button answering. A rate limit is about one of the list's two
+//  says is ``CuratedTrailNotice``'s and is pinned there, so what is pinned
+//  here is that what OpenStreetMap answered *reaches* the control and that it
+//  leaves the button answering — both for a refusal and for an area with no
+//  waymarked routes in it. A rate limit is about one of the list's two
 //  sources, and disabling the one control the *Community* tab has because the
-//  other source is busy would take the published hikes away with it.
+//  other source is busy would take the published hikes away with it; an empty
+//  area is not a failure at all, and moving the map and tapping again is the
+//  whole of what its caption advises.
 //
 
 import CoreLocation
@@ -54,18 +57,24 @@ extension MapCoordinatorTests {
 
     /// A browser that has opted in and answered once, so the next pan past the
     /// threshold is an offer rather than a question.
+    ///
+    /// `curatedOutcome` is armed **after** the opt-in has landed, deliberately.
+    /// Opening the tab asks OpenStreetMap too — see ``CommunityNearbyScope`` —
+    /// so setting it up front would caption the pill before the case had asked
+    /// for anything, and the cases here are about what one tap on the pill
+    /// puts there.
     private func browsingBrowser(
-        curatedOutage: CuratedTrailOutage? = nil
+        curatedOutcome: CuratedTrailOutcome = .trails(1)
     ) async -> CommunityBrowser {
         let transport = StubCommunityTransport()
         transport.listingsResult = .success([])
-        transport.curatedOutage = curatedOutage
         let browser = CommunityBrowser(transport: transport, blockList: .scratch())
         browser.regionDidSettle(Self.areaRegion())
         browser.startBrowsing()
         while browser.requestsInFlight > 0 {
             await Task.yield()
         }
+        transport.curatedOutcome = curatedOutcome
         return browser
     }
 
@@ -155,7 +164,7 @@ extension MapCoordinatorTests {
     @Test("a rate-limited search captions the pill and leaves it answering")
     func aRateLimitedSearchCaptionsThePill() async throws {
         #if os(iOS)
-        let browser = await browsingBrowser(curatedOutage: .rateLimited(retryAfter: 60))
+        let browser = await browsingBrowser(curatedOutcome: .outage(.rateLimited(retryAfter: 60)))
         let coordinator = MapView.Coordinator()
         let map = makeMap(mapView(community: browser), coordinator)
         defer { detach(map) }
@@ -169,6 +178,27 @@ extension MapCoordinatorTests {
             pill.isEnabled,
             "the published half is still askable, so the one control this tab has still works"
         )
+        #expect(!pill.isHidden)
+        #endif
+    }
+
+    /// The other caption, and the one a hiker meets far more often. It is not
+    /// a failure, so the button is left exactly as able to answer as it was —
+    /// tapping it somewhere else is the advice.
+    @Test("an empty area captions the pill and leaves it answering")
+    func anEmptyAreaCaptionsThePill() async throws {
+        #if os(iOS)
+        let browser = await browsingBrowser(curatedOutcome: .trails(0))
+        let coordinator = MapView.Coordinator()
+        let map = makeMap(mapView(community: browser), coordinator)
+        defer { detach(map) }
+        let pill = try #require(coordinator.areaSearchControl)
+        #expect(pill.notice == nil, "nothing has been searched for yet")
+
+        await searchThisArea(browser)
+
+        await settle(until: "the caption to reach the pill") { pill.notice == .noTrailsHere }
+        #expect(pill.isEnabled, "somewhere else is the answer, and the pill is how to ask")
         #expect(!pill.isHidden)
         #endif
     }
@@ -215,7 +245,7 @@ extension MapCoordinatorTests {
     @Test("leaving the tab takes the caption with the pill")
     func leavingTheTabClearsTheCaption() async throws {
         #if os(iOS)
-        let browser = await browsingBrowser(curatedOutage: .unavailable)
+        let browser = await browsingBrowser(curatedOutcome: .outage(.unavailable))
         let coordinator = MapView.Coordinator()
         let map = makeMap(mapView(community: browser), coordinator)
         defer { detach(map) }

@@ -67,8 +67,8 @@ struct CuratedTrailOutageTests {
     /// which is the only claim about the text that holds in every locale.
     @Test("each outage has a notice of its own")
     func eachOutageSaysSomething() {
-        let limited = CuratedTrailOutage.rateLimited(retryAfter: 60).notice
-        let unavailable = CuratedTrailOutage.unavailable.notice
+        let limited = CuratedTrailOutage.rateLimited(retryAfter: 60).text
+        let unavailable = CuratedTrailOutage.unavailable.text
 
         #expect(!limited.isEmpty)
         #expect(!unavailable.isEmpty)
@@ -81,8 +81,8 @@ struct CuratedTrailOutageTests {
     @Test("an expired wait is left off the notice")
     func anExpiredWaitIsOmitted() {
         #expect(
-            CuratedTrailOutage.rateLimited(retryAfter: 0).notice
-                != CuratedTrailOutage.rateLimited(retryAfter: 60).notice
+            CuratedTrailOutage.rateLimited(retryAfter: 0).text
+                != CuratedTrailOutage.rateLimited(retryAfter: 60).text
         )
     }
 }

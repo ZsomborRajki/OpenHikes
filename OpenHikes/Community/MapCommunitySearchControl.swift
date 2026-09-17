@@ -3,7 +3,7 @@
 //  OpenHikes
 //
 //  *Search this area*: the map's half of the *Community* tab, and the only
-//  thing on screen that spends a request.
+//  thing on screen a hiker taps to spend a request.
 //
 //  It exists because the alternative was invisible. The nearby list used to
 //  re-query itself whenever ``CommunityQueryPolicy``'s thresholds were
@@ -19,8 +19,9 @@
 //  aim. What the thresholds decide is therefore no longer whether the button
 //  exists, only whether a tap has a *new* question to ask — and a tap with no
 //  offer standing re-asks the visible region, which is a thing the hiker can
-//  legitimately want and previously had no way to say. The page of results
-//  that costs is still spent only on a tap.
+//  legitimately want and previously had no way to say. A page of results is
+//  still only ever spent on a tap: this one, or the tab selection that opened
+//  the list in the first place.
 //
 //  The one state it cannot answer in is above the zoom ceiling, where it is
 //  disabled rather than withdrawn: the list's footer says why, and a control
@@ -44,20 +45,26 @@
 //
 //  ## The caption under it
 //
-//  This is also the tap that asks OpenStreetMap — the only one, now that every
-//  other nearby request is published-only, see ``CommunityNearbyScope`` — so
-//  it is where a refusal from OpenStreetMap belongs. Overpass runs a handful
-//  of slots per address and answers a busy one with a `429` and a
-//  `Retry-After`; ``CuratedTrailOutage`` is what that becomes, and the caption
-//  under the pill is what draws it.
+//  This is the tap that spends an Overpass request — see
+//  ``CommunityNearbyScope`` for the other two that do — so it is where what
+//  OpenStreetMap had to say belongs. There are two such sentences and they are
+//  not the same kind of thing. Overpass runs a handful of slots per address and
+//  answers a busy one with a `429` and a `Retry-After`, which is a failure and
+//  wears the warning glyph; an area with no waymarked day hikes in it is an
+//  answer, wears a struck-through pin, and is here because without it the only
+//  thing a hiker ever saw under this button was *OpenStreetMap trails
+//  unavailable* — a list with no trails in it looked identical either way.
+//  ``CuratedTrailNotice`` is the pair, and the caption draws whichever one the
+//  last search came back with.
 //
-//  **The button is not disabled by it, and that is the point.** A rate limit
-//  is about one of the list's two sources. The hikes people published are in
-//  CloudKit and are unaffected, so the tap still has something to do and the
-//  caption says which half of the answer is missing rather than that the
-//  control is broken. The zoom ceiling is the only thing here that disables
-//  anything, because it is the only state where a tap would ask nothing at
-//  all.
+//  **The button is not disabled by either, and that is the point.** A rate
+//  limit is about one of the list's two sources. The hikes people published
+//  are in CloudKit and are unaffected, so the tap still has something to do
+//  and the caption says which half of the answer is missing rather than that
+//  the control is broken. An empty area leaves it even more clearly useful:
+//  moving the map and tapping again is the whole of what that caption is
+//  advising. The zoom ceiling is the only thing here that disables anything,
+//  because it is the only state where a tap would ask nothing at all.
 //
 //  It is also the cheaper half of the bargain. A pan nobody confirms now
 //  costs nothing at all, where before every threshold crossing was a request
@@ -100,6 +107,9 @@ final class MapAreaSearchView: UIView {
     /// the stack can collapse it rather than leave a gap under the pill.
     private var noticeView: UIView?
     private var noticeLabel: UILabel?
+    /// The caption's glyph. Held because it says which *kind* of caption this
+    /// is — see ``CuratedTrailNotice`` — and so changes with it.
+    private var noticeIcon: UIImageView?
 
     init(onTap: @escaping () -> Void) {
         self.onTap = onTap
@@ -154,14 +164,33 @@ final class MapAreaSearchView: UIView {
     ///
     /// Idempotent on purpose: this is written from a `withObservationTracking`
     /// re-registration that fires for a change to either of the two values it
-    /// watches, so the same string arrives repeatedly and a setter that
+    /// watches, so the same value arrives repeatedly and a setter that
     /// reloaded the hierarchy each time would be doing it during a pan.
-    var notice: String? {
+    ///
+    /// The whole notice rather than its sentence, because the glyph is part of
+    /// what it says: a refusal is a warning and an empty area is not. See
+    /// ``CuratedTrailNotice``.
+    var notice: CuratedTrailNotice? {
         didSet {
             guard notice != oldValue else { return }
-            noticeLabel?.text = notice
+            noticeLabel?.text = notice?.text
+            if let notice {
+                noticeIcon?.image = Self.noticeSymbol(named: notice.symbolName)
+                noticeIcon?.tintColor = notice.isWarning ? .systemOrange : .secondaryLabel
+            }
             noticeView?.isHidden = notice == nil
         }
+    }
+
+    /// One caption glyph, at the weight and size the caption is drawn at.
+    private static func noticeSymbol(named name: String) -> UIImage? {
+        UIImage(
+            systemName: name,
+            withConfiguration: UIImage.SymbolConfiguration(
+                pointSize: noticeSymbolPointSize,
+                weight: .semibold
+            )
+        )
     }
 
     @available(*, unavailable)
@@ -263,16 +292,11 @@ final class MapAreaSearchView: UIView {
     /// Rounded rather than a capsule: this one wraps to two lines at the
     /// larger text sizes, and a capsule around two lines is a stadium.
     private func buildNotice() -> UIView {
-        let icon = UIImageView(
-            image: UIImage(
-                systemName: "exclamationmark.triangle.fill",
-                withConfiguration: UIImage.SymbolConfiguration(
-                    pointSize: Self.noticeSymbolPointSize,
-                    weight: .semibold
-                )
-            )
-        )
-        icon.tintColor = .systemOrange
+        // No image and no colour until there is a notice to take them from.
+        // The capsule is hidden while that is true, so an icon built here
+        // would only be a claim about which kind of caption the next one is.
+        let icon = UIImageView()
+        noticeIcon = icon
         icon.setContentHuggingPriority(.required, for: .horizontal)
         icon.setContentCompressionResistancePriority(.required, for: .horizontal)
         // The sentence beside it already says everything this glyph does, and
@@ -285,7 +309,7 @@ final class MapAreaSearchView: UIView {
         label.adjustsFontForContentSizeCategory = true
         label.textColor = .label
         label.numberOfLines = 2
-        label.accessibilityIdentifier = "community-curated-outage"
+        label.accessibilityIdentifier = "community-curated-notice"
         noticeLabel = label
 
         let row = UIStackView(arrangedSubviews: [icon, label])
@@ -333,16 +357,16 @@ extension MapView.Coordinator {
     private static let areaSearchFadeDuration: TimeInterval = 0.25
 
     /// Observes which list the sheet is showing, what the map has to offer
-    /// about the region on screen, whether a search is in flight and whether
-    /// OpenStreetMap refused the last one, and shows, hides, dims, spins or
-    /// captions the pill — the same imperative arrangement
+    /// about the region on screen, whether a search is in flight and what
+    /// OpenStreetMap had to say about the last one, and shows, hides, dims,
+    /// spins or captions the pill — the same imperative arrangement
     /// ``observePhotoControls(_:)`` uses, so panning and tab switches never
     /// re-render anything in SwiftUI.
     ///
     /// All four are read in one tracking closure because they answer four
     /// parts of one question: `isBrowsing` decides whether the control is
     /// there at all, `areaPrompt` whether it can answer, `isSearching` whether
-    /// it is busy answering, and `curatedOutage` what it has to say about the
+    /// it is busy answering, and `curatedNotice` what it has to say about the
     /// answer it gave. All four are coarse — a tab is selected by hand, the
     /// policy refuses everything under half the search radius, and the other
     /// two move only when a search starts or lands — so this fires a handful
@@ -371,7 +395,7 @@ extension MapView.Coordinator {
         withObservationTracking {
             _ = browser.isBrowsing
             _ = browser.areaPrompt
-            _ = browser.curatedOutage
+            _ = browser.curatedNotice
             _ = browser.isSearching
         } onChange: { [weak self, weak browser] in
             let coordinator = self
@@ -404,11 +428,12 @@ extension MapView.Coordinator {
         let searching = community?.isSearching == true
         areaSearchControl.isSearching = searching
         areaSearchControl.isEnabled = community?.areaPrompt != .zoomIn && !searching
-        // What OpenStreetMap said about the last search that asked it, and
-        // nothing about whether the control works — see this file's header.
+        // What OpenStreetMap had to say about the last search that asked it,
+        // and nothing about whether the control works — see this file's
+        // header.
         // Cleared along with the pill when the tab goes, so the caption never
         // outlives the list it is about.
-        areaSearchControl.notice = visible ? community?.curatedOutage?.notice : nil
+        areaSearchControl.notice = visible ? community?.curatedNotice : nil
         // Hidden as well as transparent, for the reason the camera pill is:
         // an invisible view still answers hit tests, and this one sits over
         // the map the hiker is panning. Interaction goes at once rather than

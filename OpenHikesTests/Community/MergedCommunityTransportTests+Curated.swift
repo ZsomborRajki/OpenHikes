@@ -37,7 +37,7 @@ extension MergedCommunityTransportTests {
         let answer = try await Self.answer(merged, scope: .publishedOnly)
 
         #expect(answer.listings.map(\.id) == ["listing-a"])
-        #expect(answer.curatedOutage == nil, "nothing was asked, so there is nothing to report")
+        #expect(answer.curated == .notAsked, "nothing was asked, so there is nothing to report")
         #expect(merged.overpass.recording.isQuiet)
         #expect(merged.cloudKit.recording.nearbyRequests.count == 1)
     }
@@ -74,7 +74,7 @@ extension MergedCommunityTransportTests {
 
         let answer = try await Self.answer(merged)
 
-        #expect(answer.curatedOutage == .rateLimited(retryAfter: 60))
+        #expect(answer.curated == .outage(.rateLimited(retryAfter: 60)))
         #expect(
             answer.listings.map(\.id) == ["listing-a"],
             "one source failing is still not the answer failing"
@@ -93,22 +93,42 @@ extension MergedCommunityTransportTests {
 
         let answer = try await Self.answer(merged)
 
-        #expect(answer.curatedOutage == .unavailable)
+        #expect(answer.curated == .outage(.unavailable))
         #expect(answer.listings.map(\.id) == ["listing-a"])
     }
 
-    /// The happy answer says nothing, including for an area that genuinely has
-    /// no waymarked routes in it — which is most of the world, and is not
-    /// something to caption a button with.
-    @Test("a curated half that answered reports no outage")
-    func aGoodCuratedHalfReportsNothing() async throws {
+    /// The happy answer reports what it found, and the count is the listing
+    /// pass's rather than the page's — see ``CuratedTrailOutcome/trails(_:)``.
+    @Test("a curated half that answered reports what it listed")
+    func aGoodCuratedHalfReportsItsCount() async throws {
+        let merged = Self.merged(
+            published: [Self.published("listing-a", metresNorth: Offset.near)],
+            curated: [
+                Self.trail(Relation.wimbach, named: "Wimbachgries", metresNorth: Offset.nearest),
+                Self.trail(Relation.almbach, named: "Almbachklamm", metresNorth: Offset.near),
+            ]
+        )
+
+        let answer = try await Self.answer(merged)
+
+        #expect(answer.curated == .trails(2))
+    }
+
+    /// The answer that used to be indistinguishable from the one above, and
+    /// which is most of the world: Overpass answered, and there is nothing
+    /// waymarked near there. A count rather than a failure, because nothing
+    /// failed — what it buys is the one caption a hiker can act on, and the
+    /// button is the way to act on it. See ``CuratedTrailNotice``.
+    @Test("an area with no waymarked routes reports none rather than a refusal")
+    func anEmptyAreaReportsNoTrails() async throws {
         let merged = Self.merged(
             published: [Self.published("listing-a", metresNorth: Offset.near)]
         )
 
         let answer = try await Self.answer(merged)
 
-        #expect(answer.curatedOutage == nil)
+        #expect(answer.curated == .trails(0))
+        #expect(answer.listings.map(\.id) == ["listing-a"], "the published half is untouched")
     }
 
     /// What a refused search draws instead of nothing: the routes this device
@@ -145,7 +165,7 @@ extension MergedCommunityTransportTests {
 
         let answer = try await Self.answer(merged)
 
-        #expect(answer.curatedOutage == .rateLimited(retryAfter: 60))
+        #expect(answer.curated == .outage(.rateLimited(retryAfter: 60)))
         #expect(!answer.listings.isEmpty)
     }
 
