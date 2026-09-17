@@ -131,6 +131,14 @@ struct HikeDetailView: View {
     /// ``TrackerState``. Drawn on the chart as two separate markers so a manual
     /// scrub and the live position can both be visible at once.
     @State private var tracker = TrackerState()
+    /// Focus for the header's name field, so tapping the pencil puts the
+    /// keyboard up on the field rather than asking for a second tap.
+    ///
+    /// Raised from the field's own `onAppear` rather than from the button that
+    /// flips ``HikeDetailInteraction/isEditingTitle``: the field does not
+    /// exist yet at the moment of the tap, and focus asked for before then is
+    /// dropped.
+    @FocusState private var isTitleFieldFocused: Bool
     /// True while a finger is actively dragging the elevation chart — pauses
     /// auto-follow's own updates to `trackerDistance` so it doesn't fight the drag.
     @State private var isScrubbing = false
@@ -469,6 +477,8 @@ private extension HikeDetailView {
                         .font(.title2.bold())
                         .accessibilityLabel("Hike name")
                         .accessibilityIdentifier("hike-title-field")
+                        .focused($isTitleFieldFocused)
+                        .onAppear { isTitleFieldFocused = true }
                         .onSubmit { commitTitleEdit() }
                         .toolbar {
                             ToolbarItemGroup(placement: .keyboard) {
@@ -540,6 +550,7 @@ private extension HikeDetailView {
 
     private func commitTitleEdit() {
         hike.customName = HikeTitle.bounded(interaction.titleDraft)
+        isTitleFieldFocused = false
         interaction.isEditingTitle = false
     }
 
