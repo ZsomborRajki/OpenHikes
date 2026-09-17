@@ -549,7 +549,7 @@ jobs:
       # rest of the domain — `CommunityListingTextTests`,
       # `CommunityQueryPolicyTests`, `CommunityRouteOverlapTests` and the other
       # pure value-type suites — is synchronous, so a sanitizer has no second
-      # thread to watch. Measured at 698 tests in 65 suites in 10.3 seconds
+      # thread to watch. Measured at 700 tests in 65 suites in 10.8 seconds
       # locally, with no race reported.
       #
       # A mistyped identifier here is silently ignored rather than rejected, so
@@ -712,14 +712,14 @@ jobs:
       # the 65 suites, so adding a nested suite moves this number with no
       # change to the list at all.
       #
-      # Tests are a floor for the reason the comment above gives: 698 run
-      # today, and 657 sits far enough below that removing a test does not
+      # Tests are a floor for the reason the comment above gives: 700 run
+      # today, and 659 sits far enough below that removing a test does not
       # turn the build red on its own, while a suite emptied out under a name
       # that still resolves does. Raise it when the measured number rises.
       - name: Check the sanitized selection actually ran
         env:
           EXPECTED_SUITES: "65"
-          TEST_FLOOR: "657"
+          TEST_FLOOR: "659"
         run: |
           set -o pipefail
           xcrun xcresulttool get test-results tests \

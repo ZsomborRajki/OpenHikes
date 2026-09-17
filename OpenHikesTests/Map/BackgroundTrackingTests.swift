@@ -80,6 +80,14 @@ final class StubLocationMonitor: SignificantLocationMonitor {
         authorization = .always
         monitorDelegate?.locationManagerDidChangeAuthorization?(CLLocationManager())
     }
+
+    /// CoreLocation reporting the authorization the app already has, which it
+    /// does once on its own right after the manager is created. Nobody
+    /// answered anything — it is the second half of every launch, and the
+    /// reason the region is synced twice before the app has drawn a frame.
+    func reportAuthorizationUnchanged() {
+        monitorDelegate?.locationManagerDidChangeAuthorization?(CLLocationManager())
+    }
 }
 
 /// A `UserDefaults` nobody else in the process is reading, so a test can seed
