@@ -132,6 +132,73 @@ nonisolated final class RecordingUITests: XCTestCase {
         )
     }
 
+    /// The sheet's chrome sits where it did before a walk was started.
+    ///
+    /// The recording screen has a navigation bar and the sheet's own root has
+    /// none, so popping one takes the bar with it. When the bar stays behind
+    /// it is empty, 54 points tall, and directly above the search field — a
+    /// gap that looks like padding nobody wrote, and that goes away again the
+    /// moment any other screen is pushed and popped.
+    ///
+    /// Measured as the search field's offset from the top of the sheet rather
+    /// than its position on screen, because the detent is not the subject: a
+    /// sheet resting somewhere else moves the field without anything being
+    /// wrong. The bar count is the same claim stated the other way round, and
+    /// is what says *why* when the offset is out.
+    @MainActor
+    func testDiscardingARecordingLeavesTheSheetChromeWhereItWas() {
+        let app = makeApp(
+            arguments: [
+                "--ui-test-expanded-sheet",
+                "--ui-test-enable-location",
+            ]
+        )
+        app.resetAuthorizationStatus(for: .location)
+        addLocationPermissionMonitor()
+        setSimulatedLocation(UITestFixture.trailheadCoordinate)
+        defer { XCUIDevice.shared.location = nil }
+
+        launch(app)
+
+        let search = element("map-search", in: app)
+        let sheet = element("map-sheet", in: app)
+        XCTAssertTrue(
+            search.waitForExistence(timeout: UITestTimeout.navigation)
+        )
+        let restingOffset = search.frame.minY - sheet.frame.minY
+
+        startRecording(in: app)
+
+        let phase = element("recording-phase", in: app)
+        XCTAssertTrue(
+            phase.waitForExistence(timeout: UITestTimeout.navigation)
+        )
+        tapWhenReady(app.buttons["Pause"])
+        expectPhase(phase, contains: "Paused")
+
+        tapWhenReady(app.buttons["Discard Recording"])
+        confirmDiscard(in: app)
+
+        XCTAssertTrue(
+            app.staticTexts["No hikes yet"]
+                .waitForExistence(timeout: UITestTimeout.existence)
+        )
+        XCTAssertTrue(
+            search.waitForExistence(timeout: UITestTimeout.navigation)
+        )
+        XCTAssertEqual(
+            search.frame.minY - sheet.frame.minY,
+            restingOffset,
+            accuracy: 2,
+            "a discarded recording should leave the search field where it found it"
+        )
+        XCTAssertEqual(
+            app.navigationBars.count,
+            0,
+            "the sheet's own screen has no navigation bar to come back to"
+        )
+    }
+
     /// The full recording round trip: walk a trace the matcher can snap onto a
     /// bundled trail, then decide in review which line the hike keeps.
     @MainActor
