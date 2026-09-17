@@ -438,21 +438,36 @@ nonisolated extension CuratedTrailDecoding {
 
     struct Response: Decodable {
         let elements: [Element]
+        /// What the server has to say about a query it did not finish. See
+        /// ``OverpassRequest/abort(_:)``, and ``decode(_:)`` for why reading
+        /// it is not optional.
+        let remark: String?
     }
 
     /// Decodes a response, reporting a malformed one the way the trail graph's
-    /// own decode does.
+    /// own decode does — and refusing one that decoded perfectly well and is
+    /// not an answer.
     ///
-    /// Overpass answers an overloaded server with an **HTML** page carrying
-    /// HTTP 200 — observed repeatedly while this feature was being measured —
-    /// so a decode failure here is a normal operating condition rather than a
-    /// bug, and it has to arrive as a typed error the caller can log and move
-    /// past rather than as a crash.
+    /// Two failures arrive here dressed as successes, and they are the two
+    /// ordinary weathers of a volunteer-run API. An overloaded Overpass
+    /// answers with an **HTML** page carrying HTTP 200, which fails to decode;
+    /// a query it started and gave up on answers with **valid JSON** carrying
+    /// HTTP 200, an empty or partial `elements`, and a `remark` saying so.
+    /// Neither is a bug, both are normal on an ordinary afternoon, and the
+    /// second is the one with teeth: decoded blind it is indistinguishable
+    /// from an area with no waymarked routes in it, and this app now says that
+    /// out loud under the search button — see ``CuratedTrailNotice``.
+    ///
+    /// Both leave as a typed error the caller can log and walk past, keeping
+    /// the published half of the browse list standing.
     static func decode(_ data: Data) throws -> Response {
+        let response: Response
         do {
-            return try JSONDecoder().decode(Response.self, from: data)
+            response = try JSONDecoder().decode(Response.self, from: data)
         } catch {
             throw TrailGraphProviderError.malformedGraph(error.localizedDescription)
         }
+        if let abort = OverpassRequest.abort(response.remark) { throw abort }
+        return response
     }
 }

@@ -47,6 +47,11 @@ struct CuratedTrailOutageTests {
             TrailGraphProviderError.server(statusCode: 504),
             TrailGraphProviderError.invalidResponse,
             TrailGraphProviderError.malformedGraph("not JSON"),
+            // The `200` that is not an answer — see
+            // ``OverpassRequest/abort(_:)``. It reaches the hiker as
+            // *unavailable*, which is the one thing it must not be mistaken
+            // for: an area with no trails in it.
+            TrailGraphProviderError.aborted("runtime error: Query timed out"),
             URLError(.notConnectedToInternet),
         ]
 

@@ -247,6 +247,46 @@ struct CuratedTrailDecodingTests {
     }
     """.utf8)
 
+    /// What a query Overpass gave up on answers with, under HTTP 200.
+    ///
+    /// Not invented: this is the shape `overpass-api.de` (0.7.62.11) returned
+    /// on 2026-09-17 for a search it ran out of time on — valid JSON, an
+    /// `elements` array, and the whole of the bad news in a `remark` beside
+    /// it. A partial answer carries rows in that array and the same remark.
+    ///
+    /// A raw literal, so the `\"` the server really sends inside the remark is
+    /// the two characters JSON needs rather than a quote Swift has unescaped
+    /// on the way past — which is a fixture that is not JSON at all, and a
+    /// test that passes on the wrong error.
+    private static let timedOutResponse = Data(#"""
+    {
+        "version": 0.6,
+        "generator": "Overpass API 0.7.62.11 87bfad18",
+        "elements": [
+
+        ],
+    "remark": "runtime error: Query timed out in \"query\" at line 1 after 39 seconds."
+    }
+    """#.utf8)
+
+    /// The same, with a row in it: what a search that had collected something
+    /// before the clock ran out sends.
+    private static let partialTimedOutResponse = Data(#"""
+    {
+        "version": 0.6,
+        "generator": "Overpass API 0.7.62.11 87bfad18",
+        "elements": [
+        {
+            "type": "relation",
+                "id": \#(relationID),
+                "bounds": \#(alpineBounds),
+                "tags": \#(fullTags)
+        }
+        ],
+    "remark": "runtime error: Query timed out in \"query\" at line 1 after 39 seconds."
+    }
+    """#.utf8)
+
     /// What an overloaded Overpass sends instead of JSON, under HTTP 200.
     private static let overloadedServerPage = Data("""
     <!DOCTYPE html>
@@ -281,6 +321,11 @@ struct CuratedTrailDecodingTests {
 
     private static func isMalformed(_ error: TrailGraphProviderError) -> Bool {
         if case .malformedGraph = error { return true }
+        return false
+    }
+
+    private static func isAborted(_ error: TrailGraphProviderError) -> Bool {
+        if case .aborted = error { return true }
         return false
     }
 
@@ -654,6 +699,48 @@ extension CuratedTrailDecodingTests {
     /// request is in flight when the server gives up has to come back as
     /// something the caller can log and walk past, leaving the published half
     /// of the browse list standing.
+    /// **The failure that arrives dressed as a success**, and the one with
+    /// teeth now that an empty answer is a sentence on screen: a query the
+    /// server gave up on is `200`, is well-formed JSON, and decodes to no
+    /// rows. Read blind it is an area with no waymarked routes in it, and the
+    /// hiker gets *No OpenStreetMap trails here* for a valley full of them.
+    ///
+    /// Both passes, because both decode through the same door.
+    @Test("a query the server gave up on is not an empty area")
+    func aTimedOutQueryIsAnAbort() throws {
+        let listing = #expect(throws: TrailGraphProviderError.self) {
+            _ = try CuratedTrailDecoding.trails(fromListing: Self.timedOutResponse)
+        }
+        let geometry = #expect(throws: TrailGraphProviderError.self) {
+            _ = try CuratedTrailDecoding.trails(fromGeometry: Self.timedOutResponse)
+        }
+
+        #expect(Self.isAborted(try #require(listing)))
+        #expect(Self.isAborted(try #require(geometry)))
+    }
+
+    /// A partial answer is refused too, and that is the deliberate half. The
+    /// rows in it are whatever had been collected when the clock ran out —
+    /// a slice of the area decided by the order the server happened to scan
+    /// it in — so passing them off as *the trails near here* would be a
+    /// quieter kind of wrong than saying nothing arrived.
+    @Test("a partial answer is refused rather than passed off as the area's")
+    func aPartialAnswerIsRefused() throws {
+        let error = #expect(throws: TrailGraphProviderError.self) {
+            _ = try CuratedTrailDecoding.trails(fromListing: Self.partialTimedOutResponse)
+        }
+
+        #expect(Self.isAborted(try #require(error)))
+    }
+
+    /// The ordinary answer still has to work: no remark, no refusal.
+    @Test("an answer with no remark is an answer")
+    func anAnswerWithoutARemarkIsAnAnswer() throws {
+        let trails = try CuratedTrailDecoding.trails(fromListing: Self.listingResponse)
+
+        #expect(!trails.isEmpty)
+    }
+
     @Test("an HTML page from an overloaded server is a malformed graph")
     func anHTMLPageIsAMalformedGraph() throws {
         let listing = #expect(throws: TrailGraphProviderError.self) {
