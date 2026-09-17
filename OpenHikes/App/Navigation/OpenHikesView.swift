@@ -18,7 +18,6 @@ struct OpenHikesView: View {
     private var modelContext
 
     @State private var showSheet = true
-    @State private var searchText = ""
     @State private var selectedHike: Hike?
     /// The sheet's navigation stack and the height it rests at, held here
     /// rather than inside `MapSheet` so a widget tap can push a hike's detail
@@ -191,7 +190,6 @@ struct OpenHikesView: View {
         onSheetDetentCommitted: @escaping (Bool) -> Void = { _ in /* no-op default */ }
     ) -> some View {
         MapSheet(
-            searchText: $searchText,
             selectedHike: $selectedHike,
             presentation: sheet,
             highlight: highlight,
@@ -703,7 +701,7 @@ private extension OpenHikesView {
         switch destination {
         case .recording:
             guard appModel.hikeRecorder.isActive else { return }
-            searchText = ""
+            sheet.searchText = ""
             SheetRoute.openRecording(
                 hike: appModel.hikeRecorder.currentHike,
                 selectedHike: &selectedHike,
@@ -726,7 +724,7 @@ private extension OpenHikesView {
         if hike.belongsToActiveRecording(
             currentHikeID: currentRecordingHikeID
         ), appModel.hikeRecorder.isActive {
-            searchText = ""
+            sheet.searchText = ""
             SheetRoute.openRecording(
                 hike: hike,
                 selectedHike: &selectedHike,
@@ -739,7 +737,7 @@ private extension OpenHikesView {
 
         // Clearing the query drops the search results the sheet would
         // otherwise still be showing over the detail view.
-        searchText = ""
+        sheet.searchText = ""
         selectedHike = hike
         sheet.path = [.hike(hike)]
         // The compact detent is only tall enough for the search field, so a

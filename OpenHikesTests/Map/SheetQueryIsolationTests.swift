@@ -165,7 +165,6 @@ struct SheetQueryIsolationTests {
     func onlyTheLeafDeclaresTheQuery() throws {
         let container = try Fixture.modelContainer()
         let sheet = MapSheet(
-            searchText: .constant(""),
             selectedHike: .constant(nil),
             presentation: SheetPresentation(detent: .large),
             highlight: RouteHighlight(),

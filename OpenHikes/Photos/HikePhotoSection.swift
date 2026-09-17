@@ -125,10 +125,24 @@ struct HikePhotoSection: View {
     /// `onDisappear` is what clears the pins that were standing for it. Moving
     /// the modifier up to the always-present container would leave a deleted
     /// photo's marker on the map.
+    ///
+    /// **`LazyHStack`, and on this strip it is the one that matters most.** A
+    /// plain `HStack` builds every tile the moment the strip appears, so every
+    /// tile's `.task` starts its decode at once — for a row that shows four.
+    /// The other galleries in the app are capped at
+    /// ``CommunityPublisher/maximumPhotos``; this one is not capped at all,
+    /// because it is filled from the hiker's own library by
+    /// ``PhotoDiscoverySheet`` and a day on a trail can hand back a hundred.
+    /// It is also what makes ``HikePhotoThumbnail``'s `.task(id:)` mean what
+    /// its own note says it means: there is no tile to recycle, and no decode
+    /// to cancel by scrolling away from, unless the container is lazy.
     private func gallery(_ photos: [HikePhoto]) -> some View {
         ScrollView(.horizontal) {
-            HStack(spacing: Self.tileSpacing) {
-                ForEach(photos) { photo in
+            LazyHStack(spacing: Self.tileSpacing) {
+                // Enumerated rather than plain, so a tile is handed the
+                // position it is already standing in. See
+                // ``label(for:at:among:)``.
+                ForEach(photos.enumerated(), id: \.element.id) { index, photo in
                     Button {
                         onOpen(photo)
                     } label: {
@@ -137,7 +151,7 @@ struct HikePhotoSection: View {
                             store: store,
                             size: Self.tileSize,
                             cornerRadius: Self.cornerRadius,
-                            label: Self.label(for: photo, among: photos)
+                            label: Self.label(for: photo, at: index, among: photos.count)
                         )
                     }
                     .buttonStyle(.plain)
@@ -205,13 +219,20 @@ struct HikePhotoSection: View {
     /// answer costs a disk read and arrives after this body has run. Composed
     /// there rather than reported back up, because a tile telling its parent
     /// what it found would redraw the whole strip once per tile.
-    private static func label(for photo: HikePhoto, among photos: [HikePhoto]) -> String {
-        let index = (photos.firstIndex(of: photo) ?? 0) + 1
+    ///
+    /// **Takes the position rather than finding it.** It used to take the
+    /// array and ask `firstIndex(of:)`, which is a linear scan comparing
+    /// `@Model` objects — once per tile, so the strip cost a square of its own
+    /// length every time this body ran, to recover a number `ForEach` was
+    /// already holding. The same shape ``Hike/orderedPhotos`` carries its own
+    /// warning about: real work behind something that reads like a field
+    /// access.
+    private static func label(for photo: HikePhoto, at index: Int, among count: Int) -> String {
         let place = photo.isAnchored
             ? String(localized: "pinned to the trail")
             : String(localized: "not pinned to the trail")
         return String(
-            localized: "Photo \(index) of \(photos.count), \(place)"
+            localized: "Photo \(index + 1) of \(count), \(place)"
         )
     }
 

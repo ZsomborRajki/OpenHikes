@@ -2,16 +2,20 @@
 //  SheetPresentation.swift
 //  OpenHikes
 //
-//  Where the sheet rests, and what is pushed into it.
+//  Where the sheet rests, what is pushed into it, and what is typed at the top
+//  of it.
 //
-//  Both of these used to be `@State` on `OpenHikesView`: the path because a
-//  widget tap has to be able to push a hike from outside the sheet, and the
+//  All three used to be `@State` on `OpenHikesView`: the path because a
+//  widget tap has to be able to push a hike from outside the sheet, the
 //  detent because `.presentationDetents(_:selection:)` is attached out there
-//  too. That is what made opening a photo — three pushes down, inside a screen
-//  that covers the whole sheet — re-evaluate the root view, the sheet and the
-//  hikes list underneath it. `@State` invalidates the view that declares it
-//  whether or not its body reads it, so "the root doesn't render a photo" was
-//  never going to be enough on its own; the state had to leave the view.
+//  too, and the search text because it was simply where the field's binding
+//  was first written. That is what made opening a photo — three pushes down,
+//  inside a screen that covers the whole sheet — re-evaluate the root view,
+//  the sheet and the hikes list underneath it, and what made *typing a
+//  character* re-evaluate the root view and everything hanging off it.
+//  `@State` invalidates the view that declares it whether or not its body
+//  reads it, so "the root doesn't render a photo" was never going to be
+//  enough on its own; the state had to leave the view.
 //
 //  Held in a reference type instead, for the reason ``SheetMetrics``,
 //  ``RouteStyle`` and ``MapController`` are. The difference is what is
@@ -95,6 +99,33 @@ final class SheetPresentation {
             withMutation(keyPath: \.detent) { storedDetent = newValue }
             detentDidChange()
         }
+    }
+
+    /// What is typed in the sheet's search field.
+    ///
+    /// Here for the reason ``path`` and ``detent`` are, and it was the last
+    /// piece of the family left behind: it was `@State` on `OpenHikesView`,
+    /// handed down as a binding, so every keystroke invalidated the root view
+    /// — the map, the side panel, three alerts and six `onChange` handlers —
+    /// for a string that only the sheet's own chrome and its hikes list draw.
+    /// A body pass per character, on the screen the map is on.
+    ///
+    /// **Stored raw rather than behind a coarser flag, and that is not this
+    /// type's rule being broken.** The rule is that a *reader* must not be
+    /// woken for a change it cannot see, and the readers of this one — the
+    /// field, the *Search Maps for "…"* row, and the ranking in
+    /// ``MapSheetHikes`` — want the characters themselves. What they were
+    /// paying for was a reader that wanted none of it. Observation is
+    /// per-property, so keeping it here is the whole fix: `OpenHikesView`
+    /// never reads it and is no longer woken by it, while everything that does
+    /// read it is woken exactly as before.
+    var searchText = ""
+
+    /// Drives the search field's `TextField`, for the reason ``pathBinding``
+    /// drives the navigation stack: the text is written by the keyboard,
+    /// which no call site here would ever see.
+    var searchTextBinding: Binding<String> {
+        Binding(get: { self.searchText }, set: { self.searchText = $0 })
     }
 
     /// Whether the recording screen is the one on top. Read by the map's route

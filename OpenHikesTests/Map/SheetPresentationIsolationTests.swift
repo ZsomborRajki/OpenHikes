@@ -134,4 +134,70 @@ struct SheetPresentationIsolationTests {
         presentation.path = [.hike(hike)]
         #expect(presentation.isRecordingPresented == false)
     }
+
+    /// The last piece of `OpenHikesView`'s `@State` to move, and the one that
+    /// moved the most often.
+    ///
+    /// The search text was `@State` out there and a `@Binding` in `MapSheet`,
+    /// so a keystroke invalidated the root view — the map, the side panel, the
+    /// alerts and the `onChange` handlers — for a string none of them draws.
+    /// Here the question is Observation's rather than SwiftUI's: a write to
+    /// one property of an `@Observable` must reach the readers of *that*
+    /// property and nobody else.
+    ///
+    /// The flags stand in for the root view because they are what it reads of
+    /// this object — `layout` through `usesSidePanel`, `isRecordingPresented`
+    /// for the map's route selection, `isAtMiddleDetent` in the sheet's
+    /// callback. A character typed changes none of them.
+    @Test("typing wakes the search field and nothing the root view reads")
+    func typingWakesOnlyTheSearchReaders() async {
+        let presentation = SheetPresentation(detent: .medium)
+
+        let searchCounter = ObservationCounter { _ = presentation.searchText }
+        let rootCounter = ObservationCounter {
+            _ = presentation.layout
+            _ = presentation.isCompact
+            _ = presentation.isFullHeight
+            _ = presentation.isAtMiddleDetent
+            _ = presentation.hasPushedScreen
+            _ = presentation.isRecordingPresented
+        }
+        await rootCounter.settle()
+
+        presentation.searchText = "Thu"
+        await searchCounter.settle()
+
+        #expect(searchCounter.count == 1, "precondition: the keystroke really did land")
+        #expect(
+            rootCounter.count == 0,
+            "the root view draws no character of the query, so it must not be woken by one"
+        )
+    }
+
+    /// The structural half, and the one that fails if somebody puts it back.
+    ///
+    /// `@State` invalidates its declaring view whether or not the body reads
+    /// it, so *where the property is declared* is the entire fix — a fact
+    /// about the type, visible without rendering anything. `MapSheet` reaches
+    /// the text through ``SheetPresentation`` now, and stores no binding onto
+    /// it; a re-added `@Binding var searchText` would show up here.
+    @Test("the sheet stores no binding onto the query")
+    func theSheetStoresNoSearchBinding() {
+        let sheet = MapSheet(
+            selectedHike: .constant(nil),
+            presentation: SheetPresentation(detent: .large),
+            highlight: RouteHighlight(),
+            walkHighlight: WalkHighlight(),
+            mapController: MapController(),
+            photoCapture: PhotoCaptureController(),
+            photoPins: PhotoMapPinController()
+        )
+        let storesStringBinding = Mirror(reflecting: sheet).children.contains { child in
+            String(describing: type(of: child.value)) == "Binding<String>"
+        }
+        #expect(
+            !storesStringBinding,
+            "the query lives on the presentation object, not in the view hierarchy above it"
+        )
+    }
 }
