@@ -38,14 +38,20 @@ actor CuratedTransportStub {
 
     private(set) var bodies: [String] = []
     private var responses: [OverpassHTTPResponse]
+    /// Run as each request is answered, for a case that needs the world to
+    /// have moved while one was in flight — the clock, above all: *how long
+    /// the server took to refuse* is what decides whether it is asked again.
+    private let onRequest: (@Sendable () -> Void)?
 
-    init(responses: [OverpassHTTPResponse]) {
+    init(responses: [OverpassHTTPResponse], onRequest: (@Sendable () -> Void)? = nil) {
         self.responses = responses
+        self.onRequest = onRequest
     }
 
     var requestCount: Int { bodies.count }
 
     func answer(_ request: URLRequest) -> OverpassHTTPResponse {
+        onRequest?()
         bodies.append(Self.query(of: request))
         guard !responses.isEmpty else {
             return OverpassHTTPResponse(data: Data(), statusCode: Self.httpOK, headers: [:])
@@ -92,7 +98,7 @@ struct CuratedTrailSourceTests {
 
     /// Both day hikes, each a single two-point way — enough to assemble and to
     /// have a length, which is all the source reads.
-    private static let geometryBody = """
+    static let geometryBody = """
     {"elements":[
         {"type":"relation","id":11,"tags":{"name":"Near Loop","route":"hiking","roundtrip":"yes"},
         "bounds":{"minlat":47.620,"minlon":12.970,"maxlat":47.628,"maxlon":12.980},
@@ -179,12 +185,21 @@ struct CuratedTrailSourceTests {
     ///   requests and memory evictions, and a disk cache turns an eviction
     ///   into a file read rather than the round trip the assertion is written
     ///   against. The cases that are about the disk pass one.
+    /// - Parameter pause: What the source does between a busy answer and
+    ///   asking once more. Nothing, by default: the production seam sleeps,
+    ///   and a suite that slept two real seconds per refused request is a
+    ///   suite nobody runs. A case that is *about* the pause passes one that
+    ///   records it — see `CuratedTrailSourceTests+Busy`.
     static func makeSource(
         _ responses: [OverpassHTTPResponse],
         clock: TestClock = TestClock(),
-        directory: URL? = nil
+        directory: URL? = nil,
+        onRequest: (@Sendable () -> Void)? = nil,
+        pause: @escaping @Sendable (TimeInterval) async throws -> Void = { _ in
+            // No wait: see the parameter's documentation above.
+        }
     ) -> (CuratedTrailSource, CuratedTransportStub) {
-        let stub = CuratedTransportStub(responses: responses)
+        let stub = CuratedTransportStub(responses: responses, onRequest: onRequest)
         let source = CuratedTrailSource(
             endpoint: URL(string: "https://overpass.invalid/api/interpreter")!,
             directory: directory,
@@ -192,6 +207,7 @@ struct CuratedTrailSourceTests {
             // point of the seam is that no suite waits on wall time, and the
             // bundle already has the clock that makes that true.
             clock: clock.read,
+            pause: pause,
             transport: { await stub.answer($0) }
         )
         return (source, stub)
@@ -204,7 +220,7 @@ struct CuratedTrailSourceTests {
     /// what most of these tests are about — what they are about is how many
     /// requests a search costs and what is in them, and that is unchanged by
     /// the pass being asked for in two halves.
-    private static func search(
+    static func search(
         _ source: CuratedTrailSource,
         area: CommunitySearchArea = Self.area,
         limit: Int = 25,

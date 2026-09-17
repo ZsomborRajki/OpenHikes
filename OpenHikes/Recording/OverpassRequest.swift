@@ -8,9 +8,9 @@
 //  fetching the walking graph a recording is matched against, and
 //  ``CuratedTrailSource`` fetching the waymarked routes the community list
 //  offers. What they share is not logic but *manners*: the same identifying
-//  `User-Agent`, the same form encoding, the same client timeout, the same
-//  reading of a `429` and its `Retry-After` — and the same reading of the
-//  failure that arrives dressed as a success, see ``abort(_:)``.
+//  `User-Agent`, the same form encoding, the same arithmetic behind how long
+//  to wait, the same reading of a `429` and its `Retry-After` — and the same
+//  reading of the failure that arrives dressed as a success, see ``abort(_:)``.
 //
 //  Those are the half a volunteer-run API notices, and the half that would
 //  drift silently if it were written twice. A second copy that forgot the
@@ -33,18 +33,89 @@ nonisolated enum OverpassRequest {
     /// hiker's request 404s.
     static let defaultEndpoint = URL(string: "https://overpass-api.de/api/interpreter")!
 
-    /// How long the client waits before giving up, in seconds.
-    ///
-    /// Above the `[timeout:]` each query carries, so the server's own limit is
-    /// what ends a slow query and the app gets a diagnosable answer rather
-    /// than a cancelled socket.
-    static let timeoutInterval: TimeInterval = 35
-
     /// How long to wait after a `429` that names no `Retry-After`, in seconds.
     static let defaultRetryDelay: TimeInterval = 60
 
+    /// The longest Overpass holds a request before a slot frees, in seconds.
+    ///
+    /// Its own figure: "requests stay enqueued up to 15 seconds on the server
+    /// if not yet a slot is available to them". It is dead time on the wire —
+    /// the query has not started, so nothing is sent — which is exactly the
+    /// time a client idle timeout is counting.
+    static let queueAllowance: TimeInterval = 15
+
+    /// What the answer itself is allowed to take once the query is done, in
+    /// seconds.
+    ///
+    /// A geometry page is 420 KB to 1.4 MB — see
+    /// ``CuratedTrailQuery/geometryBatchLimit`` — and the hiker asking for it
+    /// is by disposition somewhere with one bar of signal.
+    static let transferAllowance: TimeInterval = 20
+
+    /// How long to leave a request that has gone quiet, for a query that asked
+    /// the server for `serverTimeout` seconds.
+    ///
+    /// **Derived rather than flat, because a flat one was below the sum it has
+    /// to cover.** `URLRequest.timeoutInterval` is an *idle* timeout, and
+    /// Overpass sends nothing at all until the query is finished: the silence
+    /// a client sits through is the queue wait plus the whole execution. The
+    /// old 35 seconds sat under a `[timeout:30]` query with 15 seconds of
+    /// queue in front of it, so the socket could be cancelled while the server
+    /// was still working — and a cancelled socket says nothing, where the
+    /// answer that was coming would have said *rate-limited*, *busy*, or here
+    /// are your trails.
+    ///
+    /// The server also overruns its own limit: measured against
+    /// `overpass-api.de` (0.7.62.11) on 2026-09-17, a `[timeout:2]` query was
+    /// aborted after 39 seconds, because the limit is checked where the
+    /// evaluation reaches a boundary rather than on a timer. That is what the
+    /// transfer allowance is really buying on top of the queue — slack for a
+    /// server clock that is not a clock.
+    static func idleTimeout(forServerTimeout serverTimeout: Int) -> TimeInterval {
+        queueAllowance + TimeInterval(serverTimeout) + transferAllowance
+    }
+
+    /// How long to leave a server that answered *busy* before asking again.
+    ///
+    /// Short, because the condition it is about is short: a dispatcher
+    /// refusal means every slot was taken at the instant we knocked, which is
+    /// the ordinary weather of a shared instance rather than a state that
+    /// takes a minute to clear. The `429` this is deliberately *not* used for
+    /// is the one that takes a minute, and it names its own wait.
+    static let busyRetryDelay: TimeInterval = 2
+
+    /// Whether `error` is Overpass saying *not this second*, as opposed to
+    /// *not you* or *not at all*.
+    ///
+    /// The three that qualify are a gateway refusing before the query starts,
+    /// an overloaded dispatcher, and a query the server abandoned — all of
+    /// which the next request may well be admitted for. A `429` is excluded on
+    /// purpose: it is a request to stop asking for a named number of seconds,
+    /// and asking again inside it is what turns one rate limit into a block.
+    static func isMomentarilyBusy(_ error: any Error) -> Bool {
+        guard let overpass = error as? TrailGraphProviderError else { return false }
+        switch overpass {
+        case .aborted:
+            return true
+        case .server(let statusCode):
+            return busyStatusCodes.contains(statusCode)
+        case .invalidResponse, .malformedGraph, .rateLimited, .storage:
+            return false
+        }
+    }
+
+    /// What a gateway in front of a busy Overpass answers with.
+    ///
+    /// `504` is the measured one — the dispatcher refusing before the query
+    /// starts — and the other two are its neighbours: every one of them is a
+    /// server saying it cannot serve this *now*.
+    static let busyStatusCodes: Set<Int> = [badGatewayCode, serviceUnavailableCode, gatewayTimeoutCode]
+
     private static let successRange = 200..<300
     private static let rateLimitCode = 429
+    private static let badGatewayCode = 502
+    private static let serviceUnavailableCode = 503
+    private static let gatewayTimeoutCode = 504
 
     /// A POST of `query` to `endpoint`, formed the way Overpass expects.
     ///
@@ -53,10 +124,19 @@ nonisolated enum OverpassRequest {
     /// characters that are structural in a form body — `;`, `=`, `&`, `+` all
     /// appear in ordinary filters, and one of them unescaped truncates the
     /// query into something that parses and means something else.
-    static func post(_ query: String, to endpoint: URL) -> URLRequest {
+    /// - Parameter serverTimeout: The `[timeout:]` the query itself carries,
+    ///   which is what the client's own patience is derived from — see
+    ///   ``idleTimeout(forServerTimeout:)``. Passed rather than parsed out of
+    ///   the query so that the caller that wrote the number is the one that
+    ///   states it.
+    static func post(
+        _ query: String,
+        to endpoint: URL,
+        awaiting serverTimeout: Int
+    ) -> URLRequest {
         var request = URLRequest(url: endpoint)
         request.httpMethod = "POST"
-        request.timeoutInterval = timeoutInterval
+        request.timeoutInterval = idleTimeout(forServerTimeout: serverTimeout)
         request.setValue(
             "application/x-www-form-urlencoded; charset=utf-8",
             forHTTPHeaderField: "Content-Type"

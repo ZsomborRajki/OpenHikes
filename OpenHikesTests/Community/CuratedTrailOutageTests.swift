@@ -37,21 +37,38 @@ struct CuratedTrailOutageTests {
         #expect(outage == .rateLimited(retryAfter: 60))
     }
 
-    /// Everything Overpass can fail with that is not a refusal to answer: a
-    /// timeout, no network, or the HTML error page an overloaded mirror serves
-    /// with a `200`. One sentence covers them because there is one thing for
-    /// the hiker to do about any of them.
+    /// The server saying *not this second*: a gateway refusing in front of
+    /// Overpass, and a query it started and abandoned — the `200` that is not
+    /// an answer, see ``OverpassRequest/abort(_:)``.
+    ///
+    /// Its own case rather than more of ``unavailable`` because the two ask
+    /// different things of the hiker. *Unavailable* reads as *you are offline*
+    /// and sends somebody looking for signal on a mountain that has none; a
+    /// busy public instance is a shared server with a queue, and the answer is
+    /// to tap again in a moment.
+    @Test("a busy server is a different sentence from an unreachable one")
+    func aBusyServerIsItsOwnCase() {
+        let errors: [any Error] = [
+            TrailGraphProviderError.server(statusCode: 504),
+            TrailGraphProviderError.server(statusCode: 503),
+            TrailGraphProviderError.aborted("runtime error: Query timed out"),
+        ]
+
+        for error in errors {
+            #expect(CuratedTrailOutage(error) == .busy)
+        }
+        #expect(CuratedTrailOutage.busy.text != CuratedTrailOutage.unavailable.text)
+    }
+
+    /// Everything left: no network, a status code that is not about load, or
+    /// an answer nobody here can claim to understand. One sentence covers them
+    /// because there is one thing for the hiker to do about any of them.
     @Test("every other failure is the one honest generality")
     func otherFailuresAreUnavailable() {
         let errors: [any Error] = [
-            TrailGraphProviderError.server(statusCode: 504),
+            TrailGraphProviderError.server(statusCode: 404),
             TrailGraphProviderError.invalidResponse,
             TrailGraphProviderError.malformedGraph("not JSON"),
-            // The `200` that is not an answer — see
-            // ``OverpassRequest/abort(_:)``. It reaches the hiker as
-            // *unavailable*, which is the one thing it must not be mistaken
-            // for: an area with no trails in it.
-            TrailGraphProviderError.aborted("runtime error: Query timed out"),
             URLError(.notConnectedToInternet),
         ]
 

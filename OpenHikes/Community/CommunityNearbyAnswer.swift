@@ -98,6 +98,19 @@ nonisolated enum CommunityNearbyScope: Equatable, Sendable {
 /// is the answer to *and did the other half arrive*, which is a smaller thing
 /// that must not disown a list the hiker can use.
 nonisolated enum CuratedTrailOutage: Equatable, Sendable {
+    /// Overpass could not serve this *now*: every slot was taken when we
+    /// knocked, a gateway refused in front of it, or it abandoned the query
+    /// part-way through.
+    ///
+    /// Split out of ``unavailable`` because the two ask different things of
+    /// the hiker, and one of them is not even about them. *Unavailable* is the
+    /// sentence a person reads as *you are offline* — it is the one this app
+    /// says when it cannot reach a thing at all — and a busy public instance
+    /// is neither their fault nor their problem to fix: it is a shared server
+    /// with a queue, and the answer is to tap again in a moment. Saying that
+    /// costs one case here and saves a hiker checking their signal on a
+    /// mountain where there is none to check.
+    case busy
     /// Overpass asked us to stop for a while, and for how long.
     ///
     /// The interval is what was left at the moment the answer landed rather
@@ -116,15 +129,22 @@ nonisolated enum CuratedTrailOutage: Equatable, Sendable {
     /// superseded search cancels the curated half mid-flight, and reporting
     /// that as an outage would put *rate-limited* under the button because the
     /// hiker panned twice quickly.
+    ///
+    /// Everything that is not Overpass speaking is ``unavailable``, and that
+    /// is the honest reading: a `URLError` is this device failing to reach a
+    /// server, and an answer that could not be decoded is one nobody here can
+    /// claim to know the meaning of.
     init?(_ error: any Error) {
         if error is CancellationError { return nil }
-        guard let overpass = error as? TrailGraphProviderError,
-              case .rateLimited(let retryAfter) = overpass
-        else {
+        guard let overpass = error as? TrailGraphProviderError else {
             self = .unavailable
             return
         }
-        self = .rateLimited(retryAfter: retryAfter)
+        if case .rateLimited(let retryAfter) = overpass {
+            self = .rateLimited(retryAfter: retryAfter)
+            return
+        }
+        self = OverpassRequest.isMomentarilyBusy(overpass) ? .busy : .unavailable
     }
 
     /// One short line for beside the *Search this area* button.
@@ -136,6 +156,8 @@ nonisolated enum CuratedTrailOutage: Equatable, Sendable {
     /// has to be one that does not cast doubt on them.
     var text: String {
         switch self {
+        case .busy:
+            return String(localized: "OpenStreetMap is busy · try again")
         case .rateLimited(let retryAfter):
             guard let wait = Self.wait(retryAfter) else {
                 return String(localized: "OpenStreetMap trails rate-limited")
